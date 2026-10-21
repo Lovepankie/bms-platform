@@ -21,7 +21,7 @@ const rangeStep = (target: string, what: string): TourStep =>
 
 export const retailHomePage: Tour = {
   id: 'page-retail-home',
-  version: 2,
+  version: 3,
   title: 'This page: Retail',
   audience: (me) => (me.permissions ?? []).some((p) => p.startsWith('retail.')),
   autoStart: false,
@@ -32,7 +32,9 @@ export const retailHomePage: Tour = {
     retail({ id: 'restock', target: 'retail-restock', needs: [RESTOCK], optional: true, title: 'Restock', body: 'Tap here when new goods arrive. Stock goes up and the cost is saved.' }),
     retail({ id: 'stock', target: 'retail-stock', needs: [STOCK_READ], optional: true, title: 'Check your stock', body: 'Tap here to see how much of each item you hold, shop by shop.' }),
     // ADR-055: a seller sees their own figures; everybody's sales, profit and the value of the stock are the owner's.
-    retail({ id: 'own-sales', target: 'own-sales', needs: [SALES_READ], unless: ['retail.sale.all_sellers'], optional: true, title: 'Your sales', body: 'What you sold today and in the last 7 days. Only your own sales are counted. All sales lists them one by one.' }),
+    // Issue #428: every figure on the page follows the days picked here, set against the days before.
+    retail({ id: 'range', target: 'home-range', needs: [SALES_READ], optional: true, title: 'Pick the days', body: 'Tap Today, 7 days, 30 days, This year, 1 year or All, or Choose days for your own first and last day. Every figure and the chart follow it and are set against the days before. Tap or point at the chart to read one day. Your choice is kept on this phone.' }),
+    retail({ id: 'own-sales', target: 'own-sales', needs: [SALES_READ], unless: ['retail.sale.all_sellers'], optional: true, title: 'Your sales', body: 'What you sold in the days you picked, against the days before. Only your own sales are counted. All sales lists them one by one.' }),
   ],
 };
 

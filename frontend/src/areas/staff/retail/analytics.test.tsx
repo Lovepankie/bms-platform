@@ -308,65 +308,115 @@ describe('business evaluation', () => {
 });
 
 describe('owner dashboard', () => {
-  const days = Array.from({ length: 30 }, (_, i) => ({ date: `2026-09-${String(8 + i).padStart(2, '0')}`, sales_minor: i * 100, gross_profit_minor: i * 30 }));
+  const series = Array.from({ length: 7 }, (_, i) => ({ start: `2026-10-${String(1 + i).padStart(2, '0')}`, sales_minor: i * 100, gross_profit_minor: i * 30, previous_sales_minor: i * 50 }));
   const full: Dashboard = {
     date: '2026-10-07', currency: 'UGX', profit_visible: true,
     today: { sales_minor: 3600, sale_count: 3, cash_minor: 2100, credit_minor: 1500, gross_profit_minor: 1200 },
-    days, last7_sales_minor: 6600, last30_sales_minor: 7500, last7_gross_profit_minor: 2200, last30_gross_profit_minor: 2500,
+    last7_sales_minor: 6600, last30_sales_minor: 7500,
     stock: { value_at_price_minor: 47050, value_at_cost_minor: 31100, out_of_stock: 1, low_stock: 2, low_stock_threshold: '5.000' },
-    shops: [{ branch_id: 'b1', today_sales_minor: 2100, last7_sales_minor: 5100, last30_sales_minor: 6000, today_gross_profit_minor: 700, stock_at_price_minor: 33550, stock_at_cost_minor: 22100, out_of_stock: 0, low_stock: 2 }],
+    shops: [{ branch_id: 'b1', today_sales_minor: 2100, range_sales_minor: 5100, previous_sales_minor: 4000, range_gross_profit_minor: 1700, today_gross_profit_minor: 700, stock_at_price_minor: 33550, stock_at_cost_minor: 22100, out_of_stock: 0, low_stock: 2 }],
+    range: {
+      period: '7d', from: '2026-10-01', to: '2026-10-07', previous_from: '2026-09-24', previous_to: '2026-09-30', group: 'day',
+      current: { sales_minor: 6600, sale_count: 4, average_sale_minor: 1650, gross_profit_minor: 2200 },
+      previous: { sales_minor: 5500, sale_count: 5, average_sale_minor: 1100, gross_profit_minor: 2400 },
+      series,
+      busiest_day: { date: '2026-10-07', sales_minor: 3600, previous_date: '2026-09-29', previous_sales_minor: 1500 },
+      best_shop: { id: 'b1', sales_minor: 5100, sale_count: 3, previous_sales_minor: 4000 },
+      best_seller: { id: 'p1', code: 'TI-01', label: 'Test Item 01', sales_minor: 3000, sale_count: 2, previous_sales_minor: 3000 },
+      top_salesperson: { id: 'u1', label: 'Test Seller 01', sales_minor: 6600, sale_count: 4, previous_sales_minor: 5500 },
+    },
   };
   const nameOf = (id?: string) => (id === 'b1' ? 'Head office' : 'Branch');
 
-  /** What a seller with sale and stock read gets: no key holding cost or profit. */
+  /** What a caller without retail.profit.read gets: no key holding cost or profit, and no ranking of colleagues. */
   function seller(): Dashboard {
-    return JSON.parse(JSON.stringify({ ...full, profit_visible: false }, (key, value) => (/cost|profit/.test(key) && key !== 'profit_visible' ? undefined : value))) as Dashboard;
+    const body = JSON.parse(JSON.stringify({ ...full, profit_visible: false }, (key, value) => (/cost|profit|value_at|stock_at/.test(key) && key !== 'profit_visible' ? undefined : value))) as Dashboard;
+    delete body.range?.top_salesperson;
+    return body;
   }
 
-  it('shows today, cash against credit, the sparklines, stock, shops and profit for a profit reader', () => {
-    const html = renderToString(<DashboardView data={full} nameOf={nameOf} />);
-    expect(html).toContain('Today, 2026-10-07');
-    expect(html).toContain('UGX 3,600');
-    expect(html).toContain('On credit');
-    expect(html).toContain('Profit today');
-    expect(html).toContain('UGX 1,200');
+  it('shows the range total against the 7 days before, the chart, the detail, stock and shops for a profit reader', () => {
+    const html = renderToString(<DashboardView data={full} nameOf={nameOf} choice={{ period: '7d' }} />);
+    expect(html).toContain('Sales, Last 7 days');
+    expect(html).toContain('UGX 6,600');
+    expect(html).toContain('Up UGX 1,100, 20% on the 7 days before');
+    expect(html).toContain('class="rc-change rc-up"');
+    expect(html).toContain('Down 1, 20% on the 7 days before');
+    expect(html).toContain('class="rc-change rc-down"');
+    expect(html).toContain('Average sale');
+    expect(html).toContain('UGX 1,650');
+    expect(html).toContain('Busiest day');
+    expect(html).toContain('7 Oct 2026');
+    expect(html).toContain('Best shop');
+    expect(html).toContain('Head office');
+    expect(html).toContain('Best seller');
+    expect(html).toContain('Test Item 01');
+    expect(html).toContain('Same as the 7 days before');
+    expect(html).toContain('Top salesperson');
+    expect(html).toContain('Profit');
     expect(html).toContain('Stock at cost');
     expect(html.indexOf('Stock at cost')).toBeLessThan(html.indexOf('Stock at price'));
-    expect(html).not.toContain('selling price');
-    expect(html).toContain('Head office');
-    expect(html).toContain('Last 7 days');
-    expect(html).toContain('Last 30 days');
-    expect(html.match(/<svg/g)?.length).toBe(2);
+    expect(html.match(/<svg/g)?.length).toBe(1);
+    expect(html).toContain('class="rc-prev"');
+    expect(html).toContain('Wed 7 Oct');
+    expect(html).toContain('data-tour="home-range"');
+    expect(html).toContain('aria-pressed="true">7 days');
     expect(html).not.toContain('style=');
   });
 
-  it('leaves clearly marked placeholders for banked against expected and savings, with no number', () => {
-    const html = renderToString(<DashboardView data={full} nameOf={nameOf} />);
-    expect(html).toContain('Banked against expected');
-    expect(html).toContain('Savings');
-    expect(html.match(/data-placeholder="cash-book"/g)?.length).toBe(2);
-    expect(html).toContain('It arrives with the cash book.');
+  it('keeps the Today card above the range picker: today, cash against credit and profit for a profit reader', () => {
+    const html = renderToString(<DashboardView data={full} nameOf={nameOf} choice={{ period: '7d' }} />);
+    expect(html).toContain('Today, 2026-10-07');
+    expect(html).toContain('Sales today');
+    expect(html).toContain('UGX 3,600');
+    expect(html).toContain('Cash and mobile money');
+    expect(html).toContain('UGX 2,100');
+    expect(html).toContain('On credit');
+    expect(html).toContain('UGX 1,500');
+    expect(html).toContain('Profit today');
+    expect(html).toContain('UGX 1,200');
+    expect(html.indexOf('Today, 2026-10-07')).toBeLessThan(html.indexOf('data-tour="home-range"'));
   });
 
-  it('shows the sales and stock parts and nothing of cost or profit to a seller', () => {
-    const html = renderToString(<DashboardView data={seller()} nameOf={nameOf} />);
+  it('keeps the Today card for a caller without profit read, with no profit in it', () => {
+    const html = renderToString(<DashboardView data={seller()} nameOf={nameOf} choice={{ period: '7d' }} />);
+    expect(html).toContain('Today, 2026-10-07');
+    expect(html).toContain('Cash and mobile money');
     expect(html).toContain('UGX 3,600');
-    expect(html).toContain('Stock at price');
-    expect(html).not.toMatch(/profit|cost/i);
+    expect(html).not.toContain('Profit today');
     expect(html).not.toContain('1,200');
+  });
+
+  it('shows the sales parts and nothing of cost, profit, stock value or a ranking of colleagues without profit read', () => {
+    const html = renderToString(<DashboardView data={seller()} nameOf={nameOf} choice={{ period: '7d' }} />);
+    expect(html).toContain('UGX 6,600');
+    expect(html).toContain('Best seller');
+    expect(html).not.toMatch(/profit|cost|Stock at price|Top salesperson/i);
+    expect(html).not.toContain('2,200');
     expect(html).not.toContain('31,100');
   });
 
   it('shows no invented zeros for a shop outside the sales scope', () => {
-    const html = renderToString(<DashboardView data={{ ...seller(), shops: [{ branch_id: 'b1', stock_at_price_minor: 33550, out_of_stock: 0, low_stock: 2 }] }} nameOf={nameOf} />);
+    const html = renderToString(<DashboardView data={{ ...seller(), shops: [{ branch_id: 'b1', out_of_stock: 0, low_stock: 2 }] }} nameOf={nameOf} choice={{ period: '7d' }} />);
     expect(html).toContain('n/a');
     expect(html).not.toContain('UGX 0');
   });
 
   it('shows only the sales parts when stock is not readable', () => {
-    const html = renderToString(<DashboardView data={{ ...seller(), stock: undefined, shops: [{ branch_id: 'b1', today_sales_minor: 2100, last7_sales_minor: 5100, last30_sales_minor: 6000 }] }} nameOf={nameOf} />);
-    expect(html).toContain('Sales today');
-    expect(html).not.toContain('Stock at price');
+    const html = renderToString(<DashboardView data={{ ...seller(), stock: undefined, shops: [{ branch_id: 'b1', range_sales_minor: 5100, previous_sales_minor: 4000 }] }} nameOf={nameOf} choice={{ period: '7d' }} />);
+    expect(html).toContain('Number of sales');
+    expect(html).not.toContain('Stock now');
     expect(html).not.toContain('Out / low');
+  });
+
+  it('compares nothing for All, which has no period before', () => {
+    // The server sends nothing of a period before for All: no previous figures, dates or steps.
+    const all = JSON.parse(JSON.stringify(full, (key, value) => (key.startsWith('previous') ? undefined : value))) as Dashboard;
+    all.range = { ...all.range, period: 'all', group: 'month' };
+    const html = renderToString(<DashboardView data={all} nameOf={nameOf} choice={{ period: 'all' }} />);
+    expect(html).toContain('Since 1 Oct 2026');
+    expect(html).not.toContain(' on the ');
+    expect(html).not.toContain('class="rc-prev"');
+    expect(html).toContain('All shows up to the last 3 years.');
   });
 });

@@ -153,11 +153,18 @@ class ReportsController {
     @GetMapping("/dashboard")
     @RequiresPermission("retail.sale.read")
     @Operation(
-            summary = "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)",
+            summary =
+                    "Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149); a chosen range (issue #428)",
             operationId = "getRetailDashboard",
             description =
-                    "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises")
-    DashboardApi.Report dashboard(@RequestParam(name = "branch_id", required = false) List<UUID> branchIds) {
-        return dashboard.dashboard(branchIds);
+                    "ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises."
+                            + " With period (today, 7d, 30d, ytd, 1y, all) or period custom with from and to (at most 366 days), the body"
+                            + " also has range: its figures, chart and best shop, seller and day against the period before; days is then left out")
+    DashboardApi.Report dashboard(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "period", required = false) String period,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to) {
+        return dashboard.dashboard(branchIds, period, from, to);
     }
 }

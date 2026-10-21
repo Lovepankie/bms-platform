@@ -15,27 +15,27 @@ const renderToString = (node: ReactElement) => render(node).replaceAll('<!-- -->
 
 const nameOf = () => 'Head office';
 
+const range = (current: NonNullable<Dashboard['range']>['current']): Dashboard['range'] => ({
+  period: 'today', from: '2026-10-20', to: '2026-10-20', previous_from: '2026-10-19', previous_to: '2026-10-19', group: 'day',
+  current, previous: { sales_minor: 4000, sale_count: 2, average_sale_minor: 2000 }, series: [{ start: '2026-10-20', sales_minor: current?.sales_minor ?? 0, previous_sales_minor: 4000 }],
+});
+
 const base: Dashboard = {
   date: '2026-10-20',
   currency: 'UGX',
   profit_visible: true,
   today: { sales_minor: 5000, sale_count: 3, cash_minor: 2000, credit_minor: 3000, gross_profit_minor: 2000 },
-  days: [],
   last7_sales_minor: 5000,
   last30_sales_minor: 5000,
-  last7_gross_profit_minor: 2000,
-  last30_gross_profit_minor: 2000,
   shops: [],
+  range: range({ sales_minor: 5000, sale_count: 3, average_sale_minor: 1667, gross_profit_minor: 2000 }),
 };
 
 const onPayment: Dashboard = {
   ...base,
   credit_sale_recognition: 'on_payment',
   today: { sales_minor: 5000, sale_count: 3, cash_minor: 2000, credit_minor: 3000, gross_profit_minor: 800, received_minor: 2000, on_credit_minor: 7000, on_credit_count: 2 },
-  last7_received_minor: 2000,
-  last30_received_minor: 2500,
-  last7_gross_profit_minor: 800,
-  last30_gross_profit_minor: 1000,
+  range: range({ sales_minor: 5000, sale_count: 3, average_sale_minor: 1667, gross_profit_minor: 800, received_minor: 2000 }),
 };
 
 describe('the setting', () => {
@@ -130,35 +130,43 @@ describe('the setting', () => {
 });
 
 describe('the home cards', () => {
-  it('keep their figures exactly under the default way', () => {
-    const html = renderToString(<DashboardView data={base} nameOf={nameOf} />);
+  it('keep their words under the default way', () => {
+    const html = renderToString(<DashboardView data={base} nameOf={nameOf} choice={{ period: 'today' }} />);
+    expect(html).toContain('Sales, Today');
     expect(html).toContain('UGX 5,000');
-    expect(html).toContain('UGX 3,000');
-    expect(html).toContain('Cash and mobile money');
-    expect(html).not.toContain('Received');
+    expect(html).toContain('Up UGX 1,000, 25% on yesterday');
+    expect(html).not.toContain('Money collected');
     expect(html).not.toContain('not paid yet');
-    expect(html).toContain('Sales, last 7 and 30 days');
+    // The Today card keeps its figures exactly under the default way.
+    expect(html).toContain('Cash and mobile money');
+    expect(html).toContain('UGX 3,000');
+    expect(html).toContain('Profit today');
   });
 
-  it('say Sold, money received, On credit and profit of the money received when the buyer pays', () => {
-    const html = renderToString(<DashboardView data={onPayment} nameOf={nameOf} />);
-    expect(html).toContain('Sales today');
-    expect(html).toContain('including credit');
-    expect(html).toContain('Money received today');
+  it('say Sold, money collected, On credit now and profit of the money received when the buyer pays', () => {
+    const html = renderToString(<DashboardView data={onPayment} nameOf={nameOf} choice={{ period: 'today' }} />);
+    expect(html).toContain('Sold, Today');
+    expect(html).toContain('credit included');
+    expect(html).toContain('Money collected');
+    expect(html).toContain('UGX 2,000');
+    expect(html).toContain('On credit now');
     expect(html).toContain('UGX 7,000');
     expect(html).toContain('2 sales not paid yet');
     expect(html).toContain('From the money received');
     expect(html).toContain('UGX 800');
-    expect(html).toContain('Sold, last 7 and 30 days');
-    expect(html).toContain('Received UGX 2,000');
+    // The Today card under the rule: Sales today including credit, Money received today, On credit, Profit today.
+    expect(html).toContain('Sales today');
+    expect(html).toContain('including credit');
+    expect(html).toContain('Money received today');
+    expect(html).toContain('Profit today');
     expect(html).not.toContain('UGX 3,000');
   });
 
-  it('show no profit to a caller without it, and the money received still', () => {
-    const noProfit: Dashboard = { ...onPayment, profit_visible: false, today: { ...onPayment.today, gross_profit_minor: undefined } };
-    const html = renderToString(<DashboardView data={noProfit} nameOf={nameOf} />);
-    expect(html).toContain('Money received today');
-    expect(html).not.toContain('Profit today');
+  it('show no profit to a caller without it, and the money collected still', () => {
+    const noProfit: Dashboard = { ...onPayment, profit_visible: false, range: range({ sales_minor: 5000, sale_count: 3, received_minor: 2000 }) };
+    const html = renderToString(<DashboardView data={noProfit} nameOf={nameOf} choice={{ period: 'today' }} />);
+    expect(html).toContain('Money collected');
+    expect(html).not.toContain('Profit');
   });
 });
 

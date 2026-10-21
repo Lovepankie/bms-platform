@@ -58,13 +58,33 @@ class CreditRecognitionRepository {
                 java.sql.Timestamp.from(to.plusDays(1).atStartOfDay(zone).toInstant()));
         String inPeriod = periods.sql("s.sale_date", "s.created_at", params, "crpE");
         String paidDay = "CAST((p.created_at AT TIME ZONE :zone) AS date)";
+        // A branch scope picks the sales to read from the events of the window that the scope reports (the branch that
+        // took a
+        // payment, that was reversed, that paid a refund out); every event of a picked sale is still read, since the
+        // running
+        // figures of a sale need them all. A return with no cash out is spread over the branches that took the sale's
+        // money,
+        // so it is picked whatever its own branch.
+        String payScope = "";
+        String revScope = "";
+        String retScope = "";
+        if (branchIds != null) {
+            params.put("scopeBranches", branchIds);
+            payScope = " AND coalesce(ap0.branch_id, s0.branch_id) IN (:scopeBranches)";
+            revScope = " AND ap.branch_id IN (:scopeBranches)";
+            retScope = " AND (r.refund_minor = 0 OR r.refund_branch_id IN (:scopeBranches))";
+        }
         return jdbc.sql("WITH active AS ("
-                        + " SELECT p.sale_id FROM retail_sale_payments p WHERE p.created_at >= :fromTs AND p.created_at < :toTs"
+                        + " SELECT p.sale_id FROM retail_sale_payments p"
+                        + " JOIN retail_sales s0 ON s0.tenant_id = p.tenant_id AND s0.id = p.sale_id"
+                        + " LEFT JOIN retail_account_payment_allocations al0 ON al0.tenant_id = p.tenant_id AND al0.sale_payment_id = p.id"
+                        + " LEFT JOIN retail_account_payments ap0 ON ap0.tenant_id = al0.tenant_id AND ap0.id = al0.receipt_id"
+                        + " WHERE p.created_at >= :fromTs AND p.created_at < :toTs" + payScope
                         + " UNION SELECT al.sale_id FROM retail_account_payments ap"
                         + " JOIN retail_account_payment_allocations al ON al.tenant_id = ap.tenant_id AND al.receipt_id = ap.id"
-                        + " WHERE ap.status = 'reversed' AND ap.reversed_on BETWEEN :from AND :to"
+                        + " WHERE ap.status = 'reversed' AND ap.reversed_on BETWEEN :from AND :to" + revScope
                         + " UNION SELECT r.sale_id FROM retail_sale_returns r"
-                        + " WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to"
+                        + " WHERE r.status = 'completed' AND r.returned_on BETWEEN :from AND :to" + retScope
                         + "), e AS ("
                         + " SELECT p.sale_id, " + paidDay + " AS d, coalesce(ap.branch_id, s1.branch_id) AS br,"
                         + " p.created_at AS ev_at, p.id AS eid,"

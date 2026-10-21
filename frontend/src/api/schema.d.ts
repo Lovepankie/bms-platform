@@ -4900,8 +4900,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149)
-         * @description ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises
+         * Owner dashboard: today, 7 and 30 days, stock value and counts, by shop (issue #149); a chosen range (issue #428)
+         * @description ADR-055: it adds up every seller's sales, so the caller also needs retail.sale.all_sellers in every branch it covers, else 403 permission_denied; without branch_id a Supervisor gets the shops it supervises. With period (today, 7d, 30d, ytd, 1y, all) or period custom with from and to (at most 366 days), the body also has range: its figures, chart and best shop, seller and day against the period before; days is then left out
          */
         get: operations["getRetailDashboard"];
         put?: never;
@@ -10164,7 +10164,7 @@ export interface components {
             currency?: string;
             /** Format: date */
             date?: string;
-            /** @description The last 30 days ending today, one entry a day, oldest first */
+            /** @description The last 30 days ending today, one entry a day, oldest first; absent with a range */
             days?: components["schemas"]["RetailDashboardDay"][];
             /**
              * Format: int64
@@ -10192,11 +10192,26 @@ export interface components {
             last7_sales_minor?: number;
             /** @description True when profit figures are included */
             profit_visible?: boolean;
+            range?: components["schemas"]["RetailDashboardRange"];
             shops?: components["schemas"]["RetailDashboardShop"][];
             stock?: components["schemas"]["RetailDashboardStock"];
             today?: components["schemas"]["RetailDashboardToday"];
         };
-        /** @description The last 30 days ending today, one entry a day, oldest first */
+        /** @description The day with the most sales; absent with no sale */
+        RetailDashboardBusiestDay: {
+            /** Format: date */
+            date?: string;
+            /**
+             * Format: date
+             * @description The busiest day of the period before
+             */
+            previous_date?: string;
+            /** Format: int64 */
+            previous_sales_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description The last 30 days ending today, one entry a day, oldest first; absent with a range */
         RetailDashboardDay: {
             /** Format: date */
             date?: string;
@@ -10213,17 +10228,105 @@ export interface components {
             /** Format: int64 */
             sales_minor?: number;
         };
+        /** @description The figures of a range or of the period before it (issue #428) */
+        RetailDashboardFigures: {
+            /**
+             * Format: int64
+             * @description sales_minor over sale_count, half up; absent with no sale
+             */
+            average_sale_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers; by the rule of credit_sale_recognition, as on the Today card
+             */
+            gross_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Only with on_payment: money recorded as collected, by any method (Received)
+             */
+            received_minor?: number;
+            /** Format: int64 */
+            sale_count?: number;
+            /**
+             * Format: int64
+             * @description Everything sold, credit included, net of goods taken back
+             */
+            sales_minor?: number;
+        };
+        /** @description The best shop, the best seller (an item) or the top salesperson of the range; previous_sales_minor is the same one's sales in the period before */
+        RetailDashboardLeader: {
+            /** @description The item code; an item only */
+            code?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description The item or person name; a shop is named from the branch list */
+            label?: string;
+            /** Format: int64 */
+            previous_sales_minor?: number;
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description One step of the range chart: a day, seven days or a month */
+        RetailDashboardPoint: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in every branch the report covers
+             */
+            gross_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Sales of the same step of the period before, counted from its first day
+             */
+            previous_sales_minor?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+            /**
+             * Format: date
+             * @description First day of the step
+             */
+            start?: string;
+        };
+        /** @description The range chosen on the dashboard (issue #428) */
+        RetailDashboardRange: {
+            best_seller?: components["schemas"]["RetailDashboardLeader"];
+            best_shop?: components["schemas"]["RetailDashboardLeader"];
+            busiest_day?: components["schemas"]["RetailDashboardBusiestDay"];
+            current?: components["schemas"]["RetailDashboardFigures"];
+            /** Format: date */
+            from?: string;
+            /**
+             * @description A step of the chart: a day up to 62 days, seven days from the first day up to a year, else a month
+             * @enum {string}
+             */
+            group?: "day" | "week" | "month";
+            /** @enum {string} */
+            period?: "today" | "7d" | "30d" | "ytd" | "1y" | "all" | "custom";
+            previous?: components["schemas"]["RetailDashboardFigures"];
+            /**
+             * Format: date
+             * @description The period before, as long as the range (This year: the same days of last year); absent for all
+             */
+            previous_from?: string;
+            /** Format: date */
+            previous_to?: string;
+            series?: components["schemas"]["RetailDashboardPoint"][];
+            /** Format: date */
+            to?: string;
+            top_salesperson?: components["schemas"]["RetailDashboardLeader"];
+        };
         RetailDashboardShop: {
             /** Format: uuid */
             branch_id?: string;
             /**
              * Format: int64
-             * @description Present only with retail.sale.read in this branch
+             * @description Present only with retail.sale.read in this branch; absent with a range
              */
             last30_sales_minor?: number;
             /**
              * Format: int64
-             * @description Present only with retail.sale.read in this branch
+             * @description Present only with retail.sale.read in this branch; absent with a range
              */
             last7_sales_minor?: number;
             /**
@@ -10236,6 +10339,21 @@ export interface components {
              * @description Present only with retail.stock.read
              */
             out_of_stock?: number;
+            /**
+             * Format: int64
+             * @description With a range that has a period before it, and Present only with retail.sale.read in this branch: sales in that period
+             */
+            previous_sales_minor?: number;
+            /**
+             * Format: int64
+             * @description With a range, and with retail.profit.read in this branch: profit in the range
+             */
+            range_gross_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description With a range (issue #428) and Present only with retail.sale.read in this branch: sales in the range
+             */
+            range_sales_minor?: number;
             /**
              * Format: int64
              * @description Present only with retail.profit.read in this branch
@@ -24503,6 +24621,9 @@ export interface operations {
         parameters: {
             query?: {
                 branch_id?: string[];
+                period?: string;
+                from?: string;
+                to?: string;
             };
             header?: never;
             path?: never;

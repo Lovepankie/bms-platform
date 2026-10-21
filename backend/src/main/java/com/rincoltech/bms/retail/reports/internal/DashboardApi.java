@@ -86,8 +86,12 @@ final class DashboardApi {
     record Shop(
             UUID branchId,
             @Schema(description = SALES_ONLY) Long todaySalesMinor,
-            @Schema(description = SALES_ONLY) Long last7SalesMinor,
-            @Schema(description = SALES_ONLY) Long last30SalesMinor,
+
+            @Schema(description = SALES_ONLY + "; absent with a range")
+            Long last7SalesMinor,
+
+            @Schema(description = SALES_ONLY + "; absent with a range")
+            Long last30SalesMinor,
 
             @Schema(description = "Present only with retail.profit.read in this branch")
             Long todayGrossProfitMinor,
@@ -104,7 +108,116 @@ final class DashboardApi {
             @Schema(
                     description =
                             "Only with on_payment, and with retail.sale.read in this branch: money collected today in this shop")
-            Long todayReceivedMinor) {}
+            Long todayReceivedMinor,
+
+            @Schema(description = "With a range (issue #428) and " + SALES_ONLY + ": sales in the range")
+            Long rangeSalesMinor,
+
+            @Schema(
+                    description =
+                            "With a range that has a period before it, and " + SALES_ONLY + ": sales in that period")
+            Long previousSalesMinor,
+
+            @Schema(description = "With a range, and with retail.profit.read in this branch: profit in the range")
+            Long rangeGrossProfitMinor) {}
+
+    @Schema(
+            name = "RetailDashboardFigures",
+            description = "The figures of a range or of the period before it (issue #428)")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record Figures(
+            @Schema(description = "Everything sold, credit included, net of goods taken back")
+            long salesMinor,
+
+            long saleCount,
+
+            @Schema(description = "sales_minor over sale_count, half up; absent with no sale")
+            Long averageSaleMinor,
+
+            @Schema(description = PROFIT_ONLY + "; by the rule of credit_sale_recognition, as on the Today card")
+            Long grossProfitMinor,
+
+            @Schema(description = "Only with on_payment: money recorded as collected, by any method (Received)")
+            Long receivedMinor) {}
+
+    @Schema(name = "RetailDashboardPoint", description = "One step of the range chart: a day, seven days or a month")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record Point(
+            @Schema(description = "First day of the step") LocalDate start,
+            long salesMinor,
+            @Schema(description = PROFIT_ONLY) Long grossProfitMinor,
+
+            @Schema(description = "Sales of the same step of the period before, counted from its first day")
+            Long previousSalesMinor) {}
+
+    @Schema(name = "RetailDashboardBusiestDay")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record BusiestDay(
+            LocalDate date,
+            long salesMinor,
+
+            @Schema(description = "The busiest day of the period before")
+            LocalDate previousDate,
+
+            Long previousSalesMinor) {}
+
+    @Schema(
+            name = "RetailDashboardLeader",
+            description = "The best shop, the best seller (an item) or the top salesperson of the range;"
+                    + " previous_sales_minor is the same one's sales in the period before")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record Leader(
+            UUID id,
+
+            @Schema(description = "The item code; an item only")
+            String code,
+
+            @Schema(description = "The item or person name; a shop is named from the branch list")
+            String label,
+
+            long salesMinor,
+            long saleCount,
+            Long previousSalesMinor) {}
+
+    @Schema(name = "RetailDashboardRange", description = "The range chosen on the dashboard (issue #428)")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record Range(
+            @Schema(allowableValues = {"today", "7d", "30d", "ytd", "1y", "all", "custom"})
+            String period,
+
+            LocalDate from,
+            LocalDate to,
+
+            @Schema(
+                    description =
+                            "The period before, as long as the range (This year: the same days of last year); absent for all")
+            LocalDate previousFrom,
+
+            LocalDate previousTo,
+
+            @Schema(
+                    allowableValues = {"day", "week", "month"},
+                    description =
+                            "A step of the chart: a day up to 62 days, seven days from the first day up to a year, else a month")
+            String group,
+
+            Figures current,
+            Figures previous,
+            List<Point> series,
+
+            @Schema(description = "The day with the most sales; absent with no sale")
+            BusiestDay busiestDay,
+
+            @Schema(description = "The shop with the most sales, among the shops in scope")
+            Leader bestShop,
+
+            @Schema(description = "The item with the most sales")
+            Leader bestSeller,
+
+            @Schema(
+                    description =
+                            "The person with the most sales; only with retail.profit.read in every branch covered, as the salesperson level of the sales summary")
+            Leader topSalesperson) {}
 
     @Schema(name = "RetailDashboard")
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -117,7 +230,7 @@ final class DashboardApi {
 
             Today today,
 
-            @Schema(description = "The last 30 days ending today, one entry a day, oldest first")
+            @Schema(description = "The last 30 days ending today, one entry a day, oldest first; absent with a range")
             List<Day> days,
 
             long last7SalesMinor,
@@ -143,5 +256,8 @@ final class DashboardApi {
                     description =
                             "The first business day of the rule on_payment, when it was chosen; it can lie in the future."
                                     + " credit_sale_recognition is on_payment once that day has come")
-            LocalDate creditRecognitionStartsOn) {}
+            LocalDate creditRecognitionStartsOn,
+
+            @Schema(description = "Only when a period or dates were asked for (issue #428)")
+            Range range) {}
 }

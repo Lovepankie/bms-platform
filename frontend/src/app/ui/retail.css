@@ -657,3 +657,174 @@ th[scope='rowgroup'] .cat-head {
 .ctl-patterns li {
   margin: var(--space-2) 0;
 }
+
+/* The range of the Retail home (issue #428): the picker, the chart and the change on the period before. Up is the success
+   colour and down the danger colour, as everywhere in the app, and each also says Up or Down in words with an arrow. */
+.rc-picker {
+  margin: var(--space-3) 0;
+}
+
+.rc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rc-chip {
+  min-height: 40px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.rc-chip[aria-pressed='true'] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.rc-chip:focus-visible,
+.rc-chart svg:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.rc-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.rc-custom label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+}
+
+.rc-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.rc-total {
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.rc-change {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.rc-up {
+  color: var(--color-success);
+}
+
+.rc-down {
+  color: var(--color-danger);
+}
+
+.rc-same {
+  color: var(--color-text-muted);
+}
+
+.rc-chart {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.rc-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.rc-base {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.rc-line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.rc-prev {
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.rc-cursor {
+  stroke: var(--color-border-strong);
+  stroke-width: 1;
+}
+
+.rc-dot {
+  fill: var(--color-primary);
+  stroke: var(--color-surface);
+  stroke-width: 2;
+}
+
+.rc-dot-prev {
+  fill: var(--color-surface);
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+}
+
+.rc-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.rc-readout {
+  margin-top: var(--space-2);
+}
+
+.rc-legend {
+  margin: var(--space-1) 0 0;
+}
+
+.rc-key {
+  display: inline-block;
+  width: 16px;
+  height: 0;
+  vertical-align: middle;
+  border-top: 3px solid var(--color-primary);
+}
+
+.rc-key-prev {
+  border-top: 2px dashed var(--color-text-muted);
+}
+
+.rc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

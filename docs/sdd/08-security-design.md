@@ -438,6 +438,10 @@ Notes:
   account: what buyers owe, listing their sales whoever made them), and the order list (shared work of the shop). Tests: `RetailSellerFiguresIT` (two sellers and the
   owner, signed in: own list, totals, sale and payments; colleague's 404; the owner reports 403; no cost, profit, margin or stock
   value key in any seller response; the owner with no branch assignment sees every sale and figure), `RetailSalesGroupingChainIT`.
+  The range of the Retail home (issue #428, ADR-060) adds no permission: the dashboard with a range keeps the 403 above and the
+  Supervisor's branches; every range figure follows the same branch filter; profit needs `retail.profit.read` in every branch
+  covered, and so does the top salesperson (a ranking of colleagues, the rule of the summary's salesperson level); a seller's own
+  card reads the summary, which is their own sales. Tests: `RetailDashboardRangeIT`, `RetailSellerFiguresIT`, `RetailOwnerDecisionsIT`.
 - Retail cash book (ADR-022, FR-RET-32, migration V34): the ten `retail.cashbook.*`,
   `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
   `retail.advance.*` permissions are rows of the matrix above, seeded by the cash book migration.

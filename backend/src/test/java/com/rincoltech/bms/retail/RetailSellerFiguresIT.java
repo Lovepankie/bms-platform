@@ -243,6 +243,8 @@ class RetailSellerFiguresIT extends IntegrationTest {
     void theReportsThatAddUpEverybodysSalesAreRefusedToASeller() {
         for (String path : List.of(
                 "/reports/dashboard",
+                "/reports/dashboard?period=30d",
+                "/reports/dashboard?period=all",
                 "/reports/sales-analysis",
                 "/orders/reports/delivery-fees",
                 "/orders/reports/cancellations",
@@ -262,6 +264,14 @@ class RetailSellerFiguresIT extends IntegrationTest {
         noOwnerFigures(ok("/sales/" + saleA, tokenA), "a sale");
         noOwnerFigures(ok("/sales/" + saleA + "/payments", tokenA), "its payments");
         noOwnerFigures(ok("/sales/summary?group_by=branch,day", tokenA), "sales summary");
+        // Issue #428: the seller's range on the Retail home reads the summary by day, month and year.
+        for (String level : List.of("day", "month", "year")) {
+            noOwnerFigures(
+                    ok(
+                            "/sales/summary?group_by=" + level + "&from=" + today().minusDays(59) + "&to=" + today(),
+                            tokenA),
+                    "sales summary by " + level);
+        }
         noOwnerFigures(ok("/stock?branch_id=" + t.headOffice(), tokenA), "stock list");
         noOwnerFigures(ok("/stock/movements", tokenA), "stock movements");
         noOwnerFigures(ok("/stock/summary?group_by=branch", tokenA), "stock summary");

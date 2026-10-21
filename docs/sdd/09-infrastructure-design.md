@@ -123,6 +123,26 @@ are the same on every architecture; Caddy is cross-compiled by Go); the per-targ
 contain no `RUN` step, so nothing executes under emulation.
 | PostgreSQL | `postgres:16.x-alpine`, pinned in the host `.env` (`POSTGRES_IMAGE`) | postgres | `pg_isready` |
 
+The web image serves the bundle in three classes, which `frontend/Caddyfile` keeps apart:
+
+| Path | Cache-Control | Missing file |
+|---|---|---|
+| `/assets/*` and `/workbox-*.js`, everything the build names with a content hash | `public, max-age=31536000, immutable` | 404, `no-store` |
+| `/app-config.json`, built from the container's environment | `no-cache` | not applicable, it is a `respond` and never reads the disk |
+| everything else (`/`, every route, `sw.js`, `push-sw.js`, the manifest, the icons) | `no-cache` | `/index.html`, so the router takes over |
+
+Nothing hashed is ever served through the single-page fallback. `index.html` names the hashed
+assets of its own build, so a copy of it kept from an earlier deploy asks for files that are gone;
+answered by the fallback, those requests return 200 with HTML, which the browser refuses as a
+stylesheet or a module under `X-Content-Type-Options: nosniff` and then holds for a year under the
+immutable header. The device renders the app unstyled until its site data is cleared. The workbox
+runtime belongs in the same class although it sits at the root rather than under `/assets`:
+`sw.js` reaches it with `importScripts`, where HTML throws a `SyntaxError` and the service worker
+fails to install, costing offline and push as well. A 404 that is not cached keeps the failure
+loud and lets the next load repair itself. For the same reason every HTML response revalidates: a
+path matcher cannot do it, because `header /index.html` matches the literal path only while real
+pages arrive as `/` or a route.
+
 The API image carries two commands: the default starts the application; `migrate` applies the
 Flyway migrations as `bms_owner` and exits (ADR-006, ADR-010). The API image also carries the
 commit it was built from (`BMS_GIT_SHA`), shown by `/version` and `/actuator/info`.
