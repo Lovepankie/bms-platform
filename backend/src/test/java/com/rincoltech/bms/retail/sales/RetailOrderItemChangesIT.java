@@ -577,6 +577,48 @@ class RetailOrderItemChangesIT extends IntegrationTest {
         return l;
     }
 
+    /**
+     * Price lists switched on and a new customer on a list of its own: each price is {item, the least quantity ("0" for none),
+     * the price}.
+     */
+    UUID buyerOnList(String name, List<Object[]> prices) {
+        capability("price_lists");
+        UUID list = RetailTestSupport.id(
+                api.post("/price-lists", Map.of("name", "Test Wholesale " + name, "strict", false), PRICES));
+        for (Object[] p : prices) {
+            UUID product = (UUID) p[0];
+            UUID unit = UUID.fromString(api.get("/products/" + product, ADMIN)
+                    .getBody()
+                    .get("unit_id")
+                    .asString());
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("product_id", product);
+            item.put("unit_id", unit);
+            if (!"0".equals(p[1])) {
+                item.put("min_qty", p[1]);
+            }
+            item.put("price_minor", p[2]);
+            ResponseEntity<JsonNode> added = api.post("/price-lists/" + list + "/items", item, PRICES);
+            assertThat(added.getStatusCode()).as("%s", added.getBody()).isEqualTo(HttpStatus.CREATED);
+        }
+        UUID buyer = RetailTestSupport.id(api.post("/customers", Map.of("name", name), ADMIN));
+        int version = 0;
+        for (JsonNode c : api.get("/customers", ADMIN).getBody().get("items")) {
+            if (c.get("id").asString().equals(buyer.toString())) {
+                version = c.get("version").asInt();
+            }
+        }
+        ResponseEntity<JsonNode> onList = api.call(
+                HttpMethod.PUT,
+                "/customers/" + buyer + "/pricing",
+                Map.of("price_list_id", list),
+                PRICES,
+                "*",
+                Map.of("If-Match", String.valueOf(version)));
+        assertThat(onList.getStatusCode()).as("%s", onList.getBody()).isEqualTo(HttpStatus.OK);
+        return buyer;
+    }
+
     /** How the current line of an order for an item was priced, as stored. */
     Map<String, Object> storedLine(UUID order, UUID product) {
         return TestDatabase.owner().sql("""
@@ -823,44 +865,13 @@ class RetailOrderItemChangesIT extends IntegrationTest {
     void priceBreaksAreFoundAgainForANewQuantityAndForNewLines() {
         api.stockUp(hq, romper, "20");
         api.stockUp(hq, bib, "20");
-        capability("price_lists");
-        UUID list = RetailTestSupport.id(
-                api.post("/price-lists", Map.of("name", "Test Wholesale", "strict", false), PRICES));
-        for (Object[] p : List.of(
-                new Object[] {romper, "0", 9_000},
-                new Object[] {romper, "3", 8_000},
-                new Object[] {bib, "0", 2_200},
-                new Object[] {bib, "5", 2_000})) {
-            UUID product = (UUID) p[0];
-            UUID unit = UUID.fromString(api.get("/products/" + product, ADMIN)
-                    .getBody()
-                    .get("unit_id")
-                    .asString());
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("product_id", product);
-            item.put("unit_id", unit);
-            if (!"0".equals(p[1])) {
-                item.put("min_qty", p[1]);
-            }
-            item.put("price_minor", p[2]);
-            ResponseEntity<JsonNode> added = api.post("/price-lists/" + list + "/items", item, PRICES);
-            assertThat(added.getStatusCode()).as("%s", added.getBody()).isEqualTo(HttpStatus.CREATED);
-        }
-        UUID buyer = RetailTestSupport.id(api.post("/customers", Map.of("name", "Test Customer 05"), ADMIN));
-        int version = 0;
-        for (JsonNode c : api.get("/customers", ADMIN).getBody().get("items")) {
-            if (c.get("id").asString().equals(buyer.toString())) {
-                version = c.get("version").asInt();
-            }
-        }
-        ResponseEntity<JsonNode> onList = api.call(
-                HttpMethod.PUT,
-                "/customers/" + buyer + "/pricing",
-                Map.of("price_list_id", list),
-                PRICES,
-                "*",
-                Map.of("If-Match", String.valueOf(version)));
-        assertThat(onList.getStatusCode()).as("%s", onList.getBody()).isEqualTo(HttpStatus.OK);
+        UUID buyer = buyerOnList(
+                "Test Customer 05",
+                List.of(
+                        new Object[] {romper, "0", 9_000},
+                        new Object[] {romper, "3", 8_000},
+                        new Object[] {bib, "0", 2_200},
+                        new Object[] {bib, "5", 2_000}));
 
         UUID id = placedAs(ORDERS, buyer, List.of(line(romper, "2")));
         assertThat(lines(api.get("/orders/" + id, ORDERS).getBody())).containsExactly("OIC-ROMPER x2 @9000");
@@ -883,6 +894,61 @@ class RetailOrderItemChangesIT extends IntegrationTest {
         assertThat(lines(back.getBody())).containsExactly("OIC-ROMPER x2 @9000", "OIC-BIB x5 @2000");
         assertThat((BigDecimal) storedLine(id, romper).get("price_break_min_qty"))
                 .isEqualByComparingTo("0");
+        assertKeptMatchesOpenOrders();
+    }
+
+    /**
+     * With price lists on, a seller without retail.price.override who only changes a quantity and types no price is not refused:
+     * nothing is sent for the price, the server prices the line from the customer's list and its quantity break, and charges
+     * that. Sending the sell price the screen shows instead (what the screen did before the fix on #421) would be a change of
+     * price against the list: refused without the permission, and without a reason when it is held. A new item at the sell
+     * price sends nothing either and is charged the list price.
+     */
+    @Test
+    void aNewQuantityWithNoPriceTypedIsChargedTheListPriceWithoutAnOverride() {
+        api.stockUp(hq, romper, "20");
+        api.stockUp(hq, bib, "20");
+        UUID buyer = buyerOnList(
+                "Test Customer 06",
+                List.of(new Object[] {romper, "0", 9_000}, new Object[] {romper, "3", 8_000}, new Object[] {
+                    bib, "0", 2_200
+                }));
+        UUID id = placedAs(ORDERS, buyer, List.of(line(romper, "2")));
+        assertThat(lines(api.get("/orders/" + id, ORDERS).getBody())).containsExactly("OIC-ROMPER x2 @9000");
+        String before = etag(id);
+
+        // The sell price (10000) sent for the new quantity is a change of price against the list.
+        List<Map<String, Object>> atSell = List.of(priced(romper, "3", 10_000, null));
+        ResponseEntity<JsonNode> denied =
+                change(id, atSell, ORDERS, "*", UUID.randomUUID().toString(), before);
+        assertThat(denied.getStatusCode()).as("%s", denied.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        ResponseEntity<JsonNode> unexplained = change(
+                id,
+                atSell,
+                ORDERS + ",retail.price.override",
+                "*",
+                UUID.randomUUID().toString(),
+                before);
+        assertThat(unexplained.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(unexplained)).isEqualTo("override_reason_required");
+        assertThat(etag(id)).isEqualTo(before);
+
+        // What the screen sends now: the quantity only, by a seller without the permission.
+        ResponseEntity<JsonNode> r = change(
+                id,
+                List.of(line(romper, "3"), line(bib, "1")),
+                ORDERS,
+                "*",
+                UUID.randomUUID().toString(),
+                before);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(lines(r.getBody())).containsExactly("OIC-ROMPER x3 @8000", "OIC-BIB x1 @2200");
+        Map<String, Object> rompers = storedLine(id, romper);
+        assertThat(rompers.get("price_source")).isEqualTo("list");
+        assertThat((BigDecimal) rompers.get("price_break_min_qty")).isEqualByComparingTo("3");
+        assertThat(rompers.get("overridden_by")).isNull();
+        assertThat(storedLine(id, bib).get("price_source")).isEqualTo("list");
+        assertThat(kept(romper)).isEqualByComparingTo("3");
         assertKeptMatchesOpenOrders();
     }
 

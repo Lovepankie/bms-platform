@@ -98,9 +98,10 @@ export function withItemsQty(o: Pick<Order, 'lines'>, l: DraftLine, qty: string)
 
 /**
  * The new items for the server. A line left as it is on the order (the same item, unit and quantity at the price agreed) sends the
- * price agreed, which the server keeps. Any other line, an item on the order whose quantity changed included, is priced again as on
- * a new order: it sends the price shown whenever that differs from today's price or from the one agreed, so the screen and the
- * server always charge the same, with the reason when it is a change of price.
+ * price agreed, which the server keeps. A line at the quantity agreed but at another price sends the price shown, with the reason,
+ * so the server does not keep the agreed one. Any other line, an item on the order whose quantity changed included, is priced again
+ * exactly as on a new order: it sends a price only when the one shown differs from the sell price, and otherwise sends none, so the
+ * server prices it itself and may charge the customer's price list or a quantity price break instead of the sell price shown.
  */
 export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], note: string): ItemsRequest {
   return {
@@ -110,9 +111,9 @@ export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], n
       const pack = chosenPack(l.product, l.unitId);
       const agreed = agreedLine(o, l);
       const agreedPrice = agreed?.unit_price_minor;
-      const kept = agreed !== undefined && milliOf(agreed.qty ?? '0') === f.qtyMilli && f.priceMinor === agreedPrice;
-      const typed =
-        f.priceMinor !== defaultPrice(l.product, pack?.unit_id) || (agreed !== undefined && f.priceMinor !== agreedPrice);
+      const sameQty = agreed !== undefined && milliOf(agreed.qty ?? '0') === f.qtyMilli;
+      const kept = sameQty && f.priceMinor === agreedPrice;
+      const typed = f.priceMinor !== defaultPrice(l.product, pack?.unit_id) || (sameQty && f.priceMinor !== agreedPrice);
       return {
         product_id: l.product.id ?? '',
         qty: qtyString(f.qtyMilli),
