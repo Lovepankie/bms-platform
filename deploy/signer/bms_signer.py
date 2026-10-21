@@ -51,6 +51,18 @@ from pathlib import Path
 REPO = "RincolTech-Solutions-ltd/bms-platform"
 WORKFLOW_PATH = ".github/workflows/deploy.yml"
 RUNNER_NAME = "bms-deploy-laptop"   # the deploy runner on Jerome's laptop (ADR-040, amendment 2026-10-18)
+# GitHub-hosted runners are also trusted while DEPLOY_RUNS_ON points the deploy jobs at them (ADR-040 amendment
+# 2026-10-21): a fresh GitHub VM per job, recognised by its runner name AND by labels carrying no "self-hosted".
+HOSTED_PREFIX = "GitHub Actions "
+
+
+def trusted_runner(job: dict) -> bool:
+    name = job.get("runner_name") or ""
+    labels = job.get("labels") or []
+    if name == RUNNER_NAME:
+        return True
+    return name.startswith(HOSTED_PREFIX) and "self-hosted" not in labels and labels == ["ubuntu-latest"]
+
 IMAGE_PREFIX = "ghcr.io/rincoltech-solutions-ltd/bms-platform"
 IMAGES = ("api", "web", "proxy")
 MAX_RUN_AGE_SECONDS = 48 * 3600
@@ -178,7 +190,7 @@ def build_digests(run_info: dict, refuse) -> dict[str, str] | None:
         job = by_name.get(f"Build and push {image}")
         if not job or job.get("status") != "completed" or job.get("conclusion") != "success":
             return None
-        if job.get("runner_name") != RUNNER_NAME or job.get("head_sha") != sha:
+        if not trusted_runner(job) or job.get("head_sha") != sha:
             refuse(f"{image} build ran on {job.get('runner_name')!r} at {str(job.get('head_sha'))[:7]}")
             return None
         digest = digest_from_log(job["id"], image, sha)
