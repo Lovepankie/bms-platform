@@ -50,6 +50,19 @@ body {
   font-size: 1.1rem;
 }
 
+.brand-bar img,
+.app-footer img {
+  background: var(--color-logo-plate);
+  border-radius: var(--radius-sm);
+}
+
+/* The theme selector, at the right of the header (issue #429); the focus ring comes from forms.css. */
+.brand-bar .theme-select {
+  margin: 0 0 0 auto;
+  width: auto;
+  flex: none;
+}
+
 .btn-brand,
 .badge-brand {
   background: var(--brand);
@@ -67,12 +80,12 @@ body {
 .app-footer {
   margin-top: 32px;
   padding-top: 12px;
-  border-top: 1px solid #d9d9d9;
+  border-top: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #555;
+  color: var(--color-text-muted);
   font-size: 0.85rem;
 }
 
@@ -103,6 +116,10 @@ body {
   /* Chart slots 2 and 3 of the insights page (#153), checked with slot 1 for colour vision deficiency. */
   --rt-viz-orange: #eb6834;
   --rt-viz-green: #1baf7a;
+  /* Dark theme counterparts of the chart slots: same hues in the same order, lifted to read on the dark surface. */
+  --rt-viz-blue-dark: #4db8f0;
+  --rt-viz-orange-dark: #f08a5d;
+  --rt-viz-green-dark: #3ccf97;
 
   /* The Rincol default of the shell's brand pair; a tenant colour replaces both inline. */
   --brand: var(--rt-blue-strong);
@@ -119,6 +136,7 @@ body {
   --color-primary: var(--brand);
   --color-on-primary: var(--brand-contrast);
   --color-primary-hover: color-mix(in srgb, var(--color-primary) 86%, #000);
+  --color-primary-active: color-mix(in srgb, var(--color-primary) 76%, #000);
   --color-accent: var(--rt-blue);
   --color-accent-tint: var(--rt-blue-tint);
   --color-link: var(--rt-blue-strong);
@@ -131,6 +149,17 @@ body {
   --color-warning-tint: #fffaeb;
   --color-info-tint: var(--rt-blue-tint);
   --color-scrim: rgba(16, 24, 40, 0.62); /* dims the page behind a guided tour step */
+  /* Roles added for the theme selector (#429): each has a light and a dark value (docs/ui/design-system.md). */
+  --color-neutral-tint: var(--rt-grey-100); /* disabled and pressed controls, skeletons, hairlines inside tables */
+  --color-danger-fill: var(--color-danger); /* the destructive button; text on it is always white */
+  --color-inverse: var(--rt-grey-900); /* toasts and chart read-outs, drawn the other way round */
+  --color-on-inverse: #ffffff;
+  --color-logo-plate: transparent; /* a logo may be dark on transparent; the dark theme sets it light */
+  --color-hover: var(--rt-grey-50);
+  --viz-1-value: var(--rt-blue-strong);
+  --viz-2-value: var(--rt-viz-orange);
+  --viz-3-value: var(--rt-viz-green);
+  color-scheme: light;
 
   /* Type */
   --font-sans: 'Open Sans Variable', 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -198,4 +227,55 @@ body {
   --color-info-tint: color-mix(in srgb, var(--brand) 10%, #fff);
   --color-link: color-mix(in srgb, var(--brand) 70%, #000);
   --color-focus: color-mix(in srgb, var(--brand) 70%, #000);
+}
+
+/*
+ * The dark theme (#429). The pre-paint script (public/theme-init.js) and the selector set
+ * data-theme="light" or "dark" on <html> from the person's choice, or from the system setting
+ * while the choice is System, so these are the only dark values and nothing here repeats in a
+ * media query. The tenant brand pair is untouched: --brand still fills buttons with
+ * --brand-contrast text. Only what is drawn as text or a line on the surface is derived again
+ * (below), because a darkened mix of the brand cannot be read on a dark page.
+ */
+:root[data-theme='dark'] {
+  --color-bg: #0e141b;
+  --color-surface: #161e28;
+  --color-surface-muted: #1b2430;
+  --color-border: #2f3b4b;
+  --color-border-strong: #7d8896; /* 4.7:1 on the dark surface */
+  --color-text: #e8edf3;
+  --color-text-muted: #a9b4c3;
+  --color-accent-tint: #10283a;
+  --color-info-tint: #10283a;
+  --color-link: #5cc0f2;
+  --color-focus: #5cc0f2;
+  --color-danger: #f97066;
+  --color-danger-tint: #3b1614;
+  --color-danger-fill: #d92d20;
+  --color-success: #47cd89;
+  --color-success-tint: #0f2c1e;
+  --color-warning: #fdb022;
+  --color-warning-tint: #352509;
+  --color-scrim: rgba(0, 0, 0, 0.72);
+  --color-neutral-tint: #222c39;
+  --color-inverse: #e8edf3;
+  --color-on-inverse: #0e141b;
+  --color-logo-plate: #ffffff;
+  --color-hover: #1b2430;
+  --viz-1-value: var(--rt-viz-blue-dark);
+  --viz-2-value: var(--rt-viz-orange-dark);
+  --viz-3-value: var(--rt-viz-green-dark);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 4px 8px -4px rgba(0, 0, 0, 0.4);
+  color-scheme: dark;
+}
+
+/* A tenant colour in the dark theme: the accent family is lifted toward white so it reads on the dark surface. */
+:root[data-theme='dark'][style*='--brand'] {
+  --color-accent: color-mix(in srgb, var(--brand) 45%, #fff);
+  --color-accent-tint: color-mix(in srgb, var(--brand) 18%, var(--color-surface));
+  --color-info-tint: color-mix(in srgb, var(--brand) 18%, var(--color-surface));
+  --color-link: color-mix(in srgb, var(--brand) 35%, #fff);
+  --color-focus: color-mix(in srgb, var(--brand) 35%, #fff);
 }

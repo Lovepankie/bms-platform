@@ -107,7 +107,7 @@ describe('choosing the tour', () => {
 
   it('a cashier is never walked to retail or admin screens', () => {
     const ids = stepsFor(staffWelcome, CASHIER).map((s) => s.id);
-    expect(ids).toEqual(['welcome', 'branch', 'members', 'notifications', 'help']);
+    expect(ids).toEqual(['welcome', 'branch', 'members', 'notifications', 'theme', 'help']);
   });
 
   it('finds the page tour of the page the user is on, if the user may see it', () => {

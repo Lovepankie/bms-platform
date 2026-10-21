@@ -1,10 +1,33 @@
 import { type ReactNode, useEffect } from 'react';
+import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from './theme-mode';
 import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_SITE, type ShellBrand, THEME_PROPERTIES, themeVars } from './branding';
 
 // The shared shell (FR-TEN-08): the brand bar, the theme colour and the Powered-by footer are
 // drawn here once, around every route, so sign-in, accept-invitation, the staff area, the member
 // portal and the platform console all inherit them. An area never draws its own footer or sets
 // its own brand colour.
+
+const THEME_LABELS: Record<ThemeChoice, string> = { system: 'System', light: 'Light', dark: 'Dark' };
+
+/** The theme selector at the right of the header, on every area (issue #429): System, Light or Dark, kept on this device. */
+export function ThemeSelector() {
+  const [choice, setChoice] = useThemeChoice();
+  return (
+    <select
+      className="theme-select"
+      aria-label="Theme"
+      data-tour="theme-select"
+      value={choice}
+      onChange={(e) => setChoice(e.target.value as ThemeChoice)}
+    >
+      {THEME_CHOICES.map((value) => (
+        <option key={value} value={value}>
+          {THEME_LABELS[value]}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 export function BrandBar({ brand }: { brand: ShellBrand }) {
   return (
@@ -14,6 +37,7 @@ export function BrandBar({ brand }: { brand: ShellBrand }) {
       ) : (
         <span className="brand-name">{brand.name}</span>
       )}
+      <ThemeSelector />
     </div>
   );
 }

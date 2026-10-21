@@ -10,10 +10,10 @@
  */
 
 .iv {
-  --viz-1: var(--rt-blue-strong);
-  --viz-2: var(--rt-viz-orange);
-  --viz-3: var(--rt-viz-green);
-  --viz-grid: var(--rt-grey-100);
+  --viz-1: var(--viz-1-value);
+  --viz-2: var(--viz-2-value);
+  --viz-3: var(--viz-3-value);
+  --viz-grid: var(--color-neutral-tint);
   --viz-axis: var(--color-text-muted);
 }
 
@@ -224,8 +224,8 @@
   max-width: 420px;
   margin-inline: auto;
   padding: var(--space-2) var(--space-3);
-  background: var(--rt-grey-900);
-  color: var(--rt-white);
+  background: var(--color-inverse);
+  color: var(--color-on-inverse);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
   font-size: var(--text-sm);
@@ -316,7 +316,7 @@ line.iv-grid {
 }
 
 .iv-bar-active {
-  fill: color-mix(in srgb, var(--viz-1) 75%, var(--rt-black));
+  fill: color-mix(in srgb, var(--viz-1) 75%, var(--color-text));
 }
 
 .iv-hit {
@@ -404,7 +404,7 @@ line.iv-grid {
     'bar bar';
   gap: var(--space-1) var(--space-3);
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--rt-grey-100);
+  border-bottom: 1px solid var(--color-neutral-tint);
 }
 
 .iv-bars li:last-child {
@@ -429,7 +429,7 @@ line.iv-grid {
 }
 
 .iv-bars-bg {
-  fill: var(--rt-grey-100);
+  fill: var(--color-neutral-tint);
 }
 
 .iv-bars-value {

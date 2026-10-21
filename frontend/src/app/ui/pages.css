@@ -276,7 +276,7 @@
 
 /* A scanner needs the darkest text colour on white, whatever the tenant colour is. */
 .qr-code .qr-light {
-  fill: var(--color-surface);
+  fill: var(--rt-white);
 }
 
 .qr-code .qr-dark {

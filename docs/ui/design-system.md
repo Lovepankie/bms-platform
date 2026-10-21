@@ -1,6 +1,6 @@
 # Design system
 
-**Status:** Draft · **Chore:** #95, #106 (visual polish) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
+**Status:** Draft · **Chore:** #95, #106 (visual polish), #429 (light and dark theme) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
 
 The look of the PWA: calm, trustworthy business software in Rincol Tech blue. One design layer serves the
 landing page, the sign-in family, the staff area, every retail screen, the member portal and the platform
@@ -112,6 +112,69 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Tour rules (issue #292) | `tour/model.ts` `autoTourFor`, `host.tsx` | At most one tour starts by itself per page load; the rest wait for the next visit. A user with no tour history gets only the first-run (Welcome) tour, and every "New:" tour is marked seen for them at that moment, since they have nothing to compare against. One "Do not show tours again" checkbox (progress key `tours-off`) stops every automatic tour, "New:" ones included; Help still replays any tour |
 | Help | `HelpMenu` in the staff bar | A `dialog.sheet` with Take the tour and Show me this page |
 
+## Light and dark theme (#429)
+
+A selector in the header, at the top right of every area (staff, member, operator, public pages), offers **System**,
+**Light** and **Dark**. It is a native `<select>` with `aria-label="Theme"` and the shared focus ring, so it is reachable
+by keyboard, and the welcome tours point at it (`data-tour="theme-select"`, the step "Light or dark").
+
+- **Remembered per person per device.** The choice is kept in the browser's `localStorage` under `bms.theme` (`light` or
+  `dark`; System keeps nothing). It is never sent to the server: a person's browser profile on a device is the person.
+- **Follows the system by default.** While the choice is System the theme follows `prefers-color-scheme`, live.
+- **No flash.** `frontend/public/theme-init.js` is a blocking script in the `<head>` (a file, because the production CSP is
+  `script-src 'self'`). Before the first paint it sets `data-theme="light|dark"` and the inline `color-scheme` on `<html>` (so the canvas and scrollbars match the choice, not the
+  system, before the stylesheet lands) and the `theme-color` meta tag. The app's `src/app/theme-mode.ts` does the same afterwards and holds the same key and colours.
+- **One dark set.** `theme.css` has a single `:root[data-theme='dark']` block, so nothing repeats in a media query. The
+  palette tokens (`--rt-*`) do not change with the theme; a stylesheet draws with the colour roles below, which do, and
+  `design-guard.test.ts` fails a stylesheet that uses a palette token other than white text on a strong fill, black for a
+  darker mix and the QR code's fixed pair (a scanner needs black on white in both themes).
+- **The installed app's theme colour.** The `theme-color` meta tag is `#0077b6` in the light theme and `#0e141b` (the dark
+  page) in the dark one, and changes with the choice. The manifest keeps `theme_color: #0077b6` and
+  `background_color: #ffffff`, because a manifest is one static file: they colour only the launch splash, and the page's own
+  meta tag replaces the theme colour as soon as it loads. **iOS limitation:** an installed iPhone app takes its status bar
+  from `apple-mobile-web-app-status-bar-style`, which stays `default` (a light bar) whatever the choice, so in Dark the
+  status bar of the installed iOS app stays light; Android and desktop browsers follow the `theme-color` meta tag.
+- **Blocked storage.** If the browser blocks `localStorage`, the choice is held in memory for the visit, so the picker, the
+  page and the system-follow listener stay in step until the app is closed.
+- **Logos.** A logo may be dark on transparent, so in the dark theme the brand bar and footer logos sit on a white plate
+  (`--color-logo-plate`).
+
+Token pairs (light, dark). Every text role is 4.5:1 or more on its surface in both themes; edges, the focus colour and the tenant accent 3:1.
+`src/app/ui/tokens.test.ts` proves each pair.
+
+| Role | Light | Dark |
+|---|---|---|
+| `--color-bg` (page) | `#f5f7f9` | `#0e141b` |
+| `--color-surface` | `#ffffff` | `#161e28` |
+| `--color-surface-muted` | `#fafbfc` | `#1b2430` |
+| `--color-border` | `#e5e5e5` | `#2f3b4b` |
+| `--color-border-strong` (input edges, 3:1) | `#868e96` | `#7d8896` |
+| `--color-text` | `#1d2939` | `#e8edf3` |
+| `--color-text-muted` | `#5c6370` | `#a9b4c3` |
+| `--color-link`, `--color-focus` | `#0077b6` | `#5cc0f2` |
+| `--color-accent` (tenant stripe, active tab, chosen card edge; 3:1) | `--brand` | `--brand` 45% mixed into white |
+| `--color-primary-hover` / `-active` (primary button, label stays 4.5:1) | `--color-primary` mixed toward black | unchanged: still toward black, because the label is white |
+| `--color-accent-tint`, `--color-info-tint` | `#eef9fe` | `#10283a` |
+| `--color-danger` / `-tint` | `#b42318` / `#fef3f2` | `#f97066` / `#3b1614` |
+| `--color-success` / `-tint` | `#067647` / `#ecfdf3` | `#47cd89` / `#0f2c1e` |
+| `--color-warning` / `-tint` | `#b54708` / `#fffaeb` | `#fdb022` / `#352509` |
+| `--color-danger-fill` (destructive button, white text) | `#b42318` | `#d92d20` |
+| `--color-neutral-tint` (disabled, neutral badge, skeleton, hairline) | `#eeeeee` | `#222c39` |
+| `--color-hover` (button hover) | `#f5f7f9` | `#1b2430` |
+| `--color-inverse` / `--color-on-inverse` (toast, chart read-out) | `#1d2939` / `#ffffff` | `#e8edf3` / `#0e141b` |
+| `--color-scrim` (behind a tour step) | `rgba(16,24,40,.62)` | `rgba(0,0,0,.72)` |
+| `--color-logo-plate` | transparent | `#ffffff` |
+| Chart slot 1, 2, 3 (`--viz-1-value` ...) | `#0077b6`, `#eb6834`, `#1baf7a` | `#4db8f0`, `#f08a5d`, `#3ccf97` |
+
+**Meaning is kept.** Danger is red, success green and warning amber in both themes, badges and alerts keep their words
+and their tint pair, and the chart slots keep their order and hues (blue, orange, green), lifted to stand out from the
+dark surface at 3:1; every chart still carries its values in a table and on hover.
+
+**Tenant colour in the dark theme.** `--brand` and `--brand-contrast` are untouched: buttons and badges keep the tenant
+fill with its 4.5:1 text. What a tenant colour draws as text or a line on the page is derived again, because a darkened mix
+cannot be read on a dark page: `--color-link` and `--color-focus` become `color-mix(in srgb, var(--brand) 35%, #fff)`
+(4.5:1 on the dark surface for any colour, tested down to black), `--color-accent` becomes `color-mix(in srgb, var(--brand) 45%, #fff)` (3:1 on the dark surface, tested for dark brands such as `#7a0019` and `#004d40`) and the tints mix 18% of `--brand` into the dark surface.
+
 ## Rules for a new screen
 
 1. Use the components above; add a class to this catalogue rather than a style attribute. Never add an
@@ -122,20 +185,21 @@ The platform host and a tenant without a colour show the Rincol blue.
    target at least 44px, the main action last and full width.
 3. State in words as well as colour; errors in `role="alert"` with `.alert-danger`.
 4. Money through `formatMinor` (`src/components/money.ts`), in `.num` cells.
-5. A tenant colour is applied for you; never write a brand colour.
+5. A tenant colour is applied for you; never write a brand colour. Draw with the colour roles, never a palette token, so
+   the screen follows the theme (see Light and dark theme above); check a new screen in both.
 6. Give the main controls of a new screen `data-tour` ids and add the screen's steps to
    `frontend/src/tour/tours.ts` (a page tour at least), with plain, short sentences.
 
 ## Checks
 
 - `npm test` runs the token contrast test and the design guard (`src/app/ui/design-guard.test.ts`: no
-  `<style>` element, no inline HTML, and no hex colour in a component or a design layer stylesheet).
+  `<style>` element, no inline HTML, and no hex colour in a component or a design layer stylesheet, and no palette token that would not follow the theme);
+  `src/app/theme-mode.dom.test.tsx` covers the three choices, persistence, following the system, the pre-paint script and the
+  theme colour.
 - `/style` in `npm run dev` shows every component at the width of the window.
 - The screenshot walk in `docs/ui/design-system/README.md` checks every screen route for sideways
   overflow at 360px and runs axe-core (WCAG 2.1 A and AA rules, colour contrast included).
 
 ## Not yet
 
-- Dark theme tokens (`prefers-color-scheme: dark`): left out again in #106. The tenant colour rule and
-  the AA checks are written for light surfaces, so a dark theme needs its own contrast rule for `--brand`.
 - The workbox precache does not list the font files, so an offline start falls back to the system font.

@@ -15,7 +15,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       // The app is installable (ADR-050): a name, an id that never changes, a start page, standalone display, icons of 192 and
       // 512 pixels and a maskable one, so the phone's home screen, the app list and the task switcher show it as an app.
-      includeAssets: ['icon.svg', 'icons/apple-touch-icon.png', 'push-sw.js'],
+      includeAssets: ['icon.svg', 'icons/apple-touch-icon.png', 'push-sw.js', 'theme-init.js'],
       manifest: {
         id: '/staff',
         name: 'BMS',

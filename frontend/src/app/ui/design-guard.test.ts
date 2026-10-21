@@ -61,4 +61,12 @@ describe('design guard', () => {
     const css = readFileSync(join(SRC, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(css).not.toMatch(HEX);
   });
+
+  // The palette tokens do not change with the theme (#429), so a stylesheet draws with the colour roles, which do. The only
+  // palette colours left are white text on a strong fill, black for a darker mix, and the QR code's fixed pair.
+  it.each(stylesheets.map((f) => relative(SRC, f)))('%s draws with theme roles, not palette tokens', (file) => {
+    const css = readFileSync(join(SRC, file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const palette = [...css.matchAll(/var\((--rt-[a-z0-9-]+)\)/g)].map((m) => m[1]);
+    expect(palette.filter((name) => !['--rt-white', '--rt-black', '--rt-grey-900'].includes(name as string))).toEqual([]);
+  });
 });

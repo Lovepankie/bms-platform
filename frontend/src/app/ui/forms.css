@@ -43,7 +43,7 @@ textarea::placeholder {
 input:hover:not(:disabled, :focus),
 select:hover:not(:disabled, :focus),
 textarea:hover:not(:disabled, :focus) {
-  border-color: var(--rt-grey-600);
+  border-color: var(--color-text-muted);
 }
 
 input:focus-visible,
@@ -71,7 +71,7 @@ label:focus-within:not(:has(> input[type='radio'], > input[type='checkbox'])) {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background-color: var(--rt-grey-100);
+  background-color: var(--color-neutral-tint);
   color: var(--color-text-muted);
 }
 

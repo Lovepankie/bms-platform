@@ -47,10 +47,12 @@ import { BusinessNotificationsScreen } from '../areas/staff/notifications/busine
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
+import { PLATFORM_BRAND } from '../app/branding';
+import { BrandBar } from '../app/shell';
 import { CORE_TOURS, TOURS } from './tours';
 
-// One test per tour: render the screen each step points at (under the staff bar, as the staff
-// layout draws it), as the user the tour is for, and prove its data-tour target is there. Renaming a screen or dropping an anchor fails here, not on
+// One test per tour: render the screen each step points at (under the shell's brand bar and the staff bar, as the staff
+// layout draws them), as the user the tour is for, and prove its data-tour target is there. Renaming a screen or dropping an anchor fails here, not on
 // a customer's phone. Steps behind a feature flag have no screen yet and are checked separately.
 
 const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff'] }) });
@@ -197,6 +199,7 @@ function render(me: Me, path: string | undefined): string {
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch }}>
+          <BrandBar brand={PLATFORM_BRAND} />
           <StaffBarForTest />
           {screen(path)}
         </StaffContext.Provider>

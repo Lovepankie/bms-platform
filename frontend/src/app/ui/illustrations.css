@@ -62,7 +62,7 @@
 }
 
 .ill-line {
-  stroke: var(--rt-grey-200);
+  stroke: var(--color-border);
 }
 
 .ill-accent-line {

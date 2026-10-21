@@ -45,6 +45,14 @@ const notifications: TourStep = {
   body: 'Tap Notifications to install BMS on your phone. There you can also turn on a notice for when something needs you, such as an approval.',
 };
 
+// The theme selector in the header (issue #429): System, Light or Dark, kept on this device. Every area has it.
+const theme: TourStep = {
+  id: 'theme',
+  target: 'theme-select',
+  title: 'Light or dark',
+  body: 'Choose System, Light or Dark here, at the top right. System follows your phone or computer, and your choice is kept on this device.',
+};
+
 const insights: TourStep = {
   id: 'insights',
   target: 'nav-insights',
@@ -107,7 +115,8 @@ export const adminWelcome: Tour = {
   // Version 13 adds the Controls step (issue #357): sales cancelled, goods taken back, prices changed, restocks cancelled and quantities corrected, by shop and person.
   // Version 14 adds the Two-step sign-in step (issue #348): who must use a code from the phone, and how long they have to set it up.
   // Version 15 adds the Notifications step: install the app and turn on notifications (ADR-050).
-  version: 15,
+  // Version 16 adds the Light or dark step (issue #429): the theme selector at the top right.
+  version: 16,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -338,6 +347,7 @@ export const adminWelcome: Tour = {
     },
     insights,
     notifications,
+    theme,
     help,
   ],
 };
@@ -350,7 +360,8 @@ export const retailSales: Tour = {
   // Version 6 adds the Cash and change step (issue #346): the amount received and the change to give on a cash sale.
   // Version 7 adds the Correct step on the stock list (issue #351): fix a wrong quantity or category where you see it.
   // Version 8 adds the Notifications step: install the app and turn on notifications (ADR-050).
-  version: 8,
+  // Version 9 adds the Light or dark step (issue #429): the theme selector at the top right.
+  version: 9,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -493,6 +504,7 @@ export const retailSales: Tour = {
       body: 'On a phone, your most used pages are always at the bottom of the screen.',
     },
     notifications,
+    theme,
     help,
   ],
 };
@@ -500,7 +512,8 @@ export const retailSales: Tour = {
 export const staffWelcome: Tour = {
   id: 'staff-welcome',
   // Version 3 adds the Notifications step: install the app and turn on notifications (ADR-050).
-  version: 3,
+  // Version 4 adds the Light or dark step (issue #429): the theme selector at the top right.
+  version: 4,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -540,6 +553,7 @@ export const staffWelcome: Tour = {
       body: 'Sales and stock live here.',
     },
     notifications,
+    theme,
     help,
   ],
 };
