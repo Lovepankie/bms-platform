@@ -62,14 +62,14 @@ class JdbcStockLedger implements StockLedger {
                 if (next.signum() < 0 || locked.reserved().signum() == 0) {
                     throw ApiException.rule(
                             "insufficient_stock",
-                            "Product " + m.productId() + " has "
+                            itemName(m.productId()) + " has "
                                     + current.stripTrailingZeros().toPlainString()
                                     + " in stock at this branch, so this quantity cannot be taken.");
                 }
                 // Issue #385, ADR-052: the units are on the shelf but kept for customer orders.
                 throw ApiException.rule(
                         "insufficient_stock",
-                        "Product " + m.productId() + " has "
+                        itemName(m.productId()) + " has "
                                 + current.stripTrailingZeros().toPlainString() + " in stock at this branch, of which "
                                 + locked.reserved().stripTrailingZeros().toPlainString()
                                 + " are kept for customer orders, so this quantity cannot be taken. Deliver or cancel"
@@ -150,7 +150,7 @@ class JdbcStockLedger implements StockLedger {
                 BigDecimal shown = free.signum() < 0 ? BigDecimal.ZERO : free;
                 throw ApiException.rule(
                         "insufficient_stock",
-                        "Product " + h.productId() + " has "
+                        itemName(h.productId()) + " has "
                                 + shown.stripTrailingZeros().toPlainString()
                                 + " free at this branch ("
                                 + locked.reserved().stripTrailingZeros().toPlainString()
@@ -213,7 +213,10 @@ class JdbcStockLedger implements StockLedger {
         }
     }
 
-    /** The item as the seller knows it, for a refusal in plain words (issue #393): its description, never its id. */
+    /**
+     * The item as the seller knows it, for every {@code insufficient_stock} refusal in plain words (issue #393): its description,
+     * never its id. A product deleted meanwhile (never in practice, the rows stay) reads as "This item".
+     */
     private String itemName(UUID productId) {
         return jdbc.sql("SELECT description FROM retail_products WHERE id = ?")
                 .param(productId)

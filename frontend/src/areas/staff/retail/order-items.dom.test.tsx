@@ -94,7 +94,8 @@ describe('Change the items on the order page', () => {
     const [id, version, body, key] = changeItems.mock.calls[0] as [string, number, { lines: unknown[]; note?: string }, string];
     expect(id).toBe(ID);
     expect(version).toBe(4);
-    expect(body.lines).toEqual([{ product_id: 'p1', qty: '3.000' }]);
+    // The price shown is today's, so it is sent as shown and the server charges exactly that.
+    expect(body.lines).toEqual([{ product_id: 'p1', qty: '3.000', unit_price_minor: 10000 }]);
     expect(body.note).toBe('Test bigger basket');
     expect(key).toMatch(/\w{8,}/);
   });

@@ -128,13 +128,25 @@ describe('changing the items of an order (issue #393)', () => {
   it('keeps the price agreed on a line left as it was; a new quantity or a new item is priced again unless a price was typed', () => {
     const lines = itemsDraft(taken, { p1: romper }) ?? [];
     expect(buildItemsRequest(taken, lines, '').lines[0]).toEqual({ product_id: 'p1', qty: '2.000', unit_price_minor: 9000 });
-    const r = buildItemsRequest(taken, [{ ...lines[0]!, qty: '3' }, newLine({ ...romper, id: 'p2' })], ' Bigger size ');
-    expect(r.lines[0]).toEqual({ product_id: 'p1', qty: '3.000' });
+    // The quantity changed and the price left at today's (as the screen shows it): today's price is sent, not the one agreed.
+    const r = buildItemsRequest(taken, [withItemsQty(taken, lines[0]!, '3'), newLine({ ...romper, id: 'p2' })], ' Bigger size ');
+    expect(r.lines[0]).toEqual({ product_id: 'p1', qty: '3.000', unit_price_minor: 10000 });
+    // A brand new item at today's price: nothing to say about the price.
     expect(r.lines[1]).toEqual({ product_id: 'p2', qty: '1.000' });
     expect(r.note).toBe('Bigger size');
     expect(buildItemsRequest(taken, lines, '')).not.toHaveProperty('note');
     const typed = buildItemsRequest(taken, [{ ...lines[0]!, qty: '3', price: '8500', reason: 'Test regular customer' }], '');
     expect(typed.lines[0]).toEqual({ product_id: 'p1', qty: '3.000', unit_price_minor: 8500, price_override_reason: 'Test regular customer' });
+  });
+
+  it('sends the price shown whenever it differs from today\'s or from the one agreed, so the server charges what the screen says', () => {
+    const line = (itemsDraft(taken, { p1: romper }) ?? [])[0]!;
+    // A bigger quantity at the price agreed: a change of price today, sent with its reason.
+    const held = buildItemsRequest(taken, [{ ...line, qty: '3', reason: 'Test same price for three' }], '');
+    expect(held.lines[0]).toEqual({ product_id: 'p1', qty: '3.000', unit_price_minor: 9000, price_override_reason: 'Test same price for three' });
+    // The line taken off and put back at today's price, same quantity: today's price is sent, not the one agreed.
+    const again = buildItemsRequest(taken, [{ ...newLine(romper), qty: '2' }], '');
+    expect(again.lines[0]).toEqual({ product_id: 'p1', qty: '2.000', unit_price_minor: 10000 });
   });
 
   it('shows today\'s price when the quantity of an item on the order changes, and the price agreed when it is back', () => {

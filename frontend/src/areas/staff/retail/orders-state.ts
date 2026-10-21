@@ -99,7 +99,8 @@ export function withItemsQty(o: Pick<Order, 'lines'>, l: DraftLine, qty: string)
 /**
  * The new items for the server. A line left as it is on the order (the same item, unit and quantity at the price agreed) sends the
  * price agreed, which the server keeps. Any other line, an item on the order whose quantity changed included, is priced again as on
- * a new order: it sends a price only when one was typed that differs from today's and from the one agreed.
+ * a new order: it sends the price shown whenever that differs from today's price or from the one agreed, so the screen and the
+ * server always charge the same, with the reason when it is a change of price.
  */
 export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], note: string): ItemsRequest {
   return {
@@ -110,7 +111,8 @@ export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], n
       const agreed = agreedLine(o, l);
       const agreedPrice = agreed?.unit_price_minor;
       const kept = agreed !== undefined && milliOf(agreed.qty ?? '0') === f.qtyMilli && f.priceMinor === agreedPrice;
-      const typed = f.priceMinor !== defaultPrice(l.product, pack?.unit_id) && f.priceMinor !== agreedPrice;
+      const typed =
+        f.priceMinor !== defaultPrice(l.product, pack?.unit_id) || (agreed !== undefined && f.priceMinor !== agreedPrice);
       return {
         product_id: l.product.id ?? '',
         qty: qtyString(f.qtyMilli),
