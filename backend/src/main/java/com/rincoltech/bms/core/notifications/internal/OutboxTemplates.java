@@ -316,30 +316,74 @@ class OutboxTemplates {
     // no text names a person or carries a phone number, an identity number or an amount: it says what happened and
     // where to
     // look. {path} is not a placeholder here: the channel reads it from the row's parameters as the page a tap opens.
-    private static final Map<String, Template> PUSH = Map.of(
-            "retail.sale_voided",
-            new Template("A sale was voided", "A sale at {branch_name} was voided. Open it to see the reason."),
-            "retail.write_off_alone",
-            new Template(
-                    "A debt was written off",
-                    "One administrator wrote off a debt at {business_name} without a second approval. Check the sale."),
-            "core.approval_policy_weakened",
-            new Template(
-                    "An approval limit was raised",
-                    "The amount that can be done without a second person was raised for {action_label}. If you did not expect"
-                            + " this, check Business set-up."),
-            "core.signin_policy_weakened",
-            new Template(
-                    "Two-step sign-in is no longer required",
-                    "Two-step sign-in is no longer required of every user. If you did not expect this, check Business set-up."),
-            "retail.transfer_dispatched",
-            new Template(
-                    "Stock is on its way to you",
-                    "Stock was sent from {from_branch_name} to {to_branch_name}. Receive it when it arrives."),
-            "core.approval_waiting",
-            new Template(
-                    "An approval is waiting for you",
-                    "{action_label} is waiting for your decision. Open Approvals to see it."));
+    private static final Map<String, Template> PUSH = Map.ofEntries(
+            Map.entry(
+                    "retail.sale_voided",
+                    new Template(
+                            "A sale was voided", "A sale at {branch_name} was voided. Open it to see the reason.")),
+            Map.entry(
+                    "retail.write_off_alone",
+                    new Template(
+                            "A debt was written off",
+                            "One administrator wrote off a debt at {business_name} without a second approval. Check the"
+                                    + " sale.")),
+            Map.entry(
+                    "core.approval_policy_weakened",
+                    new Template(
+                            "An approval limit was raised",
+                            "The amount that can be done without a second person was raised for {action_label}. If you did"
+                                    + " not expect this, check Business set-up.")),
+            Map.entry(
+                    "core.signin_policy_weakened",
+                    new Template(
+                            "Two-step sign-in is no longer required",
+                            "Two-step sign-in is no longer required of every user. If you did not expect this, check"
+                                    + " Business set-up.")),
+            Map.entry(
+                    "retail.transfer_dispatched",
+                    new Template(
+                            "Stock is on its way to you",
+                            "Stock was sent from {from_branch_name} to {to_branch_name}. Receive it when it arrives.")),
+            Map.entry(
+                    "core.approval_waiting",
+                    new Template(
+                            "An approval is waiting for you",
+                            "{action_label} is waiting for your decision. Open Approvals to see it.")),
+            // Issue #412, ADR-057: the everyday notices. Same lock-screen rule: no customer's name or phone, no amount.
+            Map.entry(
+                    "retail.order_new",
+                    new Template(
+                            "New order at {branch_name}",
+                            "A new order came in by {source_label} for {branch_name}. Open it to pack it.")),
+            Map.entry(
+                    "retail.order_out_for_delivery",
+                    new Template(
+                            "Your order is out for delivery",
+                            "An order you took at {branch_name} is out for delivery. Open it to follow it.")),
+            Map.entry(
+                    "retail.order_delivered",
+                    new Template(
+                            "Your order was delivered",
+                            "An order you took at {branch_name} was delivered and is now a sale.")),
+            Map.entry(
+                    "retail.low_stock",
+                    new Template("Stock is running low", "{item_name} at {branch_name} is {reason}. Restock it soon.")),
+            Map.entry(
+                    "retail.credit_due",
+                    new Template(
+                            "Credit payments to collect", "{credit_words}. Open Credit control to follow them up.")),
+            Map.entry(
+                    "retail.credit_due_branch",
+                    new Template(
+                            "Credit payments to collect",
+                            "At {branch_name}, {credit_words}. Open Credit control to follow them up.")),
+            Map.entry(
+                    "retail.daily_summary",
+                    new Template("Today's sales, {day}", "{shops}. Open the day's sales to see the totals.")),
+            // The summary of a day whose closing time passed while the server was down, sent the next morning.
+            Map.entry(
+                    "retail.daily_summary_late",
+                    new Template("Yesterday's sales, {day}", "{shops}. Open the sales to see the totals.")));
 
     private static final Map<String, Template> TELEGRAM = Map.of(
             "onboarding.operator_alert",

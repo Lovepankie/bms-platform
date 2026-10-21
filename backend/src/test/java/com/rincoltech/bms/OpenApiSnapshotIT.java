@@ -36,6 +36,12 @@ class OpenApiSnapshotIT extends IntegrationTest {
         if ("true".equals(System.getenv("UPDATE_OPENAPI_SNAPSHOT"))) {
             Files.writeString(SNAPSHOT, rendered);
         }
+        // Kept with the test reports (CI uploads them when a job fails), so a machine that cannot run the
+        // integration tests (no Docker) can take a contract change from a CI run: copy it to
+        // docs/api/openapi.json, then run npm run gen:api.
+        Path reports = Path.of("target/failsafe-reports");
+        Files.createDirectories(reports);
+        Files.writeString(reports.resolve("openapi.generated.json"), rendered);
         assertThat(Files.exists(SNAPSHOT))
                 .as("docs/api/openapi.json is missing; run `make openapi`")
                 .isTrue();

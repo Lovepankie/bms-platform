@@ -148,6 +148,8 @@ A push subscription is per user per device (`push_subscriptions`, forced row-lev
 | An invalid-curve or oversized key from a client | The subscription point is checked to be on P-256 and the secret to be 16 bytes at subscribe; a payload over one record is refused |
 | Theft of the VAPID private key | It lives only in the host environment (`BMS_PUSH_VAPID_PRIVATE_KEY`), never in git, logs or the API; rotation is in `docs/runbooks/push-notifications.md` |
 | A push failure harming a business event | The notice is an event handled in a savepoint; the sender runs outside any transaction; failures follow the outbox retry and expiry |
+| A notice telling people outside the branch or the role (issue #412, ADR-057) | Recipients are read from role assignments at publish time: a new order reaches only holders of `retail.order.manage` given for that shop (`BranchStaff`), low stock the holders of `retail.stock.read` at that branch and the branchless administrators, credit due the administrators and the holders of `retail.sale.all_sellers` given for that shop, the daily summary the administrators; no notice carries cost, profit or any amount, so `retail.profit.read` is never needed to read one |
+| A permission prompt nobody asked for (issue #412) | The turn-on card asks the browser only inside the tap on Turn on, and asks at most three times on a device |
 
 ## 8.3 Role-based access control
 

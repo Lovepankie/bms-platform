@@ -902,7 +902,7 @@ export const usersPage: Tour = {
 // tour in this file is; the new screen needs exactly this one.
 export const notificationsPage: Tour = {
   id: 'page-notifications',
-  version: 1,
+  version: 2,
   title: 'This page: notifications and the app',
   audience: () => true,
   autoStart: false,
@@ -926,6 +926,12 @@ export const notificationsPage: Tour = {
       optional: true,
       title: 'Your devices',
       body: 'Each device that tells you things is listed here. Remove one you no longer use.',
+    },
+    {
+      // Issue #412: the turn-on card shows in the staff area of the installed app, not on this page, so this step points at nothing.
+      id: 'turn-on-card',
+      title: 'Asked once, with one tap',
+      body: 'When you open the installed app, a card asks "Get told when something needs you?". Tap Turn on and your phone asks once. Not now asks again in a few days, at most three times.',
     },
   ],
 };
@@ -981,6 +987,36 @@ export const twoStepPage: Tour = {
       target: 'twostep-choice',
       title: 'Who must use it',
       body: 'Optional means nobody has to. Pick some roles, or everyone, to require it. Before you save, you see who will be asked and from which day.',
+    },
+  ],
+};
+
+// Business set-up > Notifications for the business (issue #412): what the business sends by push, and when the daily summary goes.
+export const businessNotificationsPage: Tour = {
+  id: 'page-business-notifications',
+  version: 1,
+  title: 'This page: notifications for the business',
+  audience: isTenantAdmin,
+  autoStart: false,
+  page: '/staff/setup/notifications',
+  steps: [
+    {
+      id: 'intro',
+      target: 'business-notify-intro',
+      title: 'What your staff are told',
+      body: 'BMS can tell your staff on their phones when something needs them. Each person still turns it on for their own phone.',
+    },
+    {
+      id: 'switches',
+      target: 'business-notify-switches',
+      title: 'Each notice on or off',
+      body: 'New orders, orders delivered, stock running low, credit to collect and the daily summary are all on until you switch one off.',
+    },
+    {
+      id: 'time',
+      target: 'business-notify-time',
+      title: 'The daily summary',
+      body: 'Choose when the owner and the administrators get the number of sales at each shop. It goes at 20:00 unless you change it.',
     },
   ],
 };
@@ -1534,7 +1570,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, notificationsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, notificationsPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

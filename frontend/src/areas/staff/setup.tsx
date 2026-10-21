@@ -297,6 +297,14 @@ export function Setup() {
         </fieldset>
 
         <fieldset>
+          <legend>Notifications</legend>
+          <p>
+            <Link to={'/staff/setup/notifications' as never}>Notifications for the business</Link>: which notices your staff get on their phones (new
+            orders, low stock, credit to collect) and when the daily summary goes.
+          </p>
+        </fieldset>
+
+        <fieldset>
           <legend>Text messages</legend>
           <p>
             <Link to="/staff/sms">SMS settings, wording and opt-outs</Link>: switch text messages on, choose the sender name and sending hours, and reword the messages.

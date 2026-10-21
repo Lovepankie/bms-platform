@@ -39,3 +39,18 @@ stay and work again when keys are set (with the old pair; a new pair needs the r
 - A device is removed by itself when its push service says it is gone (404 or 410). A rejected device is kept.
 - Logs carry the outbox id, counts and the push service's status only: never an endpoint, a key or the text.
 - The service worker file `/push-sw.js` is served `no-cache`; if handlers look stale after a deploy, hard refresh the installed app once.
+
+## The everyday notices (issue #412, ADR-057)
+
+- A business chooses what it sends on Business set-up > Notifications for the business (`/staff/setup/notifications`): new orders,
+  orders on their way and delivered, stock running low, credit payments to collect and the daily summary, all on until switched off,
+  and the summary time (20:00 on the business's clock by default). The safeguard notices have no switch.
+- The job `retail.daily-notices` runs on every quarter hour and does nothing while the keys are unset. Per retail tenant it prepares
+  the credit payments notice between 08:00 and 12:00 and the summary at the chosen time (a quarter hour up to 23:30), once each a
+  day; a summary missed while the server was down goes the next morning, before 12:00, as yesterday's: a row in `retail_notice_runs` (tenant, kind,
+  day) records that the day's notice was prepared.
+- Low stock is judged after every movement that takes stock out, by the item's level (`retail_stock_minimums`) or by the pace, and is
+  told once per item, branch and day (the outbox key carries the day). Nobody hears it unless they hold `retail.stock.read` at that
+  branch or are an administrator, and have a device.
+- The turn-on card asks on a device at most three times; what was answered is in that browser's `localStorage` (`bms.push.ask`).
+  Clearing the site's data shows the card again.

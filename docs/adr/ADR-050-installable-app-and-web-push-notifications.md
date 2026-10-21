@@ -8,6 +8,9 @@ sessions) and ADR-015 (maker-checker). Does not supersede any of them. The contr
 chapter 6 section 6.5 (`push_subscriptions`) and the threat model in chapter 8 section 8.2b. The operations note is
 `docs/runbooks/push-notifications.md`.
 
+Extended by ADR-057 (issue #412): five everyday notices with per-business switches, a one-tap turn-on card, and two new audiences
+(`BranchStaff`, `AnyOf`). No decision here changes.
+
 ## Context
 
 The staff app is a PWA (ADR-009) with a service worker, but it was not installable in any way a person would recognise: the manifest

@@ -18,6 +18,8 @@ export interface InstallState {
   canPrompt: boolean;
   /** The offer was waved away on this device, recently enough that it is not shown again. */
   dismissed: boolean;
+  /** The person accepted the install in this page (issue #412: the moment to offer notifications). */
+  accepted: boolean;
 }
 
 /** After "Not now" the banner stays away for this long on this device; the Notifications and app page always has the control. */
@@ -56,13 +58,19 @@ function readDismissed(): boolean {
 }
 
 let prompt: BeforeInstallPromptEvent | null = null;
-let state: InstallState = { installed: standalone(), canPrompt: false, dismissed: readDismissed() };
+let state: InstallState = { installed: standalone(), canPrompt: false, dismissed: readDismissed(), accepted: false };
 
 const listeners = new Set<() => void>();
 
 function update(next: Partial<InstallState>) {
   const merged = { ...state, ...next };
-  if (merged.installed === state.installed && merged.canPrompt === state.canPrompt && merged.dismissed === state.dismissed) return;
+  if (
+    merged.installed === state.installed &&
+    merged.canPrompt === state.canPrompt &&
+    merged.dismissed === state.dismissed &&
+    merged.accepted === state.accepted
+  )
+    return;
   state = merged;
   for (const listener of listeners) listener();
 }
@@ -91,7 +99,7 @@ export const subscribe = (listener: () => void) => {
 export const getState = () => state;
 
 /** Server snapshot: nothing is installable while there is no browser to install into. */
-export const getServerState = (): InstallState => ({ installed: false, canPrompt: false, dismissed: false });
+export const getServerState = (): InstallState => ({ installed: false, canPrompt: false, dismissed: false, accepted: false });
 
 /** "Not now": remembered on this device for {@link DISMISS_DAYS} days. */
 export function dismiss() {
@@ -111,5 +119,6 @@ export async function requestInstall(): Promise<'accepted' | 'dismissed' | 'unav
   update({ canPrompt: false });
   await pending.prompt();
   const { outcome } = await pending.userChoice;
+  if (outcome === 'accepted') update({ accepted: true });
   return outcome;
 }

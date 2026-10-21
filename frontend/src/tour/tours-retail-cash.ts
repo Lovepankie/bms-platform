@@ -32,7 +32,7 @@ const step = (s: Omit<TourStep, 'module'>): TourStep => ({ module: 'retail', ...
 
 export const productsPage: Tour = {
   id: 'page-products',
-  version: 3,
+  version: 4,
   title: 'This page: items',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
@@ -44,6 +44,8 @@ export const productsPage: Tour = {
     step({ id: 'search', target: 'product-search', title: 'Find an item', body: 'Type a name, a code or a category. The list narrows as you type.' }),
     step({ id: 'filters', target: 'product-filters', title: 'Narrow the list', body: 'Pick a category, or choose Switched off to see items you no longer sell.' }),
     step({ id: 'edit', target: 'product-list', title: 'Change an item', body: 'Tap Edit on an item to change its name, category or unit. Tap Stock to see how much of it you hold.' }),
+    // Issue #412: the low-stock level is on the item's page, under Edit.
+    step({ id: 'minimum', target: 'product-list', title: 'Warn me when stock is below', body: 'Tap Edit on an item to set when you are told it is running low. Set one level for every shop and store, or a different one for a shop. With no level, you are told when it would run out within 14 days.' }),
     step({ id: 'price', target: 'product-list', needs: [PRICE_EDIT], optional: true, title: 'Change a price', body: 'Tap Change price on an item. The old price stays in its history, so earlier sales keep the price they were made at.' }),
   ],
 };

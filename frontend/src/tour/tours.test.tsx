@@ -43,6 +43,7 @@ import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
 import { NotificationsPage } from '../areas/staff/notifications/page';
+import { BusinessNotificationsScreen } from '../areas/staff/notifications/business';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
@@ -90,6 +91,8 @@ function screen(path: string | undefined): ReactElement {
       return <NotificationsPage />;
     case '/staff/setup/two-step':
       return <TwoStepPolicyScreen />;
+    case '/staff/setup/notifications':
+      return <BusinessNotificationsScreen />;
     case '/staff/retail':
       return (
         <>
@@ -180,6 +183,11 @@ function render(me: Me, path: string | undefined): string {
   // What the Users page reads, so its list and search are in the static markup.
   client.setQueryData(['staff-users'], [{ id: 'u1', full_name: 'Test Seller 02', status: 'invited', roles: [{ role_key: 'retail_sales' }] }]);
   client.setQueryData(['staff-roles'], []);
+  // What the business notifications screen reads (issue #412).
+  client.setQueryData(['notification-settings'], {
+    new_orders: true, order_updates: true, low_stock: true, credit_due: true, daily_summary: true,
+    daily_summary_time: '20:00', timezone: 'Africa/Kampala', push_available: true, version: 1,
+  });
   client.setQueryData(['staff-branches'], []);
   // What the retail settings screens read, so their targets are in the static markup.
   client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
@@ -270,6 +278,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-branches': [ADMIN],
   'page-notifications': [ADMIN, CASHIER],
   'page-two-step': [ADMIN],
+  'page-business-notifications': [ADMIN],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

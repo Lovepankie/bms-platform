@@ -63,6 +63,10 @@ const staffBranchesRoute = createRoute({ getParentRoute: () => staffRoute, path:
 const staffTwoStepPolicyRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/two-step', staticData: { crumb: 'Two-step sign-in' } }).lazy(() =>
   import('../areas/staff/two-step/page').then((m) => m.Route),
 );
+// What the business sends by push and when the daily summary goes (issue #412). Under Business set-up in the trail.
+const staffBusinessNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/notifications', staticData: { crumb: 'Notifications for the business' } }).lazy(() =>
+  import('../areas/staff/notifications/business').then((m) => m.Route),
+);
 const staffOwnTwoStepRoute = createRoute({ getParentRoute: () => staffRoute, path: '/two-step', staticData: { crumb: 'Your two-step sign-in' } }).lazy(() =>
   import('../areas/staff/two-step/own').then((m) => m.Route),
 );
@@ -292,7 +296,7 @@ export const router = createRouter({
     forgotPasswordRoute,
     resetPasswordRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailCreditSalesRoute,

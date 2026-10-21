@@ -5,6 +5,7 @@ import { retailAnalytics, type CoverRow, type StockHealth } from '../../../api/r
 import { SkeletonList } from '../../../components/states';
 import { Choice, DateRange, Empty, Section, ToStock, defaultRange, moneyOrNone, plural, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
+import { StockMinimumEditor } from './stock-minimum';
 import { SlowMoversSection } from './slow-movers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 
@@ -17,6 +18,26 @@ const LEADS = [7, 14, 21, 30, 45].map((n) => ({ value: n, label: `${n} days` }))
 const COVERS = [30, 45, 60, 90].map((n) => ({ value: n, label: `${n} days` }));
 
 type NameOf = (id: string | undefined) => string;
+
+/** "Below your minimum of 10" from the server's words, which start in lower case for use inside a sentence. */
+export function lowWords(row: CoverRow): string | null {
+  const words = row.low_words;
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) + '.' : null;
+}
+
+/** Warn me when stock is below, opened on a tap from a reorder row, so the list itself loads nothing more (issue #412). */
+function LevelToggle({ row }: { row: CoverRow }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <br />
+      <button type="button" className="btn-ghost btn-sm" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Close' : row.min_qty ? 'Change the level' : 'Set a level'}
+      </button>
+      {open && <StockMinimumEditor productId={row.product_id ?? ''} unit={row.unit} />}
+    </>
+  );
+}
 
 function CoverTable({ rows, nameOf, reorder }: { rows: CoverRow[]; nameOf: NameOf; reorder: boolean }) {
   const phone = useIsPhone();
@@ -37,6 +58,8 @@ function CoverTable({ rows, nameOf, reorder }: { rows: CoverRow[]; nameOf: NameO
             <td>
               <ToStock>{r.description}</ToStock><br />
               <span className="hint">{r.code}, {nameOf(r.branch_id)}</span>
+              {reorder && lowWords(r) && <><br /><span className="badge badge-warning">{lowWords(r)}</span></>}
+              {reorder && <LevelToggle row={r} />}
               {phone && <><br /><span className="hint">{showQty(r.qty_on_hand ?? '0')} {r.unit} in stock, {showQty(r.sold_last30 ?? '0')} sold in 30 days</span></>}
             </td>
             {!phone && <td className="num">{showQty(r.qty_on_hand ?? '0')} {r.unit}</td>}
@@ -59,7 +82,10 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
   const shrinkCost = shrink.some((s) => s.net_cost_minor !== undefined);
   return (
     <>
-      <Section title={`Reorder: under ${data.lead_days} days of cover`} hint={`At the pace of the last ${data.velocity_days} days. Buy enough to reach ${data.cover_days} days of cover.`}>
+      <Section
+        title={`Reorder: under ${data.lead_days} days of cover, or below your level`}
+        hint={`Below the level you set for the item, or running out within ${data.lead_days} days at the pace of the last ${data.velocity_days} days, whichever comes first. Buy enough to reach ${data.cover_days} days of cover and at least the level.`}
+      >
         <CoverTable rows={reorder.items ?? []} nameOf={nameOf} reorder />
         {(reorder.total ?? 0) > (reorder.items ?? []).length && <p className="hint">Showing {(reorder.items ?? []).length} of {reorder.total}. Raise the Top number to see more.</p>}
       </Section>

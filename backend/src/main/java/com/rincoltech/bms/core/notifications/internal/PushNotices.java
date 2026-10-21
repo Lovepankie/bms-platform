@@ -6,6 +6,7 @@ import com.rincoltech.bms.kernel.PushNotice;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,6 +48,7 @@ class PushNotices {
     private final JdbcClient jdbc;
     private final VapidKeys keys;
     private final BusinessClock clock;
+    private final NotificationSwitches switches;
     private final TransactionTemplate savepoint;
 
     PushNotices(
@@ -54,11 +56,13 @@ class PushNotices {
             JdbcClient jdbc,
             VapidKeys keys,
             BusinessClock clock,
+            NotificationSwitches switches,
             PlatformTransactionManager transactionManager) {
         this.outbox = outbox;
         this.jdbc = jdbc;
         this.keys = keys;
         this.clock = clock;
+        this.switches = switches;
         this.savepoint = new TransactionTemplate(transactionManager);
         this.savepoint.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
     }
@@ -83,6 +87,11 @@ class PushNotices {
     }
 
     private void write(PushNotice notice) {
+        // Issue #412: a business can switch each of the everyday notices off; the safeguard notices of ADR-050 have no
+        // switch.
+        if (!switches.allows(notice.template())) {
+            return;
+        }
         List<UUID> people = recipients(notice.template(), notice.audience());
         if (people.isEmpty()) {
             return;
@@ -104,6 +113,14 @@ class PushNotices {
     private List<UUID> recipients(String template, PushNotice.Audience audience) {
         return switch (audience) {
             case PushNotice.Holders h -> holders(h, ON_THE_ROAD.contains(template));
+            case PushNotice.BranchStaff b -> branchStaff(b);
+            case PushNotice.AnyOf any -> {
+                Set<UUID> out = new LinkedHashSet<>();
+                for (PushNotice.Audience part : any.parts()) {
+                    out.addAll(recipients(template, part));
+                }
+                yield new ArrayList<>(out);
+            }
             case PushNotice.Users u -> {
                 List<UUID> out = new ArrayList<>();
                 for (UUID id : u.userIds()) {
@@ -141,6 +158,26 @@ class PushNotices {
                                         WHERE s.tenant_id = u.tenant_id AND s.user_id = u.id)
                         """)
                 .params(h.permission(), h.branchId(), h.branchId(), closedBranchOk, h.exceptUserId(), h.exceptUserId())
+                .query(UUID.class)
+                .list();
+    }
+
+    /** Holders of the permission through a role given for this branch itself, at an active branch (issue #412). */
+    private List<UUID> branchStaff(PushNotice.BranchStaff b) {
+        return jdbc.sql("""
+                        SELECT DISTINCT u.id
+                          FROM users u
+                          JOIN user_role_assignments a
+                            ON a.tenant_id = u.tenant_id AND a.user_id = u.id AND a.revoked_at IS NULL
+                          JOIN role_permissions rp ON rp.role_key = a.role_key AND rp.permission_key = ?
+                          JOIN branches b ON b.tenant_id = a.tenant_id AND b.id = a.branch_id AND b.status = 'active'
+                         WHERE u.kind = 'staff' AND u.status = 'active'
+                           AND a.branch_id = ?
+                           AND (CAST(? AS uuid) IS NULL OR u.id <> CAST(? AS uuid))
+                           AND EXISTS (SELECT 1 FROM push_subscriptions s
+                                        WHERE s.tenant_id = u.tenant_id AND s.user_id = u.id)
+                        """)
+                .params(b.permission(), b.branchId(), b.exceptUserId(), b.exceptUserId())
                 .query(UUID.class)
                 .list();
     }

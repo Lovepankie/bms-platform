@@ -6,6 +6,7 @@ import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { InstallPrompt } from '../../install/InstallPrompt';
 import { createPush } from '../../push/push';
+import { TurnOnCard } from '../../push/TurnOnCard';
 import { HelpMenu, TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
@@ -99,6 +100,7 @@ function StaffLayout() {
         <CrumbProvider>
         <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
         <InstallPrompt />
+        {!mock && <TurnOnCard push={push} />}
         {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
           <p role="status" className="alert alert-warning">
             You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.

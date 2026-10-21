@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (2026-10-06, review of pull request #154, issue #145). Builds on ADR-020.
+Accepted (2026-10-06, review of pull request #154, issue #145). Builds on ADR-020. The per-product reorder level it left for
+later is superseded by ADR-057 (issue #412): a low-stock minimum per item and branch, judged with the pace rule. The fixed 5 of the
+Stock list's Low stock tab stands.
 
 ## Context
 

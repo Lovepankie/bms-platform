@@ -934,6 +934,17 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), customerOrder, user)
                 .update();
+        // The low-stock level of an item and the record of the daily notices (migration V76, #412).
+        owner.sql("""
+                        INSERT INTO retail_stock_minimums (id, tenant_id, product_id, branch_id, min_qty, updated_by)
+                        VALUES (?, ?, ?, ?, 5, ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), retailProduct, t.headOffice(), user)
+                .update();
+        owner.sql(
+                        "INSERT INTO retail_notice_runs (tenant_id, kind, run_on) VALUES (?, 'daily_summary', DATE '2026-01-15')")
+                .param(t.tenantId())
+                .update();
     }
 
     /**

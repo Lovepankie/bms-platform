@@ -12,6 +12,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
@@ -58,6 +59,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -100,6 +102,7 @@ class CustomerOrdersService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final ApplicationEventPublisher events;
 
     CustomerOrdersService(
             CustomerOrdersRepository repo,
@@ -115,7 +118,8 @@ class CustomerOrdersService {
             TenantSequences sequences,
             CurrentTenant tenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            ApplicationEventPublisher events) {
         this.repo = repo;
         this.salesRepo = salesRepo;
         this.sales = sales;
@@ -130,6 +134,7 @@ class CustomerOrdersService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
+        this.events = events;
     }
 
     private LocalDate today() {
@@ -227,6 +232,19 @@ class CustomerOrdersService {
         after.put("delivery_fee_minor", fee);
         after.put("lines", priced.lines().size());
         audit.record(AuditLog.Entry.created("retail.order.created", ORDER, id, branch, after));
+        // Issue #412: an order that came in from outside the shop (a call, WhatsApp, social media) is news for the
+        // people who
+        // work at that shop, who pack it; a walk-in order is taken at the counter by someone already there.
+        if (!"walk_in".equals(r.source())) {
+            events.publishEvent(new PushNotice(
+                    "retail.order_new",
+                    id.toString(),
+                    new PushNotice.BranchStaff(MANAGE, branch, principal.userId()),
+                    Map.of(
+                            "branch_id", branch.toString(),
+                            "source_label", sourceWords(r.source()),
+                            "path", "/staff/retail/orders/" + id)));
+        }
         return view(repo.find(id, false).orElseThrow(), true);
     }
 
@@ -452,6 +470,7 @@ class CustomerOrdersService {
         after.put("delivered_by", rider);
         audit.record(
                 new AuditLog.Entry("retail.order.sent", ORDER, id, h.branchId(), Map.of("status", h.status()), after));
+        toldTaker(h, "retail.order_out_for_delivery", by);
         return view(repo.find(id, false).orElseThrow(), true);
     }
 
@@ -654,6 +673,7 @@ class CustomerOrdersService {
         }
         audit.record(new AuditLog.Entry(
                 "retail.order.delivered", ORDER, id, h.branchId(), Map.of("status", h.status()), after));
+        toldTaker(h, "retail.order_delivered", principal.userId());
         return new Delivered(
                 view(repo.find(id, false).orElseThrow(), true), sale.id(), sale.saleNo(), paidAtDoor, owed);
     }
@@ -844,6 +864,32 @@ class CustomerOrdersService {
     }
 
     // ---- Helpers -------------------------------------------------------------------------------------
+
+    /**
+     * Issue #412: the person who took the order hears that it went out and that it arrived, unless they did the step
+     * themselves. The notice names the shop and never the customer.
+     */
+    private void toldTaker(Header h, String template, UUID by) {
+        if (h.createdBy() == null || h.createdBy().equals(by)) {
+            return;
+        }
+        events.publishEvent(new PushNotice(
+                template,
+                h.id().toString(),
+                new PushNotice.Users(Set.of(h.createdBy())),
+                Map.of("branch_id", h.branchId().toString(), "path", "/staff/retail/orders/" + h.id())));
+    }
+
+    /** How a remote order came in, in the words a notification uses. */
+    static String sourceWords(String source) {
+        return switch (source == null ? "" : source) {
+            case "whatsapp" -> "WhatsApp";
+            case "instagram" -> "Instagram";
+            case "facebook" -> "Facebook";
+            case "phone" -> "phone";
+            default -> "another channel";
+        };
+    }
 
     /**
      * ADR-055 (the owner's decision of 21 October 2026): every seller of the branch sees the orders and their values, the shop's

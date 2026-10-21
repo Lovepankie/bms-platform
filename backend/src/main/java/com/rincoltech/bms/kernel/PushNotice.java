@@ -1,5 +1,6 @@
 package com.rincoltech.bms.kernel;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -31,7 +32,7 @@ public record PushNotice(String template, String eventRef, Audience audience, Ma
     }
 
     /** Who is told. */
-    public sealed interface Audience permits Users, Holders {}
+    public sealed interface Audience permits Users, Holders, BranchStaff, AnyOf {}
 
     /** These people, when they have a device. */
     public record Users(Set<UUID> userIds) implements Audience {
@@ -46,4 +47,26 @@ public record PushNotice(String template, String eventRef, Audience audience, Ma
      * branch holds it everywhere), without the user who caused the event when one is given.
      */
     public record Holders(String permission, UUID branchId, UUID exceptUserId) implements Audience {}
+
+    /**
+     * The staff of one branch: every active staff user who holds the permission through a role given for that branch
+     * itself. A role with no branch (an administrator's) does not count here, so a notice about one shop's daily work
+     * reaches the people who work there and not every administrator (issue #412).
+     */
+    public record BranchStaff(String permission, UUID branchId, UUID exceptUserId) implements Audience {
+
+        public BranchStaff {
+            if (permission == null || branchId == null) {
+                throw new IllegalArgumentException("the staff of a branch need a permission and a branch");
+            }
+        }
+    }
+
+    /** Everyone in any of these audiences, each person once (issue #412). */
+    public record AnyOf(List<Audience> parts) implements Audience {
+
+        public AnyOf {
+            parts = List.copyOf(parts);
+        }
+    }
 }

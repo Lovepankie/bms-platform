@@ -26,6 +26,7 @@ import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.DeadTota
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.Pace;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.SlowRow;
 import com.rincoltech.bms.retail.reports.internal.StockHealthRepository.Usage;
+import com.rincoltech.bms.retail.stock.LowStockRule;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.math.BigDecimal;
@@ -47,9 +48,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class StockHealthService {
 
-    static final int VELOCITY_DAYS = 30;
+    static final int VELOCITY_DAYS = LowStockRule.PACE_DAYS;
     static final int DEAD_DAYS = 90;
-    static final int DEFAULT_LEAD_DAYS = 14;
+    static final int DEFAULT_LEAD_DAYS = LowStockRule.DEFAULT_LEAD_DAYS;
     static final int DEFAULT_COVER_DAYS = 30;
     static final int MAX_DAYS = 365;
     static final int SLOW_DAYS = 90;
@@ -97,12 +98,12 @@ class StockHealthService {
 
         LocalDate since = today.minusDays(VELOCITY_DAYS - 1L);
         List<Pace> lowest = repo.pace(filter, since, today, VELOCITY_DAYS, null, top);
-        List<Pace> reorder = repo.pace(filter, since, today, VELOCITY_DAYS, lead, top);
+        List<Pace> reorder = repo.reorder(filter, since, today, VELOCITY_DAYS, lead, top);
         CoverList coverList = new CoverList(
                 lowest.stream().map(p -> cover(p, null)).toList(),
                 lowest.isEmpty() ? 0 : lowest.getFirst().total());
         CoverList reorderList = new CoverList(
-                reorder.stream().map(p -> cover(p, cover)).toList(),
+                reorder.stream().map(p -> reorderRow(p, lead, cover)).toList(),
                 reorder.isEmpty() ? 0 : reorder.getFirst().total());
 
         LocalDate deadSince = today.minusDays(DEAD_DAYS - 1L);
@@ -273,11 +274,50 @@ class StockHealthService {
         return rows;
     }
 
+    /**
+     * A reorder row (issue #412): the item is low by its minimum or by its pace ({@link LowStockRule}, the rule the low-stock
+     * push uses), and the suggestion reaches {@code coverDays} of cover at the pace and at least the minimum.
+     */
+    static CoverRow reorderRow(Pace p, int leadDays, int coverDays) {
+        LowStockRule.Verdict verdict = LowStockRule.judge(p.qty(), p.minQty(), p.sold(), leadDays)
+                .orElseThrow(() -> new IllegalStateException("a reorder row that is not low"));
+        BigDecimal left = p.qty().max(BigDecimal.ZERO);
+        BigDecimal need = BigDecimal.ZERO;
+        if (p.sold().signum() > 0) {
+            need = p.sold()
+                    .multiply(BigDecimal.valueOf(coverDays))
+                    .divide(BigDecimal.valueOf(VELOCITY_DAYS), 3, RoundingMode.CEILING);
+        }
+        if (p.minQty() != null) {
+            need = need.max(p.minQty());
+        }
+        CoverRow base = cover(p, null);
+        return new CoverRow(
+                base.branchId(),
+                base.productId(),
+                base.code(),
+                base.description(),
+                base.unit(),
+                base.qtyOnHand(),
+                base.soldLast30(),
+                base.avgDaily(),
+                base.daysOfCover(),
+                base.capped(),
+                Quantities.format(need.subtract(left).max(BigDecimal.ZERO)),
+                p.minQty() == null ? null : Quantities.format(p.minQty()),
+                verdict instanceof LowStockRule.BelowMinimum ? "minimum" : "pace",
+                verdict.words());
+    }
+
     /** One row of cover; {@code coverDays} adds the suggested purchase to reach that many days. */
     static CoverRow cover(Pace p, Integer coverDays) {
         BigDecimal window = BigDecimal.valueOf(VELOCITY_DAYS);
         BigDecimal left = p.qty().max(BigDecimal.ZERO);
-        BigDecimal days = left.multiply(window).divide(p.sold(), 1, RoundingMode.HALF_UP);
+        // An item below its minimum that did not sell has no pace: its cover is endless (shown capped), or none when
+        // empty.
+        BigDecimal days = p.sold().signum() > 0
+                ? left.multiply(window).divide(p.sold(), 1, RoundingMode.HALF_UP)
+                : left.signum() > 0 ? CAP.add(BigDecimal.ONE) : BigDecimal.ZERO;
         boolean capped = days.compareTo(CAP) > 0;
         String suggested = null;
         if (coverDays != null) {
@@ -296,6 +336,9 @@ class StockHealthService {
                 p.sold().divide(window, 3, RoundingMode.HALF_UP).toPlainString(),
                 AnalyticsSupport.oneDecimal(capped ? CAP : days),
                 capped,
-                suggested);
+                suggested,
+                null,
+                null,
+                null);
     }
 }

@@ -5361,6 +5361,48 @@
           }
         }
       },
+      "NotificationSettings" : {
+        "properties" : {
+          "credit_due" : {
+            "description" : "Credit payments due today or overdue, each morning",
+            "type" : "boolean"
+          },
+          "daily_summary" : {
+            "description" : "The daily closing summary to the owner and the administrators",
+            "type" : "boolean"
+          },
+          "daily_summary_time" : {
+            "description" : "HH:mm on the business's clock (timezone) when the daily summary goes",
+            "example" : "20:00",
+            "type" : "string"
+          },
+          "low_stock" : {
+            "description" : "An item below its low-stock level at a shop or store, once a day per item",
+            "type" : "boolean"
+          },
+          "new_orders" : {
+            "description" : "New orders from a phone call, WhatsApp, Instagram, Facebook or elsewhere, to the order's shop",
+            "type" : "boolean"
+          },
+          "order_updates" : {
+            "description" : "An order out for delivery and delivered, to the person who took it",
+            "type" : "boolean"
+          },
+          "push_available" : {
+            "description" : "False when this server has no push keys: nothing is sent whatever is chosen here",
+            "type" : "boolean"
+          },
+          "timezone" : {
+            "description" : "The business's time zone, for the summary time",
+            "example" : "Africa/Kampala",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
       "OpenInvestmentRequest" : {
         "properties" : {
           "amount_minor" : {
@@ -8023,7 +8065,7 @@
         }
       },
       "RetailCoverList" : {
-        "description" : "Items with cover below lead_days, the lowest first, with a suggested quantity",
+        "description" : "Items below their low-stock minimum or with cover below lead_days, whichever trips first, the most urgent first, with a suggested quantity (issue #412)",
         "properties" : {
           "items" : {
             "items" : {
@@ -8063,6 +8105,19 @@
           "description" : {
             "type" : "string"
           },
+          "low_by" : {
+            "description" : "Reorder rows only: which rule says it is low, minimum (below the level set) or pace (fewer than lead_days of cover)",
+            "enum" : [ "minimum", "pace" ],
+            "type" : "string"
+          },
+          "low_words" : {
+            "description" : "Reorder rows only: the rule in words, for example below your minimum of 10",
+            "type" : "string"
+          },
+          "min_qty" : {
+            "description" : "Reorder rows only: the low-stock minimum that applies at this branch, when one is set (issue #412)",
+            "type" : "string"
+          },
           "product_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -8075,7 +8130,7 @@
             "type" : "string"
           },
           "suggested_qty" : {
-            "description" : "Reorder rows only: units to buy to reach cover_days of cover at this pace",
+            "description" : "Reorder rows only: units to buy to reach cover_days of cover at this pace, and at least the minimum",
             "type" : "string"
           },
           "unit" : {
@@ -15023,6 +15078,61 @@
           }
         }
       },
+      "RetailStockMinimum" : {
+        "description" : "Warn me when stock is below (issue #412)",
+        "properties" : {
+          "branches" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStockMinimumBranch"
+            },
+            "type" : "array"
+          },
+          "can_set_every_branch" : {
+            "description" : "True when the caller may set the level for every branch (retail.catalogue.manage)",
+            "type" : "boolean"
+          },
+          "lead_days" : {
+            "description" : "With no level, or as well as it, an item is low when it runs out within this many days at the pace of the last 30 days",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "min_qty" : {
+            "description" : "The level for every shop and store, in the item's unit; absent when none is set",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailStockMinimumBranch" : {
+        "properties" : {
+          "applies_qty" : {
+            "description" : "The level that applies here: the branch's own, else the one for every branch; absent when none",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_name" : {
+            "type" : "string"
+          },
+          "can_set" : {
+            "description" : "True when the caller may set this branch's own level",
+            "type" : "boolean"
+          },
+          "min_qty" : {
+            "description" : "This branch's own level, absent when it follows the level for every branch",
+            "type" : "string"
+          },
+          "store" : {
+            "description" : "True for a store (keeps goods, does not sell)",
+            "type" : "boolean"
+          }
+        }
+      },
       "RetailStockMovement" : {
         "properties" : {
           "at" : {
@@ -18400,6 +18510,15 @@
         },
         "required" : [ "role" ]
       },
+      "SetRetailStockMinimumRequest" : {
+        "properties" : {
+          "min_qty" : {
+            "description" : "Warn when stock is below this; null removes the level",
+            "example" : "10",
+            "type" : "string"
+          }
+        }
+      },
       "SignInRequest" : {
         "properties" : {
           "login" : {
@@ -19704,6 +19823,31 @@
             "maxLength" : 60,
             "minLength" : 0,
             "type" : "string"
+          }
+        }
+      },
+      "UpdateNotificationSettingsRequest" : {
+        "properties" : {
+          "credit_due" : {
+            "type" : "boolean"
+          },
+          "daily_summary" : {
+            "type" : "boolean"
+          },
+          "daily_summary_time" : {
+            "description" : "HH:mm on the business's clock, a quarter hour up to 23:30",
+            "example" : "20:00",
+            "pattern" : "^(([01][0-9]|2[0-2]):(00|15|30|45)|23:(00|15|30))$",
+            "type" : "string"
+          },
+          "low_stock" : {
+            "type" : "boolean"
+          },
+          "new_orders" : {
+            "type" : "boolean"
+          },
+          "order_updates" : {
+            "type" : "boolean"
           }
         }
       },
@@ -31848,6 +31992,116 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/products/{product_id}/stock-minimum" : {
+      "get" : {
+        "operationId" : "getRetailStockMinimum",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockMinimum"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Warn me when stock is below: the item's level for every branch and each branch's own (issue #412)",
+        "tags" : [ "retail-stock" ]
+      },
+      "put" : {
+        "operationId" : "setRetailStockMinimum",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetRetailStockMinimumRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockMinimum"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set or remove the item's low-stock level for every shop and store (issue #412)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/stock-minimum/branches/{branch_id}" : {
+      "put" : {
+        "operationId" : "setRetailBranchStockMinimum",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SetRetailStockMinimumRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockMinimum"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set or remove one branch's own low-stock level; retail.catalogue.manage or retail.stocktake.commit at that branch (issue #412)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
     "/api/v1/retail/products/{product_id}/units" : {
       "get" : {
         "operationId" : "listRetailProductUnits",
@@ -36670,6 +36924,60 @@
           }
         },
         "summary" : "Upload or replace the business logo: PNG, JPEG or WebP, 1 MB, 128 px or more (FR-TEN-08)",
+        "tags" : [ "settings" ]
+      }
+    },
+    "/api/v1/settings/notifications" : {
+      "get" : {
+        "operationId" : "getNotificationSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotificationSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which everyday push notices the business sends, and when the daily summary goes (issue #412)",
+        "tags" : [ "settings" ]
+      },
+      "put" : {
+        "operationId" : "updateNotificationSettings",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateNotificationSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotificationSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change which everyday push notices the business sends, audited with before and after (issue #412)",
         "tags" : [ "settings" ]
       }
     },

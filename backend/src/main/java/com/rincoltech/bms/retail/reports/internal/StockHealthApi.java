@@ -35,8 +35,24 @@ final class StockHealthApi {
             @Schema(description = "True when the cover is above 365 days and days_of_cover shows 365.0")
             boolean capped,
 
-            @Schema(description = "Reorder rows only: units to buy to reach cover_days of cover at this pace")
-            String suggestedQty) {}
+            @Schema(
+                    description =
+                            "Reorder rows only: units to buy to reach cover_days of cover at this pace, and at least the minimum")
+            String suggestedQty,
+
+            @Schema(
+                    description =
+                            "Reorder rows only: the low-stock minimum that applies at this branch, when one is set (issue #412)")
+            String minQty,
+
+            @Schema(
+                    description =
+                            "Reorder rows only: which rule says it is low, minimum (below the level set) or pace (fewer than lead_days of cover)",
+                    allowableValues = {"minimum", "pace"})
+            String lowBy,
+
+            @Schema(description = "Reorder rows only: the rule in words, for example below your minimum of 10")
+            String lowWords) {}
 
     @Schema(name = "RetailCoverList")
     record CoverList(
@@ -208,7 +224,9 @@ final class StockHealthApi {
             @Schema(description = "The lowest cover first, over items sold in the last 30 days")
             CoverList cover,
 
-            @Schema(description = "Items with cover below lead_days, the lowest first, with a suggested quantity")
+            @Schema(
+                    description =
+                            "Items below their low-stock minimum or with cover below lead_days, whichever trips first, the most urgent first, with a suggested quantity (issue #412)")
             CoverList reorder,
 
             DeadStock deadStock,

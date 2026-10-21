@@ -83,7 +83,7 @@ async function currentSubscription(env: PushEnv, publicKey: string): Promise<Pus
 }
 
 export function createPush(env: PushEnv = browserEnv(), api: PushApi = pushApi) {
-  return {
+  const push = {
     /** What the switch shows now. Never asks for anything. */
     async state(): Promise<PushState> {
       if (!env.supported()) return 'unsupported';
@@ -147,5 +147,20 @@ export function createPush(env: PushEnv = browserEnv(), api: PushApi = pushApi) 
         // Signing out must never wait on, or fail because of, a notification.
       }
     },
+
+    /**
+     * The Turn on button of the turn-on card (issue #412). The browser's question is asked first, before anything is awaited,
+     * so it stays inside the tap that a browser requires (Safari drops a request made after a network wait). Then the device
+     * subscribes as the switch does.
+     */
+    async turnOn(): Promise<PushState> {
+      if (!env.supported()) return 'unsupported';
+      const asked = env.permission() === 'default' ? env.requestPermission() : Promise.resolve(env.permission());
+      const permission = await asked;
+      if (permission === 'denied') return 'blocked';
+      if (permission !== 'granted') return 'off';
+      return push.enable();
+    },
   };
+  return push;
 }

@@ -4428,6 +4428,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/{product_id}/stock-minimum": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Warn me when stock is below: the item's level for every branch and each branch's own (issue #412) */
+        get: operations["getRetailStockMinimum"];
+        /** Set or remove the item's low-stock level for every shop and store (issue #412) */
+        put: operations["setRetailStockMinimum"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/stock-minimum/branches/{branch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or remove one branch's own low-stock level; retail.catalogue.manage or retail.stocktake.commit at that branch (issue #412) */
+        put: operations["setRetailBranchStockMinimum"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products/{product_id}/units": {
         parameters: {
             query?: never;
@@ -5920,6 +5955,24 @@ export interface paths {
         post?: never;
         /** Remove the business logo; the file is kept (FR-TEN-08) */
         delete: operations["removeLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which everyday push notices the business sends, and when the daily summary goes (issue #412) */
+        get: operations["getNotificationSettings"];
+        /** Change which everyday push notices the business sends, audited with before and after (issue #412) */
+        put: operations["updateNotificationSettings"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8343,6 +8396,32 @@ export interface components {
         NextOfKinList: {
             items?: components["schemas"]["NextOfKin"][];
         };
+        NotificationSettings: {
+            /** @description Credit payments due today or overdue, each morning */
+            credit_due?: boolean;
+            /** @description The daily closing summary to the owner and the administrators */
+            daily_summary?: boolean;
+            /**
+             * @description HH:mm on the business's clock (timezone) when the daily summary goes
+             * @example 20:00
+             */
+            daily_summary_time?: string;
+            /** @description An item below its low-stock level at a shop or store, once a day per item */
+            low_stock?: boolean;
+            /** @description New orders from a phone call, WhatsApp, Instagram, Facebook or elsewhere, to the order's shop */
+            new_orders?: boolean;
+            /** @description An order out for delivery and delivered, to the person who took it */
+            order_updates?: boolean;
+            /** @description False when this server has no push keys: nothing is sent whatever is chosen here */
+            push_available?: boolean;
+            /**
+             * @description The business's time zone, for the summary time
+             * @example Africa/Kampala
+             */
+            timezone?: string;
+            /** Format: int32 */
+            version?: number;
+        };
         OpenInvestmentRequest: {
             /** Format: int64 */
             amount_minor: number;
@@ -9619,7 +9698,7 @@ export interface components {
             /** Format: int32 */
             next_offset?: number;
         };
-        /** @description Items with cover below lead_days, the lowest first, with a suggested quantity */
+        /** @description Items below their low-stock minimum or with cover below lead_days, whichever trips first, the most urgent first, with a suggested quantity (issue #412) */
         RetailCoverList: {
             items?: components["schemas"]["RetailCoverRow"][];
             /**
@@ -9640,12 +9719,21 @@ export interface components {
             /** @description Stock divided by the daily average, one place; 0.0 when none is left */
             days_of_cover?: string;
             description?: string;
+            /**
+             * @description Reorder rows only: which rule says it is low, minimum (below the level set) or pace (fewer than lead_days of cover)
+             * @enum {string}
+             */
+            low_by?: "minimum" | "pace";
+            /** @description Reorder rows only: the rule in words, for example below your minimum of 10 */
+            low_words?: string;
+            /** @description Reorder rows only: the low-stock minimum that applies at this branch, when one is set (issue #412) */
+            min_qty?: string;
             /** Format: uuid */
             product_id?: string;
             qty_on_hand?: string;
             /** @description Units sold in the last 30 days in this branch */
             sold_last30?: string;
-            /** @description Reorder rows only: units to buy to reach cover_days of cover at this pace */
+            /** @description Reorder rows only: units to buy to reach cover_days of cover at this pace, and at least the minimum */
             suggested_qty?: string;
             unit?: string;
         };
@@ -13333,6 +13421,34 @@ export interface components {
             /** Format: int32 */
             velocity_days?: number;
         };
+        /** @description Warn me when stock is below (issue #412) */
+        RetailStockMinimum: {
+            branches?: components["schemas"]["RetailStockMinimumBranch"][];
+            /** @description True when the caller may set the level for every branch (retail.catalogue.manage) */
+            can_set_every_branch?: boolean;
+            /**
+             * Format: int32
+             * @description With no level, or as well as it, an item is low when it runs out within this many days at the pace of the last 30 days
+             */
+            lead_days?: number;
+            /** @description The level for every shop and store, in the item's unit; absent when none is set */
+            min_qty?: string;
+            /** Format: uuid */
+            product_id?: string;
+        };
+        RetailStockMinimumBranch: {
+            /** @description The level that applies here: the branch's own, else the one for every branch; absent when none */
+            applies_qty?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            branch_name?: string;
+            /** @description True when the caller may set this branch's own level */
+            can_set?: boolean;
+            /** @description This branch's own level, absent when it follows the level for every branch */
+            min_qty?: string;
+            /** @description True for a store (keeps goods, does not sell) */
+            store?: boolean;
+        };
         RetailStockMovement: {
             /** Format: date-time */
             at?: string;
@@ -14997,6 +15113,13 @@ export interface components {
             /** @enum {string} */
             role: "store" | "shop" | "both";
         };
+        SetRetailStockMinimumRequest: {
+            /**
+             * @description Warn when stock is below this; null removes the level
+             * @example 10
+             */
+            min_qty?: string;
+        };
         SignInRequest: {
             /** @description Email, or phone for staff */
             login: string;
@@ -15559,6 +15682,18 @@ export interface components {
             phone?: string;
             relationship?: string;
             relationship_text?: string;
+        };
+        UpdateNotificationSettingsRequest: {
+            credit_due?: boolean;
+            daily_summary?: boolean;
+            /**
+             * @description HH:mm on the business's clock, a quarter hour up to 23:30
+             * @example 20:00
+             */
+            daily_summary_time?: string;
+            low_stock?: boolean;
+            new_orders?: boolean;
+            order_updates?: boolean;
         };
         UpdatePaymentsSettingsRequest: {
             /** @description Remove the daily ceiling */
@@ -23496,6 +23631,81 @@ export interface operations {
             };
         };
     };
+    getRetailStockMinimum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockMinimum"];
+                };
+            };
+        };
+    };
+    setRetailStockMinimum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRetailStockMinimumRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockMinimum"];
+                };
+            };
+        };
+    };
+    setRetailBranchStockMinimum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRetailStockMinimumRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockMinimum"];
+                };
+            };
+        };
+    };
     listRetailProductUnits: {
         parameters: {
             query?: never;
@@ -26189,6 +26399,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    getNotificationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
+                };
+            };
+        };
+    };
+    updateNotificationSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNotificationSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationSettings"];
                 };
             };
         };

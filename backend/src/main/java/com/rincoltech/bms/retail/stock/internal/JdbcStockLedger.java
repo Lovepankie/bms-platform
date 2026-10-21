@@ -30,10 +30,12 @@ class JdbcStockLedger implements StockLedger {
 
     private final JdbcClient jdbc;
     private final BusinessClock clock;
+    private final LowStockAlerts lowStock;
 
-    JdbcStockLedger(JdbcClient jdbc, BusinessClock clock) {
+    JdbcStockLedger(JdbcClient jdbc, BusinessClock clock, LowStockAlerts lowStock) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.lowStock = lowStock;
     }
 
     @Override
@@ -103,6 +105,11 @@ class JdbcStockLedger implements StockLedger {
                             """).params(m.qty(), m.branchId(), m.productId()).update();
             ids[i] = id;
         }
+        // Issue #412: an item that stock left may now be low at that branch; the check never fails the movement.
+        lowStock.afterOut(movements.stream()
+                .filter(m -> m.qty().signum() < 0)
+                .map(m -> new LowStockAlerts.Touched(m.branchId(), m.productId()))
+                .toList());
         return List.of(ids);
     }
 
@@ -256,6 +263,11 @@ class JdbcStockLedger implements StockLedger {
                             """).params(m.qty(), m.branchId(), m.productId()).update();
             ids[i] = id;
         }
+        // Issue #412: an item that stock left may now be low at that branch; the check never fails the movement.
+        lowStock.afterOut(movements.stream()
+                .filter(m -> m.qty().signum() < 0)
+                .map(m -> new LowStockAlerts.Touched(m.branchId(), m.productId()))
+                .toList());
         return List.of(ids);
     }
 

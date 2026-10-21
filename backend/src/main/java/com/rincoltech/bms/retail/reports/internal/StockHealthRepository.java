@@ -32,7 +32,8 @@ class StockHealthRepository {
             String unit,
             BigDecimal qty,
             BigDecimal sold,
-            int total) {}
+            int total,
+            BigDecimal minQty) {}
 
     private static String in(List<UUID> branchIds, String column) {
         return branchIds == null ? "" : " AND " + column + " IN (:branchIds)";
@@ -89,7 +90,69 @@ class StockHealthRepository {
                         rs.getString("unit"),
                         rs.getBigDecimal("qty"),
                         rs.getBigDecimal("sold"),
-                        rs.getInt("total")))
+                        rs.getInt("total"),
+                        null))
+                .list();
+    }
+
+    /**
+     * Issue #412, ADR-057: items low by either rule of {@code LowStockRule}, whichever trips first. An item is below its minimum
+     * at the branch (the branch's own level, else the item's level for every branch), or it sold in the window and its stock
+     * times the window is under lead days times units sold. An item with no minimum is judged by the pace alone, one that did
+     * not sell by its minimum alone. The most urgent first: the smaller share of its minimum or of the lead days that is left.
+     */
+    List<Pace> reorder(
+            List<UUID> branchIds, LocalDate since, LocalDate today, int windowDays, int leadDays, int limit) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> params = params(branchIds);
+        params.put("since", Date.valueOf(since));
+        params.put("today", Date.valueOf(today));
+        params.put("window", windowDays);
+        params.put("lead", leadDays);
+        params.put("limit", limit);
+        String share = "least(CASE WHEN r.min_qty IS NOT NULL AND r.qty < r.min_qty"
+                + " THEN greatest(r.qty, 0) / r.min_qty END,"
+                + " CASE WHEN r.sold > 0 THEN greatest(r.qty, 0) * :window / (:lead * r.sold) END)";
+        return jdbc.sql("WITH sold AS (SELECT s.branch_id, l.product_id, sum(l.qty) AS sold"
+                        + "  FROM retail_sales s JOIN retail_sale_lines l ON l.tenant_id = s.tenant_id AND l.sale_id = s.id"
+                        + " WHERE s.status = 'completed' AND s.sale_date BETWEEN :since AND :today"
+                        + in(branchIds, "s.branch_id") + " GROUP BY s.branch_id, l.product_id),"
+                        + " lvl AS (SELECT b.branch_id, b.product_id, b.qty,"
+                        + " coalesce(bm.min_qty, im.min_qty) AS min_qty"
+                        + "  FROM retail_stock_balances b"
+                        + "  LEFT JOIN retail_stock_minimums bm ON bm.tenant_id = b.tenant_id"
+                        + "       AND bm.product_id = b.product_id AND bm.branch_id = b.branch_id"
+                        + "  LEFT JOIN retail_stock_minimums im ON im.tenant_id = b.tenant_id"
+                        + "       AND im.product_id = b.product_id AND im.branch_id IS NULL"
+                        + " WHERE (bm.min_qty IS NOT NULL OR im.min_qty IS NOT NULL)"
+                        + in(branchIds, "b.branch_id") + "),"
+                        + " r AS (SELECT coalesce(l.branch_id, s.branch_id) AS branch_id,"
+                        + " coalesce(l.product_id, s.product_id) AS product_id,"
+                        + " coalesce(l.qty, b.qty, 0) AS qty, coalesce(s.sold, 0) AS sold, l.min_qty"
+                        + "  FROM lvl l FULL JOIN sold s ON s.branch_id = l.branch_id AND s.product_id = l.product_id"
+                        + "  LEFT JOIN retail_stock_balances b ON b.tenant_id = current_setting('app.tenant_id')::uuid"
+                        + "       AND b.branch_id = s.branch_id AND b.product_id = s.product_id)"
+                        + " SELECT r.branch_id, p.id, p.code, p.description, u.name AS unit, r.qty, r.sold, r.min_qty,"
+                        + " count(*) OVER () AS total"
+                        + "  FROM r"
+                        + "  JOIN retail_products p ON p.tenant_id = current_setting('app.tenant_id')::uuid AND p.id = r.product_id"
+                        + "  JOIN retail_units u ON u.tenant_id = p.tenant_id AND u.id = p.unit_id"
+                        + " WHERE p.active AND ((r.min_qty IS NOT NULL AND r.qty < r.min_qty)"
+                        + " OR (r.sold > 0 AND greatest(r.qty, 0) * :window < :lead * r.sold))"
+                        + " ORDER BY " + share + ", p.code, r.branch_id, p.id LIMIT :limit")
+                .params(params)
+                .query((rs, n) -> new Pace(
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("id", UUID.class),
+                        rs.getString("code"),
+                        rs.getString("description"),
+                        rs.getString("unit"),
+                        rs.getBigDecimal("qty"),
+                        rs.getBigDecimal("sold"),
+                        rs.getInt("total"),
+                        rs.getBigDecimal("min_qty")))
                 .list();
     }
 

@@ -13,6 +13,7 @@ import { PackEditor } from './catalogue-packs';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
 import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
+import { StockMinimumEditor } from './stock-minimum';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 
@@ -219,6 +220,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
           )}
           <p className="hint">To change the price, use Change price on the list.</p>
           <PackEditor product={product} />
+          <StockMinimumEditor productId={product.id ?? ''} unit={product.unit} />
           {canManage && (
             <PhotoEditor
               inputId={product.id ?? 'item'}

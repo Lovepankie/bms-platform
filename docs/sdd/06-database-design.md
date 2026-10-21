@@ -2049,6 +2049,25 @@ Built: customer orders (migration `V70`, renamed at merge in merge order). Three
 
 `retail_stock_balances` gains `reserved_qty numeric(14,3) NOT NULL DEFAULT 0` with the check `retail_stock_balances_reserved_positive` (added `NOT VALID`, then validated): what open orders keep aside of the balance, changed only by `StockLedger.reserve` and `release` under the balance row's lock in the transaction of the order step. A sale, usage, damage, transfer out or goods sent back to a supplier may not take `qty` below `reserved_qty` (422 `insufficient_stock`); a stock-take may. Reservations post nothing and add no movement, so the reconciliation of balances against movements is unchanged. The chart gains 4120 `delivery_income` (income, credit normal) through the seed function of V64 with one row added; tenants that switched retail on earlier get it in the same migration. On delivery the fee is one entry of its own, source type `retail.customer_order`: debit the account of the method it was paid by (cash on hand, mobile money or bank), credit `delivery_income`; the items are an ordinary sale (`retail_sales`) with its two entries. The file sets `lock_timeout` to five seconds as its first statement. ADD COLUMN with a constant default rewrites nothing but holds an access exclusive lock on the balances until the commit; the new tables are empty.
 
+### 6.11.3d Low-stock levels and the daily notices (FR-RET-63, FR-NTF-24, issue #412, ADR-057, V76)
+
+Built: migration `V76` (renamed at merge in merge order). Two tables, forced row-level security with the standard policy.
+
+`retail_stock_minimums` (`bms_app` SELECT, INSERT, UPDATE, DELETE): `id`, `tenant_id`, `product_id` (FK `(tenant_id, product_id)`),
+`branch_id` (FK `(tenant_id, branch_id)`; null means the level for every shop and store), `min_qty numeric(14,3) NOT NULL CHECK (min_qty > 0)`
+in the item's base unit, `updated_at`, `updated_by`. `UNIQUE NULLS NOT DISTINCT (tenant_id, product_id, branch_id)`: one level for every
+branch and one per branch, written with `INSERT ... ON CONFLICT DO UPDATE` and removed with a DELETE (no level is no row). A branch's own
+level wins over the level for every branch. A variant is a product, so each size and colour has its own rows. Read by the low-stock push
+after each movement out (by the item and branch) and by the Stock health reorder list; every change is audited
+(`retail.stock_minimum.changed`).
+
+`retail_notice_runs` (`bms_app` SELECT, INSERT; append-only): `tenant_id`, `kind` (`credit_due`, `daily_summary`), `run_on date` (the
+business day), `created_at`, primary key `(tenant_id, kind, run_on)`. The job `retail.daily-notices` inserts the row before it prepares
+a daily notice (`ON CONFLICT DO NOTHING`), so a notice is prepared once a day whatever the number of ticks.
+
+The tenant settings group `notifications` (in `tenant_settings.settings.module_groups`, no column): `new_orders`, `order_updates`,
+`low_stock`, `credit_due`, `daily_summary` (booleans, absent means on) and `daily_summary_time` (`HH:mm`, 20:00 by default).
+
 ### 6.11.4 The pilot import (FR-RET-12; ADR-020 decision 9; #55)
 
 The `import-retail` command (chapter 13 section 13.13) writes through the modules' history ports,
