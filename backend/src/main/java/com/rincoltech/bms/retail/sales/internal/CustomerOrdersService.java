@@ -24,6 +24,7 @@ import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.DeliverRequest
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.Delivered;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.FeePaymentRequest;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.FeesReport;
+import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.ItemsRequest;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.Lookup;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.Order;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.OrderEvent;
@@ -39,6 +40,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Sale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLineRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesRepository.LinePricing;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
 import com.rincoltech.bms.retail.sales.internal.SalesService.Priced;
 import com.rincoltech.bms.retail.stock.BranchRoles;
@@ -50,9 +52,11 @@ import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Hold;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -211,6 +215,7 @@ class CustomerOrdersService {
             boolean pack = l.saleUnitId() != null;
             repo.insertLine(
                     id,
+                    1,
                     l.lineNo(),
                     l.productId(),
                     l.saleUnitId(),
@@ -419,6 +424,280 @@ class CustomerOrdersService {
         repo.event(id, "changed", "Changed: " + String.join(", ", words) + ".", by);
         audit.record(new AuditLog.Entry("retail.order.changed", ORDER, id, h.branchId(), was, now));
         return view(repo.find(id, false).orElseThrow(), true);
+    }
+
+    // ---- Changing the items ----------------------------------------------------------------------------
+
+    /**
+     * The items of an open order change without cancelling it (issue #393, ADR-052 amendment 1), while it is ordered or packed:
+     * in one transaction under the order row's lock, then the balance rows' locks, the stock kept for the removed or reduced
+     * lines is given back and the stock for the new or larger ones is kept (refused with {@code insufficient_stock} when not
+     * enough is free), the new lines are written as the order's next items revision and the history says what changed. The
+     * order keeps its number; a packed order goes back to ordered, to be packed again.
+     */
+    @Transactional
+    Outcome<Order> changeItems(String idempotencyKey, UUID id, String ifMatch, ItemsRequest r) {
+        return idempotency.once(
+                idempotencyKey,
+                "POST",
+                PATH + "/" + id + "/items",
+                r,
+                Order.class,
+                () -> doChangeItems(id, ifMatch, r));
+    }
+
+    /** An item in a unit: how a line of the new items finds the line it keeps. */
+    private record LineKey(UUID productId, UUID unitId) {}
+
+    /** A line of the new items as it is written: in the unit ordered, at its price, with how that price was chosen. */
+    private record NewItem(
+            int lineNo,
+            UUID productId,
+            UUID unitId,
+            BigDecimal qty,
+            BigDecimal baseQty,
+            long unitPriceMinor,
+            long totalMinor,
+            LinePricing pricing,
+            UUID by) {
+
+        String key() {
+            return productId + "|" + unitId + "|" + qty.stripTrailingZeros().toPlainString() + "|" + unitPriceMinor;
+        }
+    }
+
+    private Order doChangeItems(UUID id, String ifMatch, ItemsRequest r) {
+        int expected = Versions.fromIfMatch(ifMatch);
+        Principal principal = CurrentPrincipal.require();
+        // The order row first, then the balance rows (in StockLedger.rehold), as delivery and cancel take them.
+        Header h = visible(id, true);
+        if (!h.status().equals("ordered") && !h.status().equals("packed")) {
+            throw itemsFixed(h);
+        }
+        if (h.version() != expected) {
+            throw Versions.conflict(h.version());
+        }
+        roles.requireMaySell(h.branchId());
+        branches.requireSells(h.branchId(), "branch_id");
+        List<StoredLine> was = repo.lines(id);
+        Map<LineKey, List<StoredLine>> onOrder = new HashMap<>();
+        for (StoredLine l : was) {
+            onOrder.computeIfAbsent(new LineKey(l.productId(), l.unitId()), k -> new ArrayList<>())
+                    .add(l);
+        }
+        // A line left as it was (the same item, unit and quantity, with no price or the price agreed)
+        // keeps the price agreed and how it was chosen: it goes to priceLines with an Agreement, as on
+        // delivery, so an item switched off or a cost risen since does not block the change. Every other
+        // line, one whose quantity changed included, is priced as a new order's line would be: price
+        // breaks found again, a typed price an override with the permission and a reason, credited to
+        // the person changing it. An agreed break or resolved price is never carried to a new quantity.
+        List<StoredLine> kept = new ArrayList<>();
+        List<SaleLineRequest> requested = new ArrayList<>();
+        List<SalesService.Agreement> agreements = new ArrayList<>();
+        for (CustomerOrdersApi.OrderLineRequest l : r.lines()) {
+            List<StoredLine> same = onOrder.getOrDefault(new LineKey(l.productId(), l.unitId()), List.of());
+            StoredLine keep = same.stream()
+                    .filter(s -> s.qty().compareTo(l.qty()) == 0
+                            && (l.unitPriceMinor() == null || l.unitPriceMinor() == s.unitPriceMinor()))
+                    .findFirst()
+                    .orElse(null);
+            kept.add(keep);
+            if (keep != null) {
+                same.remove(keep);
+                String why = "override".equals(keep.priceSource())
+                        ? keep.overrideReason()
+                        : "Price agreed on order " + h.orderNo();
+                requested.add(new SaleLineRequest(l.productId(), l.qty(), keep.unitPriceMinor(), l.unitId(), why));
+                agreements.add(new SalesService.Agreement(keep.priceSource(), keep.overriddenBy()));
+            } else {
+                requested.add(new SaleLineRequest(
+                        l.productId(), l.qty(), l.unitPriceMinor(), l.unitId(), l.priceOverrideReason()));
+                agreements.add(null);
+            }
+        }
+        Customer buyer = h.customerId() == null
+                ? null
+                : salesRepo.customer(h.customerId()).orElse(null);
+        List<FieldProblem> problems = new ArrayList<>();
+        Priced priced = sales.priceLines(h.branchId(), today(), buyer, null, requested, problems, agreements);
+        int revision = h.itemsRevision() + 1;
+        List<Hold> holds = new ArrayList<>();
+        List<NewItem> rows = new ArrayList<>();
+        long items = 0;
+        for (int i = 0; i < priced.lines().size(); i++) {
+            NewLine l = priced.lines().get(i);
+            StoredLine keep = kept.get(i);
+            NewItem row;
+            if (keep != null) {
+                // Written as it was: the unit, the quantities, the price and how it was chosen, the override's author.
+                row = new NewItem(
+                        l.lineNo(),
+                        keep.productId(),
+                        keep.unitId(),
+                        keep.qty(),
+                        keep.baseQty(),
+                        keep.unitPriceMinor(),
+                        keep.lineTotalMinor(),
+                        keep.pricing(),
+                        keep.overriddenBy());
+            } else {
+                boolean pack = l.saleUnitId() != null;
+                row = new NewItem(
+                        l.lineNo(),
+                        l.productId(),
+                        l.saleUnitId(),
+                        pack ? l.saleQty() : l.qty(),
+                        l.qty(),
+                        pack ? l.saleUnitPriceMinor() : l.unitPriceMinor(),
+                        l.lineTotalMinor(),
+                        l.pricing(),
+                        principal.userId());
+            }
+            items = Math.addExact(items, row.totalMinor());
+            rows.add(row);
+            holds.add(new Hold(h.branchId(), row.productId(), row.baseQty()));
+        }
+        if (items > RetailCatalogue.MAX_AMOUNT_MINOR
+                || items + h.deliveryFeeMinor() > RetailCatalogue.MAX_AMOUNT_MINOR) {
+            throw ApiException.rule("amount_out_of_range", "The order is too large to compute.");
+        }
+        if (sameItems(was, rows)) {
+            return view(h, true);
+        }
+        for (NewItem row : rows) {
+            repo.insertLine(
+                    id,
+                    revision,
+                    row.lineNo(),
+                    row.productId(),
+                    row.unitId(),
+                    row.qty(),
+                    row.baseQty(),
+                    row.unitPriceMinor(),
+                    row.totalMinor(),
+                    row.pricing(),
+                    row.by());
+        }
+        // Under the balance rows' locks, netted per item: what was kept for the old lines goes back and the new lines
+        // are
+        // kept, refused when not enough is free.
+        stock.rehold(
+                was.stream()
+                        .map(l -> new Hold(h.branchId(), l.productId(), l.baseQty()))
+                        .toList(),
+                holds);
+        // A packed order whose items changed is ordered again: what was packed is not what it now holds.
+        boolean wasPacked = h.status().equals("packed");
+        if (repo.markItemsChanged(id, h.version(), revision, items) == 0) {
+            throw Versions.conflict(repo.find(id, false).orElseThrow().version());
+        }
+        List<StoredLine> now = repo.lines(id);
+        String changes = itemChanges(was, now);
+        String note = blankToNull(r.note());
+        String text = "Items changed: " + changes + "."
+                + (wasPacked ? " It was packed, so it is back to ordered: pack it again." : "")
+                + (note == null ? "" : " " + note);
+        repo.event(
+                id, "items_changed", text.length() > 500 ? text.substring(0, 497) + "..." : text, principal.userId());
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("items_total_minor", h.itemsTotalMinor());
+        before.put("lines", auditLines(was));
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("items_total_minor", items);
+        after.put("lines", auditLines(now));
+        after.put("items_revision", revision);
+        audit.record(new AuditLog.Entry("retail.order.items_changed", ORDER, id, h.branchId(), before, after));
+        return view(repo.find(id, false).orElseThrow(), true);
+    }
+
+    /** True when the new lines are the old ones: the same items, units, quantities and prices in any order. */
+    private static boolean sameItems(List<StoredLine> was, List<NewItem> rows) {
+        if (was.size() != rows.size()) {
+            return false;
+        }
+        List<String> a = new ArrayList<>();
+        for (StoredLine l : was) {
+            a.add(l.productId() + "|" + l.unitId() + "|"
+                    + l.qty().stripTrailingZeros().toPlainString() + "|" + l.unitPriceMinor());
+        }
+        List<String> b = new ArrayList<>(rows.stream().map(NewItem::key).toList());
+        a.sort(null);
+        b.sort(null);
+        return a.equals(b);
+    }
+
+    /** What changed, in plain words: "added 2 Baby vest, removed Socks, Bib 1 to 3, price of Cap 5000 to 4500". */
+    static String itemChanges(List<StoredLine> was, List<StoredLine> now) {
+        Map<LineKey, StoredLine[]> byKey = new LinkedHashMap<>();
+        Map<LineKey, BigDecimal[]> qty = new LinkedHashMap<>();
+        for (StoredLine l : was) {
+            LineKey k = new LineKey(l.productId(), l.unitId());
+            byKey.computeIfAbsent(k, x -> new StoredLine[2])[0] = l;
+            qty.computeIfAbsent(k, x -> new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO})[0] =
+                    qty.get(k)[0].add(l.qty());
+        }
+        for (StoredLine l : now) {
+            LineKey k = new LineKey(l.productId(), l.unitId());
+            byKey.computeIfAbsent(k, x -> new StoredLine[2])[1] = l;
+            qty.computeIfAbsent(k, x -> new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO})[1] =
+                    qty.get(k)[1].add(l.qty());
+        }
+        List<String> words = new ArrayList<>();
+        for (Map.Entry<LineKey, StoredLine[]> e : byKey.entrySet()) {
+            StoredLine before = e.getValue()[0];
+            StoredLine after = e.getValue()[1];
+            BigDecimal[] q = qty.get(e.getKey());
+            String name = (after != null ? after : before).description();
+            String unit = (after != null ? after : before).unit();
+            if (before == null) {
+                words.add("added " + plain(q[1]) + " " + unit + " " + name);
+            } else if (after == null) {
+                words.add("removed " + name);
+            } else {
+                if (q[0].compareTo(q[1]) != 0) {
+                    words.add(name + " " + plain(q[0]) + " to " + plain(q[1]) + " " + unit);
+                }
+                if (before.unitPriceMinor() != after.unitPriceMinor()) {
+                    words.add("price of " + name + " " + before.unitPriceMinor() + " to " + after.unitPriceMinor());
+                }
+            }
+        }
+        return words.isEmpty() ? "the lines were put in another order" : String.join(", ", words);
+    }
+
+    private static String plain(BigDecimal q) {
+        return q.stripTrailingZeros().toPlainString();
+    }
+
+    private static List<Map<String, Object>> auditLines(List<StoredLine> lines) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (StoredLine l : lines) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("product_id", l.productId());
+            m.put("unit_id", l.unitId());
+            m.put("qty", plain(l.qty()));
+            m.put("unit_price_minor", l.unitPriceMinor());
+            m.put("price_source", l.priceSource());
+            out.add(m);
+        }
+        return out;
+    }
+
+    /** 409 {@code order_step_not_allowed}: the items of an order out for delivery, delivered or cancelled are fixed. */
+    private static ApiException itemsFixed(Header h) {
+        String where = switch (h.status()) {
+            case "delivered" -> "was delivered already";
+            case "cancelled" -> "was cancelled";
+            default -> "is out for delivery";
+        };
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "order_step_not_allowed",
+                "Order step not allowed",
+                "Order " + h.orderNo() + " " + where + ", so its items cannot be changed."
+                        + (h.status().equals("out_for_delivery")
+                                ? " Change the items before it goes out, or cancel it and take a new order."
+                                : ""));
     }
 
     // ---- Packed and out for delivery ---------------------------------------------------------------

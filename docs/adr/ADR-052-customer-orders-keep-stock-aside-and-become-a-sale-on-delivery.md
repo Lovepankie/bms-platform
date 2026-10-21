@@ -30,8 +30,8 @@ Controls page all read `retail_sales`.
    it out, the sale it became, how the fee was paid), `retail_customer_order_lines` (append-only: the product, the unit it was ordered in,
    the quantity, the base quantity kept aside, the price agreed) and `retail_customer_order_events` (append-only history: who did which
    step, when, with a note). Forced row-level security and composite tenant keys on all three. A guard trigger lets the step move forward only
-   (ordered, packed, out for delivery, then delivered or cancelled) and by one version per change. The items of an order cannot change: a
-   change of items is a cancel and a new order. The name, phone, place, day, fee and notes change while it is open, under `If-Match`.
+   (ordered, packed, out for delivery, then delivered or cancelled) and by one version per change. The items of an order change while it is
+   ordered or packed (amendment 1 below). The name, phone, place, day, fee and notes change while it is open, under `If-Match`.
 2. **Stock is kept aside on the balance row.** `retail_stock_balances.reserved_qty` (V70, `CHECK >= 0`) is raised by `StockLedger.reserve`
    and lowered by `StockLedger.release`, both under the balance row's `FOR UPDATE` lock and in branch and product order like every movement,
    in the transaction of the order step. A hold larger than what is free (the balance less what other orders keep) is refused with 422
@@ -101,10 +101,48 @@ when, where the orders come from and why they were cancelled.
 **Worse:** a balance column that every guarded movement now reads; a stock-take can leave a balance below what orders keep, which the order
 then shows when it is delivered and refused; a fee on account is paid on its order (the account page lists it apart and links to
 it), not by a payment on account; the Controls rate of a person counts a change carried from an order they took against the sales
-they entered themselves; the order's lines are fixed (editing them is a follow-up issue); item photos in the order picker come with
+they entered themselves; the order's lines change only before it goes out (amendment 1); item photos in the order picker come with
 #392.
 
 **Watch for:** `reserved_qty` must always equal the base quantities of the open orders of that branch and product; a test proves it after
 every step, and a nightly check beside the balance reconciliation is a follow-up. A future path that moves stock out must go through
 `StockLedger.record` to keep the guard. If orders grow to be taken in a Store and sold in a shop, the reservation must move with a
 transfer, which this design does not do.
+
+## Amendment 1: the items of an open order change without cancelling it (2026-10-21, issue #393)
+
+Chat customers change baskets often. A cancel and a new order filled the cancellations report and changed the order number, so the items
+of an order now change in place.
+
+1. **When.** Only while the order is ordered or packed. Out for delivery, delivered or cancelled refuse with 409 `order_step_not_allowed`
+   in plain words (an order already out is cancelled and taken again). A packed order goes back to ordered (`packed_at` and `packed_by`
+   cleared, the one step back the guard trigger allows), since what was packed is no longer what it holds; its history says so and to
+   pack it again.
+2. **How.** `POST /retail/orders/{id}/items` with the whole new set of lines, under `If-Match` (409 `version_conflict` on a stale
+   version) and an `Idempotency-Key` (it is money moving: it changes what the order will sell). The permission is `retail.order.manage`
+   at the order's shop; another branch's order is not found; a Store refuses as on taking an order.
+3. **One transaction, the order row first.** The order row is locked, then the balance rows: `StockLedger.rehold` nets what the old lines
+   kept against what the new lines keep per branch and product and applies it in one pass in branch and product order under each
+   row's lock, so a change cannot deadlock against an order, a sale or a delivery. A rise larger than what is free (the balance less what
+   orders keep) is refused with 422 `insufficient_stock`, naming the item by its description, and nothing changes. A change racing the delivery is serialised on the order row:
+   either the change lands first and the delivery sells the new items, or the delivery does and the change is refused.
+4. **Prices.** A line left as it was (the same item, unit and quantity, sent with no price or with the price agreed) keeps the price
+   agreed and how it was chosen, written again as it was (an override stays the override of the person who changed it). It goes to
+   `SalesService.priceLines` with an `Agreement` entry, as on delivery, so an item switched off since, a pack switched off or a cost
+   risen above the agreed price does not block the change. Every other line is priced by `priceLines` exactly as on taking an order
+   (units, price lists and their price breaks, the inactive item, the price floor, an override with `retail.price.override` and a
+   reason, stored on the line with the caller as `overridden_by`). That includes a line already on the order whose quantity changed:
+   its price break is found again for the new quantity and the agreed `price_break_min_qty` and resolved price are never carried onto
+   it, and the agreed price sent with a larger quantity is a new override, needing the permission and a reason again and credited to
+   the person changing it. Without a price, a new quantity takes today's price.
+5. **The lines stay append-only.** Migration `V77` (main is at `V75` and PR #415 holds `V76` and merges first, so this one merges after
+   #415) adds `retail_customer_orders.items_revision` and `retail_customer_order_lines.revision`; the new lines are written under the
+   next revision and the order's current lines are those of its `items_revision`, so every earlier set of lines is kept. The guard
+   trigger lets `items_revision` and `items_total_minor` change only on an ordered or packed order, by one revision with one version,
+   leaving it ordered (a packed order goes back to ordered with its packing cleared). The order keeps its number.
+6. **History and audit.** The history gets `items_changed` with who and when and a note in plain words (items added, removed, a
+   quantity from and to, a price from and to, and the reason given); the audit row `retail.order.items_changed` keeps the lines before
+   and after. Sending the same items again changes nothing and writes nothing.
+
+The rule of **Watch for** holds after every change: `reserved_qty` equals the base quantities of the current lines of the open orders
+(`RetailOrderItemChangesIT`).

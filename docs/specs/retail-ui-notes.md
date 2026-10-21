@@ -1192,8 +1192,14 @@ own: the order is copied from the chat, so the form asks for the phone first and
   fee too (an optional amount paid now for the items). The figures show what is paid now and what goes on credit. Offered only to whoever
   may sell at the order's shop. The success line names the sale. A fee left on the account shows on the order with a Save: the fee is paid
   form.
-- **One order** (`/staff/retail/orders/$orderId`, `order.tsx`): the summary and the step buttons, Change the delivery details (name, phone,
-  place, day, fee, notes; the items do not change), Open sale (the ordinary sale view, with its payments, returns and void) once delivered,
+- **One order** (`/staff/retail/orders/$orderId`, `order.tsx`): the summary and the step buttons, Change the items while
+  the order is ordered or packed (issue #393: the same item picker and line cards as New order, the items at the price agreed, a new
+  item or a new quantity at today's price (the price shown changes with the quantity), why a price changed, why the items changed for the history; a packed order
+  goes back to ordered and says to pack it again; the picker adds an item once per item and unit, so a second unit of an item on the order is its own line; a line
+  left as agreed sends the price agreed and keeps it; at the quantity agreed but another price it sends the price shown; any other line sends a
+  price only when the one shown differs from the sell price, as New order does, so with price lists on the server may charge the customer's list
+  price or a quantity price break instead of the sell price shown), Change the
+  delivery details (name, phone, place, day, fee, notes), Open sale (the ordinary sale view, with its payments, returns and void) once delivered,
   and the history: each step with the time, the person and the note. The breadcrumb names the order.
 - **Delivery fees and cancellations** (`/staff/retail/orders-report`, `orders-report.tsx`): the days (the last 30 by default), the fees taken
   grouped by day, where the orders came from or who delivered, and the orders cancelled with the reason and the source, each opening the

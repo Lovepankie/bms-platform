@@ -62,14 +62,14 @@ class JdbcStockLedger implements StockLedger {
                 if (next.signum() < 0 || locked.reserved().signum() == 0) {
                     throw ApiException.rule(
                             "insufficient_stock",
-                            "Product " + m.productId() + " has "
+                            itemName(m.productId()) + " has "
                                     + current.stripTrailingZeros().toPlainString()
                                     + " in stock at this branch, so this quantity cannot be taken.");
                 }
                 // Issue #385, ADR-052: the units are on the shelf but kept for customer orders.
                 throw ApiException.rule(
                         "insufficient_stock",
-                        "Product " + m.productId() + " has "
+                        itemName(m.productId()) + " has "
                                 + current.stripTrailingZeros().toPlainString() + " in stock at this branch, of which "
                                 + locked.reserved().stripTrailingZeros().toPlainString()
                                 + " are kept for customer orders, so this quantity cannot be taken. Deliver or cancel"
@@ -150,7 +150,7 @@ class JdbcStockLedger implements StockLedger {
                 BigDecimal shown = free.signum() < 0 ? BigDecimal.ZERO : free;
                 throw ApiException.rule(
                         "insufficient_stock",
-                        "Product " + h.productId() + " has "
+                        itemName(h.productId()) + " has "
                                 + shown.stripTrailingZeros().toPlainString()
                                 + " free at this branch ("
                                 + locked.reserved().stripTrailingZeros().toPlainString()
@@ -177,6 +177,52 @@ class JdbcStockLedger implements StockLedger {
                              WHERE branch_id = ? AND product_id = ?
                             """).params(h.qty(), h.branchId(), h.productId()).update();
         }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rehold(List<Hold> released, List<Hold> held) {
+        List<Hold> net = new ArrayList<>(held);
+        for (Hold h : released) {
+            net.add(new Hold(h.branchId(), h.productId(), h.qty().negate()));
+        }
+        for (Hold h : inLockOrder(net)) {
+            if (h.qty().signum() == 0) {
+                continue;
+            }
+            Locked locked = lockRow(h.branchId(), h.productId());
+            if (h.qty().signum() < 0 && locked.reserved().compareTo(h.qty().negate()) < 0) {
+                throw new IllegalStateException("releasing more than is kept for orders: " + h);
+            }
+            BigDecimal free = locked.qty().subtract(locked.reserved());
+            if (h.qty().signum() > 0 && free.compareTo(h.qty()) < 0) {
+                BigDecimal shown = free.signum() < 0 ? BigDecimal.ZERO : free;
+                throw ApiException.rule(
+                        "insufficient_stock",
+                        itemName(h.productId()) + " has "
+                                + shown.stripTrailingZeros().toPlainString()
+                                + " free at this branch ("
+                                + locked.reserved().stripTrailingZeros().toPlainString()
+                                + " kept for orders), so this order cannot keep "
+                                + h.qty().stripTrailingZeros().toPlainString() + " more.");
+            }
+            jdbc.sql("""
+                            UPDATE retail_stock_balances SET reserved_qty = reserved_qty + ?, updated_at = now()
+                             WHERE branch_id = ? AND product_id = ?
+                            """).params(h.qty(), h.branchId(), h.productId()).update();
+        }
+    }
+
+    /**
+     * The item as the seller knows it, for every {@code insufficient_stock} refusal in plain words (issue #393): its description,
+     * never its id. A product deleted meanwhile (never in practice, the rows stay) reads as "This item".
+     */
+    private String itemName(UUID productId) {
+        return jdbc.sql("SELECT description FROM retail_products WHERE id = ?")
+                .param(productId)
+                .query(String.class)
+                .optional()
+                .orElse("This item");
     }
 
     /** Holds of one branch and product added together, in branch and product order, so concurrent orders cannot deadlock. */

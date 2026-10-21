@@ -1,6 +1,7 @@
-import type { DeliverRequest, Order, OrderRequest, OrderSource, OrderStatus } from '../../../api/retail-orders';
-import { milliOf, qtyString, showQty } from './maths';
-import { defaultPrice, lineFigures, lineHint, type DraftLine } from './sale-state';
+import type { Product } from '../../../api/retail';
+import type { DeliverRequest, ItemsRequest, Order, OrderRequest, OrderSource, OrderStatus } from '../../../api/retail-orders';
+import { milliOf, parseQty, qtyString, showQty } from './maths';
+import { defaultPrice, lineFigures, lineHint, newLine, type DraftLine } from './sale-state';
 import { chosenPack } from './units-state';
 
 // The rules of the customer order screens (issue #385, ADR-052), kept apart from the markup so they are tested on their own.
@@ -44,6 +45,85 @@ export function nextSteps(o: Pick<Order, 'status'>): ('pack' | 'send' | 'deliver
   if (o.status === 'packed') return ['send', 'deliver', 'cancel'];
   if (o.status === 'out_for_delivery') return ['deliver', 'cancel'];
   return [];
+}
+
+/** The items of an order change only before it goes out (issue #393): while it is ordered or packed. */
+export const itemsMayChange = (o: Pick<Order, 'status'>): boolean => o.status === 'ordered' || o.status === 'packed';
+
+/** The order's items as lines to change, each with its product (as read now) and the price agreed; null until every product is read. */
+export function itemsDraft(o: Pick<Order, 'lines'>, products: Record<string, Product | undefined>): DraftLine[] | null {
+  const lines: DraftLine[] = [];
+  for (const l of o.lines ?? []) {
+    const product = products[l.product_id ?? ''];
+    if (!product) return null;
+    lines.push({ product, qty: l.qty ?? '1', price: String(l.unit_price_minor ?? 0), ...(l.unit_id ? { unitId: l.unit_id } : {}) });
+  }
+  return lines;
+}
+
+/** What stops the new items being saved, in plain words, or null. */
+export function itemsProblem(lines: DraftLine[]): string | null {
+  if (lines.length === 0) return 'Keep at least one item. To take every item off, cancel the order.';
+  if (lines.some((l) => lineFigures(l) === null)) return 'Check the quantity and price on each item.';
+  if (lines.some((l) => (lineHint(l) ?? '').includes('does not convert exactly'))) return 'Fix the items marked above.';
+  return null;
+}
+
+/** The line of the order in the same item and unit as a draft line (the one of the same quantity first), or undefined. */
+function agreedLine(o: Pick<Order, 'lines'>, l: DraftLine) {
+  const unit = chosenPack(l.product, l.unitId)?.unit_id ?? '';
+  const same = (o.lines ?? []).filter((x) => x.product_id === l.product.id && (x.unit_id ?? '') === unit);
+  return same.find((x) => milliOf(x.qty ?? '0') === parseQty(l.qty)) ?? same[0];
+}
+
+/** An item from the picker: a new line in its base unit, unless a base unit line of it is there already (an item and unit is one line). */
+export function addItem(lines: DraftLine[], p: Product): DraftLine[] {
+  return lines.some((l) => l.product.id === p.id && !chosenPack(l.product, l.unitId)) ? lines : [...lines, newLine(p)];
+}
+
+/**
+ * A new quantity on a line. An item already on the order whose quantity changes is priced again as on a new order, so a price
+ * left at the one agreed shows today's price instead; back at the quantity agreed, it shows the price agreed again.
+ */
+export function withItemsQty(o: Pick<Order, 'lines'>, l: DraftLine, qty: string): DraftLine {
+  const agreed = agreedLine(o, { ...l, qty });
+  if (!agreed) return { ...l, qty };
+  const agreedPrice = String(agreed.unit_price_minor ?? 0);
+  const today = String(defaultPrice(l.product, l.unitId));
+  const sameQty = milliOf(agreed.qty ?? '0') === parseQty(qty);
+  if (!sameQty && l.price === agreedPrice) return { ...l, qty, price: today };
+  if (sameQty && l.price === today) return { ...l, qty, price: agreedPrice };
+  return { ...l, qty };
+}
+
+/**
+ * The new items for the server. A line left as it is on the order (the same item, unit and quantity at the price agreed) sends the
+ * price agreed, which the server keeps. A line at the quantity agreed but at another price sends the price shown, with the reason,
+ * so the server does not keep the agreed one. Any other line, an item on the order whose quantity changed included, is priced again
+ * exactly as on a new order: it sends a price only when the one shown differs from the sell price, and otherwise sends none, so the
+ * server prices it itself and may charge the customer's price list or a quantity price break instead of the sell price shown.
+ */
+export function buildItemsRequest(o: Pick<Order, 'lines'>, lines: DraftLine[], note: string): ItemsRequest {
+  return {
+    lines: lines.map((l) => {
+      const f = lineFigures(l);
+      if (!f) throw new Error('invalid line');
+      const pack = chosenPack(l.product, l.unitId);
+      const agreed = agreedLine(o, l);
+      const agreedPrice = agreed?.unit_price_minor;
+      const sameQty = agreed !== undefined && milliOf(agreed.qty ?? '0') === f.qtyMilli;
+      const kept = sameQty && f.priceMinor === agreedPrice;
+      const typed = f.priceMinor !== defaultPrice(l.product, pack?.unit_id) || (sameQty && f.priceMinor !== agreedPrice);
+      return {
+        product_id: l.product.id ?? '',
+        qty: qtyString(f.qtyMilli),
+        ...(pack ? { unit_id: pack.unit_id } : {}),
+        ...(kept || typed ? { unit_price_minor: f.priceMinor } : {}),
+        ...(typed && l.reason?.trim() ? { price_override_reason: l.reason.trim() } : {}),
+      };
+    }),
+    ...(note.trim() ? { note: note.trim() } : {}),
+  };
 }
 
 export interface OrderDraft {

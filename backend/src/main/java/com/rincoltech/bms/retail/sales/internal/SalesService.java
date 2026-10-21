@@ -365,7 +365,11 @@ class SalesService {
         return priceLines(branch, saleDate, buyer, priceListId, requests, problems, null);
     }
 
-    /** As above; {@code agreements} prices lines a customer order agreed on (issue #385): see {@link #record(SaleRequest, Long, List)}. */
+    /**
+     * As above; {@code agreements} prices lines a customer order agreed on (issue #385): see {@link #record(SaleRequest, Long, List)}.
+     * An entry may be null: that line is priced as a new one with every rule checked (a change of an order's items, issue #393,
+     * where only the lines left as they were carry an agreement).
+     */
     Priced priceLines(
             UUID branch,
             LocalDate saleDate,
@@ -374,7 +378,6 @@ class SalesService {
             List<SaleLineRequest> requests,
             List<FieldProblem> problems,
             List<Agreement> agreements) {
-        boolean agreed = agreements != null;
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
         boolean priced = pricing.on();
@@ -386,6 +389,8 @@ class SalesService {
         List<NewLine> lines = new ArrayList<>();
         for (int i = 0; i < requests.size(); i++) {
             SaleLineRequest l = requests.get(i);
+            Agreement agreement = agreements == null ? null : agreements.get(i);
+            boolean agreed = agreement != null;
             String field = "lines[" + i + "]";
             ProductSnapshot p = catalogue.find(l.productId()).orElse(null);
             if (p == null) {
@@ -428,7 +433,6 @@ class SalesService {
                 price = d.priceMinor();
                 String source = d.source();
                 String reason = null;
-                Agreement agreement = agreed ? agreements.get(i) : null;
                 UUID overriddenBy = null;
                 if (agreement != null && "override".equals(agreement.source()) && l.unitPriceMinor() != null) {
                     // A price changed when the customer order was taken (issue #385): an override once, for whoever
@@ -511,8 +515,11 @@ class SalesService {
         // customer
         // order were held to the floor when it was taken; a cost that rose since does not block its delivery (issue
         // #385).
-        if (!agreed && !principal.may("retail.price.below_cost", branch)) {
+        if (!principal.may("retail.price.below_cost", branch)) {
             for (NewLine l : lines) {
+                if (agreements != null && agreements.get(l.lineNo() - 1) != null) {
+                    continue;
+                }
                 // A pack line is judged on its line total, never on the rounded price per base unit (spec 3.3).
                 boolean below = l.saleUnitId() == null
                         ? l.unitPriceMinor() <= l.unitCostMinor()

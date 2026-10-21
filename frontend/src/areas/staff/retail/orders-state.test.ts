@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../../../api/retail';
+import type { Order } from '../../../api/retail-orders';
 import {
-  blankDeliver, blankOrder, keptWords, payChoicesFor, buildDeliverRequest, buildOrderRequest, deliverFigures, deliverProblem, feeOf, lookupKey, nextSteps, orderProblem, sourceLabel, stepOf,
+  addItem, blankDeliver, blankOrder, keptWords, payChoicesFor, buildDeliverRequest, buildItemsRequest, buildOrderRequest, deliverFigures, deliverProblem, feeOf, itemsDraft,
+  itemsMayChange, itemsProblem, lookupKey, nextSteps, orderProblem, sourceLabel, stepOf, withItemsQty,
 } from './orders-state';
 import { canWriteOff, writeOffAmount, writeOffWarning } from './sale-actions-state';
 import { newLine } from './sale-state';
@@ -100,5 +102,87 @@ describe('writing off a sale with a fee on the account', () => {
     expect(writeOffAmount(sale)).toBe(2000);
     expect(canWriteOff(sale)).toBe(true);
     expect(writeOffWarning(12000, 2000)).toContain('of which UGX 2,000 is the delivery fee');
+  });
+});
+
+describe('changing the items of an order (issue #393)', () => {
+  const taken: Pick<Order, 'status' | 'lines'> = {
+    status: 'ordered',
+    lines: [{ line_no: 1, product_id: 'p1', code: 'ROMPER', description: 'Test Romper', qty: '2', unit: 'piece', unit_price_minor: 9000, line_total_minor: 18000, base_qty: '2' }],
+  };
+
+  it('is offered while the order is ordered or packed, not once it is out', () => {
+    expect(itemsMayChange({ status: 'ordered' })).toBe(true);
+    expect(itemsMayChange({ status: 'packed' })).toBe(true);
+    expect(itemsMayChange({ status: 'out_for_delivery' })).toBe(false);
+    expect(itemsMayChange({ status: 'delivered' })).toBe(false);
+    expect(itemsMayChange({ status: 'cancelled' })).toBe(false);
+  });
+
+  it('starts from the items on the order at the price agreed, once every product is read', () => {
+    expect(itemsDraft(taken, {})).toBeNull();
+    const lines = itemsDraft(taken, { p1: romper });
+    expect(lines).toEqual([{ product: romper, qty: '2', price: '9000' }]);
+  });
+
+  it('keeps the price agreed on a line left as it was; a new quantity or a new item is priced again unless a price was typed', () => {
+    const lines = itemsDraft(taken, { p1: romper }) ?? [];
+    expect(buildItemsRequest(taken, lines, '').lines[0]).toEqual({ product_id: 'p1', qty: '2.000', unit_price_minor: 9000 });
+    // The quantity changed and the price left at today's (as the screen shows it): no price is sent, so the server prices the line
+    // as on a new order, from the customer's price list or a quantity price break when there is one.
+    const r = buildItemsRequest(taken, [withItemsQty(taken, lines[0]!, '3'), newLine({ ...romper, id: 'p2' })], ' Bigger size ');
+    expect(r.lines[0]).toEqual({ product_id: 'p1', qty: '3.000' });
+    // A brand new item at today's price: nothing to say about the price.
+    expect(r.lines[1]).toEqual({ product_id: 'p2', qty: '1.000' });
+    expect(r.note).toBe('Bigger size');
+    expect(buildItemsRequest(taken, lines, '')).not.toHaveProperty('note');
+    const typed = buildItemsRequest(taken, [{ ...lines[0]!, qty: '3', price: '8500', reason: 'Test regular customer' }], '');
+    expect(typed.lines[0]).toEqual({ product_id: 'p1', qty: '3.000', unit_price_minor: 8500, price_override_reason: 'Test regular customer' });
+  });
+
+  it('sends a price changed from today\'s, and today\'s price at the quantity agreed so the server does not keep the agreed one', () => {
+    const line = (itemsDraft(taken, { p1: romper }) ?? [])[0]!;
+    // A bigger quantity at the price agreed: a change of price today, sent with its reason.
+    const held = buildItemsRequest(taken, [{ ...line, qty: '3', reason: 'Test same price for three' }], '');
+    expect(held.lines[0]).toEqual({ product_id: 'p1', qty: '3.000', unit_price_minor: 9000, price_override_reason: 'Test same price for three' });
+    // The line taken off and put back at today's price, same quantity: today's price is sent, not the one agreed.
+    const again = buildItemsRequest(taken, [{ ...newLine(romper), qty: '2' }], '');
+    expect(again.lines[0]).toEqual({ product_id: 'p1', qty: '2.000', unit_price_minor: 10000 });
+  });
+
+  // Agreed 2 at 9000, today's (sell) price 10000.
+  it.each([
+    ['kept as agreed', '2', '9000', undefined, true, { unit_price_minor: 9000 }],
+    ['new quantity at the price agreed, with a reason', '3', '9000', 'Test same price for three', true, { unit_price_minor: 9000, price_override_reason: 'Test same price for three' }],
+    ['new quantity at today\'s price', '3', '10000', undefined, true, {}],
+    ['quantity agreed at today\'s price', '2', '10000', undefined, true, { unit_price_minor: 10000 }],
+    ['new item at today\'s price', '1', '10000', undefined, false, {}],
+    ['new item at a typed price', '1', '8500', 'Test regular customer', false, { unit_price_minor: 8500, price_override_reason: 'Test regular customer' }],
+  ] as const)('truth table: %s', (_name, qty, price, reason, onOrder, sent) => {
+    const product = onOrder ? romper : { ...romper, id: 'p2' };
+    const line = { ...newLine(product), qty, price, ...(reason ? { reason } : {}) };
+    expect(buildItemsRequest(taken, [line], '').lines[0]).toEqual({ product_id: product.id, qty: `${qty}.000`, ...sent });
+  });
+
+  it('shows today\'s price when the quantity of an item on the order changes, and the price agreed when it is back', () => {
+    const line = (itemsDraft(taken, { p1: romper }) ?? [])[0]!;
+    const bigger = withItemsQty(taken, line, '3');
+    expect(bigger.price).toBe('10000');
+    expect(withItemsQty(taken, bigger, '2').price).toBe('9000');
+    expect(withItemsQty(taken, { ...line, price: '8000' }, '3').price).toBe('8000');
+  });
+
+  it('adds an item from the picker once per item and unit, so a second unit of the same item is its own line', () => {
+    const carton = { ...romper, packs: [{ unit_id: 'u-carton', unit: 'carton', factor: '12', active: true }] } as Product;
+    const inCartons = [{ ...newLine(carton), unitId: 'u-carton' }];
+    expect(addItem(inCartons, carton)).toHaveLength(2);
+    expect(addItem(addItem(inCartons, carton), carton)).toHaveLength(2);
+    expect(addItem([newLine(romper)], romper)).toHaveLength(1);
+  });
+
+  it('needs at least one item and a valid quantity on each', () => {
+    expect(itemsProblem([])).toMatch(/cancel the order/i);
+    expect(itemsProblem([{ ...newLine(romper), qty: 'two' }])).toMatch(/quantity/i);
+    expect(itemsProblem([newLine(romper)])).toBeNull();
   });
 });

@@ -11,6 +11,7 @@ import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.DeliverRequest
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.Delivered;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.FeePaymentRequest;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.FeesReport;
+import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.ItemsRequest;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.Lookup;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.Order;
 import com.rincoltech.bms.retail.sales.internal.CustomerOrdersApi.OrderPage;
@@ -168,6 +169,29 @@ class CustomerOrdersController {
         NoStore.apply(response);
         Order o = service.change(id, ifMatch, request);
         return ResponseEntity.ok().eTag(String.valueOf(o.version())).body(o);
+    }
+
+    @PostMapping("/{order_id}/items")
+    @RequiresPermission(CustomerOrdersService.MANAGE)
+    @Operation(
+            summary =
+                    "Change the items of an order that is ordered or packed, keeping its number: the stock kept aside follows"
+                            + " in the same transaction and the history says what changed; M (issue #393)",
+            operationId = "changeRetailOrderItems")
+    ResponseEntity<Order> changeItems(
+            @PathVariable("order_id") UUID id,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @RequestHeader(name = "If-Match", required = false) String ifMatch,
+            @Valid @RequestBody ItemsRequest request,
+            HttpServletResponse response) {
+        NoStore.apply(response);
+        Outcome<Order> outcome = service.changeItems(idempotencyKey, id, ifMatch, request);
+        ResponseEntity.BodyBuilder builder =
+                ResponseEntity.ok().eTag(String.valueOf(outcome.body().version()));
+        if (outcome.replayed()) {
+            builder.header("Idempotent-Replayed", "true");
+        }
+        return builder.body(outcome.body());
     }
 
     @PostMapping("/{order_id}/pack")

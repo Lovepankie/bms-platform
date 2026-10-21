@@ -1,23 +1,27 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
-import { businessToday } from '../../../api/retail';
+import { businessToday, retail, type Product } from '../../../api/retail';
 import { retailOrders, type Order } from '../../../api/retail-orders';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { OrderActions, OrderSummary } from './orders';
-import { feeOf, isOpen } from './orders-state';
+import { addItem, buildItemsRequest, feeOf, isOpen, itemsDraft, itemsMayChange, itemsProblem, itemsTotal, withItemsQty } from './orders-state';
 import { newIdempotencyKey } from './idempotency';
-import { canUse, holdsAt } from './permissions';
+import { UNITS, canUse, capabilityOn, holdsAt } from './permissions';
+import { SaleLineCard } from './sale';
+import { withUnit, type DraftLine } from './sale-state';
 import { OpenSale } from './sales';
-import { Gate, Problem, money, useBranchName } from './ui';
+import { Gate, Note, Problem, ProductPicker, money, useBranchName } from './ui';
 
 // One customer order (issue #385, ADR-052): what was ordered, where it stands, who did what and when, the delivery details that
-// can still change, and, once delivered, the sale it became (with its receipt, payments, returns and void like any sale).
+// can still change, and, once delivered, the sale it became (with its receipt, payments, returns and void like any sale). Its items
+// change while it is ordered or packed (issue #393): the number stays, the stock kept follows, and the history says what changed.
 
 const STEP_WORDS: Record<string, string> = {
   ordered: 'Order taken',
   changed: 'Details changed',
+  items_changed: 'Items changed',
   packed: 'Packed',
   out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
@@ -67,11 +71,86 @@ function ChangeDetails({ order }: { order: Order }) {
       <input id="change-fee" inputMode="numeric" value={fee} onChange={(e) => setFee(e.target.value)} />
       <label htmlFor="change-notes">Notes</label>
       <input id="change-notes" value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
-      <p className="hint">The items cannot change. To change them, cancel this order and take a new one.</p>
+      <p className="hint">To change the items, use Change the items.</p>
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={save.error} />
       <button type="button" disabled={problem !== null || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Save the changes'}</button>
       <button type="button" onClick={() => setOpen(false)}>Close</button>
+    </fieldset>
+  );
+}
+
+/** The items of an order that is not out yet: the same picker as a new order, the stock kept following when it is saved. */
+function ChangeItems({ order }: { order: Order }) {
+  const { me } = useStaff();
+  const client = useQueryClient();
+  const unitsOn = capabilityOn(me, 'retail', UNITS);
+  const [open, setOpen] = useState(false);
+  const [lines, setLines] = useState<DraftLine[] | null>(null);
+  const [note, setNote] = useState('');
+  const [reason, setReason] = useState('');
+  const [key, setKey] = useState(newIdempotencyKey);
+  const ids = [...new Set((order.lines ?? []).map((l) => l.product_id ?? ''))];
+  const products = useQueries({
+    queries: ids.map((id) => ({ queryKey: ['retail', 'product', id], queryFn: () => retail.getProduct(id), enabled: open })),
+  });
+  const read: Record<string, Product | undefined> = {};
+  ids.forEach((id, i) => { read[id] = products[i]?.data; });
+  const shown = lines ?? (open ? itemsDraft(order, read) : null);
+  const save = useMutation({
+    mutationFn: () => retailOrders.changeItems(
+      order.id ?? '',
+      order.version ?? 1,
+      buildItemsRequest(order, (shown ?? []).map((l) => (reason.trim() ? { ...l, reason } : l)), note),
+      key,
+    ),
+    onSuccess: () => {
+      setKey(newIdempotencyKey());
+      setOpen(false);
+      setLines(null);
+      void client.invalidateQueries({ queryKey: ['retail', 'order', order.id] });
+      void client.invalidateQueries({ queryKey: ['retail', 'orders'] });
+      void client.invalidateQueries({ queryKey: ['retail', 'stock'] });
+    },
+  });
+  if (!open) return <button type="button" className="btn-sm" data-tour="order-items-change" onClick={() => setOpen(true)}>Change the items</button>;
+  const edit = (f: (ls: DraftLine[]) => DraftLine[]) => setLines(f(shown ?? []));
+  const add = (p: Product) => edit((ls) => addItem(ls, p));
+  const problem = shown ? itemsProblem(shown) : null;
+  return (
+    <fieldset data-tour="order-items-change">
+      <legend>Change the items</legend>
+      <p className="hint">Add, take off or change the quantity of any item. The order keeps its number {order.order_no}.</p>
+      {order.status === 'packed' && <Note>This order is packed already. Saving new items puts it back to ordered: pack it again after you save.</Note>}
+      {products.some((q) => q.error) && <Problem error={products.find((q) => q.error)?.error} />}
+      {!shown && !products.some((q) => q.error) && <p className="loading">Loading the items</p>}
+      {shown && (
+        <>
+          <ProductPicker id="order-items-search" branchId={order.branch_id ?? ''} showPrice onAdd={add} />
+          {shown.map((l, i) => (
+            <SaleLineCard
+              key={`${l.product.id}-${l.unitId ?? 'base'}-${i}`}
+              line={l}
+              index={i}
+              unitsOn={unitsOn}
+              onQty={(v) => edit((ls) => ls.map((x, n) => (n === i ? withItemsQty(order, x, v) : x)))}
+              onPrice={(v) => edit((ls) => ls.map((x, n) => (n === i ? { ...x, price: v } : x)))}
+              onUnit={(unitId) => edit((ls) => ls.map((x, n) => (n === i ? withUnit(x, unitId) : x)))}
+              onRemove={() => edit((ls) => ls.filter((_, n) => n !== i))}
+            />
+          ))}
+          <p className="rt-total" aria-live="polite">Items {money(itemsTotal(shown))}, delivery {money(order.delivery_fee_minor ?? 0)}, total {money(itemsTotal(shown) + (order.delivery_fee_minor ?? 0))}</p>
+          <label htmlFor="items-reason">Why a price changed (needed only if you changed a price)</label>
+          <input id="items-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
+          <label htmlFor="items-note">Why the items changed (optional, it stays in the history)</label>
+          <input id="items-note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+          <p className="hint">Saving keeps the new items aside and puts back on the shelf what was taken off. An item left as it is on the order keeps the price agreed; a new item, or one whose quantity changed, takes today&apos;s price.</p>
+          {problem && <Note>{problem}</Note>}
+        </>
+      )}
+      <Problem error={save.error} />
+      <button type="button" className="rt-primary" disabled={!shown || problem !== null || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Save the new items'}</button>
+      <button type="button" onClick={() => { setOpen(false); setLines(null); save.reset(); }}>Close</button>
     </fieldset>
   );
 }
@@ -123,6 +202,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
         {o && <OrderSummary order={o} branchName={nameOf(o.branch_id)} />}
         {o && isOpen(o) && <OrderActions order={o} />}
       </section>
+      {o && itemsMayChange(o) && <ChangeItems key={`items-${o.version}`} order={o} />}
       {o && isOpen(o) && <ChangeDetails key={o.version} order={o} />}
       {o && o.status === 'delivered' && o.fee_method === 'account' && !o.fee_paid_on && !o.sale_voided && holdsAt(me, 'retail.sale.create', o.branch_id) && <PayFee order={o} />}
       {o?.sale_id && !saleOpen && (

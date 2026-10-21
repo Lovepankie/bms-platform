@@ -4046,6 +4046,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/orders/{order_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the items of an order that is ordered or packed, keeping its number: the stock kept aside follows in the same transaction and the history says what changed; M (issue #393) */
+        post: operations["changeRetailOrderItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/orders/{order_id}/pack": {
         parameters: {
             query?: never;
@@ -11579,6 +11596,12 @@ export interface components {
             rows?: components["schemas"]["RetailOrderReportRow"][];
             /** Format: date */
             to?: string;
+        };
+        /** @description The whole new set of items. A line left as it was (the same item, unit and quantity, with no price or the price agreed) keeps the price agreed; any other line is priced as a new order's would be */
+        RetailOrderItemsRequest: {
+            lines: components["schemas"]["RetailOrderLineRequest"][];
+            /** @description Why the items changed, kept in the order's history */
+            note?: string;
         };
         RetailOrderLine: {
             /** @description What the order keeps aside, in the product's base unit */
@@ -22981,6 +23004,35 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RetailOrderFeePaymentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOrder"];
+                };
+            };
+        };
+    };
+    changeRetailOrderItems: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+                "If-Match"?: string;
+            };
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailOrderItemsRequest"];
             };
         };
         responses: {

@@ -130,7 +130,8 @@ class RetailCustomerOrdersIT extends IntegrationTest {
                 .sql("""
                         SELECT count(*) FROM retail_stock_balances b
                           LEFT JOIN (SELECT o.branch_id, l.product_id, sum(l.base_qty) AS q
-                                       FROM retail_customer_orders o JOIN retail_customer_order_lines l ON l.order_id = o.id
+                                       FROM retail_customer_orders o
+                                       JOIN retail_customer_order_lines l ON l.order_id = o.id AND l.revision = o.items_revision
                                       WHERE o.tenant_id = ? AND o.status IN ('ordered', 'packed', 'out_for_delivery')
                                       GROUP BY 1, 2) k ON k.branch_id = b.branch_id AND k.product_id = b.product_id
                          WHERE b.tenant_id = ? AND b.reserved_qty <> coalesce(k.q, 0)

@@ -29,14 +29,15 @@ export const ordersPage: Tour = {
 
 export const orderPage: Tour = {
   id: 'page-order',
-  version: 1,
+  version: 2,
   title: 'This page: one order',
   audience: (me) => held(me, ORDERS),
   autoStart: false,
   page: '/staff/retail/orders/$orderId',
   steps: [
     retail({ id: 'summary', target: 'order-summary', title: 'The order', body: 'Who ordered, where it goes, the items, the delivery fee and where it stands. The buttons move it to the next step.' }),
-    retail({ id: 'history', target: 'order-history', title: 'Who did what', body: 'Every step with the time and the person: taken, changed, packed, sent out, delivered or cancelled.' }),
+    retail({ id: 'items', target: 'order-items-change', title: 'Change the items', body: 'The customer wants something else? Tap Change the items to add, take off or change the quantity before the order goes out. The order keeps its number and the items are kept aside again.' }),
+    retail({ id: 'history', target: 'order-history', title: 'Who did what', body: 'Every step with the time and the person: taken, changed, items changed, packed, sent out, delivered or cancelled.' }),
     retail({ id: 'back', target: 'order-back', title: 'Back to the list', body: 'Tap Back to the orders to see the others.' }),
   ],
 };
