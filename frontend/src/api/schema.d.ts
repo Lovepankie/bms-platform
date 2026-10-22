@@ -2433,6 +2433,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The plan card: the plan, the modules on, the paid-until date, module requests and changes still to come (ADR-073) */
+        get: operations["getPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner only, with the step-up: cancel the subscription at the end of the paid period; the business is read only after it, data kept (ADR-073) */
+        post: operations["cancelPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/changes/{change_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner only: undo a module stop or the cancellation before its day (ADR-073) */
+        post: operations["undoPlanChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/module-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner only: ask for a module; switched on at once when the plan includes it, otherwise the platform operator decides (ADR-073) */
+        post: operations["requestPlanModule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/modules/{module}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner only, with the step-up: stop using a module at the end of the paid period (at once when nothing is paid ahead); records are kept (ADR-073) */
+        post: operations["stopPlanModule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** When the subscription ends or ended, for the banner and the read-only notice (ADR-073) */
+        get: operations["getPlanStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/applications": {
         parameters: {
             query?: never;
@@ -2756,6 +2858,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/module-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Module requests of every business, newest first; pending by default (ADR-073) */
+        get: operations["platformListModuleRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/module-requests/{request_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve a module request with a reason, optionally moving the plan first; switches the module on, data kept; needs a current code from the operator's own authenticator (ADR-073) */
+        post: operations["platformApproveModuleRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/module-requests/{request_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline a module request with a reason the Owner sees (ADR-073) */
+        post: operations["platformDeclineModuleRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/outbox": {
         parameters: {
             query?: never;
@@ -2836,6 +2989,23 @@ export interface paths {
         put?: never;
         /** Set the plan's price from a date; the price already in force on that date again changes nothing (FR-SUB-01) */
         post: operations["platformAddPlanPrice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/scheduled-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Module stops and cancellations still to come, soonest first (ADR-073) */
+        get: operations["platformListScheduledChanges"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9249,6 +9419,26 @@ export interface components {
         PlanList: {
             items?: components["schemas"]["Plan"][];
         };
+        PlanModuleAsk: {
+            module?: string;
+        };
+        /** @description A module the Owner asked for, and the operator's decision */
+        PlanModuleRequest: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** @description True when the plan already included the module, so it was switched on at once */
+            decided_automatically?: boolean;
+            /** @description The operator's reason, shown to the Owner when declined */
+            decision_reason?: string;
+            /** Format: uuid */
+            id?: string;
+            module_key?: string;
+            requested_by_name?: string;
+            /** @description pending, approved or declined */
+            status?: string;
+        };
         /** @description A price of a plan from a date; a later row replaces it from its own date */
         PlanPrice: {
             /**
@@ -9275,6 +9465,44 @@ export interface components {
              */
             monthly_minor?: number;
             reason?: string;
+        };
+        /** @description A module stopped or the subscription cancelled, from a date */
+        PlanScheduledChange: {
+            /** Format: date-time */
+            applied_at?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /**
+             * Format: date
+             * @description The first day the change is in force
+             */
+            effective_on?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description stop_module or cancel */
+            kind?: string;
+            module_key?: string;
+            requested_by_name?: string;
+            /** @description scheduled, applied or undone */
+            status?: string;
+        };
+        /** @description For the banner and the read-only notice every member of staff sees */
+        PlanStatus: {
+            /**
+             * Format: date
+             * @description When the subscription has ended: the day it ended; the business is read only
+             */
+            ended_on?: string;
+            /**
+             * Format: date
+             * @description While a cancellation is scheduled: the first day the business is read only
+             */
+            ends_on?: string;
+        };
+        /** @description The authenticator code when the Owner has two-step sign-in, else the password */
+        PlanStepUp: {
+            password?: string;
+            totp_code?: string;
         };
         PlatformFeedbackItem: {
             app_version?: string;
@@ -9322,9 +9550,62 @@ export interface components {
             /** Format: uuid */
             user_id?: string;
         };
+        PlatformModuleApproval: {
+            /** @description Move the business to this plan first, when its plan does not include the module */
+            plan_code?: string;
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+            /** @description A current 6 digit code from the operator's own authenticator app */
+            totp_code: string;
+        };
+        PlatformModuleDecline: {
+            /** @description Why; shown to the Owner and kept in the audit log */
+            reason: string;
+        };
+        PlatformModuleRequest: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            decided_automatically?: boolean;
+            decision_reason?: string;
+            /** Format: uuid */
+            id?: string;
+            module_key?: string;
+            plan_code?: string;
+            /** @description Whether the business's plan already includes the module */
+            plan_includes?: boolean;
+            requested_by_name?: string;
+            status?: string;
+            /** Format: uuid */
+            tenant_id?: string;
+            tenant_name?: string;
+            tenant_slug?: string;
+        };
+        PlatformModuleRequestList: {
+            items?: components["schemas"]["PlatformModuleRequest"][];
+        };
         PlatformReasonRequest: {
             /** @description Why; kept in the platform audit log */
             reason: string;
+        };
+        PlatformScheduledChange: {
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date */
+            effective_on?: string;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            module_key?: string;
+            requested_by_name?: string;
+            /** Format: uuid */
+            tenant_id?: string;
+            tenant_name?: string;
+            tenant_slug?: string;
+        };
+        PlatformScheduledChangeList: {
+            items?: components["schemas"]["PlatformScheduledChange"][];
         };
         /** @description Shown once to the operator, who hands it to the tenant admin */
         PlatformSignInResetLink: {
@@ -21175,6 +21456,142 @@ export interface operations {
             };
         };
     };
+    getPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
+                };
+            };
+        };
+    };
+    cancelPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanStepUp"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanScheduledChange"];
+                };
+            };
+        };
+    };
+    undoPlanChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanScheduledChange"];
+                };
+            };
+        };
+    };
+    requestPlanModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanModuleAsk"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanModuleRequest"];
+                };
+            };
+        };
+    };
+    stopPlanModule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                module: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanStepUp"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanScheduledChange"];
+                };
+            };
+        };
+    };
+    getPlanStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanStatus"];
+                };
+            };
+        };
+    };
     platformListApplications: {
         parameters: {
             query?: {
@@ -21620,6 +22037,80 @@ export interface operations {
             };
         };
     };
+    platformListModuleRequests: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformModuleRequestList"];
+                };
+            };
+        };
+    };
+    platformApproveModuleRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformModuleApproval"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanModuleRequest"];
+                };
+            };
+        };
+    };
+    platformDeclineModuleRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformModuleDecline"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanModuleRequest"];
+                };
+            };
+        };
+    };
     platformOutbox: {
         parameters: {
             query?: never;
@@ -21752,6 +22243,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanDetail"];
+                };
+            };
+        };
+    };
+    platformListScheduledChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformScheduledChangeList"];
                 };
             };
         };
