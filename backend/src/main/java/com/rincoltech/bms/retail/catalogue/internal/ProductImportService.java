@@ -258,6 +258,13 @@ class ProductImportService {
                 report.add(new ImportRow(line, code, description.strip(), "error", barcodeProblem));
                 continue;
             }
+            // Only a row that passes holds its codes, so a later row is never refused over a code of an error row.
+            for (String c : rowCodes) {
+                codesInFile.putIfAbsent(Barcodes.key(c), line);
+            }
+            for (String c : rowPackCodes) {
+                codesInFile.putIfAbsent(Barcodes.key(c), line);
+            }
             if (!categories.containsKey(categoryKey)) {
                 newCategories.putIfAbsent(categoryKey, category);
             }
@@ -487,6 +494,7 @@ class ProductImportService {
     /**
      * Issue #345: the first problem of a row's barcodes, or null. A code another active item holds, or one repeated in
      * the file, is an error, never a guess; a code held by an item that is switched off moves to the new item on apply.
+     * {@code inFile} holds the codes of the rows that passed so far; the caller adds this row's once the row passes.
      */
     private static String barcodeProblem(
             List<String> rowCodes,
@@ -497,6 +505,7 @@ class ProductImportService {
             int line) {
         List<String> all = new ArrayList<>(rowCodes);
         all.addAll(packCodes);
+        java.util.Set<String> inRow = new java.util.HashSet<>();
         for (String c : all) {
             Barcodes.Result r = Barcodes.check(c, format);
             if (!r.ok()) {
@@ -508,9 +517,12 @@ class ProductImportService {
                 return "Barcode " + c + " is on the item " + h.productDescription() + " (code " + h.productCode()
                         + ") already.";
             }
-            Integer first = inFile.putIfAbsent(k, line);
+            Integer first = inFile.get(k);
             if (first != null) {
                 return "Barcode " + c + " is repeated in the file (same as line " + first + ").";
+            }
+            if (!inRow.add(k)) {
+                return "Barcode " + c + " is repeated on this line.";
             }
         }
         return null;

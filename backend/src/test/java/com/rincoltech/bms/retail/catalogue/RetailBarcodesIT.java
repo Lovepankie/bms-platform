@@ -363,6 +363,24 @@ class RetailBarcodesIT extends IntegrationTest {
     }
 
     @Test
+    void frRet68ACodeOfAnErrorRowDoesNotMakeALaterRowARepeat() {
+        JsonNode rows = api.post(
+                        "/products/import?dry_run=true",
+                        Map.of(
+                                "csv",
+                                "code,description,category,unit,sell price,barcode\n"
+                                        + "IMP-ER1,Test soap,Soap,bar,1000,TEST-ER-1|4006381333932\n"
+                                        + "IMP-ER2,Test oil,Oil,bottle,2000,TEST-ER-1\n"
+                                        + "IMP-ER3,Test salt,Salt,packet,500,TEST-ER-3 TEST-ER-3\n"),
+                        ADMINISTRATOR)
+                .getBody()
+                .get("rows");
+        assertThat(rows.get(0).get("outcome").asString()).isEqualTo("error");
+        assertThat(rows.get(1).get("outcome").asString()).isEqualTo("added");
+        assertThat(rows.get(2).get("message").asString()).contains("repeated on this line");
+    }
+
+    @Test
     void frRet68TheImportFileCarriesBarcodesAndRefusesABadOrRepeatedOne() {
         String header = "code,description,category,unit,sell price,barcode\n";
         ResponseEntity<JsonNode> dry = api.post(
