@@ -66,9 +66,51 @@ export function barcodeKey(code: string): string {
 
 /**
  * A USB or Bluetooth scanner types the code far faster than a person and ends with Enter. Keys closer together than
- * this are a scanner; a person rarely types two keys within 35 ms, a scanner sends one every 5 to 20.
+ * this are a scanner; a person rarely types two keys within 35 ms, a scanner sends one every 5 to 20. A slow Bluetooth
+ * scanner may need more, so each device may raise it up to WEDGE_GAP_MAX_MS in Notifications and app.
  */
 export const WEDGE_GAP_MS = 35;
+export const WEDGE_GAP_MAX_MS = 80;
+export const WEDGE_GAP_CHOICES = [35, 50, 65, 80] as const;
+const WEDGE_GAP_KEY = 'bms.scanner.gap-ms';
+const SCAN_FOCUS_KEY = 'bms.scanner.sale-focus';
+
+/** This device's scanner gap: the saved one between 35 and 80 ms, else 35. Storage can be blocked; then the default. */
+export function wedgeGap(): number {
+  try {
+    const n = Number(window.localStorage.getItem(WEDGE_GAP_KEY));
+    return Number.isInteger(n) && n >= WEDGE_GAP_MS && n <= WEDGE_GAP_MAX_MS ? n : WEDGE_GAP_MS;
+  } catch {
+    return WEDGE_GAP_MS;
+  }
+}
+
+export function saveWedgeGap(ms: number): void {
+  try {
+    if (ms === WEDGE_GAP_MS) window.localStorage.removeItem(WEDGE_GAP_KEY);
+    else window.localStorage.setItem(WEDGE_GAP_KEY, String(Math.min(Math.max(Math.round(ms), WEDGE_GAP_MS), WEDGE_GAP_MAX_MS)));
+  } catch {
+    // Blocked storage keeps the default.
+  }
+}
+
+/** Whether the sale screen keeps the cursor in its scan box (on unless this device turned it off). */
+export function saleScanFocus(): boolean {
+  try {
+    return window.localStorage.getItem(SCAN_FOCUS_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+export function saveSaleScanFocus(on: boolean): void {
+  try {
+    if (on) window.localStorage.removeItem(SCAN_FOCUS_KEY);
+    else window.localStorage.setItem(SCAN_FOCUS_KEY, 'off');
+  } catch {
+    // Blocked storage keeps the default.
+  }
+}
 /** The shortest code a wedge burst is taken for (shorter bursts are a fast typist's double key). */
 export const WEDGE_MIN = 4;
 

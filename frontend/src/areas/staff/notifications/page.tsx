@@ -7,6 +7,8 @@ import { THEME_CHOICES, useThemeChoice } from '../../../app/theme-mode';
 import { InstallPanel } from '../../../install/InstallPrompt';
 import { isIosDevice } from '../../../install/install';
 import { type PushState, createPush } from '../../../push/push';
+import { useOptionalStaff } from '../context';
+import { ScannerSettings } from '../retail/scan';
 
 // Notifications and app (ADR-050). For the person using this device: install BMS as an app, choose how it looks (issue #452), and turn on notifications
 // for the things that need them (a sale voided, a write-off made alone, an approval limit raised, stock sent to their branch, an
@@ -152,6 +154,8 @@ export function Appearance() {
 }
 
 export function NotificationsPage({ push = defaultPush }: { push?: ReturnType<typeof createPush> }) {
+  const staff = useOptionalStaff();
+  const shop = staff?.me.modules?.includes('retail') ?? false;
   return (
     <main className="rt ln">
       <h1>Notifications and app</h1>
@@ -163,6 +167,12 @@ export function NotificationsPage({ push = defaultPush }: { push?: ReturnType<ty
         <h2 id="appearance-title">Appearance</h2>
         <Appearance />
       </section>
+      {shop && (
+        <section className="rt-card stack" aria-labelledby="scanner-title">
+          <h2 id="scanner-title">Barcode scanner</h2>
+          <ScannerSettings />
+        </section>
+      )}
       <section className="rt-card stack" aria-labelledby="notify-title" data-tour="notifications-toggle">
         <h2 id="notify-title">Notifications on this device</h2>
         <p>

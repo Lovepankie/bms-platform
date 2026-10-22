@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { retail, type Product } from '../../../api/retail';
 import { useStaff } from '../context';
-import { createWedge, findByBarcodeIn } from './barcode-state';
+import { WEDGE_GAP_CHOICES, WEDGE_GAP_MS, createWedge, findByBarcodeIn, saleScanFocus, saveSaleScanFocus, saveWedgeGap, wedgeGap } from './barcode-state';
 import { holds } from './permissions';
 import { Problem, ProductPicker } from './ui';
 
@@ -21,6 +21,15 @@ export function cameraSupported(): boolean {
 /** The page is on a plain http address, where a browser never offers the camera. */
 export function insecureAddress(): boolean {
   return typeof window !== 'undefined' && window.isSecureContext === false;
+}
+
+/** A mouse or trackpad is the main pointer (a till or a laptop, not a phone); true where the browser cannot say. */
+function finePointer(): boolean {
+  try {
+    return window.matchMedia('(pointer: fine)').matches;
+  } catch {
+    return true;
+  }
 }
 
 /** A short beep and a buzz on a phone that can, so a scan is noticed without looking; silent where it cannot. */
@@ -75,7 +84,7 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
   handler.current = onScan;
   useEffect(() => {
     if (!enabled) return undefined;
-    const wedge = createWedge();
+    const wedge = createWedge(wedgeGap());
     let before: FieldSnapshot | null = null;
     const down = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -106,7 +115,7 @@ type Outcome = { kind: 'added'; name: string } | { kind: 'refused'; message: str
  * given, and the pack the barcode is on (absent for the item's own unit); it returns a message instead when the form
  * cannot take the scan (a pack it cannot use, an item not on the sheet), shown in place of Added.
  */
-export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: string; onFound: (product: Product, unitId?: string) => string | void }) {
+export function ScanBar({ id, branchId, onFound, keepFocus = false }: { id: string; branchId?: string; onFound: (product: Product, unitId?: string) => string | void; keepFocus?: boolean }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const [text, setText] = useState('');
@@ -116,6 +125,18 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<unknown>(null);
   const canAssign = holds(me, 'retail.catalogue.manage');
+  // With keepFocus (the sale screen, unless this device turned it off) the cursor waits in the scan box, so a scanner too
+  // slow to be told from typing still lands there and its Enter looks the code up instead of submitting the sale. Only
+  // where there is a mouse or trackpad: on a phone it would open the keyboard on every visit.
+  const box = useRef<HTMLInputElement>(null);
+  const holdFocus = keepFocus && saleScanFocus() && finePointer();
+  useEffect(() => {
+    if (holdFocus) box.current?.focus();
+  }, [holdFocus]);
+  const refocus = () => {
+    const at = document.activeElement;
+    if (holdFocus && (at === null || at === document.body)) box.current?.focus();
+  };
 
   const found = (product: Product, unitId?: string) => {
     const refused = onFound(product, unitId);
@@ -147,6 +168,7 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
       }
     } finally {
       setBusy(false);
+      refocus();
     }
   };
 
@@ -171,6 +193,7 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
       <div className="rt-row">
         <input
           id={id}
+          ref={box}
           data-scan-box=""
           autoComplete="off"
           enterKeyHint="search"
@@ -223,6 +246,30 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
           />
         </Suspense>
       )}
+    </div>
+  );
+}
+
+/** The scanner settings of this device, in Notifications and app: how slow a scanner may type, and the sale's scan box. */
+export function ScannerSettings() {
+  const [gap, setGap] = useState(wedgeGap);
+  const [focus, setFocus] = useState(saleScanFocus);
+  return (
+    <div className="stack">
+      <p className="hint">
+        A scanner types the code very fast and presses Enter. If scans from a slow Bluetooth scanner end up as typing, choose a
+        slower speed here. This is kept on this device only.
+      </p>
+      <label htmlFor="scanner-gap">Scanner speed</label>
+      <select id="scanner-gap" value={gap} onChange={(e) => { const ms = Number(e.target.value); saveWedgeGap(ms); setGap(ms); }}>
+        {WEDGE_GAP_CHOICES.map((ms) => (
+          <option key={ms} value={ms}>{ms === WEDGE_GAP_MS ? `Usual (up to ${ms} ms between keys)` : `Slower (up to ${ms} ms between keys)`}</option>
+        ))}
+      </select>
+      <label>
+        <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={focus} onChange={(e) => { saveSaleScanFocus(e.target.checked); setFocus(e.target.checked); }} />
+        Keep the cursor in the scan box on the sale screen, so a scan never presses Enter on the sale
+      </label>
     </div>
   );
 }

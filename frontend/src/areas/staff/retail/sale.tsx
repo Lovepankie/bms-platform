@@ -250,7 +250,7 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
       <div data-tour="sale-search">
         <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
       </div>
-      <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} />
+      <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} keepFocus />
 
       <h2>Items</h2>
       {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Search above and tap Add.</EmptyState>}

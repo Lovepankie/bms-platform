@@ -70,5 +70,5 @@ an item with no manufacturer code gets a label; codes are checked, so a misread 
 so the iPhone camera is slower than the native detector. A code holding `% ; ? # / \` cannot be stored.
 
 **Watch for:** a scanner configured to send Tab instead of Enter (the scan box and the wedge both need Enter); scanners that type
-faster than the browser fires key events still fit the 35 ms window, a very slow Bluetooth scanner may not; label printers with other
+faster than the browser fires key events still fit the 35 ms window; a slow Bluetooth scanner needs the device's Scanner speed in Notifications and app raised (up to 80 ms, kept in this browser only), and on the sale screen the cursor waits in the scan box (on a device with a mouse or trackpad, unless turned off there) so a scan too slow to be told from typing still lands in the box and its Enter never submits the sale; label printers with other
 sheet sizes (the CSS sheet is A4, 3 by 8); the V90 number against the open claims V81 to V89.

@@ -8,7 +8,9 @@ import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { LabelsPage } from './labels';
 import { SaleForm } from './sale';
+import { ScannerSettings } from './scan';
 import { TransferForm } from './transfer';
+import { wedgeGap } from './barcode-state';
 
 // Scanning on the forms and the label sheet (ADR-070, issue #345; FR-RET-68): a keyboard-wedge scan adds the item at 1
 // and the next scan of it adds one more, an unknown code says so (with Add this barcode to a product for an
@@ -32,6 +34,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  localStorage.clear();
   Reflect.deleteProperty(navigator, 'mediaDevices');
 });
 
@@ -44,12 +47,6 @@ function screenOf(node: ReactElement, role = 'admin') {
   );
 }
 
-/** A scanner: the code's keys in a burst on whatever has focus, then Enter. */
-function wedge(code: string) {
-  const target = document.activeElement ?? document.body;
-  for (const ch of code) fireEvent.keyDown(target, { key: ch });
-  fireEvent.keyDown(target, { key: 'Enter' });
-}
 
 /**
  * A key as a browser handles it, at time `at`: keydown, then, unless prevented, the character typed into the focused field
@@ -68,12 +65,17 @@ function press(key: string, at: number) {
   target.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-/** A burst of `code` with `gapMs` between keys, then Enter, typed with `press`. */
-function typed(code: string, gapMs: number, from = 1000) {
-  let at = from;
+let clock = 0;
+
+/** A burst of `code` with `gapMs` between keys, then Enter, typed with `press` into whatever has focus. */
+function typed(code: string, gapMs: number) {
+  let at = (clock += 10000);
   for (const ch of code) press(ch, (at += gapMs));
-  press('Enter', at + gapMs);
+  press('Enter', (clock = at + gapMs));
 }
+
+/** A scanner: the code's keys in a fast burst on whatever has focus (the sale's scan box, or a field), then Enter. */
+const wedge = (code: string) => typed(code, 8);
 
 const BULB15 = '00000000-0000-4000-8000-0000000b0004';
 
@@ -137,6 +139,15 @@ describe('FR-RET-68 scanning on the sale form', () => {
     await waitFor(() => expect(qtyOf(1)).toBe('1'));
     expect(price.value).toBe('5500');
     expect(price.selectionStart).toBe(2);
+  });
+
+  it('waits in the scan box, so a scanner too slow to be told from typing still adds the item', async () => {
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP' });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    expect(document.activeElement?.id).toBe('sale-scan');
+    typed('TEST-LAMP', 150);
+    await waitFor(() => expect(qtyOf(0)).toBe('1'));
+    expect(document.activeElement?.id).toBe('sale-scan');
   });
 
   it('takes keys slower than a scanner for a person typing, not a scan', async () => {
@@ -209,6 +220,30 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect(screen.getByRole('button', { name: 'Scan' })).toBeTruthy();
     expect(screen.queryByText('The camera works only on the secure (https) address.')).toBeNull();
     Reflect.deleteProperty(window, 'isSecureContext');
+  });
+});
+
+describe('FR-RET-68 the scanner settings of this device', () => {
+  it('lets a slow scanner be chosen, kept on this device, and then takes its bursts as scans', async () => {
+    render(<ScannerSettings />);
+    expect(wedgeGap()).toBe(35);
+    fireEvent.change(screen.getByLabelText('Scanner speed'), { target: { value: '80' } });
+    expect(wedgeGap()).toBe(80);
+    cleanup();
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP' });
+    screenOf(<TransferForm fromBranchId={BRANCH} />);
+    typed('TEST-LAMP', 60);
+    await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('1'));
+  });
+
+  it('keeps 35 ms for a saved value out of range, and can stop the sale holding the cursor in the scan box', () => {
+    localStorage.setItem('bms.scanner.gap-ms', '500');
+    expect(wedgeGap()).toBe(35);
+    render(<ScannerSettings />);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Keep the cursor in the scan box/ }));
+    cleanup();
+    screenOf(<SaleForm branchId={BRANCH} />);
+    expect(document.activeElement?.id).not.toBe('sale-scan');
   });
 });
 

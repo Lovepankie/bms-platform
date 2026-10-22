@@ -1270,8 +1270,11 @@ ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability s
 - **Scan bar** (`scan.tsx`, data-tour `scan-bar`) under the item search of the sale, restock, goods received without an order (purchasing), move stock and stock count forms:
   "Scan or type a barcode, then press Enter", and a **Scan** button (data-tour `scan-camera`) shown only where the browser can open a
   camera (`navigator.mediaDevices.getUserMedia`). A USB or Bluetooth scanner works anywhere on the screen: a burst of keys within
-  35 ms of each other, at least four, closed by Enter (`createWedge` in `barcode-state.ts`); with the cursor in a text field the burst
-  is taken back out of it. A found item is added at 1 or its line gains one, in the pack the barcode is on (the sale and the restock,
+  35 ms of each other (this device's **Scanner speed** in Notifications and app, up to 80 ms for a slow Bluetooth scanner, kept in
+  this browser), at least four, closed by Enter (`createWedge` in `barcode-state.ts`); with the cursor in a text field the field gets
+  back the value and selection it had before the burst. On the sale screen the cursor waits in the scan box (on a device with a
+  mouse or trackpad; "Keep the cursor in the scan box on the sale screen" in Notifications and app turns it off), so a scan too slow
+  to be told from typing still lands there and its Enter never submits the sale. A found item is added at 1 or its line gains one, in the pack the barcode is on (the sale and the restock,
   with pack sizes on); on the stock count it adds one to the count, or the pack factor. "Added <item>." is read out politely, with a
   short beep and buzz where the device allows. On the restock the quantity goes to the branch chosen at the top.
 - **Unknown code:** "No item has the barcode <code>." An administrator gets **Add this barcode to a product**: the item search
