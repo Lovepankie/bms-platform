@@ -34,9 +34,10 @@ while the business itself stays one business with one installed app.
 5. **Where it shows.** A document made at one shop (the receipt to share, an invoice, a delivery note, a quotation, a credit note, a loan
    document of that branch) carries that shop's logo on its letterhead, else the business logo (`Letterheads.forBranch` and
    `forBranchCode`; an issued retail document keeps the branch code in its snapshot, and the code never changes). The logo is read when the
-   document is rendered, as the business logo already is. A customer statement spans branches and keeps the business logo. In the
-   staff app the shop's logo shows next to the branch picker and the shop name in the side menu, and on the sale screen header for the shop
-   the seller is selling in.
+   document is rendered, as the business logo already is; a shop logo whose file cannot be read falls back to the business logo. A
+   customer statement spans branches and keeps the business logo. In the staff app the shop's logo shows beside the branch picker in the
+   staff bar and on the sale screen header for the shop the seller is selling in, and the side menu and the phone drawer show the shop in
+   use with its logo beside its name, falling back to the business logo and then to no image (Hillary's decision on issue #461).
 6. **What stays the business's.** The installed app's icon and name, the manifest, the browser tab icon, the sign-in page and the email
    header keep the business logo (ADR-066): one business, one installed app.
 
@@ -50,5 +51,7 @@ while the business itself stays one business with one installed app.
 **Worse:**
 
 - A receipt reprinted after a shop's logo changed shows the new logo, as it already does for the business logo.
+- The other signed-in staff see a new shop logo in the staff bar, the side menu and the sale screen on their next `/me` refresh (the
+  next token refresh or page load), not at once.
 - One more public image per shop: anyone who knows a branch id and the business's address can fetch its logo, as anyone can fetch the
   business logo. The image is meant to be seen by customers, so this is accepted.
