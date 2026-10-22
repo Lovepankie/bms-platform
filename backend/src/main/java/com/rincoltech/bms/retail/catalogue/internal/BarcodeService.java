@@ -168,13 +168,14 @@ class BarcodeService {
                 made.add(existing);
                 continue;
             }
+            // A person may have typed a code of the same shape by hand, or typed it a moment ago in another session;
+            // the sequence then moves past it and the next number is tried.
+            UUID id = UUID.randomUUID();
             String code;
             do {
-                // A person may have typed a code of the same shape by hand; the sequence then moves past it.
                 code = Barcodes.generated(sequences.next(SEQUENCE));
-            } while (repo.byKey(code).isPresent());
-            UUID id = UUID.randomUUID();
-            repo.insert(id, productId, null, code, Barcodes.Format.CODE128.key, true, by);
+            } while (repo.byKey(code).isPresent()
+                    || !repo.insertGenerated(id, productId, code, Barcodes.Format.CODE128.key, by));
             audit.record(AuditLog.Entry.created(
                     "retail.barcode.generated", BARCODE, id, null, Map.of("product_id", productId, "code", code)));
             made.add(repo.generatedOf(productId).orElseThrow());

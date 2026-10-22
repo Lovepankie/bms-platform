@@ -106,6 +106,18 @@ class BarcodeRepository {
                         """).params(id, productId, unitId, code, format, generated, by).update();
     }
 
+    /**
+     * A made code, or nothing when another writer holds its lookup key already (true when inserted). ON CONFLICT keeps
+     * the transaction usable, where a caught unique violation would abort it in PostgreSQL.
+     */
+    boolean insertGenerated(UUID id, UUID productId, String code, String format, UUID by) {
+        return jdbc.sql("""
+                        INSERT INTO retail_product_barcodes (id, tenant_id, product_id, unit_id, code, format, generated, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, NULL, ?, ?, true, ?)
+                        ON CONFLICT (tenant_id, lookup_key) DO NOTHING
+                        """).params(id, productId, code, format, by).update() == 1;
+    }
+
     int delete(UUID id) {
         return jdbc.sql("DELETE FROM retail_product_barcodes WHERE id = ?")
                 .param(id)
