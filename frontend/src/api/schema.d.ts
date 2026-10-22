@@ -8269,6 +8269,13 @@ export interface components {
             maturity_date?: string;
             /** Format: date */
             next_due_date?: string;
+            /** @description FR-ARR-03, chapter 14: current, 1_30, 31_60, 61_90 or over_90 */
+            par_bucket?: string;
+            /**
+             * Format: int64
+             * @description FR-ARR-03: penalties charged so far (R-PEN), paid or not
+             */
+            penalties_assessed_minor?: number;
             /** Format: int64 */
             penalties_outstanding_minor?: number;
             /** Format: int64 */

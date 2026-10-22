@@ -22,6 +22,7 @@ import com.rincoltech.bms.lending.loans.internal.Servicing.Replay;
 import com.rincoltech.bms.lending.loans.internal.ServicingRepository.Txn;
 import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ProductCatalog.FeeCharge;
+import com.rincoltech.bms.lending.products.ProductCatalog.PenaltyRule;
 import com.rincoltech.bms.lending.products.ProductCatalog.ProductTerms;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import java.time.LocalDate;
@@ -61,6 +62,7 @@ class LoanServicer implements LoanServicing {
     private final AuditLog audit;
     private final CollateralLookup collateral;
     private final LoanNotices notices;
+    private final PenaltyReconciler penalties;
 
     LoanServicer(
             LoanRepository loans,
@@ -73,7 +75,8 @@ class LoanServicer implements LoanServicing {
             BusinessClock clock,
             AuditLog audit,
             CollateralLookup collateral,
-            LoanNotices notices) {
+            LoanNotices notices,
+            PenaltyReconciler penalties) {
         this.loans = loans;
         this.repo = repo;
         this.products = products;
@@ -85,6 +88,7 @@ class LoanServicer implements LoanServicing {
         this.audit = audit;
         this.collateral = collateral;
         this.notices = notices;
+        this.penalties = penalties;
     }
 
     LocalDate today() {
@@ -415,6 +419,11 @@ class LoanServicer implements LoanServicing {
         }
         if (!recovery) {
             repo.insertAllocations(txnId, txnId, applied.allocations());
+            PenaltyReconciler.Moved moved =
+                    penalties.reconcile(loan.id(), terms(loan).penalty(), items, txnId, today);
+            if (moved.cancelledMinor() > 0) {
+                after.put("penalties_cancelled_minor", moved.cancelledMinor());
+            }
             repo.saveItems(items, today);
             credit += applied.excessMinor();
             after.put("payoff", applied.payoff());
@@ -590,11 +599,50 @@ class LoanServicer implements LoanServicing {
         return gone;
     }
 
+    /** At most this many replays settle where the surviving repayments go once the penalties are set right. */
+    static final int MAX_REPLAYS = 4;
+
+    /**
+     * The delta review of #270: a reversal can show that cancelled penalties were owed after all, and the surviving
+     * repayments must meet them as they are when allocated (a penalty-first order pays them first). So the replay is
+     * planned, the penalties it implies are set on a fresh copy of the items, and the replay is done again on that
+     * copy, until the planned penalties are the same as the pass before (a pass may raise one period and, under a
+     * cap, lower another). When they have not settled within {@link #MAX_REPLAYS} passes the reversal is refused
+     * (409 {@code reversal_not_settled}) before anything is written. The penalties are written afterwards, with the
+     * reversal.
+     */
+    private Replay replayWithPenaltiesSetFirst(Loan loan, Txn txn, List<Txn> survivors, LocalDate today) {
+        PenaltyRule rule = terms(loan).penalty();
+        Map<UUID, LocalDate> valueDates = new LinkedHashMap<>();
+        survivors.forEach(t -> valueDates.put(t.id(), t.valueDate()));
+        return PenaltyReconciler.settleReplay(
+                repo.items(loan.id()),
+                planned -> replayWithout(loan, txn, survivors, planned),
+                replay -> {
+                    List<Item> next = repo.items(loan.id());
+                    penalties.reconcile(
+                            loan.id(),
+                            rule,
+                            next,
+                            null,
+                            today,
+                            PenaltyReconciler.paidBy(replay, valueDates),
+                            false,
+                            true);
+                    return next;
+                },
+                MAX_REPLAYS);
+    }
+
     /** The schedule replayed without this repayment: what the loan would owe once it is reversed. */
     private Replay replayWithout(Loan loan, Txn txn, List<Txn> survivors) {
+        return replayWithout(loan, txn, survivors, repo.items(loan.id()));
+    }
+
+    private Replay replayWithout(Loan loan, Txn txn, List<Txn> survivors, List<Item> contracted) {
         ProductTerms product = terms(loan);
         return Servicing.replay(
-                repo.items(loan.id()),
+                contracted,
                 survivors.stream()
                         .map(t -> new Payment(t.id(), t.amountMinor(), t.valueDate()))
                         .toList(),
@@ -614,8 +662,12 @@ class LoanServicer implements LoanServicing {
         if (!txn.txnType().equals("repayment")) {
             return false;
         }
+        // The replay with its penalties set right, as the reversal will write it, so the checker sees a reopening
+        // (and collateral that cannot be restored) that only the charged-again penalties cause.
         return !Servicing.position(
-                        replayWithout(loan, txn, survivorsOf(loan, txn)).items(), today())
+                        replayWithPenaltiesSetFirst(loan, txn, survivorsOf(loan, txn), today())
+                                .items(),
+                        today())
                 .settled();
     }
 
@@ -646,7 +698,7 @@ class LoanServicer implements LoanServicing {
             entry = books.reverse(txn.journalEntryId(), today, txn.receiptNo(), key);
         } else {
             List<Txn> survivors = survivorsOf(loan, txn);
-            replay = replayWithout(loan, txn, survivors);
+            replay = replayWithPenaltiesSetFirst(loan, txn, survivors, today);
             Map<UUID, List<Allocation>> before = repo.allocationsByRepayment(loan.id());
             deltas.put(txn.id(), Servicing.difference(before.getOrDefault(txn.id(), List.of()), List.of()));
             boolean othersMoved = false;
@@ -697,6 +749,17 @@ class LoanServicer implements LoanServicing {
                 makerId,
                 null));
         deltas.forEach((appliesTo, rows) -> repo.insertAllocations(reversalId, appliesTo, rows));
+        PenaltyReconciler.Moved moved = replay == null
+                ? new PenaltyReconciler.Moved(0, 0)
+                : penalties.reconcile(
+                        loan.id(),
+                        terms(loan).penalty(),
+                        replay.items(),
+                        reversalId,
+                        today,
+                        repo.contractPaidByValueDate(loan.id()),
+                        true,
+                        false);
         long credit = repo.creditBalance(loan.id());
         if (replay != null) {
             credit = replay.allocations().values().stream()
@@ -716,6 +779,10 @@ class LoanServicer implements LoanServicing {
         after.put("amount_minor", txn.amountMinor());
         after.put("reason", reason);
         after.put("re_allocated_repayments", Math.max(0, deltas.size() - 1));
+        if (moved.rechargedMinor() > 0 || moved.cancelledMinor() > 0) {
+            after.put("penalties_charged_again_minor", moved.rechargedMinor());
+            after.put("penalties_cancelled_minor", moved.cancelledMinor());
+        }
         after.put("approval_request_id", approvalId);
         audit.record(
                 AuditLog.Entry.created("lending.loan.repayment_reversed", SUBJECT, loan.id(), loan.branchId(), after));
@@ -825,6 +892,17 @@ class LoanServicer implements LoanServicing {
     }
 
     // ---- Shared ---------------------------------------------------------------------------
+
+    /**
+     * FR-ARR-01: the nightly run's recompute of statuses, DPD and arrears for one loan. Nothing is paid overnight, so
+     * only an item whose status moved is written, and the loan only when its position moved: a rerun writes nothing.
+     */
+    Position refreshPosition(UUID loanId, List<Item> items, LocalDate today) {
+        repo.saveStatuses(items, today);
+        Position position = Servicing.position(items, today);
+        repo.positionIfChanged(loanId, position);
+        return position;
+    }
 
     /** Item statuses, balances, arrears and DPD as of {@code today} (R-DPD). */
     private Position refresh(UUID loanId, List<Item> items, LocalDate today) {

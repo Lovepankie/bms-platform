@@ -1,6 +1,7 @@
 package com.rincoltech.bms.lending.loans;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -22,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -30,8 +32,10 @@ import tools.jackson.databind.JsonNode;
  * and recovery, idempotency and branch scope; every journal is checked line by line against
  * chapter 6 section 6.6.3, and the books are checked to agree with the subledger after each test.
  * Four users: an officer originates, an appraiser appraises, a manager approves and checks, a
- * cashier moves the money. All figures fabricated.
+ * cashier moves the money. The nightly arrears job is off in every test context ({@code IntegrationTest}), so it
+ * never races the test's own run. All figures fabricated.
  */
+@org.springframework.test.context.event.RecordApplicationEvents
 class LoanServicingIT extends LoanFixtures {
 
     @Autowired
@@ -1689,16 +1693,173 @@ class LoanServicingIT extends LoanFixtures {
     /** The statement rows: date, then three amounts at the end of the line ("-" for none). */
     record Row(String line, long charged, long credited, long balance) {}
 
+    /** A word of a page, where it starts: x from the left edge, y (its baseline) from the top. */
+    record Word(String text, float x, float y) {}
+
+    /**
+     * A page's lines as the text stripper groups them, each a list of words with their positions. A word is cut at
+     * every space, so each one has the position of its own first letter.
+     */
+    static List<List<Word>> pageWords(byte[] pdf, int page) throws Exception {
+        List<List<Word>> lines = new ArrayList<>();
+        List<Word> current = new ArrayList<>();
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            org.apache.pdfbox.text.PDFTextStripper s = new org.apache.pdfbox.text.PDFTextStripper() {
+                @Override
+                protected void writeString(String text, List<org.apache.pdfbox.text.TextPosition> positions) {
+                    StringBuilder word = new StringBuilder();
+                    org.apache.pdfbox.text.TextPosition first = null;
+                    for (org.apache.pdfbox.text.TextPosition t : positions) {
+                        if (t.getUnicode().isBlank()) {
+                            if (first != null) {
+                                current.add(new Word(word.toString(), first.getXDirAdj(), first.getYDirAdj()));
+                            }
+                            word.setLength(0);
+                            first = null;
+                        } else {
+                            first = first == null ? t : first;
+                            word.append(t.getUnicode());
+                        }
+                    }
+                    if (first != null) {
+                        current.add(new Word(word.toString(), first.getXDirAdj(), first.getYDirAdj()));
+                    }
+                }
+
+                @Override
+                protected void writeLineSeparator() {
+                    if (!current.isEmpty()) {
+                        lines.add(List.copyOf(current));
+                        current.clear();
+                    }
+                }
+            };
+            s.setSortByPosition(true);
+            s.setStartPage(page);
+            s.setEndPage(page);
+            s.getText(d);
+        }
+        if (!current.isEmpty()) {
+            lines.add(List.copyOf(current));
+        }
+        return lines;
+    }
+
+    /**
+     * The statement's lines with a balance, read by position. A cell's text is centred on its row, so a description
+     * too long for its cell wraps around the line of the date and amounts: parts of it above, on and below that line.
+     * Every line of the grid that does not start with a date is a part of the nearest row's number or description
+     * (by its column), and a part with no row near it fails the reading rather than being glued to a wrong one. The
+     * row's line is put back together as date, number, description in reading order, then the three amounts.
+     */
     static List<Row> statementRows(byte[] pdf) throws Exception {
-        java.util.regex.Pattern row = java.util.regex.Pattern.compile(
-                "^(\\d{1,2} [A-Z][a-z]{2} \\d{4}) .*?(-|[\\d,]+) (-|[\\d,]+) ([\\d,]+)$");
+        java.util.regex.Pattern date = java.util.regex.Pattern.compile("^\\d{1,2} [A-Z][a-z]{2} \\d{4}$");
+        java.util.regex.Pattern money = java.util.regex.Pattern.compile("^(-|[\\d,]+)$");
+        // A part of a wrapped cell is at most a line and a half from its row's line for the descriptions printed here.
+        float near = 20f;
         List<Row> rows = new ArrayList<>();
         for (int p = 1; p <= pages(pdf); p++) {
-            for (String line : pageText(pdf, p).split("\n")) {
-                java.util.regex.Matcher m = row.matcher(line.strip().replaceAll("\\s+", " "));
-                if (m.matches()) {
-                    rows.add(new Row(line.strip(), amount(m.group(2)), amount(m.group(3)), amount(m.group(4))));
+            List<List<Word>> lines = pageWords(pdf, p);
+            int header = -1;
+            for (int i = 0; i < lines.size() && header < 0; i++) {
+                List<String> texts = lines.get(i).stream().map(Word::text).toList();
+                header = texts.containsAll(List.of("Date", "Number", "Description", "Charged", "Credited", "Balance"))
+                        ? i
+                        : -1;
+            }
+            if (header < 0) {
+                continue;
+            }
+            float numberX = lines.get(header).stream()
+                    .filter(w -> w.text().equals("Number"))
+                    .findFirst()
+                    .orElseThrow()
+                    .x();
+            float descriptionX = lines.get(header).stream()
+                    .filter(w -> w.text().equals("Description"))
+                    .findFirst()
+                    .orElseThrow()
+                    .x();
+            // The rows (a note row too, which has no amounts but owns its wrapped parts) and the parts, up to Totals.
+            List<List<Word>> anchors = new ArrayList<>();
+            List<List<Word>> parts = new ArrayList<>();
+            for (List<Word> line : lines.subList(header + 1, lines.size())) {
+                String first = line.getFirst().text();
+                if (first.equals("Totals") || first.equals("Closing")) {
+                    break;
                 }
+                boolean dated = line.size() >= 3
+                        && date.matcher(first + " " + line.get(1).text() + " "
+                                        + line.get(2).text())
+                                .matches()
+                        && line.getFirst().x() < numberX - 1;
+                if (dated) {
+                    anchors.add(line);
+                } else if (line.getFirst().x() >= numberX - 1) {
+                    parts.add(line);
+                }
+            }
+            if (anchors.isEmpty()) {
+                continue;
+            }
+            float lastY = anchors.getLast().getFirst().y();
+            Map<List<Word>, List<Word>> cells = new LinkedHashMap<>();
+            anchors.forEach(a -> cells.put(a, new ArrayList<>(a.subList(3, a.size()))));
+            for (List<Word> part : parts) {
+                float y = part.getFirst().y();
+                if (y > lastY + near) {
+                    break; // below the grid of a page that continues on the next one: the page foot
+                }
+                List<Word> owner = anchors.stream()
+                        .min(java.util.Comparator.comparingDouble(
+                                a -> Math.abs(a.getFirst().y() - y)))
+                        .orElseThrow();
+                assertThat(Math.abs(owner.getFirst().y() - y))
+                        .as("a wrapped part of the statement near no row: %s", part)
+                        .isLessThanOrEqualTo(near);
+                cells.get(owner).addAll(part);
+            }
+            for (Map.Entry<List<Word>, List<Word>> e : cells.entrySet()) {
+                List<Word> anchor = e.getKey();
+                List<Word> rest = e.getValue();
+                int n = anchor.size();
+                boolean amounts = n >= 6
+                        && money.matcher(anchor.get(n - 1).text()).matches()
+                        && money.matcher(anchor.get(n - 2).text()).matches()
+                        && money.matcher(anchor.get(n - 3).text()).matches()
+                        && anchor.get(n - 3).x() > descriptionX;
+                if (!amounts) {
+                    continue; // a note row
+                }
+                List<Word> tail = anchor.subList(n - 3, n);
+                List<Word> text = new ArrayList<>(rest);
+                text.removeAll(tail);
+                java.util.Comparator<Word> reading =
+                        java.util.Comparator.comparingDouble(Word::y).thenComparingDouble(Word::x);
+                String number = text.stream()
+                        .filter(w -> w.x() < descriptionX - 1)
+                        .sorted(reading)
+                        .map(Word::text)
+                        .collect(java.util.stream.Collectors.joining(""));
+                String description = text.stream()
+                        .filter(w -> w.x() >= descriptionX - 1)
+                        .sorted(reading)
+                        .map(Word::text)
+                        .collect(java.util.stream.Collectors.joining(" "));
+                String line = java.util.stream.Stream.of(
+                                anchor.get(0).text() + " " + anchor.get(1).text() + " "
+                                        + anchor.get(2).text(),
+                                number,
+                                description,
+                                tail.get(0).text() + " " + tail.get(1).text() + " "
+                                        + tail.get(2).text())
+                        .filter(t -> !t.isEmpty())
+                        .collect(java.util.stream.Collectors.joining(" "));
+                rows.add(new Row(
+                        line,
+                        amount(tail.get(0).text()),
+                        amount(tail.get(1).text()),
+                        amount(tail.get(2).text())));
             }
         }
         return rows;
@@ -2131,5 +2292,645 @@ class LoanServicingIT extends LoanFixtures {
                         1)
                 .replaceAll("\\s+", " ");
         assertThat(text).contains("Approved by a former user").doesNotContain("no checker needed");
+    }
+
+    // ---- Arrears (FR-ARR-01, FR-ARR-03, R-PEN, R-DPD) ----------------------------------------
+
+    /**
+     * The business has run arrears since long ago (penalties start at its first run), so a loan's periods since its
+     * due date are all chargeable.
+     */
+    @Autowired
+    org.springframework.context.ApplicationContext context;
+
+    /** The job for this test's business only, never the other tenants in the shared database. */
+    void runArrearsOnce() {
+        com.rincoltech.bms.lending.loans.internal.ArrearsTestRun.run(context, t.tenantId());
+    }
+
+    void arrearsSinceLongAgo() {
+        // A loan made through the staff screens is in the system from before its disbursement (penalties start at the
+        // later of the business's first run and the loan's own start): the test loans are dated so. An imported loan
+        // is not touched (channel import), so it keeps today's start.
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE lending_loans SET created_at = disbursed_on - 1 WHERE tenant_id = ? AND channel <> 'import'"
+                                + " AND disbursed_on IS NOT NULL AND created_at > disbursed_on - 1")
+                .param(t.tenantId())
+                .update();
+        businessRunSinceLongAgo();
+    }
+
+    void businessRunSinceLongAgo() {
+        TestDatabase.owner().sql("""
+                        INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at)
+                        VALUES (?, DATE '2000-01-01', now(), now(), now()) ON CONFLICT DO NOTHING
+                        """).param(t.tenantId()).update();
+    }
+
+    /**
+     * The nightly run as the job runs it for each tenant, for this test's business only, with today's run made due
+     * again (as if it were the next night), so each call is a full run.
+     */
+    void runArrears() {
+        arrearsSinceLongAgo();
+        TestDatabase.owner()
+                .sql("DELETE FROM lending_arrears_runs WHERE tenant_id = ? AND business_date > DATE '2000-01-01'")
+                .param(t.tenantId())
+                .update();
+        runArrearsOnce();
+    }
+
+    /** The loan's and its items' versions and last-updated times, to show a rerun wrote nothing. */
+    String stamps(String loan) {
+        return TestDatabase.owner().sql("""
+                        SELECT l.version || '/' || l.updated_at || ';'
+                               || string_agg(i.version || '/' || i.updated_at, ';' ORDER BY i.item_no)
+                          FROM lending_loans l JOIN lending_schedule_items i ON i.loan_id = l.id
+                         WHERE l.id = ?::uuid GROUP BY l.version, l.updated_at
+                        """).param(loan).query(String.class).single();
+    }
+
+    long cancelledCharges(String loan) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM lending_charge_cancels WHERE loan_id = ?::uuid")
+                .param(loan)
+                .query(Long.class)
+                .single();
+    }
+
+    Map<String, Object> dailyPenalty() {
+        Map<String, Object> penalty = new LinkedHashMap<>();
+        penalty.put("penalty_method", "flat_per_period");
+        penalty.put("penalty_period_unit", "day");
+        penalty.put("penalty_grace_days", 0);
+        penalty.put("penalty_flat_minor", 2_000);
+        return penalty;
+    }
+
+    long penaltyCharges(String loan) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM lending_loan_charges WHERE loan_id = ?::uuid")
+                .param(loan)
+                .query(Long.class)
+                .single();
+    }
+
+    /**
+     * FR-ARR-01 and FR-ARR-03: worked example B disbursed a month and five days ago, so item 1 is
+     * five days overdue. The nightly job charges one 2,000 penalty per day after the due date
+     * (grace 0), sets DPD and arrears, and a rerun charges nothing more. A repayment pays the
+     * penalty first (the default allocation order) and posts it to penalty income.
+     */
+    @Test
+    void frArr01_theNightlyJobChargesPenaltiesAndSetsArrearsOnce() throws Exception {
+        Map<String, Object> penalty = new LinkedHashMap<>();
+        penalty.put("penalty_method", "flat_per_period");
+        penalty.put("penalty_period_unit", "day");
+        penalty.put("penalty_grace_days", 0);
+        penalty.put("penalty_flat_minor", 2_000);
+        String loan = approved(product("PEN", penalty, List.of()), 1_200_000, 3, 91);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+
+        runArrears();
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("days_past_due").asInt()).isEqualTo(5);
+        assertThat(b.get("par_bucket").asString()).isEqualTo("1_30");
+        assertThat(b.get("arrears_minor").asLong()).isEqualTo(520_000);
+        assertThat(b.get("penalties_assessed_minor").asLong()).isEqualTo(10_000);
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isEqualTo(10_000);
+        assertThat(penaltyCharges(loan)).isEqualTo(5);
+        JsonNode item1 = get(loan, "/schedule").get("items").get(0);
+        assertThat(item1.get("status").asString()).isEqualTo("overdue");
+        assertThat(item1.get("penalties_due_minor").asLong()).isEqualTo(10_000);
+
+        String before = stamps(loan);
+        runArrears();
+        assertThat(penaltyCharges(loan))
+                .as("a rerun the same day charges nothing")
+                .isEqualTo(5);
+        assertThat(stamps(loan))
+                .as("and writes nothing: no item's version or time, nor the loan's, moves")
+                .isEqualTo(before);
+        assertThat(loan(loan).get("balances").get("penalties_assessed_minor").asLong())
+                .isEqualTo(10_000);
+        // A charge is never deleted or changed, the owner included; only a waiver (T2) raises waived_minor.
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("DELETE FROM lending_loan_charges WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("may only raise waived_minor");
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_loan_charges SET amount_minor = 1 WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("may only raise waived_minor");
+
+        JsonNode paid = repaid(loan, 10_000, today).get("transaction");
+        assertThat(lines(paid.get("journal_entry_id").asString()))
+                .containsExactly("cash_on_hand:10000:0", "loan_penalty_income:0:10000");
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isZero();
+
+        // ADR-034: the statement charges each penalty on its own date, never at disbursement.
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertReconciles(
+                statement,
+                loan(loan).get("balances").get("total_outstanding_minor").asLong());
+        assertThat(statementRows(statement))
+                .filteredOn(r -> r.line().contains("Penalties charged"))
+                .hasSize(5)
+                .allSatisfy(r -> assertThat(r.charged()).isEqualTo(2_000));
+        booksAgree();
+    }
+
+    /** FR-ARR-01: a loan that is not overdue, or a product with no penalty rule, is charged nothing. */
+    @Test
+    void frArr01_noPenaltyWithoutARuleOrBeforeTheDueDate() {
+        String loan = approved(exampleB("NOPEN"), 1_200_000, 3, 92);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        runArrears();
+        assertThat(penaltyCharges(loan)).isZero();
+        assertThat(loan(loan).get("balances").get("days_past_due").asInt()).isEqualTo(3);
+        String current = approved(exampleB("CURRENT"), 1_200_000, 3, 93);
+        disburse(current, today);
+        runArrears();
+        assertThat(loan(current).get("balances").get("par_bucket").asString()).isEqualTo("current");
+    }
+
+    /**
+     * FR-ARR-01: the nightly recompute moves DPD and statuses without a new loan version, so an
+     * approval requested the day before is not made stale by it.
+     */
+    @Test
+    void frArr01_theNightlyRunLeavesPendingApprovalsCurrent() {
+        String loan = approved(exampleB("NIGHTAPR"), 1_200_000, 3, 96);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        int version = loan(loan).get("version").asInt();
+        ResponseEntity<JsonNode> r = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/write-off",
+                withKey(as(accountant, accountantPerms, "*", null), key()),
+                Map.of("reason", "Test borrower unreachable"));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+
+        runArrears();
+        JsonNode after = loan(loan);
+        assertThat(after.get("balances").get("days_past_due").asInt()).isEqualTo(3);
+        assertThat(after.get("version").asInt()).isEqualTo(version);
+        ResponseEntity<JsonNode> d =
+                decide(r.getBody().get("approval_request_id").asString(), admin, adminPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(loan(loan).get("status").asString()).isEqualTo("written_off");
+    }
+
+    /**
+     * The review of #270, finding 1: item 1 is five days overdue with five daily penalties. A repayment of exactly its
+     * principal and interest, dated its due date, pays no penalty (none existed on that date), pays the item up, and
+     * the five penalties charged after that date are cancelled: a paid-up loan is never penalised. The next run
+     * charges nothing more, and the statement still reconciles.
+     */
+    @Test
+    void frArr01_aBackDatedRepaymentNeverPaysALaterPenaltyAndCancelsIt() throws Exception {
+        String loan = approved(product("PENBACK", dailyPenalty(), List.of()), 1_200_000, 3, 97);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        assertThat(penaltyCharges(loan)).isEqualTo(5);
+        LocalDate due = LocalDate.parse(
+                get(loan, "/schedule").get("items").get(0).get("due_date").asString());
+
+        JsonNode paid = repaid(loan, 520_000, due).get("transaction");
+        assertThat(lines(paid.get("journal_entry_id").asString())).noneMatch(l -> l.startsWith("loan_penalty_income"));
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isZero();
+        assertThat(b.get("penalties_assessed_minor").asLong()).isZero();
+        assertThat(b.get("days_past_due").asInt()).isZero();
+        assertThat(get(loan, "/schedule").get("items").get(0).get("status").asString())
+                .isEqualTo("paid");
+        assertThat(cancelledCharges(loan)).isEqualTo(5);
+
+        runArrears();
+        assertThat(penaltyCharges(loan)).as("nothing new on a paid item").isEqualTo(5);
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertReconciles(
+                statement,
+                loan(loan).get("balances").get("total_outstanding_minor").asLong());
+        booksAgree();
+    }
+
+    /**
+     * The review of #270, finding 2: a business that switches the run on today is charged from today, not for every
+     * period since a long overdue item fell due.
+     */
+    @Test
+    void frArr01_theFirstRunChargesNothingBeforeItsOwnDate() {
+        String loan = approved(product("PENFIRST", dailyPenalty(), List.of()), 1_200_000, 3, 98);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        TestDatabase.owner()
+                .sql("DELETE FROM lending_arrears_runs WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        runArrearsOnce();
+        assertThat(penaltyCharges(loan)).as("only today's period").isEqualTo(1);
+        assertThat(loan(loan).get("balances").get("days_past_due").asInt()).isEqualTo(5);
+    }
+
+    /**
+     * The review of #270, finding 4: a run held by another worker's live lease is left alone, a lapsed lease is taken
+     * over (the charges keyed by item and period make the second pass safe), and a finished date is not run again.
+     */
+    @Test
+    void frArr01_aRunIsClaimedOnceAndALapsedLeaseIsTakenOver() {
+        String loan = approved(product("PENLEASE", dailyPenalty(), List.of()), 1_200_000, 3, 99);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        arrearsSinceLongAgo();
+        JdbcClient owner = TestDatabase.owner();
+        owner.sql("DELETE FROM lending_arrears_runs WHERE tenant_id = ? AND business_date > DATE '2000-01-01'")
+                .param(t.tenantId())
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until)
+                        VALUES (?, ?, now(), now() + interval '1 hour')
+                        """).params(t.tenantId(), today).update();
+        runArrearsOnce();
+        assertThat(penaltyCharges(loan)).as("another worker holds today's run").isZero();
+
+        owner.sql("UPDATE lending_arrears_runs SET lease_until = now() - interval '1 minute'"
+                        + " WHERE tenant_id = ? AND business_date = ?")
+                .params(t.tenantId(), today)
+                .update();
+        runArrearsOnce();
+        assertThat(penaltyCharges(loan)).isEqualTo(5);
+        assertThat(owner.sql("SELECT attempts FROM lending_arrears_runs WHERE tenant_id = ? AND business_date = ?"
+                                + " AND finished_at IS NOT NULL")
+                        .params(t.tenantId(), today)
+                        .query(Integer.class)
+                        .single())
+                .isEqualTo(2);
+
+        runArrearsOnce();
+        assertThat(owner.sql("SELECT attempts FROM lending_arrears_runs WHERE tenant_id = ? AND business_date = ?")
+                        .params(t.tenantId(), today)
+                        .query(Integer.class)
+                        .single())
+                .as("a finished date is not claimed again")
+                .isEqualTo(2);
+    }
+
+    long rechargedMinor(String loan) {
+        return TestDatabase.owner()
+                .sql("SELECT coalesce(sum(amount_minor), 0) FROM lending_loan_charges WHERE loan_id = ?::uuid"
+                        + " AND charge_type = 'penalty_recharge'")
+                .param(loan)
+                .query(Long.class)
+                .single();
+    }
+
+    /**
+     * The review of #270, finding 2: a bounced back-dated payment had paid the instalment up and cancelled five
+     * penalties; its reversal charges them again, as new rows, so nothing is lost and nothing is charged twice.
+     */
+    @Test
+    void frArr01_aReversalChargesTheCancelledPenaltiesAgain() throws Exception {
+        String loan = approved(product("PENREV", dailyPenalty(), List.of()), 1_200_000, 3, 73);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        LocalDate due = LocalDate.parse(
+                get(loan, "/schedule").get("items").get(0).get("due_date").asString());
+        String paid = repaid(loan, 520_000, due).get("transaction").get("id").asString();
+        assertThat(cancelledCharges(loan)).isEqualTo(5);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isZero();
+
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, paid), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(rechargedMinor(loan)).isEqualTo(10_000);
+        // The running balance: the charges again are printed on the day they were recorded, as the cancels were, so
+        // no line between shows the penalties twice.
+        String day = today.format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.ENGLISH));
+        // Five daily penalties of 2,000 were cancelled and are charged again, all recorded today: one line each way, of
+        // 10,000.
+        List<Row> rows = statementRows(render(loan, "loan_statement").getBody());
+        assertThat(rows)
+                .filteredOn(r -> r.line().contains("Penalties cancelled after a back-dated payment"))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.line()).startsWith(day);
+                    assertThat(r.credited()).isEqualTo(10_000);
+                    assertThat(r.charged()).isZero();
+                });
+        assertThat(rows)
+                .filteredOn(r -> r.line().contains("Penalties charged again after a reversal"))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.line()).startsWith(day);
+                    assertThat(r.charged()).isEqualTo(10_000);
+                    assertThat(r.credited()).isZero();
+                });
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isEqualTo(10_000);
+        assertThat(b.get("penalties_assessed_minor").asLong()).isEqualTo(10_000);
+        assertThat(cancelledCharges(loan)).as("the cancels stay, as history").isEqualTo(5);
+        runArrears();
+        assertThat(penaltyCharges(loan))
+                .as("the five periods and their five charges again, nothing more")
+                .isEqualTo(10);
+        assertReconciles(
+                render(loan, "loan_statement").getBody(),
+                b.get("total_outstanding_minor").asLong());
+        booksAgree();
+    }
+
+    /**
+     * The review of #270, finding 2: payments A and B, both dated the due date, together pay the instalment up and
+     * cancel the later penalties; reversing A means B alone no longer does, so the penalties are charged again.
+     */
+    @Test
+    void frArr01_reversingOnePaymentMeansTheOtherNoLongerPaysTheInstalmentUp() {
+        String loan = approved(product("PENAB", dailyPenalty(), List.of()), 1_200_000, 3, 72);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        LocalDate due = LocalDate.parse(
+                get(loan, "/schedule").get("items").get(0).get("due_date").asString());
+        String a = repaid(loan, 300_000, due).get("transaction").get("id").asString();
+        assertThat(cancelledCharges(loan))
+                .as("A alone does not pay the instalment up")
+                .isZero();
+        repaid(loan, 220_000, due);
+        assertThat(cancelledCharges(loan)).isEqualTo(5);
+
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, a), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(rechargedMinor(loan)).isEqualTo(10_000);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(10_000);
+        booksAgree();
+    }
+
+    /**
+     * The review of #270: a run missed for days and a payment posted in between. A partial payment leaves the item
+     * overdue, so each missed day is charged once on its own date; a payment in full, dated before the run, means
+     * nothing is charged at all.
+     */
+    @Test
+    void frArr01_aMissedNightIsCaughtUpAroundAPaymentPostedInBetween() {
+        String partly = approved(product("PENMISSA", dailyPenalty(), List.of()), 1_200_000, 3, 71);
+        disburse(partly, today.minusMonths(1).minusDays(5));
+        String fully = approved(product("PENMISSB", dailyPenalty(), List.of()), 1_200_000, 3, 70);
+        disburse(fully, today.minusMonths(1).minusDays(5));
+        repaid(partly, 100_000, today.minusDays(2));
+        repaid(fully, 520_000, today.minusDays(2));
+        runArrears();
+        assertThat(penaltyCharges(partly)).isEqualTo(5);
+        assertThat(penaltyCharges(fully))
+                .as("a paid-up instalment is never charged")
+                .isZero();
+        runArrears();
+        assertThat(penaltyCharges(partly)).isEqualTo(5);
+    }
+
+    /**
+     * The review of #270, finding 3: a repayment whose transaction began before the nightly run charged a penalty, and
+     * waited on the loan's lock, is stamped when it is recorded, after the charge it pays, so its receipt counts it.
+     */
+    @Test
+    void frArr01_aRepaymentRacingTheRunIsStampedAfterTheChargeItPays() throws Exception {
+        String loan = approved(product("PENRACE", dailyPenalty(), List.of()), 1_200_000, 3, 69);
+        disburse(loan, today.minusMonths(1).minusDays(1));
+        arrearsSinceLongAgo();
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try (java.sql.Connection c = TestDatabase.ownerDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            try (java.sql.PreparedStatement lock =
+                    c.prepareStatement("SELECT id FROM lending_loans WHERE id = ?::uuid FOR UPDATE")) {
+                lock.setString(1, loan);
+                lock.executeQuery();
+            }
+            Future<JsonNode> payment = pool.submit(() -> repaid(loan, 2_000, today));
+            // Wait until the payment's transaction is waiting on the loan's row lock: a session that holds a lock on
+            // lending_loans (its SELECT ... FOR UPDATE) and waits for one not granted. Fail if it never comes.
+            String waiting = """
+                    SELECT count(*) FROM pg_locks w
+                     WHERE NOT w.granted
+                       AND EXISTS (SELECT 1 FROM pg_locks l WHERE l.pid = w.pid
+                                      AND l.relation = 'lending_loans'::regclass)
+                    """;
+            long waiters = 0;
+            for (int i = 0; i < 200 && waiters == 0; i++) {
+                Thread.sleep(50);
+                waiters = TestDatabase.owner().sql(waiting).query(Long.class).single();
+            }
+            assertThat(waiters).as("the payment waits on the loan's lock").isPositive();
+            try (java.sql.PreparedStatement charge = c.prepareStatement("""
+                    INSERT INTO lending_loan_charges (id, tenant_id, loan_id, schedule_item_id, charge_type, period_no,
+                                                      business_date, amount_minor)
+                    SELECT gen_random_uuid(), tenant_id, loan_id, id, 'penalty', 1, ?, 2000
+                      FROM lending_schedule_items WHERE loan_id = ?::uuid AND item_no = 1
+                    """)) {
+                charge.setObject(1, today);
+                charge.setString(2, loan);
+                charge.executeUpdate();
+            }
+            try (java.sql.PreparedStatement due = c.prepareStatement(
+                    "UPDATE lending_schedule_items SET penalties_due_minor = 2000 WHERE loan_id = ?::uuid AND item_no = 1")) {
+                due.setString(1, loan);
+                due.executeUpdate();
+            }
+            c.commit();
+            JsonNode txn = payment.get(30, TimeUnit.SECONDS).get("transaction");
+            assertThat(lines(txn.get("journal_entry_id").asString()))
+                    .as("the payment paid the penalty")
+                    .contains("loan_penalty_income:0:2000");
+            assertThat(TestDatabase.owner()
+                            .sql(
+                                    "SELECT t.created_at > c.created_at FROM lending_loan_transactions t, lending_loan_charges c"
+                                            + " WHERE t.id = ?::uuid AND c.loan_id = t.loan_id")
+                            .param(txn.get("id").asString())
+                            .query(Boolean.class)
+                            .single())
+                    .as("stamped after the charge it paid")
+                    .isTrue();
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /**
+     * The delta review of #270, finding 1: A, dated the first due date, pays item 1 up and cancels its penalties; B,
+     * dated today, pays item 2 and its penalties. Reversing A must meet B with item 1's penalties charged again, so
+     * the penalty-first order books B's money to penalty income first, not to principal.
+     */
+    @Test
+    void frArr01_aReversalSetsThePenaltiesBeforeItReallocatesTheSurvivingPayment() {
+        String loan = approved(product("PENREPLAY", dailyPenalty(), List.of()), 1_200_000, 3, 62);
+        disburse(loan, today.minusMonths(2).minusDays(5));
+        runArrears();
+        JsonNode items = get(loan, "/schedule").get("items");
+        LocalDate due1 = LocalDate.parse(items.get(0).get("due_date").asString());
+        long item1Penalties = items.get(0).get("penalties_due_minor").asLong();
+        long item2Penalties = items.get(1).get("penalties_due_minor").asLong();
+        assertThat(item1Penalties).isPositive();
+        String a = repaid(loan, 520_000, due1).get("transaction").get("id").asString();
+        assertThat(get(loan, "/schedule")
+                        .get("items")
+                        .get(0)
+                        .get("penalties_due_minor")
+                        .asLong())
+                .isZero();
+        String b = repaid(loan, 520_000 + item2Penalties, today)
+                .get("transaction")
+                .get("id")
+                .asString();
+
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, a), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT coalesce(sum(amount_minor), 0) FROM lending_repayment_allocations"
+                                + " WHERE applies_to_txn_id = ?::uuid AND component = 'penalty'")
+                        .param(b)
+                        .query(Long.class)
+                        .single())
+                .as("B pays item 1's penalties, charged again, before anything else")
+                .isEqualTo(item1Penalties);
+        assertThat(rechargedMinor(loan)).isEqualTo(item1Penalties);
+        booksAgree();
+    }
+
+    /**
+     * The delta review of #270, finding 3, and the cap: 5% a week of the overdue principal and interest, capped at 5%
+     * of the instalment. Week 1 charged 26,000 (the cap); a payment of 416,000 recorded after, dated the due date, leaves
+     * a base of 104,000, so week 1 stands at 5,200 and 20,800 is cancelled. The cancelled amount is out of the cap,
+     * so week 2 is charged its 5,200 on the next run.
+     */
+    @Test
+    void frArr01_aBackDatedPartialPaymentRecomputesAPercentPenaltyAndFreesTheCap() {
+        Map<String, Object> penalty = new LinkedHashMap<>();
+        penalty.put("penalty_method", "percent_of_overdue_per_period");
+        penalty.put("penalty_period_unit", "week");
+        penalty.put("penalty_grace_days", 0);
+        penalty.put("penalty_rate_bp", 500);
+        penalty.put("penalty_cap_bp", 500);
+        String loan = approved(product("PENPCT", penalty, List.of()), 1_200_000, 3, 61);
+        disburse(loan, today.minusMonths(1).minusDays(8));
+        runArrears();
+        assertThat(penaltyCharges(loan)).as("week 2 finds the cap reached").isEqualTo(1);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(26_000);
+        LocalDate due = LocalDate.parse(
+                get(loan, "/schedule").get("items").get(0).get("due_date").asString());
+        repaid(loan, 416_000, due);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT coalesce(sum(amount_minor), 0) FROM lending_charge_cancels WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(20_800);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(5_200);
+        runArrears();
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .as("week 2 charged within the cap, the cancelled 20,800 not counted")
+                .isEqualTo(10_400);
+        booksAgree();
+    }
+
+    /** The delta review of #270: a loan imported today, long overdue, is charged from today only, not every period. */
+    @Test
+    void frArr01_anImportedLoanIsNotBackCharged() {
+        String loan = approved(product("PENIMP", dailyPenalty(), List.of()), 1_200_000, 3, 60);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        TestDatabase.owner()
+                .sql("UPDATE lending_loans SET channel = 'import' WHERE id = ?::uuid")
+                .param(loan)
+                .update();
+        runArrears();
+        assertThat(penaltyCharges(loan)).as("only today's period").isEqualTo(1);
+    }
+
+    @Autowired
+    org.springframework.test.context.event.ApplicationEvents events;
+
+    /** The delta review of #270: a loan that failed the run last night and fails again tonight is pushed to managers. */
+    @Test
+    void frArr01_aLoanFailingTwoNightsRunningIsAlerted() {
+        String loan = approved(product("PENFAIL", dailyPenalty(), List.of()), 1_200_000, 3, 59);
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at,
+                                                          failed_loan_ids)
+                        VALUES (?, ?, now(), now(), now(), ARRAY[?::uuid]),
+                               (?, ?, now(), now() + interval '1 hour', NULL, '{}')
+                        """)
+                .params(t.tenantId(), today.minusDays(1), loan, t.tenantId(), today)
+                .update();
+        assertThat(com.rincoltech.bms.lending.loans.internal.ArrearsTestRun.finish(
+                        context, t.tenantId(), today, 1, List.of(UUID.fromString(loan))))
+                .isTrue();
+        assertThat(events.stream(com.rincoltech.bms.kernel.PushNotice.class)).anySatisfy(n -> {
+            assertThat(n.template()).isEqualTo("lending.arrears_loan_failing");
+            assertThat(n.eventRef()).startsWith(loan);
+        });
+    }
+
+    /** A finished run of this business for a date, with these loans failed. */
+    void finishedRun(LocalDate day, String... failed) {
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at,
+                                                          failed_loan_ids)
+                        VALUES (?, ?, now(), now(), now(), ?::uuid[])
+                        """)
+                .params(t.tenantId(), day, "{" + String.join(",", failed) + "}")
+                .update();
+    }
+
+    /** Tonight's run finished with this loan failed, as the run's first attempt claimed it. */
+    boolean failsTonight(String loan) {
+        TestDatabase.owner().sql("""
+                        INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at,
+                                                          failed_loan_ids)
+                        VALUES (?, ?, now(), now() + interval '1 hour', NULL, '{}')
+                        """).params(t.tenantId(), today).update();
+        return com.rincoltech.bms.lending.loans.internal.ArrearsTestRun.finish(
+                context, t.tenantId(), today, 1, List.of(UUID.fromString(loan)));
+    }
+
+    List<com.rincoltech.bms.kernel.PushNotice> failingAlerts(String loan) {
+        return events.stream(com.rincoltech.bms.kernel.PushNotice.class)
+                .filter(n -> n.template().equals("lending.arrears_loan_failing")
+                        && n.eventRef().startsWith(loan))
+                .toList();
+    }
+
+    /**
+     * FR-ARR-01, the negative case: a loan that fails tonight but not on the business's previous finished run is not
+     * alerted, even though it failed on the run before that.
+     */
+    @Test
+    void frArr01_aLoanFailingTonightButNotOnThePreviousRunIsNotAlerted() {
+        String loan = approved(product("PENONCE", dailyPenalty(), List.of()), 1_200_000, 3, 58);
+        String other = approved(product("PENOTHR", dailyPenalty(), List.of()), 1_200_000, 3, 57);
+        finishedRun(today.minusDays(2), loan);
+        finishedRun(today.minusDays(1), other);
+        assertThat(failsTonight(loan)).isTrue();
+        assertThat(failingAlerts(loan)).isEmpty();
+        assertThat(failingAlerts(other)).isEmpty();
+    }
+
+    /**
+     * FR-ARR-01: "two nights running" is the business's last two finished runs, so a night with no run between them
+     * (the server was down) does not hide a loan that keeps failing.
+     */
+    @Test
+    void frArr01_aMissedNightDoesNotHideALoanFailingTwoRunsRunning() {
+        String loan = approved(product("PENMISS", dailyPenalty(), List.of()), 1_200_000, 3, 56);
+        finishedRun(today.minusDays(2), loan);
+        assertThat(failsTonight(loan)).isTrue();
+        assertThat(failingAlerts(loan))
+                .singleElement()
+                .satisfies(n -> assertThat(n.eventRef()).isEqualTo(loan + ":" + today));
     }
 }

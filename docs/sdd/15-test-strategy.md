@@ -360,7 +360,33 @@ breaking, and answers 503 when no render slot is free. A statement read is one R
 snapshot (`LoanDocumentsIsolationIT`, with a READ COMMITTED control), a five hundred line statement
 renders in a child JVM with a 224 MB heap (`StatementMemoryTest`), document responses are
 `no-store`, another branch and another tenant get 404 (403 on the core document route across
-branches), and `PenaltyDatingGuardTest` stops penalties shipping without dated charges.
+branches), and `PenaltyDatingGuardTest` keeps the documents on dated penalty charges.
+
+Arrears (#264). `PenaltiesTest` covers R-PEN without a database: the grace days, each period unit,
+flat and percent charges, the cap and the periods already charged. `LoanServicingIT` runs the
+nightly job on a loan five days overdue: five penalty charges, DPD 5, the `1_30` bucket, the
+arrears, nothing more on a rerun, a repayment that pays the penalty first and posts it to penalty
+income, a statement with one penalty line per day that reconciles, and a charge that the owner
+cannot delete or change. `LoanLedgerTest` places penalties on their own dates and keeps a later
+penalty out of an earlier receipt. After the review of #270: `PenaltiesTest` also checks that nothing is
+charged before the first run and that a percent rounding to nothing charges nothing; `ServicingTest`
+that a payment never pays a penalty charged after its value date; `LoanLedgerTest` that a cancelled
+penalty is credited on its own day and kept on an earlier receipt; and `LoanServicingIT` a back-dated
+repayment that pays an item up and cancels the five later penalties, a first run that charges only
+its own day, and a run held by another worker's lease, taken over when the lease lapses and not run
+again once finished. The second review added: `PenaltiesTest` recomputes the 100,000
+instalment at 5% a week after a back-dated 80,000 (week 1 stands at 1,000, 4,000 cancelled);
+`LoanServicingIT` charges the cancelled penalties again when the back-dated payment is reversed, and
+when reversing payment A means payment B no longer pays the instalment up; catches up a missed run
+around a payment posted in between; stamps a repayment racing the run after the charge it pays; checks
+that a rerun moves no version or time; and runs the job for its own business only; `ArrearsRunIT`
+refuses a stale attempt at finish and runs a business in another time zone for its own date. The delta review added: a reversal that sets the penalties before
+it re-allocates the surviving payment (penalty first), the charges again and cancels printed on the
+day they were recorded, a back-dated partial payment through the reconcile with percent penalties and
+the cap freed by the cancelled amount, an imported loan not back-charged, and the push sent for a loan
+failing two nights running, none for a loan that did not fail on the previous finished run, and the
+push still sent when a night with no run lies between the two failing runs; the time-zone case runs on a
+pinned clock.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

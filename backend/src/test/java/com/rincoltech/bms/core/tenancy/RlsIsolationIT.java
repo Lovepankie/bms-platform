@@ -705,6 +705,16 @@ class RlsIsolationIT {
                                                             interest_due_minor, status)
                         VALUES (?, ?, ?, 1, DATE '2026-02-15', 100000, 10000, 'pending')
                         """).params(item, t.tenantId(), loan).update();
+        UUID charge = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO lending_loan_charges (id, tenant_id, loan_id, schedule_item_id, charge_type, period_no,
+                                                          business_date, amount_minor)
+                        VALUES (?, ?, ?, ?, 'penalty', 1, DATE '2026-02-16', 1000)
+                        """).params(charge, t.tenantId(), loan, item).update();
+        owner.sql("""
+                        INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at)
+                        VALUES (?, DATE '2026-02-17', now(), now(), now())
+                        """).params(t.tenantId()).update();
         UUID repayment = UUID.randomUUID();
         owner.sql("""
                         INSERT INTO lending_loan_transactions (id, tenant_id, branch_id, loan_id, txn_type, amount_minor,
@@ -720,6 +730,13 @@ class RlsIsolationIT {
                         VALUES (?, ?, ?, ?, ?, 'principal', 1000)
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), repayment, repayment, item)
+                .update();
+        owner.sql("""
+                        INSERT INTO lending_charge_cancels (id, tenant_id, loan_id, charge_id, amount_minor, business_date,
+                                                            reason, cause_txn_id)
+                        VALUES (?, ?, ?, ?, 100, DATE '2026-02-17', 'paid_before_charged', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), loan, charge, repayment)
                 .update();
         // Savings (increment 9, #151): a product, an account, a deposit on the fixture journal, an
         // end-of-day balance and an interest posting.
