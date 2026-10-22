@@ -35,7 +35,10 @@ left, the branch, the period, the person's roles.
 3. **The outbox.** A sale saved offline, or whose answer was lost, goes into the outbox store with its whole request, a
    `client_sale_id` (a UUID made when the draft starts), an `Idempotency-Key`, `occurred_at` (the device time of Save),
    `prices_as_of`, the person, the branch and a provisional receipt number (`OFF-` and the first 8 characters of the client
-   sale id). The screen shows the provisional receipt marked "Not yet sent"; the server's number replaces it after sync.
+   sale id). The screen shows the provisional receipt marked "Not yet sent"; the server's number replaces it after sync. A write to
+   IndexedDB counts as saved only when its transaction completes (an abort or an error after the request succeeded rejects
+   it, and the sale is not shown as kept), and the app asks the browser for persistent storage
+   (`navigator.storage.persist()`) when offline selling is mounted, so the outbox is not cleared under storage pressure.
 4. **Sync.** One sale at a time, oldest `occurred_at` first, never two requests in flight. A network failure, a 5xx, a 409
    or a 429 backs off (5 s, 15 s, 1 min, 5 min, then every 15 min) and keeps the order. A 401 tries one session refresh; if
    that fails the engine stops and the header asks the person to sign in. A 2xx removes the item and keeps the server's sale

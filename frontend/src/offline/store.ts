@@ -65,8 +65,8 @@ function request<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
-function open(): Promise<IDBDatabase> {
-  const r = indexedDB.open(DB, 1);
+function open(factory: IDBFactory): Promise<IDBDatabase> {
+  const r = factory.open(DB, 1);
   r.onupgradeneeded = () => {
     const db = r.result;
     if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'id' }).createIndex('scope', 'scope');
@@ -75,12 +75,30 @@ function open(): Promise<IDBDatabase> {
   return request(r);
 }
 
-export function indexedDbStore(): OfflineStore {
+/**
+ * The device store on IndexedDB. A call settles when its transaction does: it resolves on `complete`, when the write is
+ * durable, and rejects on `abort` or `error`, so a write whose request succeeded but whose transaction then failed (a full
+ * disk, a quota) is never taken as saved (ADR-067 decision 3).
+ */
+export function indexedDbStore(factory: IDBFactory = indexedDB): OfflineStore {
   let db: Promise<IDBDatabase> | null = null;
   const tx = async <T,>(name: 'outbox' | 'kv', mode: IDBTransactionMode, work: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> => {
-    db ??= open();
-    const store = (await db).transaction(name, mode).objectStore(name);
-    return request(work(store));
+    const opened = (db ??= open(factory));
+    let database: IDBDatabase;
+    try {
+      database = await opened;
+    } catch (e) {
+      if (db === opened) db = null;
+      throw e;
+    }
+    const t = database.transaction(name, mode);
+    const r = work(t.objectStore(name));
+    return new Promise<T>((resolve, reject) => {
+      const failed = () => reject(t.error ?? r.error ?? new Error('This phone could not save it.'));
+      t.oncomplete = () => resolve(r.result);
+      t.onabort = failed;
+      t.onerror = failed;
+    });
   };
   const get = async <T,>(key: string): Promise<T | null> => ((await tx('kv', 'readonly', (s) => s.get(key))) as T | undefined) ?? null;
   const put = async (key: string, value: unknown) => void (await tx('kv', 'readwrite', (s) => s.put(value, key)));

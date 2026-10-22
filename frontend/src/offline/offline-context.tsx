@@ -213,6 +213,8 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
 
   useEffect(() => {
     if (!svc || !scope || !engine) return;
+    // Sales kept on this phone must survive the browser clearing storage under pressure (ADR-067 decision 3).
+    requestPersistence();
     let live = true;
     void svc.store.catalogue(scope).then((c) => live && setCatalogue((now) => now ?? c));
     void lookAtOthers(false);
@@ -261,6 +263,16 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       },
     };
   }, [svc, scope, engine, catalogue, refresh, manager, userId, others]);
+}
+
+/** Asks the browser to keep this site's storage (the outbox) when space runs low; a refusal or no support changes nothing. */
+export function requestPersistence(): void {
+  try {
+    const storage = typeof navigator === 'undefined' ? undefined : navigator.storage;
+    if (storage && typeof storage.persist === 'function') void storage.persist().catch(() => false);
+  } catch {
+    // Not offered here.
+  }
 }
 
 /** The number of sales waiting on this device for the signed-in person (queued and failed). */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/client';
 import { mockMe } from '../api/retail-mock';
 import { othersOnPhone, summaries, useOfflineSupport, type OfflineServices } from './offline-context';
@@ -13,6 +13,8 @@ import { testConnectivity } from './test-kit';
 // on a phone. Fabricated people, ids and amounts.
 
 const HOST = 'test.example';
+
+afterEach(cleanup);
 
 function item(id: string, userId: string, patch: Partial<OutboxItem> = {}): OutboxItem {
   return {
@@ -72,6 +74,17 @@ describe('a shared phone', () => {
       [{ client_sale_id: 'a', branch_id: 'b1', made_by: 'first-person', occurred_at: '2026-10-22T08:00:00.000Z', total_minor: 12000 }],
     ]);
     expect(result.current?.engine.snapshot().items).toEqual([]);
+  });
+
+  it('asks the browser to keep the outbox when offline selling is mounted', async () => {
+    const persist = vi.fn(async () => true);
+    Object.defineProperty(navigator, 'storage', { value: { persist }, configurable: true });
+    try {
+      renderHook(() => useOfflineSupport({ ...mockMe('sales'), user_id: 'u1' }, true, services(memoryStore(), async () => {})));
+      await waitFor(() => expect(persist).toHaveBeenCalled());
+    } finally {
+      Reflect.deleteProperty(navigator, 'storage');
+    }
   });
 
   it('picks only the other people of this business, and only what still waits', () => {
