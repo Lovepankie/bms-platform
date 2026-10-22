@@ -1100,7 +1100,8 @@ operator's `/platform/feedback`. Endpoints in chapter 7 sections 7.11.3 and 7.11
 Issue #466, ADR-071, migration `V91`. For a lending business moving from a paper or spreadsheet register: the loans it
 already gave out come in with their real disbursement dates and the repayments already received, so due dates, days
 overdue, arrears lists and reminders run from the right day. The staff screens are `/staff/lending/existing-loans` (the
-form) and `/staff/lending/existing-loans/import` (the CSV); the endpoints are in chapter 7 section 7.11.13.
+form) and `/staff/lending/existing-loans/import` (the CSV), and the go-live date is a field of Business set-up
+(`/staff/setup`, for a lending business); the endpoints are in chapter 7 section 7.11.13.
 
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
