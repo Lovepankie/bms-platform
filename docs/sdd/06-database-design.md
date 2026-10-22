@@ -764,6 +764,27 @@ the pack. Three read-only `SECURITY DEFINER` functions let the runner see across
 beat) is older than the cutoff. The migration sets `lock_timeout` to five seconds before it takes its brief locks on `tenants` and
 `documents`.
 
+Migration V94 (issue #334, ADR-074) replaces the three definer functions so that they also count and name suspended tenants:
+a business whose subscription has ended still gets the workbook it asks for. Signatures, owners and grants are unchanged.
+
+### `data_export_settings` (RLS)
+
+Built (issue #334 step 1, migration V94; ADR-074). (std, no `version`) `weekly_email boolean NOT NULL DEFAULT true` (the Owner is
+emailed the workbook every week), `updated_by uuid NOT NULL` (composite foreign key to `users`). Unique `(tenant_id)`: one row
+per business, written on the first change; no row means on. `bms_app` holds SELECT, INSERT and UPDATE; every change is audited
+(`core.data_export.settings_changed`, before and after).
+
+### `data_export_weekly` (RLS)
+
+Built (issue #334 step 1, migration V94; ADR-074). (std, no `version`) `week_of date NOT NULL` (the Monday that starts the week,
+checked), `run_id uuid` (the week's `core.data_export` run, composite foreign key to `report_runs`), `recipient_user_id uuid` (the
+Owner it was made for, composite foreign key to `users`), `status text NOT NULL` [`queued`, `emailed`, `skipped`, `failed`],
+`attached boolean` (the workbook was attached rather than linked), `reason text` (a stable code: `no_owner_email`, `cancelled`
+or the run's error code), `finished_at timestamptz`. Unique `(tenant_id, week_of)`: one row per business and week, so the job
+queues one workbook and one email however often it runs. Checks: a `skipped` week has no run and every other one has; only a
+`queued` week has no `finished_at`. Partial index on the `queued` weeks. `bms_app` holds SELECT and INSERT, and UPDATE of
+`status`, `attached`, `reason` and `finished_at` only.
+
 ### `payment_methods` (RLS)
 
 (std) `method_key text NOT NULL` [`cash`, `bank`, `mtn_momo`, `airtel_money`, `gateway`,

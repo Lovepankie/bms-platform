@@ -337,10 +337,8 @@ class OutboxTemplates {
                     "You got this email because you are a BMS platform operator."));
 
     // The weekly copy of the business's data (issue #334, ADR-074): to the Owner, with the workbook attached, or with a
-    // link to
-    // Business set-up when the file is too large to attach. The link opens the business's own sign-in, so the file is
-    // only
-    // ever fetched by the signed-in Owner, and it is kept until {expires_on}.
+    // link to Business set-up when the file is too large to attach. The link opens the business's own sign-in, so the
+    // file is only ever fetched by the signed-in Owner, and it is kept until {expires_on}.
     private static final Map<String, Template> EMAIL_DATA_EXPORT = Map.of(
             "core.data_export_weekly",
             new Template(

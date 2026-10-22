@@ -274,6 +274,7 @@ platform API and holds no tenant permissions.
 | `core.payments.allocate` | Y | | | Y | Y | | | | | | | |
 | `core.reports.financial` | Y | Y | | | Y | Y | | | | | | |
 | `core.reports.audit` | Y | | | | | Y | | | | | | |
+| `core.data_export.run` | Y | | | | | | | | | | | |
 | `lending.members.read` | Y | Y | Y | Y | Y | Y | | | | | | |
 | `lending.members.create` | Y | Y | Y | | | | | | | | | |
 | `lending.members.update` | Y | Y | Y | | | | | | | | | |
@@ -415,6 +416,11 @@ Notes:
   it (no signed-in user) can neither widen nor lose it; `lending.par` takes it from the insights module, the same code as the
   insights endpoints, and needs `lending.insights.read` as well. Report runs are off until a tenant administrator sets
   `reports_enabled` in the tenant settings (`core.settings.manage`).
+  Built (issue #334 step 1, ADR-074, migration V94): `core.data_export.run`, the tenant admin's alone (the Owner is one,
+  ADR-062), asks for "Download my data", the whole business as one workbook across every branch, and turns the weekly email to
+  the Owner on or off (audited, `core.data_export.settings_changed`). It is offered whatever `reports_enabled` says; the file
+  is fetched by the person it was made for while they hold the permission, every refusal 404. A suspended tenant (FR-TEN-06)
+  may still ask for it and fetch the signed address of a file, the two reads that are a `POST`; every other write stays 423.
   Built (extras slice D2, issue #217): the PDF and Excel renderers and `lending.portfolio_outstanding` add no permission and no seeded
   row either (both lending reports run under `lending.reports.portfolio`); `PermissionMatrixIT` still passes and this matrix equals the
   seeds. A spreadsheet cell is never a formula: text is written as a string cell and text that begins with `=`, `+`, `-`, `@`, a tab or a
