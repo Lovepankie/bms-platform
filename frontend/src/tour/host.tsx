@@ -50,9 +50,13 @@ interface TourApi {
   /** The tour of the page the user is on, for "Show me this page". */
   pageTour: Tour | undefined;
   start: (tour: Tour) => void;
+  /** True while a tour is on screen. */
+  running: boolean;
+  /** The data-tour id the current step lights up, so a closed phone menu can open for it (issue #455). */
+  target: string | undefined;
 }
 
-const TourContext = createContext<TourApi>({ mainTour: undefined, pageTour: undefined, start: () => undefined });
+const TourContext = createContext<TourApi>({ mainTour: undefined, pageTour: undefined, start: () => undefined, running: false, target: undefined });
 
 export function useTour(): TourApi {
   return useContext(TourContext);
@@ -252,7 +256,9 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
     if (action === 'back' && active && active.index > 0) go(-1);
   }
 
-  const value = useMemo(() => ({ mainTour, pageTour, start }), [mainTour, pageTour, start]);
+  const running = active !== null;
+  const wanted = step?.target;
+  const value = useMemo(() => ({ mainTour, pageTour, start, running, target: wanted }), [mainTour, pageTour, start, running, wanted]);
 
   return (
     <TourContext.Provider value={value}>

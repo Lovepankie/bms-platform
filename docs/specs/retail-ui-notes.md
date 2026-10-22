@@ -103,9 +103,10 @@ The inline `<style>` element the screens used to render (`RetailStyles`) is gone
 a no-op export.
 
 - The retail home shows one large tile per screen, with an icon, two per row on a phone.
-- On the retail pages the staff layout adds a bottom bar (`retail/nav.tsx`): Retail home plus the first
-  three of Sale, Stock, Restock, Stock-take and Usage that the user may use. It is fixed to the bottom
-  on a phone and a row of pills above the title from 720px wide.
+- The retail shortcuts (`retail/nav.tsx`, up to five the user may use) are a group under Retail in the
+  side menu, the sidebar from 720px and the drawer on a phone (issue #455 replaced the bottom bar). Retail stays
+  current on every retail page and is drawn as the section above a current shortcut. On a phone a primary Sell
+  button beside the menu button opens the sale screen in one tap for anyone who can sell.
 - Tables sit in a `.table-wrap` that scrolls sideways inside its card on a phone, with a shadow on the
   side that has more columns; quantities and money are right-aligned in tabular figures.
 - Forms end with the main action full width, and any secondary action ("Clear this sale") under it.

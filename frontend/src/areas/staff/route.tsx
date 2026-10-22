@@ -11,6 +11,7 @@ import { TurnOnCard } from '../../push/TurnOnCard';
 import { HelpMenu, TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
+import { type MenuLink, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
@@ -20,7 +21,7 @@ import { showCollateral, showMembers } from './lending/member-permissions';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
 import { showReports } from './reports/permissions';
-import { RetailNav } from './retail/nav';
+import { RetailMenuGroup, shortcutsFor, useSells } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
 import { showReceivePayments } from './payments/state';
 import { showSms } from './sms/state';
@@ -102,19 +103,23 @@ function StaffLayout() {
     <StaffContext.Provider value={{ me: profile, branch, chooseBranch: choose }}>
       <TourProvider me={profile} saveProgress={!mock}>
         <CrumbProvider>
-        <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
-        <InstallPrompt />
-        {!mock && <NewLogoCard />}
-        {!mock && <TurnOnCard push={push} />}
-        {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
-          <p role="status" className="alert alert-warning">
-            You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
-          </p>
-        )}
-        <TwoStepNotices me={profile} pathname={pathname} />
-        {pathname.startsWith('/staff/retail') && showRetail(profile) && <RetailNav me={profile} />}
-        <StaffBreadcrumbs />
-        {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
+          <div className="nav-layout">
+            <StaffSideNav me={profile} />
+            <div className="nav-layout-main">
+              <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
+              <InstallPrompt />
+              {!mock && <NewLogoCard />}
+              {!mock && <TurnOnCard push={push} />}
+              {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
+                <p role="status" className="alert alert-warning">
+                  You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
+                </p>
+              )}
+              <TwoStepNotices me={profile} pathname={pathname} />
+              <StaffBreadcrumbs />
+              {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
+            </div>
+          </div>
         </CrumbProvider>
       </TourProvider>
     </StaffContext.Provider>
@@ -122,41 +127,75 @@ function StaffLayout() {
 }
 
 /**
- * Who is signed in, Help, the branch switcher, sign out and the area tabs. Carries the data-tour
- * anchors the first-run tours light up (tour/tours.ts).
+ * The areas the session may open, in menu order; Retail carries its shortcuts as a group (`sells` from useSells decides Sale). The
+ * sidebar and the drawer both list these.
+ */
+export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
+  const permissions = me.permissions ?? [];
+  const shortcuts = showRetail(me) ? shortcutsFor(me, { sells }) : [];
+  const areas: (MenuLink | false)[] = [
+    { to: '/staff', label: 'Home', icon: icons.home, exact: true },
+    permissions.includes('core.approvals.read') && { to: '/staff/approvals', label: 'Approvals', icon: icons.approve, tour: 'nav-approvals' },
+    showLending(me) && { to: '/staff/lending', label: 'Loans', icon: icons.calendar, exact: true, tour: 'nav-lending' },
+    showMembers(me) && { to: '/staff/lending/members', label: 'Members', icon: icons.people, tour: 'nav-members' },
+    !showMembers(me) && showCollateral(me) && { to: '/staff/lending/collateral', label: 'Collateral', icon: icons.lock },
+    showSavings(me) && { to: '/staff/lending/savings', label: 'Savings', icon: icons.savings },
+    showInvestments(me) && { to: '/staff/lending/investments', label: 'Investments', icon: icons.valuation },
+    showInsights(me) && { to: '/staff/insights', label: 'Insights', icon: icons.salesAnalysis, tour: 'nav-insights' },
+    canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.evaluation },
+    showReports(me) && { to: '/staff/reports', label: 'Reports', icon: icons.documents },
+    showRetail(me) && {
+      to: '/staff/retail',
+      label: 'Retail',
+      icon: icons.sale,
+      tour: 'nav-retail',
+      group: <RetailMenuGroup shortcuts={shortcuts} />,
+      groupPaths: shortcuts.map((s) => s.path),
+    },
+    showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },
+    showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.banking },
+    showUsers(me) && { to: '/staff/users', label: 'Users', icon: icons.user, tour: 'nav-users' },
+    { to: '/staff/notifications', label: 'Notifications', icon: icons.bell, tour: 'nav-notifications' },
+    { to: '/staff/feedback', label: 'Feedback', icon: icons.chat, tour: 'nav-feedback' },
+    permissions.includes('core.settings.manage') && { to: '/staff/setup', label: 'Business set-up', icon: icons.settings },
+  ];
+  return areas.filter((a): a is MenuLink => a !== false);
+}
+
+/** The sidebar at the left from 720px (issue #455); nothing on a phone, where the staff bar's menu button opens the same list. */
+export function StaffSideNav({ me }: { me: Me }) {
+  const phone = useIsPhone();
+  const sells = useSells(me);
+  if (phone) return null;
+  return <SideNav label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} />;
+}
+
+/**
+ * Who is signed in, Help, the branch switcher and Sign out; below 720px also the menu button of the side menu, which then holds
+ * Sign out, and a one-tap Sell for anyone who can sell (issue #455). With StaffSideNav it carries the data-tour anchors the
+ * first-run tours light up (tour/tours.ts).
  */
 export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: string | null; onBranch: (selection: string) => void; onSignOut: () => void }) {
-  const permissions = me.permissions ?? [];
+  const phone = useIsPhone();
+  const sells = useSells(me);
   return (
     <header className="staff-bar">
       <div className="staff-bar-top">
+        {phone && <SideMenu label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} name={me.full_name} onSignOut={onSignOut} />}
+        {phone && sells && (
+          <Link to="/staff/retail/sale" className="btn btn-primary btn-sm staff-sell">
+            {icons.sale}
+            <span>Sell</span>
+          </Link>
+        )}
         <span className="staff-user">
           <span className="avatar">{icons.user}</span>
           <span className="staff-user-name">{me.full_name}</span>
         </span>
         <HelpMenu feedback />
         <BranchPicker me={me} branch={branch} onChoose={onBranch} />
-        <button className="btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>
+        {!phone && <button className="btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>}
       </div>
-      <nav className="tabs" aria-label="Staff areas" data-tour="nav-areas">
-        <Link to="/staff" activeOptions={{ exact: true }}>Home</Link>
-        {permissions.includes('core.approvals.read') && <Link to="/staff/approvals" data-tour="nav-approvals">Approvals</Link>}
-        {showLending(me) && <Link to="/staff/lending" activeOptions={{ exact: true }} data-tour="nav-lending">Loans</Link>}
-        {showMembers(me) && <Link to="/staff/lending/members" data-tour="nav-members">Members</Link>}
-        {!showMembers(me) && showCollateral(me) && <Link to="/staff/lending/collateral">Collateral</Link>}
-        {showSavings(me) && <Link to="/staff/lending/savings">Savings</Link>}
-        {showInvestments(me) && <Link to="/staff/lending/investments">Investments</Link>}
-        {showInsights(me) && <Link to="/staff/insights" data-tour="nav-insights">Insights</Link>}
-        {canConfigureAdvisor(me) && <Link to="/staff/assistant">AI assistant</Link>}
-        {showReports(me) && <Link to="/staff/reports">Reports</Link>}
-        {showRetail(me) && <Link to="/staff/retail" data-tour="nav-retail">Retail</Link>}
-        {showSms(me) && <Link to="/staff/sms">SMS</Link>}
-        {showReceivePayments(me) && <Link to="/staff/payments">Receive payments</Link>}
-        {showUsers(me) && <Link to="/staff/users" data-tour="nav-users">Users</Link>}
-        <Link to="/staff/notifications" data-tour="nav-notifications">Notifications</Link>
-        <Link to="/staff/feedback" data-tour="nav-feedback">Feedback</Link>
-        {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
-      </nav>
     </header>
   );
 }

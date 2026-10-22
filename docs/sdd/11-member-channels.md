@@ -109,7 +109,7 @@ tokens against 4.5:1 and input edges against 3:1 with the same `contrast.ts` the
 Components: buttons (a bare `<button>` is the secondary style; `.btn-primary`, `.btn-danger`,
 `.btn-ghost`, `.btn` for links), labelled inputs, selects and choice rows of at least 44px, field
 hints and errors, cards, tables in a `.table-wrap` that scrolls sideways inside its card on a phone
-with right-aligned tabular numbers, tabs, the staff bar, the retail bottom bar, badges, alerts, empty
+with right-aligned tabular numbers, the staff bar, the side menu, badges, alerts, empty
 states, a spinner and skeleton, the `<dialog>` sheet and a toast. Screens carry no inline `<style>`
 element, which the production CSP (`style-src 'self'`) refuses.
 
@@ -126,6 +126,24 @@ that renders a `<style>` element or writes a hex colour outside `theme.css`. A l
 dark theme follow (#429): the person picks Light, Dark or Same as my phone with the sun or moon button at the top
 right of the header, or under Appearance on the Notifications and app page (#452), kept on the device; the tokens, the
 menu and the dark pairs are in `docs/ui/design-system.md`.
+
+Navigation (#455): one pattern on every screen size. The staff area and the operator portal list
+their areas in a side menu, each item with an inline SVG icon, the current one marked
+`aria-current="page"` and the retail shortcuts as a group under Retail; the area tabs and the
+separate retail bar are gone. From 720px the menu is a sidebar at the left of the page (about 240px,
+folding to 64px of icons, folded at first below 1024px and unfolded from there until the person
+chooses, the choice kept on the device, each folded item keeping its label as its accessible name and
+tooltip), and the content takes the remaining width. Below 720px a menu
+button at the top left of the staff bar opens the same list in a side drawer from the left (85% of
+the width, at most 320px, over a dimmed backdrop) with the person's name and Sign out at the bottom.
+The drawer is a modal dialog: focus moves in, stays in, and returns to the menu button; the page
+behind does not scroll; it closes on the backdrop, Escape, a left swipe, a chosen link or any change
+of page. On a phone a primary Sell button beside the menu button opens the sale screen in one tap for
+anyone who can sell. Both are
+built from one list per layout, so the items and permission checks cannot drift apart, and both
+follow the theme and reduced motion. A guided tour step that points at a menu item finds it in the
+sidebar, unfolding it if folded, or opens the drawer on a phone. The member area has no area list
+and keeps its layout. Details in `docs/ui/design-system.md`, "Navigation".
 
 ## 11.3 SMS
 

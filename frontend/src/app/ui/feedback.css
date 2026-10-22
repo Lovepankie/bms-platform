@@ -136,12 +136,12 @@
   }
 }
 
-/* A toast, bottom centre, above the retail bottom bar, rising in (#106). Give it role="status" (or
+/* A toast, bottom centre, rising in (#106); beside the sidebar it centres on the content column (#455). Give it role="status" (or
    "alert" for a failure); -success and -danger add a coloured edge, the words carry the meaning. */
 .toast {
   position: fixed;
-  left: 50%;
-  bottom: calc(88px + env(safe-area-inset-bottom));
+  left: calc(50% + var(--side-nav-width, 0px) / 2);
+  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: var(--z-toast);
   max-width: calc(100% - 32px);

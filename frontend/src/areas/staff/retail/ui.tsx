@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import type { Me } from '../../../api/client';
@@ -106,15 +106,15 @@ export function Gate({ screen, title, children, wide }: { screen: RetailScreen; 
  * The roles of the branches (ADR-033): undefined while the capability is off, the session cannot read
  * stock, or the read is on its way, and then every branch behaves as before roles existed.
  */
-export function useBranchRoles(me: Pick<Me, 'permissions' | 'module_capabilities'>): BranchRole[] | undefined {
-  const enabled = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read');
+export function useBranchRoles(me: Pick<Me, 'permissions' | 'module_capabilities'>, wanted = true): BranchRole[] | undefined {
+  const enabled = wanted && capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read');
   const roles = useQuery({ queryKey: ['retail', 'branch-roles'], queryFn: () => retail.branchRoles(), enabled, staleTime: 60_000, retry: 1 });
   return enabled ? roles.data : undefined;
 }
 
-/** True unless branch roles are on and every branch the session can sell at is a store. */
-export function useCanSellAnywhere(me: Me): boolean {
-  const roles = useBranchRoles(me);
+/** True unless branch roles are on and every branch the session can sell at is a store. `wanted` false skips the branch roles read. */
+export function useCanSellAnywhere(me: Me, wanted = true): boolean {
+  const roles = useBranchRoles(me, wanted);
   return sellingBranches(branchesWhere(me, 'retail.sale.create'), roles).length > 0;
 }
 
@@ -152,22 +152,8 @@ export function useBranchName(): (id: string | undefined) => string {
   return (id) => branchLabel((me.branches ?? []).find((b) => b.id === id));
 }
 
-const PHONE = '(max-width: 719px)';
-const subscribePhone = (notify: () => void) => {
-  if (typeof window === 'undefined' || !window.matchMedia) return () => undefined;
-  const query = window.matchMedia(PHONE);
-  query.addEventListener('change', notify);
-  return () => query.removeEventListener('change', notify);
-};
-
-/** True below 720px, where a wide table gives way to one card per row. False when rendered without a window. */
-export function useIsPhone(): boolean {
-  return useSyncExternalStore(
-    subscribePhone,
-    () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(PHONE).matches,
-    () => false,
-  );
-}
+/** True below 720px, where a wide table gives way to one card per row. Shared with the phone side menu (issue #455). */
+export { useIsPhone } from '../../../components/side-menu';
 
 /**
  * Says plainly when the chosen branch holds no stock (#103), with a button for each of the user's

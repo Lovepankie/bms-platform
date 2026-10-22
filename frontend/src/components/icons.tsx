@@ -390,6 +390,41 @@ export const icons = {
       <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
     </Svg>
   ),
+  // The phone side menu (issue #455): the menu button, its close button and the areas that had no icon.
+  menu: (
+    <Svg>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Svg>
+  ),
+  close: (
+    <Svg>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </Svg>
+  ),
+  approve: (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12l3 3 5-6" />
+    </Svg>
+  ),
+  people: (
+    <Svg>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6" />
+    </Svg>
+  ),
+  bell: (
+    <Svg>
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" />
+      <path d="M10 21h4" />
+    </Svg>
+  ),
+  chat: (
+    <Svg>
+      <path d="M4 5h16v11H9l-5 4z" />
+    </Svg>
+  ),
   phone: (
     <Svg>
       <rect x="7" y="2.5" width="10" height="19" rx="2" />
@@ -399,6 +434,12 @@ export const icons = {
   check: (
     <Svg>
       <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </Svg>
+  ),
+  signOut: (
+    <Svg>
+      <path d="M10 4H5v16h5" />
+      <path d="M14 8l4 4-4 4M18 12H9" />
     </Svg>
   ),
 } as const;

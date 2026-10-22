@@ -28,7 +28,6 @@ import { LandedCostsPage } from '../areas/staff/retail/landed-costs';
 import { CataloguePage } from '../areas/staff/retail/catalogue';
 import { ControlsPage } from '../areas/staff/retail/controls';
 import { RetailHome } from '../areas/staff/retail/home';
-import { RetailNav } from '../areas/staff/retail/nav';
 import { RecordSale } from '../areas/staff/retail/sale';
 import { InTransitPage } from '../areas/staff/retail/in-transit';
 import { RetailSettings } from '../areas/staff/retail/settings';
@@ -39,7 +38,7 @@ import { AllSales, CreditSales } from '../areas/staff/retail/sales';
 import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { RefreshButton } from '../app/refresh-button';
-import { StaffBar } from '../areas/staff/route';
+import { StaffBar, StaffSideNav } from '../areas/staff/route';
 import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
@@ -53,7 +52,7 @@ import { PLATFORM_BRAND } from '../app/branding';
 import { BrandBar } from '../app/shell';
 import { CORE_TOURS, TOURS } from './tours';
 
-// One test per tour: render the screen each step points at (under the shell's brand bar and the staff bar, as the staff
+// One test per tour: render the screen each step points at (under the shell's brand bar, the sidebar and the staff bar, as the staff
 // layout draws them), as the user the tour is for, and prove its data-tour target is there. Renaming a screen or dropping an anchor fails here, not on
 // a customer's phone. Steps behind a feature flag have no screen yet and are checked separately.
 
@@ -100,12 +99,7 @@ function screen(path: string | undefined): ReactElement {
     case '/staff/setup/notifications':
       return <BusinessNotificationsScreen />;
     case '/staff/retail':
-      return (
-        <>
-          <RetailHome />
-          <RetailNavForTest />
-        </>
-      );
+      return <RetailHome />;
     case '/staff/retail/sale':
       return <RecordSale />;
     case '/staff/retail/stock':
@@ -178,8 +172,8 @@ let current: Me;
 function StaffBarForTest() {
   return <StaffBar me={current} branch={current.default_branch_id ?? null} onBranch={() => undefined} onSignOut={() => undefined} />;
 }
-function RetailNavForTest() {
-  return <RetailNav me={current} />;
+function StaffSideNavForTest() {
+  return <StaffSideNav me={current} />;
 }
 
 function render(me: Me, path: string | undefined): string {
@@ -204,6 +198,7 @@ function render(me: Me, path: string | undefined): string {
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch }}>
           <BrandBar brand={PLATFORM_BRAND} actions={<RefreshButton />} />
+          <StaffSideNavForTest />
           <StaffBarForTest />
           {screen(path)}
         </StaffContext.Provider>

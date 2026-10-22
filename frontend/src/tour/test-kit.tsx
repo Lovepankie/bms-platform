@@ -7,7 +7,7 @@ import type { Me, TenantSettings } from '../api/client';
 import { router as appRouter } from '../app/router';
 import { StaffContext } from '../areas/staff/context';
 import { RefreshButton } from '../app/refresh-button';
-import { StaffBar } from '../areas/staff/route';
+import { StaffBar, StaffSideNav } from '../areas/staff/route';
 import { type Tour, stepsFor } from './model';
 
 // The harness the page-tour tests share (issue #337): render the screen a tour step points at, under the staff bar and a
@@ -32,6 +32,7 @@ export function renderStaff(me: Me, screen: ReactElement, seed?: Seed): string {
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch }}>
           <RefreshButton />
+          <StaffSideNav me={me} />
           <StaffBar me={me} branch={me.default_branch_id ?? null} onBranch={() => undefined} onSignOut={() => undefined} />
           {screen}
         </StaffContext.Provider>

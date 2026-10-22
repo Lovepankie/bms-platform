@@ -78,3 +78,10 @@ the production CSP added to every HTML response, headless Chromium at 390x844 (a
 API answered by Playwright with fabricated bodies (no backend). The same walk tabbed through every tour
 step (focus stayed in the card), checked for sideways overflow and targets under 44px, ran axe-core 4
 (WCAG 2.0 and 2.1 A and AA) with the CSP bypassed for the injected script, and saw no violations.
+
+The `28` captures (2026-10-22, issue #455) show the side menu, the one navigation of the staff area on every screen size:
+`28-side-menu-desktop` (1280x800, the sidebar with the retail shortcuts under Retail), `28b-side-menu-folded-desktop`
+(folded to icons), `28c-side-menu-1024-dark-desktop` (1024x768, dark theme, no sideways scroll) and `28d-side-menu-phone`
+(360x740, the drawer open). They were taken from `npm run dev` with `VITE_RETAIL_MOCK=1` (fabricated session, no backend,
+so the retail home shows its error notice) in headless Chromium with reduced motion. The older desktop captures above
+predate #455 and still show the area tabs and the retail bar.

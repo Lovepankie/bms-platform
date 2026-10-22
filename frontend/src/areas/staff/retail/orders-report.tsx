@@ -62,7 +62,7 @@ export function OrdersReportPage() {
           <>
             <p className="rt-total">{fees.data.orders} delivered, items {money(fees.data.items_minor ?? 0)}, delivery fees {money(fees.data.fees_minor ?? 0)}</p>
             {(fees.data.rows ?? []).length === 0 ? <p className="empty-state">No orders delivered on these days.</p> : (
-              <div className="table-scroll"><table>
+              <div className="table-wrap"><table>
                 <thead><tr><th>{groupBy === 'day' ? 'Day' : groupBy === 'source' ? 'From' : 'Delivered by'}</th><th>Orders</th><th>Items</th><th>Delivery fees</th></tr></thead>
                 <tbody>
                   {(fees.data.rows ?? []).map((r) => (

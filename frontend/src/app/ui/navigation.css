@@ -1,6 +1,6 @@
 /*
- * Navigation: the staff bar under the shell's brand bar (who is signed in, the branch, sign out, and
- * the area tabs, which scroll sideways on a phone), and the retail bottom bar on phones.
+ * Navigation: the staff bar under the shell's brand bar (who is signed in, the branch, sign out) and the side menu that holds the
+ * areas on every screen size: a sidebar at the left from 720px, a drawer from the left below it (issue #455).
  */
 
 /* Full-bleed band without widening the page: the background is a clipped spread shadow. */
@@ -54,6 +54,16 @@
   flex: none;
 }
 
+/* The phone's one-tap Sell beside the menu button (issue #455): the sale screen without opening the menu. */
+.staff-sell {
+  flex: none;
+}
+
+.staff-sell svg {
+  width: 18px;
+  height: 18px;
+}
+
 .branch-picker {
   display: flex;
   align-items: center;
@@ -69,40 +79,6 @@
   min-width: 0;
 }
 
-.tabs {
-  display: flex;
-  gap: var(--space-1);
-  margin-top: var(--space-2);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.tabs a {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border-bottom: 3px solid transparent;
-  color: var(--color-text-muted);
-  font-weight: var(--weight-semibold);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.tabs a:hover {
-  color: var(--color-text);
-}
-
-.tabs a[data-status='active'],
-.tabs a[aria-current='page'] {
-  color: var(--color-link);
-  border-bottom-color: var(--color-accent);
-}
-
 @media (min-width: 720px) {
   .staff-bar {
     margin: calc(-1 * var(--space-6)) 0 var(--space-6);
@@ -114,89 +90,261 @@
   }
 }
 
-/* The retail bottom bar: fixed on phones, an inline row of links above the title on wider screens. */
-.bottom-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: var(--z-nav);
-  display: grid;
-  grid-auto-columns: 1fr;
-  grid-auto-flow: column;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  box-shadow: 0 -4px 16px rgba(16, 24, 40, 0.06);
+/*
+ * The sidebar from 720px (SideNav in components/side-menu.tsx, issue #455): the page becomes two columns, the sidebar and the
+ * rest. The sidebar is 240px, or 64px of icons when folded, and stays in view while the page scrolls; the content takes the
+ * remaining width with its text centred up to --content-width, and clips its full-bleed staff bar so nothing scrolls sideways.
+ */
+.app-content:has(> .nav-layout > .side-nav) {
+  max-width: none;
+  padding: 0;
 }
 
-.bottom-nav a {
+.nav-layout:has(> .side-nav) {
+  --side-nav-width: 240px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.nav-layout:has(> .side-nav-folded) {
+  --side-nav-width: 64px;
+}
+
+.nav-layout:has(> .side-nav) > .nav-layout-main {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-6) max(var(--space-5), calc((100vw - var(--side-nav-width) - var(--content-width)) / 2 + var(--space-5)))
+    var(--space-8);
+  overflow-x: clip;
+}
+
+.side-nav {
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-height: 60px;
-  padding: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  text-decoration: none;
+  gap: var(--space-2);
+  width: var(--side-nav-width);
+  flex: none;
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--space-3);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  transition: width var(--motion) var(--ease-out);
 }
 
-.bottom-nav svg {
+.side-nav-folded {
+  padding: var(--space-3) var(--space-2);
+}
+
+.side-nav-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+}
+
+.side-nav-toggle svg {
   width: 24px;
   height: 24px;
 }
 
-.bottom-nav a[data-status='active'] {
+.side-nav .side-menu-links a {
+  white-space: nowrap;
+}
+
+.side-nav-folded .side-menu-links a {
+  justify-content: center;
+  padding: 0;
+}
+
+.side-nav-folded .side-menu-group {
+  margin-left: 0;
+  border-left: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-nav {
+    transition: none;
+  }
+}
+
+/*
+ * The phone side menu (components/side-menu.tsx, issue #455): below 720px a menu button at the top left of the staff bar opens a
+ * drawer from the left, 85% of the width and at most 320px, over a dimmed backdrop. It keeps clear of the iPhone notch and home
+ * bar, slides in over --motion (once in 1ms under reduced motion, base.css) and appears at once when a tour step opens it.
+ */
+.menu-button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  min-width: var(--tap);
+  padding: 0;
+  flex: none;
+}
+
+.menu-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.side-menu {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+}
+
+.side-menu[hidden] {
+  display: none;
+}
+
+.side-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--color-scrim);
+  animation: rt-fade var(--motion) var(--ease-out);
+}
+
+.side-menu-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(85vw, 320px);
+  padding: calc(var(--space-2) + env(safe-area-inset-top)) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom))
+    calc(var(--space-3) + env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  animation: rt-drawer-in var(--motion) var(--ease-out);
+}
+
+.side-menu-instant .side-menu-backdrop,
+.side-menu-instant .side-menu-panel {
+  animation: none;
+}
+
+@keyframes rt-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* The page behind does not scroll; iOS Safari ignores overflow on the body, so it is fixed where it was (SideMenu sets the offset). */
+body.side-menu-open {
+  position: fixed;
+  top: var(--side-menu-scroll, 0);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+.side-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.side-menu-title {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.side-menu-links {
+  flex: 1 0 auto;
+}
+
+.side-menu-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.side-menu-links a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.side-menu-links a svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.side-menu-links a:hover {
+  background: var(--color-hover);
+}
+
+.side-menu-links a[aria-current='page'] {
+  background: var(--color-accent-tint);
   color: var(--color-link);
-  box-shadow: inset 0 3px 0 var(--color-accent);
+  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
-body:has(.bottom-nav) .app-footer {
-  padding-bottom: calc(60px + var(--space-4) + env(safe-area-inset-bottom));
+.side-menu-links a[aria-current='page'] svg {
+  color: var(--color-link);
 }
 
-@media (min-width: 720px) {
-  .bottom-nav {
-    position: static;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    max-width: 720px;
-    margin: 0 auto var(--space-4);
-    padding: 0;
-    background: none;
-    border: 0;
-    box-shadow: none;
-  }
+/* The section of the current page (Retail above its current shortcut): the colour of the current item without its tint or edge. */
+.side-menu-links a.side-menu-section {
+  color: var(--color-link);
+}
 
-  .bottom-nav a {
-    flex-direction: row;
-    gap: var(--space-2);
-    min-height: var(--tap);
-    padding: 0 var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-pill);
-    background: var(--color-surface);
-    font-size: var(--text-sm);
-  }
+.side-menu-links a.side-menu-section svg {
+  color: var(--color-link);
+}
 
-  .bottom-nav svg {
-    width: 18px;
-    height: 18px;
-  }
+.side-menu-group {
+  margin: 0 0 var(--space-2) var(--space-6);
+  border-left: 1px solid var(--color-border);
+}
 
-  .bottom-nav a[data-status='active'] {
-    box-shadow: none;
-    border-color: var(--color-accent);
-    background: var(--color-accent-tint);
-  }
+.side-menu-group a {
+  font-weight: var(--weight-regular);
+  font-size: var(--text-sm);
+}
 
-  body:has(.bottom-nav) .app-footer {
-    padding-bottom: var(--space-4);
-  }
+.side-menu-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.side-menu-foot button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.side-menu-foot button svg {
+  width: 18px;
+  height: 18px;
 }
 
 /*

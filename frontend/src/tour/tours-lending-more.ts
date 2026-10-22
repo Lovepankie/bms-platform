@@ -527,8 +527,8 @@ export const staffHomePage: Tour = {
     {
       id: 'areas',
       target: 'nav-areas',
-      title: 'The tabs',
-      body: 'Each tab opens one area, such as members, loans, insights or users. You see the tabs your role allows.',
+      title: 'The menu',
+      body: 'Each item in the menu opens one area, such as members, loans, insights or users. You see the areas your role allows. On a phone, open the menu at the top left.',
     },
     {
       id: 'members',
