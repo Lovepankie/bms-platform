@@ -287,7 +287,9 @@ class OfflineSalesService {
                         "This is your own sale: give a second reason of at least 5 characters.")));
             }
         }
-        Optional<OfflineSalesRepository.Recorded> sale = repo.saleByClient(f.clientSaleId());
+        // A conflict means the sale recorded under this id is not the one refused: it never closes the report.
+        Optional<OfflineSalesRepository.Recorded> sale =
+                f.code().equals("client_sale_conflict") ? Optional.empty() : repo.saleByClient(f.clientSaleId());
         if (sale.isPresent()) {
             // The sale was recorded after all (a report that crossed its send): closed by it, never discarded. The
             // close

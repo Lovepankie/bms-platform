@@ -1047,6 +1047,62 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isEqualTo("open");
     }
 
+    /**
+     * A manager discards a client_sale_conflict report: it is discarded, never closed as recorded by the other sale under its
+     * id, and it leaves the queue.
+     */
+    @Test
+    void aConflictReportIsDiscardedNotLinkedToTheOtherSale() {
+        String id = conflictReport();
+        RetailTestSupport boss = new RetailTestSupport(http, t);
+        ResponseEntity<JsonNode> discarded =
+                boss.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
+        assertThat(discarded.getStatusCode()).as("%s", discarded.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(discarded.getBody().get("status").asString()).isEqualTo("discarded");
+        assertThat(discarded.getBody().path("sale_id").isMissingNode()
+                        || discarded.getBody().get("sale_id").isNull())
+                .isTrue();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status || ':' || coalesce(sale_id::text, 'null') FROM retail_offline_failures"
+                                + " WHERE id = ?::uuid")
+                        .param(id)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("discarded:null");
+    }
+
+    /** A manager asks for a client_sale_conflict report again: it waits for a resend, never closed by the other sale. */
+    @Test
+    void aConflictReportIsRetriedNotLinkedToTheOtherSale() {
+        String id = conflictReport();
+        RetailTestSupport boss = new RetailTestSupport(http, t);
+        ResponseEntity<JsonNode> retry = boss.post("/offline-failures/" + id + "/retry", Map.of(), MANAGER);
+        assertThat(retry.getStatusCode()).as("%s", retry.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(retry.getBody().get("status").asString()).isEqualTo("retry");
+        assertThat(retry.getBody().path("sale_id").isMissingNode()
+                        || retry.getBody().get("sale_id").isNull())
+                .isTrue();
+        assertThat(boss.get("/offline-failures", MANAGER).getBody().get("items"))
+                .anySatisfy(item -> assertThat(item.get("id").asString()).isEqualTo(id));
+    }
+
+    /** A sale recorded under a client sale id, then a client_sale_conflict report of a different sale under it: its id. */
+    private String conflictReport() {
+        api.stockUp(t.headOffice(), product, "5");
+        UUID client = UUID.randomUUID();
+        ResponseEntity<JsonNode> sold = send(
+                offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "1", 2_000),
+                UUID.randomUUID().toString());
+        assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
+        Map<String, Object> report =
+                failureReport(client, offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "2", 2_000));
+        report.put("code", "client_sale_conflict");
+        report.put("message", "This client sale id was used for a different sale.");
+        ResponseEntity<JsonNode> reported = api.post("/offline-failures", report, SALES);
+        assertThat(reported.getBody().get("status").asString()).isEqualTo("open");
+        return reported.getBody().get("id").asString();
+    }
+
     /** A refusal is reported only for a branch that may sell, as the sale path checks: never for a store (ADR-033). */
     @Test
     void aReportForAStoreIsRefusedAsTheSaleWouldBe() {
