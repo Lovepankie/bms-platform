@@ -760,13 +760,19 @@ class ReferralService implements Referrals {
                 rs.getTimestamp("created_at").toInstant());
     }
 
-    /** RFC 4180 quoting; a leading formula character is neutralised for spreadsheet safety (as the audit export). */
+    /**
+     * RFC 4180 quoting; a text starting with a formula character (= + - @, a tab or a carriage return) is neutralised for
+     * spreadsheet safety (as the audit export). A number is written as it is, so a negative amount stays a number.
+     */
     static String cell(Object value) {
         if (value == null) {
             return "";
         }
+        if (value instanceof Number) {
+            return value.toString();
+        }
         String s = value.toString();
-        if (!s.isEmpty() && "=+-@".indexOf(s.charAt(0)) >= 0) {
+        if (!s.isEmpty() && "=+-@\t\r".indexOf(s.charAt(0)) >= 0) {
             s = "'" + s;
         }
         if (s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r") || s.contains("'")) {

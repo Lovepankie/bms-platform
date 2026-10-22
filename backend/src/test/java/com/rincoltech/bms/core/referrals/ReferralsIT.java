@@ -120,22 +120,26 @@ class ReferralsIT extends IntegrationTest {
     }
 
     ResponseEntity<JsonNode> pay(UUID tenantId, long amount, int months) {
+        ResponseEntity<JsonNode> paid = pay(tenantId, amount, months, "ref-pay-" + UUID.randomUUID());
+        assertThat(paid.getStatusCode()).as("%s", paid.getBody()).isEqualTo(HttpStatus.CREATED);
+        return paid;
+    }
+
+    ResponseEntity<JsonNode> pay(UUID tenantId, long amount, int months, String idempotencyKey) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("amount_minor", amount);
         body.put("method", "mtn_momo");
-        body.put("reference", "TEST-REF-" + UUID.randomUUID().toString().substring(0, 6));
+        body.put("reference", "TEST-REF-" + idempotencyKey.substring(idempotencyKey.length() - 6));
         body.put("paid_on", LocalDate.now(KAMPALA).toString());
         body.put("months", months);
         body.put("reason", "Test: seen on the statement");
         body.put("confirm_unusual_amount", true);
-        ResponseEntity<JsonNode> paid = platform.call(
+        return platform.call(
                 HttpMethod.POST,
                 "/api/v1/platform/tenants/" + tenantId + "/payments",
                 body,
                 operator.accessToken(),
-                Map.of("Idempotency-Key", "ref-pay-" + UUID.randomUUID()));
-        assertThat(paid.getStatusCode()).as("%s", paid.getBody()).isEqualTo(HttpStatus.CREATED);
-        return paid;
+                Map.of("Idempotency-Key", idempotencyKey));
     }
 
     ResponseEntity<JsonNode> rule(String path, Map<String, Object> rule, String reason) {
@@ -912,5 +916,86 @@ class ReferralsIT extends IntegrationTest {
                 .isEqualTo("idempotency_key_reused");
         assertThat(amounts(detail(rx))).containsExactly(800L);
         assertThat(audits("platform.referral.commission_added")).isEqualTo(1);
+    }
+
+    /** A payment submitted twice with the same Idempotency-Key is recorded once and adds exactly one line. */
+    @Test
+    void aRepeatedPaymentAddsOneLine() {
+        TestDatabase.Fixture a = TestDatabase.tenant("refreplay", false);
+        Business x = business("ref-replay");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        rule("/api/v1/platform/referrals/" + rx + "/rule", percent(1000, null), "Test: ten percent, no end");
+        String key = "ref-pay-" + UUID.randomUUID();
+        assertThat(pay(x.id(), 10000, 1, key).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(pay(x.id(), 10000, 1, key).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(amounts(detail(rx))).containsExactly(1000L);
+    }
+
+    /**
+     * A payment that straddles the end of the first N months earns only for the months still inside N, pro rata, and counts
+     * only those; the next payment earns nothing (decision 5).
+     */
+    @Test
+    void aPaymentAcrossTheEndOfTheMonthsEarnsForTheMonthsLeft() {
+        TestDatabase.Fixture a = TestDatabase.tenant("refedge", false);
+        Business x = business("ref-edge");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        rule("/api/v1/platform/referrals/" + rx + "/rule", percent(1000, 3), "Test: ten percent, three months");
+        pay(x.id(), 20000, 2);
+        // One month of three is left: ten percent of a third of 10,001 is 333.37, so 333.
+        pay(x.id(), 10001, 3);
+        pay(x.id(), 10000, 1);
+        JsonNode lines = detail(rx).get("lines");
+        assertThat(amounts(detail(rx))).containsExactly(2000L, 333L);
+        assertThat(lines.get(0).get("months_counted").asInt()).isEqualTo(2);
+        assertThat(lines.get(1).get("months_counted").asInt()).isEqualTo(1);
+        assertThat(lines.get(1).get("rule_snapshot").get("paid_months_before").asInt())
+                .isEqualTo(2);
+    }
+
+    /** A rule changed between two payments applies to the second only: the first line and its snapshot never change. */
+    @Test
+    void aRuleChangeLeavesEarlierLinesAsTheyWere() {
+        TestDatabase.Fixture a = TestDatabase.tenant("refchange", false);
+        Business x = business("ref-change");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        rule("/api/v1/platform/referrals/" + rx + "/rule", percent(1000, null), "Test: ten percent, no end");
+        pay(x.id(), 10000, 1);
+        JsonNode first = detail(rx).get("lines").get(0);
+
+        Map<String, Object> perMonth = new LinkedHashMap<>();
+        perMonth.put("kind", "fixed_per_month");
+        perMonth.put("amount_minor", 700);
+        perMonth.put("currency", "UGX");
+        rule("/api/v1/platform/referrals/" + rx + "/rule", perMonth, "Test: a new deal");
+        pay(x.id(), 10000, 1);
+
+        JsonNode lines = detail(rx).get("lines");
+        assertThat(amounts(detail(rx))).containsExactly(1000L, 700L);
+        assertThat(lines.get(0)).isEqualTo(first);
+        assertThat(lines.get(0).get("rule_snapshot").get("kind").asString()).isEqualTo("percent_of_payment");
+        assertThat(lines.get(1).get("rule_snapshot").get("kind").asString()).isEqualTo("fixed_per_month");
+        assertThat(lines.get(1).get("rule_snapshot").get("rule_id"))
+                .isNotEqualTo(lines.get(0).get("rule_snapshot").get("rule_id"));
+    }
+
+    /** A fixed rule in another currency than the payment's gives no line (currency_differs). */
+    @Test
+    void aFixedRuleInAnotherCurrencyGivesNoLine() {
+        TestDatabase.Fixture a = TestDatabase.tenant("refcur", false);
+        Business x = business("ref-cur");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        Map<String, Object> usd = new LinkedHashMap<>();
+        usd.put("kind", "fixed_first_payment");
+        usd.put("amount_minor", 500);
+        usd.put("currency", "USD");
+        rule("/api/v1/platform/referrals/" + rx + "/rule", usd, "Test: a deal in dollars");
+        pay(x.id(), 10000, 1);
+        assertThat(detail(rx).get("lines")).isEmpty();
+        assertThat(audits("platform.referral.commission_added")).isZero();
     }
 }
