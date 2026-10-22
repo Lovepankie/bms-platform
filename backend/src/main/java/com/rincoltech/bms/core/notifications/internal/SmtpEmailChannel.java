@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.notifications.internal;
 
 import com.rincoltech.bms.core.jobs.TenantJobs;
+import com.rincoltech.bms.core.notifications.EmailAttachments;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.Letterheads;
 import com.rincoltech.bms.core.tenancy.PlatformHost;
@@ -12,6 +13,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.util.ByteArrayDataSource;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -23,6 +25,7 @@ import java.util.function.Predicate;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -37,6 +40,10 @@ import org.springframework.stereotype.Component;
  * platform host; a row of a tenant whose logo is set (the emails of its own staff) shows that logo, from the tenant's
  * public logo route, with "Powered by BMS from Rincol Tech" in the footer. A brand that cannot be read never stops a
  * send: the email then carries the platform's look.
+ *
+ * <p>A row whose parameters name a file ({@link EmailAttachments#PARAM}, the weekly copy of a business's workbook, ADR-074)
+ * is sent as {@code multipart/mixed}: the two parts above, then the file, read when the email is sent by the module that owns
+ * it. A file that is gone fails the send cleanly ({@code attachment_unavailable}); the email never goes without it.
  */
 @Component
 class SmtpEmailChannel implements OutboxChannel {
@@ -55,6 +62,7 @@ class SmtpEmailChannel implements OutboxChannel {
     private final TenantJobs tenantJobs;
     private final CurrentTenant tenant;
     private final Letterheads letterheads;
+    private final ObjectProvider<EmailAttachments> attachments;
 
     SmtpEmailChannel(
             NotificationProperties properties,
@@ -63,6 +71,7 @@ class SmtpEmailChannel implements OutboxChannel {
             TenantJobs tenantJobs,
             CurrentTenant tenant,
             Letterheads letterheads,
+            ObjectProvider<EmailAttachments> attachments,
             @Value("${bms.environment:}") String environment) {
         properties.smtp().requireInProduction(environment);
         this.smtp = properties.smtp();
@@ -72,6 +81,7 @@ class SmtpEmailChannel implements OutboxChannel {
         this.tenantJobs = tenantJobs;
         this.tenant = tenant;
         this.letterheads = letterheads;
+        this.attachments = attachments;
         this.trusted = trustedLinks(hosts);
     }
 
@@ -111,7 +121,7 @@ class SmtpEmailChannel implements OutboxChannel {
         props.put("mail.smtps.writetimeout", "20000");
         Session session = Session.getInstance(props);
         Body body = body(delivery, brand(delivery.context()));
-        MimeMessage message = compose(session, smtp.from(), delivery, body);
+        MimeMessage message = compose(session, smtp.from(), delivery, body, attachment(delivery.context()));
         try (Transport transport = session.getTransport("smtps")) {
             transport.connect(smtp.host(), smtp.port(), smtp.user(), smtp.password());
             message.saveChanges();
@@ -152,8 +162,37 @@ class SmtpEmailChannel implements OutboxChannel {
         return new Body(text, EmailLayout.html(brand, content, support));
     }
 
+    /** The file a row names, read now for the row's tenant; null when it names none. */
+    EmailAttachments.Attachment attachment(RowContext context) throws SendFailure {
+        String ref = context == null || context.params() == null
+                ? null
+                : context.params().get(EmailAttachments.PARAM);
+        if (ref == null) {
+            return null;
+        }
+        int colon = ref.indexOf(':');
+        String kind = colon < 0 ? ref : ref.substring(0, colon);
+        String id = colon < 0 ? "" : ref.substring(colon + 1);
+        Optional<EmailAttachments.Attachment> file = attachments
+                .orderedStream()
+                .filter(a -> a.kind().equals(kind))
+                .findFirst()
+                .flatMap(a -> context.tenantId() == null ? Optional.empty() : a.read(context.tenantId(), id));
+        if (file.isEmpty()) {
+            throw new SendFailure("attachment_unavailable");
+        }
+        return file.get();
+    }
+
     /** The message, ready to send: {@code multipart/alternative} with the plain part first, as the standard asks. */
     static MimeMessage compose(Session session, String from, Delivery delivery, Body body) throws MessagingException {
+        return compose(session, from, delivery, body, null);
+    }
+
+    /** As {@link #compose(Session, String, Delivery, Body)}, inside {@code multipart/mixed} with the file after it. */
+    static MimeMessage compose(
+            Session session, String from, Delivery delivery, Body body, EmailAttachments.Attachment attachment)
+            throws MessagingException {
         MimeMessage message = new IdMessage(session, messageId(delivery.idempotencyKey()));
         message.setFrom(new InternetAddress(from, true));
         message.setRecipient(Message.RecipientType.TO, new InternetAddress(delivery.recipient(), true));
@@ -165,7 +204,21 @@ class SmtpEmailChannel implements OutboxChannel {
         MimeMultipart alternative = new MimeMultipart("alternative");
         alternative.addBodyPart(plain);
         alternative.addBodyPart(html);
-        message.setContent(alternative);
+        if (attachment == null) {
+            message.setContent(alternative);
+            return message;
+        }
+        MimeBodyPart text = new MimeBodyPart();
+        text.setContent(alternative);
+        MimeBodyPart file = new MimeBodyPart();
+        file.setDataHandler(new jakarta.activation.DataHandler(
+                new ByteArrayDataSource(attachment.bytes(), attachment.contentType())));
+        file.setFileName(oneLine(attachment.fileName()));
+        file.setDisposition(MimeBodyPart.ATTACHMENT);
+        MimeMultipart mixed = new MimeMultipart("mixed");
+        mixed.addBodyPart(text);
+        mixed.addBodyPart(file);
+        message.setContent(mixed);
         return message;
     }
 

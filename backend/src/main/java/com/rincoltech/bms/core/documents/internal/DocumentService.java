@@ -480,6 +480,26 @@ class DocumentService implements Documents {
     }
 
     @Override
+    public Optional<byte[]> readReportObject(UUID documentId, long maxBytes) {
+        var row = ownTransaction.execute(s -> jdbc.sql(
+                        "SELECT object_key, doc_type, size_bytes FROM documents WHERE id = ?")
+                .param(documentId)
+                .query((rs, n) ->
+                        new Object[] {rs.getString("object_key"), rs.getString("doc_type"), rs.getLong("size_bytes")})
+                .optional());
+        if (row.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!"report".equals(row.get()[1])) {
+            throw new IllegalArgumentException("Only the object of a report document may be read this way.");
+        }
+        if ((Long) row.get()[2] > maxBytes) {
+            throw new IllegalArgumentException("The report file is larger than the caller may hold.");
+        }
+        return storage.get((String) row.get()[0]);
+    }
+
+    @Override
     public void discardGenerated(GeneratedObject object) {
         try {
             storage.delete(object.key());

@@ -41,6 +41,14 @@ public interface ReportDefinition {
     /** The permission (chapter 8) that lets a user run it. */
     String permission();
 
+    /**
+     * True for a report every business has, whatever its modules and whatever its reports switch: the business's own copy of
+     * its data (ADR-074). False (the default) for every other report, which needs {@link #module()} on and reports switched on.
+     */
+    default boolean everyBusiness() {
+        return false;
+    }
+
     /** The parameters it accepts; a request naming any other is refused. */
     List<Param> params();
 

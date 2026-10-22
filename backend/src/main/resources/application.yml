@@ -161,6 +161,11 @@ bms:
     max-file-bytes: ${BMS_REPORTS_MAX_FILE_BYTES:67108864}
     # Where a run's spool files live while it runs; empty means a folder in the system temp directory.
     spool-dir: ${BMS_REPORTS_SPOOL_DIR:}
+  # Download my data (issue #334, ADR-074). Not secrets. A table longer than split-rows is cut into a sheet per year (and
+  # never past the row cap above); the weekly email attaches a workbook up to attach-max-bytes and links to a larger one.
+  data-export:
+    split-rows: ${BMS_DATA_EXPORT_SPLIT_ROWS:10000}
+    attach-max-bytes: ${BMS_DATA_EXPORT_ATTACH_MAX_BYTES:5242880}
   # Outbox senders (spec section 11, chapter 9 section 9.8). A sender whose values are unset is off:
   # its rows stay pending and nothing fails. SMTP is implicit TLS (465); 587 is blocked on the
   # staging host. Never logged.

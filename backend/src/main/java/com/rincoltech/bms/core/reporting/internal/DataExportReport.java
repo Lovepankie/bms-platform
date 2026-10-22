@@ -1,0 +1,251 @@
+package com.rincoltech.bms.core.reporting.internal;
+
+import com.rincoltech.bms.core.reporting.DataExportSection;
+import com.rincoltech.bms.core.reporting.DataExportSheets;
+import com.rincoltech.bms.core.reporting.ReportDefinition;
+import com.rincoltech.bms.core.reporting.ReportOutput;
+import com.rincoltech.bms.core.reporting.ReportOutput.Column;
+import com.rincoltech.bms.core.reporting.ReportOutput.Kind;
+import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.TenantModules;
+import com.rincoltech.bms.kernel.BusinessClock;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Component;
+
+/**
+ * "Download my data" (issue #334 step 1, ADR-074): the whole business as one workbook, a sheet per table, made by the report
+ * run framework like any other report (queued, one snapshot, kept 30 days, tenant scoped). The core writes the Branches
+ * sheet; each vertical the business has on adds its own sheets through a {@link DataExportSection}. It has no parameters and
+ * no branch scope: it is read by an administrator for the whole business, so a file made for one stays theirs to fetch for
+ * as long as they hold the permission. Read only: making it changes nothing.
+ */
+@Component
+class DataExportReport implements ReportDefinition {
+
+    static final String KEY = "core.data_export";
+    static final String PERMISSION = "core.data_export.run";
+
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
+
+    private final List<DataExportSection> sections;
+    private final TenantModules modules;
+    private final CurrentTenant tenant;
+    private final BusinessClock clock;
+    private final JdbcClient jdbc;
+    private final int splitRows;
+
+    DataExportReport(
+            List<DataExportSection> sections,
+            TenantModules modules,
+            CurrentTenant tenant,
+            BusinessClock clock,
+            JdbcClient jdbc,
+            ReportsProperties limits,
+            @Value("${bms.data-export.split-rows:10000}") int splitRows) {
+        this.sections = sections.stream()
+                .sorted(Comparator.comparingInt(DataExportSection::order))
+                .toList();
+        this.modules = modules;
+        this.tenant = tenant;
+        this.clock = clock;
+        this.jdbc = jdbc;
+        // A sheet never passes the row cap of a run, whatever the split is set to.
+        this.splitRows = Math.max(1, Math.min(splitRows, limits.tableRowCap));
+    }
+
+    @Override
+    public String key() {
+        return KEY;
+    }
+
+    @Override
+    public String title() {
+        return "Business data";
+    }
+
+    @Override
+    public String description() {
+        return "Every table of the business in one workbook, a sheet each: a copy to keep, like the old spreadsheet.";
+    }
+
+    @Override
+    public String module() {
+        return "core";
+    }
+
+    @Override
+    public String permission() {
+        return PERMISSION;
+    }
+
+    @Override
+    public boolean everyBusiness() {
+        return true;
+    }
+
+    @Override
+    public List<Param> params() {
+        return List.of();
+    }
+
+    @Override
+    public Set<String> formats() {
+        return Set.of("xlsx");
+    }
+
+    @Override
+    public Prepared prepare(Map<String, Object> params) {
+        return new Prepared(Map.of(), Map.of(), clock.today(tenant.profile().timezone()));
+    }
+
+    @Override
+    public String describeScope(Prepared run) {
+        return "Every branch of the business";
+    }
+
+    @Override
+    public void query(Prepared prepared, ReportOutput out) {
+        out.note("A copy of the business's data, every branch. Making it changed nothing.");
+        out.note("Dates and times are in the business's time zone; amounts are whole numbers in its currency.");
+        Sheets sheets = new Sheets(out, tenant.profile().timezone(), splitRows);
+        branches(sheets);
+        for (DataExportSection section : sections) {
+            if (modules.isEnabled(section.module())) {
+                section.write(sheets);
+            }
+        }
+    }
+
+    private void branches(Sheets sheets) {
+        DataExportSheets.Rows rows = sheets.table(
+                "branches",
+                "Branches",
+                List.of(
+                        new Column("code", "Code", Kind.TEXT),
+                        new Column("name", "Name", Kind.TEXT),
+                        new Column("location", "Location", Kind.TEXT),
+                        new Column("head_office", "Head office", Kind.TEXT),
+                        new Column("status", "Status", Kind.TEXT),
+                        new Column("opened_on", "Opened on", Kind.DATE)));
+        jdbc.sql("""
+                        SELECT code, name, location, is_head_office, status, created_at
+                          FROM branches ORDER BY is_head_office DESC, code, id
+                        """)
+                .query((rs, n) -> {
+                    rows.row(
+                            rs.getString("code"),
+                            rs.getString("name"),
+                            rs.getString("location"),
+                            rs.getBoolean("is_head_office") ? "Yes" : "No",
+                            rs.getString("status"),
+                            sheets.date(rs.getTimestamp("created_at")));
+                    return null;
+                })
+                .list();
+    }
+
+    /**
+     * The sheets of one run: each table opened on the output as it is needed, a table past {@code split} rows cut into
+     * more. A dated table longer than the split gets a sheet per year; any sheet that reaches the split continues in a
+     * numbered part, so no sheet passes the run's row cap.
+     */
+    static final class Sheets implements DataExportSheets {
+
+        private final ReportOutput out;
+        private final ZoneId zone;
+        private final int split;
+
+        Sheets(ReportOutput out, ZoneId zone, int split) {
+            this.out = out;
+            this.zone = zone;
+            this.split = split;
+        }
+
+        @Override
+        public ZoneId zone() {
+            return zone;
+        }
+
+        @Override
+        public LocalDate date(Timestamp at) {
+            return at == null ? null : LocalDate.ofInstant(at.toInstant(), zone);
+        }
+
+        @Override
+        public String time(Timestamp at) {
+            return at == null ? null : CLOCK.format(at.toInstant().atZone(zone));
+        }
+
+        @Override
+        public void checkpoint() {
+            out.checkpoint();
+        }
+
+        @Override
+        public Rows table(String key, String title, List<Column> columns) {
+            Splitter s = new Splitter(key, title, columns, false);
+            s.open(null);
+            return cells -> s.write(null, cells);
+        }
+
+        @Override
+        public DatedRows dated(String key, String title, List<Column> columns, long rowCount) {
+            boolean byYear = rowCount > split;
+            Splitter s = new Splitter(key, title, columns, byYear);
+            if (!byYear) {
+                s.open(null);
+            }
+            return (date, cells) -> s.write(Objects.requireNonNull(date, "a dated row needs its date"), cells);
+        }
+
+        private final class Splitter {
+
+            private final String key;
+            private final String title;
+            private final List<Column> columns;
+            private final boolean byYear;
+            private ReportOutput.Table current;
+            private Integer year;
+            private int part;
+            private long inPart;
+
+            Splitter(String key, String title, List<Column> columns, boolean byYear) {
+                this.key = key;
+                this.title = title;
+                this.columns = columns;
+                this.byYear = byYear;
+            }
+
+            void open(Integer y) {
+                if (!Objects.equals(y, year)) {
+                    part = 0;
+                }
+                year = y;
+                part++;
+                inPart = 0;
+                String keySuffix = (y == null ? "" : "_" + y) + (part > 1 ? "_" + part : "");
+                String titleSuffix = (y == null ? "" : " " + y) + (part > 1 ? " (" + part + ")" : "");
+                current = out.table(key + keySuffix, title + titleSuffix, columns);
+            }
+
+            void write(LocalDate date, Object[] cells) {
+                Integer y = byYear ? date.getYear() : null;
+                if (current == null || !Objects.equals(y, year) || inPart >= split) {
+                    open(y);
+                }
+                current.row(cells);
+                inPart++;
+            }
+        }
+    }
+}

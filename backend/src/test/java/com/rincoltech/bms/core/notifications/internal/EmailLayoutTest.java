@@ -59,6 +59,10 @@ class EmailLayoutTest {
         p.put("kind", "problem");
         p.put("page", "/staff/retail/sale");
         p.put("message", "Test message <b>with</b> markup & an ampersand.");
+        // The weekly copy of the business's data (issue #334).
+        p.put("owner_name", "Test Owner 01");
+        p.put("as_of", "19 Oct 2026");
+        p.put("expires_on", "18 Nov 2026");
         return p;
     }
 
@@ -414,7 +418,7 @@ class EmailLayoutTest {
             }
         };
         SmtpEmailChannel channel = new SmtpEmailChannel(
-                new NotificationProperties(null, null, ""), templates, HOSTS, jobs, tenant, letterheads, "");
+                new NotificationProperties(null, null, ""), templates, HOSTS, jobs, tenant, letterheads, null, "");
         OutboxChannel.RowContext row = new OutboxChannel.RowContext(
                 UUID.randomUUID(), UUID.randomUUID(), "transactional", null, null, null, Map.of(), 1, null, null);
 

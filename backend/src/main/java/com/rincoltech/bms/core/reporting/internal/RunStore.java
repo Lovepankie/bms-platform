@@ -188,6 +188,23 @@ class RunStore {
                 .list();
     }
 
+    /** The requester's newest run of one report, if any (the data export card, ADR-074). */
+    Optional<Run> latestOf(UUID requestedBy, String reportKey) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM report_runs WHERE requested_by = ? AND report_key = ?"
+                        + " ORDER BY created_at DESC, id LIMIT 1")
+                .params(requestedBy, reportKey)
+                .query(this::map)
+                .optional();
+    }
+
+    /** When a run of this report last finished ready, by anyone in the business; null when none has. */
+    Instant lastReadyAt(String reportKey) {
+        return jdbc.sql("SELECT max(finished_at) FROM report_runs WHERE report_key = ? AND status = 'ready'")
+                .param(reportKey)
+                .query((rs, n) -> instant(rs, "max"))
+                .single();
+    }
+
     int countCreatedSince(UUID requestedBy, Instant since) {
         return jdbc.sql("SELECT count(*) FROM report_runs WHERE requested_by = ? AND created_at > ?")
                 .params(requestedBy, ts(since))

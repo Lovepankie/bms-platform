@@ -43,13 +43,13 @@ class ReportRegistry {
 
     /** The report when it exists and its module is on for the bound tenant. */
     Optional<ReportDefinition> findInTenant(String key) {
-        return find(key).filter(d -> modules.isEnabled(d.module()));
+        return find(key).filter(d -> d.everyBusiness() || modules.isEnabled(d.module()));
     }
 
     /** What the principal may run in the bound tenant, by key. */
     List<ReportDefinition> available(Principal principal) {
         return byKey.values().stream()
-                .filter(d -> modules.isEnabled(d.module()))
+                .filter(d -> d.everyBusiness() || modules.isEnabled(d.module()))
                 .filter(d -> principal.hasPermission(d.permission()))
                 .toList();
     }

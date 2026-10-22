@@ -27,6 +27,7 @@ class ReportJobs {
 
     static final String RUNNER = "core.reporting.report-runner";
     static final String EXPIRY = "core.reporting.report-expiry";
+    static final String WEEKLY = "core.reporting.data-export-weekly";
 
     private static final Logger log = LoggerFactory.getLogger(ReportJobs.class);
 
@@ -36,6 +37,18 @@ class ReportJobs {
         sweepSpool(limits.spoolDir);
         return Tasks.recurring(RUNNER, Schedules.fixedDelay(Duration.ofSeconds(15)))
                 .execute((instance, context) -> runner.tick());
+    }
+
+    /**
+     * The weekly copy of each business's data (ADR-074), every 15 minutes: the week's workbook is queued once from 02:00 on
+     * Monday and emailed once it is ready. Switched off by {@code bms.data-export.weekly-enabled=false}, which the integration
+     * tests set so that they drive {@link DataExportWeekly#tick} themselves.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "bms.data-export.weekly-enabled", havingValue = "true", matchIfMissing = true)
+    RecurringTask<Void> dataExportWeeklyTask(DataExportWeekly weekly) {
+        return Tasks.recurring(WEEKLY, Schedules.fixedDelay(Duration.ofMinutes(15)))
+                .execute((instance, context) -> weekly.tick());
     }
 
     /** After the runner's own job: the files that passed their 30 days go, tenant by tenant. */

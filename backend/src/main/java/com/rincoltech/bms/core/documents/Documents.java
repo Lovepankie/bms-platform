@@ -165,6 +165,15 @@ public interface Documents {
      */
     void deleteReportObject(UUID documentId);
 
+    /**
+     * The bytes of a generated report's stored object, for the weekly email that carries the business's workbook (ADR-074);
+     * empty when the object is gone. Refuses any document that is not of type {@code report}, and an object larger than
+     * {@code maxBytes} (the caller attaches only a small file and links to a larger one). Only {@code core.reporting} calls it
+     * (an architecture test enforces that). The lookup is its own short transaction under the bound tenant; the read holds
+     * none.
+     */
+    Optional<byte[]> readReportObject(UUID documentId, long maxBytes);
+
     /** Removes an object that {@link #putGenerated} wrote and nothing recorded. Never throws. */
     void discardGenerated(GeneratedObject object);
 

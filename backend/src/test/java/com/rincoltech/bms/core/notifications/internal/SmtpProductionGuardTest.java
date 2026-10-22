@@ -73,7 +73,7 @@ class SmtpProductionGuardTest {
     @Test
     void theEmailChannelBeanRunsTheGuard() {
         NotificationProperties unset = new NotificationProperties(null, null, null);
-        assertThatThrownBy(() -> new SmtpEmailChannel(unset, null, null, null, null, null, "production"))
+        assertThatThrownBy(() -> new SmtpEmailChannel(unset, null, null, null, null, null, null, "production"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageStartingWith("BMS_ENVIRONMENT=production needs email");
     }

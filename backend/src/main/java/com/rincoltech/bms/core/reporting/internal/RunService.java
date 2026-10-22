@@ -163,17 +163,27 @@ class RunService {
                         new FieldProblem("params." + required.name(), "required", "This parameter is required.")));
             }
         }
+        return insert(def, format, prepared, principal.userId(), true);
+    }
+
+    /**
+     * Queues a run of {@code def} for {@code requester} after the checks of a request (or of a job that acts for a named
+     * user, the weekly data export of ADR-074): an identical open run of theirs is returned instead, and with
+     * {@code byRequest} the rate limit applies and the audit row is the signed-in user's; without it the audit row names
+     * the requester and the system. Runs in the caller's transaction.
+     */
+    Requested insert(ReportDefinition def, String format, Prepared prepared, UUID requester, boolean byRequest) {
         String hash = hash(def.key(), format, prepared);
         // One request at a time per requester from here: the repeat check, the rate count and the insert below see each
         // other, so ten runs a minute is ten and not "about ten" when requests arrive together.
-        store.lockRequester(principal.userId());
-        Optional<Run> open = store.findOpenByHash(principal.userId(), hash);
+        store.lockRequester(requester);
+        Optional<Run> open = store.findOpenByHash(requester, hash);
         if (open.isPresent()) {
             // An identical request is answered with the run that exists, however many were asked this minute.
             return new Requested(view(open.get()), false);
         }
         Instant now = clock.now();
-        if (store.countCreatedSince(principal.userId(), now.minus(Duration.ofMinutes(1))) >= RATE_PER_MINUTE) {
+        if (byRequest && store.countCreatedSince(requester, now.minus(Duration.ofMinutes(1))) >= RATE_PER_MINUTE) {
             throw new ApiException(
                     HttpStatus.TOO_MANY_REQUESTS,
                     "rate_limited",
@@ -189,12 +199,12 @@ class RunService {
                 hash,
                 prepared.scope(),
                 format,
-                principal.userId(),
+                requester,
                 prepared.asOf(),
                 limits.tableRowCap,
                 limits.maxFileBytes);
         if (!created) {
-            Run existing = store.findOpenByHash(principal.userId(), hash).orElseThrow();
+            Run existing = store.findOpenByHash(requester, hash).orElseThrow();
             return new Requested(view(existing), false);
         }
         Map<String, Object> after = new LinkedHashMap<>();
@@ -202,7 +212,12 @@ class RunService {
         after.put("format", format);
         after.put("as_of", prepared.asOf().toString());
         after.put("params", prepared.params());
-        audit.record(AuditLog.Entry.created(AUDIT_RUN, ENTITY, id, null, after));
+        AuditLog.Entry entry = AuditLog.Entry.created(AUDIT_RUN, ENTITY, id, null, after);
+        if (byRequest) {
+            audit.record(entry);
+        } else {
+            audit.record(entry, requester, "system");
+        }
         return new Requested(view(store.find(id).orElseThrow()), true);
     }
 

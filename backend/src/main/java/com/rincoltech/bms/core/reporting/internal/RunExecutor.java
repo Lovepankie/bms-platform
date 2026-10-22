@@ -202,7 +202,10 @@ class RunExecutor {
 
     /** Refuses a run that should not start: reports switched off, requester deactivated, report gone. */
     private ReportDefinition precheck(Run run) {
-        if (!Boolean.TRUE.equals(plain.execute(s -> settings.reportsEnabled()))) {
+        ReportDefinition def = registry.find(run.reportKey())
+                .orElseThrow(() -> new ReportFailure("report_unavailable", "The report is no longer offered."));
+        // The business's own copy of its data is made whatever the reports switch says (ADR-074).
+        if (!def.everyBusiness() && !Boolean.TRUE.equals(plain.execute(s -> settings.reportsEnabled()))) {
             throw new ReportFailure("reports_disabled", "Reports were switched off.");
         }
         Boolean deactivated = plain.execute(
@@ -213,8 +216,7 @@ class RunExecutor {
         if (Boolean.TRUE.equals(deactivated)) {
             throw new ReportFailure("requester_deactivated", "The requester was deactivated.");
         }
-        return registry.find(run.reportKey())
-                .orElseThrow(() -> new ReportFailure("report_unavailable", "The report is no longer offered."));
+        return def;
     }
 
     private Queried query(Run run, ReportDefinition def, Spool spool, RunGuard guard) {

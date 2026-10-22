@@ -1,0 +1,102 @@
+-- V94: download my data (issue #334 step 1, ADR-074). V80 to V83 are on main and V84 to V93 are claimed by open pull
+-- requests; Flyway runs with outOfOrder off, so this number is kept only while it stays above every merged one.
+--
+-- Expand only, safe on a populated database. One permission, two new tenant tables, and the three runner functions of V49
+-- replaced so that a business whose subscription has ended (a suspended tenant, read only under FR-TEN-06) still gets its
+-- own workbook made. No existing table, column, constraint or row changes.
+--
+-- Locks, said plainly. Flyway runs this file in one transaction. CREATE TABLE with foreign keys takes SHARE ROW EXCLUSIVE
+-- on tenants, users and report_runs until the commit (reads go on; the new tables are empty, so the cost is the wait for the
+-- lock). CREATE OR REPLACE FUNCTION only changes catalogue rows. lock_timeout is five seconds as in V26 and V80: if a lock
+-- cannot be had at once the migration fails and is retried, rather than every writer queueing behind it.
+
+SET LOCAL lock_timeout = '5s';
+
+-- ---------------------------------------------------------------------------------------------
+-- data_export_settings (ADR-074): the business's choice about the weekly email of its workbook. No row means the default,
+-- on. One row per business, changed in place by a holder of core.data_export.run; every change is audited.
+-- ---------------------------------------------------------------------------------------------
+
+CREATE TABLE data_export_settings (
+    id           uuid        NOT NULL PRIMARY KEY,
+    tenant_id    uuid        NOT NULL REFERENCES tenants (id),
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz,
+    weekly_email boolean     NOT NULL DEFAULT true,
+    updated_by   uuid        NOT NULL,
+    UNIQUE (tenant_id, id),
+    UNIQUE (tenant_id),
+    FOREIGN KEY (tenant_id, updated_by) REFERENCES users (tenant_id, id)
+);
+SELECT bms_apply_tenant_rls('data_export_settings');
+SELECT bms_grant_app('data_export_settings', 'SELECT, INSERT, UPDATE');
+
+-- ---------------------------------------------------------------------------------------------
+-- data_export_weekly (ADR-074): one row per business per week (the Monday that starts it), written by the weekly job when
+-- it queues that week's workbook for the Owner, so a job that runs twice, or on two instances, queues one workbook and sends
+-- one email (the unique key). A week while the switch is off gets no row, so turning it on mid-week sends that week's copy.
+-- status: queued (the run is being made), emailed (the outbox row is written), skipped (no active Owner with an email
+-- address), failed (the run did not finish ready). reason is a stable code, never a message.
+-- ---------------------------------------------------------------------------------------------
+
+CREATE TABLE data_export_weekly (
+    id                uuid        NOT NULL PRIMARY KEY,
+    tenant_id         uuid        NOT NULL REFERENCES tenants (id),
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    week_of           date        NOT NULL CHECK (extract(isodow FROM week_of) = 1),
+    run_id            uuid,
+    recipient_user_id uuid,
+    status            text        NOT NULL CHECK (status IN ('queued', 'emailed', 'skipped', 'failed')),
+    attached          boolean,
+    reason            text        CHECK (reason ~ '^[a-z][a-z0-9_]{2,60}$'),
+    finished_at       timestamptz,
+    UNIQUE (tenant_id, id),
+    UNIQUE (tenant_id, week_of),
+    FOREIGN KEY (tenant_id, run_id) REFERENCES report_runs (tenant_id, id),
+    FOREIGN KEY (tenant_id, recipient_user_id) REFERENCES users (tenant_id, id),
+    CHECK ((status = 'skipped') = (run_id IS NULL)),
+    CHECK ((status = 'queued') = (finished_at IS NULL))
+);
+CREATE INDEX data_export_weekly_open ON data_export_weekly (tenant_id) WHERE status = 'queued';
+SELECT bms_apply_tenant_rls('data_export_weekly');
+SELECT bms_grant_app('data_export_weekly', 'SELECT, INSERT');
+GRANT UPDATE (status, attached, reason, finished_at) ON data_export_weekly TO bms_app;
+
+-- ---------------------------------------------------------------------------------------------
+-- The runner's functions of V49, now over active and suspended tenants. A suspended business is read only: it cannot queue
+-- a report (every write but the data export's own queue answers 423), and making a file of its own data changes none of it.
+-- Signatures, owners and grants are unchanged.
+-- ---------------------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION app_count_running_report_runs() RETURNS integer
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT count(*)::integer FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+     WHERE r.status = 'running' AND t.status IN ('active', 'suspended')
+$$;
+
+CREATE OR REPLACE FUNCTION app_tenants_with_queued_report_runs() RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT r.tenant_id FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+     WHERE r.status = 'queued' AND t.status IN ('active', 'suspended')
+       AND NOT EXISTS (SELECT 1 FROM report_runs x WHERE x.tenant_id = r.tenant_id AND x.status = 'running')
+     GROUP BY r.tenant_id
+     ORDER BY min(r.created_at), r.tenant_id
+$$;
+
+CREATE OR REPLACE FUNCTION app_tenants_with_stale_report_runs(p_cutoff timestamptz) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT DISTINCT r.tenant_id FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+     WHERE r.status = 'running' AND t.status IN ('active', 'suspended')
+       AND coalesce(r.heartbeat_at, r.started_at) < p_cutoff
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- Permission (chapter 8 section 8.3.2, ADR-074). A read of the whole business across every branch, so the administrators
+-- (the Owner among them, ADR-062) hold it and nobody else; PermissionMatrixIT compares the seeded rows with the matrix.
+-- ---------------------------------------------------------------------------------------------
+
+INSERT INTO permissions (key, module, description, is_money_moving) VALUES
+    ('core.data_export.run', 'core', 'Business data: download the whole business as a workbook and choose the weekly email', false);
+
+INSERT INTO role_permissions (role_key, permission_key) VALUES
+    ('tenant_admin', 'core.data_export.run');
