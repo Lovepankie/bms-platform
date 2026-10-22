@@ -23,6 +23,7 @@ import com.rincoltech.bms.retail.sales.internal.DocumentSnapshot.TransferRef;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.DocumentPage;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.IssueRequest;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.IssuedDocument;
+import com.rincoltech.bms.retail.sales.internal.DocumentsApi.SaleReceipt;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.Series;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.SeriesBranch;
 import com.rincoltech.bms.retail.sales.internal.DocumentsApi.SeriesList;
@@ -82,6 +83,7 @@ class DocumentsService {
     private final SalesService sales;
     private final AccountsService accounts;
     private final SalesRepository salesRepo;
+    private final ReturnsRepository returns;
     private final DocumentModels models;
     private final Documents documents;
     private final RetailCapabilities capabilities;
@@ -100,6 +102,7 @@ class DocumentsService {
             SalesService sales,
             AccountsService accounts,
             SalesRepository salesRepo,
+            ReturnsRepository returns,
             DocumentModels models,
             Documents documents,
             RetailCapabilities capabilities,
@@ -115,6 +118,7 @@ class DocumentsService {
         this.sales = sales;
         this.accounts = accounts;
         this.salesRepo = salesRepo;
+        this.returns = returns;
         this.models = models;
         this.documents = documents;
         this.capabilities = capabilities;
@@ -680,6 +684,121 @@ class DocumentsService {
             return models.statement(st, buyer.contact(), termsText, account.creditLimitMinor(), scope, today, number);
         });
         return documents.renderPdf("customer_statement", model);
+    }
+
+    // JUSTIFICATION-A3: the receipt to share (issue #439): one check of who may share it, its facts and its PDF.
+    /** A sale whose receipt may be shared, with its completed returns. */
+    /**
+     * A sale whose receipt may be shared, with its completed returns. {@code paidMinor} is the money the buyer actually paid:
+     * a return taken off the balance is booked on the sale as paid ({@code addPaid}), and a receipt shows it as a return,
+     * never as a payment.
+     */
+    private record Receipt(
+            Sale sale, UUID madeBy, List<ReturnsRepository.Row> returned, long returnedMinor, long paidMinor) {}
+
+    /**
+     * The sale behind a receipt to share (issue #439, ADR-061), in the caller's read transaction. Stricter than reading
+     * the sale: without {@code retail.sale.all_sellers} at its branch only a sale the caller made, with no exception for
+     * a debt still owed (404, as a sale outside the scope). A voided sale, a written-off sale and a sale whose goods were
+     * all taken back have no receipt (422): a clean receipt is never printed for money that is not owed or not kept.
+     */
+    private Receipt receipt(UUID saleId) {
+        Principal principal = CurrentPrincipal.require();
+        Sale sale = sales.get(saleId);
+        // The maker as stored: the sale read through the API hides it from some callers (ADR-055).
+        UUID madeBy = repo.saleMadeBy(sale.id()).orElse(null);
+        boolean own = principal.userId() != null && principal.userId().equals(madeBy);
+        if (!own && !principal.may(SalesSummaryService.ALL_SELLERS, sale.branchId())) {
+            throw ApiException.notFound();
+        }
+        if (!sale.status().equals("completed")) {
+            throw ApiException.rule("sale_voided", "A cancelled sale has no receipt to share.");
+        }
+        if (sale.writeOff() != null) {
+            throw ApiException.rule(
+                    "sale_written_off", "The unpaid part of this sale was written off, so it has no receipt to share.");
+        }
+        List<ReturnsRepository.Row> done = returns.forSale(sale.id()).stream()
+                .filter(r -> r.status().equals("completed"))
+                .toList();
+        long returnedMinor =
+                done.stream().mapToLong(ReturnsRepository.Row::totalMinor).sum();
+        if (!done.isEmpty() && returnedMinor >= sale.totalMinor()) {
+            throw ApiException.rule(
+                    "sale_fully_returned", "Every item of this sale was taken back, so it has no receipt to share.");
+        }
+        long offBalance = done.stream()
+                .mapToLong(ReturnsRepository.Row::accountCreditMinor)
+                .sum();
+        return new Receipt(sale, madeBy, done, returnedMinor, Math.max(0, sale.paidMinor() - offBalance));
+    }
+
+    /** The facts of the receipt to share: what the screen's caption says, the same figures as the PDF. */
+    SaleReceipt receiptFacts(UUID saleId) {
+        return reading.execute(status -> {
+            Receipt r = receipt(saleId);
+            Sale sale = r.sale();
+            String name = sale.buyerName();
+            String contact = sale.buyerContact();
+            Integer customerVersion = null;
+            boolean customerHasContact = false;
+            if (sale.customerId() != null) {
+                DocumentsRepository.BuyerInfo c =
+                        repo.customer(sale.customerId()).orElse(null);
+                if (c != null) {
+                    name = c.name();
+                    customerHasContact = c.contact() != null && !c.contact().isBlank();
+                    contact = customerHasContact ? c.contact() : contact;
+                    customerVersion = repo.customerVersion(sale.customerId()).orElse(null);
+                }
+            }
+            return new SaleReceipt(
+                    sale.id(),
+                    sale.saleNo(),
+                    models.businessName(),
+                    name == null || name.isBlank() ? null : name,
+                    contact == null || contact.isBlank() ? null : contact,
+                    sale.customerId(),
+                    customerVersion,
+                    customerHasContact,
+                    sale.paymentMethod(),
+                    sale.currency(),
+                    sale.totalMinor(),
+                    r.paidMinor(),
+                    sale.balanceMinor(),
+                    r.returnedMinor(),
+                    sale.totalMinor() - r.returnedMinor(),
+                    r.returned().stream()
+                            .map(ReturnsRepository.Row::creditNoteNo)
+                            .toList(),
+                    sale.version());
+        });
+    }
+
+    /**
+     * The receipt of a sale as a PDF, for the seller to share from their own phone (issue #439, ADR-061): the invoice
+     * layout titled RECEIPT under the sale's own number, with the balance the sale carries, the returns and the net, and
+     * the seller who made the sale. Rendered now and never stored, numbered in no series and written to no table, so it
+     * needs neither the documents capability nor {@code retail.document.issue}. Who may have it and whether the sale has a
+     * receipt are checked first, holding no render place, so a wrong or foreign sale is a quick 404 or 422; the model is
+     * then built inside the receipt's own render place, apart from the documents and the reports.
+     */
+    byte[] receiptPdf(UUID saleId) {
+        reading.executeWithoutResult(status -> receipt(saleId));
+        return documents.renderSharedPdf(
+                "invoice",
+                () -> reading.execute(status -> {
+                    Receipt r = receipt(saleId);
+                    Sale sale = r.sale();
+                    DocumentSnapshot snapshot = saleSnapshot(sale, "invoice", sale.saleNo(), today(), true, null);
+                    return models.receipt(
+                            snapshot,
+                            repo.userName(r.madeBy()),
+                            r.paidMinor(),
+                            sale.balanceMinor(),
+                            r.returned(),
+                            sale.totalMinor() - r.returnedMinor());
+                }));
     }
 
     LocalDate today() {

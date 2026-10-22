@@ -350,6 +350,11 @@ class DocumentService implements Documents {
     }
 
     @Override
+    public byte[] renderSharedPdf(String template, java.util.function.Supplier<Map<String, Object>> model) {
+        return pdf.renderShared(template, model);
+    }
+
+    @Override
     public void renderPdf(
             String template,
             java.util.function.Supplier<Map<String, Object>> model,

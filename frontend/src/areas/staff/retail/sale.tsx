@@ -16,6 +16,7 @@ import type { BranchRole } from '../../../api/retail';
 import { BRANCH_ROLES, CREDIT_OVERRIDE, CUSTOMER_ACCOUNTS, PRICELIST_MANAGE, PRICELIST_USE, PRICE_LISTS, PRICE_OVERRIDE, UNITS, branchesWhere, capabilityOn, holds, holdsAt, needsOf, sellingBranches } from './permissions';
 import { exceededBy, isLimitRefusal, limitWords, termsWords } from './account-state';
 import { SaleDocuments } from './documents-ui';
+import { ShareReceipt } from './receipt-share';
 import { ChangePanel, ReceiptChange } from './sale-change';
 import { receivedFor, receivedProblem } from './sale-change-state';
 
@@ -428,6 +429,7 @@ export function RecordSale() {
       ) : sale ? (
         <>
           <Receipt sale={sale} received={received} onNew={() => { setSale(null); setReceived(undefined); setRound((n) => n + 1); }} />
+          <ShareReceipt sale={sale} madeHere />
           {sale.id && <SaleDocuments saleId={sale.id} status={sale.status} branchId={sale.branch_id} />}
         </>
       ) : (

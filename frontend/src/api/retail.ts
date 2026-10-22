@@ -53,6 +53,7 @@ export type SimilarProduct = S['RetailSimilarProduct'];
 export type ImportResult = S['RetailProductImportResult'];
 export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
+export type SaleReceipt = S['RetailSaleReceipt'];
 export type CustomerPage = S['RetailCustomerList'];
 /** Customer accounts (ADR-033, issue #196): the credit limit and terms, the statement, payment on account. Money is integer minor units. */
 export type CustomerAccount = S['RetailCustomerAccount'];
@@ -459,6 +460,10 @@ export interface RetailApi {
   reverseAccountPayment(id: string, paymentId: string, reason: string, idempotencyKey: string): Promise<AccountPayment>;
   /** The customer statement as a PDF (documents and customer_accounts), as at today and never stored. */
   customerStatementPdf(id: string, q: { from?: string; to?: string }): Promise<Blob>;
+  /** The receipt of a sale as a PDF to share from the seller's phone (retail.sale.read; own sales only without retail.sale.all_sellers), never stored (issue #439). */
+  saleReceiptPdf(saleId: string): Promise<Blob>;
+  /** The facts of the receipt to share, as its PDF prints them (same check as the PDF; 422 for a voided, written-off or wholly returned sale). */
+  saleReceipt(saleId: string): Promise<SaleReceipt>;
   /** Optional documents (the documents capability, issue #197); 404 capability_not_enabled while it is off. */
   listSaleDocuments(saleId: string): Promise<RetailDocument[]>;
   /** The invoice or delivery note of a sale, issued once; takes the Idempotency-Key of its button. */
@@ -996,6 +1001,15 @@ const realRetail: RetailApi = {
       params: { path: { customer_id: id }, query: { from: from || undefined, to: to || undefined } },
       parseAs: 'blob',
     });
+    return unwrap(result as { data?: Blob; error?: unknown; response: Response });
+  },
+
+  async saleReceipt(saleId) {
+    return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}/receipt', { params: { path: { sale_id: saleId } } }));
+  },
+
+  async saleReceiptPdf(saleId) {
+    const result = await api.GET('/api/v1/retail/sales/{sale_id}/receipt/pdf', { params: { path: { sale_id: saleId } }, parseAs: 'blob' });
     return unwrap(result as { data?: Blob; error?: unknown; response: Response });
   },
 

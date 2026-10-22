@@ -361,7 +361,8 @@ export const retailSales: Tour = {
   // Version 7 adds the Correct step on the stock list (issue #351): fix a wrong quantity or category where you see it.
   // Version 8 adds the Notifications step: install the app and turn on notifications (ADR-050).
   // Version 9 adds the Light or dark step (issue #429): the theme selector at the top right.
-  version: 9,
+  // Version 10 words the Save step for Share receipt and WhatsApp customer (issue #439): send the receipt from your phone.
+  version: 10,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -414,7 +415,7 @@ export const retailSales: Tour = {
       module: 'retail',
       optional: true,
       title: 'Save the sale',
-      body: 'Check the total, then tap Save sale. You get a receipt to show the customer.',
+      body: 'Check the total, then tap Save sale. You get a receipt to show the customer. Tap Share receipt to send the PDF from your phone, on WhatsApp or any other app. WhatsApp customer sends the details to their number.',
     },
     {
       id: 'credit-payments',

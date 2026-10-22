@@ -112,6 +112,71 @@ class DocumentModels {
         m.put("totals", totals);
     }
 
+    // JUSTIFICATION-A3: the receipt to share (issue #439) is the invoice model with the sale's own balance and returns.
+    /** The business's own name, as its letterhead prints it: the caption of a shared receipt names it, never the platform. */
+    String businessName() {
+        return letterheads.current().displayName();
+    }
+
+    /**
+     * The model of the receipt a seller shares (issue #439, ADR-061): the invoice of the snapshot, titled RECEIPT, signed by
+     * the seller who made the sale, with the money the buyer actually paid ({@code paidMinor}: a return taken off the balance
+     * is a return, not a payment) and what the sale still owes as the sale carries it (payments and returns taken off),
+     * and, when goods were taken back, each credit note, the net and a title that says so.
+     */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> receipt(
+            DocumentSnapshot s,
+            String soldBy,
+            long paidMinor,
+            long balanceMinor,
+            List<ReturnsRepository.Row> returned,
+            long netMinor) {
+        Map<String, Object> m = model(s);
+        ((Map<String, Object>) m.get("doc")).put("title", returned.isEmpty() ? "RECEIPT" : "RECEIPT AFTER RETURNS");
+        ((Map<String, Object>) m.get("signs")).put("issuedBy", soldBy);
+        Map<String, Object> totals = (Map<String, Object>) m.get("totals");
+        DocumentSnapshot.SaleRef sale = s.sale();
+        String method = METHODS.getOrDefault(sale.paymentMethod(), sale.paymentMethod());
+        if (!sale.paymentMethod().equals("credit")) {
+            totals.put("status", "Paid in full by " + method + ".");
+            totals.put("due", null);
+        } else if (balanceMinor <= 0) {
+            totals.put("status", "Paid in full.");
+            totals.put("due", null);
+        } else {
+            totals.put("status", paidMinor > 0 ? "Part paid." : "Sold on credit.");
+            totals.put(
+                    "due",
+                    (paidMinor > 0 ? "Paid so far: " + money(paidMinor, s.currency()) + ". " : "")
+                            + "Balance outstanding on " + date(s.issueDate()) + ": "
+                            + money(balanceMinor, s.currency()) + " " + s.currency());
+        }
+        if (!returned.isEmpty()) {
+            List<String> lines = new ArrayList<>();
+            for (ReturnsRepository.Row r : returned) {
+                StringBuilder line = new StringBuilder("Credit note " + r.creditNoteNo() + ", " + date(r.returnedOn())
+                        + ": goods worth " + money(r.totalMinor(), s.currency()) + " taken back");
+                if (r.refundMinor() > 0) {
+                    line.append(", ")
+                            .append(money(r.refundMinor(), s.currency()))
+                            .append(" paid back");
+                }
+                if (r.accountCreditMinor() > 0) {
+                    line.append(", ")
+                            .append(money(r.accountCreditMinor(), s.currency()))
+                            .append(" taken off the balance");
+                }
+                lines.add(line.append('.').toString());
+            }
+            Map<String, Object> after = new LinkedHashMap<>();
+            after.put("lines", lines);
+            after.put("net", money(netMinor, s.currency()));
+            m.put("returns", after);
+        }
+        return m;
+    }
+
     private void deliveryNote(DocumentSnapshot s, Map<String, Object> m) {
         Map<String, Object> ref = new LinkedHashMap<>();
         Map<String, Object> to = new LinkedHashMap<>();

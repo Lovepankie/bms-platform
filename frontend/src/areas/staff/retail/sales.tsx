@@ -13,6 +13,7 @@ import { settledWords } from './returns-state';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { SaleDocuments } from './documents-ui';
+import { ShareReceipt } from './receipt-share';
 import { useRootFigures } from './sales-grouped';
 import { SalesChain, useChainView } from './sales-chain';
 import { chainUser, effectiveChain, usableChain, usableLevels, type Selection } from './sales-chain-state';
@@ -169,6 +170,7 @@ export function OpenSale({ id, onClose }: { id: string; onClose: () => void }) {
       <Problem error={sale.error} />
       {sale.data && <SaleDetail sale={sale.data} today={businessToday()} branchName={nameOf(sale.data.branch_id)} />}
       {sale.data && <PaySaleAction sale={sale.data} today={businessToday()} />}
+      {sale.data && <ShareReceipt sale={sale.data} />}
       {sale.data?.id && <SaleDocuments saleId={sale.data.id} status={sale.data.status} branchId={sale.data.branch_id} />}
       {sale.data && mayReturn && sale.data.status === 'completed' && (
         <p><Link className="btn-sm" to="/staff/retail/returns/new/$saleId" params={{ saleId: id }}>Return goods</Link></p>

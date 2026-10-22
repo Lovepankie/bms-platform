@@ -92,6 +92,14 @@ public interface Documents {
     byte[] renderPdf(String template, Map<String, Object> model);
 
     /**
+     * As {@link #renderPdf(String, Map)} for a PDF a person shares from their phone (a sale's receipt, ADR-061): laid out in
+     * its own render place, never one of the places documents and reports use, so a report never makes it wait and a burst
+     * of them never takes a place from an administrator's documents. The model is built only once the place is held. 503
+     * {@code documents_busy} after the render wait. No transaction and no storage.
+     */
+    byte[] renderSharedPdf(String template, java.util.function.Supplier<Map<String, Object>> model);
+
+    /**
      * As {@link #renderPdf(String, Map)} written to {@code target} instead of returned (a report's PDF, ADR-038): the file
      * is streamed out as it is laid out and no byte array of the whole document is made. Waits for a render place for up to
      * {@code waitMillis} (a report run is a job and can wait longer than a request), then answers 503

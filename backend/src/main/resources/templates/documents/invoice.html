@@ -52,6 +52,10 @@
     <div th:text="${totals.status}">Paid in full</div>
     <div class="muted" th:if="${totals.due != null}" th:text="${totals.due}">Balance due at issue 5,000</div>
   </div>
+  <div class="box" th:if="${returns != null}">
+    <div th:each="r : ${returns.lines}" th:text="${r}">Credit note CN-HQ-000001: goods worth 1,000 taken back.</div>
+    <div th:text="${'Net after returns (' + currency + '): ' + returns.net}">Net after returns 4,000</div>
+  </div>
   <div class="muted" th:if="${notes != null}" th:text="${notes}">Notes</div>
 
   <table class="signs">

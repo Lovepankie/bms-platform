@@ -249,4 +249,53 @@ final class DocumentsApi {
             @Pattern(regexp = "[A-Z][A-Z0-9]{0,7}")
             @Schema(description = "One to eight capital letters or digits, starting with a letter")
             String prefix) {}
+
+    // JUSTIFICATION-A3: the facts of the receipt to share (issue #439); the screen's caption reads the same figures as
+    // the PDF.
+    @Schema(name = "RetailSaleReceipt")
+    record SaleReceipt(
+            UUID saleId,
+
+            @Schema(description = "The sale's number, which the receipt carries")
+            String receiptNo,
+
+            @Schema(description = "The business's own name from its letterhead")
+            String businessName,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String buyerName,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The buyer's number: the record's when the sale names one, else the sale's")
+            String buyerContact,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID customerId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The buyer record's version, for a save of its number under If-Match")
+            Integer customerVersion,
+
+            @Schema(description = "Whether the buyer's record already has a number")
+            boolean customerHasContact,
+
+            String paymentMethod,
+            String currency,
+            long totalMinor,
+
+            @Schema(description = "The money the buyer actually paid: a return taken off the balance is not counted")
+            long paidMinor,
+
+            @Schema(description = "What the buyer still owes, as on the sale: returns and payments taken into account")
+            long balanceMinor,
+
+            @Schema(description = "The value of the goods taken back by completed returns")
+            long returnedMinor,
+
+            @Schema(description = "The total less the goods taken back")
+            long netMinor,
+
+            @Schema(description = "The credit notes of the completed returns, oldest first")
+            List<String> creditNotes,
+
+            @Schema(description = "The sale's version; it changes with a payment or a return")
+            int saleVersion) {}
 }

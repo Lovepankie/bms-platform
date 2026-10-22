@@ -1229,3 +1229,36 @@ own: the order is copied from the chat, so the form asks for the phone first and
   settings version like the other retail settings and audited as `retail.capabilities.changed`.
 - Tours: `page-stock-health` v2 adds the Slow movers step (`health-slow`), `page-retail-settings` v4 the settings step
   (`retail-slow-movers`).
+
+## Share the receipt (issue #439, ADR-061, FR-RET-66)
+
+A card **Send the receipt** under the receipt, right after a sale is saved (`sale.tsx`) and on an opened sale (`sales.tsx`, beside
+Documents). It shows for a completed sale to someone who may read it: a seller for their own sales, a supervisor or an administrator
+for every seller's (`receipt-share.tsx`, `canShareReceipt`). A voided or written-off sale has none. The card reads the receipt's
+facts (`GET /retail/sales/{sale_id}/receipt`) and shows the server's refusal in plain words instead of the buttons, for a sale
+whose goods were all taken back. The facts and the PDF are fetched again when the sale's version, paid amount or balance
+changes, so after a payment on the same screen the next share sends the new receipt.
+
+- **Share receipt** fetches `GET /retail/sales/{sale_id}/receipt/pdf` (never stored, documents capability on or off) and hands the
+  PDF to the phone's share sheet as `Receipt <sale no>.pdf` with the caption as its text. On an iPhone (Safari or the installed
+  app) and on an Android phone (Chrome or the installed app) the share sheet lists WhatsApp, Gmail, Messages, Telegram and the rest.
+  A browser that cannot share files (some desktop browsers) downloads the PDF and says: "This browser cannot share files, so the
+  receipt PDF was downloaded. Send it from your downloads." Cancelling the share sheet shows nothing. If the phone refuses the share
+  because fetching took too long, the screen says "The receipt is ready. Tap Share receipt again to send it." and the second tap
+  shares the fetched file at once; if the phone refuses again, the PDF downloads and the screen says so.
+- **Customer's WhatsApp number**, prefilled from the buyer's record (read by id with the facts) or the number on the sale (an order delivered as a sale carries
+  its phone), else empty. **WhatsApp customer** normalises it (`receipt-share-state.ts`, rules in ADR-061) and opens
+  `wa.me/<number>?text=<caption>` in a new window; a number that could mean two things is refused under the box in plain words and
+  nothing opens. Under the button: "WhatsApp opens with the receipt details. To send the PDF itself, use Share receipt and pick
+  WhatsApp."
+- **Save this number for <buyer>**, unticked, appears only when the buyer has a record with no number, the person may edit buyers
+  (`retail.customer.manage` at the sale's branch) and a number was typed; ticked, the number is saved on the buyer through the existing edit when
+  WhatsApp opens.
+- The caption: `*<business name>*: Receipt <sale no>`, `Customer: <buyer>` (left out without one), `Amount paid: UGX <amount>
+  (<way of paying>)`, after returns `Goods returned: UGX <amount> (credit note <numbers>)` and `Net after returns: UGX
+  <amount>`, then `Balance outstanding: UGX <amount>` (the balance the sale carries) or `Fully settled, thank you!`, then `Thank you for your business.` The
+  business name is the shop's own letterhead name, never the platform's; without one the first line is `Receipt <sale no>`.
+  `*`, `_`, `~` and the backtick are taken out of the names so they cannot break WhatsApp's bold, and half an emoji is dropped.
+- Nothing is written to the server except the optional number; the typed number is never logged. The tour `retail-sales` is
+  version 10: its Save step names Share receipt and WhatsApp customer.
+

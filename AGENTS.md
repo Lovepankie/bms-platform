@@ -193,6 +193,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   rules live in the `retail` settings group (`/retail/settings/capabilities`). The PWA: the Slow movers section, a Move link that
   opens Move stock filled in (`from`, `to`, `product`, `code`, `qty` in the address), the Slow movers card on Retail settings;
   tours `page-stock-health` v2 and `page-retail-settings` v4 (`docs/specs/retail-ui-notes.md`).
+- **Built (share a sale's receipt from the seller's phone, issue #439, FR-RET-66, ADR-061):** no migration and no permission. Two read routes, `GET /retail/sales/{sale_id}/receipt/pdf` and its facts `GET /retail/sales/{sale_id}/receipt` (`retail.sale.read`; without `retail.sale.all_sellers` only the caller's own sales, even of a credit sale they may read; 422 `sale_voided`, `sale_written_off`, `sale_fully_returned`), render the invoice layout titled RECEIPT (RECEIPT AFTER RETURNS with the credit notes and the net) under the sale's number, signed by the seller, with the balance the sale carries, never stored, laid out in its own render place apart from documents and reports (`Documents.renderSharedPdf`), with the documents capability on or off (`DocumentsService.receiptPdf`). The card Send the receipt (`receipt-share.tsx`, `receipt-share-state.ts`) on the saved sale and the opened sale: Share receipt hands the PDF to the phone's share sheet (download where a browser cannot share files; a cancel shows nothing), WhatsApp customer opens wa.me with the receipt's facts and the number normalised by the rules of ADR-061 (an ambiguous number is refused), and an unticked Save this number for the buyer uses the existing customer edit. Nothing is sent from a server and nothing new is audited. Tests: `SaleReceiptPdfIT`, `receipt-share-state.test.ts`, `receipt-share.dom.test.tsx`. Notes: `docs/specs/retail-ui-notes.md` (Share the receipt).
 - **Built (the Retail home range, issue #428, FR-RET-65, ADR-060):** reports only, no migration, no permission:
   `GET /retail/reports/dashboard` takes `period` (`today`, `7d`, `30d`, `ytd`, `1y`, `all`) or `period=custom` with `from` and
   `to` (at most 366 days) and then answers `range`: the figures, average sale and number of sales against the period before (as many
@@ -712,6 +713,8 @@ Accepted (this list is the ADR index):
 - ADR-060 The Retail home follows one chosen range against the period before (as many days before, This year against last
   year, All against nothing), from the dashboard's own dated queries; the choice kept per person per device (proposed, #428;
   FR-RET-65; renumbered at merge if needed)
+- ADR-061 Receipts are shared from the seller's own phone (the share sheet and wa.me), never sent from a server; the receipt PDF is
+  rendered now under `retail.sale.read`, own sales only for a seller, never stored (proposed, #439; FR-RET-66; renumbered at merge if needed)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 

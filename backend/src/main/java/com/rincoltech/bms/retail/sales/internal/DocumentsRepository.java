@@ -331,6 +331,24 @@ class DocumentsRepository {
                 .optional();
     }
 
+    /**
+     * Who made a sale, as stored: the sale an API caller reads may have it hidden (ADR-055), and a receipt is signed by the
+     * seller whoever shares it.
+     */
+    Optional<UUID> saleMadeBy(UUID saleId) {
+        return jdbc.sql("SELECT created_by FROM retail_sales WHERE id = ?")
+                .param(saleId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    Optional<Integer> customerVersion(UUID customerId) {
+        return jdbc.sql("SELECT version FROM retail_customers WHERE id = ?")
+                .param(customerId)
+                .query(Integer.class)
+                .optional();
+    }
+
     String userName(UUID userId) {
         if (userId == null) {
             return "the system";
