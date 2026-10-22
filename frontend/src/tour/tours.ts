@@ -687,13 +687,20 @@ export const creditSalesPage: Tour = {
 
 export const setupPage: Tour = {
   id: 'page-setup',
-  version: 1,
+  version: 2,
   title: 'This page: business set-up',
   audience: isTenantAdmin,
   autoStart: false,
   page: '/staff/setup',
   steps: [
     ...adminWelcome.steps.filter((s) => s.route === '/staff/setup'),
+    {
+      id: 'plan',
+      target: 'setup-plan',
+      optional: true,
+      title: 'Plan and modules',
+      body: 'Your plan, what you use and the last day paid for. The owner adds or stops a module or cancels here; a change starts after the days already paid for.',
+    },
     {
       id: 'save',
       target: 'setup-save',
