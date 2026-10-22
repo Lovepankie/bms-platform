@@ -381,6 +381,23 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Business set-up",
+                    "You got this email because you are the Owner of {business_name} on BMS."),
+            "core.data_export_weekly_failed",
+            new Template(
+                    "Your weekly copy of {business_name}'s data could not be made",
+                    """
+                    Hello {owner_name},
+
+                    Your weekly copy of the data of {business_name} could not be made this week. Nothing in the \
+                    business changed. You can download a copy now from Business set-up, under Download my data:
+
+                    {link}
+
+                    To stop these emails, untick the weekly email under Download my data in Business set-up.
+
+                    Rincol Tech
+                    """,
+                    "Open Business set-up",
                     "You got this email because you are the Owner of {business_name} on BMS."));
 
     private static final Map<String, Template> EMAIL = emailTemplates();

@@ -66,7 +66,10 @@ never change data, never show one business another's rows, and never hold a larg
    to Business set-up on the business's own sign-in page (decision 9). The attachment is named in the outbox row as a
    reference, never as bytes; the sender reads it through the `EmailAttachments` port of `core.notifications`, for the row's
    tenant, only while the run is ready and unexpired. A week with no active Owner who has an email address is recorded as
-   skipped; a run that failed ends the week as failed with its code. Turning the switch off stops the next week; turning it on
+   skipped; a run that failed, timed out or was cancelled ends the week as failed with its code, and the Owner gets a short
+   email (`core.data_export_weekly_failed`) saying this week's copy could not be made and that they can download one from
+   Business set-up. A run of the whole business may take 30 minutes (`ReportDefinition.timeout`, `bms.data-export.timeout`),
+   against the runner's 10 for any other report. Turning the switch off stops the next week; turning it on
    mid-week sends that week's.
 7. **Read only, and served to a business whose subscription has ended.** Making the workbook writes only the run's own rows and
    file. A suspended tenant answers 423 to every write except two reads that are a `POST`: asking for the workbook and the signed

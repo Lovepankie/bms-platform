@@ -53,6 +53,9 @@ class DataExportIT extends LendingBookSupport {
     @Autowired
     DataExportWeekly weekly;
 
+    @Autowired
+    DataExportReport report;
+
     // ---- helpers -----------------------------------------------------------------------------------
 
     ResponseEntity<JsonNode> card(TestDatabase.Fixture t, UUID user, String permissions) {
@@ -580,6 +583,34 @@ class DataExportIT extends LendingBookSupport {
                 .isEqualTo("failed email_failed");
         assertThat(card(s.t(), owner, PERM).getBody().get("last_emailed_at").isNull())
                 .isTrue();
+    }
+
+    @Test
+    void aWeeklyRunThatTimedOutEndsTheWeekAsFailedAndTellsTheOwnerOnce() throws Exception {
+        // The whole business has longer than one report: 30 minutes against the runner's limit.
+        assertThat(report.timeout()).isEqualTo(java.time.Duration.ofMinutes(30));
+        Shop s = shop("DXT");
+        owner(s.t());
+        weekly.tick();
+        TestDatabase.owner()
+                .sql("UPDATE report_runs SET status = 'failed', error = 'timeout', finished_at = now()"
+                        + " WHERE tenant_id = ? AND report_key = 'core.data_export'")
+                .param(s.t().tenantId())
+                .update();
+        weekly.tick();
+        weekly.tick();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status || ' ' || reason FROM data_export_weekly WHERE tenant_id = ?")
+                        .param(s.t().tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("failed timeout");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT template_key FROM notification_outbox WHERE recipient = ?")
+                        .param(ownerEmail(s.t()))
+                        .query(String.class)
+                        .list())
+                .containsExactly(DataExportWeekly.NOT_MADE);
     }
 
     @Test

@@ -45,7 +45,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       {@code failed} ({@code email_failed}) when the outbox gives it up, so the card shows what happened. The workbook is attached when it is at most
  *       {@code bms.data-export.attach-max-bytes}, else the email links to Business set-up, where the signed-in Owner
  *       downloads the full copy. A run that failed or was cancelled
- *       ends the week as failed with its code.
+ *       ends the week as failed with its code, and the Owner gets a short email saying this week's copy could not be made and
+ *       that they can download one from Business set-up.
  * </ol>
  *
  * The runs themselves are made by the report runner like any other (one at a time per business, read only).
@@ -57,6 +58,7 @@ class DataExportWeekly {
 
     static final String ATTACHED = "core.data_export_weekly";
     static final String LINKED = "core.data_export_weekly_link";
+    static final String NOT_MADE = "core.data_export_weekly_failed";
 
     /** The first moment of the week, in the business's time zone, at which the week's copy is made. */
     static final LocalTime FROM = LocalTime.of(2, 0);
@@ -230,8 +232,8 @@ class DataExportWeekly {
                         emailed++;
                     }
                 }
-                case "failed" -> close(w.id(), "failed", null, w.error());
-                case "cancelled" -> close(w.id(), "failed", null, "cancelled");
+                case "failed" -> notMade(w, w.error());
+                case "cancelled" -> notMade(w, "cancelled");
                 default -> {
                     // Still queued or running: the next tick looks again.
                 }
@@ -292,6 +294,25 @@ class DataExportWeekly {
                     .params(Timestamp.from(clock.now()), w.id())
                     .update();
         }
+    }
+
+    /**
+     * A week whose run failed (a timeout among the reasons) or was cancelled ends as failed with its code, and the Owner is
+     * told in a short email, once (the week's own outbox key), that this week's copy could not be made and where to download
+     * one.
+     */
+    private void notMade(Week w, String reason) {
+        close(w.id(), "failed", null, reason == null ? "run_failed" : reason);
+        Optional<Owner> owner = owner(w.recipient());
+        if (owner.isEmpty()) {
+            return;
+        }
+        Map<String, String> params = new HashMap<>();
+        params.put("owner_name", owner.get().name());
+        params.put("business_name", businessName());
+        params.put("link", hosts.tenantOrigin(tenant.profile().slug()) + "/staff/setup");
+        outbox.enqueue(new Outbox.Message(
+                Outbox.EMAIL, owner.get().email(), NOT_MADE, params, "core.data_export_weekly:" + w.id(), null, null));
     }
 
     private void close(UUID id, String status, Boolean attached, String reason) {

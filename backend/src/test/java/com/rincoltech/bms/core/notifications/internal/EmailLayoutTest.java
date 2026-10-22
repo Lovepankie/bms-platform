@@ -213,6 +213,13 @@ class EmailLayoutTest {
                         .text()
                         .replaceAll("\\s+", " "))
                 .contains("this copy leaves out phone numbers, addresses, dates of birth and ID numbers");
+        // A week whose copy could not be made: a short email that says where to download one.
+        assertThat(templates
+                        .render("email", "core.data_export_weekly_failed", params())
+                        .text()
+                        .replaceAll("\\s+", " "))
+                .contains("could not be made this week")
+                .contains("download a copy now from Business set-up");
     }
 
     @Test

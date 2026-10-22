@@ -10,6 +10,7 @@ import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -56,6 +57,7 @@ class DataExportReport implements ReportDefinition {
     private final BusinessClock clock;
     private final JdbcTemplate streaming;
     private final int splitRows;
+    private final Duration timeout;
 
     DataExportReport(
             List<DataExportSection> sections,
@@ -64,7 +66,8 @@ class DataExportReport implements ReportDefinition {
             BusinessClock clock,
             DataSource dataSource,
             ReportsProperties limits,
-            @Value("${bms.data-export.split-rows:10000}") int splitRows) {
+            @Value("${bms.data-export.split-rows:10000}") int splitRows,
+            @Value("${bms.data-export.timeout:PT30M}") Duration timeout) {
         this.sections = sections.stream()
                 .sorted(Comparator.comparingInt(DataExportSection::order))
                 .toList();
@@ -76,6 +79,7 @@ class DataExportReport implements ReportDefinition {
         this.streaming.setFetchSize(FETCH);
         // A sheet never passes the row cap of a run, whatever the split is set to.
         this.splitRows = Math.max(1, Math.min(splitRows, limits.tableRowCap));
+        this.timeout = timeout;
     }
 
     @Override
@@ -106,6 +110,12 @@ class DataExportReport implements ReportDefinition {
     @Override
     public boolean everyBusiness() {
         return true;
+    }
+
+    /** The whole business takes longer than one report: 30 minutes, against the runner's 10. */
+    @Override
+    public Duration timeout() {
+        return timeout;
     }
 
     @Override

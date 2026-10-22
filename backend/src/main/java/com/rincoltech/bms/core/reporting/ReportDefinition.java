@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.reporting;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -47,6 +48,14 @@ public interface ReportDefinition {
      */
     default boolean everyBusiness() {
         return false;
+    }
+
+    /**
+     * How long a run may take, or null (the default) for the runner's limit, {@code bms.reports.timeout}. Only a report that
+     * reads the whole business sets a longer one (the data export of ADR-074).
+     */
+    default Duration timeout() {
+        return null;
     }
 
     /** The parameters it accepts; a request naming any other is refused. */

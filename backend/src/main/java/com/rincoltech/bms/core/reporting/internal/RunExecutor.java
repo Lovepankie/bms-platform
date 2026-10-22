@@ -76,6 +76,7 @@ class RunExecutor {
     private final ObjectMapper mapper;
     private final ReportsProperties limits;
     private final JdbcClient jdbc;
+    private final PlatformTransactionManager transactions;
     private final TransactionTemplate snapshotRead;
     private final TransactionTemplate plain;
     private final TransactionTemplate separate;
@@ -104,16 +105,27 @@ class RunExecutor {
         this.mapper = mapper;
         this.limits = limits;
         this.jdbc = jdbc;
-        // One snapshot for every query of a run: the reports of a pack agree with each other.
-        this.snapshotRead = new TransactionTemplate(transactions);
-        this.snapshotRead.setReadOnly(true);
-        this.snapshotRead.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
-        this.snapshotRead.setTimeout((int) Math.max(1, limits.timeout.toSeconds()));
+        this.transactions = transactions;
+        this.snapshotRead = snapshotRead(limits.timeout);
         this.plain = new TransactionTemplate(transactions);
         // The cancel poll must see other sessions' commits, so it never joins the snapshot transaction.
         this.separate = new TransactionTemplate(transactions);
         this.separate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.separate.setReadOnly(true);
+    }
+
+    /** One snapshot for every query of a run (the reports of a pack agree with each other), bounded by the run's limit. */
+    private TransactionTemplate snapshotRead(Duration timeout) {
+        TransactionTemplate read = new TransactionTemplate(transactions);
+        read.setReadOnly(true);
+        read.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        read.setTimeout((int) Math.max(1, timeout.toSeconds()));
+        return read;
+    }
+
+    /** The run's limit: the report's own when it sets one, else the runner's. */
+    private Duration timeout(ReportDefinition def) {
+        return def.timeout() == null ? limits.timeout : def.timeout();
     }
 
     /** Raised when the run was cancelled: not a failure. */
@@ -175,7 +187,7 @@ class RunExecutor {
         Spool spool = new Spool(limits.spoolDir.resolve(TenantContext.require() + "-" + runId), mapper);
         try {
             ReportDefinition def = precheck(run);
-            RunGuard guard = new RunGuard(runId, limits.timeout);
+            RunGuard guard = new RunGuard(runId, timeout(def));
             Queried queried = query(run, def, spool, guard);
             plain.executeWithoutResult(s -> store.recordSnapshot(runId, queried.snapshotAt(), clock.now()));
             Rendered rendered = render(run, def, spool, queried, guard);
@@ -223,7 +235,8 @@ class RunExecutor {
         Prepared prepared = new Prepared(run.params(), run.scope(), run.asOf());
         int rowCap = Math.min(run.rowCap(), limits.tableRowCap);
         long sizeCap = Math.min(run.sizeCapBytes(), limits.maxFileBytes);
-        return snapshotRead.execute(status -> {
+        TransactionTemplate read = def.timeout() == null ? snapshotRead : snapshotRead(timeout(def));
+        return read.execute(status -> {
             // The connection's defaults (60 s statement, 60 s idle in transaction) suit a request, not a run that
             // reads a book and writes rows between statements: lift both to the run's remaining time, for this
             // transaction only. A margin keeps the server's limits behind the run's own deadline, so a run that is
