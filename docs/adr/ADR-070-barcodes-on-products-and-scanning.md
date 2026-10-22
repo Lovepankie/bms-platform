@@ -31,8 +31,9 @@ or Bluetooth scanner at the till, many have only phones.
 4. **One lookup for every way of scanning.** `GET /api/v1/retail/products/by-barcode/{code}` (`retail.stock.read`, optional
    `branch_id` for that branch's balance) answers the active item, the barcode and the pack it names, or 404 `barcode_not_found`. A code on a pack that is switched off, or on any pack while the units capability is off, is 404 `pack_inactive` with a plain message; the forms never add one base unit in its place.
    Product responses (list, get) carry `barcodes`, so a screen that has read the items can match a scan without the server when it
-   is offline; the offline catalogue of the pending offline sales work (issue #458) caches those responses and gets the barcodes with
-   them.
+   is offline. Until then the offline lookup uses only the products this screen has already read and cached (the item search, the
+   lines on the form); an item the screen has not read is "could not be looked up" offline. It covers the whole catalogue only once
+   the offline catalogue cache of issue #463 carries `barcodes`.
 5. **Three ways in, one path out, on four forms.** The sale, the restock, the move stock and the stock count forms have a scan bar:
    (a) a keyboard-wedge scanner anywhere on the screen, told apart from a person by its speed (keys within 35 ms, at least four,
    closed by Enter); in a text field the burst is taken back out, so a scan with the cursor in a quantity box never changes it;

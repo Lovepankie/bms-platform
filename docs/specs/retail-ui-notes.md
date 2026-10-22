@@ -1284,8 +1284,8 @@ ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability s
   away.", Close the camera. The browser's BarcodeDetector reads the frames; on an iPhone Quagga2 (loaded only then) reads a still
   four times a second. A blocked camera says how to allow it (on an iPhone: Settings, Safari, Camera); a missing or busy camera and
   an insecure address each have their own sentence.
-- **Offline:** when the lookup cannot reach the server, the items the screen has already read (with their `barcodes`) are searched.
-  The offline catalogue of the offline sales work (#458) carries `barcodes` too, since it caches the product responses.
+- **Offline:** when the lookup cannot reach the server, only the items the screen has already read and cached (with their
+  `barcodes`) are searched; the whole catalogue only once the offline catalogue cache of issue #463 carries `barcodes`.
 - **Item form** (edit an item, `catalogue-barcodes.tsx`, data-tour `item-barcodes`): the barcodes with their format and pack, Remove,
   Add a barcode (the format and check digit are judged as you type, in the server's words), "This barcode is on" one unit or one
   pack, and **Make a barcode for labels** for an item with no made code. Administrators only.
