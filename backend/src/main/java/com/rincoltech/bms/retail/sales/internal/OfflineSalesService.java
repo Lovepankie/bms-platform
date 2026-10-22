@@ -98,10 +98,19 @@ class OfflineSalesService {
                     "Request too large",
                     "The sale request is larger than 64 KB.");
         }
-        UUID by = CurrentPrincipal.require().userId();
+        Principal principal = CurrentPrincipal.require();
+        UUID by = principal.userId();
         if (!repo.branchExists(r.branchId())) {
             throw ApiException.validation(
                     List.of(new ApiException.FieldProblem("branch_id", "unknown_branch", "No such branch.")));
+        }
+        if (!principal.may("retail.sale.create", r.branchId())) {
+            // Only a sale the reporter could have made: never one at a branch they do not sell at.
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "You do not sell at this branch, so you cannot report a sale made there.");
         }
         repo.dropWaiting(r.clientSaleId());
         // A sale already recorded under this id (its answer was lost, then a later send was refused) is the sale: the

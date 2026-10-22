@@ -724,6 +724,41 @@ class RetailOfflineSalesIT extends IntegrationTest {
     }
 
     /**
+     * Round 2 minors: the whole report body is capped at 64 KB before it is parsed (a sale request under 64 KB in a body over
+     * it is refused), and a report of a sale at a branch the reporter does not sell at is 403.
+     */
+    @Test
+    void aReportIsCappedAsAWholeAndOnlyForABranchTheReporterSellsAt() {
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = new LinkedHashMap<>(offlineSale(client, Instant.now(), "1", 2_000));
+        request.put("buyer_name", "x".repeat(64 * 1024 - 700));
+        Map<String, Object> report = failureReport(client, request);
+        report.put("message", "y".repeat(450));
+        tools.jackson.databind.ObjectMapper json = new tools.jackson.databind.ObjectMapper();
+        assertThat(json.writeValueAsBytes(request).length).isLessThan(64 * 1024);
+        assertThat(json.writeValueAsBytes(report).length).isGreaterThan(64 * 1024);
+        ResponseEntity<JsonNode> big = api.post("/offline-failures", report, SALES);
+        assertThat(big.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+        assertThat(big.getBody().get("code").asString()).isEqualTo("offline_failure_too_large");
+
+        UUID other = UUID.randomUUID();
+        ResponseEntity<JsonNode> elsewhere = api.call(
+                HttpMethod.POST,
+                "/offline-failures",
+                failureReport(other, offlineSale(other, Instant.now(), "1", 2_000)),
+                SALES,
+                UUID.randomUUID().toString(),
+                Map.of());
+        assertThat(elsewhere.getStatusCode()).as("%s", elsewhere.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_offline_failures WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    /**
      * Review fix 4 and round 2 fix 4 (ADR-067 decision 11 d): a Supervisor who made the refused sale can neither discard it,
      * even with a second reason, nor ask for it again; another manager can.
      */
