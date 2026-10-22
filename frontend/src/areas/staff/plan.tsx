@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api, problemOf } from '../../api/client';
+import { BusyButton } from '../../app/ui/BusyButton';
 import type { components } from '../../api/schema';
 import { resetProofProblem } from './users/state';
 
@@ -221,7 +222,7 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
                 {stopping.has(m) ? (
                   '(stopping)'
                 ) : staying.length > 1 ? (
-                  <button type="button" className="btn-ghost" disabled={busy} onClick={() => { setConfirm({ kind: 'stop', module: m }); setError(null); }}>
+                  <button type="button" /* busy-exempt: opens the confirm, sends nothing */ className="btn-ghost" disabled={busy} onClick={() => { setConfirm({ kind: 'stop', module: m }); setError(null); }}>
                     Stop using {moduleName(m)}
                   </button>
                 ) : (
@@ -235,9 +236,9 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
                 {pending.has(m) ? (
                   '(asked for)'
                 ) : (
-                  <button type="button" disabled={busy} onClick={() => ask(m)}>
+                  <BusyButton type="button" busy={busy} onClick={() => ask(m)}>
                     Add {moduleName(m)}
-                  </button>
+                  </BusyButton>
                 )}
                 {!pending.has(m) && !(p.modules_in_plan ?? []).includes(m) && <span> Rincol Tech answers first; the price may change.</span>}
               </li>
@@ -245,7 +246,7 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
           </ul>
           {!p.ends_on && (
             <p>
-              <button type="button" className="btn-danger" disabled={busy} onClick={() => { setConfirm({ kind: 'cancel' }); setError(null); }}>
+              <button type="button" /* busy-exempt: opens the confirm, sends nothing */ className="btn-danger" disabled={busy} onClick={() => { setConfirm({ kind: 'cancel' }); setError(null); }}>
                 Cancel the subscription
               </button>
             </p>
@@ -277,10 +278,10 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
           )}
           {proofProblem && <p role="alert" className="field-error">{proofProblem}</p>}
           <p className="cluster">
-            <button type="submit" className="btn-danger" disabled={busy || resetProofProblem(mfaEnabled, typed) !== null}>
+            <BusyButton type="submit" className="btn-danger" busy={busy} disabled={resetProofProblem(mfaEnabled, typed) !== null}>
               {confirm.kind === 'cancel' ? 'Yes, cancel the subscription' : `Yes, stop using ${moduleName(confirm.module)}`}
-            </button>
-            <button type="button" className="btn-ghost" disabled={busy} onClick={() => { setConfirm(null); setTyped(''); }}>
+            </BusyButton>
+            <button type="button" /* busy-exempt: closes the confirm, sends nothing */ className="btn-ghost" disabled={busy} onClick={() => { setConfirm(null); setTyped(''); }}>
               Keep it
             </button>
           </p>
@@ -293,9 +294,9 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
             <li key={c.id}>
               {changeWords(c)}{' '}
               {p.can_change && !ended && (c.effective_on ?? '') > today && (
-                <button type="button" className="btn-ghost" disabled={busy} onClick={() => undo(c)}>
+                <BusyButton type="button" className="btn-ghost" busy={busy} onClick={() => undo(c)}>
                   Undo
-                </button>
+                </BusyButton>
               )}
             </li>
           ))}
