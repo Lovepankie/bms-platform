@@ -18,6 +18,17 @@ public interface ApprovalAction {
      */
     String CHECKER_NOTICE = "checker_notice";
 
+    /**
+     * The sentence the checker reads for a pending request, worked out now: by default the one stored at request time. An action
+     * whose facts can move between the request and the decision (an allocation's credit balance, when the payoff changed)
+     * overrides it so the checker sees the current figure.
+     */
+    default Optional<String> checkerNotice(UUID subjectId, Map<String, Object> payload) {
+        return payload != null && payload.get(CHECKER_NOTICE) instanceof String notice
+                ? Optional.of(notice)
+                : Optional.empty();
+    }
+
     /** Lower snake case, for example {@code loan_disbursement}; stored in {@code approval_requests}. */
     String actionType();
 

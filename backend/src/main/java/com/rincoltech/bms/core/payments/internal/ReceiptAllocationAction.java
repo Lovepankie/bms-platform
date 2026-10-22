@@ -55,6 +55,12 @@ class ReceiptAllocationAction implements ApprovalAction {
         return receipts.version(subjectId);
     }
 
+    /** The credit balance sentence with the payoff of now, not of the request (ADR-035 decision 51). */
+    @Override
+    public Optional<String> checkerNotice(UUID subjectId, java.util.Map<String, Object> payload) {
+        return payload == null ? Optional.empty() : settler.currentCreditNotice(payload);
+    }
+
     @Override
     public void execute(Execution execution) {
         settler.allocate(execution);

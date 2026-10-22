@@ -53,7 +53,7 @@ class ReceiptService {
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 200;
     private static final Set<String> STATUSES = Set.of("open", "allocated", "refunded", "reversed");
-    /** The payload key of the credit balance an allocation above the loan's payoff creates (ADR-035 decision 64). */
+    /** The payload key of the credit balance an allocation above the loan's payoff creates (ADR-035 decision 51). */
     static final String CREDIT_BALANCE = "credit_balance_minor";
 
     private static final Pattern REFERENCE = Pattern.compile("^[\\x20-\\x7E]{1,100}$");
@@ -195,7 +195,7 @@ class ReceiptService {
             } catch (PurposeRefusal refusal) {
                 // A payment above the payoff is not refused here: spec 3.7 governs, and the excess becomes the loan's
                 // credit
-                // balance, as an overpayment at the counter does (ADR-035 decision 64). The checker is told so plainly,
+                // balance, as an overpayment at the counter does (ADR-035 decision 51). The checker is told so plainly,
                 // and
                 // the request and its audit row carry the excess.
                 if (!"exceeds_payoff".equals(refusal.code())) {
@@ -211,13 +211,10 @@ class ReceiptService {
             if (excess > 0) {
                 String subject = handler.label(r.subjectId()).orElse("the loan");
                 payload.put(CREDIT_BALANCE, excess);
+                payload.put(CREDIT_SUBJECT_LABEL, subject);
                 payload.put(
                         ApprovalAction.CHECKER_NOTICE,
-                        "This creates a credit balance of " + receipt.currency() + " "
-                                + whole(excess, receipt.currency())
-                                + " on " + subject + ": the payment is more than the " + receipt.currency() + " "
-                                + whole(receipt.amountMinor() - excess, receipt.currency())
-                                + " it takes to pay it off today.");
+                        creditNotice(receipt.currency(), excess, receipt.amountMinor() - excess, subject));
             }
             ActionOutcome result = outcome(receipt, ReceiptAllocationAction.TYPE, payload);
             if (excess > 0) {
@@ -319,6 +316,16 @@ class ReceiptService {
                 "permission_denied",
                 "Permission denied",
                 "You do not have permission to allocate payments for this branch.");
+    }
+
+    /** The payload key of how the loan is named in the credit balance sentence. */
+    static final String CREDIT_SUBJECT_LABEL = "credit_subject_label";
+
+    /** The sentence the checker reads for an allocation above the payoff (ADR-035 decision 51). */
+    static String creditNotice(String currency, long excess, long payoff, String subject) {
+        return "This creates a credit balance of " + currency + " " + whole(excess, currency) + " on " + subject
+                + ": the payment is more than the " + currency + " " + whole(payoff, currency)
+                + " it takes to pay it off today.";
     }
 
     /** An amount in minor units as a person reads it, with thousands separators ("UGX 450,000"). */

@@ -146,6 +146,10 @@ class ReceiptSettler {
         if (!ledger.periodOpen(today)) {
             throw ApiException.rule("period_closed", "Today's accounting period is closed.");
         }
+        // The credit balance this allocation creates is worked out again now, at approval (ADR-035 decision 51): the
+        // payoff
+        // may have moved since the request, and the audit records what it is when the money moves.
+        long creditNow = currentExcess(handler, subjectId, receipt.amountMinor());
         // The money moves to the subject through the very code a payment that booked at once goes through. The first
         // try is dated the payment's day; a date the subject cannot take is retried dated today, as the booker does.
         Booked booked = book(
@@ -187,6 +191,10 @@ class ReceiptSettler {
         after.put("allocated_subject_id", subjectId.toString());
         after.put("transaction_id", txnId.toString());
         after.put("cleared_entry_id", cleared.entryId().toString());
+        if (creditNow > 0 || p.get(ReceiptService.CREDIT_BALANCE) != null) {
+            after.put(ReceiptService.CREDIT_BALANCE, creditNow);
+            after.put("credit_balance_at_request_minor", p.get(ReceiptService.CREDIT_BALANCE));
+        }
         audit.record(new AuditLog.Entry(
                 "core.payments.receipt.allocated",
                 "unallocated_receipt",
@@ -491,5 +499,37 @@ class ReceiptSettler {
         after.put("requested_by", e.makerId().toString());
         after.put("decided_by", e.checkerId().toString());
         return after;
+    }
+
+    /** What of the amount the subject cannot take today and so becomes its credit balance (0 for a purpose without a payoff). */
+    long currentExcess(PurposeHandler handler, UUID subjectId, long amountMinor) {
+        java.util.OptionalLong payoff = handler.payoffMinor(subjectId);
+        return payoff.isPresent() ? Math.max(0, amountMinor - payoff.getAsLong()) : 0;
+    }
+
+    /**
+     * The checker's sentence for a pending allocation, worked out now from the current payoff (ADR-035 decision 51); empty when
+     * the allocation no longer creates a credit balance.
+     */
+    java.util.Optional<String> currentCreditNotice(Map<String, Object> p) {
+        Object purpose = p.get(PURPOSE);
+        Object subject = p.get(SUBJECT_ID);
+        Object amount = p.get(AMOUNT);
+        Object currency = p.get(CURRENCY);
+        if (purpose == null || subject == null || !(amount instanceof Number n) || currency == null) {
+            return java.util.Optional.empty();
+        }
+        return registry.find(String.valueOf(purpose)).flatMap(handler -> {
+            UUID subjectId = UUID.fromString(String.valueOf(subject));
+            java.util.OptionalLong payoff = handler.payoffMinor(subjectId);
+            if (payoff.isEmpty() || n.longValue() <= payoff.getAsLong()) {
+                return java.util.Optional.empty();
+            }
+            String label = p.get(ReceiptService.CREDIT_SUBJECT_LABEL) instanceof String l
+                    ? l
+                    : handler.label(subjectId).orElse("the loan");
+            return java.util.Optional.of(ReceiptService.creditNotice(
+                    String.valueOf(currency), n.longValue() - payoff.getAsLong(), payoff.getAsLong(), label));
+        });
     }
 }

@@ -618,7 +618,7 @@ class UnallocatedReceiptsIT extends LoanFixtures {
     }
 
     /**
-     * Spec 3.7 governs an allocation above the payoff (ADR-035 decision 64): the excess becomes the loan's credit balance, and the
+     * Spec 3.7 governs an allocation above the payoff (ADR-035 decision 51): the excess becomes the loan's credit balance, and the
      * checker is told so in words before deciding, on the list and the detail; the request carries it and an audit row records it.
      */
     @Test
@@ -664,16 +664,38 @@ class UnallocatedReceiptsIT extends LoanFixtures {
                         .single())
                 .isEqualTo(450_000L);
 
+        // The payoff moves before the checker decides: the sentence is worked out again with the payoff of now.
+        cashRepayment(target, 20_000);
+        assertThat(send(
+                                HttpMethod.GET,
+                                "/api/v1/approvals/" + approval,
+                                as(accountant, accountantPerms, "*", null),
+                                null)
+                        .getBody()
+                        .get("checker_notice")
+                        .asString())
+                .isEqualTo("This creates a credit balance of UGX 470,000 on loan " + loanNo
+                        + ": the payment is more than the UGX 30,000 it takes to pay it off today.");
+
         ResponseEntity<JsonNode> done = decide(approval, "approve");
         assertThat(done.getStatusCode().value()).as("%s", done.getBody()).isEqualTo(200);
         assertThat(receiptRow(receipt).get("status")).isEqualTo("allocated");
+        // The audit of the allocation records the excess at approval and the one asked about.
+        Map<String, Object> audited =
+                TestDatabase.owner().sql("""
+                        SELECT (data -> 'after' ->> 'credit_balance_minor')::bigint AS now,
+                               (data -> 'after' ->> 'credit_balance_at_request_minor')::bigint AS asked
+                          FROM audit_log WHERE entity_id = ? AND action = 'core.payments.receipt.allocated'
+                        """).param(receipt).query().singleRow();
+        assertThat(audited.get("now")).isEqualTo(470_000L);
+        assertThat(audited.get("asked")).isEqualTo(450_000L);
         Map<String, Object> loan = TestDatabase.owner()
                 .sql("SELECT status, credit_balance_minor FROM lending_loans WHERE id = ?")
                 .param(UUID.fromString(target))
                 .query()
                 .singleRow();
         assertThat(loan.get("status")).isEqualTo("closed");
-        assertThat(loan.get("credit_balance_minor")).isEqualTo(450_000L);
+        assertThat(loan.get("credit_balance_minor")).isEqualTo(470_000L);
     }
 
     @Test

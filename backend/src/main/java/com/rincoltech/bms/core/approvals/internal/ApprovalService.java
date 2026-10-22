@@ -558,9 +558,11 @@ class ApprovalService implements Approvals {
                 r.decisionNote(),
                 r.executionError(),
                 withPayload ? r.payload() : null,
-                r.payload() != null && r.payload().get(ApprovalAction.CHECKER_NOTICE) instanceof String notice
-                        ? notice
-                        : null,
+                pending && action != null
+                        ? action.checkerNotice(r.subjectId(), r.payload()).orElse(null)
+                        : r.payload() != null && r.payload().get(ApprovalAction.CHECKER_NOTICE) instanceof String notice
+                                ? notice
+                                : null,
                 canDecide,
                 canCancel);
     }
