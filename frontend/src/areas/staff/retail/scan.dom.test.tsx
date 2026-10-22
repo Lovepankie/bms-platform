@@ -8,6 +8,7 @@ import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { LabelsPage } from './labels';
 import { SaleForm } from './sale';
+import { StocktakePage } from './stocktake';
 import { ScannerSettings } from './scan';
 import { TransferForm } from './transfer';
 import { wedgeGap } from './barcode-state';
@@ -220,6 +221,35 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect(screen.getByRole('button', { name: 'Scan' })).toBeTruthy();
     expect(screen.queryByText('The camera works only on the secure (https) address.')).toBeNull();
     Reflect.deleteProperty(window, 'isSecureContext');
+  });
+});
+
+describe('FR-RET-68 scanning on the stock count', () => {
+  it('clears the search so the counted item shows, and counts one more on each scan', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    screenOf(<StocktakePage />);
+    const search = await screen.findByLabelText('Search by name, code or category');
+    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).not.toBeNull());
+    fireEvent.change(search, { target: { value: 'solar' } });
+    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).toBeNull());
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge(EAN);
+    await waitFor(() => expect(document.querySelector('.scan-bar')?.textContent).toContain('Added'));
+    await waitFor(() => expect((document.getElementById(`count-${LAMP}`) as HTMLInputElement | null)?.value).toBe('1'));
+    expect((search as HTMLInputElement).value).toBe('');
+  });
+
+  it('refuses an item that is not on the count sheet of the branch', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    const all = await retail.listStock({ branchId: BRANCH });
+    retail.listStock = async () => all.filter((r) => r.product_id !== LAMP);
+    screenOf(<StocktakePage />);
+    await screen.findByLabelText('Search by name, code or category');
+    await waitFor(() => expect(document.querySelectorAll('[id^="count-"]').length).toBeGreaterThan(1));
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge(EAN);
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('is not on the count sheet of this branch'));
+    expect(document.getElementById(`count-${LAMP}`)).toBeNull();
   });
 });
 

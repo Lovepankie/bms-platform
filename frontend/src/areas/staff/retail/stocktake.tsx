@@ -6,7 +6,7 @@ import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type Stocktake, type StocktakeLine } from '../../../api/retail';
 import { milliOf, parseCount, parseQty, showQty } from './maths';
 import { ScanBar } from './scan';
-import { plusOne } from './barcode-state';
+import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
 import { needsOf } from './permissions';
@@ -77,11 +77,17 @@ function CountSheet({ branchId }: { branchId: string }) {
   const [draft, setDraft] = useState<Stocktake | null>(null);
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
 
-  // A scan (issue #345) counts one more of the item, or a whole pack when the barcode is on a pack.
+  // A scan (issue #345) counts one more of the item, or a whole pack when the barcode is on a pack. The search is cleared
+  // so the counted line shows; an item not on this branch's sheet is refused rather than counted out of sight.
   const scanAdd = (p: Product, unitId?: string) => {
-    const pack = (p.packs ?? []).find((k) => k.unit_id === unitId && k.active !== false);
     const id = p.id ?? '';
+    if (!stock.data) return 'The count sheet is still loading. Scan again in a moment.';
+    if (!stock.data.some((r) => r.product_id === id)) return `${p.description ?? p.code ?? 'This item'} is not on the count sheet of this branch. Restock it first, or count it at its own branch.`;
+    const pack = (p.packs ?? []).find((k) => k.unit_id === unitId && k.active !== false);
+    if (unitId && !pack) return PACK_UNUSABLE;
+    search.clear();
     setCounts((c) => ({ ...c, [id]: plusOne(c[id], pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000) }));
+    return undefined;
   };
   const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);
