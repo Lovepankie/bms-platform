@@ -258,8 +258,14 @@ class SalesService {
      * which the Controls page does not count again. Every other rule of a sale holds.
      */
     Sale record(SaleRequest r, Long creditDelta, List<Agreement> agreements) {
-        if (r.clientSaleId() != null && repo.failureDiscarded(r.clientSaleId())) {
-            // ADR-067 decision 8: a manager discarded this refused offline sale; it is never recorded afterwards.
+        // ADR-067 decision 8: the refused offline sale's row is locked to the commit, so a manager's discard running
+        // now
+        // either finishes first and refuses this sale, or waits and finds it recorded. A discarded one is never
+        // recorded.
+        if (r.clientSaleId() != null
+                && repo.lockFailure(r.clientSaleId())
+                        .filter("discarded"::equals)
+                        .isPresent()) {
             throw ApiException.rule(
                     "offline_sale_discarded",
                     "A manager discarded this sale, so it is not recorded. It is removed from the phone.");

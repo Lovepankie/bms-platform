@@ -298,22 +298,33 @@ class SalesRepository {
                 .optional();
     }
 
-    /** A refused offline sale with this client sale id was discarded by a manager (ADR-067 decision 8). */
-    boolean failureDiscarded(UUID clientSaleId) {
-        return jdbc.sql(
-                                "SELECT count(*) FROM retail_offline_failures WHERE client_sale_id = ? AND status = 'discarded'")
-                        .param(clientSaleId)
-                        .query(Long.class)
-                        .single()
-                > 0;
+    /**
+     * The status of the refused offline sale reported with this client sale id, its row locked to the commit (ADR-067 decision
+     * 8), so a manager's discard and a resend of the same sale queue on it and only one of them wins.
+     */
+    Optional<String> lockFailure(UUID clientSaleId) {
+        return jdbc.sql("SELECT status FROM retail_offline_failures WHERE client_sale_id = ? FOR UPDATE")
+                .param(clientSaleId)
+                .query(String.class)
+                .optional();
     }
 
     /** A refused offline sale reported with this client sale id is closed by the sale it became (ADR-067). */
     void closeFailure(UUID clientSaleId, UUID saleId) {
-        jdbc.sql("""
+        int closed = jdbc.sql("""
                         UPDATE retail_offline_failures SET status = 'recorded', sale_id = ?, updated_at = now()
                          WHERE client_sale_id = ? AND status IN ('open', 'retry')
                         """).params(saleId, clientSaleId).update();
+        if (closed == 0) {
+            // The row was locked before the sale was written, so a discarded one here is a broken invariant, never a
+            // race.
+            lockFailure(clientSaleId)
+                    .filter(status -> !status.equals("recorded"))
+                    .ifPresent(status -> {
+                        throw new IllegalStateException(
+                                "Offline failure for client sale " + clientSaleId + " is " + status + ", not recorded");
+                    });
+        }
         // And a summary of it waiting on a phone goes.
         jdbc.sql("DELETE FROM retail_offline_waiting WHERE client_sale_id = ?")
                 .param(clientSaleId)

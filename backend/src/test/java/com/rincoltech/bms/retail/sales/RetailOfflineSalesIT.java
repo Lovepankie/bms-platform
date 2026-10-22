@@ -740,6 +740,122 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(balance()).isEqualTo("5.000");
     }
 
+    /**
+     * Review round 2, fix 1: a resend waits on the refused sale's row while a discard holds it, and then finds it discarded:
+     * refused, nothing recorded.
+     */
+    @Test
+    void aResendWaitingOnADiscardIsRefusedWhenTheDiscardCommits() throws Exception {
+        api.stockUp(t.headOffice(), product, "5");
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(3)), "1", 2_000);
+        api.post("/offline-failures", failureReport(client, request), SALES);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (java.sql.Connection conn = TestDatabase.ownerDataSource().getConnection()) {
+            conn.setAutoCommit(false);
+            try (java.sql.Statement st = conn.createStatement()) {
+                // Hold the refused sale's row, as a manager's discard does.
+                st.execute("SELECT 1 FROM retail_offline_failures WHERE client_sale_id = '" + client + "' FOR UPDATE");
+                String holder;
+                try (java.sql.ResultSet rs = st.executeQuery("SELECT txid_current() % 4294967296")) {
+                    rs.next();
+                    holder = rs.getString(1);
+                }
+                var resend = pool.submit(() -> send(request, UUID.randomUUID().toString()));
+                assertThat(waitersOn(holder)).as("the resend waits for the row").isEqualTo(1);
+                st.execute(
+                        "UPDATE retail_offline_failures SET status = 'discarded', discard_reason = 'Entered by hand',"
+                                + " decided_by = made_by, decided_at = now() WHERE client_sale_id = '" + client + "'");
+                conn.commit();
+                ResponseEntity<JsonNode> sent = resend.get(60, java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(sent.getStatusCode()).as("%s", sent.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                assertThat(sent.getBody().get("code").asString()).isEqualTo("offline_sale_discarded");
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(sales()).isZero();
+        assertThat(balance()).isEqualTo("5.000");
+    }
+
+    /**
+     * Review round 2, fix 1: a resend and a discard of one refused sale at the same moment, in two transactions, end in one
+     * of two states only: recorded with the discard refused 409, or discarded with the resend refused 422.
+     */
+    @Test
+    void aResendAndADiscardAtOnceNeverBothWin() throws Exception {
+        api.stockUp(t.headOffice(), product, "20");
+        RetailTestSupport boss = new RetailTestSupport(http, t);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 5; round++) {
+                UUID client = UUID.randomUUID();
+                Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(1)), "1", 2_000);
+                String id = api.post("/offline-failures", failureReport(client, request), SALES)
+                        .getBody()
+                        .get("id")
+                        .asString();
+                java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+                var resend = pool.submit(() -> {
+                    go.await();
+                    return send(request, UUID.randomUUID().toString());
+                });
+                var discard = pool.submit(() -> {
+                    go.await();
+                    return boss.post(
+                            "/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
+                });
+                go.countDown();
+                ResponseEntity<JsonNode> sent = resend.get(60, java.util.concurrent.TimeUnit.SECONDS);
+                ResponseEntity<JsonNode> decided = discard.get(60, java.util.concurrent.TimeUnit.SECONDS);
+                String status = TestDatabase.owner()
+                        .sql("SELECT status FROM retail_offline_failures WHERE client_sale_id = ?")
+                        .param(client)
+                        .query(String.class)
+                        .single();
+                long recorded = TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_sales WHERE client_sale_id = ?")
+                        .param(client)
+                        .query(Long.class)
+                        .single();
+                if (sent.getStatusCode() == HttpStatus.CREATED) {
+                    assertThat(decided.getStatusCode())
+                            .as("%s", decided.getBody())
+                            .isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(status).isEqualTo("recorded");
+                    assertThat(recorded).isEqualTo(1);
+                } else {
+                    assertThat(sent.getBody().get("code").asString()).isEqualTo("offline_sale_discarded");
+                    assertThat(decided.getStatusCode())
+                            .as("%s", decided.getBody())
+                            .isEqualTo(HttpStatus.OK);
+                    assertThat(status).isEqualTo("discarded");
+                    assertThat(recorded).isZero();
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** How many backends wait for the transaction with this id, polled for up to 30 seconds until one does. */
+    long waitersOn(String txid) throws InterruptedException {
+        long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        long waiting = 0;
+        while (System.nanoTime() < until && waiting == 0) {
+            waiting = TestDatabase.owner()
+                    .sql("SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'"
+                            + " AND transactionid::text = ?")
+                    .param(txid)
+                    .query(Long.class)
+                    .single();
+            if (waiting == 0) {
+                Thread.sleep(50);
+            }
+        }
+        return waiting;
+    }
+
     Map<String, Object> failureReport(UUID client, Map<String, Object> request) {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("client_sale_id", client);
