@@ -799,6 +799,7 @@ disbursement, FR-DIS-03; a repayment on a closed loan; a quote on a loan that is
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/lending/loans` | `lending.loans.read` | Filters: `status`, `member_id`, `officer_user_id`, `product_id`, `q` (built); `dpd_from`, `dpd_to`, `disbursed_on_from/_to` (increment 8) |
+| GET | `/lending/loans/summary` | `lending.loans.read` | **Built (#471, ADR-072).** Home's Lending card: the business date, the currency, and for the active loans in the caller's scope (optional `branch_id`) the count and the amount still owed of those with an instalment due today (`due_today_count`, `due_today_minor`) and due before today (`in_arrears_count`, `in_arrears_minor`), read live from the schedule, in the business's currency; without `lending.collections.all_officers` in a branch only the caller's own portfolio there (ADR-064). FR-UXN-05 |
 | POST | `/lending/loans` | `lending.loans.create` | Draft application. FR-ORG-01 |
 | GET | `/lending/loans/{loan_id}` | `lending.loans.read` | Includes balances, DPD, PAR bucket, guarantors, collateral |
 | PATCH | `/lending/loans/{loan_id}` | `lending.loans.create` | Draft only |

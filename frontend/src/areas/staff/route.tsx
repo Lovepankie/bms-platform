@@ -15,7 +15,7 @@ import { TurnOnCard } from '../../push/TurnOnCard';
 import { HelpMenu, TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
-import { type MenuLink, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
+import { type MenuLink, type MenuSection, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
@@ -171,8 +171,17 @@ function StaffLayout() {
 }
 
 /**
+ * The two headed parts of the menu for a business with both modules (issue #471). A business with one of them gets no heading: the
+ * side menu draws sections only when the links name two.
+ */
+export const STAFF_SECTIONS: MenuSection[] = [
+  { id: 'shop', label: 'Shop', icon: icons.stock, tours: ['retail-nav'] },
+  { id: 'lending', label: 'Lending', icon: icons.lending },
+];
+
+/**
  * The areas the session may open, in menu order; Retail carries its shortcuts as a group (`sells` from useSells decides Sale). The
- * sidebar and the drawer both list these.
+ * sidebar and the drawer both list these, the lending and retail areas marked with their STAFF_SECTIONS id.
  */
 export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
   const permissions = me.permissions ?? [];
@@ -180,13 +189,13 @@ export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
   const areas: (MenuLink | false)[] = [
     { to: '/staff', label: 'Home', icon: icons.home, exact: true },
     permissions.includes('core.approvals.read') && { to: '/staff/approvals', label: 'Approvals', icon: icons.approve, tour: 'nav-approvals' },
-    showLending(me) && { to: '/staff/lending', label: 'Loans', icon: icons.calendar, exact: true, tour: 'nav-lending' },
-    showMembers(me) && { to: '/staff/lending/members', label: 'Members', icon: icons.people, tour: 'nav-members' },
-    !showMembers(me) && showCollateral(me) && { to: '/staff/lending/collateral', label: 'Collateral', icon: icons.lock },
-    showSavings(me) && { to: '/staff/lending/savings', label: 'Savings', icon: icons.savings },
-    showInvestments(me) && { to: '/staff/lending/investments', label: 'Investments', icon: icons.valuation },
-    showInsights(me) && { to: '/staff/insights', label: 'Insights', icon: icons.salesAnalysis, tour: 'nav-insights' },
-    canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.evaluation },
+    showLending(me) && { to: '/staff/lending', label: 'Loans', icon: icons.calendar, exact: true, tour: 'nav-lending', section: 'lending' },
+    showMembers(me) && { to: '/staff/lending/members', label: 'Members', icon: icons.people, tour: 'nav-members', section: 'lending' },
+    !showMembers(me) && showCollateral(me) && { to: '/staff/lending/collateral', label: 'Collateral', icon: icons.lock, section: 'lending' },
+    showSavings(me) && { to: '/staff/lending/savings', label: 'Savings', icon: icons.savings, section: 'lending' },
+    showInvestments(me) && { to: '/staff/lending/investments', label: 'Investments', icon: icons.valuation, section: 'lending' },
+    showInsights(me) && { to: '/staff/insights', label: 'Insights', icon: icons.salesAnalysis, tour: 'nav-insights', section: 'lending' },
+    canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.evaluation, section: 'lending' },
     showReports(me) && { to: '/staff/reports', label: 'Reports', icon: icons.documents },
     showRetail(me) && {
       to: '/staff/retail',
@@ -195,6 +204,7 @@ export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
       tour: 'nav-retail',
       group: <RetailMenuGroup shortcuts={shortcuts} />,
       groupPaths: shortcuts.map((s) => s.path),
+      section: 'shop',
     },
     showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },
     showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.banking },
@@ -211,12 +221,13 @@ export function StaffSideNav({ me }: { me: Me }) {
   const phone = useIsPhone();
   const sells = useSells(me);
   if (phone) return null;
-  return <SideNav label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} />;
+  return <SideNav label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} sections={STAFF_SECTIONS} person={me.user_id} />;
 }
 
 /**
  * Who is signed in, Help, the branch switcher and Sign out; below 720px also the menu button of the side menu, which then holds
- * Sign out, and a one-tap Sell for anyone who can sell (issue #455). With StaffSideNav it carries the data-tour anchors the
+ * Sign out, and a one-tap Sell for anyone who can sell (issue #455), only while the business has retail; with Lending too the Sale
+ * shortcut also stays in the menu's Shop section (issue #471). With StaffSideNav it carries the data-tour anchors the
  * first-run tours light up (tour/tours.ts).
  */
 export function StaffBar({
@@ -238,7 +249,7 @@ export function StaffBar({
   return (
     <header className="staff-bar">
       <div className="staff-bar-top">
-        {phone && <SideMenu label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} name={me.full_name} busy={busy} onSignOut={onSignOut} />}
+        {phone && <SideMenu label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} sections={STAFF_SECTIONS} person={me.user_id} name={me.full_name} busy={busy} onSignOut={onSignOut} />}
         {phone && sells && (
           <Link to="/staff/retail/sale" className="btn btn-primary btn-sm staff-sell">
             {icons.sale}

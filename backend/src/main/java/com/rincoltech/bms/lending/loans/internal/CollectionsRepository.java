@@ -337,7 +337,8 @@ class CollectionsRepository {
      */
     record Officers(UUID requested, List<UUID> wholeBranches, UUID me) {}
 
-    private static void filters(StringBuilder sql, Map<String, Object> p, List<UUID> branchIds, Officers o) {
+    /** The branch and ADR-064 officer limit on {@code l} (lending_loans); also the Home summary's (issue #471). */
+    static void filters(StringBuilder sql, Map<String, Object> p, List<UUID> branchIds, Officers o) {
         if (branchIds != null) {
             sql.append(" AND l.branch_id IN (:branchIds)");
             p.put("branchIds", branchIds);

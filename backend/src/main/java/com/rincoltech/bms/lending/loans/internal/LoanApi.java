@@ -170,6 +170,29 @@ final class LoanApi {
     @Schema(name = "LoanPage")
     record LoanPage(List<LoanListItem> items, String nextCursor) {}
 
+    @Schema(
+            name = "LoanHomeSummary",
+            description =
+                    "The Lending card on Home (issue #471, ADR-072): active loans in the caller's lending.loans.read"
+                            + " scope and in the business's currency, read live from the schedule, not from the nightly arrears run")
+    record HomeSummary(
+            @Schema(description = "The business date the figures are for")
+            LocalDate date,
+
+            String currency,
+
+            @Schema(description = "Loans with an instalment due today that is not fully paid")
+            int dueTodayCount,
+
+            @Schema(description = "What is still owed on the instalments due today")
+            long dueTodayMinor,
+
+            @Schema(description = "Loans with an instalment due before today that is not fully paid")
+            int inArrearsCount,
+
+            @Schema(description = "What is still owed on the instalments due before today")
+            long inArrearsMinor) {}
+
     @Schema(name = "LoanStatusChange")
     record StatusChange(String fromStatus, String toStatus, UUID changedBy, String reason, Instant at) {}
 

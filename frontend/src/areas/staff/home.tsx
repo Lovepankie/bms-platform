@@ -6,8 +6,10 @@ import { fetchHealth, listMembers } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
+import { HomeCards } from './home-cards';
 
-// Staff home: the member list of the active branch (FR-BR-04), where the user may read members.
+// Staff home: a card per module the business uses (issue #471, home-cards.tsx), then the member list of the active branch
+// (FR-BR-04), where the user may read members.
 
 export function StaffHome() {
   const { me, branch } = useStaff();
@@ -32,6 +34,7 @@ export function StaffHome() {
           API: {health.data ?? 'checking'}
         </span>
       </div>
+      <HomeCards />
       {canReadMembers && (
         <section aria-labelledby="members-title" data-tour="lending-members">
           <h2 id="members-title">Members</h2>

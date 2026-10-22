@@ -80,9 +80,10 @@ export async function listMembers(
   return data;
 }
 
-export async function listPendingApprovals(branchIds: string[] | undefined): Promise<ApprovalPage> {
+/** The pending requests in the branches given, only of `actionTypes` when given (the server filters). */
+export async function listPendingApprovals(branchIds: string[] | undefined, actionTypes?: string[]): Promise<ApprovalPage> {
   const { data, error } = await api.GET('/api/v1/approvals', {
-    params: { query: { status: ['pending'], branch_id: branchIds } },
+    params: { query: { status: ['pending'], branch_id: branchIds, action_type: actionTypes } },
   });
   if (error || !data) throw new Error(problemOf(error).detail ?? 'Could not load approvals');
   return data;

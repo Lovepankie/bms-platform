@@ -1327,6 +1327,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Home's Lending card: loans due today and in arrears, with what is owed (issue #471) */
+        get: operations["getLoanHomeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}": {
         parameters: {
             query?: never;
@@ -8632,6 +8649,35 @@ export interface components {
             /** Format: uuid */
             member_id: string;
             relationship?: string;
+        };
+        /** @description The Lending card on Home (issue #471, ADR-072): active loans in the caller's lending.loans.read scope and in the business's currency, read live from the schedule, not from the nightly arrears run */
+        LoanHomeSummary: {
+            currency?: string;
+            /**
+             * Format: date
+             * @description The business date the figures are for
+             */
+            date?: string;
+            /**
+             * Format: int32
+             * @description Loans with an instalment due today that is not fully paid
+             */
+            due_today_count?: number;
+            /**
+             * Format: int64
+             * @description What is still owed on the instalments due today
+             */
+            due_today_minor?: number;
+            /**
+             * Format: int32
+             * @description Loans with an instalment due before today that is not fully paid
+             */
+            in_arrears_count?: number;
+            /**
+             * Format: int64
+             * @description What is still owed on the instalments due before today
+             */
+            in_arrears_minor?: number;
         };
         LoanListItem: {
             /** Format: int64 */
@@ -19405,6 +19451,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    getLoanHomeSummary: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanHomeSummary"];
                 };
             };
         };
