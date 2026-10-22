@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
-import { retail, type Product, type ResolvedLine, type Sale, type SalePayment } from '../../../api/retail';
+import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment } from '../../../api/retail';
+import { offlineProblem, offlineSale } from '../../../offline/catalogue';
+import { useOffline, useOnline } from '../../../offline/offline-context';
+import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../offline/offline-sale';
+import type { OutboxItem } from '../../../offline/outbox';
+import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
@@ -164,9 +169,19 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
   );
 }
 
-export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (sale: Sale, received?: number) => void }) {
+export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
+  branchId: string;
+  branchName?: string;
+  onSaved?: (sale: Sale, received?: number) => void;
+  /** ADR-067: the sale was kept on this phone to send later. */
+  onQueued?: (item: OutboxItem) => void;
+}) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
+  // ADR-067: with no network a cash, mobile money or bank sale is kept on this phone; online the form is as before.
+  const offline = useOffline();
+  const online = useOnline();
+  const offlineMode = offline !== null && !online;
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<Draft>(`sale:${me.user_id ?? ''}:${branchId}`, {
     branchId, method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [],
   });
@@ -174,8 +189,8 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   // What the customer handed over (cash only): kept in this form's state, never in the draft, so it goes with the form (#346).
   const [received, setReceived] = useState('');
 
-  const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS);
-  const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: draft.method === 'credit' || pricesOn });
+  const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS) && !offlineMode;
+  const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: !offlineMode && (draft.method === 'credit' || pricesOn) });
   // Reading the lists needs retail.pricelist.manage too (a list is a customer's negotiated price); the checks are the server's, per branch.
   const canChooseList = pricesOn && holdsAt(me, PRICELIST_USE, branchId) && holds(me, PRICELIST_MANAGE);
   const lists = useQuery({ queryKey: ['retail', 'price-lists'], queryFn: () => retail.listPriceLists(), enabled: canChooseList });
@@ -197,8 +212,9 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const buyerRow = (customers.data ?? []).find((c) => c.id === draft.customerId);
   const accounts: Accounts | undefined = accountsOn ? { termsDays: buyerRow?.terms_days } : undefined;
 
+  // The client sale id is the draft's key, so a sale whose answer was lost and that is kept to send later is never twice.
   const save = useMutation({
-    mutationFn: () => retail.createSale(buildSaleRequest(shown, pricing, accounts), key),
+    mutationFn: () => retail.createSale({ ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) }, key),
     onSuccess: (sale) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
@@ -226,7 +242,31 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
 
   const total = draftTotal(shown.lines);
-  const problem = draftProblem(shown, pricing, accounts) ?? receivedProblem(draft.method, total, received);
+  const problem = (offlineMode ? offlineProblem(draft) : draftProblem(shown, pricing, accounts)) ?? receivedProblem(draft.method, total, received);
+  // A sale whose request got no answer may or may not be recorded: kept to send later, it is recorded once either way.
+  const lost = offline !== null && save.error !== null && !(save.error instanceof RetailError);
+  const keep = useMutation({
+    mutationFn: async () => {
+      if (!offline) throw new Error('Offline sales are not available');
+      const item = offlineSale({
+        draft: shown,
+        clientSaleId: key,
+        // A new key: the first one may already be stored with the online request, which this one is not.
+        key: lost ? newIdempotencyKey() : key,
+        scope: offline.scope,
+        branchName,
+        pricesAsOf: offline.catalogue?.pricesAsOf,
+        now: new Date(),
+      });
+      await offline.engine.queue(item);
+      return item;
+    },
+    onSuccess: (item) => {
+      finish();
+      void offline?.engine.sync();
+      onQueued?.(item);
+    },
+  });
   // A credit sale refused for the buyer's limit: say by how much, and offer the override to whoever holds it.
   const overBy = accountsOn && draft.method === 'credit' ? exceededBy(save.error) : null;
   const canOverride = holdsAt(me, CREDIT_OVERRIDE, branchId);
@@ -235,11 +275,14 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (!problem && !save.isPending) save.mutate();
+        if (problem || save.isPending || keep.isPending) return;
+        if (offlineMode) keep.mutate();
+        else save.mutate();
       }}
     >
+      {offlineMode && <OfflineNote />}
       <div data-tour="sale-search">
-        <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
+        {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />}
       </div>
 
       <h2>Items</h2>
@@ -294,10 +337,11 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         <legend>How is it paid?</legend>
         {METHODS.map((m) => (
           <label key={m.value} style={{ fontWeight: 400 }}>
-            <input type="radio" name="method" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={draft.method === m.value} onChange={() => update({ method: m.value })} />
+            <input type="radio" name="method" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={draft.method === m.value} disabled={offlineMode && m.value === 'credit'} onChange={() => update({ method: m.value })} />
             {m.label}
           </label>
         ))}
+        {offlineMode && <p className="hint">A credit sale needs the internet.</p>}
       </fieldset>
 
       {draft.method === 'credit' && (
@@ -368,8 +412,17 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         </div>
       )}
       {overBy === null && <Problem error={save.error} />}
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending} data-tour="sale-save">
-        {save.isPending ? 'Saving' : 'Save sale'}
+      {lost && (
+        <div role="alert" className="alert alert-warning" data-testid="lost-answer">
+          <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
+          <button type="button" disabled={keep.isPending} onClick={() => keep.mutate()}>
+            Keep it on this phone
+          </button>
+        </div>
+      )}
+      {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
+      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending || keep.isPending} data-tour="sale-save">
+        {save.isPending || keep.isPending ? 'Saving' : offlineMode ? 'Save on this phone' : 'Save sale'}
       </button>
       {draft.lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); setAddingBuyer(false); setReceived(''); save.reset(); }}>
@@ -414,8 +467,10 @@ export function RecordSale() {
     branchId !== null &&
     ((roles !== undefined && roles.some((r) => r.branch_id === branchId && !r.can_sell)) || (me.branches ?? []).some((b) => b.id === branchId && b.sells_goods === false));
   // With branch roles on, the sale form waits for the roles, so it is never drawn at a store while they load.
-  const waiting = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
+  const online = useOnline();
+  const waiting = online && capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
   const [sale, setSale] = useState<Sale | null>(null);
+  const [queued, setQueued] = useState<OutboxItem | null>(null);
   const [received, setReceived] = useState<number>();
   const [round, setRound] = useState(0);
   return (
@@ -426,6 +481,8 @@ export function RecordSale() {
         <p role="status">Loading</p>
       ) : store ? (
         <StoreBranch branchName={branchName} roles={roles} />
+      ) : queued ? (
+        <ProvisionalReceipt item={queued} onNew={() => { setQueued(null); setRound((n) => n + 1); }} />
       ) : sale ? (
         <>
           <Receipt sale={sale} received={received} onNew={() => { setSale(null); setReceived(undefined); setRound((n) => n + 1); }} />
@@ -436,7 +493,7 @@ export function RecordSale() {
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <NoStockHere branchId={branchId} />
-          <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s, r) => { setSale(s); setReceived(r); }} />
+          <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued} />
         </>
       )}
     </Gate>

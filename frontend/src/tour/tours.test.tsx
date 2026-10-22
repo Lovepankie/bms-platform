@@ -1,4 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { OfflineProvider } from '../offline/offline-context';
+import { testOffline } from '../offline/test-kit';
 import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { renderToString } from 'react-dom/server';
@@ -197,10 +199,12 @@ function render(me: Me, path: string | undefined): string {
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch }}>
-          <BrandBar brand={PLATFORM_BRAND} actions={<RefreshButton />} />
-          <StaffSideNavForTest />
-          <StaffBarForTest />
-          {screen(path)}
+          <OfflineProvider value={testOffline(me)}>
+            <BrandBar brand={PLATFORM_BRAND} actions={<RefreshButton />} />
+            <StaffSideNavForTest />
+            <StaffBarForTest />
+            {screen(path)}
+          </OfflineProvider>
         </StaffContext.Provider>
       </QueryClientProvider>
     </RouterContextProvider>,

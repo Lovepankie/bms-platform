@@ -22,6 +22,12 @@ export function subscribe(listener: Listener): () => void {
 }
 
 let inFlight: Promise<boolean> | null = null;
+let unreachable = false;
+
+/** True when the last refresh got no answer at all (no network), rather than a refusal (ADR-067 decision 9). */
+export function refreshFailedOffline(): boolean {
+  return unreachable;
+}
 let refreshPath = '/api/v1/auth/refresh';
 
 /**
@@ -40,6 +46,7 @@ export function refreshSession(): Promise<boolean> {
   if (!inFlight) {
     inFlight = fetch(refreshPath, { method: 'POST', credentials: 'same-origin', headers: tenantHeaders() })
       .then(async (response) => {
+        unreachable = false;
         if (!response.ok) {
           setAccessToken(null);
           return false;
@@ -48,7 +55,10 @@ export function refreshSession(): Promise<boolean> {
         setAccessToken(body.access_token ?? null);
         return Boolean(body.access_token);
       })
-      .catch(() => false)
+      .catch(() => {
+        unreachable = true;
+        return false;
+      })
       .finally(() => {
         inFlight = null;
       });
