@@ -13,7 +13,7 @@ import { SaleForm } from './sale';
 import { StocktakePage } from './stocktake';
 import { ScannerSettings } from './scan';
 import { TransferForm } from './transfer';
-import { wedgeGap } from './barcode-state';
+import { PACK_UNUSABLE, wedgeGap } from './barcode-state';
 
 // Scanning on the forms and the label sheet (ADR-070, issue #345; FR-RET-68): a keyboard-wedge scan adds the item at 1
 // and the next scan of it adds one more, an unknown code says so (with Add this barcode to a product for an
@@ -496,6 +496,17 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     screenOf(<TransferForm fromBranchId={BRANCH} />, 'admin', BRANCH, ['units']);
     wedge('TEST-LAMP-BOX');
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('switched off'));
+    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
+  });
+
+  it('refuses a match on a pack that is switched off with the pack message, and moves no single piece in its place', async () => {
+    const ROLL = '00000000-0000-4000-8000-0000000d0001';
+    const lamp = await retail.getProduct(LAMP);
+    // A lookup that still finds the barcode on a pack now inactive, as an offline hit on a stale item list would.
+    retail.findByBarcode = async () => ({ product: { ...lamp, packs: [{ unit_id: ROLL, factor: '10.000', active: false }] }, unit_id: ROLL });
+    screenOf(<TransferForm fromBranchId={BRANCH} />, 'admin', BRANCH, ['units']);
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain(PACK_UNUSABLE));
     expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
   });
 
