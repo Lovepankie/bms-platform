@@ -59,6 +59,9 @@ class EmailLayoutTest {
         p.put("kind", "problem");
         p.put("page", "/staff/retail/sale");
         p.put("message", "Test message <b>with</b> markup & an ampersand.");
+        // The Owner's own plan (issue #472): the module asked for and the decision, with the operator's reason.
+        p.put("module", "Shop");
+        p.put("decision", "declined. The platform operator wrote: Test reason <i>typed</i> & sent.");
         return p;
     }
 
