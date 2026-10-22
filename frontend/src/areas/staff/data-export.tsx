@@ -9,9 +9,18 @@ import { BusyButton } from '../../app/ui/BusyButton';
 
 const QUERY = ['data-export'];
 
-function when(at: string | null): string {
+/** A moment as the business's own date and time (its time zone, not the device's), or "never". */
+export function when(at: string | null, zone?: string | null): string {
   if (!at) return 'never';
-  return new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(at).toLocaleString('en-GB', {
+    timeZone: zone || 'Africa/Kampala',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 /** The tables the workbook holds, for the modules the business has on (all of them when not known). */
@@ -25,7 +34,7 @@ export function exportWording(modules: string[] | null | undefined): string {
   return tables.length === 0 ? 'your branches' : tables.join('; ');
 }
 
-export function DataExportCard({ modules }: { modules?: string[] | null }) {
+export function DataExportCard({ modules, zone }: { modules?: string[] | null; zone?: string | null }) {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const status = useQuery({
@@ -74,7 +83,7 @@ export function DataExportCard({ modules }: { modules?: string[] | null }) {
       {data && (
         <>
           <p>
-            Last export: <strong>{when(data.last_export_at)}</strong>. Last weekly email: <strong>{when(data.last_emailed_at)}</strong>.
+            Last export: <strong>{when(data.last_export_at, zone)}</strong>. Last weekly email: <strong>{when(data.last_emailed_at, zone)}</strong>.
           </p>
           <BusyButton busy={ask.isPending || open} onClick={() => ask.mutate()}>
             Download my data
@@ -82,7 +91,7 @@ export function DataExportCard({ modules }: { modules?: string[] | null }) {
           {open && <p role="status">Preparing your workbook. It takes a minute or two; you can leave this page.</p>}
           {ready && (
             <p>
-              Your workbook is ready{latest.expires_at ? ` until ${when(latest.expires_at)}` : ''}.{' '}
+              Your workbook is ready{latest.expires_at ? ` until ${when(latest.expires_at, zone)}` : ''}.{' '}
               <BusyButton busy={download.isPending} onClick={() => download.mutate(latest.document_id as string)}>
                 Save the workbook
               </BusyButton>

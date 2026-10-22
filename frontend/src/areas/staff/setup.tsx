@@ -333,7 +333,7 @@ export function Setup() {
           </label>
         </fieldset>
 
-        {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} />}
+        {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} zone={me.tenant_timezone} />}
 
         {permissions.includes('core.branches.read') && (
           <fieldset>

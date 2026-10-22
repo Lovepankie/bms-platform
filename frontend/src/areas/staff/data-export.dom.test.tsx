@@ -32,7 +32,7 @@ vi.mock('../../api/client', async (original) => ({
   api: new Proxy({}, { get: (_t, name: string) => (client as Record<string, unknown>)[name] }),
 }));
 
-const { DataExportCard, exportWording } = await import('./data-export');
+const { DataExportCard, exportWording, when } = await import('./data-export');
 
 function show() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -96,5 +96,14 @@ describe('the Download my data card', () => {
     fireEvent.click(box);
     await waitFor(() => expect(client.PUT).toHaveBeenCalledWith('/api/v1/data-export/settings', { body: { weekly_email: false } }));
     expect(await screen.findByText('The weekly email is off.')).toBeTruthy();
+  });
+});
+
+describe('when', () => {
+  it('writes a moment in the business time zone, whatever the device says', () => {
+    // 22:30 UTC on 7 October is 01:30 on 8 October in Kampala.
+    expect(when('2026-10-07T22:30:00Z', 'Africa/Kampala')).toMatch(/^8 Oct 2026,? 01:30$/);
+    expect(when('2026-10-07T22:30:00Z', 'UTC')).toMatch(/^7 Oct 2026,? 22:30$/);
+    expect(when(null, 'Africa/Kampala')).toBe('never');
   });
 });
