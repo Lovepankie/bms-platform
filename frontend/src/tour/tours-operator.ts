@@ -49,7 +49,7 @@ export const businessesPage: Tour = {
 
 export const businessPage: Tour = {
   id: 'page-operator-business',
-  version: 1,
+  version: 2,
   title: 'This page: one business',
   audience: forOperator,
   autoStart: false,
@@ -95,7 +95,7 @@ export const businessPage: Tour = {
       id: 'rescue',
       target: 'biz-rescue',
       title: 'Owner sign-in help',
-      body: 'A one-time link for a forgotten password, or a reset of a lost two-step sign-in. Each needs a code from your own authenticator app.',
+      body: 'A one-time link for a forgotten password, or a reset of a lost two-step sign-in. The owner is marked. When the owner has lost access for good, Make the owner gives the role to another active administrator. Each needs a code from your own authenticator app.',
     },
     {
       id: 'messages',

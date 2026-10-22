@@ -7,7 +7,7 @@ import { useStaff } from '../context';
 import { LinkBox, type ShownLink } from './link-box';
 import { RolePick } from './role-pick';
 import { WhoCanDoWhat } from './who-can-do-what';
-import { ADD_ONS, TILL, canManageUsers, emptyInvite, hasProblems, inviteBody, inviteProblems, purchasingOffered, roleChoices, type InviteDraft, type InviteProblems } from './state';
+import { ADD_ONS, TILL, canManageUsers, emptyInvite, hasProblems, inviteBody, inviteProblems, offeredChoices, purchasingOffered, roleChoices, type InviteDraft, type InviteProblems } from './state';
 
 // Invite a staff user (issue #319; FR-IAM-01). Phone first: most staff are reached on a phone, so the phone box comes before the
 // email and either one is enough. After the invitation the one-time link is shown once, in a box with Copy and WhatsApp buttons.
@@ -21,6 +21,8 @@ export function InviteScreen() {
   const allowed = canManageUsers(me);
   const roles = useQuery({ queryKey: ['staff-roles'], queryFn: users.roles, enabled: allowed });
   const branches = useQuery({ queryKey: ['staff-branches'], queryFn: users.branches, enabled: allowed });
+  // Only the Owner invites an administrator (ADR-062): the staff list says whether the business has an Owner.
+  const people = useQuery({ queryKey: ['staff-users'], queryFn: users.list, enabled: allowed });
   const [draft, setDraft] = useState<InviteDraft>(emptyInvite);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -121,7 +123,7 @@ export function InviteScreen() {
 
         <div data-tour="invite-role">
         <RolePick
-          roles={roleChoices(roles.data ?? [], me.modules).filter((r) => !(ADD_ONS as readonly string[]).includes(r.key))}
+          roles={offeredChoices(roleChoices(roles.data ?? [], me.modules), me, people.data ?? null).filter((r) => !(ADD_ONS as readonly string[]).includes(r.key))}
           branches={branches.data ?? []}
           roleKey={draft.roleKey}
           branchIds={draft.branchIds}

@@ -30,7 +30,19 @@ final class UserApi {
     record UpdateUserRequest(
             @Size(min = 1, max = 200) String fullName,
             @Email @Size(max = 320) String email,
-            @Size(max = 20) String phone) {}
+            @Size(max = 20) String phone,
+
+            @Size(max = 20)
+            @Schema(
+                    description =
+                            "Only for the Owner changing their own email or phone (ADR-062): the current code from their authenticator app")
+            String totpCode,
+
+            @Size(max = 200)
+            @Schema(
+                    description =
+                            "Only for the Owner changing their own email or phone (ADR-062), when they have no two-step sign-in: their own password")
+            String password) {}
 
     @Schema(name = "RoleAssignment")
     record RoleAssignment(String roleKey, String roleName, UUID branchId) {}
@@ -46,7 +58,12 @@ final class UserApi {
             Instant lastLoginAt,
             List<RoleAssignment> roles,
             Instant createdAt,
-            int version) {}
+            int version,
+
+            @Schema(
+                    description =
+                            "True for the Owner of the business: one per business, an administrator whom nobody inside the business can remove, deactivate or demote, and who alone adds, removes or changes administrators (ADR-062)")
+            boolean isOwner) {}
 
     @Schema(name = "UserPage")
     record UserPage(List<UserResponse> items, String nextCursor) {}
@@ -80,6 +97,21 @@ final class UserApi {
     @Schema(name = "UnlockSignInRequest")
     record UnlockSignInRequest(
             @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the tenant's audit log")
+            String reason) {}
+
+    @Schema(
+            name = "TransferOwnershipRequest",
+            description =
+                    "Proof that the signed-in Owner is still themselves, as for the reset of a sign-in: the code from their authenticator app when they have two-step sign-in, otherwise their own password; never logged")
+    record TransferOwnershipRequest(
+            @Size(max = 20) @Schema(description = "The current 6 digit code from the Owner's own authenticator app")
+            String totpCode,
+
+            @Size(max = 200)
+            @Schema(description = "The Owner's own current password, for an Owner with no two-step sign-in")
+            String password,
+
+            @Size(max = 300) @Schema(description = "Optional: why, kept in the audit row")
             String reason) {}
 
     @Schema(name = "InvitedUser")
@@ -164,7 +196,12 @@ final class UserApi {
             String twoStepPolicy,
 
             @Schema(description = "The business's time zone, in which mfa_due_by is a day's end (ADR-046)")
-            String tenantTimezone) {}
+            String tenantTimezone,
+
+            @Schema(
+                    description =
+                            "True when the signed-in user is the Owner of the business (ADR-062): the PWA offers the owner-only actions and the Transfer ownership action only then")
+            boolean isOwner) {}
 
     @Schema(name = "PlatformMe")
     record PlatformMeResponse(UUID userId, String kind, String fullName, String email, List<String> permissions) {}

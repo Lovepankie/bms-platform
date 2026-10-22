@@ -14,7 +14,7 @@ import { StaffContext } from '../context';
 // closed, a branch is asked for only when the role is not the administrator, the plan's refusal is shown, and someone who may only
 // read sees the list and no action. Every name, number and link below is invented.
 
-const api = { list: vi.fn(), roles: vi.fn(), branches: vi.fn(), invite: vi.fn(), reissue: vi.fn(), setRoles: vi.fn(), deactivate: vi.fn() };
+const api = { list: vi.fn(), roles: vi.fn(), branches: vi.fn(), invite: vi.fn(), reissue: vi.fn(), setRoles: vi.fn(), deactivate: vi.fn(), transferOwnership: vi.fn() };
 
 vi.mock('../../../api/users', async (original) => {
   const real = await original<typeof import('../../../api/users')>();
@@ -57,8 +57,8 @@ const READER = ['core.users.read'];
 
 let lastClient: QueryClient;
 
-function shell(node: ReactElement, permissions: string[] = ADMIN, mfaEnabled = false) {
-  const me = { ...mockMe('admin'), permissions, user_id: 'u-self', mfa_enabled: mfaEnabled };
+function shell(node: ReactElement, permissions: string[] = ADMIN, mfaEnabled = false, isOwner = false) {
+  const me = { ...mockMe('admin'), permissions, user_id: 'u-self', mfa_enabled: mfaEnabled, is_owner: isOwner };
   const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/users'] }) });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   lastClient = client;
@@ -652,5 +652,61 @@ describe('Reset sign-in (issue #339)', () => {
     expect(resetUserSignIn).toHaveBeenCalledTimes(1);
     await act(async () => finish({ url: RESET_LINK, expiresAt: '2026-10-22T10:00:00Z' }));
     await screen.findByRole('heading', { name: 'Sign-in link for Test Seller 07' });
+  });
+});
+
+// The Owner of the business (ADR-062, FR-IAM-18): the badge, the actions an administrator is not offered, and the transfer.
+describe('the owner', () => {
+  const OWNER: StaffUser = { id: 'u-owner', full_name: 'Test Owner 09', email: 'owner09@example.com', status: 'active', is_owner: true, roles: [{ role_key: 'tenant_admin' }] };
+  const SELF_ADMIN: StaffUser = { ...SELF, full_name: 'Test Admin 01' };
+
+  const card = (name: string) => screen.getByText(name).closest('li') as HTMLElement;
+
+  it('shows the Owner badge and offers an administrator no action on the owner or another administrator', async () => {
+    api.list.mockResolvedValue([OWNER, SELF_ADMIN, SECOND_ADMIN, WAITING]);
+    shell(<UsersScreen />);
+    await screen.findByText('Test Owner 09', {}, { timeout: 5000 });
+    expect(within(card('Test Owner 09')).getByText('Owner')).toBeTruthy();
+    expect(within(card('Test Owner 09')).queryByRole('button')).toBeNull();
+    expect(within(card('Test Admin 03')).queryByRole('button')).toBeNull();
+    expect(within(card('Test Seller 02')).getByRole('button', { name: 'Change roles' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Transfer ownership' })).toBeNull();
+  });
+
+  it('lets the owner hand ownership to an active administrator after saying what changes', async () => {
+    api.list.mockResolvedValue([{ ...SELF, is_owner: true }, SECOND_ADMIN, WAITING, LEFT]);
+    api.transferOwnership.mockResolvedValue({ ...SECOND_ADMIN, is_owner: true });
+    shell(<UsersScreen />, ADMIN, false, true);
+    await screen.findByText('Test Admin 03', {}, { timeout: 5000 });
+    expect(screen.getByText(/Turn on two-step sign-in/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }));
+    const form = screen.getByRole('form', { name: 'Transfer ownership' });
+    // Only the other active administrators are offered.
+    expect(within(form).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose an administrator', 'Test Admin 03']);
+    fireEvent.change(within(form).getByLabelText('Who becomes the owner'), { target: { value: 'u-admin2' } });
+    expect(within(form).getByText(/You stay an administrator/)).toBeTruthy();
+    fireEvent.change(within(form).getByLabelText('Your own password'), { target: { value: 'Fabricated-Pass-2026' } });
+    const yes = within(form).getByRole('button', { name: 'Yes, make Test Admin 03 the owner' });
+    fireEvent.click(yes);
+    fireEvent.click(yes);
+    await screen.findByText(/Test Admin 03 is now the owner of the business/);
+    expect(api.transferOwnership).toHaveBeenCalledTimes(1);
+    expect(api.transferOwnership).toHaveBeenCalledWith('u-admin2', { password: 'Fabricated-Pass-2026' });
+  });
+
+  it('shows the refusal in plain words and keeps nothing typed', async () => {
+    api.list.mockResolvedValue([{ ...SELF, is_owner: true }, SECOND_ADMIN]);
+    api.transferOwnership.mockRejectedValue(new UsersError('That password is not right.', 422, 'invalid_password'));
+    shell(<UsersScreen />, ADMIN, false, true);
+    await screen.findByText('Test Admin 03', {}, { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }));
+    const form = screen.getByRole('form', { name: 'Transfer ownership' });
+    fireEvent.change(within(form).getByLabelText('Who becomes the owner'), { target: { value: 'u-admin2' } });
+    fireEvent.change(within(form).getByLabelText('Your own password'), { target: { value: 'Wrong-Pass-0000' } });
+    await act(async () => {
+      fireEvent.click(within(form).getByRole('button', { name: 'Yes, make Test Admin 03 the owner' }));
+    });
+    await waitFor(() => expect(within(form).getByText('That password is not right.')).toBeTruthy());
+    expect((within(form).getByLabelText('Your own password') as HTMLInputElement).value).toBe('');
   });
 });

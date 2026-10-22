@@ -225,6 +225,23 @@ class OutboxTemplates {
                     """,
                     null,
                     "You got this email because you have a BMS sign-in at {tenant_name}."),
+            // Sent to the Owner's old address when the Owner's email or phone changes (ADR-062). No link.
+            "identity.contact_changed",
+            new Template(
+                    "Your BMS email or phone was changed",
+                    """
+                    Hello,
+
+                    The email or phone of your BMS sign-in at {tenant_name} was changed on {when}. You are the owner of \
+                    this business, so ownership cannot be handed over for 24 hours after this change.
+
+                    If this was you, nothing more is needed. If it was not, contact Rincol Tech support at once: the \
+                    platform operator can help you get your business back.
+
+                    Rincol Tech
+                    """,
+                    null,
+                    "You got this email because you have a BMS sign-in at {tenant_name}."),
             // The insights digest (ADR-030): the text is built by lending.insights as plain text from the tenant's own
             // figures, ready for a WhatsApp relay later.
             "insights.daily_digest",
@@ -419,6 +436,13 @@ class OutboxTemplates {
      * carry a balance; the channel drops the balance parameter again when the setting is off.
      */
     private static final Map<String, Template> SMS = Map.ofEntries(
+            // To the Owner's old phone when an Owner with no email changes their email or phone (ADR-062). No link.
+            Map.entry(
+                    "identity.contact_changed",
+                    new Template(
+                            null,
+                            "{tenant_name}: the phone or email of the BMS owner sign-in was changed. Not you? Call Rincol Tech"
+                                    + " support at once.")),
             Map.entry(
                     "savings.deposit",
                     new Template(

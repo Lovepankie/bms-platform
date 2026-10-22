@@ -84,7 +84,7 @@ class PlatformController {
             List<String> modules,
             Instant createdAt,
 
-            @Schema(description = "The first tenant admin (the owner), or null")
+            @Schema(description = "The Owner of the business (ADR-062), or null while it has none")
             String ownerName,
 
             String ownerEmail,
@@ -286,7 +286,10 @@ class PlatformController {
 
             boolean mfaEnabled,
             Instant lastLoginAt,
-            Instant createdAt) {}
+            Instant createdAt,
+
+            @Schema(description = "True for the Owner of the business, listed first (ADR-062)")
+            boolean isOwner) {}
 
     @Schema(name = "TenantMessage", description = "A message the outbox holds for the business; never its text or link")
     record MessageResponse(
@@ -490,6 +493,50 @@ class PlatformController {
             @Valid @RequestBody ReasonRequest request) {
         service.unlockSignIn(tenantId, userId, request.reason());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ADR-062: for a business whose Owner lost access (or that has none), the operator makes one of its active administrators the
+     * Owner, with a reason, audited in both logs. Never a non-administrator in one step: the person is made an administrator of
+     * the business first. The target is checked before the operator's code is spent.
+     */
+    @PostMapping("/tenants/{tenant_id}/users/{user_id}/make-owner")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Make an active administrator of the business its Owner, with a reason; the previous Owner stays an administrator; needs a current code from the operator's own authenticator (FR-IAM-18)",
+            operationId = "platformTransferOwnership")
+    ResponseEntity<Void> makeOwner(
+            @PathVariable("tenant_id") UUID tenantId,
+            @PathVariable("user_id") UUID userId,
+            @Valid @RequestBody StepUpRequest request) {
+        service.requireOwnerCandidate(tenantId, userId);
+        security.requireTotp(request.totpCode());
+        service.transferOwnership(tenantId, userId, request.reason());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * ADR-062: a new business whose first administrator (its Owner) never joined, and whose invitation expired, is not stuck:
+     * the operator sends a new link, with a reason and the operator's own code, shown once. Only for that invited first
+     * administrator; the target is checked before the code is spent.
+     */
+    @PostMapping("/tenants/{tenant_id}/users/{user_id}/invitation")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Issue a new invitation link for the first administrator (the Owner) of a business who never joined, with a reason; shown once; needs a current code from the operator's own authenticator (FR-IAM-18)",
+            operationId = "platformReissueOwnerInvitation")
+    FirstAdminInvitation reissueOwnerInvitation(
+            @PathVariable("tenant_id") UUID tenantId,
+            @PathVariable("user_id") UUID userId,
+            @Valid @RequestBody StepUpRequest request,
+            HttpServletResponse response) {
+        NoStore.apply(response);
+        service.requireInvitedFirstAdmin(tenantId, userId);
+        security.requireTotp(request.totpCode());
+        TenantAdmins.Invitation invitation = service.reissueFirstAdminInvitation(tenantId, userId, request.reason());
+        return new FirstAdminInvitation(invitation.userId(), invitation.url(), invitation.expiresAt());
     }
 
     @PostMapping("/tenants/{tenant_id}/users/{user_id}/mfa/reset")

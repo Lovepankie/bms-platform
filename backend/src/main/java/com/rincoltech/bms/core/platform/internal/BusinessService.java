@@ -83,7 +83,8 @@ class BusinessService {
                         rs.getString("status"),
                         rs.getBoolean("mfa_enabled"),
                         PlatformService.instant(rs.getTimestamp("last_login_at")),
-                        rs.getTimestamp("created_at").toInstant()))
+                        rs.getTimestamp("created_at").toInstant(),
+                        rs.getBoolean("is_owner")))
                 .list());
         List<MessageResponse> messages =
                 transactions.execute(status -> jdbc.sql("SELECT * FROM platform_tenant_outbox(?, 50)")

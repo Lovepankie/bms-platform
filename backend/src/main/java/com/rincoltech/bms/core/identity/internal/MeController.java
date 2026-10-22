@@ -119,7 +119,8 @@ class MeController {
                 settings.reportsEnabled(),
                 accounts.mfaDueBy(user.id(), user.mfaEnabled()).orElse(null),
                 settings.twoStepPolicy().mode(),
-                tenant.profile().timezone().getId());
+                tenant.profile().timezone().getId(),
+                user.isOwner());
     }
 
     /**

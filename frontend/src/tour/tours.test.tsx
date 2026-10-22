@@ -217,6 +217,8 @@ const ADMIN: Me = {
   // Branch roles on, so the tile and the screen of that capability are on the pages its tour points at.
   module_capabilities: { retail: ['branch_roles'] },
   full_name: 'Test Owner 01',
+  // The Owner of the business (ADR-062), so the Users page shows the owner card its tour points at.
+  is_owner: true,
   all_branches: true,
   permissions: [
     ...(mockMe('admin').permissions ?? []),

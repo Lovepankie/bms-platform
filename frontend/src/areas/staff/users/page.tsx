@@ -11,12 +11,15 @@ import { LinkBox, type ShownLink } from './link-box';
 import { RoleEditor } from './role-editor';
 import { WhoCanDoWhat } from './who-can-do-what';
 import { ResetPanel } from './reset-panel';
-import { canManageUsers, canResetSignIn, contactLine, matchesSearch, roleChoices, roleLines, showUsers, statusWords } from './state';
+import { TransferOwner } from './transfer-owner';
+import { canActOn, canManageUsers, canResetSignIn, contactLine, matchesSearch, offeredChoices, ownershipTargets, roleChoices, roleLines, showUsers, statusWords } from './state';
 
 // Staff users (issue #319; FR-IAM-01, FR-IAM-02, FR-IAM-08): who works in the business, what each person may do, and who has not
 // joined yet. Anyone who may read the list sees it; an administrator also invites, sends a new link, changes roles and deactivates.
 // The one-time link of a resend is shown once, in a box, and is never kept. Reset sign-in (issue #339) makes such a link for an active
 // person who forgot their password, after the administrator types a code from their own authenticator app (or their own password).
+// The Owner (ADR-062) carries a badge; only the Owner is offered the actions on another administrator and Transfer ownership, and the
+// Owner's own card offers no action to anyone else. The server refuses the same with 403 owner_only and owner_protected.
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
@@ -39,6 +42,7 @@ export function UsersScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [transferring, setTransferring] = useState(false);
   // One action at a time: a second tap before the first answer must not send a second request.
   const working = useRef(false);
 
@@ -102,6 +106,24 @@ export function UsersScreen() {
       return `${user.full_name} is deactivated and signed out.`;
     });
 
+  async function transferOwnership(to: StaffUser, credential: { totpCode?: string; password?: string }): Promise<string | null> {
+    if (working.current) return null;
+    working.current = true;
+    setNotice(null);
+    try {
+      await users.transferOwnership(to.id ?? '', credential);
+      setTransferring(false);
+      setNotice(`${to.full_name} is now the owner of the business. You are still an administrator.`);
+      await queryClient.invalidateQueries({ queryKey: ['me'] });
+      await queryClient.invalidateQueries({ queryKey: ['staff-users'] });
+      return null;
+    } catch (e) {
+      return messageOf(e);
+    } finally {
+      working.current = false;
+    }
+  }
+
   async function saveRoles(user: StaffUser, next: RoleAssignmentRequest[]): Promise<string | null> {
     try {
       await users.setRoles(user.id ?? '', next);
@@ -120,7 +142,9 @@ export function UsersScreen() {
   const shown = search.term === '' ? all : all.filter((u) => matchesSearch(u, search.term));
   const roleList = roles.data ?? [];
   const branchList = branches.data ?? [];
-  const choices = roleChoices(roleList, me.modules);
+  const allChoices = roleChoices(roleList, me.modules);
+  const choices = offeredChoices(allChoices, me, all);
+  const targets = ownershipTargets(me, all);
 
   return (
     <main className="rt ln stack">
@@ -134,6 +158,26 @@ export function UsersScreen() {
         <p className="hint">Only an administrator can invite people or change roles.</p>
       )}
       <WhoCanDoWhat roles={roleList} modules={me.modules} />
+      {me.is_owner === true && (
+        <div className="rt-card stack" data-tour="staff-transfer-owner">
+          <p>You are the <strong>owner</strong> of this business. Only you can add, remove or change an administrator, and nobody can remove you.</p>
+          {me.mfa_enabled !== true && (
+            <p role="status" className="alert alert-warning">
+              Turn on two-step sign-in, so that someone who learns your password still cannot get into the owner's account.{' '}
+              <Link to="/staff/two-step">Turn it on</Link>
+            </p>
+          )}
+          {transferring ? (
+            <TransferOwner targets={targets} mfaEnabled={me.mfa_enabled === true} onSend={transferOwnership} onCancel={() => setTransferring(false)} />
+          ) : (
+            <p>
+              <button type="button" className="btn-ghost btn-sm" disabled={busyId !== null || list.isPending} onClick={() => { setTransferring(true); setError(null); }}>
+                Transfer ownership
+              </button>
+            </p>
+          )}
+        </div>
+      )}
       {link && <LinkBox link={link} business={brand.name} onDone={() => setLink(null)} doneLabel="I have sent it" />}
       {notice && <p role="status" className="alert alert-success">{notice}</p>}
       {error && mode?.kind !== 'deactivate' && <p role="alert" className="alert alert-danger">{error}</p>}
@@ -160,13 +204,14 @@ export function UsersScreen() {
                     <p>
                       <strong><Highlight text={u.full_name ?? ''} term={search.term} /></strong>{' '}
                       <span className={BADGE[u.status ?? ''] ?? 'badge'}>{statusWords(u.status)}</span>
+                      {u.is_owner === true && <> <span className="badge badge-info">Owner</span></>}
                       {u.id === me.user_id && <span className="hint"> (you)</span>}
                     </p>
                     <p className="hint"><Highlight text={contactLine(u)} term={search.term} /></p>
                     <ul>
                       {roleLines(u, branchList, roleList).map((line) => <li key={line}>{line}</li>)}
                     </ul>
-                    {canManage && u.status !== 'deactivated' && mode?.id !== u.id && (
+                    {canActOn(me, u, all) && u.status !== 'deactivated' && mode?.id !== u.id && (
                       <p className="cluster">
                         {u.status === 'invited' && (
                           <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => void resend(u)}>
@@ -189,7 +234,7 @@ export function UsersScreen() {
                       </p>
                     )}
                     {mode?.id === u.id && mode?.kind === 'roles' && (
-                      <RoleEditor user={u} self={u.id === me.user_id} roles={choices} branches={branchList} retail={!me.modules || me.modules.includes('retail')} onSave={(next) => saveRoles(u, next)} onCancel={() => setMode(null)} />
+                      <RoleEditor user={u} self={u.id === me.user_id} roles={u.id === me.user_id ? allChoices : choices} branches={branchList} retail={!me.modules || me.modules.includes('retail')} onSave={(next) => saveRoles(u, next)} onCancel={() => setMode(null)} />
                     )}
                     {mode?.id === u.id && mode?.kind === 'reset' && (
                       <ResetPanel user={u} mfaEnabled={me.mfa_enabled === true} onSend={(credential) => resetSignIn(u, credential)} onCancel={() => setMode(null)} />

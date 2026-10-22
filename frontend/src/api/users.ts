@@ -40,6 +40,21 @@ const MESSAGES: Record<string, string | undefined> = {
   invalid_phone: 'Use a Uganda mobile number such as 0712 345 678 or +256 712 345 678.',
   invalid_status_transition: 'This person has already joined, or was deactivated, so this is not possible now. Reload the page to see their status.',
   permission_denied: 'You are not allowed to do this. Ask an administrator.',
+  // The Owner of the business (ADR-062).
+  owner_only: 'Only the owner of the business can add, remove or change an administrator.',
+  owner_protected: 'Nobody can remove, deactivate or change the owner of the business. The owner can hand ownership to another administrator.',
+  owner_must_transfer_first: 'The owner stays an administrator. Hand ownership to another administrator first.',
+  owner_must_be_active_admin: 'Ownership can only go to an active administrator. Make the person an administrator first.',
+  already_owner: 'This person is already the owner.',
+  no_owner: 'This business has no owner yet. Ask the platform operator to choose one.',
+  owner_recently_changed: 'Your email, phone or password changed in the last 24 hours. For safety, ownership can be handed over a day after such a change.',
+  owner_changed: 'The owner of the business changed at the same moment. Reload the page and try again.',
+  step_up_required: 'Enter your password or authenticator code to change your email or phone.',
+  totp_required: 'Enter the current 6 digit code from your authenticator app.',
+  invalid_mfa_code: 'That code is not right. Codes change every 30 seconds; type the next one.',
+  password_required: 'Enter your own password to confirm.',
+  invalid_password: 'That password is not right. Check it and try again; too many wrong tries lock your account for 15 minutes.',
+  account_locked: 'Too many wrong tries. Your account is locked for 15 minutes. Try again later.',
 };
 
 /** The words for a field problem the server sends with its own code (UserService.checkRoles and the contact check). */
@@ -113,6 +128,18 @@ export const users = {
 
   async setRoles(userId: string, roles: RoleAssignmentRequest[]): Promise<StaffUser> {
     return unwrap(await sent(api.PUT('/api/v1/users/{user_id}/roles', { params: { path: { user_id: userId } }, body: roles })), 'Could not change the roles.');
+  },
+
+  /**
+   * Hand ownership of the business to another active administrator (ADR-062). The Owner proves it is still them: the code from
+   * their authenticator app when they have two-step sign-in, otherwise their own password. Neither is kept.
+   */
+  async transferOwnership(userId: string, credential: { totpCode?: string; password?: string }): Promise<StaffUser> {
+    const body = credential.totpCode ? { totp_code: credential.totpCode } : { password: credential.password };
+    return unwrap(
+      await sent(api.POST('/api/v1/users/{user_id}/transfer-ownership', { params: { path: { user_id: userId } }, body })),
+      'Could not hand over ownership.',
+    );
   },
 
   async deactivate(userId: string): Promise<StaffUser> {

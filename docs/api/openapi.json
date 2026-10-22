@@ -4840,6 +4840,10 @@
           "full_name" : {
             "type" : "string"
           },
+          "is_owner" : {
+            "description" : "True when the signed-in user is the Owner of the business (ADR-062): the PWA offers the owner-only actions and the Transfer ownership action only then",
+            "type" : "boolean"
+          },
           "kind" : {
             "type" : "string"
           },
@@ -5950,7 +5954,7 @@
             "type" : "string"
           },
           "owner_name" : {
-            "description" : "The first tenant admin (the owner), or null",
+            "description" : "The Owner of the business (ADR-062), or null while it has none",
             "type" : "string"
           },
           "paid_from" : {
@@ -19589,6 +19593,10 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "is_owner" : {
+            "description" : "True for the Owner of the business, listed first (ADR-062)",
+            "type" : "boolean"
+          },
           "last_login_at" : {
             "format" : "date-time",
             "type" : "string"
@@ -19907,6 +19915,29 @@
           }
         },
         "required" : [ "status" ]
+      },
+      "TransferOwnershipRequest" : {
+        "description" : "Proof that the signed-in Owner is still themselves, as for the reset of a sign-in: the code from their authenticator app when they have two-step sign-in, otherwise their own password; never logged",
+        "properties" : {
+          "password" : {
+            "description" : "The Owner's own current password, for an Owner with no two-step sign-in",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Optional: why, kept in the audit row",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "The current 6 digit code from the Owner's own authenticator app",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
       },
       "UnlockSignInRequest" : {
         "properties" : {
@@ -20506,7 +20537,19 @@
             "minLength" : 1,
             "type" : "string"
           },
+          "password" : {
+            "description" : "Only for the Owner changing their own email or phone (ADR-062), when they have no two-step sign-in: their own password",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "phone" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "Only for the Owner changing their own email or phone (ADR-062): the current code from their authenticator app",
             "maxLength" : 20,
             "minLength" : 0,
             "type" : "string"
@@ -20528,6 +20571,10 @@
           "id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "is_owner" : {
+            "description" : "True for the Owner of the business: one per business, an administrator whom nobody inside the business can remove, deactivate or demote, and who alone adds, removes or changes administrators (ADR-062)",
+            "type" : "boolean"
           },
           "last_login_at" : {
             "format" : "date-time",
@@ -27900,6 +27947,91 @@
           }
         },
         "summary" : "Suspend with a reason: the tenant becomes read only, nothing is deleted; already suspended changes nothing (FR-TEN-06)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/invitation" : {
+      "post" : {
+        "operationId" : "platformReissueOwnerInvitation",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformStepUpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FirstAdminInvitation"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Issue a new invitation link for the first administrator (the Owner) of a business who never joined, with a reason; shown once; needs a current code from the operator's own authenticator (FR-IAM-18)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/make-owner" : {
+      "post" : {
+        "operationId" : "platformTransferOwnership",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformStepUpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make an active administrator of the business its Owner, with a reason; the previous Owner stays an administrator; needs a current code from the operator's own authenticator (FR-IAM-18)",
         "tags" : [ "platform" ]
       }
     },
@@ -37892,7 +38024,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Change a staff user's name or contact",
+        "summary" : "Change a staff user's name or contact; the Owner changing their own email or phone also sends totp_code or password (ADR-062)",
         "tags" : [ "users" ]
       }
     },
@@ -38056,6 +38188,44 @@
           }
         },
         "summary" : "Replace a user's roles and branch scopes (FR-IAM-01)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/transfer-ownership" : {
+      "post" : {
+        "operationId" : "transferOwnership",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TransferOwnershipRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Hand ownership of the business to another active administrator; the Owner only; needs the Owner's authenticator code, or their own password when they have no two-step sign-in (FR-IAM-18)",
         "tags" : [ "users" ]
       }
     },

@@ -813,6 +813,18 @@ class OnboardingIT extends IntegrationTest {
                                  WHERE u.tenant_id = ? AND u.email = ? AND u.status = 'invited' AND a.role_key = 'tenant_admin'
                                 """).params(tenantId, email).query(Long.class).single())
                 .isEqualTo(1);
+        // ADR-062, FR-IAM-18: the applicant, the business's first administrator, is its Owner from activation.
+        assertThat(owner.sql("SELECT email FROM users WHERE tenant_id = ? AND is_owner")
+                        .param(tenantId)
+                        .query(String.class)
+                        .list())
+                .containsExactly(email);
+        assertThat(owner.sql(
+                                "SELECT actor_kind FROM audit_log WHERE tenant_id = ? AND action = 'core.user.owner_assigned'")
+                        .param(tenantId)
+                        .query(String.class)
+                        .list())
+                .containsExactly("platform");
         assertThat(platformAudits("platform.application.activated", id)).isEqualTo(1);
         String auditData = owner.sql(
                         "SELECT data::text FROM platform_audit_log WHERE action = 'platform.application.activated' AND data->>'application_id' = ?")

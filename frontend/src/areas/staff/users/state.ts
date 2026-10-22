@@ -46,7 +46,55 @@ export const ADD_ONS = ['retail_purchasing', 'retail_till'] as const;
  * choices never disagree. The administrator first; roles the business does not have (retail without the module) are left out.
  */
 export function whoCanDoWhat(roles: StaffRole[], modules?: string[] | null): { title: string; about: string }[] {
-  return roleChoices(roles, modules).map((c) => ({ title: c.label, about: c.about }));
+  const lines = roleChoices(roles, modules).map((c) => ({ title: c.label, about: c.about }));
+  // The Owner is one administrator, not a role of its own (ADR-062), so its line comes first, before the role lines.
+  return lines.length === 0 ? lines : [OWNER_WORDS, ...lines];
+}
+
+// --- The Owner of the business (ADR-062) ---------------------------------------------------------
+
+/** The Owner in the words of the "Who can do what" card. */
+export const OWNER_WORDS = {
+  title: 'Owner',
+  about: 'One administrator of the business who sees and does everything an administrator does, and is the only one who can add, remove or change an administrator. Nobody can remove the owner; the owner can hand ownership to another administrator.',
+};
+
+type Person = Pick<StaffUser, 'id' | 'status' | 'roles' | 'is_owner'>;
+
+export const isAdministrator = (user: Pick<StaffUser, 'roles'>): boolean => (user.roles ?? []).some((r) => r.role_key === TENANT_ADMIN);
+
+/** The business has an Owner. While it has none (an older business with no active administrator), the administrators keep the rules of before. */
+export const hasOwner = (people: Pick<StaffUser, 'is_owner'>[]): boolean => people.some((p) => p.is_owner === true);
+
+/** Adding, removing or changing an administrator: the Owner only (or every administrator while the business has no Owner). */
+export function mayChangeAdministrators(me: Pick<Me, 'permissions' | 'is_owner'>, people: Pick<StaffUser, 'is_owner'>[]): boolean {
+  return canManageUsers(me) && (me.is_owner === true || !hasOwner(people));
+}
+
+/**
+ * Whether the card of a person offers the administrator's actions (Send a new link, Change roles, Deactivate). The server refuses the
+ * rest with 403 `owner_only` and `owner_protected`; this only hides what cannot work. One's own card keeps its actions.
+ */
+export function canActOn(me: Pick<Me, 'permissions' | 'is_owner' | 'user_id'>, user: Person, people: Pick<StaffUser, 'is_owner'>[]): boolean {
+  if (!canManageUsers(me)) return false;
+  if (user.id === me.user_id) return true;
+  if (user.is_owner === true) return false;
+  return isAdministrator(user) ? mayChangeAdministrators(me, people) : true;
+}
+
+/**
+ * The role choices the signed-in person may give: the administrator role only when they may change administrators. `people` is
+ * null while the staff list is loading: then only the Owner is offered the administrator role, so it never flashes for others.
+ */
+export function offeredChoices(choices: RoleChoice[], me: Pick<Me, 'permissions' | 'is_owner'>, people: Pick<StaffUser, 'is_owner'>[] | null): RoleChoice[] {
+  const may = people === null ? canManageUsers(me) && me.is_owner === true : mayChangeAdministrators(me, people);
+  return may ? choices : choices.filter((c) => c.key !== TENANT_ADMIN);
+}
+
+/** Who ownership can go to: the other active administrators, offered to the Owner only. */
+export function ownershipTargets<P extends Person>(me: Pick<Me, 'is_owner' | 'user_id'>, people: P[]): P[] {
+  if (me.is_owner !== true) return [];
+  return people.filter((p) => p.id !== me.user_id && p.status === 'active' && isAdministrator(p));
 }
 
 /** The role that records purchases and restocks (ADR-055): given on top of another role, so the invitation offers it as a tick box. */

@@ -1881,6 +1881,114 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V79 (ADR-062, FR-IAM-18) on a database at V78: every business with an active administrator gets exactly one Owner, the
+     * administrator with the email the business signed up with when there is one, else the earliest-created active administrator;
+     * a business whose recorded owner email is not one of its active administrators falls back to the earliest; a business with no
+     * active administrator is left with no Owner; every assignment is audited on both sides; and the database refuses a second
+     * Owner.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates users across the owner migration.
+     */
+    @Test
+    void ownerMigrationGivesEveryBusinessWithAnActiveAdministratorExactlyOneOwner() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            assertThat(flyway(postgres, "78").migrate().targetSchemaVersion).isEqualTo("78");
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID recorded = UUID.randomUUID();
+            UUID earliest = UUID.randomUUID();
+            UUID notAdmin = UUID.randomUUID();
+            UUID nobody = UUID.randomUUID();
+            int n = 0;
+            for (UUID tenant : List.of(recorded, earliest, notAdmin, nobody)) {
+                n++;
+                owner.sql(
+                                "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, ?, ?, '00000000-0000-4000-8000-000000000001')")
+                        .params(tenant, "test-v79-" + n, "Test Business V79 " + n)
+                        .update();
+            }
+            // Each user: tenant, key, status, role, created at.
+            Object[][] users = {
+                {recorded, "r-early", "active", "tenant_admin", "2026-01-01 08:00:00"},
+                {recorded, "r-signup", "active", "tenant_admin", "2026-02-01 08:00:00"},
+                {recorded, "r-gone", "deactivated", "tenant_admin", "2025-12-01 08:00:00"},
+                {earliest, "e-first", "active", "tenant_admin", "2026-01-01 08:00:00"},
+                {earliest, "e-second", "active", "tenant_admin", "2026-03-01 08:00:00"},
+                {earliest, "e-old-cashier", "active", "cashier", "2025-06-01 08:00:00"},
+                {notAdmin, "n-signup", "active", "cashier", "2025-06-01 08:00:00"},
+                {notAdmin, "n-admin", "active", "tenant_admin", "2026-01-01 08:00:00"},
+                {nobody, "x-invited", "invited", "tenant_admin", "2026-01-01 08:00:00"},
+            };
+            java.util.Map<String, UUID> ids = new java.util.HashMap<>();
+            for (Object[] u : users) {
+                UUID id = UUID.randomUUID();
+                ids.put((String) u[1], id);
+                owner.sql("""
+                                INSERT INTO users (id, tenant_id, kind, full_name, email, status, created_at)
+                                VALUES (?, ?, 'staff', 'Test Staff V79', ?, ?, CAST(? AS timestamptz))
+                                """)
+                        .params(id, u[0], u[1] + "@example.test", u[2], u[4])
+                        .update();
+                owner.sql("""
+                                INSERT INTO user_role_assignments (id, tenant_id, user_id, role_key, branch_id, granted_by)
+                                VALUES (gen_random_uuid(), ?, ?, ?, NULL, ?)
+                                """).params(u[0], id, u[3], id).update();
+            }
+            // The sign-up applications the businesses were activated from: the recorded owner email, in another case.
+            String application = """
+                    INSERT INTO onboarding_applications (id, reference, status, business_name, contact_name, contact_email,
+                                                         contact_phone_e164, country, modules, term, way_in, activated_at,
+                                                         activated_tenant)
+                    VALUES (gen_random_uuid(), ?, 'activated', 'Test Business', 'Test Applicant', ?, '+256700000001', 'UG',
+                            '{retail}', 'monthly', 'trial', now(), ?)
+                    """;
+            owner.sql(application)
+                    .params("TV79A0000001", "R-Signup@Example.test", recorded)
+                    .update();
+            owner.sql(application)
+                    .params("TV79A0000002", "n-signup@example.test", notAdmin)
+                    .update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+            assertThat(result.success).isTrue();
+
+            String ownersOf = "SELECT id FROM users WHERE tenant_id = ? AND is_owner";
+            assertThat(owner.sql(ownersOf).param(recorded).query(UUID.class).list())
+                    .as("the administrator with the email the business signed up with, any case")
+                    .containsExactly(ids.get("r-signup"));
+            assertThat(owner.sql(ownersOf).param(earliest).query(UUID.class).list())
+                    .as("no application: the earliest active administrator, not an older cashier")
+                    .containsExactly(ids.get("e-first"));
+            assertThat(owner.sql(ownersOf).param(notAdmin).query(UUID.class).list())
+                    .as("the recorded owner is not an administrator: the earliest active administrator")
+                    .containsExactly(ids.get("n-admin"));
+            assertThat(owner.sql(ownersOf).param(nobody).query(UUID.class).list())
+                    .as("no active administrator: no Owner yet")
+                    .isEmpty();
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM audit_log
+                                     WHERE action = 'core.user.owner_assigned' AND actor_kind = 'system'
+                                    """).query(Long.class).single()).isEqualTo(3);
+            assertThat(owner.sql(
+                                    "SELECT count(*) FROM platform_audit_log WHERE action = 'platform.tenant.owner_assigned'")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(3);
+            assertThatThrownBy(() -> owner.sql("UPDATE users SET is_owner = true WHERE id = ?")
+                            .param(ids.get("e-second"))
+                            .update())
+                    .hasStackTraceContaining("users_one_owner");
+            assertThat(owner.sql("""
+                                    SELECT count(*) FROM pg_constraint
+                                     WHERE conrelid = 'users'::regclass AND NOT convalidated
+                                    """).query(Long.class).single())
+                    .as("every constraint ends validated")
+                    .isZero();
+        }
+    }
+
     @Test
     void noTwoMigrationsShareAVersion() {
         try (PostgreSQLContainer postgres = database()) {

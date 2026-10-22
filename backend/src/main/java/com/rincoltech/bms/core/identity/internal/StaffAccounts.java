@@ -180,7 +180,9 @@ class StaffAccounts implements Accounts {
                         UPDATE user_credentials SET totp_secret_enc = ?, totp_pending_secret_enc = NULL, totp_last_step = ?,
                                updated_at = now() WHERE user_id = ?
                         """).params(sealedSecret, usedStep, id).update();
-        jdbc.sql("UPDATE users SET mfa_enabled = true, updated_at = now(), version = version + 1 WHERE id = ?")
+        // second_factor_changed_at starts the Owner's 24 hour wait before a transfer (ADR-062).
+        jdbc.sql("UPDATE users SET mfa_enabled = true, second_factor_changed_at = now(), updated_at = now(),"
+                        + " version = version + 1 WHERE id = ?")
                 .param(id)
                 .update();
     }
@@ -275,7 +277,8 @@ class StaffAccounts implements Accounts {
                                totp_last_step = NULL, updated_at = now() WHERE user_id = ?
                         """).param(id).update();
         jdbc.sql("DELETE FROM user_recovery_codes WHERE user_id = ?").param(id).update();
-        jdbc.sql("UPDATE users SET mfa_enabled = false, updated_at = now(), version = version + 1 WHERE id = ?")
+        jdbc.sql("UPDATE users SET mfa_enabled = false, second_factor_changed_at = now(), updated_at = now(),"
+                        + " version = version + 1 WHERE id = ?")
                 .param(id)
                 .update();
     }

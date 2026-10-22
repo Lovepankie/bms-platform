@@ -499,6 +499,18 @@ an object). `preferences.tours` maps a guided tour id to `{status: completed | d
 Partial unique `(tenant_id, lower(email)) WHERE email IS NOT NULL AND kind = 'staff'`;
 partial unique `(tenant_id, phone_e164) WHERE kind = 'member'`.
 `CHECK (email IS NOT NULL OR phone_e164 IS NOT NULL)`.
+`is_owner boolean NOT NULL DEFAULT false` (`V79`, ADR-062, FR-IAM-18): the Owner of the business. `contact_changed_at
+timestamptz` (`V79`): when the email or phone last changed; `second_factor_changed_at timestamptz` (`V79`): when two-step
+sign-in was last set up or reset; the Owner's own transfer waits 24 hours after either (or after
+`user_credentials.password_changed_at`). Partial unique
+`users_one_owner (tenant_id) WHERE is_owner` (one Owner per business); `CHECK users_owner_is_staff (NOT is_owner OR (kind =
+'staff' AND status <> 'deactivated'))`; the trigger `users_owner_is_admin` refuses a user made the Owner without an active
+`tenant_admin` assignment (and any user inserted as the Owner), and the trigger `user_role_assignments_owner_keeps_admin` on
+`user_role_assignments` refuses revoking, moving or deleting the Owner's `tenant_admin` assignment. V79 backfills one Owner per business with
+an active administrator (the one whose email is the activated sign-up application's `contact_email`, else the earliest created),
+with a system `core.user.owner_assigned` audit row and a `platform.tenant.owner_assigned` platform row each; a business with no
+active administrator stays without one (a WARNING in the migration log). V79 also replaces `platform_tenant_overview` (the owner is
+the Owner) and `platform_tenant_admins` (adds `is_owner`, the Owner first).
 
 ### `user_credentials` (RLS)
 

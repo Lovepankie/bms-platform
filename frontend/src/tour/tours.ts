@@ -892,7 +892,7 @@ export const assistantPage: Tour = {
 // The Users page (issue #319): a page tour for whoever may read the staff list; the steps about changing people need the manage permission.
 export const usersPage: Tour = {
   id: 'page-users',
-  version: 4,
+  version: 5,
   title: 'This page: staff users',
   audience: (me) => held(me, 'core.users.read'),
   autoStart: false,
@@ -910,6 +910,13 @@ export const usersPage: Tour = {
       target: 'who-can-do-what',
       title: 'Who can do what',
       body: 'Open this to see what each role may do. There is one short line for every role.',
+    },
+    {
+      id: 'owner',
+      target: 'staff-transfer-owner',
+      optional: true,
+      title: 'You are the owner',
+      body: 'Only you can add, remove or change an administrator, and nobody can remove you. Transfer ownership hands this to another administrator: you stay an administrator, and they become the one owner.',
     },
     {
       id: 'search',

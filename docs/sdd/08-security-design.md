@@ -186,7 +186,7 @@ A push subscription is per user per device (`push_subscriptions`, forced row-lev
 | Role | Kind | Typical holder | Branch scope |
 |---|---|---|---|
 | Super admin | platform | Platform operator (not a tenant user) | n/a |
-| Tenant admin | staff | Owner or general manager of the tenant | All branches |
+| Tenant admin | staff | Owner or general manager of the tenant; exactly one of them is the Owner (`users.is_owner`, ADR-062), who alone manages the other administrators | All branches |
 | Branch manager | staff | Manager of one or more branches | Assigned branches |
 | Loan officer | staff | Field or desk officer | Assigned branches |
 | Cashier / teller | staff | Handles cash and mobile money in and out | Assigned branches |
@@ -212,6 +212,32 @@ the database), so an administrator sees and acts in every shop and store, every 
 across branches, every report, Controls, profit and cost, whatever other role or branch the same
 person is also given; a further role only adds to the union and never narrows it (ADR-055
 decision 4).
+
+**The Owner (ADR-062, FR-IAM-18, migration `V79`).** Every business has exactly one Owner: one of
+its tenant admins, marked `users.is_owner`, not a role of its own, so the Owner holds exactly the
+tenant admin's permissions and the matrix below is unchanged. What the Owner adds is protection,
+checked in `core.identity` (`Owners`) on top of `core.users.manage`:
+
+| Act on the Users routes | Owner | Other tenant admin |
+|---|---|---|
+| Invite, change roles, deactivate, send a new link, reset two-step sign-in, unlock: a staff member who is not an administrator | Y | Y |
+| Invite an administrator, make someone an administrator | Y | 403 `owner_only` |
+| Change another administrator's roles or contact, deactivate them, reset their two-step sign-in, send them a new link | Y | 403 `owner_only` |
+| Any of those on the Owner | own contact only; not their own administrator role (422 `owner_must_transfer_first`) | 403 `owner_protected` |
+| Change one's own email or phone | Y, with the step-up (authenticator code, else own password); the old address is told | Y |
+| Transfer ownership to another active administrator (step-up: authenticator code, else own password; not within 24 hours of the Owner's email, phone or password change) | Y | 403 `owner_only` |
+| Lift a sign-in lock (any staff member) | Y | Y |
+
+The database holds it too: one Owner per business (`users_one_owner`), never a deactivated user
+(`users_owner_is_staff`), made the Owner only while an administrator (`users_owner_is_admin`), and
+the Owner's administrator role cannot be revoked (`user_role_assignments_owner_keeps_admin`). A
+platform operator makes an active administrator the Owner with a reason and the operator's own
+authenticator code (`POST /platform/tenants/{tenant_id}/users/{user_id}/make-owner`), audited on
+both sides, and sends a new invitation link to an invited Owner who never joined (`.../invitation`).
+One advisory lock per business serialises everything that makes or moves the Owner against every
+owner rule (ADR-062 decision 9). A business with no Owner yet (one with no active administrator when V79 ran) keeps the
+rules of before until the operator assigns one. Two-step sign-in is not forced on the Owner; the
+Users screen prompts the Owner to turn it on.
 
 ### 8.3.2 Permission matrix
 
@@ -911,6 +937,7 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
 | A staff user edits history to hide theft | Append-only tables, reversal-only corrections, audit |
 | Credential stuffing on staff sign-in | The five-failure lock in the database for every address (an address of nobody exactly as an account, across restarts), failed requests limited per IP, second-factor attempts per account, MFA for admins (ADR-059) |
 | A stranger keeping an owner locked out | Accepted by design (the lock is what stops guessing); the owner's way back is a password reset, which lifts the lock, a tenant admin's or the operator's audited unlock (ADR-059) |
+| An administrator who leaves on bad terms locks the owner out (deactivates or demotes them, changes their email, or adds administrators of their own) | One Owner per business whom nobody inside the business can remove, deactivate, demote or change, and who alone adds, removes or changes administrators, held in the database too; the Owner hands over by a transfer with a step-up; an operator rescue with a reason for a lost Owner (ADR-062) |
 | A flood of sign-ins exhausting the API's memory or the database pool | At most four argon2id hashes at once, 503 `sign_in_busy` with Retry-After beyond, and no connection held while a request waits for or runs a hash (ADR-059) |
 | The forgotten-password form used to learn which staff have accounts, to flood a mailbox, or to take an account over | One generic answer with a time floor, limits per address and per account, a hashed single-use one hour token sent only to the email on file, every session ended on use, the second factor untouched and the failed-attempt lock lifted (ADR-059); the threat model is section 8.2a and ADR-042 |
 | SIM swap used to take over a member portal | PIN plus OTP only at activation and reset; SMS notice to the member on PIN reset; staff can revoke portal access |

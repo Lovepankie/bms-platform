@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { planLimitWords } from '../../../api/users';
 import {
-  EVERY_BRANCH, whoCanDoWhat, assignmentFor, assignmentsFor, branchUnavailable, purchasingOffered, roleRows, canManageUsers, canResetSignIn, contactLine, resetProofProblem, emptyInvite, hasProblems, inviteBody, inviteProblems, matchesSearch, roleChoice, roleChoices, roleLines, showUsers, whatsappLink,
+  EVERY_BRANCH, whoCanDoWhat, canActOn, hasOwner, mayChangeAdministrators, offeredChoices, ownershipTargets, assignmentFor, assignmentsFor, branchUnavailable, purchasingOffered, roleRows, canManageUsers, canResetSignIn, contactLine, resetProofProblem, emptyInvite, hasProblems, inviteBody, inviteProblems, matchesSearch, roleChoice, roleChoices, roleLines, showUsers, whatsappLink,
 } from './state';
 
 // The rules of the Users screen (issue #319), with fabricated people and numbers only.
@@ -138,10 +138,11 @@ describe('who can do what', () => {
   it('has one line per role, the administrator first, in the pick-list words', () => {
     const lines = whoCanDoWhat(roles, ['retail', 'lending']);
     expect(lines.map((l) => l.title)).toEqual([
-      'Administrator', 'Sales person', 'Supervisor', 'Storekeeper', 'Purchasing', 'Can close the till and do the banking', 'Loan officer',
+      'Owner', 'Administrator', 'Sales person', 'Supervisor', 'Storekeeper', 'Purchasing', 'Can close the till and do the banking', 'Loan officer',
     ]);
-    expect(lines.map((l) => l.about)).toEqual(roleChoices(roles, ['retail', 'lending']).map((c) => c.about));
-    expect(lines[0]?.about).toMatch(/every shop and store, profit and costs/);
+    expect(lines.slice(1).map((l) => l.about)).toEqual(roleChoices(roles, ['retail', 'lending']).map((c) => c.about));
+    expect(lines[0]?.about).toMatch(/only one who can add, remove or change an administrator/);
+    expect(lines[1]?.about).toMatch(/every shop and store, profit and costs/);
     expect(lines.find((l) => l.title === 'Storekeeper')?.about).toMatch(/no prices and no money/);
     expect(lines.find((l) => l.title === 'Supervisor')?.about).toMatch(/No profit, costs/);
     expect(lines.find((l) => l.title === 'Purchasing')?.about).toMatch(/buying prices of what they buy/);
@@ -149,7 +150,7 @@ describe('who can do what', () => {
   });
 
   it('leaves the retail roles out of a business without retail', () => {
-    expect(whoCanDoWhat(roles, ['lending']).map((l) => l.title)).toEqual(['Administrator', 'Loan officer']);
+    expect(whoCanDoWhat(roles, ['lending']).map((l) => l.title)).toEqual(['Owner', 'Administrator', 'Loan officer']);
   });
 
   it('adds the till in the same shops and stores when it is ticked', () => {
@@ -242,5 +243,49 @@ describe('a branch that has closed', () => {
     expect(branchUnavailable('a', branches)).toBe(false);
     expect(branchUnavailable('', branches)).toBe(false);
     expect(branchUnavailable('c', [])).toBe(false);
+  });
+});
+
+// The Owner of the business (ADR-062, FR-IAM-18): what the screen offers, with fabricated people only. The server is the authority.
+describe('the owner', () => {
+  const MANAGE = ['core.users.read', 'core.users.manage'];
+  type P = { id: string; status: string; is_owner?: boolean; roles: { role_key: string; branch_id?: string }[] };
+  const admin = (id: string, extra: Partial<P> = {}): P => ({ id, status: 'active', roles: [{ role_key: 'tenant_admin' }], ...extra });
+  const owner = admin('o', { is_owner: true });
+  const other = admin('a');
+  const cashier: P = { id: 'c', status: 'active', roles: [{ role_key: 'cashier', branch_id: 'h1' }] };
+  const people: P[] = [owner, other, cashier, admin('gone', { status: 'deactivated' }), admin('new', { status: 'invited' })];
+  const ownerMe = { user_id: 'o', permissions: MANAGE, is_owner: true };
+  const adminMe = { user_id: 'a', permissions: MANAGE, is_owner: false };
+
+  it('lets only the owner change administrators, and every administrator while the business has none', () => {
+    expect(hasOwner(people)).toBe(true);
+    expect(mayChangeAdministrators(ownerMe, people)).toBe(true);
+    expect(mayChangeAdministrators(adminMe, people)).toBe(false);
+    expect(mayChangeAdministrators(adminMe, [other, cashier])).toBe(true);
+    expect(mayChangeAdministrators({ permissions: ['core.users.read'], is_owner: true }, people)).toBe(false);
+  });
+
+  it('hides the actions on the owner and on other administrators from an administrator, never on other staff', () => {
+    expect(canActOn(adminMe, owner, people)).toBe(false);
+    expect(canActOn(adminMe, admin('b'), people)).toBe(false);
+    expect(canActOn(adminMe, cashier, people)).toBe(true);
+    expect(canActOn(adminMe, other, people)).toBe(true);
+    expect(canActOn(ownerMe, other, people)).toBe(true);
+    expect(canActOn(ownerMe, owner, people)).toBe(true);
+  });
+
+  it('offers the administrator role only to someone who may give it', () => {
+    const choices = roleChoices([{ key: 'tenant_admin' }, { key: 'cashier' }], ['lending']);
+    expect(offeredChoices(choices, ownerMe, people).map((c) => c.key)).toEqual(['tenant_admin', 'cashier']);
+    expect(offeredChoices(choices, adminMe, people).map((c) => c.key)).toEqual(['cashier']);
+    // While the staff list loads, only the Owner sees the administrator role, so it never flashes for anyone else.
+    expect(offeredChoices(choices, adminMe, null).map((c) => c.key)).toEqual(['cashier']);
+    expect(offeredChoices(choices, ownerMe, null).map((c) => c.key)).toEqual(['tenant_admin', 'cashier']);
+  });
+
+  it('hands ownership only to another active administrator, and only from the owner', () => {
+    expect(ownershipTargets(ownerMe, people).map((p) => p.id)).toEqual(['a']);
+    expect(ownershipTargets(adminMe, people)).toEqual([]);
   });
 });
