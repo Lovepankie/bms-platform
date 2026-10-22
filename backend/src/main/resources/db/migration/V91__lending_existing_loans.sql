@@ -7,7 +7,7 @@
 -- Numbering: main holds V80 to V84 (lending V81 to V84, the last the arrears notices of #290). V91 is an ordered claim:
 -- payments (#315 and #318, which hold V84 and V85 on their branches today and renumber to V85 and V86 at merge),
 -- offline sales V87, shop logos V88, referrals V89 and barcodes V90 come first, so this keeps V91 and is renumbered
--- only if one of them merges under another number.
+-- only if one of them merges under another number. Self-serve claims V93 after it (the AGENTS.md migration ledger).
 
 -- ---------------------------------------------------------------------------------------------
 -- lending_loans: the brought_in status (recorded, waiting for its checker; it counts nowhere until approved) and what
