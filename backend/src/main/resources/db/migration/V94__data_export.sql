@@ -65,6 +65,29 @@ SELECT bms_apply_tenant_rls('data_export_weekly');
 SELECT bms_grant_app('data_export_weekly', 'SELECT, INSERT');
 GRANT UPDATE (status, attached, reason, finished_at) ON data_export_weekly TO bms_app;
 
+-- The businesses the weekly email goes to (ADR-074 decision 7): every active one, and one whose subscription has ended (a
+-- suspended tenant, read only) for 90 days after the end, so a business that is leaving gets its copies while it decides.
+-- The end is the last move of the subscription into suspended or cancelled from a working status in the operator's audit
+-- (every such move is written there, V2 and V75), else the subscription's or the tenant's last change, else its creation.
+-- Ids only, executable by bms_app only.
+CREATE FUNCTION app_data_export_weekly_tenants(p_now timestamptz) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT t.id FROM tenants t
+     WHERE t.status = 'active'
+        OR (t.status = 'suspended'
+            AND coalesce(
+                    (SELECT max(a.occurred_at) FROM platform_audit_log a
+                      WHERE a.tenant_id = t.id AND a.action = 'platform.tenant.subscription_changed'
+                        AND a.data ->> 'after' IN ('suspended', 'cancelled')
+                        AND coalesce(a.data ->> 'before', '') NOT IN ('suspended', 'cancelled')),
+                    (SELECT s.updated_at FROM subscriptions s WHERE s.tenant_id = t.id),
+                    t.updated_at,
+                    t.created_at) > p_now - interval '90 days')
+     ORDER BY t.id
+$$;
+REVOKE ALL ON FUNCTION app_data_export_weekly_tenants(timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_data_export_weekly_tenants(timestamptz) TO bms_app;
+
 -- What the outbox made of a week's email, for the bound tenant only: pending, sent or failed, or null when there is no row
 -- (a sent row is purged after its days). The outbox is reached only through functions (V23); this one reads one row by the
 -- week's own key and returns its status, nothing else.

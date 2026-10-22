@@ -75,8 +75,11 @@ never change data, never show one business another's rows, and never hold a larg
    file. A suspended tenant answers 423 to every write except two reads that are a `POST`: asking for the workbook and the signed
    address of a file; the runner's three definer functions (V49) now include suspended tenants. The nightly expiry of report
    files no longer walks the active tenants only: `app_tenants_with_expired_report_files` lists every tenant with a file past
-   its 30 days, whatever its status, so a suspended or ended business's workbook is deleted on time like any other. The weekly email follows the
-   platform's active tenants only: an ended business keeps "Download my data" but no longer gets the Monday email.
+   its 30 days, whatever its status, so a suspended or ended business's workbook is deleted on time like any other. An ended business keeps
+   "Download my data" and also keeps the weekly email, with the same attachment rules (decision 6) and the same sign-in link
+   (decision 9), for 90 days after the end, then it stops: a business that is leaving gets its copies while it decides, and
+   the Owner of one that left long ago is not emailed its data for ever. The end is the last move of the subscription into
+   suspended or cancelled in the operator's audit (`app_data_export_weekly_tenants`).
 8. **The card.** Business set-up shows "Download my data" to holders of the permission: when the business's data was last
    exported (by anyone) and last emailed, the caller's newest full workbook (preparing, ready to save until its expiry, or why it
    failed) and the weekly switch. The welcome tour has a step for it.

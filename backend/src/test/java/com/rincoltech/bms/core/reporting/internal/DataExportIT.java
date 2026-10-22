@@ -613,6 +613,56 @@ class DataExportIT extends LendingBookSupport {
                 .containsExactly(DataExportWeekly.NOT_MADE);
     }
 
+    /** The subscription ended {@code daysAgo} days before the test clock, as the operator's audit records it. */
+    void ended(TestDatabase.Fixture t, int daysAgo) {
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                .param(t.tenantId())
+                .update();
+        TestDatabase.owner()
+                .sql("INSERT INTO platform_audit_log (id, occurred_at, action, tenant_id, data)"
+                        + " VALUES (?, ?, 'platform.tenant.subscription_changed', ?,"
+                        + " '{\"before\": \"active\", \"after\": \"cancelled\"}'::jsonb)")
+                .params(
+                        UUID.randomUUID(),
+                        Timestamp.from(TestReports.START.minus(java.time.Duration.ofDays(daysAgo))),
+                        t.tenantId())
+                .update();
+    }
+
+    @Test
+    void anEndedBusinessGetsTheWeeklyEmailForNinetyDaysAfterTheEndThenItStops() throws Exception {
+        Shop recent = shop("DXR");
+        Shop old = shop("DXO");
+        owner(recent.t());
+        owner(old.t());
+        ended(recent.t(), 10);
+        ended(old.t(), 91);
+        weekly.tick();
+        drain();
+        weekly.tick();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT template_key FROM notification_outbox WHERE recipient = ?")
+                        .param(ownerEmail(recent.t()))
+                        .query(String.class)
+                        .list())
+                .as("ended 10 days ago: the email as for any business")
+                .containsExactly(DataExportWeekly.ATTACHED);
+        assertThat(count(
+                        "SELECT count(*) FROM data_export_weekly WHERE tenant_id = ?",
+                        old.t().tenantId()))
+                .as("ended 91 days ago: no more")
+                .isZero();
+
+        // The same business 81 days later is past its 90 days: nothing more is queued.
+        clock.set(TestReports.START.plus(java.time.Duration.ofDays(81)));
+        weekly.tick();
+        assertThat(count(
+                        "SELECT count(*) FROM data_export_weekly WHERE tenant_id = ?",
+                        recent.t().tenantId()))
+                .isEqualTo(1);
+    }
+
     @Test
     void aWeekWithNoOwnerToEmailIsRecordedAsSkippedOnce() {
         Shop s = shop("DXN");

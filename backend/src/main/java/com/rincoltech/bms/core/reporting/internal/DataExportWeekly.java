@@ -32,7 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The weekly copy of the business's data (issue #334 step 1, ADR-074), the job {@code core.reporting.data-export-weekly}
- * every 15 minutes. For each active business, in two short transactions of its own:
+ * every 15 minutes. For each active business, and each whose subscription ended less than 90 days ago (ADR-074 decision 7),
+ * in two short transactions of its own:
  *
  * <ol>
  *   <li><b>Queue.</b> From 02:00 on Monday in the business's time zone, while the weekly email is on, the week's workbook is
@@ -103,12 +104,15 @@ class DataExportWeekly {
         this.attachMaxBytes = attachMaxBytes;
     }
 
-    /** One pass over every active business; returns how many emails it queued. */
+    /** One pass over every business the email goes to; returns how many emails it queued. */
     int tick() {
         int emailed = 0;
         int failures = 0;
-        for (UUID tenantId :
-                jdbc.sql("SELECT app_list_active_tenants()").query(UUID.class).list()) {
+        // Every active business, and one whose subscription ended less than 90 days ago (decision 7).
+        for (UUID tenantId : jdbc.sql("SELECT app_data_export_weekly_tenants(?)")
+                .param(Timestamp.from(clock.now()))
+                .query(UUID.class)
+                .list()) {
             try {
                 emailed += tenantJobs.callAs(tenantId, () -> {
                     tx.executeWithoutResult(this::queueWeek);

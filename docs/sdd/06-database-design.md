@@ -787,7 +787,8 @@ Owner it was made for, composite foreign key to `users`), `status text NOT NULL`
 queues one workbook and one email however often it runs. Checks: a `skipped` week has no run and every other one has; only a
 `preparing` or `queued` week has no `finished_at`. Partial index on those open weeks. The definer function
 `app_data_export_weekly_email_status(week_id)` returns the outbox status of the week's own email for the bound tenant, so the
-week becomes `emailed` only when it was sent. `bms_app` holds SELECT and INSERT, and UPDATE of
+week becomes `emailed` only when it was sent; `app_data_export_weekly_tenants(now)` lists the businesses the weekly job visits:
+the active ones and those whose subscription ended less than 90 days ago (ADR-074 decision 7). `bms_app` holds SELECT and INSERT, and UPDATE of
 `status`, `attached`, `reason` and `finished_at` only.
 
 ### `payment_methods` (RLS)
