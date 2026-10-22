@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { cameraProblem } from './camera-scan';
+import { cameraProblem, twoFramesInARow } from './camera-scan';
 
 // The camera's refusals in plain words (ADR-070, issue #345): what happened and what to do next.
+
+describe('FR-RET-68 a camera read', () => {
+  it('counts a code only once two frames in a row read it', () => {
+    const confirm = twoFramesInARow();
+    expect(confirm('4006381333931')).toBeNull();
+    expect(confirm('4006381333937')).toBeNull();
+    expect(confirm(null)).toBeNull();
+    expect(confirm('4006381333931')).toBeNull();
+    expect(confirm('4006381333931')).toBe('4006381333931');
+    expect(confirm('4006381333931')).toBeNull();
+  });
+});
 
 describe('FR-RET-68 camera problems', () => {
   it('says how to allow a blocked camera', () => {

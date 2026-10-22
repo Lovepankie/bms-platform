@@ -32,6 +32,19 @@ export function cameraProblem(error: unknown): string {
   }
 }
 
+/**
+ * A misread frame can yield a wrong code, so a code counts only when two frames in a row read it: returns the code on the
+ * second matching read, null otherwise (a frame with nothing, or a different code, starts again).
+ */
+export function twoFramesInARow(): (code: string | null) => string | null {
+  let last: string | null = null;
+  return (code) => {
+    const sure = code !== null && code === last ? code : null;
+    last = sure ? null : code;
+    return sure;
+  };
+}
+
 /** A reader of one frame: the browser's BarcodeDetector, or the Quagga2 fallback loaded now. */
 async function makeReader(): Promise<(frame: HTMLCanvasElement) => Promise<string | null>> {
   const Native = (window as unknown as { BarcodeDetector?: DetectorClass & { getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
@@ -78,6 +91,7 @@ export default function CameraScanner({ onCode, onClose }: { onCode: (code: stri
         video.current.srcObject = stream;
         await video.current.play().catch(() => undefined);
         const read = await makeReader();
+        const confirm = twoFramesInARow();
         const tick = async () => {
           if (stopped || !video.current) return;
           const v = video.current;
@@ -85,7 +99,7 @@ export default function CameraScanner({ onCode, onClose }: { onCode: (code: stri
             canvas.width = v.videoWidth;
             canvas.height = v.videoHeight;
             canvas.getContext('2d')?.drawImage(v, 0, 0);
-            const code = await read(canvas).catch(() => null);
+            const code = confirm(await read(canvas).catch(() => null));
             if (code && !stopped) {
               stop();
               found.current(code);
