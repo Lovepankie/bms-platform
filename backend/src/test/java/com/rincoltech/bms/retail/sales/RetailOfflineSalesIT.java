@@ -1018,6 +1018,35 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(sales()).isEqualTo(2);
     }
 
+    /**
+     * A refusal reported as client_sale_conflict (another sale is recorded under the id) stays open for a manager: the sale
+     * recorded is not the one refused, so it never closes the report.
+     */
+    @Test
+    void aConflictReportStaysOpenThoughASaleHasItsId() {
+        api.stockUp(t.headOffice(), product, "5");
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "1", 2_000);
+        ResponseEntity<JsonNode> sold = send(request, UUID.randomUUID().toString());
+        assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
+
+        Map<String, Object> changed = offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "2", 2_000);
+        Map<String, Object> report = failureReport(client, changed);
+        report.put("code", "client_sale_conflict");
+        report.put("message", "This client sale id was used for a different sale.");
+        ResponseEntity<JsonNode> reported = api.post("/offline-failures", report, SALES);
+        assertThat(reported.getStatusCode()).as("%s", reported.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(reported.getBody().get("status").asString()).isEqualTo("open");
+        assertThat(reported.getBody().path("sale_id").isMissingNode()
+                        || reported.getBody().get("sale_id").isNull())
+                .isTrue();
+        assertThat(api.post("/offline-failures", report, SALES)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("open");
+    }
+
     /** How many backends wait for the transaction with this id, polled for up to 30 seconds until one does. */
     long waitersOn(String txid) throws InterruptedException {
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
