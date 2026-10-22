@@ -387,6 +387,34 @@ the cap freed by the cancelled amount, an imported loan not back-charged, and th
 failing two nights running, none for a loan that did not fail on the previous finished run, and the
 push still sent when a night with no run lies between the two failing runs; the time-zone case runs on a
 pinned clock.
+
+Waivers (#265). `ServicingTest` replays a schedule with a standing waiver and a rebate: the waiver
+stays, the rebate is recomputed. `LoanLedgerTest` credits a waiver on its date between the two
+payments of that day by when it was recorded, and counts it only for the later receipt.
+`LoanServicingIT` waives part of a penalty through maker and checker (the maker cannot approve,
+nothing changes before the checker, nothing is posted, the statement shows it and reconciles),
+refuses more than is left, waives the rest without an amount, closes the loan on payoff, and
+reverses a payment made after two waivers without undoing them. After the review of #271 it also checks that the maker's
+own decision is refused as `self_approval_forbidden`, that waivers split under the threshold reach a
+checker once their total passes it, and that a waiver is refused on a written-off loan and not found
+from another branch. The second review added: a partly waived penalty still cancelled by a
+back-dated repayment (3,500 of 4,000), a waiver of a later penalty that never blocks paying an earlier
+one, the checker seeing the waiver's own amount, and the loan's officer refused as a decider.
+from another branch.
+
+Collections (#266). `PromisesTest` covers kept, open and broken without a database.
+`LoanServicingIT` reassigns two loans at once (audited, all or none against an unknown loan,
+refusing a cashier, an officer of another branch, an unknown user and a caller without the
+permission), lists the items due today and over a range with its limit, lists arrears by bucket,
+logs actions with each refusal, and lets the nightly run keep one promise, break one and leave one
+open, with the action guard refusing a change of note. A pending approval stays current across the
+nightly run (`frArr01_theNightlyRunLeavesPendingApprovalsCurrent`). After the review of #272: a list capped at its limit says it
+was cut and keeps the bucket totals, a caller without members read sees masked phones, one payment
+keeps one promise only, and a reversal reopens a kept promise the next night. After the second
+review: the real cashier and auditor roles see masked phones and the loan officer whole ones, a loan
+officer sees only their own portfolio, a reassignment needs a reason and refuses a deactivated officer,
+the Owner moves loans of two branches in one call, and a payment recorded before a promise never keeps
+it while one entered after and dated back into its window does.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

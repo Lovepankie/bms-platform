@@ -164,6 +164,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.loans       -> bms.api.documents "Renders receipts, vouchers, schedules and statements as PDF, synchronously on request (ADR-034): a receipt or voucher is stored once, a schedule or statement never; no render or upload runs under the loan's row lock"
         bms.api.loans       -> bms.api.tenancy "Reads the tenant's letterhead (name, logo, brand colour, receipt footer) for generated documents"
         bms.api.loans       -> bms.api.audit "Writes audit rows"
+        bms.api.loans       -> bms.api.identity "Checks that a new responsible officer is an active staff user who may create loans in the loan's branch (StaffDirectory, FR-CLN-01), once per branch of a reassignment"
         bms.api.loans       -> bms.db "Reads and writes loans, schedule items, transactions and allocations"
         bms.api.approvals   -> bms.api.loans "Executes approved loan_disbursement, repayment_reversal and loan_write_off through the action registry (ADR-015, ADR-026)"
         bms.api.approvals   -> bms.api.retailSales "Executes an approved retail_sale_return through the action registry (ADR-015, ADR-033)"

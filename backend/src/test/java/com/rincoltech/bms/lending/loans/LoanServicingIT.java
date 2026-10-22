@@ -2486,6 +2486,143 @@ class LoanServicingIT extends LoanFixtures {
         assertThat(loan(loan).get("status").asString()).isEqualTo("written_off");
     }
 
+    /** A product that charges 2,000 a day from the day after the due date. */
+    String dailyPenaltyProduct(String code) {
+        Map<String, Object> penalty = new LinkedHashMap<>();
+        penalty.put("penalty_method", "flat_per_period");
+        penalty.put("penalty_period_unit", "day");
+        penalty.put("penalty_grace_days", 0);
+        penalty.put("penalty_flat_minor", 2_000);
+        return product(code, penalty, List.of());
+    }
+
+    /**
+     * The waiver's maker and checker are foreign keys to users (chapter 6, lending_charge_waivers), so the manager who
+     * requests and the accountant who approves are the business's staff here, as they are in production.
+     */
+    ResponseEntity<JsonNode> requestWaiver(String loan, String charge, Long amount) {
+        for (UUID staff : List.of(manager, accountant)) {
+            TestDatabase.owner()
+                    .sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                            + " VALUES (?, ?, 'staff', 'Test Staff', ?, 'active') ON CONFLICT DO NOTHING")
+                    .params(staff, t.tenantId(), staff + "@example.test")
+                    .update();
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount_minor", amount);
+        body.put("reason", "Test goodwill");
+        return send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/charges/" + charge + "/waive",
+                withKey(as(manager, managerPerms, "*", null), key()),
+                body);
+    }
+
+    /** Requested by the manager and approved by the accountant. */
+    void waived(String loan, String charge, Long amount) {
+        ResponseEntity<JsonNode> r = requestWaiver(loan, charge, amount);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        ResponseEntity<JsonNode> d =
+                decide(r.getBody().get("approval_request_id").asString(), accountant, accountantPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * FR-ARR-04: a waiver of part of a penalty is maker-checker, posts nothing, shows on the
+     * statement on its date, and is refused above what is left; waiving the rest and paying the
+     * contract closes the loan.
+     */
+    @Test
+    void frArr04_aWaiverTakesThePenaltyOffAndPostsNothing() throws Exception {
+        String loan = approved(dailyPenaltyProduct("WAIVE"), 1_200_000, 3, 94);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        assertThat(charges).hasSize(5);
+        assertThat(charges.get(0).get("waivable_minor").asLong()).isEqualTo(2_000);
+        String first = charges.get(0).get("id").asString();
+
+        ResponseEntity<JsonNode> tooMuch = requestWaiver(loan, first, 3_000L);
+        assertThat(tooMuch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(tooMuch.getBody().get("code").asString()).isEqualTo("waiver_exceeds_charge");
+
+        ResponseEntity<JsonNode> r = requestWaiver(loan, first, 1_500L);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String approval = r.getBody().get("approval_request_id").asString();
+        ResponseEntity<JsonNode> self = decide(approval, manager, managerPerms);
+        assertThat(self.getStatusCode()).as("the maker never approves").isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(self.getBody().get("code").asString()).isEqualTo("self_approval_forbidden");
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .as("nothing changes before the checker")
+                .isEqualTo(10_000);
+        assertThat(decide(approval, accountant, accountantPerms).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isEqualTo(8_500);
+        assertThat(b.get("penalties_assessed_minor").asLong())
+                .as("assessed stays gross")
+                .isEqualTo(10_000);
+        JsonNode after = get(loan, "/charges").get("items").get(0);
+        assertThat(after.get("waived_minor").asLong()).isEqualTo(1_500);
+        assertThat(after.get("waivable_minor").asLong()).isEqualTo(500);
+        assertThat(get(loan, "/schedule")
+                        .get("items")
+                        .get(0)
+                        .get("waived_minor")
+                        .asLong())
+                .isEqualTo(1_500);
+
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertReconciles(statement, b.get("total_outstanding_minor").asLong());
+        assertThat(statementRows(statement))
+                .filteredOn(row -> row.line().contains("Penalties waived"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.credited()).isEqualTo(1_500));
+
+        // The rest of the charge, all that is left when no amount is given, then the whole loan.
+        waived(loan, first, null);
+        assertThat(requestWaiver(loan, first, null).getBody().get("code").asString())
+                .isEqualTo("nothing_to_waive");
+        long payoff = get(loan, "/payoff-quote").get("total_minor").asLong();
+        repaid(loan, payoff, today);
+        assertThat(loan(loan).get("status").asString()).isEqualTo("closed");
+        booksAgree();
+    }
+
+    /**
+     * ADR-026 Watch for: a reversal replays the repayments from the schedule with its standing
+     * waivers, so it gives the money back without undoing the waiver.
+     */
+    @Test
+    void frArr04_aReversalKeepsTheWaiver() {
+        String loan = approved(dailyPenaltyProduct("WAIVEREV"), 1_200_000, 3, 95);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        waived(loan, charges.get(0).get("id").asString(), null);
+        waived(loan, charges.get(1).get("id").asString(), null);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(6_000);
+
+        String paid = repaid(loan, 6_000, today).get("transaction").get("id").asString();
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isZero();
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, paid), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .as("the payment comes back, the 4,000 waived stays waived")
+                .isEqualTo(6_000);
+        assertThat(get(loan, "/schedule")
+                        .get("items")
+                        .get(0)
+                        .get("waived_minor")
+                        .asLong())
+                .isEqualTo(4_000);
+        booksAgree();
+    }
+
     /**
      * The review of #270, finding 1: item 1 is five days overdue with five daily penalties. A repayment of exactly its
      * principal and interest, dated its due date, pays no penalty (none existed on that date), pays the item up, and
@@ -2577,6 +2714,79 @@ class LoanServicingIT extends LoanFixtures {
                         .single())
                 .as("a finished date is not claimed again")
                 .isEqualTo(2);
+    }
+
+    /**
+     * The review of #271: the waiver threshold weighs everything already waived on the loan with the request, so a
+     * waiver split into requests each under the threshold still reaches a checker once the total passes it.
+     */
+    @Test
+    void frArr04_splitWaiversCannotAvoidTheChecker() {
+        TestDatabase.owner()
+                .sql("INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (?, ?,"
+                        + " '{\"approval_thresholds_minor\": {\"charge_waiver\": 5000}}')")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        String loan = approved(dailyPenaltyProduct("WAIVESPLIT"), 1_200_000, 3, 93);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        for (int i = 0; i < 2; i++) {
+            ResponseEntity<JsonNode> r =
+                    requestWaiver(loan, charges.get(i).get("id").asString(), null);
+            assertThat(r.getStatusCode().is2xxSuccessful())
+                    .as("%s", r.getBody())
+                    .isTrue();
+            assertThat(r.getBody().get("executed").asBoolean())
+                    .as("%s waived in all, under the threshold", 2_000 * (i + 1))
+                    .isTrue();
+        }
+        ResponseEntity<JsonNode> third =
+                requestWaiver(loan, charges.get(2).get("id").asString(), null);
+        assertThat(third.getStatusCode()).as("%s", third.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(third.getBody().get("executed").asBoolean())
+                .as("6,000 waived in all would pass the threshold")
+                .isFalse();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT amount_minor FROM approval_requests WHERE id = ?::uuid")
+                        .param(third.getBody().get("approval_request_id").asString())
+                        .query(Long.class)
+                        .single())
+                .as("the checker sees this waiver's own amount")
+                .isEqualTo(2_000);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(6_000);
+    }
+
+    /** The review of #271: a waiver is refused on a written-off loan and is not found from another branch. */
+    @Test
+    void frArr04_noWaiverOnAWrittenOffLoanOrFromAnotherBranch() {
+        String loan = approved(dailyPenaltyProduct("WAIVENOT"), 1_200_000, 3, 92);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        String charge = get(loan, "/charges").get("items").get(0).get("id").asString();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("reason", "Test goodwill");
+        ResponseEntity<JsonNode> elsewhere = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/charges/" + charge + "/waive",
+                withKey(as(manager, managerPerms, t.secondBranch().toString(), null), key()),
+                body);
+        assertThat(elsewhere.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        ResponseEntity<JsonNode> w = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/write-off",
+                withKey(as(accountant, accountantPerms, "*", null), key()),
+                Map.of("reason", "Test borrower unreachable"));
+        assertThat(w.getStatusCode()).as("%s", w.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        ResponseEntity<JsonNode> d =
+                decide(w.getBody().get("approval_request_id").asString(), admin, adminPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> writtenOff = requestWaiver(loan, charge, null);
+        assertThat(writtenOff.getStatusCode()).as("%s", writtenOff.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(writtenOff.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
     }
 
     long rechargedMinor(String loan) {
@@ -2758,6 +2968,69 @@ class LoanServicingIT extends LoanFixtures {
     }
 
     /**
+     * The review of #271, finding 5 (critical): penalties of 2,000 on day +1 and day +2, 500 of day +2 waived, then a
+     * repayment dated the due date pays the principal and interest. Both penalties were charged after he paid up:
+     * day +1 is cancelled whole and day +2 for its unwaived 1,500, so nothing is left owing.
+     */
+    @Test
+    void frArr04_aPartlyWaivedPenaltyIsStillCancelledByABackDatedRepayment() {
+        String loan = approved(dailyPenaltyProduct("WAIVECANCEL"), 1_200_000, 3, 68);
+        disburse(loan, today.minusMonths(1).minusDays(2));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        assertThat(charges).hasSize(2);
+        waived(loan, charges.get(1).get("id").asString(), 500L);
+        LocalDate due = LocalDate.parse(
+                get(loan, "/schedule").get("items").get(0).get("due_date").asString());
+        repaid(loan, 520_000, due);
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT coalesce(sum(amount_minor), 0) FROM lending_charge_cancels WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(3_500);
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isZero();
+        assertThat(get(loan, "/schedule").get("items").get(0).get("status").asString())
+                .isEqualTo("paid");
+        booksAgree();
+    }
+
+    /**
+     * The review of #271, finding 6: a waiver is netted against its own charge. Day +5's penalty waived in full, a
+     * payment of 2,000 dated day +1 pays day +1's penalty, which the later waiver does not hide.
+     */
+    @Test
+    void frArr04_aWaiverOfALaterPenaltyNeverBlocksPayingAnEarlierOne() {
+        String loan = approved(dailyPenaltyProduct("WAIVEDATE"), 1_200_000, 3, 67);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        waived(loan, charges.get(4).get("id").asString(), null);
+        LocalDate due = LocalDate.parse(
+                get(loan, "/schedule").get("items").get(0).get("due_date").asString());
+        JsonNode paid = repaid(loan, 2_000, due.plusDays(1)).get("transaction");
+        assertThat(lines(paid.get("journal_entry_id").asString())).contains("loan_penalty_income:0:2000");
+        booksAgree();
+    }
+
+    /** The review of #271: the loan's own officer, even holding the approve permission, may not decide its waiver. */
+    @Test
+    void frArr04_theLoansOfficerCannotApproveItsWaiver() {
+        String loan = approved(dailyPenaltyProduct("WAIVEOFF"), 1_200_000, 3, 66);
+        disburse(loan, today.minusMonths(1).minusDays(2));
+        runArrears();
+        ResponseEntity<JsonNode> r = requestWaiver(
+                loan, get(loan, "/charges").get("items").get(0).get("id").asString(), null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        ResponseEntity<JsonNode> d =
+                decide(r.getBody().get("approval_request_id").asString(), officer, accountantPerms);
+        assertThat(d.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(d.getBody().get("code").asString()).isEqualTo("approver_conflict");
+    }
+
+    /**
      * The delta review of #270, finding 1: A, dated the first due date, pays item 1 up and cancels its penalties; B,
      * dated today, pays item 2 and its penalties. Reversing A must meet B with item 1's penalties charged again, so
      * the penalty-first order books B's money to penalty income first, not to principal.
@@ -2932,5 +3205,541 @@ class LoanServicingIT extends LoanFixtures {
         assertThat(failingAlerts(loan))
                 .singleElement()
                 .satisfies(n -> assertThat(n.eventRef()).isEqualTo(loan + ":" + today));
+    }
+
+    // ---- Collections (FR-CLN-01 to FR-CLN-05) ---------------------------------------------
+
+    JsonNode lending(String path) {
+        ResponseEntity<JsonNode> r = asOfficer(HttpMethod.GET, "/api/v1/lending" + path, null, null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        return r.getBody();
+    }
+
+    UUID staffUser(String role, UUID branch) {
+        return com.rincoltech.bms.testsupport.Api.staff(
+                t,
+                role + "-" + UUID.randomUUID() + "@example.test",
+                new com.rincoltech.bms.testsupport.Api.Role(role, branch));
+    }
+
+    /**
+     * FR-CLN-01: one loan or many move to an officer who can originate loans in their branch, all or
+     * none, audited; a cashier, an officer of another branch and a caller without the permission are
+     * refused.
+     */
+    @Test
+    void cln01_reassignIsAuditedAndAllOrNone() {
+        String a = approved(exampleB("REASSA"), 1_200_000, 3, 81);
+        disburse(a, today.minusDays(3));
+        String b = approved(exampleB("REASSB"), 1_200_000, 3, 82);
+        UUID next = staffUser("loan_officer", t.headOffice());
+        UUID cashierUser = staffUser("cashier", t.headOffice());
+        UUID elsewhere = staffUser("loan_officer", t.secondBranch());
+
+        for (UUID wrong : List.of(cashierUser, elsewhere, UUID.randomUUID())) {
+            ResponseEntity<JsonNode> r = send(
+                    HttpMethod.PUT,
+                    LOANS + "/" + a + "/officer",
+                    as(manager, managerPerms, "*", null),
+                    Map.of("officer_user_id", wrong.toString(), "reason", "Test reassignment"));
+            assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(r.getBody().get("code").asString()).isEqualTo("officer_not_eligible");
+        }
+        assertThat(send(
+                                HttpMethod.POST,
+                                "/api/v1/lending/collections/reassign",
+                                as(cashier, cashierPerms, "*", null),
+                                Map.of(
+                                        "loan_ids",
+                                        List.of(a),
+                                        "officer_user_id",
+                                        next.toString(),
+                                        "reason",
+                                        "Test reassignment"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        ResponseEntity<JsonNode> moved = send(
+                HttpMethod.POST,
+                "/api/v1/lending/collections/reassign",
+                as(manager, managerPerms, "*", null),
+                Map.of("loan_ids", List.of(a, b), "officer_user_id", next.toString(), "reason", "Test reassignment"));
+        assertThat(moved.getStatusCode()).as("%s", moved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(moved.getBody().get("reassigned").asInt()).isEqualTo(2);
+        assertThat(loan(a).get("officer_user_id").asString()).isEqualTo(next.toString());
+        assertThat(loan(b).get("officer_user_id").asString()).isEqualTo(next.toString());
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM audit_log WHERE action = 'lending.loan.officer_reassigned'"
+                                + " AND entity_id = ?::uuid")
+                        .param(a)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+
+        UUID other = staffUser("loan_officer", t.headOffice());
+        ResponseEntity<JsonNode> partly = send(
+                HttpMethod.POST,
+                "/api/v1/lending/collections/reassign",
+                as(manager, managerPerms, "*", null),
+                Map.of(
+                        "loan_ids",
+                        List.of(b, UUID.randomUUID().toString()),
+                        "officer_user_id",
+                        other.toString(),
+                        "reason",
+                        "Test reassignment"));
+        assertThat(partly.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(loan(b).get("officer_user_id").asString()).as("all or none").isEqualTo(next.toString());
+    }
+
+    /** FR-CLN-02 and FR-CLN-03: the due list for a date or range, and the arrears list by bucket. */
+    @Test
+    void cln02_03_theDueListAndTheArrearsList() {
+        String late = approved(exampleB("DUELATE"), 1_200_000, 3, 83);
+        disburse(late, today.minusMonths(1).minusDays(3));
+        String dueToday = approved(exampleB("DUETODAY"), 1_200_000, 3, 84);
+        disburse(dueToday, today.minusMonths(1));
+
+        JsonNode todayList = lending("/collections/due-list");
+        assertThat(todayList.get("items")).hasSize(1);
+        JsonNode line = todayList.get("items").get(0);
+        assertThat(line.get("loan_id").asString()).isEqualTo(dueToday);
+        assertThat(line.get("due_minor").asLong()).isEqualTo(520_000);
+        assertThat(line.get("outstanding_minor").asLong()).isEqualTo(520_000);
+        assertThat(line.get("member_name").asString()).isEqualTo("Test Borrower 84");
+
+        JsonNode range = lending("/collections/due-list?date_from=" + today.minusDays(3) + "&date_to=" + today);
+        assertThat(range.get("items")).hasSize(2);
+        ResponseEntity<JsonNode> tooLong = asOfficer(
+                HttpMethod.GET,
+                "/api/v1/lending/collections/due-list?date_from=" + today + "&date_to=" + today.plusDays(100),
+                null,
+                null);
+        assertThat(tooLong.getBody().get("code").asString()).isEqualTo("range_too_long");
+
+        runArrears();
+        JsonNode arrears = lending("/collections/arrears");
+        assertThat(arrears.get("buckets")).hasSize(4);
+        JsonNode first = arrears.get("buckets").get(0);
+        assertThat(first.get("par_bucket").asString()).isEqualTo("1_30");
+        assertThat(first.get("loans").asInt()).isEqualTo(1);
+        assertThat(first.get("items").get(0).get("loan_id").asString()).isEqualTo(late);
+        assertThat(first.get("items").get(0).get("days_past_due").asInt()).isEqualTo(3);
+        assertThat(first.get("items").get(0).get("arrears_minor").asLong()).isEqualTo(520_000);
+        assertThat(lending("/collections/arrears?bucket=31_60")
+                        .get("buckets")
+                        .get(0)
+                        .get("loans")
+                        .asInt())
+                .isZero();
+        assertThat(asOfficer(HttpMethod.GET, "/api/v1/lending/collections/arrears?bucket=2_5", null, null)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("invalid_bucket");
+    }
+
+    /** An action's performer is a foreign key to users (chapter 6, lending_collection_actions), so the officer is. */
+    void officerIsStaff() {
+        TestDatabase.owner()
+                .sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                        + " VALUES (?, ?, 'staff', 'Test Officer', ?, 'active') ON CONFLICT DO NOTHING")
+                .params(officer, t.tenantId(), officer + "@example.test")
+                .update();
+    }
+
+    ResponseEntity<JsonNode> logAction(String loan, Map<String, Object> body) {
+        officerIsStaff();
+        return send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/collection-actions",
+                as(officer, officerPerms, "*", null),
+                body);
+    }
+
+    static Map<String, Object> promise(LocalDate date, long amount) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("action_type", "promise_to_pay");
+        body.put("note", "Test promise");
+        body.put("promised_date", date.toString());
+        body.put("promised_amount_minor", amount);
+        return body;
+    }
+
+    /**
+     * FR-CLN-04 and FR-CLN-05: actions form an append-only timeline; the nightly run marks a promise
+     * kept once the payments since it reach its amount, broken the day after its date otherwise, and
+     * leaves one that is still open.
+     */
+    @Test
+    void cln04_05_actionsAndPromisesSettledByTheNightlyRun() {
+        String loan = approved(exampleB("PROMISE"), 1_200_000, 3, 85);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+
+        assertThat(logAction(loan, Map.of("action_type", "call", "note", "Test call, no answer"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(logAction(loan, Map.of("action_type", "visit"))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("note_required");
+        assertThat(logAction(loan, Map.of("action_type", "promise_to_pay"))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("promise_incomplete");
+        assertThat(logAction(loan, promise(today.minusDays(1), 100_000))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("promised_date_in_past");
+        assertThat(logAction(loan, Map.of("action_type", "shout", "note", "x"))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("invalid_action_type");
+        ResponseEntity<JsonNode> soon = logAction(loan, promise(today, 100_000));
+        assertThat(soon.getStatusCode()).as("%s", soon.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(soon.getBody().get("promise_status").asString()).isEqualTo("pending");
+        String later = logAction(loan, promise(today.plusDays(2), 300_000))
+                .getBody()
+                .get("id")
+                .asString();
+        // A promise made five days ago for yesterday, with nothing paid since.
+        String missed = UUID.randomUUID().toString();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO lending_collection_actions (id, tenant_id, loan_id, action_type, note, promised_date,
+                            promised_amount_minor, promise_status, performed_by, performed_at)
+                        VALUES (?::uuid, ?, ?::uuid, 'promise_to_pay', 'Test promise', ?, 999999, 'pending', ?,
+                                now() - interval '5 days')
+                        """)
+                .params(missed, t.tenantId(), loan, today.minusDays(1), officer)
+                .update();
+
+        JsonNode timeline = get(loan, "/collection-actions").get("items");
+        assertThat(timeline).hasSize(4);
+        assertThat(timeline.get(0).get("id").asString()).isEqualTo(later);
+
+        repaid(loan, 100_000, today);
+        runArrears();
+        assertThat(lending("/collections/promises?promise_status=kept").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString())
+                        .isEqualTo(soon.getBody().get("id").asString()));
+        assertThat(lending("/collections/promises?promise_status=broken").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(missed));
+        assertThat(lending("/collections/promises").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(later));
+        JsonNode inArrears = lending("/collections/arrears?bucket=1_30")
+                .get("buckets")
+                .get(0)
+                .get("items")
+                .get(0);
+        assertThat(inArrears.get("last_action_type").asString()).isEqualTo("promise_to_pay");
+        assertThat(inArrears.get("promised_date").asString())
+                .isEqualTo(today.plusDays(2).toString());
+
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_collection_actions SET note = 'changed' WHERE loan_id = ?::uuid")
+                        .param(loan)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("may only settle a promise");
+    }
+
+    /** A GET on a collections list as a real seeded role. */
+    JsonNode listAs(UUID user, String perms, String path) {
+        ResponseEntity<JsonNode> r = send(HttpMethod.GET, "/api/v1/lending" + path, as(user, perms, "*", null), null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        return r.getBody();
+    }
+
+    /**
+     * The review of #272 and ADR-064: a list returns at most its limit and says it was cut, the bucket totals still
+     * count every loan; the real cashier and auditor roles see every officer's loans with each phone masked, the real
+     * loan officer sees whole numbers.
+     */
+    @Test
+    void cln03_theListsAreCappedAndOnlyCallersSeePhones() {
+        for (int i = 0; i < 2; i++) {
+            String late = approved(exampleB("CAP" + i), 1_200_000, 3, 86 + i);
+            disburse(late, today.minusMonths(1).minusDays(3 + i));
+        }
+        runArrears();
+        JsonNode one = lending("/collections/arrears?limit=1");
+        assertThat(one.get("truncated").asBoolean()).isTrue();
+        JsonNode first = one.get("buckets").get(0);
+        assertThat(first.get("loans").asInt()).as("the total counts every loan").isEqualTo(2);
+        assertThat(first.get("items")).hasSize(1);
+        assertThat(first.get("items").get(0).get("phone").asString())
+                .as("the loan officer calls borrowers")
+                .startsWith("+256")
+                .doesNotContain("*");
+
+        String auditorPerms = permissionsOf("auditor");
+        for (String perms : List.of(cashierPerms, auditorPerms)) {
+            JsonNode arrears = listAs(cashier, perms, "/collections/arrears");
+            assertThat(arrears.get("truncated").asBoolean()).isFalse();
+            assertThat(arrears.get("buckets").get(0).get("items"))
+                    .hasSize(2)
+                    .allSatisfy(l -> assertThat(l.get("phone").asString()).contains("*"));
+            assertThat(listAs(
+                                    cashier,
+                                    perms,
+                                    "/collections/due-list?date_from=" + today.minusDays(5) + "&date_to=" + today)
+                            .get("items"))
+                    .allSatisfy(l -> assertThat(l.get("phone").asString()).contains("*"));
+        }
+    }
+
+    /**
+     * ADR-064: a loan officer's lists cover only their own portfolio, whatever officer they ask for; the branch
+     * manager sees the branch.
+     */
+    @Test
+    void cln03_aLoanOfficerSeesOnlyTheirOwnPortfolio() {
+        String mine = approved(exampleB("OWNA"), 1_200_000, 3, 78);
+        disburse(mine, today.minusMonths(1).minusDays(3));
+        String theirs = approved(exampleB("OWNB"), 1_200_000, 3, 79);
+        disburse(theirs, today.minusMonths(1).minusDays(4));
+        UUID other = staffUser("loan_officer", t.headOffice());
+        assertThat(send(
+                                HttpMethod.PUT,
+                                LOANS + "/" + theirs + "/officer",
+                                as(manager, managerPerms, "*", null),
+                                Map.of("officer_user_id", other.toString(), "reason", "Test portfolio split"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        runArrears();
+
+        JsonNode own = lending("/collections/arrears?officer_user_id=" + other);
+        assertThat(own.get("buckets").get(0).get("items"))
+                .as("asking for another officer still answers one's own")
+                .singleElement()
+                .satisfies(l -> assertThat(l.get("loan_id").asString()).isEqualTo(mine));
+        assertThat(listAs(manager, managerPerms, "/collections/arrears")
+                        .get("buckets")
+                        .get(0)
+                        .get("items"))
+                .hasSize(2);
+    }
+
+    /**
+     * The second review of #272: a reassignment needs a reason, kept in the audit row; a deactivated officer is not
+     * eligible; the Owner (an administrator over every branch) moves loans of two branches in one call.
+     */
+    @Test
+    void cln01_aReasonADeactivatedOfficerAndTheOwner() {
+        String a = approved(exampleB("REASONA"), 1_200_000, 3, 76);
+        UUID gone = staffUser("loan_officer", t.headOffice());
+        TestDatabase.owner()
+                .sql("UPDATE users SET status = 'deactivated' WHERE id = ?")
+                .param(gone)
+                .update();
+        ResponseEntity<JsonNode> inactive = send(
+                HttpMethod.PUT,
+                LOANS + "/" + a + "/officer",
+                as(manager, managerPerms, "*", null),
+                Map.of("officer_user_id", gone.toString(), "reason", "Test reassignment"));
+        assertThat(inactive.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(inactive.getBody().get("code").asString()).isEqualTo("officer_not_eligible");
+
+        UUID next = staffUser("loan_officer", t.headOffice());
+        ResponseEntity<JsonNode> noReason = send(
+                HttpMethod.PUT,
+                LOANS + "/" + a + "/officer",
+                as(manager, managerPerms, "*", null),
+                Map.of("officer_user_id", next.toString(), "reason", "no"));
+        assertThat(noReason.getStatusCode().is4xxClientError()).isTrue();
+        assertThat(loan(a).get("officer_user_id").asString()).isNotEqualTo(next.toString());
+
+        UUID owner = staffUser("tenant_admin", null);
+        JdbcClient db = TestDatabase.owner();
+        db.sql("UPDATE users SET is_owner = false WHERE tenant_id = ? AND is_owner")
+                .param(t.tenantId())
+                .update();
+        db.sql("UPDATE users SET is_owner = true WHERE id = ?").param(owner).update();
+        String b = approvedIn(t.secondBranch(), exampleB("REASONB"), 75);
+        UUID both = com.rincoltech.bms.testsupport.Api.staff(
+                t,
+                "both-" + UUID.randomUUID() + "@example.test",
+                new com.rincoltech.bms.testsupport.Api.Role("loan_officer", t.headOffice()),
+                new com.rincoltech.bms.testsupport.Api.Role("loan_officer", t.secondBranch()));
+        ResponseEntity<JsonNode> moved = send(
+                HttpMethod.POST,
+                "/api/v1/lending/collections/reassign",
+                as(owner, adminPerms, "*", null),
+                Map.of(
+                        "loan_ids",
+                        List.of(a, b),
+                        "officer_user_id",
+                        both.toString(),
+                        "reason",
+                        "Test branch handover"));
+        assertThat(moved.getStatusCode()).as("%s", moved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(moved.getBody().get("reassigned").asInt()).isEqualTo(2);
+        assertThat(db.sql("SELECT data::text FROM audit_log WHERE action = 'lending.loan.officer_reassigned'"
+                                + " AND entity_id = ?::uuid")
+                        .param(b)
+                        .query(String.class)
+                        .single())
+                .contains("Test branch handover");
+    }
+
+    /** As {@link #approved}, for a member of {@code branch}. */
+    String approvedIn(UUID branch, String productId, int memberNo) {
+        String member =
+                member("Test Borrower %02d".formatted(memberNo), "07000000%02d".formatted(memberNo), branch, true);
+        ResponseEntity<JsonNode> created = apply(member, productId, 1_200_000, 3);
+        assertThat(created.getStatusCode()).as("%s", created.getBody()).isEqualTo(HttpStatus.CREATED);
+        String loan = created.getBody().get("id").asString();
+        assertThat(asOfficer(HttpMethod.POST, LOANS + "/" + loan + "/submit", "\"1\"", null)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(send(
+                                HttpMethod.POST,
+                                LOANS + "/" + loan + "/appraisals",
+                                as(appraiser, officerPerms, "*", "\"2\""),
+                                Map.of("declared_monthly_income_minor", 2_400_000))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> decided = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/decision",
+                as(manager, managerPerms, "*", "\"3\""),
+                Map.of("decision", "approve"));
+        assertThat(decided.getBody().get("status").asString()).isEqualTo("approved");
+        return loan;
+    }
+
+    /**
+     * The second review of #272: a payment recorded before a promise never keeps it, even dated the same day; a
+     * payment entered after the promise and dated back into its window does; a promise more than 60 days ahead is
+     * refused.
+     */
+    @Test
+    void cln05_onlyAPaymentRecordedAfterThePromiseKeepsIt() {
+        String loan = approved(exampleB("PROMAFTER"), 1_200_000, 3, 77);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        repaid(loan, 100_000, today);
+        String early = logAction(loan, promise(today.plusDays(3), 100_000))
+                .getBody()
+                .get("id")
+                .asString();
+        runArrears();
+        assertThat(lending("/collections/promises").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(early));
+
+        assertThat(logAction(loan, promise(today.plusDays(61), 1_000))
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("promised_date_too_far");
+
+        String other = approved(exampleB("PROMBACK"), 1_200_000, 3, 74);
+        disburse(other, today.minusMonths(1).minusDays(6));
+        String back = UUID.randomUUID().toString();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO lending_collection_actions (id, tenant_id, loan_id, action_type, note, promised_date,
+                            promised_amount_minor, promise_status, performed_by, performed_at)
+                        VALUES (?::uuid, ?, ?::uuid, 'promise_to_pay', 'Test promise', ?, 100000, 'pending', ?,
+                                now() - interval '5 days')
+                        """)
+                .params(back, t.tenantId(), other, today.plusDays(3), officer)
+                .update();
+        repaid(other, 100_000, today.minusDays(2));
+        runArrears();
+        assertThat(lending("/collections/promises?promise_status=kept").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(back));
+    }
+
+    /**
+     * The review of #272: one payment keeps one promise only, and a reversal of that payment opens the promise again
+     * the next night, since every open or recent promise is settled afresh from the payments that stand.
+     */
+    @Test
+    void cln05_onePaymentKeepsOnePromiseAndAReversalReopensIt() {
+        String loan = approved(exampleB("PROMTWO"), 1_200_000, 3, 88);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        String first = logAction(loan, promise(today.plusDays(3), 100_000))
+                .getBody()
+                .get("id")
+                .asString();
+        String second = logAction(loan, promise(today.plusDays(5), 100_000))
+                .getBody()
+                .get("id")
+                .asString();
+        String paid = repaid(loan, 100_000, today).get("transaction").get("id").asString();
+        runArrears();
+        assertThat(lending("/collections/promises?promise_status=kept").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(first));
+        assertThat(lending("/collections/promises").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(second));
+
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, paid), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        runArrears();
+        assertThat(lending("/collections/promises?promise_status=kept").get("items"))
+                .isEmpty();
+        assertThat(lending("/collections/promises").get("items")).hasSize(2);
+    }
+
+    /**
+     * ADR-064, decided per branch: a caller who sees every officer's loans in the head office only (a manager there and a
+     * loan officer elsewhere) sees in the second branch only their own loans, here none.
+     */
+    @Test
+    void cln03_everyOfficersLoansIsDecidedPerBranch() {
+        String hq = approved(exampleB("PERBRA"), 1_200_000, 3, 65);
+        disburse(hq, today.minusMonths(1).minusDays(3));
+        String second = approvedIn(t.secondBranch(), exampleB("PERBRB"), 64);
+        disburse(second, today.minusMonths(1).minusDays(3));
+        runArrears();
+        HttpHeaders h = as(manager, managerPerms, "*", null);
+        h.add("X-Dev-Scopes", "lending.collections.all_officers=" + t.headOffice());
+        ResponseEntity<JsonNode> r = send(HttpMethod.GET, "/api/v1/lending/collections/arrears", h, null);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(r.getBody().get("buckets").get(0).get("items"))
+                .singleElement()
+                .satisfies(l -> assertThat(l.get("loan_id").asString()).isEqualTo(hq));
+    }
+
+    /** Promise order: the promise made later but due sooner takes the one payment first. */
+    @Test
+    void cln05_aPromiseDueSoonerIsKeptFirstEvenIfMadeLater() {
+        String loan = approved(exampleB("PROMORD"), 1_200_000, 3, 63);
+        disburse(loan, today.minusMonths(1).minusDays(3));
+        String later = UUID.randomUUID().toString();
+        officerIsStaff();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO lending_collection_actions (id, tenant_id, loan_id, action_type, note, promised_date,
+                            promised_amount_minor, promise_status, performed_by, performed_at)
+                        VALUES (?::uuid, ?, ?::uuid, 'promise_to_pay', 'Test promise', ?, 100000, 'pending', ?,
+                                now() - interval '2 days')
+                        """)
+                .params(later, t.tenantId(), loan, today.plusDays(10), officer)
+                .update();
+        String sooner = logAction(loan, promise(today.plusDays(2), 100_000))
+                .getBody()
+                .get("id")
+                .asString();
+        repaid(loan, 100_000, today);
+        runArrears();
+        assertThat(lending("/collections/promises?promise_status=kept").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(sooner));
+        assertThat(lending("/collections/promises").get("items"))
+                .singleElement()
+                .satisfies(p -> assertThat(p.get("action_id").asString()).isEqualTo(later));
     }
 }

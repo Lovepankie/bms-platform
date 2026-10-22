@@ -710,6 +710,113 @@
           }
         }
       },
+      "ArrearsBucket" : {
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ArrearsListLine"
+            },
+            "type" : "array"
+          },
+          "loans" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "par_bucket" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ArrearsList" : {
+        "description" : "FR-CLN-03, chapter 14 lending.arrears_list: loans with DPD above 0 by PAR bucket",
+        "properties" : {
+          "buckets" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ArrearsBucket"
+            },
+            "type" : "array"
+          },
+          "truncated" : {
+            "description" : "More loans matched than the limit; the bucket totals still count every loan",
+            "type" : "boolean"
+          }
+        }
+      },
+      "ArrearsListLine" : {
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "days_past_due" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "last_action_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "last_action_type" : {
+            "type" : "string"
+          },
+          "last_repayment_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "officer_name" : {
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "par_bucket" : {
+            "type" : "string"
+          },
+          "penalties_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "phone" : {
+            "description" : "Masked (+256*****0001) unless the caller holds lending.members.contact in the loan's branch",
+            "type" : "string"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "promised_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "promised_date" : {
+            "description" : "The earliest pending promise to pay, if any",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "AuditEvent" : {
         "description" : "Identifiers in data are masked (FR-AUD-05)",
         "properties" : {
@@ -947,6 +1054,22 @@
             "$ref" : "#/components/schemas/PlatformTenant"
           }
         }
+      },
+      "ChargeWaiverRequest" : {
+        "description" : "FR-ARR-04: amount_minor left out waives all that is waivable",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "CloseBranchRequest" : {
         "description" : "The reason is required only when the branch still holds stock or has transfers on their way (422 branch_close_needs_reason says which).",
@@ -1243,6 +1366,83 @@
           }
         },
         "required" : [ "market_value_minor", "valued_on" ]
+      },
+      "CollectionAction" : {
+        "properties" : {
+          "action_type" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "performed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "performed_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "performed_by_name" : {
+            "type" : "string"
+          },
+          "promise_status" : {
+            "description" : "pending, kept or broken; null unless a promise to pay",
+            "type" : "string"
+          },
+          "promised_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "promised_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "CollectionActionList" : {
+        "description" : "FR-CLN-04: the loan's timeline, newest first",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/CollectionAction"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "CollectionActionRequest" : {
+        "description" : "FR-CLN-04: a promise to pay carries a date and an amount",
+        "properties" : {
+          "action_type" : {
+            "description" : "call, visit, sms, letter, promise_to_pay or other",
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "promised_amount_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "promised_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "action_type" ]
       },
       "CreateBranchRequest" : {
         "properties" : {
@@ -1773,6 +1973,86 @@
           },
           "url" : {
             "type" : "string"
+          }
+        }
+      },
+      "DueList" : {
+        "description" : "FR-CLN-02, chapter 14 lending.due_list: sorted by officer then due date",
+        "properties" : {
+          "date_from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "date_to" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DueListLine"
+            },
+            "type" : "array"
+          },
+          "truncated" : {
+            "description" : "More lines matched than the limit; narrow by officer, branch or dates",
+            "type" : "boolean"
+          }
+        }
+      },
+      "DueListLine" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "due_minor" : {
+            "description" : "principal, interest, fees and penalties due",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "item_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "officer_name" : {
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "phone" : {
+            "description" : "Masked (+256*****0001) unless the caller holds lending.members.contact in the loan's branch",
+            "type" : "string"
+          },
+          "waived_minor" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         }
       },
@@ -4150,6 +4430,55 @@
           }
         }
       },
+      "LoanCharge" : {
+        "description" : "R-PEN: one charge on a schedule item, and what can still be waived",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "charge_type" : {
+            "description" : "penalty or fee",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "item_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "period_no" : {
+            "description" : "The penalty period; null for a fee",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "waivable_minor" : {
+            "description" : "What a waiver may still take: unwaived and not yet paid",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "waived_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanChargeList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanCharge"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "LoanDecisionRequest" : {
         "properties" : {
           "approved_principal_minor" : {
@@ -4338,6 +4667,21 @@
           }
         },
         "required" : [ "note" ]
+      },
+      "LoanOfficerRequest" : {
+        "properties" : {
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept in the loan's audit row",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "officer_user_id", "reason" ]
       },
       "LoanPage" : {
         "properties" : {
@@ -4710,6 +5054,43 @@
           }
         },
         "required" : [ "reason" ]
+      },
+      "LoanReassignRequest" : {
+        "description" : "FR-CLN-01: all or none of the loans move",
+        "properties" : {
+          "loan_ids" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 500,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept in each loan's audit row",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "loan_ids", "officer_user_id", "reason" ]
+      },
+      "LoanReassignResult" : {
+        "properties" : {
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reassigned" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
       },
       "LoanSchedule" : {
         "description" : "FR-DIS-04: the items and a totals row that equals the loan totals",
@@ -6261,6 +6642,65 @@
             "description" : "Wording to preview without saving; omitted: the saved wording, else the default",
             "maxLength" : 2000,
             "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "PromiseList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PromiseListLine"
+            },
+            "type" : "array"
+          },
+          "truncated" : {
+            "description" : "More promises matched than the limit",
+            "type" : "boolean"
+          }
+        }
+      },
+      "PromiseListLine" : {
+        "properties" : {
+          "action_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_name" : {
+            "type" : "string"
+          },
+          "officer_user_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "performed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "performed_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "promise_status" : {
+            "type" : "string"
+          },
+          "promised_amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "promised_date" : {
+            "format" : "date",
             "type" : "string"
           }
         }
@@ -22526,6 +22966,206 @@
         "tags" : [ "lending-collateral" ]
       }
     },
+    "/api/v1/lending/collections/arrears" : {
+      "get" : {
+        "operationId" : "getArrearsList",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "bucket",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ArrearsList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Loans in arrears by PAR bucket (FR-CLN-03)",
+        "tags" : [ "lending-collections" ]
+      }
+    },
+    "/api/v1/lending/collections/due-list" : {
+      "get" : {
+        "operationId" : "getDueList",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "date_from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "date_to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DueList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every item of an active loan due in a range, today by default (FR-CLN-02)",
+        "tags" : [ "lending-collections" ]
+      }
+    },
+    "/api/v1/lending/collections/promises" : {
+      "get" : {
+        "operationId" : "listPromises",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "promise_status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "officer_user_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PromiseList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Promises to pay by status, pending by default (FR-CLN-05)",
+        "tags" : [ "lending-collections" ]
+      }
+    },
+    "/api/v1/lending/collections/reassign" : {
+      "post" : {
+        "operationId" : "reassignLoans",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanReassignRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanReassignResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reassign many loans to one officer, all or none (FR-CLN-01)",
+        "tags" : [ "lending-collections" ]
+      }
+    },
     "/api/v1/lending/insights/brief" : {
       "get" : {
         "operationId" : "getInsightsBrief",
@@ -24395,6 +25035,87 @@
         "tags" : [ "lending-loans" ]
       }
     },
+    "/api/v1/lending/loans/{loan_id}/charges" : {
+      "get" : {
+        "operationId" : "listLoanCharges",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanChargeList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The loan's penalty charges with what each still allows a waiver to take (R-PEN)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/charges/{charge_id}/waive" : {
+      "post" : {
+        "operationId" : "requestLoanChargeWaiver",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "charge_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChargeWaiverRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request a waiver of all or part of a penalty, with a reason (FR-ARR-04)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
     "/api/v1/lending/loans/{loan_id}/collateral" : {
       "put" : {
         "operationId" : "setLoanCollateral",
@@ -24438,6 +25159,70 @@
         },
         "summary" : "Set a draft's pledged collateral (FR-ORG-02)",
         "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/collection-actions" : {
+      "get" : {
+        "operationId" : "listCollectionActions",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionActionList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A loan's collection actions, newest first (FR-CLN-04)",
+        "tags" : [ "lending-collections" ]
+      },
+      "post" : {
+        "operationId" : "logCollectionAction",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CollectionActionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CollectionAction"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Log a call, visit, SMS, letter, promise to pay or other action (FR-CLN-04)",
+        "tags" : [ "lending-collections" ]
       }
     },
     "/api/v1/lending/loans/{loan_id}/decision" : {
@@ -24667,6 +25452,44 @@
         },
         "summary" : "Set a draft's guarantors (FR-ORG-02)",
         "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/officer" : {
+      "put" : {
+        "operationId" : "setLoanOfficer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoanOfficerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanReassignResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reassign a loan's responsible officer (FR-CLN-01)",
+        "tags" : [ "lending-collections" ]
       }
     },
     "/api/v1/lending/loans/{loan_id}/payoff-quote" : {

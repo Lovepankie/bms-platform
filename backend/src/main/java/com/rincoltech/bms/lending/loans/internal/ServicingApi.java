@@ -59,6 +59,31 @@ final class ServicingApi {
     @Schema(name = "LoanReasonRequest")
     record ReasonRequest(@NotBlank @Size(max = 500) String reason) {}
 
+    @Schema(name = "ChargeWaiverRequest", description = "FR-ARR-04: amount_minor left out waives all that is waivable")
+    record WaiverRequest(
+            @Positive Long amountMinor,
+            @NotBlank @Size(max = 500) String reason) {}
+
+    @Schema(name = "LoanCharge", description = "R-PEN: one charge on a schedule item, and what can still be waived")
+    record ChargeRow(
+            UUID id,
+            Integer itemNo,
+
+            @Schema(description = "penalty or fee") String chargeType,
+
+            @Schema(description = "The penalty period; null for a fee")
+            Integer periodNo,
+
+            LocalDate businessDate,
+            long amountMinor,
+            long waivedMinor,
+
+            @Schema(description = "What a waiver may still take: unwaived and not yet paid")
+            long waivableMinor) {}
+
+    @Schema(name = "LoanChargeList")
+    record ChargeList(List<ChargeRow> items) {}
+
     @Schema(
             name = "LoanActionOutcome",
             description = "executed: the action took effect now (below the tenant's threshold); otherwise it waits for"
