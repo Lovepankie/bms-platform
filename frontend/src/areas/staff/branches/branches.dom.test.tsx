@@ -11,9 +11,9 @@ import { StaffContext } from '../context';
 // The Branches screen in a browser (issue #329) with the API client replaced: closed branches are hidden until asked for and carry a
 // Closed badge, closing an empty branch asks once, closing over stock shows the server's warning with the stock value and needs a
 // reason before it is sent again, nothing is sent twice by a double tap, a reopen and the stocking switch work, and someone who may only
-// read sees the list and no action. Every name below is invented.
+// read sees the list and no action. Each open shop has a logo control for an administrator (issue #461). Every name below is invented.
 
-const api = { list: vi.fn(), close: vi.fn(), reopen: vi.fn(), setStocking: vi.fn(), setSelling: vi.fn() };
+const api = { list: vi.fn(), close: vi.fn(), reopen: vi.fn(), setStocking: vi.fn(), setSelling: vi.fn(), uploadLogo: vi.fn(), removeLogo: vi.fn() };
 
 vi.mock('../../../api/branches', async (original) => {
   const real = await original<typeof import('../../../api/branches')>();
@@ -195,5 +195,57 @@ describe('the store switch (#366)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sells again (make it a shop)' }));
     await waitFor(() => expect(api.setSelling).toHaveBeenCalledTimes(1));
     expect(api.setSelling.mock.calls[0]?.[1]).toBe(true);
+  });
+});
+
+describe('the shop logo (#461)', () => {
+  const LOGO = '/api/v1/branches/b-two/logo?v=doc-1';
+
+  it('uploads a logo for one shop, then shows it and removes it', async () => {
+    api.uploadLogo.mockResolvedValue({ ...SHOP, logo_url: LOGO, version: 4 });
+    shell();
+    await screen.findByText('Test Shop Two (KLA)');
+    // Every open branch has its own control; the closed one has none.
+    expect(screen.getAllByLabelText(/Upload a logo \(PNG, JPEG or WebP/)).toHaveLength(2);
+    expect(screen.getAllByText('No logo of its own: its receipts and documents carry the business logo.')).toHaveLength(2);
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'shop.png', { type: 'image/png' });
+    const control = screen.getByRole('group', { name: 'Logo of Test Shop Two (KLA)' });
+    api.list.mockResolvedValue([HEAD, { ...SHOP, logo_url: LOGO, version: 4 }, OLD]);
+    fireEvent.change(control.querySelector('input[type="file"]') as HTMLInputElement, { target: { files: [file] } });
+    await screen.findByText('Logo saved for Test Shop Two (KLA). Its receipts and documents now carry it.');
+    expect(api.uploadLogo).toHaveBeenCalledTimes(1);
+    expect(api.uploadLogo.mock.calls[0]?.[0]).toMatchObject({ id: 'b-two' });
+    expect(api.uploadLogo.mock.calls[0]?.[1]).toBe(file);
+
+    const image = (await screen.findByAltText('Logo of Test Shop Two (KLA)')) as HTMLImageElement;
+    expect(image.getAttribute('src')).toBe(LOGO);
+    expect(screen.getByLabelText(/Replace the logo/)).toBeTruthy();
+
+    api.removeLogo.mockResolvedValue({ ...SHOP, version: 5 });
+    api.list.mockResolvedValue([HEAD, { ...SHOP, version: 5 }, OLD]);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the logo' }));
+    await screen.findByText('Logo removed from Test Shop Two (KLA). It shows the business logo again.');
+    expect(api.removeLogo).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByAltText('Logo of Test Shop Two (KLA)')).toBeNull());
+  });
+
+  it('shows the server refusal in plain words', async () => {
+    api.uploadLogo.mockRejectedValue(new BranchesError('The image is too small: it needs at least 128 px on its short side.', 422, 'image_too_small'));
+    shell();
+    await screen.findByText('Test Shop Two (KLA)');
+    const control = screen.getByRole('group', { name: 'Logo of Test Shop Two (KLA)' });
+    fireEvent.change(control.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File([new Uint8Array([1])], 'tiny.png', { type: 'image/png' })] },
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain('at least 128 px');
+  });
+
+  it('shows the logo to a reader, with no control to change it', async () => {
+    api.list.mockResolvedValue([HEAD, { ...SHOP, logo_url: LOGO }]);
+    shell(['core.branches.read']);
+    expect(((await screen.findByAltText('Logo of Test Shop Two (KLA)')) as HTMLImageElement).getAttribute('src')).toBe(LOGO);
+    expect(screen.queryByLabelText(/Upload a logo/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove the logo' })).toBeNull();
   });
 });

@@ -73,6 +73,16 @@
   color: var(--color-text-muted);
 }
 
+/* A shop's own logo beside its name (issue #461, ADR-068): the picker, the sale screen header and the Branches set-up. */
+.shop-logo {
+  height: 28px;
+  width: auto;
+  max-width: 72px;
+  object-fit: contain;
+  vertical-align: middle;
+  border-radius: var(--radius-sm);
+}
+
 .branch-picker select {
   margin: 0;
   flex: 1;

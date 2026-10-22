@@ -1,8 +1,8 @@
 import { api, problemOf } from './client';
 import type { components } from './schema';
 
-// The branches client (issue #329; ADR-041; chapter 7 section 7.11.4): list, close, reopen and the stocking switch. Every change
-// carries the branch's version in If-Match. A close over stock or transfers on the road comes back as 422
+// The branches client (issue #329; ADR-041; chapter 7 section 7.11.4): list, close, reopen, the stocking switch and the shop's own
+// logo (issue #461, ADR-068). Every change but the logo carries the branch's version in If-Match. A close over stock or transfers on the road comes back as 422
 // `branch_close_needs_reason` with the figures; the screen shows them and asks for a reason, then sends the same call again.
 
 export type AdminBranch = components['schemas']['Branch'];
@@ -125,6 +125,32 @@ export const branches = {
         }),
       ),
       'Could not change this branch.',
+    );
+  },
+
+  /** Uploads or replaces the shop's own logo: the rules of the business logo, checked and re-encoded by the server. */
+  async uploadLogo(branch: AdminBranch, file: File): Promise<AdminBranch> {
+    return unwrap(
+      await sent(
+        api.PUT('/api/v1/branches/{branch_id}/logo', {
+          params: { path: { branch_id: branch.id ?? '' } },
+          body: { file } as unknown as { file: string },
+          bodySerializer: (body) => {
+            const form = new FormData();
+            form.append('file', (body as unknown as { file: File }).file);
+            return form;
+          },
+        }),
+      ),
+      'Could not upload the logo.',
+    );
+  },
+
+  /** Removes the shop's own logo; it shows the business logo again. */
+  async removeLogo(branch: AdminBranch): Promise<AdminBranch> {
+    return unwrap(
+      await sent(api.DELETE('/api/v1/branches/{branch_id}/logo', { params: { path: { branch_id: branch.id ?? '' } } })),
+      'Could not remove the logo.',
     );
   },
 };

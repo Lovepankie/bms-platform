@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { Me } from '../../api/client';
+import { useLogoSrc } from '../../app/branding';
 import { retail } from '../../api/retail';
 import { ALL_BRANCHES, branchLabel, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
 
@@ -42,9 +43,17 @@ export function useActiveBranch(me: Me | undefined): { branch: string | null; ch
   return { branch, choose, ready };
 }
 
+/** A shop's own logo beside its name (issue #461, ADR-068); nothing for a shop without one, which goes by the business logo. */
+export function ShopLogo({ url, name }: { url?: string | null; name: string }) {
+  const src = useLogoSrc(url ?? null);
+  return src ? <img className="shop-logo" src={src} alt={`Logo of ${name}`} /> : null;
+}
+
 export function BranchPicker({ me, branch, onChoose }: { me: Me; branch: string | null; onChoose: (selection: string) => void }) {
+  const active = (me.branches ?? []).find((b) => b.id === branch);
   return (
     <label className="branch-picker" data-tour="branch-picker">
+      {active && <ShopLogo url={active.logo_url} name={branchLabel(active)} />}
       Branch{' '}
       <select value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
         {me.all_branches && <option value={ALL_BRANCHES}>All branches</option>}

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type ResolvedLine, type Sale, type SalePayment } from '../../../api/retail';
 import { useStaff } from '../context';
+import { ShopLogo } from '../branch-picker';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
@@ -434,7 +435,9 @@ export function RecordSale() {
         </>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
+          <p className="branch-line">
+            <ShopLogo url={(me.branches ?? []).find((b) => b.id === branchId)?.logo_url} name={branchName} /> Branch: <strong>{branchName}</strong>
+          </p>
           <NoStockHere branchId={branchId} />
           <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s, r) => { setSale(s); setReceived(r); }} />
         </>

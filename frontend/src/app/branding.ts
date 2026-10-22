@@ -99,16 +99,21 @@ export function useTenantHost(): boolean | null {
   return Boolean(import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT) || classifyHost(window.location.hostname, hosts.data).kind === 'tenant';
 }
 
-export function useShellBrand(): ShellBrand {
-  const tenantHost = useTenantHost() === true;
-  const branding = useQuery({ ...BRANDING_QUERY, enabled: tenantHost });
-  const logoUrl = branding.data?.logo_url ?? null;
+/** The address an <img> can show for a public logo URL (the business's or a shop's, issue #461), or null while none. */
+export function useLogoSrc(logoUrl: string | null): string | null {
   const logo = useQuery({
     queryKey: ['branding-logo', logoUrl],
     enabled: logoUrl !== null,
     staleTime: Infinity,
     queryFn: () => loadLogo(logoUrl as string),
   });
+  return logoUrl === null ? null : (logo.data ?? null);
+}
+
+export function useShellBrand(): ShellBrand {
+  const tenantHost = useTenantHost() === true;
+  const branding = useQuery({ ...BRANDING_QUERY, enabled: tenantHost });
+  const logoSrc = useLogoSrc(branding.data?.logo_url ?? null);
   if (!tenantHost || !branding.data) return PLATFORM_BRAND;
-  return brandOf(branding.data, logoUrl === null ? null : (logo.data ?? null));
+  return brandOf(branding.data, logoSrc);
 }
