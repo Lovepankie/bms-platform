@@ -62,3 +62,17 @@ exists (the first, the manual journal, arrives in increment 2).
   match; review item 13 of the spec review (the subject type of each action) is decided when
   each action is built.
 - Threshold splitting (review item 14) is not addressed; revisit before disbursements.
+
+## Addendum of 2026-10-22 (issue #264, review of #270): the nightly arrears run keeps the loan's version
+
+The nightly arrears run (FR-ARR-01) moves DPD, arrears and item statuses every night. It writes them
+without raising `lending_loans.version`, and writes nothing when nothing moved. A version raised every
+night would make every pending approval on an overdue loan (a reversal, a write-off, a waiver) stale
+overnight and refuse it at its decision (FR-APR-08). This is safe because each registered action
+checks its own facts again when it executes, under the loan's row lock; the version guards against
+a person's change that the checker has not seen, and the night's recompute is not one. A money event
+(repayment, reversal, write-off, waiver) still raises the version.
+
+A consequence the checker should know: a pending write-off (or waiver) executes on the loan's balance at
+execution time, which the overnight recompute may have moved since the request; the decision screen
+shows the balance at decision time, and that is what is written off.

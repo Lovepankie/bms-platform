@@ -402,6 +402,13 @@ class OutboxTemplates {
                     new Template(
                             "Your order was delivered",
                             "An order you took at {branch_name} was delivered and is now a sale.")),
+            // A loan the nightly arrears run could not update two nights running (#270 review): a safeguard, no switch.
+            Map.entry(
+                    "lending.arrears_loan_failing",
+                    new Template(
+                            "A loan was not updated overnight",
+                            "Loan {loan_no} failed the nightly arrears run two nights in a row. Its arrears may be out of"
+                                    + " date: tell support.")),
             Map.entry(
                     "retail.low_stock",
                     new Template("Stock is running low", "{item_name} at {branch_name} is {reason}. Restock it soon.")),

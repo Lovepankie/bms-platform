@@ -185,3 +185,26 @@ number is printed on the page and a render must never run under the series lock.
 and the PDF is a rendering of it; a render that fails leaves a numbered document that renders from the same snapshot on the next
 request. The customer statement follows the schedule and statement rule: rendered on each request, never stored, numbered by date and a
 short customer code. `make document-samples` renders them too.
+
+## Addendum of 2026-10-14 (issue #264): penalties are dated
+
+Increment 6 records every penalty as a `lending_loan_charges` row with the business date it is
+charged for and the time the nightly run recorded it. `LoanLedger` no longer reads the items'
+penalties due: the statement charges the penalties of each date on that date (before that day's
+payments, because the run charges at the start of the business date), and a receipt's "loan after
+this payment" adds only the penalties recorded before the payment. The known limit above is
+closed. `PenaltyDatingGuardTest` now checks that `LoanLedger` never reads the items' penalties and
+that only the nightly run writes them; a later writer (a waiver) must keep the same dating.
+
+## Addendum of 2026-10-22 (review of #270): cancelled and recharged penalties
+
+A repayment reaches only the penalties charged on or before its value date. After every repayment and
+reversal each charged period is recomputed from the payments by value date. What a back-dated repayment
+shows was not owed (the item was paid up before the period, or a percent penalty's base was smaller)
+is cancelled as a dated `lending_charge_cancels` row and credited on the statement on the day of the
+cancel ("Penalties cancelled after a back-dated payment"); what a reversal shows was owed after all is
+charged again as a new `penalty_recharge` row, kept on the period's own date for the penalty logic and
+printed on the day it was recorded ("Penalties charged again after a reversal"), as its cancel was. Both are timed with the transaction that caused them, and repayments are stamped with the
+clock when recorded under the loan's lock, so a receipt counts exactly the penalties recorded up to its
+payment and never changes after it is first opened. `PenaltyDatingGuardTest` allows the reconcile as
+the one other writer of the items' penalties due.
