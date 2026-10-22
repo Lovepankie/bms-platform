@@ -11886,7 +11886,7 @@ export interface components {
             /** Format: date-time */
             occurred_at: string;
             payment_method: string;
-            /** @description The sale request exactly as the device holds it */
+            /** @description The sale request exactly as the device holds it; at most 64 KB as JSON (413) */
             request: {
                 [key: string]: Record<string, never>;
             };
@@ -13620,7 +13620,7 @@ export interface components {
             buyer_name?: string;
             /**
              * Format: uuid
-             * @description ADR-067: the id the device made for this sale, unique per business. A second request with it, by the same person, answers the sale already recorded (Idempotent-Replayed), after the Idempotency-Key has expired too; by another person it is 422 client_sale_id_reused
+             * @description ADR-067: the id the device made for this sale, unique per business. A second request with it, by the same person, answers the sale already recorded (Idempotent-Replayed), after the Idempotency-Key has expired too; by another person it is 422 client_sale_id_reused; with a different request (apart from occurred_at, recorded_offline and prices_as_of) 422 client_sale_conflict; the id of a refused offline sale a manager discarded 422 offline_sale_discarded
              */
             client_sale_id?: string;
             /** @description Why a credit sale above the buyer's credit limit goes ahead; needed (at least five characters) from a user who holds retail.credit.override, ignored when the sale is within the limit or the customer_accounts capability is off */
@@ -13646,10 +13646,10 @@ export interface components {
             price_list_id?: string;
             /**
              * Format: date-time
-             * @description ADR-067: when the device last refreshed its prices, for the words of a price clash
+             * @description ADR-067: the server's time when the device last refreshed its prices. A device price equal to the catalogue or pack price in force then stands; an occurred_at before it means the phone clock was behind (clock_behind)
              */
             prices_as_of?: string;
-            /** @description ADR-067: the sale was taken with no network and its money is already in hand. Needs client_sale_id and occurred_at; never a credit sale. A short stock, an item switched off, a changed price or a price not above cost then records the sale with a clash instead of refusing it */
+            /** @description ADR-067: the sale was taken with no network and its money is already in hand. Needs client_sale_id and occurred_at; never a credit sale. A short stock, an item or a pack switched off, a saved price that changed, a typed price the online rules would not take (price_typed), a price not above cost or a phone clock ahead or behind then records the sale with a clash instead of refusing it */
             recorded_offline?: boolean;
             /**
              * Format: date

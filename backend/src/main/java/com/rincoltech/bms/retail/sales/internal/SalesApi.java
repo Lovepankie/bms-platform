@@ -91,7 +91,9 @@ final class SalesApi {
                     description = "ADR-067: the id the device made for this sale, unique per business. A second request"
                             + " with it, by the same person, answers the sale already recorded (Idempotent-Replayed),"
                             + " after the Idempotency-Key has expired too; by another person it is 422"
-                            + " client_sale_id_reused")
+                            + " client_sale_id_reused; with a different request (apart from occurred_at, recorded_offline"
+                            + " and prices_as_of) 422 client_sale_conflict; the id of a refused offline sale a manager"
+                            + " discarded 422 offline_sale_discarded")
             UUID clientSaleId,
 
             @Schema(
@@ -102,12 +104,16 @@ final class SalesApi {
 
             @Schema(
                     description = "ADR-067: the sale was taken with no network and its money is already in hand. Needs"
-                            + " client_sale_id and occurred_at; never a credit sale. A short stock, an item switched off,"
-                            + " a changed price or a price not above cost then records the sale with a clash instead of"
-                            + " refusing it")
+                            + " client_sale_id and occurred_at; never a credit sale. A short stock, an item or a pack"
+                            + " switched off, a saved price that changed, a typed price the online rules would not take"
+                            + " (price_typed), a price not above cost or a phone clock ahead or behind then records the"
+                            + " sale with a clash instead of refusing it")
             Boolean recordedOffline,
 
-            @Schema(description = "ADR-067: when the device last refreshed its prices, for the words of a price clash")
+            @Schema(
+                    description = "ADR-067: the server's time when the device last refreshed its prices. A device price"
+                            + " equal to the catalogue or pack price in force then stands; an occurred_at before it means"
+                            + " the phone clock was behind (clock_behind)")
             Instant pricesAsOf) {
 
         /** A sale request of the server's own (a quotation or an order becoming a sale): no device fields. */
@@ -357,7 +363,8 @@ final class SalesApi {
             @NotNull @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
             Long totalMinor,
 
-            @NotNull @Schema(description = "The sale request exactly as the device holds it")
+            @NotNull
+            @Schema(description = "The sale request exactly as the device holds it; at most 64 KB as JSON (413)")
             Map<String, Object> request,
 
             @NotBlank @Size(max = 60) String code,
