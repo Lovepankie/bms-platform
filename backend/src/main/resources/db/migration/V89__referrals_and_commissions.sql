@@ -263,6 +263,8 @@ CREATE TABLE referral_commission_lines (
     currency                    char(3)      NOT NULL REFERENCES currencies (code),
     months_counted              integer      CHECK (months_counted >= 0),
     rule_snapshot               jsonb,
+    -- The referrer business was suspended or cancelled when the line was worked out: the operator decides before paying.
+    referrer_inactive           boolean      NOT NULL DEFAULT false,
     note                        varchar(500),
     paid_on                     date,
     paid_method                 text         CHECK (paid_method IN ('mtn_momo', 'airtel_money', 'bank_transfer', 'cash', 'other')),
@@ -326,9 +328,25 @@ SELECT bms_make_append_only('referral_payment_outcomes');
 -- ---------------------------------------------------------------------------------------------
 -- 6. Referral reads. Each returns the totals per currency as a JSON array of {currency, earned_minor, paid_minor, due_minor}:
 --    earned is every line (reversals count against it), paid the lines marked paid, due the difference.
---    status: applied (an open application), active (a business with no payment yet), paying (it has paid), ended (the
---    operator moved the referral to another referrer; shown only while it carries lines).
+--    status: applied (an open application), active (a business with no payment yet), paying (it has paid), suspended or
+--    cancelled (the referred business's subscription, ADR-069 decision 12), ended (the operator moved the referral to another
+--    referrer; shown only while it carries lines).
 -- ---------------------------------------------------------------------------------------------
+
+CREATE FUNCTION bms_referral_status(p_ended_at timestamptz, p_referred uuid) RETURNS text
+LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
+    SELECT CASE WHEN p_ended_at IS NOT NULL THEN 'ended'
+                WHEN t.status = 'suspended' THEN 'suspended'
+                WHEN s.status IN ('suspended', 'cancelled') THEN s.status
+                WHEN EXISTS (SELECT 1 FROM subscription_payments sp
+                              WHERE sp.tenant_id = p_referred AND sp.status = 'confirmed') THEN 'paying'
+                ELSE 'active' END
+      FROM tenants t
+      LEFT JOIN LATERAL (SELECT x.status FROM subscriptions x WHERE x.tenant_id = t.id
+                          ORDER BY x.created_at DESC LIMIT 1) s ON true
+     WHERE t.id = p_referred
+$$;
+REVOKE ALL ON FUNCTION bms_referral_status(timestamptz, uuid) FROM PUBLIC;
 
 CREATE FUNCTION bms_referral_totals(p_referral_id uuid) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
@@ -362,10 +380,7 @@ BEGIN
         SELECT r.id AS referral_id, r.application_id, r.tenant_id AS referrer_tenant_id, rt.slug::text AS referrer_slug,
                rt.name AS referrer_name, r.code::text AS code, r.referred_tenant_id, dt.slug::text AS referred_slug,
                dt.name AS referred_name,
-               CASE WHEN r.ended_at IS NOT NULL THEN 'ended'
-                    WHEN EXISTS (SELECT 1 FROM subscription_payments sp
-                                  WHERE sp.tenant_id = r.referred_tenant_id AND sp.status = 'confirmed') THEN 'paying'
-                    ELSE 'active' END AS status,
+               bms_referral_status(r.ended_at, r.referred_tenant_id) AS status,
                r.source, dt.created_at AS joined_at, r.started_at, r.ended_at, r.rule_id,
                bms_referral_totals(r.id) AS totals
           FROM tenant_referrals r
@@ -399,10 +414,7 @@ CREATE FUNCTION tenant_referrals_mine() RETURNS TABLE (
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     SELECT x.referral_id, x.referred_name, x.joined_at, x.status, x.totals
       FROM (SELECT r.id AS referral_id, dt.name AS referred_name, dt.created_at AS joined_at,
-                   CASE WHEN r.ended_at IS NOT NULL THEN 'ended'
-                        WHEN EXISTS (SELECT 1 FROM subscription_payments sp
-                                      WHERE sp.tenant_id = r.referred_tenant_id AND sp.status = 'confirmed') THEN 'paying'
-                        ELSE 'active' END AS status,
+                   bms_referral_status(r.ended_at, r.referred_tenant_id) AS status,
                    bms_referral_totals(r.id) AS totals, r.started_at AS sort_at
               FROM tenant_referrals r JOIN tenants dt ON dt.id = r.referred_tenant_id
              WHERE r.tenant_id = current_setting('app.tenant_id')::uuid
@@ -419,8 +431,8 @@ $$;
 -- The lines of one referral, oldest first, for the operator.
 CREATE FUNCTION platform_referral_lines(p_referral_id uuid) RETURNS TABLE (
     id uuid, kind text, payment_id uuid, reverses_line_id uuid, reversed_by_line_id uuid, amount_minor bigint,
-    currency text, months_counted integer, rule_snapshot jsonb, note text, paid_on date, paid_method text,
-    paid_reference text, paid_note text, paid_at timestamptz, paid_by_name text, created_by_name text,
+    currency text, months_counted integer, rule_snapshot jsonb, referrer_inactive boolean, note text, paid_on date,
+    paid_method text, paid_reference text, paid_note text, paid_at timestamptz, paid_by_name text, created_by_name text,
     created_at timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 BEGIN
@@ -431,8 +443,8 @@ BEGIN
     RETURN QUERY
     SELECT l.id, l.kind, l.payment_id, l.reverses_line_id, (SELECT x.id FROM referral_commission_lines x
                                                               WHERE x.reverses_line_id = l.id),
-           l.amount_minor, l.currency::text, l.months_counted, l.rule_snapshot, l.note::text, l.paid_on, l.paid_method,
-           l.paid_reference::text, l.paid_note::text, l.paid_at, pu.full_name, cu.full_name, l.created_at
+           l.amount_minor, l.currency::text, l.months_counted, l.rule_snapshot, l.referrer_inactive, l.note::text, l.paid_on,
+           l.paid_method, l.paid_reference::text, l.paid_note::text, l.paid_at, pu.full_name, cu.full_name, l.created_at
       FROM referral_commission_lines l
       LEFT JOIN platform_users pu ON pu.id = l.paid_by_platform_user_id
       LEFT JOIN platform_users cu ON cu.id = l.created_by_platform_user_id
@@ -594,8 +606,9 @@ $$;
 --    business; the payment must be that business's own. Paid months are counted over every other confirmed payment of the
 --    referred business recorded since this referral started (ADR-069 decision 9), leaving out the payments whose outcome was
 --    currency_differs (each outcome is kept in referral_payment_outcomes); recording a payment locks the business's subscription first (V75), so two payments recorded at once
---    are counted one after the other and never both as the first. Amounts are whole minor units, rounded half up. Outcomes:
---    added, no_referral, no_rule, not_first_payment, months_used, currency_differs, cap_reached, zero.
+--    are counted one after the other and never both as the first. Amounts are whole minor units, rounded half up. A line
+--    worked out while the referrer business is suspended or cancelled is flagged referrer_inactive. Outcomes: added,
+--    no_referral, no_rule, not_first_payment, months_used, currency_differs, cap_reached, zero.
 -- ---------------------------------------------------------------------------------------------
 
 CREATE FUNCTION platform_referral_commission_for_payment(p_payment_id uuid, p_platform_user_id uuid)
@@ -611,6 +624,7 @@ DECLARE
     v_eligible integer;
     v_amount   bigint;
     v_earned   bigint;
+    v_inactive boolean;
 BEGIN
     SELECT * INTO v_pay FROM subscription_payments sp
      WHERE sp.id = p_payment_id AND sp.tenant_id = v_tenant AND sp.status = 'confirmed';
@@ -692,16 +706,19 @@ BEGIN
         RETURN NEXT;
         RETURN;
     END IF;
+    v_inactive := EXISTS (SELECT 1 FROM tenants t WHERE t.id = v_ref.tenant_id AND t.status = 'suspended')
+               OR EXISTS (SELECT 1 FROM subscriptions s
+                           WHERE s.tenant_id = v_ref.tenant_id AND s.status IN ('suspended', 'cancelled'));
     line_id := gen_random_uuid();
     INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, payment_id, amount_minor, currency,
-                                           months_counted, rule_snapshot, created_by_platform_user_id)
+                                           months_counted, rule_snapshot, referrer_inactive, created_by_platform_user_id)
     VALUES (line_id, v_ref.tenant_id, v_ref.id, 'payment', v_pay.id, v_amount, v_pay.currency, v_eligible,
             jsonb_build_object(
                 'rule_id', v_rule.id, 'source', v_source, 'kind', v_rule.kind, 'percent_bp', v_rule.percent_bp,
                 'amount_minor', v_rule.amount_minor, 'currency', v_rule.currency, 'months', v_rule.months,
                 'cap_minor', v_rule.cap_minor, 'payment_amount_minor', v_pay.amount_minor,
                 'payment_months', v_pay.months, 'paid_months_before', v_before),
-            p_platform_user_id);
+            v_inactive, p_platform_user_id);
     amount_minor := v_amount;
     currency := v_pay.currency;
     outcome := 'added';

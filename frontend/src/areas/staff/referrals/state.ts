@@ -15,6 +15,8 @@ export const STATUS_WORDS: Record<string, string> = {
   applied: 'Applied, not started yet',
   active: 'Using BMS',
   paying: 'Paying',
+  suspended: 'Suspended',
+  cancelled: 'Cancelled',
   ended: 'Moved to another referrer',
 };
 

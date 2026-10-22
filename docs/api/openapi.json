@@ -5820,7 +5820,7 @@
             "type" : "string"
           },
           "status" : {
-            "description" : "applied, active, paying or ended",
+            "description" : "applied, active, paying, suspended, cancelled or ended",
             "type" : "string"
           },
           "totals" : {
@@ -6608,7 +6608,7 @@
             "type" : "string"
           },
           "status" : {
-            "description" : "applied, active, paying or ended",
+            "description" : "applied, active, paying, suspended or cancelled (the referred business's subscription), or ended",
             "type" : "string"
           },
           "totals" : {
@@ -7031,6 +7031,10 @@
           "payment_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "referrer_inactive" : {
+            "description" : "The referrer business was suspended or cancelled when the line was worked out: decide before paying it",
+            "type" : "boolean"
           },
           "reversed_by_line_id" : {
             "format" : "uuid",
@@ -29109,7 +29113,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Referrals across the platform and open applications with a code, newest first; filters: referrer_tenant_id, status (applied, active, paying, ended), commission (due, paid)",
+        "summary" : "Referrals across the platform and open applications with a code, newest first; filters: referrer_tenant_id, status (applied, active, paying, suspended, cancelled, ended), commission (due, paid)",
         "tags" : [ "platform" ]
       }
     },

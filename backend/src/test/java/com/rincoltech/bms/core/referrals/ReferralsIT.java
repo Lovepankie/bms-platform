@@ -1093,4 +1093,53 @@ class ReferralsIT extends IntegrationTest {
         assertThat(detail(rx).get("lines").get(0).get("paid_on").isNull()).isTrue();
         assertThat(audits("platform.referral.commission_paid")).isZero();
     }
+
+    /**
+     * A referred business whose subscription is suspended or cancelled shows so to the owner and the operator; a line worked out
+     * while the referrer business is suspended or cancelled is still added, flagged referrer_inactive (decision 12).
+     */
+    @Test
+    void suspendedAndCancelledBusinessesAreShownAndFlagged() {
+        Business referrer = business("ref-inact");
+        Business x = business("ref-inact-x");
+        setReferrer(x.id(), code(referrer.id()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        rule("/api/v1/platform/referrals/" + rx + "/rule", percent(1000, null), "Test: ten percent, no end");
+        pay(x.id(), 10000, 1);
+        subscription(referrer.id(), "cancelled");
+        pay(x.id(), 10000, 1);
+        JsonNode lines = detail(rx).get("lines");
+        assertThat(amounts(detail(rx))).containsExactly(1000L, 1000L);
+        assertThat(lines.get(0).get("referrer_inactive").asBoolean()).isFalse();
+        assertThat(lines.get(1).get("referrer_inactive").asBoolean()).isTrue();
+
+        TestDatabase.Fixture a = TestDatabase.tenant("refstatus", false);
+        Business y = business("ref-status-y");
+        Business z = business("ref-status-z");
+        setReferrer(y.id(), code(a.tenantId()), "Test: referred by the shop");
+        setReferrer(z.id(), code(a.tenantId()), "Test: referred by the shop");
+        subscription(y.id(), "suspended");
+        subscription(z.id(), "cancelled");
+        Map<String, String> owner = new LinkedHashMap<>();
+        mine(a, staffToken(a, "tenant_admin"))
+                .getBody()
+                .get("items")
+                .forEach(i -> owner.put(
+                        i.get("referred_name").asString(), i.get("status").asString()));
+        assertThat(owner).containsEntry(y.name(), "suspended").containsEntry(z.name(), "cancelled");
+        JsonNode suspended = platform.get(
+                        "/api/v1/platform/referrals?referrer_tenant_id=" + a.tenantId() + "&status=suspended",
+                        operator.accessToken())
+                .getBody();
+        assertThat(suspended.get("items")).hasSize(1);
+        assertThat(suspended.get("items").get(0).get("referred_slug").asString())
+                .isEqualTo(y.slug());
+    }
+
+    static void subscription(UUID tenantId, String status) {
+        TestDatabase.owner()
+                .sql("UPDATE subscriptions SET status = ? WHERE tenant_id = ?")
+                .params(status, tenantId)
+                .update();
+    }
 }

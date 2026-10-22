@@ -151,7 +151,8 @@ class ReferralsAdminController {
     @RequiresPermission("platform.tenants.read")
     @Operation(
             summary = "Referrals across the platform and open applications with a code, newest first; filters:"
-                    + " referrer_tenant_id, status (applied, active, paying, ended), commission (due, paid)",
+                    + " referrer_tenant_id, status (applied, active, paying, suspended, cancelled, ended), commission (due,"
+                    + " paid)",
             operationId = "platformListReferrals")
     ReferralList list(
             @RequestParam(name = "referrer_tenant_id", required = false) UUID referrer,

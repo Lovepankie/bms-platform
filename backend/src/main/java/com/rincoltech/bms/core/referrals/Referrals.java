@@ -134,7 +134,10 @@ public interface Referrals {
             String referredSlug,
             String referredName,
 
-            @Schema(description = "applied, active, paying or ended")
+            @Schema(
+                    description =
+                            "applied, active, paying, suspended or cancelled (the referred business's subscription),"
+                                    + " or ended")
             String status,
 
             @Schema(description = "sign_up or operator") String source,
@@ -196,6 +199,12 @@ public interface Referrals {
 
             @Schema(description = "The rule as it was when the line was worked out, and the payment it was applied to")
             Map<String, Object> ruleSnapshot,
+
+            @Schema(
+                    description =
+                            "The referrer business was suspended or cancelled when the line was worked out: decide"
+                                    + " before paying it")
+            boolean referrerInactive,
 
             String note,
             LocalDate paidOn,

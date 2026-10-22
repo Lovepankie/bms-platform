@@ -67,8 +67,8 @@ data, and a business must not be able to refer itself.
 7. **Who sees what.** Referrals and lines are rows of the **referrer** (`tenant_id` is the referrer) under forced row-level
    security, with SELECT only for the application role. The owner and the administrators of a business (`core.referrals.read`,
    tenant admin only, so the Owner of ADR-062 holds it) see `GET /referrals`: their code, their link, and for each business they
-   referred its name, when it joined, its status (`applied`, `active`, `paying`, or `ended` for a referral moved to another
-   referrer that carries lines) and the commission earned, paid and due per currency; nothing else of the referred business. An
+   referred its name, when it joined, its status (`applied`, `active`, `paying`, `suspended`, `cancelled` (decision 12), or
+   `ended` for a referral moved to another referrer that carries lines) and the commission earned, paid and due per currency; nothing else of the referred business. An
    application counts as `applied` only once its email is confirmed. The operator lists referrals across the platform with
    filters (referrer, status, commission due or paid) and exports them as CSV (at most 10,000 rows, audited), through definer
    functions that refuse a tenant-bound transaction. The PWA shows the page as Referrals under Business set-up
@@ -97,6 +97,11 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
 11. **A reversed line is not paid.** An unpaid line that was reversed nets to nothing with its reversal, so marking it paid is
     refused with 409 `commission_line_reversed`; a line paid before it was reversed stays paid, and the reversal records what
     the referrer owes back.
+12. **A suspended or cancelled business is named so, and a suspended or cancelled referrer's lines are flagged.** The status of
+    a referred business shown to its referrer's owner and administrators and to the operator is also `suspended` or
+    `cancelled`, from the referred business's subscription (or `suspended` for a suspended business). A referrer business that
+    is suspended or cancelled still has its lines worked out, but each such line carries `referrer_inactive`, so the operator
+    decides before paying it.
 
 ## Consequences
 

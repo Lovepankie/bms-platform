@@ -42,7 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
 class ReferralService implements Referrals {
 
     static final Set<String> KINDS = Set.of("percent_of_payment", "fixed_first_payment", "fixed_per_month");
-    static final Set<String> STATUSES = Set.of("applied", "active", "paying", "ended");
+    static final Set<String> STATUSES = Set.of("applied", "active", "paying", "suspended", "cancelled", "ended");
     static final Set<String> COMMISSION_FILTERS = Set.of("due", "paid");
     static final Set<String> PAID_METHODS = Set.of("mtn_momo", "airtel_money", "bank_transfer", "cash", "other");
     static final int EXPORT_LIMIT = 10_000;
@@ -681,8 +681,8 @@ class ReferralService implements Referrals {
 
     private static void check(Filter filter) {
         if (filter.status() != null && !STATUSES.contains(filter.status())) {
-            throw ApiException.validation(
-                    List.of(new FieldProblem("status", "invalid", "status is applied, active, paying or ended.")));
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "status", "invalid", "status is applied, active, paying, suspended, cancelled or ended.")));
         }
         if (filter.commission() != null && !COMMISSION_FILTERS.contains(filter.commission())) {
             throw ApiException.validation(
@@ -761,6 +761,7 @@ class ReferralService implements Referrals {
                 rs.getString("currency"),
                 rs.getObject("months_counted", Integer.class),
                 snapshot == null ? null : JSON.readValue(snapshot, OBJECT),
+                rs.getBoolean("referrer_inactive"),
                 rs.getString("note"),
                 rs.getObject("paid_on", LocalDate.class),
                 rs.getString("paid_method"),

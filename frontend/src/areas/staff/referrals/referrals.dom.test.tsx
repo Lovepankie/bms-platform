@@ -8,7 +8,7 @@ import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { ReferralsPage } from './page';
-import { moneyWords, showReferrals, whatsappShare } from './state';
+import { moneyWords, showReferrals, statusWords, whatsappShare } from './state';
 
 // The Referrals page under Business set-up (issue #464, ADR-069), with the API replaced: the link with Copy and Share on WhatsApp,
 // the businesses referred with their status and money, nothing for someone without the permission. Fabricated businesses only.
@@ -113,5 +113,11 @@ describe('the words', () => {
     expect(moneyWords([], 'earned_minor')).toBe('Nothing yet');
     expect(moneyWords([{ currency: 'UGX', earned_minor: 25000, paid_minor: 0, due_minor: 25000 }], 'due_minor')).toBe('UGX 25,000');
     expect(decodeURIComponent(whatsappShare('Test Shop', 'https://bms.example.test/sign-up?ref=TESTS7K'))).toContain('Test Shop');
+  });
+
+  it('names a suspended or cancelled business in plain words', () => {
+    expect(statusWords('suspended')).toBe('Suspended');
+    expect(statusWords('cancelled')).toBe('Cancelled');
+    expect(statusWords('paying')).toBe('Paying');
   });
 });

@@ -2849,7 +2849,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Referrals across the platform and open applications with a code, newest first; filters: referrer_tenant_id, status (applied, active, paying, ended), commission (due, paid) */
+        /** Referrals across the platform and open applications with a code, newest first; filters: referrer_tenant_id, status (applied, active, paying, suspended, cancelled, ended), commission (due, paid) */
         get: operations["platformListReferrals"];
         put?: never;
         post?: never;
@@ -9193,7 +9193,7 @@ export interface components {
              */
             joined_at?: string;
             referred_name?: string;
-            /** @description applied, active, paying or ended */
+            /** @description applied, active, paying, suspended, cancelled or ended */
             status?: string;
             totals?: components["schemas"]["ReferralTotal"][];
         };
@@ -9565,7 +9565,7 @@ export interface components {
             source?: string;
             /** Format: date-time */
             started_at?: string;
-            /** @description applied, active, paying or ended */
+            /** @description applied, active, paying, suspended or cancelled (the referred business's subscription), or ended */
             status?: string;
             totals?: components["schemas"]["ReferralTotal"][];
         };
@@ -9746,6 +9746,8 @@ export interface components {
             paid_reference?: string;
             /** Format: uuid */
             payment_id?: string;
+            /** @description The referrer business was suspended or cancelled when the line was worked out: decide before paying it */
+            referrer_inactive?: boolean;
             /** Format: uuid */
             reversed_by_line_id?: string;
             /** Format: uuid */

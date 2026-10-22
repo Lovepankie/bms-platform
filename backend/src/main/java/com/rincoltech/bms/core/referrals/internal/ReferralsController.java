@@ -36,7 +36,7 @@ class ReferralsController {
             @Schema(description = "When the business was created, or the application sent")
             Instant joinedAt,
 
-            @Schema(description = "applied, active, paying or ended")
+            @Schema(description = "applied, active, paying, suspended, cancelled or ended")
             String status,
 
             List<Total> totals) {}
