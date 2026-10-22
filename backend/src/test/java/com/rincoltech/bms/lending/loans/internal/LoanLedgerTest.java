@@ -436,4 +436,39 @@ class LoanLedgerTest {
                 .as("both charges were recorded before the receipt, the cancel after it")
                 .isEqualTo(1_590_000 + 4_000 - 1_000);
     }
+
+    /** FR-ARR-04: a waiver is a credit on its own date, and a receipt counts it only when recorded before it. */
+    @Test
+    void aWaiverIsCreditedOnItsDateAndCountsOnlyForLaterReceipts() {
+        Book b = new Book();
+        b.disburse();
+        LocalDate due = b.contracted.get(0).dueDate;
+        List<PenaltyEvent> penalties = new ArrayList<>();
+        penalties.add(new PenaltyEvent(1, due.plusDays(1), b.next(), 2_000, PenaltyEvent.Kind.CHARGED));
+        penalties.add(new PenaltyEvent(1, due.plusDays(2), b.next(), 2_000, PenaltyEvent.Kind.CHARGED));
+        UUID p1 = b.repay(100_000, due.plusDays(3));
+        penalties.add(new PenaltyEvent(1, due.plusDays(3), b.next(), 1_500, PenaltyEvent.Kind.WAIVED));
+        UUID p2 = b.repay(100_000, due.plusDays(3));
+
+        long outstanding = b.outstanding() + 4_000 - 1_500;
+        Statement st = statement(b, false, outstanding, penalties);
+        assertRunningBalance(st);
+        assertThat(st.closingMinor()).isEqualTo(outstanding);
+        List<String> order = st.entries().stream()
+                .filter(e -> !e.note())
+                .map(Entry::description)
+                .toList();
+        assertThat(order.subList(order.size() - 3, order.size()))
+                .as("the waiver sits between the two payments of its day, by when it was recorded")
+                .containsExactly("Repayment", "Penalties waived", "Repayment");
+        assertThat(st.entries())
+                .anyMatch(e -> e.description().equals("Penalties waived") && e.creditedMinor() == 1_500);
+
+        assertThat(LoanLedger.after(b.transactions(), b.scheduleRows(false), penalties, p1)
+                        .outstandingMinor())
+                .isEqualTo(1_590_000 + 4_000 - 100_000);
+        assertThat(LoanLedger.after(b.transactions(), b.scheduleRows(false), penalties, p2)
+                        .outstandingMinor())
+                .isEqualTo(1_590_000 + 4_000 - 1_500 - 200_000);
+    }
 }

@@ -29,7 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * FR-ARR-01, the nightly arrears run for one tenant: for every active loan, the penalty periods due
  * by today (R-PEN, {@link Penalties}) become charges on their items, then item statuses, DPD and
- * arrears are recomputed (R-DPD). Charges are memorandum items: nothing is posted here.
+ * arrears are recomputed (R-DPD); last, the promises to pay are settled (FR-CLN-05). Charges are
+ * memorandum items: nothing is posted here.
  *
  * <p>How it stays safe to run twice (the review of #270, finding 4, and ADR-008):
  *
@@ -64,6 +65,7 @@ class ArrearsRun {
     private final CurrentTenant currentTenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final CollectionsService collections;
     private final TransactionTemplate tx;
     private final ApplicationEventPublisher events;
 
@@ -79,6 +81,7 @@ class ArrearsRun {
             CurrentTenant currentTenant,
             BusinessClock clock,
             AuditLog audit,
+            CollectionsService collections,
             PlatformTransactionManager transactionManager,
             ApplicationEventPublisher events) {
         this.jdbc = jdbc;
@@ -89,11 +92,19 @@ class ArrearsRun {
         this.currentTenant = currentTenant;
         this.clock = clock;
         this.audit = audit;
+        this.collections = collections;
         this.tx = new TransactionTemplate(transactionManager);
         this.events = events;
     }
 
-    record Result(LocalDate businessDate, int loans, int charges, long chargedMinor, int failedLoans) {}
+    record Result(
+            LocalDate businessDate,
+            int loans,
+            int charges,
+            long chargedMinor,
+            int failedLoans,
+            int promisesKept,
+            int promisesBroken) {}
 
     /** What one loan's step did. */
     record Outcome(int charges, long chargedMinor) {}
@@ -147,7 +158,19 @@ class ArrearsRun {
                         e);
             }
         }
-        Result result = new Result(today, active.size(), charges, charged, failed);
+        // Last, the promises to pay (FR-CLN-05), in a transaction of their own: a failure there is logged and the date
+        // still finishes, and tomorrow's run settles them again from the payments that stand.
+        CollectionsService.Settled promises = new CollectionsService.Settled(0, 0);
+        try {
+            promises = tx.execute(s -> collections.settlePromises(today));
+        } catch (RuntimeException e) {
+            log.error(
+                    "arrears run for {} could not settle promises error={}",
+                    today,
+                    e.getClass().getSimpleName(),
+                    e);
+        }
+        Result result = new Result(today, active.size(), charges, charged, failed, promises.kept(), promises.broken());
         return Boolean.TRUE.equals(tx.execute(s -> finish(result, attempt, failedIds)))
                 ? Optional.of(result)
                 : Optional.empty();
@@ -308,6 +331,8 @@ class ArrearsRun {
         after.put("penalty_charges", result.charges());
         after.put("penalties_charged_minor", result.chargedMinor());
         after.put("failed_loans", result.failedLoans());
+        after.put("promises_kept", result.promisesKept());
+        after.put("promises_broken", result.promisesBroken());
         after.put("attempt", attempt);
         audit.record(
                 AuditLog.Entry.created("lending.arrears.run", "lending.arrears", null, null, after), null, "system");

@@ -816,11 +816,12 @@ disbursement, FR-DIS-03; a repayment on a closed loan; a quote on a loan that is
 | POST | `/lending/loans/{loan_id}/repayments` | `lending.repayments.create` | **M**. `{amount_minor, value_date, payment_method_key, external_reference}`. FR-REP-01 |
 | POST | `/lending/loans/{loan_id}/transactions/{txn_id}/reverse` | `lending.repayments.reverse_request` | **M A**. FR-REP-05 |
 | GET | `/lending/loans/{loan_id}/payoff-quote` | `lending.loans.read` | `?value_date=`. FR-REP-06 |
-| POST | `/lending/loans/{loan_id}/charges/{charge_id}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04 |
+| GET | `/lending/loans/{loan_id}/charges` | `lending.loans.read` | R-PEN: each charge with `waived_minor` and `waivable_minor` (unwaived and unpaid) |
+| POST | `/lending/loans/{loan_id}/charges/{charge_id}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04. `{amount_minor?, reason}`; without an amount, all that is waivable. 201 at once below the `charge_waiver` threshold, else 202 |
 | POST | `/lending/loans/{loan_id}/write-off` | `lending.loans.write_off_request` | **M A**. FR-LCL-02 |
 | POST | `/lending/loans/{loan_id}/restructure` | `lending.loans.restructure_request` | **M A**. FR-LCL-04 (P2) |
-| PUT | `/lending/loans/{loan_id}/officer` | `lending.collections.assign` | FR-CLN-01 |
-| GET, POST | `/lending/loans/{loan_id}/collection-actions` | `lending.collections.read` / `lending.collections.log_action` | FR-CLN-04 |
+| PUT | `/lending/loans/{loan_id}/officer` | `lending.collections.assign` | FR-CLN-01. `{officer_user_id}`; `{officer_user_id, reassigned}`; 422 `officer_not_eligible` |
+| GET, POST | `/lending/loans/{loan_id}/collection-actions` | `lending.collections.read` / `lending.collections.log_action` | FR-CLN-04. Newest first. POST `{action_type, note?, promised_date?, promised_amount_minor?}`, 201; 422 `invalid_action_type`, `note_required`, `promise_incomplete`, `promised_date_in_past`, `promise_fields_not_allowed` |
 | POST | `/lending/loans/{loan_id}/documents/{doc_type}` | `lending.loans.read` | Generates statement, schedule, or agreement PDF. Built (#120, ADR-034): `schedule` and `loan_statement` return the PDF itself as at the business date, numbered `SCH-<branch>-<loan no>` and `ST-<branch>-<loan no>`, never stored, numbered with the statement date; 409 `invalid_status_transition` before disbursement; 503 `documents_busy` with `Retry-After` when too many are being produced. Every document response is `Cache-Control: no-store`. The statement is the loan account with a running balance whose closing balance is the loan's outstanding (ADR-034). |
 | POST | `/lending/loans/{loan_id}/transactions/{txn_id}/document` | `lending.loans.read` | Built (#120, ADR-034): the receipt (repayment, recovery, upfront fee) or voucher (disbursement), rendered on the first request and stored once (FR-DOC-02); answers `{document_id, doc_type, doc_number, created, reversed, reversed_on}`, then download through `POST /documents/{id}/download-url` (FR-DOC-03). A receipt shows the loan as it was right after that payment, whenever it is first opened. 422 `no_document` for a reversal or a write-off; 422 `transaction_reversed` when the repayment was reversed and no receipt had been issued; a receipt issued before a reversal is unchanged and comes back with `reversed: true`. |
 | GET | `/lending/loans/{loan_id}/documents` | `lending.loans.read` | Built (#120, ADR-034): the receipts and vouchers stored for the loan, newest first, `{items: [{document_id, doc_type, doc_number, created, reversed, reversed_on}]}`; `reversed` marks a receipt whose repayment was reversed after it was issued. |
@@ -909,10 +910,10 @@ Codes (422 unless stated): `term_not_offered`, `amount_out_of_range`, `product_a
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/lending/collections/due-list` | `lending.collections.read` | `?date_from&date_to&officer_user_id`. FR-CLN-02 |
-| GET | `/lending/collections/arrears` | `lending.collections.read` | `?bucket=1_30`. FR-CLN-03 |
-| POST | `/lending/collections/reassign` | `lending.collections.assign` | `{loan_ids, officer_user_id}` |
-| GET | `/lending/collections/promises` | `lending.collections.read` | `?promise_status=pending` |
+| GET | `/lending/collections/due-list` | `lending.collections.read` | `?date_from&date_to&officer_user_id&branch_id&limit`. FR-CLN-02. Today by default, at most 92 days (422 `invalid_range`, `range_too_long`); at most `limit` lines (200, up to 500) and `truncated`; `phone` masked without `lending.members.contact` in the loan's branch; without `lending.collections.all_officers` only the caller's own loans (ADR-064) |
+| GET | `/lending/collections/arrears` | `lending.collections.read` | `?bucket=1_30&officer_user_id&branch_id&limit`. FR-CLN-03. `{buckets: [{par_bucket, loans, arrears_minor, items}], truncated}`: the totals count every loan, the items at most `limit` (200, up to 500); `phone` masked as on the due list; 422 `invalid_bucket` |
+| POST | `/lending/collections/reassign` | `lending.collections.assign` | `{loan_ids, officer_user_id, reason}` (reason 5 to 300 characters, audited; also on `PUT /lending/loans/{loan_id}/officer`), at most 500, all or none (404 when any is out of scope) |
+| GET | `/lending/collections/promises` | `lending.collections.read` | `?promise_status=pending&officer_user_id&branch_id&limit`; at most `limit` (200, up to 500) and `truncated`; 422 `invalid_promise_status` |
 
 ### 7.11.18 Member portal (`/member`, member principals only)
 

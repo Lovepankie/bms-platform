@@ -67,10 +67,17 @@ final class Servicing {
             this.penaltiesDue = penaltiesDue;
         }
 
-        /** The same contracted amounts with nothing paid or waived: the starting point of a replay. */
+        /**
+         * The starting point of a replay: the same amounts due (penalty charges included) and the
+         * standing fee and penalty waivers (FR-ARR-04), with nothing paid. A reversal re-applies
+         * the repayments around a waiver and never undoes it (ADR-026). Waived interest is left
+         * out: today it is only the early settlement rebate, which the replay recomputes.
+         */
         Item fresh() {
             Item i = new Item(id, no, dueDate, principalDue, interestDue, feesDue, penaltiesDue);
             i.penaltyCharges = penaltyCharges == null ? null : new TreeMap<>(penaltyCharges);
+            i.feesWaived = feesWaived;
+            i.penaltiesWaived = penaltiesWaived;
             return i;
         }
 

@@ -262,6 +262,31 @@ class ServicingTest {
         assertThat(items.get(1).paidTotal()).isEqualTo(300_000);
     }
 
+    /**
+     * FR-ARR-04 with ADR-026: a replay starts from the penalties charged and the standing waivers,
+     * so reversing a payment brings back what it paid and never what was waived; the early
+     * settlement rebate is not a standing waiver and is recomputed.
+     */
+    @Test
+    void aReplayKeepsStandingWaiversButNotTheRebate() {
+        Item item = new Item(UUID.randomUUID(), 1, LocalDate.of(2026, 2, 15), 400_000, 120_000, 0, 10_000);
+        item.penaltiesWaived = 4_000;
+        item.interestWaived = 50_000;
+        UUID pay = UUID.randomUUID();
+        Applied paid = Servicing.apply(List.of(item), 6_000, LocalDate.of(2026, 2, 20), "flat", false, ORDER);
+        assertThat(paid.allocations()).containsExactly(new Allocation(item.id, "penalty", 6_000));
+
+        Replay none = Servicing.replay(List.of(item), List.of(), "flat", false, ORDER);
+        Item fresh = none.items().get(0);
+        assertThat(fresh.penaltiesWaived).isEqualTo(4_000);
+        assertThat(fresh.unpaid("penalty")).isEqualTo(6_000);
+        assertThat(fresh.interestWaived).isZero();
+
+        Replay again = Servicing.replay(
+                List.of(item), List.of(new Payment(pay, 6_000, LocalDate.of(2026, 2, 20))), "flat", false, ORDER);
+        assertThat(again.allocations().get(pay)).isEqualTo(paid.allocations());
+    }
+
     /** R-ROUND carried through: a schedule with a residue on the last item still sums to the minor unit. */
     @Test
     void residuesOnTheLastItemAreSettledToTheMinorUnit() {
