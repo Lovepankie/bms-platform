@@ -18,8 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Component;
 
 /**
@@ -35,13 +37,16 @@ class DataExportReport implements ReportDefinition {
     static final String KEY = "core.data_export";
     static final String PERMISSION = "core.data_export.run";
 
+    /** Rows fetched from the server at a time by the reads of the workbook. */
+    static final int FETCH = 2000;
+
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm");
 
     private final List<DataExportSection> sections;
     private final TenantModules modules;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
-    private final JdbcClient jdbc;
+    private final JdbcTemplate streaming;
     private final int splitRows;
 
     DataExportReport(
@@ -49,7 +54,7 @@ class DataExportReport implements ReportDefinition {
             TenantModules modules,
             CurrentTenant tenant,
             BusinessClock clock,
-            JdbcClient jdbc,
+            DataSource dataSource,
             ReportsProperties limits,
             @Value("${bms.data-export.split-rows:10000}") int splitRows) {
         this.sections = sections.stream()
@@ -58,7 +63,9 @@ class DataExportReport implements ReportDefinition {
         this.modules = modules;
         this.tenant = tenant;
         this.clock = clock;
-        this.jdbc = jdbc;
+        // Rows come from the server in blocks of FETCH in the run's transaction, so no table is held whole (ADR-038).
+        this.streaming = new JdbcTemplate(dataSource);
+        this.streaming.setFetchSize(FETCH);
         // A sheet never passes the row cap of a run, whatever the split is set to.
         this.splitRows = Math.max(1, Math.min(splitRows, limits.tableRowCap));
     }
@@ -137,21 +144,16 @@ class DataExportReport implements ReportDefinition {
                         new Column("head_office", "Head office", Kind.TEXT),
                         new Column("status", "Status", Kind.TEXT),
                         new Column("opened_on", "Opened on", Kind.DATE)));
-        jdbc.sql("""
-                        SELECT code, name, location, is_head_office, status, created_at
-                          FROM branches ORDER BY is_head_office DESC, code, id
-                        """)
-                .query((rs, n) -> {
-                    rows.row(
-                            rs.getString("code"),
-                            rs.getString("name"),
-                            rs.getString("location"),
-                            rs.getBoolean("is_head_office") ? "Yes" : "No",
-                            rs.getString("status"),
-                            sheets.date(rs.getTimestamp("created_at")));
-                    return null;
-                })
-                .list();
+        streaming.query("""
+                SELECT code, name, location, is_head_office, status, created_at
+                  FROM branches ORDER BY is_head_office DESC, code, id
+                """, (RowCallbackHandler) rs -> rows.row(
+                rs.getString("code"),
+                rs.getString("name"),
+                rs.getString("location"),
+                rs.getBoolean("is_head_office") ? "Yes" : "No",
+                rs.getString("status"),
+                sheets.date(rs.getTimestamp("created_at"))));
     }
 
     /**

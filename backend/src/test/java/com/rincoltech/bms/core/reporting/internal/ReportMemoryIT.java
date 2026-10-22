@@ -25,11 +25,12 @@ import org.springframework.context.annotation.Import;
  * real application context, so an out of memory error fails this test and not a production run (the precedent is
  * {@code StatementMemoryTest}).
  *
- * <p>The child makes fourteen runs: three {@code lending.par} runs on the seeded book and the synthetic report at the
+ * <p>The child makes fifteen runs: three {@code lending.par} runs on the seeded book and the synthetic report at the
  * largest table the staging cap allows, as JSON and CSV (slice D1); files at the size cap, uploaded from disk; and, for
  * the renderers of slice D2 (issue #217), {@code lending.par} and {@code lending.portfolio_outstanding} as PDF and
  * Excel on the seeded book, an Excel sheet of 20,000 rows of eight columns (the cap), and a PDF of a table of 20,000 rows
- * (cut at the 500 row cap, its total kept). Rows go to the spool one at a time and every renderer reads it a row at a
+ * (cut at the 500 row cap, its total kept); and the business's own copy of its data, {@code core.data_export} (ADR-074),
+ * every table of the seeded book read from the server 2,000 rows at a time and written as it comes. Rows go to the spool one at a time and every renderer reads it a row at a
  * time, so no table is ever held in memory. A second child runs the PDF at the production cap of 3,000 rows on the same
  * heap, to show the headroom. The book is twice the demo seed; raise it with {@code -Dreports.memory.scale=N}. The pack of
  * slice D5 joins this test when it exists.
@@ -151,7 +152,9 @@ class ReportMemoryIT extends IntegrationTest {
         assertThat(runs.stream().filter(l -> !l.contains("status=ready")).toList())
                 .as("runs that did not end ready, with status and failure code; output: %s", output)
                 .isEmpty();
-        assertThat(runs).as(output).hasSize(14);
+        assertThat(runs).as(output).hasSize(15);
+        // The whole book as one workbook, streamed: every lending table of the seeded tenant.
+        assertThat(runs).as(output).anyMatch(l -> l.startsWith("MEMORY run core.data_export xlsx status=ready"));
         assertThat(output).contains("MEMORY run test.rows json status=ready rows=20000");
         assertThat(output).contains("MEMORY run test.rows csv status=ready rows=20000");
         // The files at the size cap: between 7 and 8 MiB each, stored from disk.

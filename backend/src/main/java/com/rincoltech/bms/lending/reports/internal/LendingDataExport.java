@@ -10,6 +10,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
+import javax.sql.DataSource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -27,10 +30,17 @@ class LendingDataExport implements DataExportSection {
     private static final Column MEMBER = new Column("member", "Member", Kind.TEXT);
     private static final Column OFFICER = new Column("officer", "Officer", Kind.TEXT);
 
-    private final JdbcClient jdbc;
+    /** Rows fetched from the server at a time: a table of any length is never held whole (ADR-038). */
+    static final int FETCH = 2000;
 
-    LendingDataExport(JdbcClient jdbc) {
+    private final JdbcClient jdbc;
+    private final JdbcTemplate streaming;
+
+    LendingDataExport(JdbcClient jdbc, DataSource dataSource) {
         this.jdbc = jdbc;
+        // Joins the run's snapshot transaction like any read; the fetch size makes the driver hand rows over in blocks.
+        this.streaming = new JdbcTemplate(dataSource);
+        this.streaming.setFetchSize(FETCH);
     }
 
     @Override
@@ -57,13 +67,9 @@ class LendingDataExport implements DataExportSection {
         void write(ResultSet rs) throws SQLException;
     }
 
+    /** Writes each row as the server returns it, {@link #FETCH} at a time; nothing is collected. */
     private void each(String sql, Row row) {
-        jdbc.sql(sql)
-                .query((rs, n) -> {
-                    row.write(rs);
-                    return null;
-                })
-                .list();
+        streaming.query(sql, (RowCallbackHandler) row::write);
     }
 
     private long count(String sql) {
