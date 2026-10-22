@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Barcode, type Product } from '../../../api/retail';
 import { BarcodeSvg } from './catalogue-barcodes';
 import { Gate, Problem, ProductPicker, money } from './ui';
@@ -71,9 +72,9 @@ export function LabelsPage() {
         My printer cannot print to the edge: keep 4 mm clear inside each label
       </label>
       <p>
-        <button type="button" className="rt-primary" data-tour="labels-make" disabled={rows.length === 0 || make.isPending} onClick={() => make.mutate()}>
-          {make.isPending ? 'Making' : 'Make the labels'}
-        </button>{' '}
+        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} disabled={rows.length === 0} onClick={() => make.mutate()}>
+          Make the labels
+        </BusyButton>{' '}
         <button type="button" data-tour="labels-print" disabled={sheet.length === 0} onClick={() => window.print()}>
           Print
         </button>

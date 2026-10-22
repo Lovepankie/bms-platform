@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Product } from '../../../api/retail';
 import { useStaff } from '../context';
 import { checkBarcode, code128Widths, formatName } from './barcode-state';
@@ -67,9 +68,9 @@ export function BarcodeEditor({ product }: { product: Product }) {
               {b.generated ? ', made for labels' : ''}
             </span>
             {canManage && (
-              <button type="button" className="btn-ghost" disabled={remove.isPending} onClick={() => remove.mutate(b.id ?? '')} aria-label={`Remove barcode ${b.code}`}>
+              <BusyButton type="button" className="btn-ghost" busy={remove.isPending && remove.variables === b.id} disabled={remove.isPending} onClick={() => remove.mutate(b.id ?? '')} aria-label={`Remove barcode ${b.code}`}>
                 Remove
-              </button>
+              </BusyButton>
             )}
           </li>
         ))}
@@ -103,13 +104,13 @@ export function BarcodeEditor({ product }: { product: Product }) {
             </>
           )}
           <Problem error={add.error} />
-          <button type="button" disabled={!checked?.ok || add.isPending} onClick={() => add.mutate()}>
-            {add.isPending ? 'Saving' : 'Add barcode'}
-          </button>
+          <BusyButton type="button" busy={add.isPending} disabled={!checked?.ok} onClick={() => add.mutate()}>
+            Add barcode
+          </BusyButton>
           {!list.some((b) => b.generated) && (
-            <button type="button" className="btn-ghost" disabled={make.isPending} onClick={() => make.mutate()}>
-              {make.isPending ? 'Making' : 'Make a barcode for labels'}
-            </button>
+            <BusyButton type="button" className="btn-ghost" busy={make.isPending} onClick={() => make.mutate()}>
+              Make a barcode for labels
+            </BusyButton>
           )}
         </>
       )}
