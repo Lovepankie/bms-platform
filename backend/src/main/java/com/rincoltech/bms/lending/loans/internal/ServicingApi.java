@@ -84,7 +84,27 @@ final class ServicingApi {
             long totalPaidMinor,
 
             @Schema(description = "Overpayment held for the member (R-ALLOC step 4)")
-            long creditBalanceMinor) {}
+            long creditBalanceMinor,
+
+            @Schema(description = "FR-ARR-03, chapter 14: current, 1_30, 31_60, 61_90 or over_90")
+            String parBucket,
+
+            @Schema(description = "FR-ARR-03: penalties charged so far (R-PEN), paid or not")
+            long penaltiesAssessedMinor) {}
+
+    /** Chapter 14: the PAR bucket of a number of days past due. */
+    static String parBucket(int daysPastDue) {
+        if (daysPastDue <= 0) {
+            return "current";
+        }
+        if (daysPastDue <= 30) {
+            return "1_30";
+        }
+        if (daysPastDue <= 60) {
+            return "31_60";
+        }
+        return daysPastDue <= 90 ? "61_90" : "over_90";
+    }
 
     @Schema(name = "LoanScheduleRow")
     record ScheduleRow(

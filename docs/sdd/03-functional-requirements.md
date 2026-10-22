@@ -650,10 +650,46 @@ SMS and PDF are deferred.
 
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
-| FR-ARR-01 | A nightly job (00:30 tenant local time) shall, for every active loan: update item statuses, recompute DPD and arrears (R-DPD), assess penalties (R-PEN), and expire stale approvals (FR-ORG-08). | Rerunning for the same business date changes nothing. | MVP |
+| FR-ARR-01 | A nightly job (shortly after midnight, tenant local time) shall, for every active loan: update item statuses, recompute DPD and arrears (R-DPD), assess penalties (R-PEN), and expire stale approvals (FR-ORG-08). | Rerunning for the same business date changes nothing. | MVP |
 | FR-ARR-02 | The job shall record a daily snapshot per loan (business date, principal outstanding, arrears, DPD) for portfolio trend and PAR history reports. | One row per active loan per business date; a rerun upserts. | MVP |
 | FR-ARR-03 | The loan view shall show arrears amount, DPD, PAR bucket (chapter 14) and assessed penalties. | Tested with fixed clocks. | MVP |
 | FR-ARR-04 | A branch manager shall request a waiver of all or part of an assessed penalty (or, with accountant role, of fees or interest) with a reason; the waiver is maker-checker and is recorded on the item as `waived`. | Waived penalties are never posted to income. Waiving principal is not allowed (that is a write-off). | MVP |
+
+Built in increment 6 T1 (#264, migration V81): FR-ARR-01 and FR-ARR-03. The job ticks every
+quarter hour and runs each lending tenant once per business date, at the first tick after the
+tenant's own midnight (so the 00:30 of the table above is now "shortly after midnight, tenant local
+time"; the approval expiry stays its own job, FR-ORG-08). The run claims its date in
+`lending_arrears_runs` with a ten minute lease that it renews as it goes: a second worker leaves a
+held date alone, a crashed run is taken over when its lease lapses, and a finished date is never
+run again. Each loan is one short transaction under its row lock, so one loan that fails is logged
+and counted (`failed_loans` on the run and its audit row) and the others go on. For every active
+loan it charges the R-PEN periods due by the business date as `lending_loan_charges` rows (keyed by
+item and period, so two runs never charge a period twice), adds them to the items' penalties due,
+and recomputes item statuses, DPD and arrears, writing only what moved and keeping the loan's
+version (ADR-015 addendum of 2026-10-22); a rerun the same day writes nothing. Penalties start at
+the business's first arrears run: a period dated before it is never charged, so switching the run
+on does not charge a long overdue loan every period since its due date in one night; a missed
+night is caught up with each period on its own date; the percent base is the overdue principal and
+interest unpaid at the run, and an item no longer overdue is charged nothing, even for a missed
+period (the borrower's side of the doubt). A repayment reaches only the penalties charged on or
+before its value date (R-ALLOC with dated penalties, also on a reversal's replay). After every
+repayment and reversal each charged period is recomputed from the payments by value date: owed only
+when the item was overdue at the start of its date, a percent penalty on the principal and interest
+unpaid then, never more than first charged; a back-dated repayment cancels the excess (in whole or in
+part, never what was waived or paid, `lending_charge_cancels`), and a reversal that shows a cancelled
+amount was owed after all charges it again as a new row (`penalty_recharge`), set before the
+surviving repayments are re-allocated so a penalty-first order meets them, so a bounced payment
+loses no penalty and a paid-up loan is never penalised. Penalties start at the later of the business's
+first run and the loan's own start in the system, and a loan that fails the run two nights running
+(the business's last two finished runs, so a night with no run between them does not hide it) is
+pushed to its branch's managers and the administrators (`lending.arrears_loan_failing`). A
+repayment is stamped with the clock when it is recorded, under the loan's lock, so a receipt places
+the penalties it paid exactly. The loan's `balances` add `par_bucket` (`current`,
+`1_30`, `31_60`, `61_90`, `over_90`) and `penalties_assessed_minor` (cancelled amounts left out).
+The statement charges each penalty on its own business date and credits a cancel on the day it was
+made, and a receipt counts only the penalties recorded before its payment (ADR-034 addenda). The
+insights snapshot (FR-ARR-02, 00:45) computes each date's positions itself and does not wait for
+this run. FR-ARR-04 is T2 (#265).
 
 ## 3.22 Closure, write-off and restructure (LCL)
 

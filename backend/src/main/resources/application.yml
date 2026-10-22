@@ -249,6 +249,10 @@ bms:
     max-applications-per-hour: ${BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR:30}
     max-verification-emails-per-hour: ${BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR:60}
     max-verification-emails-per-mailbox: 3
+  # The nightly arrears run (FR-ARR-01, lending.loan-arrears, every quarter hour). On by default; the integration
+  # tests switch it off so that a tick never charges penalties on a test's loans, and drive the run themselves.
+  lending:
+    arrears-job-enabled: ${BMS_LENDING_ARREARS_JOB_ENABLED:true}
 
 # Background jobs on PostgreSQL (ADR-008). BMS_SCHEDULER_ENABLED=false turns polling off in an
 # instance that should only serve HTTP, if a separate worker instance is ever split out.

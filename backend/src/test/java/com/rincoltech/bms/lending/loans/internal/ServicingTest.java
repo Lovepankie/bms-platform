@@ -278,4 +278,37 @@ class ServicingTest {
         assertThat(sum(a.allocations())).isEqualTo(1_300_001);
         assertThat(items).allMatch(Item::settled);
     }
+
+    /**
+     * The review of #270, finding 1: a payment reaches only the penalties charged on or before its value date, so a
+     * back-dated payment pays the item's principal and interest, and the later penalties are left to be cancelled; a
+     * payment dated after them pays them first, as the allocation order says.
+     */
+    @Test
+    void aPaymentNeverPaysAPenaltyChargedAfterItsValueDate() {
+        LocalDate due = LocalDate.of(2026, 10, 1);
+        Servicing.Item back = datedItem(due);
+        Servicing.Applied a = Servicing.apply(java.util.List.of(back), 520_000, due, "flat", false, null);
+        assertThat(a.allocations()).noneMatch(r -> r.component().equals("penalty"));
+        assertThat(back.unpaidContract()).isZero();
+        assertThat(back.unpaidOn("penalty", due))
+                .as("none of the three existed on its value date")
+                .isZero();
+
+        Servicing.Item later = datedItem(due);
+        Servicing.Applied b = Servicing.apply(java.util.List.of(later), 6_000, due.plusDays(3), "flat", false, null);
+        assertThat(b.allocations()).singleElement().satisfies(r -> {
+            assertThat(r.component()).isEqualTo("penalty");
+            assertThat(r.amountMinor()).isEqualTo(6_000);
+        });
+        assertThat(later.unpaid("penalty")).isZero();
+    }
+
+    private static Servicing.Item datedItem(LocalDate due) {
+        Servicing.Item i = new Servicing.Item(java.util.UUID.randomUUID(), 1, due, 400_000, 120_000, 0, 6_000);
+        for (int d = 1; d <= 3; d++) {
+            i.chargedOn(due.plusDays(d), 2_000);
+        }
+        return i;
+    }
 }
