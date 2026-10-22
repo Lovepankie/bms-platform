@@ -229,13 +229,18 @@ class BillingService {
      * the others.
      */
     RunResult run() {
+        return run(null);
+    }
+
+    /** As {@link #run()} for these businesses only, or every one when null: the integration tests share one database. */
+    RunResult run(java.util.Set<UUID> only) {
         Settings settings = settings();
         Instant now = clock.now();
         int queued = 0;
         int overdue = 0;
         int failures = 0;
         for (TenantResponse tenant : platform.tenants(null, List.of("trial", "active"), null)) {
-            if (tenant.pilot() || !"active".equals(tenant.status())) {
+            if (tenant.pilot() || !"active".equals(tenant.status()) || (only != null && !only.contains(tenant.id()))) {
                 continue;
             }
             try {
@@ -277,11 +282,10 @@ class BillingService {
 
     record Owner(String fullName, String email, String phone) {}
 
-    /** The Owner of the bound business (ADR-062), or empty while it has none. */
+    /** The Owner of the bound business (ADR-062; invited or active, never deactivated), or empty while it has none. */
     private Optional<Owner> owner() {
         return jdbc.sql("""
-                        SELECT full_name, email, phone_e164 FROM users
-                         WHERE is_owner AND kind = 'staff' AND status = 'active'
+                        SELECT full_name, email, phone_e164 FROM users WHERE is_owner AND kind = 'staff'
                         """)
                 .query((rs, n) ->
                         new Owner(rs.getString("full_name"), rs.getString("email"), rs.getString("phone_e164")))
