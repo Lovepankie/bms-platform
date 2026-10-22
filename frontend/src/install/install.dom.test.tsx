@@ -113,13 +113,16 @@ describe('the install offer', () => {
     expect(screen.queryByRole('heading', { name: 'Install the app' })).toBeNull();
   });
 
-  it('gives an iPhone an Install button that shows the three taps, and can be waved away', async () => {
+  it('gives an iPhone an Install button that shows the Safari steps, and can be waved away', async () => {
     const { ui } = await load({ ios: true });
     render(<ui.InstallPrompt />);
     expect(screen.queryByTestId('ios-install-steps')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
     expect(screen.getByTestId('ios-install-steps').textContent).toContain('Add to Home Screen');
     expect(screen.getByTestId('ios-install-steps').textContent).toContain('Share');
+    // A pilot owner could not find Share: the steps say Safari, not a Private tab, and where Share hides.
+    expect(screen.getByTestId('ios-install-steps').textContent).toContain('Private');
+    expect(screen.getByTestId('ios-install-steps').textContent).toContain('⋯');
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('ios-install-steps')).toBeNull();

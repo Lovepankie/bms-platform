@@ -38,7 +38,8 @@ protocol), who may be pushed to and how a device belongs to a person, which even
    it on a tap. The offer (`InstallPrompt`) shows after sign-in under the staff bar, on the sign-in page, on the invitation page where
    the first password is chosen (and after it), and on the forgot and reset password pages. It shows only when this device can
    install: the browser gave a prompt (Android, desktop Chrome and Edge), or it is an iPhone or iPad, where there is no prompt and the
-   person is told the three taps (Share, Add to Home Screen, Add). It never shows to someone already running the installed app.
+   person is told the steps in Safari: a normal tab rather than a Private one, Share (with what to do when it is hidden, behind the
+   toolbar or the ⋯ button), Add to Home Screen, Add. It never shows to someone already running the installed app.
    "Not now" is remembered on this device in `localStorage` for 30 days (per device, not per account, since the question is about the
    device). The staff area also has a permanent control, Notifications and app (`/staff/notifications`), with the install button or
    the steps, whatever was dismissed.

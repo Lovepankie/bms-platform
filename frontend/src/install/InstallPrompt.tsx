@@ -4,19 +4,29 @@ import { dismiss, getServerState, getState, isIosDevice, requestInstall, subscri
 // "Install the app" (ADR-050). Two pieces share one store (install.ts):
 //   InstallPrompt: the offer. It shows after sign-in, on the sign-in page, on the invitation and first password page and on the
 //     forgot and reset password pages, only when this device can actually install the app (the browser gave us a prompt, or it is
-//     an iPhone or iPad, where the person is told the three taps). "Not now" is remembered on this device.
+//     an iPhone or iPad, where the person is told the taps in Safari). "Not now" is remembered on this device.
 //   InstallPanel: the permanent control on the Notifications and app page, which stays whatever was dismissed.
 
 function useInstall() {
   return useSyncExternalStore(subscribe, getState, getServerState);
 }
 
-/** The three taps on an iPhone or iPad, in plain words. */
+/**
+ * The taps on an iPhone or iPad, in plain words. The steps name Safari because it is where these taps are the same for everyone
+ * (other iOS browsers can add to the Home Screen too, from menus that differ). The Share button is often out of sight: Safari
+ * folds its toolbar away when the page scrolls, and in some layouts Share sits behind the ⋯ button. A first pilot owner stopped
+ * at "tap Share" because she could not see it, so the steps say what to do when it is not there, rather than which phone or
+ * which iOS layout she has, which she cannot be expected to know.
+ */
 export function IosSteps() {
   return (
     <ol className="stack" data-testid="ios-install-steps">
       <li>
-        Tap the <strong>Share</strong> button: the square with an arrow, at the bottom of Safari (at the top on an iPad).
+        Use <strong>Safari</strong>, in a normal tab, not a Private one (a Private tab forgets your sign-in).
+      </li>
+      <li>
+        Tap <strong>Share</strong>: the square with an arrow. If the buttons are hidden, tap the address bar once so they
+        show. If you still do not see Share, tap <strong>⋯</strong> and Share is there.
       </li>
       <li>
         Scroll down and tap <strong>Add to Home Screen</strong>.
