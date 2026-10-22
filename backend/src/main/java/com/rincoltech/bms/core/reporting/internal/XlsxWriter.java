@@ -435,7 +435,7 @@ final class XlsxWriter {
             case MONEY -> 20;
             case DATE -> 14;
             case BASIS_POINTS -> 12;
-            case COUNT -> 12;
+            case COUNT, QUANTITY -> 12;
         };
         return Math.min(60, Math.max(base, header(c, currency).length() + 3));
     }
@@ -457,6 +457,11 @@ final class XlsxWriter {
                         at,
                         style(c.kind(), total, false),
                         String.valueOf(ReportFormats.excelSerial(LocalDate.parse(String.valueOf(v)))));
+            case QUANTITY ->
+                number(
+                        at,
+                        style(c.kind(), total, false),
+                        ReportFormats.quantity(v).toPlainString());
         };
     }
 
@@ -466,7 +471,8 @@ final class XlsxWriter {
 
     private static int style(Kind kind, boolean total, boolean quoted) {
         int offset = switch (kind) {
-            case TEXT -> quoted ? 5 : 0;
+            // A quantity is a number in the General format, which the text styles have: no style of its own is needed.
+            case TEXT, QUANTITY -> quoted ? 5 : 0;
             case COUNT -> 1;
             case MONEY -> 2;
             case BASIS_POINTS -> 3;
@@ -476,7 +482,7 @@ final class XlsxWriter {
             return S_TOTAL + offset;
         }
         return switch (kind) {
-            case TEXT -> quoted ? S_TEXT_Q : S_TEXT;
+            case TEXT, QUANTITY -> quoted ? S_TEXT_Q : S_TEXT;
             case COUNT -> S_COUNT;
             case MONEY -> S_MONEY;
             case BASIS_POINTS -> S_RATE;

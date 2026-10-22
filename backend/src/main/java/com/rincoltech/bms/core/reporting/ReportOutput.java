@@ -33,7 +33,8 @@ public interface ReportOutput {
 
         /**
          * One row, a cell per column. A {@code TEXT} cell is a {@code String}, a {@code DATE} cell a
-         * {@code LocalDate}, the other kinds a {@code Long} or {@code Integer}; any cell may be null.
+         * {@code LocalDate}, a {@code QUANTITY} cell a {@code BigDecimal} (or a whole {@code Long} or {@code Integer}), the
+         * other kinds a {@code Long} or {@code Integer}; any cell may be null.
          */
         void row(Object... cells);
 
@@ -59,6 +60,8 @@ public interface ReportOutput {
         MONEY,
         /** Basis points, shown as a percentage to one decimal. */
         BASIS_POINTS,
-        DATE
+        DATE,
+        /** A quantity of goods, which may hold a fraction (2.5 kg): kept exact, written as a plain number. */
+        QUANTITY
     }
 }
