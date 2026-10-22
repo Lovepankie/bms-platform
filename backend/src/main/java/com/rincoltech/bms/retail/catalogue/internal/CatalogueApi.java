@@ -223,7 +223,66 @@ final class CatalogueApi {
                     description =
                             "Issue #384: the id of the photo of the item this size belongs to, which it shows while it has"
                                     + " none of its own; absent when the item has none")
-            UUID itemPhotoId) {
+            UUID itemPhotoId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #345: the barcodes of this product and of its pack sizes, sent by the list, the get and"
+                                    + " the barcode lookup; scan any of them to find the product")
+            List<Barcode> barcodes) {
+
+        /** Every field but the barcodes, the shape every read had before barcodes (issue #345). */
+        Product(
+                UUID id,
+                String code,
+                String description,
+                UUID categoryId,
+                String category,
+                UUID unitId,
+                String unit,
+                Long sellMinor,
+                Long costMinor,
+                String currency,
+                boolean active,
+                Instant createdAt,
+                Instant updatedAt,
+                int version,
+                String qty,
+                Boolean negative,
+                List<Pack> packs,
+                String stockOnHand,
+                Integer stockBranches,
+                VariantOf variant,
+                String reservedQty,
+                UUID photoId,
+                UUID itemPhotoId) {
+            this(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reservedQty,
+                    photoId,
+                    itemPhotoId,
+                    null);
+        }
 
         /** Every field but the photo, the shape every read had before item photos (issue #384). */
         Product(
@@ -468,7 +527,8 @@ final class CatalogueApi {
                     variant,
                     reservedQty,
                     photoId,
-                    itemPhotoId);
+                    itemPhotoId,
+                    barcodes);
         }
 
         Product withStock(String total, int branches) {
@@ -495,7 +555,8 @@ final class CatalogueApi {
                     variant,
                     reservedQty,
                     photoId,
-                    itemPhotoId);
+                    itemPhotoId,
+                    barcodes);
         }
 
         /** ADR-055: no selling price and no cost, for a caller who may see neither (a storekeeper). */
@@ -527,7 +588,8 @@ final class CatalogueApi {
                     variant,
                     reservedQty,
                     photoId,
-                    itemPhotoId);
+                    itemPhotoId,
+                    barcodes);
         }
 
         Product withoutCost() {
@@ -554,7 +616,8 @@ final class CatalogueApi {
                     variant,
                     reservedQty,
                     photoId,
-                    itemPhotoId);
+                    itemPhotoId,
+                    barcodes);
         }
 
         /** The same product with what customer orders keep aside of the branch balance (issue #385). */
@@ -582,7 +645,8 @@ final class CatalogueApi {
                     variant,
                     reserved,
                     photoId,
-                    itemPhotoId);
+                    itemPhotoId,
+                    barcodes);
         }
 
         Product withVariant(VariantOf v) {
@@ -609,7 +673,8 @@ final class CatalogueApi {
                     v,
                     reservedQty,
                     photoId,
-                    itemPhotoId);
+                    itemPhotoId,
+                    barcodes);
         }
 
         Product withPhoto(UUID photo, UUID itemPhoto) {
@@ -636,7 +701,36 @@ final class CatalogueApi {
                     variant,
                     reservedQty,
                     photo,
-                    itemPhoto);
+                    itemPhoto,
+                    barcodes);
+        }
+
+        Product withBarcodes(List<Barcode> codes) {
+            return new Product(
+                    id,
+                    code,
+                    description,
+                    categoryId,
+                    category,
+                    unitId,
+                    unit,
+                    sellMinor,
+                    costMinor,
+                    currency,
+                    active,
+                    createdAt,
+                    updatedAt,
+                    version,
+                    qty,
+                    negative,
+                    packs,
+                    stockOnHand,
+                    stockBranches,
+                    variant,
+                    reservedQty,
+                    photoId,
+                    itemPhotoId,
+                    codes);
         }
     }
 
@@ -1031,4 +1125,59 @@ final class CatalogueApi {
 
     @Schema(name = "RetailPackList")
     record PackList(List<Pack> items) {}
+
+    // ---- Barcodes (ADR-070, issue #345; FR-RET-68) ----------------------------------------------------
+
+    @Schema(
+            name = "RetailBarcode",
+            description = "Issue #345: one barcode of a product, for its base unit or one pack size")
+    record Barcode(
+            UUID id,
+            UUID productId,
+            String code,
+
+            @Schema(description = "ean13, ean8, upca or code128")
+            String format,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The pack size this barcode is on; absent for the product's own unit")
+            UUID unitId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "The name of that pack's unit")
+            String unit,
+
+            @Schema(description = "True for a Code 128 code the system made for the product's labels")
+            boolean generated) {}
+
+    @Schema(name = "RetailBarcodeRequest", description = "Issue #345: add a barcode to a product")
+    record BarcodeRequest(
+            @NotBlank
+            @Size(max = Barcodes.MAX_LENGTH)
+            @Schema(description = "As printed or scanned; EAN-13, EAN-8 and UPC-A check digits are checked")
+            String code,
+
+            @Size(max = 10)
+            @Schema(
+                    description =
+                            "ean13, ean8, upca or code128; by default read from the code (13, 12 or 8 digits, else Code 128)")
+            String format,
+
+            @Schema(
+                    description =
+                            "A pack size of the product (the units capability); absent for the product's own unit")
+            UUID unitId) {}
+
+    @Schema(name = "RetailBarcodeList")
+    record BarcodeList(List<Barcode> items) {}
+
+    @Schema(name = "RetailBarcodeMatch", description = "Issue #345: the active product a scanned barcode belongs to")
+    record BarcodeMatch(
+            Product product,
+            Barcode barcode,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The pack size the barcode is on, to add the line in that unit; absent for the base unit")
+            UUID unitId) {}
 }

@@ -296,6 +296,20 @@ class CatalogueRepository {
                 .optional();
     }
 
+    /** A product with the balance of a branch, as a search row has it (issue #345, the barcode lookup). */
+    Optional<Product> findAt(UUID id, UUID branchId) {
+        if (branchId == null) {
+            return find(id);
+        }
+        return jdbc.sql(
+                        SELECT_PRODUCT.replace(
+                                        " FROM retail_products p", ", b.qty, b.reserved_qty FROM retail_products p")
+                                + " LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = ? WHERE p.id = ?")
+                .params(branchId, id)
+                .query(CatalogueRepository::productWithQty)
+                .optional();
+    }
+
     /**
      * The product row lock (FR-RET-06). {@code FOR UPDATE} would conflict with the {@code FOR KEY
      * SHARE} that every stock movement and sale line insert takes through its foreign key, and a
