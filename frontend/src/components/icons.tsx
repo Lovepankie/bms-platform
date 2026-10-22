@@ -243,6 +243,14 @@ export const icons = {
       <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
     </Svg>
   ),
+  // A coin held out on an open hand: the Lending heading of the side menu (issue #471).
+  lending: (
+    <Svg>
+      <circle cx="15" cy="6" r="3" />
+      <path d="M2 14h3.5l3.5-1h3a1.5 1.5 0 0 1 0 3H9" />
+      <path d="M12.5 16l5.2-2.4a1.6 1.6 0 0 1 1.9 2.5L15 20H5.5L2 19" />
+    </Svg>
+  ),
   banking: (
     <Svg>
       <path d="M3 9l9-5 9 5" />

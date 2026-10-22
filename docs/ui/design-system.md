@@ -1,6 +1,6 @@
 # Design system
 
-**Status:** Draft · **Chore:** #95, #106 (visual polish), #429 (light and dark theme), #455 (phone side menu) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
+**Status:** Draft · **Chore:** #95, #106 (visual polish), #429 (light and dark theme), #455 (phone side menu), #471 (menu sections and Home cards) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
 
 The look of the PWA: calm, trustworthy business software in Rincol Tech blue. One design layer serves the
 landing page, the sign-in family, the staff area, every retail screen, the member portal and the platform
@@ -88,6 +88,7 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Side menu | `SideNav` and `SideMenu` (`components/side-menu.tsx`), `.side-nav`, `.side-nav-folded`, `.menu-button`, `.side-menu`, `.side-menu-panel`, `.side-menu-group` | The one navigation of the staff area and the operator portal: a sidebar from 720px that folds to icons, a drawer of the same items below it (see Navigation) |
 | Breadcrumbs | `StaffBreadcrumbs` (`components/breadcrumbs.tsx`): `<nav aria-label="Breadcrumb">` with an `<ol>` | One trail under the staff bar from the routes' `crumb` labels (FR-UXN-01); the last item is `aria-current="page"`; below 720px only Back to the parent and the current page |
 | Category group | `GroupControls`, `GroupedBodies`, `GroupedCards` (`areas/staff/retail/category-groups.tsx`), `.cat-head` | A list in expandable category sections: a full-width header button (`aria-expanded`, `aria-controls`) with the count and subtotal, a Group by category switch, Expand all and Collapse all (FR-UXN-02) |
+| Home cards | `HomeCards` (`areas/staff/home-cards.tsx`), `.home-cards`, `.home-card`, `.home-figures` | Home's card per module the business uses (#471, FR-UXN-05, ADR-072): a `.card` headed with the module's menu icon and name, its figures as a `dl` (label muted, value large and semibold, a count as a hint), and a link to the module; a grid of columns at least 280px wide, so one column on a phone |
 | Retail shortcuts | `RetailMenuGroup` (`areas/staff/retail/nav.tsx`) | Up to five retail shortcuts the user may use, as a group under Retail in the side menu on every size (#455, which removed the retail bottom bar) |
 | Tile | `.tile-grid` of `.tile` | Retail home: icon, label, hint; two per row on a phone |
 | Stat tile | `.an-stats` of `.an-stat` (`.an-stat-label`, `.an-stat-value`, a `.hint`) | The retail dashboard: a figure with its label, two per row on a phone and four from 720px; `.an-placeholder` (dashed) marks a slot for a figure that does not exist yet and shows no number |
@@ -138,6 +139,20 @@ query, so the number is the token.
   longer). The page becomes two columns (`.nav-layout`, `.nav-layout-main`): the content takes the remaining width, centred up
   to `--content-width`, and clips the staff bar's full-bleed band, so nothing scrolls sideways at 1024px. It comes first in the
   page, so Tab reaches the menu before the content. Sign out stays in the staff bar.
+- **Sections for a business with Shop and Lending (#471, FR-UXN-04):** each item of `staffAreas` names its module with
+  `section` (`shop` for Retail, `lending` for Loans, Members, Collateral, Savings, Investments, Insights and the AI assistant),
+  and the layout passes `STAFF_SECTIONS` (Shop with the `stock` icon, Lending with its own `lending` icon, a coin on an open hand, since `banking` is Receive payments'). When the links name two
+  sections, `MenuLinks` draws the shared items before the first sectioned one (Home, Approvals), then each section, then the
+  other shared items (Reports, SMS, Receive payments, Users, Notifications, Feedback, Business set-up). A section is a
+  `.side-menu-block` with a rule above it and a heading button (`.side-menu-heading`: small muted capitals, its icon, a caret,
+  `aria-expanded`, `aria-controls` on the list) that folds its links; folded, the links stay in the page under `hidden`, and the
+  drawer's Tab cycle skips any control inside a `[hidden]` ancestor. The folded sections are kept per person in `localStorage`
+  under `bms.menu.sections.<user id>` (a list of ids, read and written inside `try`/`catch`), read again when another person
+  signs in. A folded section shows its links while the page is one of them or of their groups (`groupPaths`), and while a tour
+  step points at one of its links or its `tours` (`retail-nav` for Shop). The heading acts on what the person sees, as the
+  sidebar button does: a press on a section held open folds it and wins until the page or the tour step changes. In the folded
+  sidebar the heading is its icon, with the label as its accessible name and `title`. With one section, or none, the list stays
+  flat with no heading, as before. On a phone the one-tap Sell is there only while retail is on, and Sale stays in Shop too.
 - **Folding the sidebar:** a button at its top (the `menu` icon, the constant name `aria-label="Menu labels"`, `aria-expanded`
   true while the labels show, a `title` that says Show or Hide menu labels) folds it to 64px of icons and back. It starts
   folded between 720 and 1023px and unfolded from 1024px. A folded item keeps its label as its accessible name (a

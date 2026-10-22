@@ -112,3 +112,46 @@ dialog h2 {
     opacity: 1;
   }
 }
+
+/* Home's card per module (issue #471): side by side where they fit, one above the other on a phone. */
+.home-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.home-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.home-card .card-title svg {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+}
+
+.home-figures {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.home-figure dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.home-figure dd {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.home-figure dd .hint {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
