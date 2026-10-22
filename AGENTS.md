@@ -192,8 +192,8 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   upload and remove control per shop; the shop's logo shows beside the branch picker in the staff bar and on the sale screen header, and
   the shop in use is shown with its logo (else the business logo, else no image) beside its name at the top of the side menu and the
   phone drawer (`CurrentShop` in `frontend/src/areas/staff/branch-picker.tsx`). The app icon, the tab icon and the manifest keep the
-  business logo (ADR-066). Tests: `BranchLogoIT`, `RlsIsolationIT`, `frontend/src/areas/staff/branches/branches.dom.test.tsx`,
-  `branch-picker.dom.test.tsx`, `side-menu-shop.dom.test.tsx`.
+  business logo (ADR-066). Tests: `BranchLogoIT`, `LoanServicingIT`, `RlsIsolationIT`, `frontend/src/areas/staff/branches/branches.dom.test.tsx`,
+  `branch-picker.dom.test.tsx`, `side-menu-shop.dom.test.tsx`, `frontend/src/app/branding.test.ts`.
 - **Built (the installed app uses the business's logo, issue #446, FR-TEN-08, ADR-066):** no migration, no permission. Public
   `GET /api/v1/branding/app/manifest.webmanifest` (the business of the host: `id` and `start_url` `/staff`, its display name, a 12
   character `short_name` cut by grapheme clusters at a word boundary when one is 6 or more in, its theme colour) and `GET /api/v1/branding/app/{icon}` (`icon-192.png`, `icon-512.png`, the two maskable ones
@@ -815,7 +815,7 @@ Accepted (this list is the ADR index):
   migration `V80`)
 - ADR-068 Each shop can have its own logo: optional, the rules of the business logo, set by the owner and the administrators
   (`core.branches.manage`), served publicly like the business logo; it heads that shop's receipts and documents and its screens,
-  and the app icon, tab and manifest stay the business's (proposed, #461; FR-BR-09; migration `V88`; renumbered at merge if needed)
+  and the app icon, tab and manifest stay the business's (accepted, #461; FR-BR-09; migration `V88`; renumbered at merge if needed)
 - ADR-066 The installed app uses the business's own logo and name as its icon: a per-host manifest and icons drawn from the logo by the
   API under `/api/v1/branding/app/`, the BMS icons as the fallback; an iPhone takes the icon only when the app is added again (proposed,
   #446; FR-TEN-08; amends ADR-050 decision 1; renumbered at merge if needed)

@@ -1,8 +1,8 @@
 # ADR-068: Each shop can have its own logo
 
-## Status
+## Status: Accepted
 
-Proposed (owner request of 22 Oct 2026, issue #461, FR-BR-09). Builds on the tenant branding of FR-TEN-08 (the logo as a core
+Accepted (owner request of 22 Oct 2026, issue #461, FR-BR-09). Builds on the tenant branding of FR-TEN-08 (the logo as a core
 document, its upload rules and its public route) and on ADR-034 (generated documents and their letterhead). ADR-066 stands unchanged:
 the installed app, the browser tab and the manifest keep the business logo. Numbered ADR-068 because pending ADR-067 is claimed by the open
 offline sales pull request; renumbered at merge if needed.
