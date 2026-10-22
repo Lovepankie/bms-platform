@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { RetailError, type SimilarProduct } from '../../../api/retail';
 
 // An item's name is kept once per unit (issue #352). Three things can happen on the Items form: the server refuses a name that
@@ -53,7 +54,7 @@ export function ExistsPanel({ item, canAddAnyway, busy, onOpen, onAddAnyway, onC
           <label htmlFor="duplicate-reason">Why is this a different item? (at least {MIN_DUPLICATE_REASON} characters)</label>
           <input id="duplicate-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} autoComplete="off" />
           <p className="hint">The reason is kept with the item.</p>
-          <button type="button" disabled={ready === null || busy} onClick={() => ready && onAddAnyway(ready)}>{busy ? 'Saving' : 'Add anyway'}</button>
+          <BusyButton busy={busy ?? false} type="button" disabled={ready === null} onClick={() => ready && onAddAnyway(ready)}>Add anyway</BusyButton>
         </div>
       )}
     </section>
@@ -86,7 +87,7 @@ export function SimilarPanel({ items, busy, onOpen, onSaveAnyway, onChangeName }
         ))}
       </ul>
       <p className="cluster">
-        <button type="button" className="rt-primary" disabled={busy} onClick={onSaveAnyway}>{busy ? 'Saving' : 'This is a different item, save it'}</button>
+        <BusyButton busy={busy ?? false} type="button" className="rt-primary" onClick={onSaveAnyway}>This is a different item, save it</BusyButton>
         <button type="button" className="btn-ghost" onClick={onChangeName}>Change the name</button>
       </p>
     </section>

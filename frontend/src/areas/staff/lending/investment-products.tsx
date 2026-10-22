@@ -8,6 +8,7 @@ import { PRODUCTS_MANAGE, may, parsePercent, payoutWords, percent } from './inve
 import { InvestmentsGate } from './investments';
 import { formatMinor } from '../../../components/money';
 import { currencyOf, money, parseAmount, words } from './loan-state';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Investment products setup (FR-INV-01, FR-INV-08): the list for everyone who reads investments,
 // and for a tenant admin the form to create one, edit it (investments already opened keep their
@@ -174,9 +175,9 @@ function ProductForm({ product, currency, onDone }: { product?: InvestmentProduc
       )}
       {problem && d.rate !== '' && <p className="field-hint">{problem}</p>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary btn-block" disabled={!!problem || d.name.trim() === '' || save.isPending}>
-        {save.isPending ? 'Saving' : product ? 'Save changes' : 'Create product'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary btn-block" disabled={!!problem || d.name.trim() === ''}>
+        {product ? 'Save changes' : 'Create product'}
+      </BusyButton>
       {product && <p className="field-hint">Investments already opened keep the terms they were opened on.</p>}
     </form>
   );
@@ -228,9 +229,9 @@ export function Products() {
         <section className="rt-card" aria-label="Product form">
           <ProductForm product={editing === 'new' ? undefined : editing} currency={currency} onDone={() => setEditing(null)} />
           {editing !== 'new' && (
-            <button type="button" className="btn-danger btn-block" disabled={archive.isPending} onClick={() => { archive.mutate(editing); setEditing(null); }}>
+            <BusyButton busy={archive.isPending} type="button" className="btn-danger btn-block" onClick={() => { archive.mutate(editing); setEditing(null); }}>
               Archive this product
-            </button>
+            </BusyButton>
           )}
           <button type="button" className="btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
         </section>

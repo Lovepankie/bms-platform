@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { type NotificationSettings, type NotificationSettingsChange, notificationSettingsApi } from '../../../api/notification-settings';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 
 // Business set-up > Notifications (issue #412, ADR-057): what the business sends by push, each everyday notice on or off, and when
@@ -105,14 +106,15 @@ export function BusinessNotificationsScreen() {
         <input id="summary-time" type="time" step={900} max="23:30" value={shownTime} disabled={!canChange || busy} onChange={(e) => setTime(e.target.value)} />
         {canChange && (
           <p>
-            <button
+            <BusyButton
               type="button"
               className="rt-primary"
-              disabled={busy || !QUARTER_HOUR.test(shownTime) || shownTime === current.daily_summary_time}
+              busy={busy}
+              disabled={!QUARTER_HOUR.test(shownTime) || shownTime === current.daily_summary_time}
               onClick={() => void save({ daily_summary_time: shownTime }, `The daily summary now goes at ${shownTime}.`)}
             >
               Save the time
-            </button>
+            </BusyButton>
           </p>
         )}
         <p className="hint">A quarter hour, at the latest 23:30. If the server was down at that time, the summary comes the next morning as yesterday's.</p>

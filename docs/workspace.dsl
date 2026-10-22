@@ -341,6 +341,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.retailStock -> bms.api.operations "Claims the Idempotency-Key row and replays a completed response, in the same transaction"
         bms.api.retailCashbook -> bms.api.operations "Claims the Idempotency-Key row and replays a completed response, in the same transaction"
         bms.api.loans -> bms.api.operations "Claims the Idempotency-Key row and replays a completed response, in the same transaction"
+        bms.api.loans -> bms.api.notifications "Nightly arrears run: queues the due reminders and arrears notices (reminder and arrears categories, held for the sending window), one per schedule item and reminder type (SmsEvents, #227)"
         bms.api.savings -> bms.api.operations "Claims the Idempotency-Key row and replays a completed response, in the same transaction"
         bms.api.investments -> bms.api.operations "Claims the Idempotency-Key row and replays a completed response, in the same transaction"
         bms.api.operations  -> bms.db "Checks reachability, the applied migration version and its own role"

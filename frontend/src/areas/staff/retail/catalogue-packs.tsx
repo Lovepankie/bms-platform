@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Pack, type Product } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showQty } from './maths';
@@ -42,13 +43,13 @@ function PackRow({ productId, pack }: { productId: string; pack: Pack }) {
       />
       {problem !== null && <p id={`pack-factor-problem-${pack.unit_id}`} className="rt-flag">{problem}</p>}
       <p className="cluster">
-        <button type="button" className="btn-sm" aria-label={`Save the number for ${pack.unit}`} disabled={problem !== null || change.isPending || factor.trim() === showQty(pack.factor ?? '')} onClick={() => change.mutate({ factor: factor.trim() })}>
+        <BusyButton busy={change.isPending && change.variables?.active === undefined} type="button" className="btn-sm" aria-label={`Save the number for ${pack.unit}`} disabled={problem !== null || change.isPending || factor.trim() === showQty(pack.factor ?? '')} onClick={() => change.mutate({ factor: factor.trim() })}>
           Save the number
-        </button>
+        </BusyButton>
         {/* Switching on again confirms the number: the item's unit may have changed while the pack was off. */}
-        <button type="button" className="btn-sm" aria-label={`${pack.active === false ? 'Switch on' : 'Switch off'} the ${pack.unit} pack`} disabled={change.isPending || (pack.active === false && problem !== null)} onClick={() => change.mutate(pack.active === false ? { active: true, factor: factor.trim() } : { active: false })}>
+        <BusyButton busy={change.isPending && change.variables?.active !== undefined} type="button" className="btn-sm" aria-label={`${pack.active === false ? 'Switch on' : 'Switch off'} the ${pack.unit} pack`} disabled={change.isPending || (pack.active === false && problem !== null)} onClick={() => change.mutate(pack.active === false ? { active: true, factor: factor.trim() } : { active: false })}>
           {pack.active === false ? 'Switch on' : 'Switch off'}
-        </button>
+        </BusyButton>
       </p>
       <Problem error={change.error} />
     </li>
@@ -106,9 +107,9 @@ export function PackEditor({ product }: { product: Product }) {
       />
       {factor.trim() !== '' && problem !== null && <p id="pack-factor-problem" className="rt-flag">{problem}</p>}
       <Problem error={add.error} />
-      <button type="button" disabled={unitId === '' || problem !== null || add.isPending} onClick={() => add.mutate()}>
-        {add.isPending ? 'Saving' : 'Add pack'}
-      </button>
+      <BusyButton busy={add.isPending} type="button" disabled={unitId === '' || problem !== null} onClick={() => add.mutate()}>
+        Add pack
+      </BusyButton>
     </fieldset>
   );
 }

@@ -144,7 +144,7 @@
   bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: var(--z-toast);
-  max-width: calc(100% - 32px);
+  max-width: calc(100% - var(--side-nav-width, 0px) - 32px);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius);
   background: var(--color-inverse);

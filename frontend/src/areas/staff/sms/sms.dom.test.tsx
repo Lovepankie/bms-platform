@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
@@ -394,6 +394,7 @@ describe('the opt-out list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to the list' }));
     expect(await screen.findByText('Use a Uganda mobile number such as 0700 000 001.')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '0700000601' } });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve)); await new Promise((resolve) => setTimeout(resolve)); });
     fireEvent.click(screen.getByRole('button', { name: 'Add to the list' }));
     await waitFor(() => expect(api.addOptOut).toHaveBeenLastCalledWith('0700000601', 'all', undefined));
     expect(await screen.findByText('Added.')).toBeTruthy();

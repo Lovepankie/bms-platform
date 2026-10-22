@@ -14,6 +14,7 @@ import {
 import { BranchField, SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { showQty } from './maths';
 import { Gate, Problem, ProductPicker, money } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The purchase order form (the purchasing capability, ADR-033, issue #198): the supplier, the date it is expected, and the items
 // with how many and what one costs. Saving makes a DRAFT; nothing is ordered and no stock moves until the order is sent. The cost
@@ -87,7 +88,8 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
       <p className="rt-total" aria-live="polite" data-testid="order-total">Order total {money(orderTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="order-save">{busy ? 'Saving' : submitLabel}</button>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="order-save">{submitLabel}</BusyButton>
+
     </form>
   );
 }

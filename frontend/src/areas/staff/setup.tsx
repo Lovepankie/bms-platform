@@ -4,6 +4,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/client';
 import { BRANDING_QUERY, appTitle, brandOf, useShellBrand } from '../../app/branding';
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
 import { PlanCard } from './plan';
@@ -213,9 +214,9 @@ export function Setup() {
                 </li>
               ))}
           </ul>
-          <button disabled={busy} onClick={dismiss}>
+          <BusyButton busy={busy} onClick={dismiss}>
             Dismiss the checklist
-          </button>
+          </BusyButton>
         </section>
       )}
 
@@ -244,9 +245,9 @@ export function Setup() {
             <input type="file" accept={ACCEPT} disabled={busy} onChange={upload} style={{ display: 'block' }} />
           </label>
           {current.logo_document_id && (
-            <button disabled={busy} onClick={removeLogo}>
+            <BusyButton busy={busy} onClick={removeLogo}>
               Remove the logo
-            </button>
+            </BusyButton>
           )}
           {iconSaved && current.logo_document_id && <NewIconNote name={appTitle(brand)} />}
         </fieldset>
@@ -269,7 +270,7 @@ export function Setup() {
             />
           </label>{' '}
           {current.theme_primary && (
-            <button type="button" disabled={busy} onClick={() => { setColour(''); setSuggested(false); }}>
+            <button type="button" /* busy-exempt: only changes the form */ disabled={busy} onClick={() => { setColour(''); setSuggested(false); }}>
               Use the platform colour
             </button>
           )}
@@ -336,9 +337,9 @@ export function Setup() {
           </p>
         </fieldset>
 
-        <button disabled={busy || (colour !== '' && !check.ok)} onClick={save} data-tour="setup-save">
+        <BusyButton busy={busy} disabled={colour !== '' && !check.ok} onClick={save} data-tour="setup-save">
           Save
-        </button>
+        </BusyButton>
         {message && <p role="status">{message}</p>}
       </div>
     </main>

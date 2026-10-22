@@ -3,6 +3,7 @@ import { createLazyRoute, Outlet, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react';
 import { api } from '../../api/client';
 import { platformMe } from '../../api/onboarding';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { icons } from '../../components/icons';
 import { type MenuLink, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { getAccessToken, refreshSession, setAccessToken, setSessionScope, subscribe } from '../../auth/session';
@@ -29,6 +30,7 @@ function PortalLayout() {
   const queryClient = useQueryClient();
   const token = useSyncExternalStore(subscribe, getAccessToken);
   const [restoring, setRestoring] = useState(token === null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setSessionScope('platform');
@@ -42,10 +44,15 @@ function PortalLayout() {
   const me = useQuery({ queryKey: ['platform-me', token], queryFn: platformMe, enabled: token !== null });
 
   async function signOut() {
-    await api.POST('/api/v1/platform/auth/logout');
-    setAccessToken(null);
-    queryClient.clear();
-    await navigate({ to: '/platform/sign-in' });
+    setBusy(true);
+    try {
+      await api.POST('/api/v1/platform/auth/logout');
+      setAccessToken(null);
+      queryClient.clear();
+      await navigate({ to: '/platform/sign-in' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (restoring || !me.data) {
@@ -63,7 +70,7 @@ function PortalLayout() {
   // operator is not a tenant user, so there is no tour progress to keep, and no staff tour may start by itself here.
   return (
     <TourProvider me={OPERATOR} saveProgress={false}>
-      <PortalFrame name={me.data.full_name} onSignOut={() => void signOut()}>
+      <PortalFrame name={me.data.full_name} busy={busy} onSignOut={() => void signOut()}>
         <Outlet />
       </PortalFrame>
     </TourProvider>
@@ -71,7 +78,17 @@ function PortalLayout() {
 }
 
 /** The portal's side menu, its bar with the operator's name and Sign out, and the page beside them (issue #455). */
-export function PortalFrame({ name, onSignOut, children }: { name?: string; onSignOut: () => void; children: ReactNode }) {
+export function PortalFrame({
+  name,
+  busy = false,
+  onSignOut,
+  children,
+}: {
+  name?: string;
+  busy?: boolean;
+  onSignOut: () => void;
+  children: ReactNode;
+}) {
   const phone = useIsPhone();
   return (
     <div className="nav-layout">
@@ -79,14 +96,14 @@ export function PortalFrame({ name, onSignOut, children }: { name?: string; onSi
       <div className="nav-layout-main">
         <header className="staff-bar">
           <div className="staff-bar-top">
-            {phone && <SideMenu label="Operator portal" links={AREAS} name={name} onSignOut={onSignOut} />}
+            {phone && <SideMenu label="Operator portal" links={AREAS} name={name} busy={busy} onSignOut={onSignOut} />}
             <span className="staff-user">
               <span className="staff-user-name">{name}</span>
             </span>
             {!phone && (
-              <button type="button" className="btn-ghost btn-sm" onClick={onSignOut}>
+              <BusyButton type="button" className="btn-ghost btn-sm" busy={busy} onClick={onSignOut}>
                 Sign out
-              </button>
+              </BusyButton>
             )}
           </div>
         </header>

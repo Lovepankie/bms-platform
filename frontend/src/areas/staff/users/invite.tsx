@@ -3,6 +3,7 @@ import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { UsersError, users } from '../../../api/users';
 import { useShellBrand } from '../../../app/branding';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { LinkBox, type ShownLink } from './link-box';
 import { RolePick } from './role-pick';
@@ -154,7 +155,7 @@ export function InviteScreen() {
           </p>
         )}
         <p className="cluster">
-          <button type="submit" className="rt-primary" data-tour="invite-send" disabled={busy || roles.isPending}>{busy ? 'Inviting' : 'Invite'}</button>
+          <BusyButton type="submit" className="rt-primary" data-tour="invite-send" busy={busy} disabled={roles.isPending}>Invite</BusyButton>
           <Link to="/staff/users" className="btn-ghost btn">Cancel</Link>
         </p>
       </form>

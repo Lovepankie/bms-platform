@@ -12,6 +12,7 @@ import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
 import { PURCHASE_ALL, PURCHASE_NAMES, PURCHASE_ORDER, listUser } from './list-chain-state';
 import { useRestockVariantLevel } from './catalogue-variants';
 import { GroupedRestocks } from './restocks-grouped';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Past restocks (issue #351, ADR-044): every restock, newest first, a voided one marked and never deleted. A restock entered with a
 // wrong quantity, price, unit or supplier is corrected here: "Correct this restock" voids it (the stock, the books and the prices go
@@ -64,9 +65,10 @@ export function CorrectPanel({ purchase, onDone, onCancel }: { purchase: Purchas
       <input id={`void-${id}`} value={draft.reason} maxLength={300} onChange={(e) => setDraft({ reason: e.target.value })} autoComplete="off" />
       <Problem error={send.error} />
       <p className="cluster">
-        <button type="submit" className="rt-primary" disabled={ready === null || send.isPending}>{send.isPending ? 'Voiding' : 'Void and enter it again'}</button>
-        <button type="button" disabled={ready === null || send.isPending} onClick={() => press(false)}>Void only</button>
-        <button type="button" className="btn-ghost" disabled={send.isPending} onClick={onCancel}>Keep the restock</button>
+        <BusyButton type="submit" className="rt-primary" busy={send.isPending && send.variables === true} disabled={ready === null || send.isPending}>Void and enter it again</BusyButton>
+        <BusyButton type="button" busy={send.isPending && send.variables === false} disabled={ready === null || send.isPending} onClick={() => press(false)}>Void only</BusyButton>
+        <button type="button" /* busy-exempt: keep waits for the void */ className="btn-ghost" disabled={send.isPending} onClick={onCancel}>Keep the restock</button>
+
       </p>
     </form>
   );

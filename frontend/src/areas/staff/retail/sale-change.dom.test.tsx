@@ -179,4 +179,26 @@ describe('amount received on the sale form', () => {
     finish(answer(15500));
     expect(await screen.findByTestId('receipt-change')).toBeTruthy();
   });
+
+  // JUSTIFICATION-A3: the busy-button test case issue #456 asks for.
+  it('shows Save sale as busy while the sale is sent, and a double click records it once', async () => {
+    let finish: (s: Sale) => void = () => undefined;
+    createSale.mockReturnValue(new Promise<Sale>((resolve) => { finish = resolve; }));
+    open();
+    await addBoth();
+    type('20000');
+    const button = saveButton();
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+    const busy = saveButton();
+    expect(busy).toBe(button);
+    expect(busy.getAttribute('aria-disabled')).toBe('true');
+    expect(busy.querySelector('.busy-spinner')).not.toBeNull();
+    fireEvent.click(busy);
+    expect(createSale).toHaveBeenCalledTimes(1);
+    finish(answer(15500));
+    expect(await screen.findByTestId('receipt-change')).toBeTruthy();
+    expect(createSale).toHaveBeenCalledTimes(1);
+  });
 });

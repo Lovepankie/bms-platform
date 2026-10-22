@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { RetailError, retail, type Sale } from '../../../api/retail';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { CREDIT_WRITE_OFF, SALE_VOID, holdsAt } from './permissions';
@@ -55,8 +56,8 @@ export function PayFormView({ sale, today, form, full, busy, error, todayOnly, o
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
       <p className="cluster">
-        <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : full ? 'Mark as fully paid' : 'Save payment'}</button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
+        <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null}>{full ? 'Mark as fully paid' : 'Save payment'}</BusyButton>
+        <button type="button" /* busy-exempt: cancel waits for the payment */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </p>
     </form>
   );
@@ -173,8 +174,8 @@ export function VoidFormView({ branchName, busy, error, onVoid, onCancel }: {
       </p>
       <Problem error={error} />
       <p className="cluster">
-        <button type="submit" disabled={ready === null || busy}>{busy ? 'Voiding' : 'Void this sale'}</button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Keep the sale</button>
+        <BusyButton type="submit" busy={busy === true} disabled={ready === null}>Void this sale</BusyButton>
+        <button type="button" /* busy-exempt: keep waits for the void */ className="btn-ghost" disabled={busy} onClick={onCancel}>Keep the sale</button>
       </p>
     </form>
   );
@@ -247,8 +248,8 @@ export function WriteOffFormView({ owed, fee, reason, busy, error, onReason, onW
       <p className="hint" data-testid="write-off-checker">{WRITE_OFF_CHECKER}</p>
       <Problem error={error} />
       <p className="cluster">
-        <button type="submit" disabled={ready === null || busy}>{busy ? 'Writing off' : 'Write off'}</button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Keep the debt</button>
+        <BusyButton type="submit" busy={busy === true} disabled={ready === null}>Write off</BusyButton>
+        <button type="button" /* busy-exempt: keep waits for the write-off */ className="btn-ghost" disabled={busy} onClick={onCancel}>Keep the debt</button>
       </p>
     </form>
   );

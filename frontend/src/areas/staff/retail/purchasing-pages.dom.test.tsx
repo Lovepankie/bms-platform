@@ -129,7 +129,7 @@ describe('the purchase order pages', () => {
     const draft = await retail.createPurchaseOrder({ supplier_id: SUPPLIER, branch_id: BRANCH, lines: [{ product_id: await bulbId(), qty: '10', cost_minor: 3500 }] }, 'k-send');
     mount('/purchase-orders/$orderId', PurchaseOrderPage, `/staff/retail/purchase-orders/${draft.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Send to the supplier' }, wait));
-    expect((await screen.findByRole('status', undefined, wait)).textContent).toMatch(/Sent .* You can now receive goods against it/);
+    await waitFor(() => expect(screen.getAllByRole('status').some((s) => /Sent .* You can now receive goods against it/.test(s.textContent ?? ''))).toBe(true), wait);
     expect(await screen.findByRole('link', { name: 'Receive goods' }, wait)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Send to the supplier' })).toBeNull();
   });
@@ -138,7 +138,8 @@ describe('the purchase order pages', () => {
     const draft = await retail.createPurchaseOrder({ supplier_id: SUPPLIER, branch_id: BRANCH, lines: [{ product_id: await bulbId(), qty: '1000', cost_minor: 5_000_000 }] }, 'k-big');
     mount('/purchase-orders/$orderId', PurchaseOrderPage, `/staff/retail/purchase-orders/${draft.id}`);
     fireEvent.click(await screen.findByRole('button', { name: 'Send to the supplier' }, wait));
-    expect((await screen.findByRole('status', undefined, wait)).textContent).toMatch(/second person.*stays a draft/);
+    await waitFor(() => expect(screen.getAllByRole('status').some((s) => /second person.*stays a draft/.test(s.textContent ?? ''))).toBe(true), wait);
+
     expect((await retail.getPurchaseOrder(draft.id ?? '')).status).toBe('draft');
     expect(screen.queryByRole('link', { name: 'Receive goods' })).toBeNull();
   });

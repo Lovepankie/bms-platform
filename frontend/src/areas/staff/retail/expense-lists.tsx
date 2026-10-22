@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useId, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ExpenseCategory, type ExpenseItem } from '../../../api/retail';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
@@ -21,7 +22,7 @@ function RenameField({ label, value, disabled, onSave }: { label: string; value:
         <label htmlFor={id}>{label}</label>
         <input id={id} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
       </div>
-      <button type="button" className="btn-sm" disabled={!changed || disabled} onClick={() => onSave(name.trim())}>Save name</button>
+      <BusyButton busy={disabled} type="button" className="btn-sm" disabled={!changed} onClick={() => onSave(name.trim())}>Save name</BusyButton>
     </div>
   );
 }
@@ -43,9 +44,9 @@ export function ItemRow({ category, item, busy, change }: { category: ExpenseCat
           onChange={(e) => update({ requires_explanation: e.target.checked })} />
         Needs an explanation when used
       </label>
-      <button type="button" className="btn-sm" disabled={busy} onClick={() => update({ active: item.active === false })}>
+      <BusyButton busy={busy} type="button" className="btn-sm" onClick={() => update({ active: item.active === false })}>
         {item.active === false ? `Switch ${item.name} on` : `Switch ${item.name} off`}
-      </button>
+      </BusyButton>
     </li>
   );
 }
@@ -69,7 +70,7 @@ function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: 
         <input id={flagId} type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={flag} onChange={(e) => setFlag(e.target.checked)} />
         Needs an explanation when used
       </label>
-      <button type="submit" className="btn-sm" disabled={name.trim() === '' || busy}>Add item</button>
+      <BusyButton busy={busy} type="submit" className="btn-sm" disabled={name.trim() === ''}>Add item</BusyButton>
     </form>
   );
 }
@@ -83,9 +84,9 @@ export function CategoryCard({ category, busy, change }: { category: ExpenseCate
         {category.name} {category.active === false && <span className="badge badge-warning">Switched off</span>}
       </strong>
       <RenameField label={`Rename ${category.name}`} value={category.name ?? ''} disabled={busy} onSave={(name) => update({ name })} />
-      <button type="button" className="btn-sm" disabled={busy} onClick={() => update({ active: category.active === false })}>
+      <BusyButton busy={busy} type="button" className="btn-sm" onClick={() => update({ active: category.active === false })}>
         {category.active === false ? `Switch ${category.name} on` : `Switch ${category.name} off`}
-      </button>
+      </BusyButton>
       {(category.items ?? []).length === 0 && <p className="hint">No items yet.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {(category.items ?? []).map((i) => <ItemRow key={i.id} category={category} item={i} busy={busy} change={change} />)}
@@ -109,7 +110,7 @@ export function ExpenseLists({ categories, busy, error, change }: { categories: 
       }}>
         <label htmlFor={nameId}>New category</label>
         <input id={nameId} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
-        <button type="submit" className="btn-sm" disabled={name.trim() === '' || busy}>Add category</button>
+        <BusyButton busy={busy} type="submit" className="btn-sm" disabled={name.trim() === ''}>Add category</BusyButton>
       </form>
       {categories.length === 0 && <p className="empty-state">No categories yet. Add the first one above.</p>}
       {categories.map((c) => <CategoryCard key={c.id} category={c} busy={busy} change={change} />)}

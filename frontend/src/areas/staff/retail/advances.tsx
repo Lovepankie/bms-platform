@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type Advance, type AdvanceReport, type Repayment } from '../../../api/retail';
 import { useStaff } from '../context';
 import { amountOrNull, enteredBy, voidOffered } from './cash-state';
@@ -79,9 +80,9 @@ export function AdvanceForm({ branchId, onSaved }: { branchId: string; onSaved?:
       <input id="advance-purpose" maxLength={300} value={draft.purpose} onChange={(e) => update({ purpose: e.target.value })} />
       <p className="hint">The money is taken out of this shop's till.</p>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={blocked}>
-        {save.isPending ? 'Saving' : 'Save advance'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+        Save advance
+      </BusyButton>
     </form>
   );
 }
@@ -134,9 +135,9 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
       <DateField id="repay-date" label="Date" value={draft.date} onChange={(date) => update({ date })} />
       <p className="hint">The money goes into this shop's till or account.</p>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={blocked}>
-        {save.isPending ? 'Saving' : 'Save repayment'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+        Save repayment
+      </BusyButton>
     </form>
   );
 }

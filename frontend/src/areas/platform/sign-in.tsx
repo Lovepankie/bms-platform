@@ -1,6 +1,7 @@
 import { createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useEffect, useState } from 'react';
 import { api, problemOf } from '../../api/client';
+import { BusyButton } from '../../app/ui/BusyButton';
 import type { MfaEnrolment, SignInResponse } from '../../api/onboarding';
 import { normaliseSecondFactor, recoveryCodesText } from '../../auth/codes';
 import { setAccessToken, setSessionScope } from '../../auth/session';
@@ -62,9 +63,9 @@ export function OperatorSignInView(p: OperatorSignInViewProps) {
               required
             />
           </div>
-          <button className="btn-brand" type="submit" disabled={p.busy}>
-            {p.busy ? 'Signing in' : 'Sign in'}
-          </button>
+          <BusyButton className="btn-brand" type="submit" busy={p.busy}>
+            Sign in
+          </BusyButton>
         </form>
       )}
       {p.step.kind === 'challenge' && (
@@ -74,9 +75,9 @@ export function OperatorSignInView(p: OperatorSignInViewProps) {
             <label htmlFor="op-code">Code</label>
             <input id="op-code" value={p.code} onChange={(e) => p.onCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric" className="input-code" required />
           </div>
-          <button className="btn-brand" type="submit" disabled={p.busy}>
+          <BusyButton className="btn-brand" type="submit" busy={p.busy}>
             Verify
-          </button>
+          </BusyButton>
         </form>
       )}
       {p.step.kind === 'enrol' && (
@@ -92,9 +93,9 @@ export function OperatorSignInView(p: OperatorSignInViewProps) {
             <label htmlFor="op-enrol-code">Code from the app</label>
             <input id="op-enrol-code" value={p.code} onChange={(e) => p.onCode(e.target.value)} autoComplete="one-time-code" inputMode="numeric" className="input-code" required />
           </div>
-          <button className="btn-brand" type="submit" disabled={p.busy}>
+          <BusyButton className="btn-brand" type="submit" busy={p.busy}>
             Turn on
-          </button>
+          </BusyButton>
         </form>
       )}
       {p.step.kind === 'codes' && (
@@ -249,9 +250,9 @@ export function OperatorSetupView(p: {
               required
             />
           </div>
-          <button className="btn-brand" type="submit" disabled={p.busy}>
-            {p.busy ? 'Saving' : 'Set password'}
-          </button>
+          <BusyButton className="btn-brand" type="submit" busy={p.busy}>
+            Set password
+          </BusyButton>
         </form>
       )}
     </main>

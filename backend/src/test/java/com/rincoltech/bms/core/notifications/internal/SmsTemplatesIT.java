@@ -89,7 +89,12 @@ class SmsTemplatesIT extends LoanFixtures {
                         "loan.closed",
                         "investment.funded",
                         "investment.maturing",
-                        "investment.paid_out");
+                        "investment.paid_out",
+                        "loan.due_in_3_days",
+                        "loan.due_today",
+                        "loan.overdue_1",
+                        "loan.overdue_7",
+                        "loan.overdue_30");
 
         JsonNode dep = deposit();
         assertThat(dep.get("channel").asString()).isEqualTo("sms");

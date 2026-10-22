@@ -1,6 +1,7 @@
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { requestPasswordReset } from '../../api/sign-in-reset';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { illustrations } from '../../components/illustrations';
 import { StatusPanel } from '../../components/states';
 import { InstallPrompt } from '../../install/InstallPrompt';
@@ -57,9 +58,9 @@ export function ForgotPassword({ initial = 'form' }: { initial?: 'form' | 'sent'
           <label htmlFor="forgot-login">Email or phone</label>
           <input id="forgot-login" value={login} onChange={(e) => setLogin(e.target.value)} autoComplete="username" maxLength={320} required />
         </div>
-        <button className="btn-primary btn-lg" disabled={busy}>
-          {busy ? 'Sending' : 'Send me a link'}
-        </button>
+        <BusyButton className="btn-primary btn-lg" busy={busy}>
+          Send me a link
+        </BusyButton>
       </form>
       <p>
         <Link to="/sign-in">Back to sign-in</Link>

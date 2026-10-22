@@ -11,6 +11,7 @@ import { CreditRecognitionSetting } from './credit-recognition';
 import { PurchasingSettings } from './purchasing-settings';
 import { SlowMoverSetting } from './slow-movers';
 import { Gate, Problem, Success, changeFailureText, useToast } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Retail settings (ADR-033, trade slice 2, issue #192): the administrator chooses the shop or the
 // trade profile and switches each feature on or off. The profile is a preset of the switches, not a
@@ -73,8 +74,9 @@ export function ChangeReview({ change, busy, onConfirm, onBack }: { change: Chan
       </ul>
       <p className="hint">The change takes effect on the next page everyone opens. It is recorded with your name.</p>
       <p className="cluster">
-        <button type="button" className="rt-primary" disabled={busy} onClick={onConfirm}>{busy ? 'Saving' : 'Confirm'}</button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onBack}>Back</button>
+        <BusyButton type="button" className="rt-primary" busy={busy === true} onClick={onConfirm}>Confirm</BusyButton>
+        <button type="button" /* busy-exempt: back waits for the save */ className="btn-ghost" disabled={busy} onClick={onBack}>Back</button>
+
       </p>
     </section>
   );

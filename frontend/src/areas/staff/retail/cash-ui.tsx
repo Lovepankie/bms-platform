@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, daysBefore } from '../../../api/retail';
 import { useStaff } from '../context';
 import { enteredBy, groupByShopMonth, savedFor, voidOffered } from './cash-state';
@@ -121,9 +122,9 @@ export function VoidAction({ what, run, onVoided }: { what: string; run: (reason
       <input id={id} maxLength={300} value={reason} onChange={(e) => { key.current = newIdempotencyKey(); setReason(e.target.value); }} />
       <Problem error={void_.error} />
       <div className="cluster">
-        <button type="submit" className="btn-sm" disabled={reason.trim() === '' || void_.isPending}>
-          {void_.isPending ? 'Voiding' : 'Confirm void'}
-        </button>
+        <BusyButton busy={void_.isPending} type="submit" className="btn-sm" disabled={reason.trim() === ''}>
+          Confirm void
+        </BusyButton>
         <button type="button" className="btn-sm" onClick={() => { setOpen(false); setReason(''); void_.reset(); }}>
           Keep it
         </button>

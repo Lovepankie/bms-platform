@@ -4,6 +4,7 @@ import { retail, type CashParty, type CashPartyKind } from '../../../api/retail'
 import { useStaff } from '../context';
 import { addableKinds } from './permissions';
 import { Problem } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // One list of cash parties serves beneficiaries and advance parties (FR-RET-17). The picker offers the
 // active parties of the allowed kinds and lets a permitted user add one on the spot. Adding is not a
@@ -85,9 +86,10 @@ export function PartyPicker({ id, label, parties, kinds, listed, value, onChange
           )}
           <Problem error={add.error} />
           <div className="cluster">
-            <button type="button" className="btn-sm" disabled={name.trim() === '' || add.isPending} onClick={() => add.mutate()}>
-              {add.isPending ? 'Adding' : 'Add to the list'}
-            </button>
+            <BusyButton type="button" className="btn-sm" busy={add.isPending} disabled={name.trim() === ''} onClick={() => add.mutate()}>
+              Add to the list
+            </BusyButton>
+
             <button type="button" className="btn-sm" onClick={() => setAdding(false)}>Cancel</button>
           </div>
         </fieldset>

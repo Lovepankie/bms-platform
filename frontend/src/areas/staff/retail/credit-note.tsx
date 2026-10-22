@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type SaleReturn } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
@@ -90,7 +91,7 @@ export function VoidPanel({ busy, error, onVoid }: { busy?: boolean; error?: unk
       <p className="hint">The goods it put back come off the shelf again, and the money or the balance goes back as it was. This only works while those goods are still in stock.</p>
       <Problem error={error} />
       <p className="cluster">
-        <button type="submit" disabled={reasonOf(reason) === null || busy}>Void it</button>
+        <BusyButton busy={busy ?? false} type="submit" disabled={reasonOf(reason) === null}>Void it</BusyButton>
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
       </p>
     </form>

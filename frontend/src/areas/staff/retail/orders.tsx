@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type Product } from '../../../api/retail';
 import { retailOrders, type Delivered, type Order, type OrderQuery, type OrderSource } from '../../../api/retail-orders';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
@@ -85,9 +86,9 @@ export function DeliverPanel({ order, onDone }: { order: Order; onDone: (d: Deli
       <input id={`deliver-note-${order.id}`} value={form.note} maxLength={500} onChange={(e) => setForm({ ...form, note: e.target.value })} />
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={deliver.error} />
-      <button type="button" className="rt-primary" disabled={problem !== null || deliver.isPending} onClick={() => deliver.mutate()}>
-        {deliver.isPending ? 'Saving' : 'Save: delivered and paid'}
-      </button>
+      <BusyButton busy={deliver.isPending} type="button" className="rt-primary" disabled={problem !== null} onClick={() => deliver.mutate()}>
+        Save: delivered and paid
+      </BusyButton>
     </fieldset>
   );
 }
@@ -121,7 +122,7 @@ export function OrderActions({ order, onDelivered }: { order: Order; onDelivered
   return (
     <>
       <div className="rt-row">
-        {steps.includes('pack') && <button type="button" className="btn-sm" disabled={pack.isPending} onClick={() => pack.mutate()}>Packed</button>}
+        {steps.includes('pack') && <BusyButton busy={pack.isPending} type="button" className="btn-sm" onClick={() => pack.mutate()}>Packed</BusyButton>}
         {steps.includes('send') && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'send' ? null : 'send')}>Out for delivery</button>}
         {steps.includes('deliver') && maySell && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'deliver' ? null : 'deliver')}>Delivered</button>}
         {steps.includes('cancel') && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'cancel' ? null : 'cancel')}>Cancel</button>}
@@ -131,7 +132,7 @@ export function OrderActions({ order, onDelivered }: { order: Order; onDelivered
           <legend>Out for delivery</legend>
           <label htmlFor={`rider-${order.id}`}>Who takes it? (for example the rider&apos;s name)</label>
           <input id={`rider-${order.id}`} value={rider} maxLength={120} onChange={(e) => setRider(e.target.value)} />
-          <button type="button" disabled={rider.trim() === '' || send.isPending} onClick={() => send.mutate()}>{send.isPending ? 'Saving' : 'Save: out for delivery'}</button>
+          <BusyButton busy={send.isPending} type="button" disabled={rider.trim() === ''} onClick={() => send.mutate()}>Save: out for delivery</BusyButton>
         </fieldset>
       )}
       {panel === 'deliver' && <DeliverPanel order={order} onDone={(d) => { setDone(d); setPanel(null); onDelivered?.(d); }} />}
@@ -140,7 +141,7 @@ export function OrderActions({ order, onDelivered }: { order: Order; onDelivered
           <legend>Cancel this order</legend>
           <label htmlFor={`cancel-${order.id}`}>Why? (it stays on record, and the items go back on the shelf)</label>
           <input id={`cancel-${order.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-          <button type="button" disabled={reason.trim().length < 3 || cancel.isPending} onClick={() => cancel.mutate()}>{cancel.isPending ? 'Cancelling' : 'Cancel the order'}</button>
+          <BusyButton busy={cancel.isPending} type="button" disabled={reason.trim().length < 3} onClick={() => cancel.mutate()}>Cancel the order</BusyButton>
         </fieldset>
       )}
       <Problem error={pack.error ?? send.error ?? cancel.error} />
@@ -294,9 +295,9 @@ export function OrderForm({ branchId, onSaved }: { branchId: string; onSaved: (o
       <p className="hint">Saving keeps these items aside, so they are not sold at the till. Nothing is paid until the order is delivered.</p>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending} data-tour="order-save">
-        {save.isPending ? 'Saving' : 'Save the order'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={problem !== null} data-tour="order-save">
+        Save the order
+      </BusyButton>
       {draft.lines.length > 0 && !save.isPending && <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this order</button>}
     </form>
   );

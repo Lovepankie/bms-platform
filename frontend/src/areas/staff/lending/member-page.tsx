@@ -18,6 +18,7 @@ import { kycBadge, kycMissing, kycWords, relationshipWords, showPhone } from './
 import { showInvestments } from './investment-state';
 import { showSavings } from './savings-permissions';
 import { MembersGate } from './member-ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // A member's page (FR-MEM-05, FR-MEM-08, FR-MEM-09, FR-MEM-10): who they are, what is missing before their details can be
 // checked, the check itself for staff who may do it, next of kin, documents, the relationship panel, their loans, savings and
@@ -64,7 +65,7 @@ function KycPanel({ member, kinCount, hasIdFront }: { member: MemberRecord; kinC
           <p>Compare the details with the photo of the ID, then accept or refuse them.</p>
           {!rejecting ? (
             <p className="cluster">
-              <button type="button" className="rt-primary" disabled={decide.isPending} onClick={() => decide.mutate({ decision: 'verified' })}>Details are correct</button>
+              <BusyButton busy={decide.isPending} type="button" className="rt-primary" onClick={() => decide.mutate({ decision: 'verified' })}>Details are correct</BusyButton>
               <button type="button" className="btn-ghost" onClick={() => setRejecting(true)}>Do not accept</button>
             </p>
           ) : (
@@ -72,7 +73,7 @@ function KycPanel({ member, kinCount, hasIdFront }: { member: MemberRecord; kinC
               <label htmlFor="kyc-note">Why are they not accepted</label>
               <textarea id="kyc-note" rows={3} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
               <p className="cluster">
-                <button type="button" className="rt-primary" disabled={decide.isPending || note.trim() === ''} onClick={() => decide.mutate({ decision: 'rejected', note: note.trim() })}>Not accepted</button>
+                <BusyButton busy={decide.isPending} type="button" className="rt-primary" disabled={note.trim() === ''} onClick={() => decide.mutate({ decision: 'rejected', note: note.trim() })}>Not accepted</BusyButton>
                 <button type="button" className="btn-ghost" onClick={() => setRejecting(false)}>Cancel</button>
               </p>
             </div>
