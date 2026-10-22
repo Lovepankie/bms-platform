@@ -1021,6 +1021,114 @@ class ReferralsIT extends IntegrationTest {
                 .isNotEqualTo(lines.get(0).get("rule_snapshot").get("rule_id"));
     }
 
+    // ---- The default rule (ADR-069 decision 14) ----------------------------------------------
+
+    /** The default rule V89 seeds: 10% of each payment for the first 12 paid months, no cap. */
+    static final UUID SEEDED_DEFAULT = UUID.fromString("00000000-0000-4000-8000-000000000890");
+
+    /** Puts the seeded default back in force, whatever an earlier test left. */
+    static void seededDefault() {
+        TestDatabase.owner()
+                .sql("UPDATE referral_settings SET default_rule_id = ?")
+                .param(SEEDED_DEFAULT)
+                .update();
+    }
+
+    List<String> outcomes(UUID referralId) {
+        return TestDatabase.owner()
+                .sql("""
+                        SELECT o.outcome FROM referral_payment_outcomes o JOIN subscription_payments p ON p.id = o.payment_id
+                         WHERE o.referral_id = ? ORDER BY p.created_at
+                        """)
+                .param(referralId)
+                .query(String.class)
+                .list();
+    }
+
+    /** A Growing business paying 60,000 a month earns its referrer 6,000 on each of its first 12 payments, nothing on the 13th. */
+    @Test
+    void theDefaultEarnsTenPercentOfEachMonthlyPaymentForTwelveMonths() {
+        seededDefault();
+        TestDatabase.Fixture a = TestDatabase.tenant("refdefm", false);
+        Business x = business("ref-def-month");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        for (int month = 1; month <= 13; month++) {
+            pay(x.id(), 60000, 1);
+        }
+        JsonNode detail = detail(rx);
+        assertThat(detail.get("rule_source").asString()).isEqualTo("default");
+        assertThat(amounts(detail)).hasSize(12).containsOnly(6000L);
+        assertThat(detail.get("lines")
+                        .get(0)
+                        .get("rule_snapshot")
+                        .get("rule_id")
+                        .asString())
+                .isEqualTo(SEEDED_DEFAULT.toString());
+        assertThat(outcomes(rx)).hasSize(13).endsWith("months_used");
+    }
+
+    /** A year paid upfront earns 10% of that payment once and uses up the 12 months, so the next payment earns nothing. */
+    @Test
+    void theDefaultOnAYearPaidUpfrontEarnsOnceAndUsesTheTwelveMonths() {
+        seededDefault();
+        TestDatabase.Fixture a = TestDatabase.tenant("refdefy", false);
+        Business x = business("ref-def-year");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        pay(x.id(), 720000, 12);
+        pay(x.id(), 60000, 1);
+        JsonNode lines = detail(rx).get("lines");
+        assertThat(amounts(detail(rx))).containsExactly(72000L);
+        assertThat(lines.get(0).get("months_counted").asInt()).isEqualTo(12);
+        assertThat(outcomes(rx)).containsExactly("added", "months_used");
+    }
+
+    /** Two businesses referred by the same shop each have their own 12 months. */
+    @Test
+    void eachReferredBusinessHasItsOwnTwelveMonths() {
+        seededDefault();
+        TestDatabase.Fixture a = TestDatabase.tenant("refdeft", false);
+        Business x = business("ref-def-x");
+        Business y = business("ref-def-y");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        pay(x.id(), 720000, 12);
+        pay(x.id(), 60000, 1);
+        // The second business is referred after the first used its months: its own 12 start with its own referral.
+        setReferrer(y.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID ry = currentReferral(y.id());
+        for (int month = 1; month <= 12; month++) {
+            pay(y.id(), 60000, 1);
+        }
+        pay(y.id(), 60000, 1);
+        assertThat(amounts(detail(rx))).containsExactly(72000L);
+        assertThat(amounts(detail(ry))).hasSize(12).containsOnly(6000L);
+    }
+
+    /** A new default applies to later payments only: the lines worked out under the old one keep their amount and rule. */
+    @Test
+    void changingTheDefaultLeavesExistingLinesAsTheyWere() {
+        seededDefault();
+        TestDatabase.Fixture a = TestDatabase.tenant("refdefc", false);
+        Business x = business("ref-def-change");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        pay(x.id(), 60000, 1);
+        JsonNode first = detail(rx).get("lines").get(0);
+
+        ResponseEntity<JsonNode> changed =
+                rule("/api/v1/platform/referrals/default-rule", percent(500, 12), "Test: a new default");
+        assertThat(changed.getStatusCode()).as("%s", changed.getBody()).isEqualTo(HttpStatus.OK);
+        pay(x.id(), 60000, 1);
+
+        JsonNode lines = detail(rx).get("lines");
+        assertThat(amounts(detail(rx))).containsExactly(6000L, 3000L);
+        assertThat(lines.get(0)).isEqualTo(first);
+        assertThat(lines.get(0).get("rule_snapshot").get("rule_id").asString()).isEqualTo(SEEDED_DEFAULT.toString());
+        assertThat(lines.get(1).get("rule_snapshot").get("percent_bp").asInt()).isEqualTo(500);
+    }
+
     /**
      * A fixed rule in another currency than the payment's gives no line (currency_differs), and that payment never uses up a
      * later rule's months: under a first payment rule in the payment's currency, the next payment is the first (decision 9).
