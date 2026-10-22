@@ -206,7 +206,9 @@ function ManagerQueue() {
                 {f.made_by_name ?? 'A seller'}, {f.occurred_at ? when(f.occurred_at) : ''}, {METHOD_WORDS[f.payment_method ?? ''] ?? f.payment_method} {money(f.total_minor ?? 0)}
               </div>
               <p className="sync-reason">Not recorded: {f.message}</p>
-              {f.status === 'retry' ? (
+              {f.made_by === offline?.userId ? (
+                <p className="muted">Your own sale: another manager decides it. You can send it again from your phone.</p>
+              ) : f.status === 'retry' ? (
                 <p className="muted">Waiting for the seller's phone to send it again.</p>
               ) : discarding === f.id ? (
                 <div className="stack">

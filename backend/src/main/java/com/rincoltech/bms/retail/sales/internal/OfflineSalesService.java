@@ -168,6 +168,14 @@ class OfflineSalesService {
         Failure f = repo.failure(id, true)
                 .filter(x -> principal.may(RESOLVE, x.branchId()))
                 .orElseThrow(ApiException::notFound);
+        if (f.madeBy().equals(principal.userId())) {
+            // ADR-067 decision 11 (d): nobody decides their own refused sale, a Supervisor included.
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "own_offline_sale",
+                    "Your own sale",
+                    "Another manager decides a sale you made. You can send it again from your phone.");
+        }
         if (f.status().equals("discarded") || f.status().equals("recorded")) {
             throw new ApiException(
                     HttpStatus.CONFLICT,

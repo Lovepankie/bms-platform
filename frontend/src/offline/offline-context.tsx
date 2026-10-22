@@ -14,6 +14,8 @@ import { SyncEngine, type SyncDeps, type SyncSnapshot } from './sync-engine';
 
 export interface Offline {
   scope: string;
+  /** The signed-in person, whose own refused sales another manager decides. */
+  userId: string;
   store: OfflineStore;
   engine: SyncEngine;
   connectivity: Connectivity;
@@ -194,6 +196,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
     return {
       manager,
       scope,
+      userId: userId ?? '',
       store: svc.store,
       engine,
       connectivity: svc.connectivity,
@@ -204,7 +207,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
         await svc.store.setLastPerson(svc.host, null);
       },
     };
-  }, [svc, scope, engine, catalogue, refresh, manager]);
+  }, [svc, scope, engine, catalogue, refresh, manager, userId]);
 }
 
 /** The number of sales waiting on this device for the signed-in person (queued and failed). */

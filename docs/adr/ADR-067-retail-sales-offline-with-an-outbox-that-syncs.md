@@ -80,7 +80,8 @@ left, the branch, the period, the person's roles.
    discarded failure is marked discarded on the seller's device on its next sync, shown for a day and never sent again. The
    server refuses a sale whose client sale id belongs to a discarded failure, before any other check of the sale, with 422
    `offline_sale_discarded`, whatever key it carries; the device marks it discarded on that answer too. A failure later recorded as a sale is closed by
-   that sale in the same transaction. The seller may send their own failed sale again at any time; they cannot discard it.
+   that sale in the same transaction. The seller may send their own failed sale again at any time; they cannot discard it, and nobody decides (retry or
+   discard) a sale they made themselves, a Supervisor or an administrator included: 403 `own_offline_sale`.
 9. **Sign-out safety.** Signing out while anything is queued or failed asks first ("3 sales are waiting to sync. Sync now,
    or keep them on this phone and sign out?"). The waiting sales stay in the person's own outbox on this device and are sent
    when the same person signs in here again; the catalogue copy is cleared at sign-out. Another person on the same device

@@ -50,6 +50,7 @@ export function testOffline(
   });
   return {
     scope,
+    userId: me.user_id ?? 'nobody',
     store,
     engine,
     connectivity,

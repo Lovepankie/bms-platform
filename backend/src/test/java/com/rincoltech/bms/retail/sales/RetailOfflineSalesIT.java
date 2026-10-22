@@ -332,6 +332,8 @@ class RetailOfflineSalesIT extends IntegrationTest {
      */
     @Test
     void aRefusedSaleIsReportedThenResentOrDiscardedByAManager() {
+        // The manager is another person: nobody decides their own refused sale.
+        RetailTestSupport boss = new RetailTestSupport(http, t);
         UUID client = UUID.randomUUID();
         Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(5)), "1", 2_000);
         Map<String, Object> report = new LinkedHashMap<>();
@@ -362,9 +364,10 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(api.post("/offline-failures/" + id + "/discard", Map.of("reason", "Typed twice"), SALES)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(api.get("/offline-failures", MANAGER).getBody().get("items")).hasSize(1);
+        assertThat(boss.get("/offline-failures", MANAGER).getBody().get("items"))
+                .hasSize(1);
 
-        ResponseEntity<JsonNode> retry = api.post("/offline-failures/" + id + "/retry", Map.of(), MANAGER);
+        ResponseEntity<JsonNode> retry = boss.post("/offline-failures/" + id + "/retry", Map.of(), MANAGER);
         assertThat(retry.getBody().get("status").asString()).isEqualTo("retry");
         report.put("code", "branch_does_not_sell");
         assertThat(api.post("/offline-failures", report, SALES)
@@ -372,14 +375,14 @@ class RetailOfflineSalesIT extends IntegrationTest {
                         .get("status")
                         .asString())
                 .isEqualTo("open");
-        assertThat(api.post("/offline-failures/" + id + "/discard", Map.of("reason", "no"), MANAGER)
+        assertThat(boss.post("/offline-failures/" + id + "/discard", Map.of("reason", "no"), MANAGER)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         ResponseEntity<JsonNode> discarded =
-                api.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
+                boss.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
         assertThat(discarded.getStatusCode()).as("%s", discarded.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(discarded.getBody().get("status").asString()).isEqualTo("discarded");
-        assertThat(api.post("/offline-failures/" + id + "/retry", Map.of(), MANAGER)
+        assertThat(boss.post("/offline-failures/" + id + "/retry", Map.of(), MANAGER)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
         assertThat(TestDatabase.owner()
@@ -396,7 +399,7 @@ class RetailOfflineSalesIT extends IntegrationTest {
         report.put("client_sale_id", second);
         String secondId =
                 api.post("/offline-failures", report, SALES).getBody().get("id").asString();
-        api.post("/offline-failures/" + secondId + "/retry", Map.of(), MANAGER);
+        boss.post("/offline-failures/" + secondId + "/retry", Map.of(), MANAGER);
         ResponseEntity<JsonNode> sold = send(
                 offlineSale(second, Instant.now().minus(Duration.ofHours(1)), "1", 2_000),
                 UUID.randomUUID().toString());
@@ -485,6 +488,28 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(balance()).isEqualTo("19.000");
     }
 
+    /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
+    @Test
+    void aManagerCannotDecideTheirOwnRefusedSale() {
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "1", 2_000);
+        String id = api.post("/offline-failures", failureReport(client, request), MANAGER)
+                .getBody()
+                .get("id")
+                .asString();
+        for (String action : List.of("discard", "retry")) {
+            ResponseEntity<JsonNode> own =
+                    api.post("/offline-failures/" + id + "/" + action, Map.of("reason", "My own mistake"), MANAGER);
+            assertThat(own.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(own.getBody().get("code").asString()).isEqualTo("own_offline_sale");
+        }
+        RetailTestSupport other = new RetailTestSupport(http, t);
+        ResponseEntity<JsonNode> decided =
+                other.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
+        assertThat(decided.getStatusCode()).as("%s", decided.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(decided.getBody().get("status").asString()).isEqualTo("discarded");
+    }
+
     /** Review fix 1: a sale sent after a manager discarded it is refused and never recorded, whatever key it carries. */
     @Test
     void aSaleSentAfterItWasDiscardedIsRefused() {
@@ -495,7 +520,8 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .getBody()
                 .get("id")
                 .asString();
-        assertThat(api.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER)
+        RetailTestSupport boss = new RetailTestSupport(http, t);
+        assertThat(boss.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
 
