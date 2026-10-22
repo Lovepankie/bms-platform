@@ -4,6 +4,7 @@ import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.CreateLoanRequest;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.DecisionRequest;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.GuarantorsRequest;
+import com.rincoltech.bms.lending.loans.internal.LoanApi.HomeSummary;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanPage;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanResponse;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.NoteRequest;
@@ -81,6 +82,15 @@ class LoanController {
             @RequestParam(name = "cursor", required = false) String cursor) {
         return service.list(
                 branchIds, statuses == null ? List.of() : statuses, memberId, officerId, productId, q, limit, cursor);
+    }
+
+    @GetMapping("/summary")
+    @RequiresPermission("lending.loans.read")
+    @Operation(
+            summary = "Home's Lending card: loans due today and in arrears, with what is owed (issue #471)",
+            operationId = "getLoanHomeSummary")
+    HomeSummary summary(@RequestParam(name = "branch_id", required = false) List<UUID> branchIds) {
+        return service.homeSummary(branchIds);
     }
 
     @PostMapping

@@ -4592,6 +4592,39 @@
         },
         "required" : [ "guaranteed_amount_minor", "member_id" ]
       },
+      "LoanHomeSummary" : {
+        "description" : "The Lending card on Home (issue #471, ADR-072): active loans in the caller's lending.loans.read scope and in the business's currency, read live from the schedule, not from the nightly arrears run",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "date" : {
+            "description" : "The business date the figures are for",
+            "format" : "date",
+            "type" : "string"
+          },
+          "due_today_count" : {
+            "description" : "Loans with an instalment due today that is not fully paid",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "due_today_minor" : {
+            "description" : "What is still owed on the instalments due today",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "in_arrears_count" : {
+            "description" : "Loans with an instalment due before today that is not fully paid",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "in_arrears_minor" : {
+            "description" : "What is still owed on the instalments due before today",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
       "LoanListItem" : {
         "properties" : {
           "approved_principal_minor" : {
@@ -25027,6 +25060,37 @@
           }
         },
         "summary" : "Create a draft application (FR-ORG-01)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/summary" : {
+      "get" : {
+        "operationId" : "getLoanHomeSummary",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanHomeSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Home's Lending card: loans due today and in arrears, with what is owed (issue #471)",
         "tags" : [ "lending-loans" ]
       }
     },

@@ -23,6 +23,7 @@ export type RepaymentResult = S['RepaymentResult'];
 export type DisbursementRequest = S['DisbursementRequest'];
 export type LoanActionOutcome = S['LoanActionOutcome'];
 export type PayoffQuote = S['PayoffQuote'];
+export type LoanHomeSummary = S['LoanHomeSummary'];
 
 /** The payment methods the server maps to an account (payment_method_key). */
 export const PAYMENT_METHODS = [
@@ -95,6 +96,11 @@ export const lending = {
         signal: q.signal,
       }),
     );
+  },
+
+  /** Home's Lending card (issue #471): loans due today and in arrears in the caller's scope, read live from the schedule. */
+  async homeSummary(branchIds?: string[]): Promise<LoanHomeSummary> {
+    return unwrap(await api.GET('/api/v1/lending/loans/summary', { params: { query: { branch_id: branchIds } } }));
   },
 
   async getLoan(id: string): Promise<Loan> {

@@ -82,20 +82,24 @@ function SigningOutBar({ me, signOut, done }: { me: Me; signOut: () => void; don
 function show(me: Me, { at = '/staff', children = null as ReactNode, signingOut = undefined as Promise<void> | undefined } = {}) {
   const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: [at] }) });
   const signOut = vi.fn();
-  render(
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const tree = (who: Me) => (
     <RouterContextProvider router={router}>
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })}>
-        <StaffContext.Provider value={{ me, branch: me.branches?.[0]?.id ?? null }}>
-          <TourProvider me={me} saveProgress={false}>
-            <StaffSideNav me={me} />
-            {signingOut ? <SigningOutBar me={me} signOut={signOut} done={signingOut} /> : <StaffBar me={me} branch={null} onBranch={() => undefined} onSignOut={signOut} />}
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: who, branch: who.branches?.[0]?.id ?? null }}>
+          <TourProvider me={who} saveProgress={false}>
+            <StaffSideNav me={who} />
+            {signingOut ? <SigningOutBar me={who} signOut={signOut} done={signingOut} /> : <StaffBar me={who} branch={null} onBranch={() => undefined} onSignOut={signOut} />}
             {children}
           </TourProvider>
         </StaffContext.Provider>
       </QueryClientProvider>
-    </RouterContextProvider>,
+    </RouterContextProvider>
   );
-  return { router, signOut };
+  const { rerender } = render(tree(me));
+  // Another person signed in, without the menu leaving the page.
+  const signIn = (who: Me) => rerender(tree(who));
+  return { router, signOut, signIn };
 }
 
 const menuButton = () => screen.getByRole('button', { name: 'Menu' });
@@ -719,6 +723,199 @@ describe('the same areas for the same permissions on every size', () => {
     const group = (sells: boolean) => staffAreas(admin, { sells }).find((a) => a.label === 'Retail')?.groupPaths ?? [];
     expect(group(true)).toContain('/staff/retail/sale');
     expect(group(false)).not.toContain('/staff/retail/sale');
+  });
+});
+
+describe('a business with both Shop and Lending (issue #471)', () => {
+  const both = { ...admin, permissions: [...(admin.permissions ?? []), 'lending.loans.read', 'lending.members.read'], modules: ['lending', 'retail'] } as unknown as Me;
+  const headings = (root: HTMLElement) => Array.from(root.querySelectorAll('.side-menu-heading')).map((b) => b.textContent);
+  const sectionLinks = (root: HTMLElement, name: string) => {
+    const heading = within(root).getByRole('button', { name });
+    const list = document.getElementById(heading.getAttribute('aria-controls') ?? '') as HTMLElement;
+    return within(list).queryAllByRole('link').map((a) => a.textContent);
+  };
+
+  it('groups the menu under Shop and Lending with the shared areas around them, on a phone and from 720px alike', () => {
+    widthIs(1280);
+    show(both);
+    const sidebar = document.querySelector('.side-nav') as HTMLElement;
+    expect(headings(sidebar)).toEqual(['Shop', 'Lending']);
+    expect(sectionLinks(sidebar, 'Lending')).toEqual(['Loans', 'Members']);
+    expect(sectionLinks(sidebar, 'Shop')[0]).toBe('Retail');
+    const wide = within(sidebar).getAllByRole('link').map((a) => a.textContent);
+    expect(wide.slice(0, 2)).toEqual(['Home', 'Retail']);
+    expect(wide.slice(-3)).toEqual(['Notifications', 'Feedback', 'Business set-up']);
+    cleanup();
+    widthIs(360);
+    show(both);
+    const dialog = openMenu();
+    expect(headings(dialog)).toEqual(['Shop', 'Lending']);
+    expect(labels(dialog)).toEqual(wide);
+  });
+
+  it('keeps a one-module menu flat, with no heading', () => {
+    widthIs(1280);
+    show(admin);
+    expect(headings(document.querySelector('.side-nav') as HTMLElement)).toEqual([]);
+    cleanup();
+    show(officer);
+    expect(headings(document.querySelector('.side-nav') as HTMLElement)).toEqual([]);
+  });
+
+  it('folds a section and remembers it for that person only', () => {
+    widthIs(1280);
+    show(both);
+    const heading = screen.getByRole('button', { name: 'Lending' });
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(heading);
+    expect(heading.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('link', { name: 'Loans' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Retail' })).toBeTruthy();
+    cleanup();
+    show(both);
+    expect(screen.getByRole('button', { name: 'Lending' }).getAttribute('aria-expanded')).toBe('false');
+    cleanup();
+    show({ ...both, user_id: '00000000-0000-4000-8000-0000000000f2' } as Me);
+    expect(screen.getByRole('button', { name: 'Lending' }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('link', { name: 'Loans' })).toBeTruthy();
+  });
+
+  it('reads the folded sections again when another person signs in on the device', () => {
+    widthIs(1280);
+    const other = { ...both, user_id: '00000000-0000-4000-8000-0000000000f3' } as Me;
+    window.localStorage.setItem(`bms.menu.sections.${other.user_id}`, JSON.stringify(['lending']));
+    const { signIn } = show(both);
+    expect(screen.getByRole('button', { name: 'Lending' }).getAttribute('aria-expanded')).toBe('true');
+    signIn(other);
+    expect(screen.getByRole('button', { name: 'Lending' }).getAttribute('aria-expanded')).toBe('false');
+    signIn(both);
+    expect(screen.getByRole('button', { name: 'Lending' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it.each([
+    { at: '/staff/lending/members', section: 'Lending', link: 'Members' },
+    { at: '/staff/retail/sale', section: 'Shop', link: 'Sale' },
+  ])('shows a folded section while the page is one of its links: $at', async ({ at, section, link }) => {
+    widthIs(1280);
+    window.localStorage.setItem(`bms.menu.sections.${both.user_id}`, JSON.stringify(['shop', 'lending']));
+    show(both, { at });
+    await waitFor(() => expect(screen.getByRole('button', { name: section }).getAttribute('aria-expanded')).toBe('true'));
+    expect(screen.getByRole('link', { name: link }).getAttribute('aria-current')).toBe('page');
+    const otherSection = section === 'Shop' ? 'Lending' : 'Shop';
+    expect(screen.getByRole('button', { name: otherSection }).getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it.each([
+    { target: 'nav-lending', section: 'Lending' },
+    { target: 'nav-retail', section: 'Shop' },
+    { target: 'retail-nav', section: 'Shop' },
+  ])('unfolds a folded section for a tour step on $target', async ({ target, section }) => {
+    widthIs(1280);
+    window.localStorage.setItem(`bms.menu.sections.${both.user_id}`, JSON.stringify(['shop', 'lending']));
+    const tour: Tour = {
+      id: `test-section-tour-${target}`,
+      version: 1,
+      title: 'Test tour',
+      audience: () => true,
+      autoStart: false,
+      steps: [{ id: 'here', target, title: 'Look here', body: 'This part of the menu.' }],
+    };
+    function Starter() {
+      const { start } = useTour();
+      useEffect(() => start(tour), [start]);
+      return null;
+    }
+    vi.stubGlobal('CSS', { escape: (value: string) => value });
+    Element.prototype.scrollIntoView = vi.fn();
+    show(both, { children: <Starter /> });
+    await screen.findByRole('heading', { name: 'Look here' });
+    const heading = within(document.querySelector('.side-nav') as HTMLElement).getByRole('button', { name: section });
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    });
+    await waitFor(() => expect(heading.getAttribute('aria-expanded')).toBe('false'));
+  });
+
+  it('folds a section held open for a tour step on a press, for that step only', async () => {
+    widthIs(1280);
+    window.localStorage.setItem(`bms.menu.sections.${both.user_id}`, JSON.stringify(['lending']));
+    const tour: Tour = {
+      id: 'test-section-press',
+      version: 1,
+      title: 'Test tour',
+      audience: () => true,
+      autoStart: false,
+      steps: [{ id: 'here', target: 'nav-lending', title: 'Look here', body: 'This part of the menu.' }],
+    };
+    function Starter() {
+      const { start } = useTour();
+      return (
+        <button type="button" onClick={() => start(tour)}>
+          Start the test tour
+        </button>
+      );
+    }
+    vi.stubGlobal('CSS', { escape: (value: string) => value });
+    Element.prototype.scrollIntoView = vi.fn();
+    show(both, { children: <Starter /> });
+    fireEvent.click(screen.getByRole('button', { name: 'Start the test tour' }));
+    await screen.findByRole('heading', { name: 'Look here' });
+    const heading = within(document.querySelector('.side-nav') as HTMLElement).getByRole('button', { name: 'Lending' });
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(heading);
+    expect(heading.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('link', { name: 'Loans' })).toBeNull();
+    expect(JSON.parse(window.localStorage.getItem(`bms.menu.sections.${both.user_id}`) ?? '[]')).toEqual(['lending']);
+    act(() => {
+      fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    });
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Look here' })).toBeNull());
+    expect(heading.getAttribute('aria-expanded')).toBe('false');
+    // The next run of the tour holds it open again.
+    fireEvent.click(screen.getByRole('button', { name: 'Start the test tour' }));
+    await screen.findByRole('heading', { name: 'Look here' });
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('folds the section of the page on a press, and unfolds it on the next', () => {
+    widthIs(1280);
+    window.localStorage.setItem(`bms.menu.sections.${both.user_id}`, JSON.stringify(['lending']));
+    show(both, { at: '/staff/lending/members' });
+    const heading = screen.getByRole('button', { name: 'Lending' });
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(heading);
+    expect(heading.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('link', { name: 'Members' })).toBeNull();
+    fireEvent.click(heading);
+    expect(heading.getAttribute('aria-expanded')).toBe('true');
+    expect(JSON.parse(window.localStorage.getItem(`bms.menu.sections.${both.user_id}`) ?? '[]')).toEqual([]);
+  });
+
+  it('skips the links of a folded section when tabbing round the drawer', () => {
+    show(both);
+    const dialog = openMenu();
+    const heading = within(dialog).getByRole('button', { name: 'Lending' });
+    fireEvent.click(heading);
+    expect(heading.getAttribute('aria-expanded')).toBe('false');
+    const lists = dialog.querySelectorAll<HTMLElement>('.side-menu-links > ul');
+    const nextShared = within(lists[lists.length - 1] as HTMLElement).getAllByRole('link')[0] as HTMLElement;
+    heading.focus();
+    fireEvent.keyDown(heading, { key: 'Tab' });
+    expect(document.activeElement).toBe(nextShared);
+    fireEvent.keyDown(nextShared, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it('keeps the one-tap Sell on a 360px phone and Sale in the Shop section', () => {
+    show(both);
+    expect(screen.getByRole('link', { name: 'Sell' }).getAttribute('href')).toBe('/staff/retail/sale');
+    const dialog = openMenu();
+    expect(sectionLinks(dialog, 'Shop')).toContain('Sale');
+    expect(sectionLinks(dialog, 'Lending')).not.toContain('Sale');
+    cleanup();
+    show({ ...both, modules: ['lending'] } as Me);
+    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
   });
 });
 

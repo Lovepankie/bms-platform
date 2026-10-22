@@ -17,6 +17,7 @@ import com.rincoltech.bms.lending.collateral.CollateralLookup.CollateralSummary;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.CreateLoanRequest;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.Guarantor;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.GuarantorInput;
+import com.rincoltech.bms.lending.loans.internal.LoanApi.HomeSummary;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanListItem;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanPage;
 import com.rincoltech.bms.lending.loans.internal.LoanApi.LoanResponse;
@@ -166,6 +167,29 @@ class LoanService {
     @Transactional(readOnly = true)
     LoanResponse get(UUID id) {
         return respond(inScope(id, "lending.loans.read"));
+    }
+
+    /**
+     * The Lending card on Home (issue #471, ADR-072), on the business date in the caller's lending.loans.read scope;
+     * where the caller lacks lending.collections.all_officers only their own portfolio (ADR-064).
+     */
+    @Transactional(readOnly = true)
+    HomeSummary homeSummary(List<UUID> branchIds) {
+        Principal principal = CurrentPrincipal.require();
+        CurrentTenant.Profile profile = currentTenant.profile();
+        LocalDate today = clock.today(profile.timezone());
+        LoanRepository.HomeFigures f = repo.homeFigures(
+                principal.branchFilter("lending.loans.read", branchIds),
+                CollectionsService.officerFor(principal, null),
+                today,
+                profile.currency());
+        return new HomeSummary(
+                today,
+                profile.currency(),
+                f.dueTodayCount(),
+                f.dueTodayMinor(),
+                f.inArrearsCount(),
+                f.inArrearsMinor());
     }
 
     @Transactional(readOnly = true)
