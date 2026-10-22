@@ -123,6 +123,22 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect([qty.selectionStart, qty.selectionEnd]).toEqual([0, 2]);
   });
 
+  it('leaves a focused price as it was when a scan lands in it', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    await retail.addBarcode(BULB15, { code: 'TEST-BULB15' });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge(EAN);
+    await waitFor(() => expect(qtyOf(0)).toBe('1'));
+    const price = document.getElementById('price-0') as HTMLInputElement;
+    fireEvent.change(price, { target: { value: '5500' } });
+    price.focus();
+    price.setSelectionRange(2, 2);
+    typed('TEST-BULB15', 8);
+    await waitFor(() => expect(qtyOf(1)).toBe('1'));
+    expect(price.value).toBe('5500');
+    expect(price.selectionStart).toBe(2);
+  });
+
   it('takes keys slower than a scanner for a person typing, not a scan', async () => {
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP' });
     screenOf(<SaleForm branchId={BRANCH} />);

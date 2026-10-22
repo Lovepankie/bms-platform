@@ -14,4 +14,12 @@ describe('FR-RET-68 camera problems', () => {
     expect(cameraProblem({ name: 'SecurityError' })).toContain('https');
     expect(cameraProblem(new Error('odd'))).toContain('Type the barcode instead');
   });
+
+  it('gives each refusal the browser may name its own plain message', () => {
+    expect(cameraProblem({ name: 'PermissionDeniedError' })).toContain('Allow the camera for this site');
+    expect(cameraProblem({ name: 'OverconstrainedError' })).toBe('This device has no camera the app can use. Use a scanner or type the barcode instead.');
+    expect(cameraProblem({ name: 'AbortError' })).toBe('Another app is using the camera. Close it and tap Scan again.');
+    expect(cameraProblem(null)).toBe('The camera could not be opened. Type the barcode instead, or try again.');
+    expect(cameraProblem('a string')).toContain('could not be opened');
+  });
 });

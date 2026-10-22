@@ -293,6 +293,76 @@ class RetailBarcodesIT extends IntegrationTest {
     }
 
     @Test
+    void frRet68AMadeLabelCodeStepsPastAnInCodeTypedByHand() {
+        UUID typed = api.product("BC-HT", 100, 200);
+        assertThat(add(typed, "IN00000001").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(add(typed, "IN00000002").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID item = api.product("BC-HT2", 100, 200);
+        ResponseEntity<JsonNode> made =
+                api.post("/products/barcodes/generate", Map.of("product_ids", List.of(item)), ADMIN);
+        assertThat(made.getStatusCode()).as("%s", made.getBody()).isEqualTo(HttpStatus.OK);
+        String code = made.getBody().get("items").get(0).get("code").asString();
+        assertThat(code).matches("IN\\d{8}").isNotIn("IN00000001", "IN00000002");
+        assertThat(lookup(code).getBody().get("product").get("id").asString()).isEqualTo(item.toString());
+        assertThat(lookup("IN00000001").getBody().get("product").get("id").asString())
+                .isEqualTo(typed.toString());
+    }
+
+    @Test
+    void frRet68AnImportedCodeAnActiveItemHoldsIsAnErrorRow() {
+        UUID held = api.product("BC-IC", 100, 200);
+        add(held, EAN);
+        JsonNode row = api.post(
+                        "/products/import?dry_run=true",
+                        Map.of(
+                                "csv",
+                                "code,description,category,unit,sell price,barcode\n"
+                                        + "IMP-IC1,Test soap,Soap,bar,1000," + EAN + "\n"),
+                        ADMINISTRATOR)
+                .getBody()
+                .get("rows")
+                .get(0);
+        assertThat(row.get("outcome").asString()).isEqualTo("error");
+        assertThat(row.get("message").asString()).contains("is on the item").contains("BC-IC");
+        ResponseEntity<JsonNode> applied = api.post(
+                "/products/import?dry_run=false",
+                Map.of(
+                        "csv",
+                        "code,description,category,unit,sell price,barcode\n" + "IMP-IC1,Test soap,Soap,bar,1000," + EAN
+                                + "\n"),
+                ADMINISTRATOR);
+        assertThat(applied.getStatusCode().is2xxSuccessful()).isFalse();
+        assertThat(lookup(EAN).getBody().get("product").get("id").asString()).isEqualTo(held.toString());
+    }
+
+    @Test
+    void frRet68AnImportedCodeHeldByASwitchedOffItemMovesToTheNewItemOnApply() {
+        UUID old = api.product("BC-OFF", 100, 200);
+        add(old, EAN);
+        String etag = api.get("/products/" + old, ADMIN).getHeaders().getETag();
+        api.call(HttpMethod.PATCH, "/products/" + old, Map.of("active", false), ADMIN, "*", Map.of("If-Match", etag));
+        String csv =
+                "code,description,category,unit,sell price,barcode\nIMP-OFF1,Test soap,Soap,bar,1000," + EAN + "\n";
+        JsonNode dry = api.post("/products/import?dry_run=true", Map.of("csv", csv), ADMINISTRATOR)
+                .getBody()
+                .get("rows")
+                .get(0);
+        assertThat(dry.get("outcome").asString()).isEqualTo("added");
+        ResponseEntity<JsonNode> applied =
+                api.post("/products/import?dry_run=false", Map.of("csv", csv), ADMINISTRATOR);
+        assertThat(applied.getStatusCode()).as("%s", applied.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(lookup(EAN).getBody().get("product").get("code").asString()).isEqualTo("IMP-OFF1");
+        assertThat(api.get("/products/" + old + "/barcodes", ADMIN).getBody().get("items"))
+                .isEmpty();
+        long released = TestDatabase.owner()
+                .sql("SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.barcode.released'")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(released).isEqualTo(1);
+    }
+
+    @Test
     void frRet68TheImportFileCarriesBarcodesAndRefusesABadOrRepeatedOne() {
         String header = "code,description,category,unit,sell price,barcode\n";
         ResponseEntity<JsonNode> dry = api.post(
