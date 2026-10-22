@@ -57,10 +57,14 @@ import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.StockLedger.Recorded;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +75,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Sales and credit buyers (FR-RET-04, FR-RET-05, FR-RET-11, FR-RET-14). A sale and everything it
@@ -103,6 +108,7 @@ class SalesService {
     private final AccountsService accounts;
     private final ReturnsRepository returns;
     private final ApplicationEventPublisher events;
+    private final ObjectMapper mapper;
 
     SalesService(
             SalesRepository repo,
@@ -121,8 +127,10 @@ class SalesService {
             RetailPricing priceLists,
             AccountsService accounts,
             ReturnsRepository returns,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            ObjectMapper mapper) {
         this.events = events;
+        this.mapper = mapper;
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -162,7 +170,7 @@ class SalesService {
         boolean[] earlier = {false};
         Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, r, Sale.class, () -> {
             if (r.clientSaleId() != null) {
-                Optional<Sale> found = recordedAs(r.clientSaleId());
+                Optional<Sale> found = recordedAs(r);
                 if (found.isPresent()) {
                     earlier[0] = true;
                     return found.get();
@@ -173,9 +181,12 @@ class SalesService {
         return earlier[0] ? new Outcome<>(outcome.body(), true) : outcome;
     }
 
-    /** The sale recorded with this client sale id, when the caller made it; 422 when someone else did. */
-    private Optional<Sale> recordedAs(UUID clientSaleId) {
-        Optional<SalesRepository.ByClient> found = repo.byClientSaleId(clientSaleId);
+    /**
+     * The sale recorded with this request's client sale id, when the caller made it with the same request; 422 when someone
+     * else did, or when the request differs from the one recorded (a changed sale is never answered with the old one).
+     */
+    private Optional<Sale> recordedAs(SaleRequest r) {
+        Optional<SalesRepository.ByClient> found = repo.byClientSaleId(r.clientSaleId());
         if (found.isEmpty()) {
             return Optional.empty();
         }
@@ -183,8 +194,43 @@ class SalesService {
             throw ApiException.rule(
                     "client_sale_id_reused", "This client sale id belongs to a sale someone else recorded.");
         }
+        if (found.get().requestHash() != null && !found.get().requestHash().equals(requestHash(r))) {
+            throw ApiException.rule(
+                    "client_sale_conflict",
+                    "A different sale was already recorded with this client sale id. Start a new sale for the changes.");
+        }
         return Optional.of(
                 visible(repo.find(found.get().saleId(), false).orElseThrow().sale()));
+    }
+
+    /**
+     * The fingerprint of a request with a client sale id (ADR-067 decision 5): the SHA-256 of the request without how it was
+     * delivered (occurred_at, recorded_offline, prices_as_of), so a sale whose answer was lost and that is sent again from the
+     * outbox is the same request, and a changed one is not.
+     */
+    String requestHash(SaleRequest r) {
+        SaleRequest what = new SaleRequest(
+                r.branchId(),
+                r.saleDate(),
+                r.paymentMethod(),
+                r.customerId(),
+                r.buyerName(),
+                r.buyerContact(),
+                r.dueDate(),
+                r.priceListId(),
+                r.creditOverrideReason(),
+                r.lines(),
+                r.clientSaleId(),
+                null,
+                null,
+                null);
+        try {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(mapper.writeValueAsString(what).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** A clash found while recording a sale made offline, written once the sale exists (ADR-067 decision 7). */
@@ -325,7 +371,7 @@ class SalesService {
                 null,
                 r.clientSaleId() == null ? null : new Device(r.clientSaleId(), occurredAt, offline, List.of()));
         try {
-            repo.insert(header);
+            repo.insert(header, r.clientSaleId() == null ? null : requestHash(r));
         } catch (DuplicateKeyException e) {
             // ADR-067: another send of the same client sale id is being recorded right now; its retry finds the sale.
             throw new ApiException(

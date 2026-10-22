@@ -250,14 +250,14 @@ class SalesRepository {
         }
     }
 
-    void insert(Sale s) {
+    void insert(Sale s, String requestHash) {
         jdbc.sql("""
                         INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, customer_id,
                             buyer_name, buyer_contact, due_date, currency, total_minor, cost_total_minor, paid_minor, status,
-                            created_by, price_list_id, client_sale_id, occurred_at, recorded_offline)
+                            created_by, price_list_id, client_sale_id, occurred_at, recorded_offline, request_hash)
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :branch, :no, :date, :method, :customer,
                             :buyerName, :buyerContact, :due, :currency, :total, :cost, :paid, 'completed', :by, :priceList,
-                            :clientSaleId, :occurredAt, :offline)
+                            :clientSaleId, :occurredAt, :offline, :requestHash)
                         """)
                 .param("id", s.id())
                 .param("branch", s.branchId())
@@ -281,16 +281,20 @@ class SalesRepository {
                                 ? null
                                 : Timestamp.from(s.device().occurredAt()))
                 .param("offline", s.device() != null && s.device().recordedOffline())
+                .param("requestHash", requestHash)
                 .update();
     }
 
-    /** The sale recorded with this client sale id and who made it (ADR-067), whatever its branch. */
-    record ByClient(UUID saleId, UUID createdBy) {}
+    /** The sale recorded with this client sale id, who made it and the fingerprint of its request (ADR-067), any branch. */
+    record ByClient(UUID saleId, UUID createdBy, String requestHash) {}
 
     Optional<ByClient> byClientSaleId(UUID clientSaleId) {
-        return jdbc.sql("SELECT id, created_by FROM retail_sales WHERE client_sale_id = ?")
+        return jdbc.sql("SELECT id, created_by, request_hash FROM retail_sales WHERE client_sale_id = ?")
                 .param(clientSaleId)
-                .query((rs, n) -> new ByClient(rs.getObject("id", UUID.class), rs.getObject("created_by", UUID.class)))
+                .query((rs, n) -> new ByClient(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("created_by", UUID.class),
+                        rs.getString("request_hash")))
                 .optional();
     }
 

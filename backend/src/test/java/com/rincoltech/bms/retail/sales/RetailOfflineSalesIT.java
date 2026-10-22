@@ -410,6 +410,81 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isEqualTo(sold.getBody().get("id").asString());
     }
 
+    /**
+     * Review fix 2: a send under a recorded client sale id must carry the same sale. How it was delivered (the time, the
+     * offline flag, the prices time) may differ, so an online sale whose answer was lost and that the outbox sends is the
+     * same; a changed line is 422 client_sale_conflict and records nothing.
+     */
+    @Test
+    void aReplayWithADifferentBodyIsAConflict() {
+        api.stockUp(t.headOffice(), product, "5");
+        UUID client = UUID.randomUUID();
+        Map<String, Object> online = new LinkedHashMap<>();
+        online.put("branch_id", t.headOffice());
+        online.put("payment_method", "cash");
+        online.put("lines", List.of(Map.of("product_id", product, "qty", "1")));
+        online.put("client_sale_id", client);
+        ResponseEntity<JsonNode> first = send(online, UUID.randomUUID().toString());
+        assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
+
+        Map<String, Object> fromOutbox = new LinkedHashMap<>(online);
+        fromOutbox.put("occurred_at", Instant.now().minus(Duration.ofMinutes(1)).toString());
+        fromOutbox.put("recorded_offline", true);
+        fromOutbox.put("prices_as_of", Instant.now().minus(Duration.ofHours(1)).toString());
+        ResponseEntity<JsonNode> same = send(fromOutbox, UUID.randomUUID().toString());
+        assertThat(same.getStatusCode()).as("%s", same.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(same.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+        assertThat(same.getBody().get("id")).isEqualTo(first.getBody().get("id"));
+
+        Map<String, Object> changed = new LinkedHashMap<>(online);
+        changed.put("lines", List.of(Map.of("product_id", product, "qty", "3")));
+        ResponseEntity<JsonNode> conflict = send(changed, UUID.randomUUID().toString());
+        assertThat(conflict.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(conflict.getBody().get("code").asString()).isEqualTo("client_sale_conflict");
+        assertThat(sales()).isEqualTo(1);
+        assertThat(balance()).isEqualTo("4.000");
+    }
+
+    /**
+     * ADR-067 decision 5: sends of one client sale id at the same moment with different keys make one sale; a send that
+     * loses the race on the unique index is 409 client_sale_in_progress, never a second sale.
+     */
+    @Test
+    void concurrentSendsOfOneClientIdMakeOneSale() throws Exception {
+        api.stockUp(t.headOffice(), product, "20");
+        UUID client = UUID.randomUUID();
+        Map<String, Object> body = offlineSale(client, Instant.now().minus(Duration.ofMinutes(5)), "1", 2_000);
+        int n = 6;
+        java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(n);
+        List<java.util.concurrent.Future<ResponseEntity<JsonNode>>> sent = new ArrayList<>();
+        try {
+            for (int i = 0; i < n; i++) {
+                sent.add(pool.submit(() -> {
+                    go.await();
+                    return send(body, UUID.randomUUID().toString());
+                }));
+            }
+            go.countDown();
+            List<String> ids = new ArrayList<>();
+            for (var f : sent) {
+                ResponseEntity<JsonNode> r = f.get(60, java.util.concurrent.TimeUnit.SECONDS);
+                if (r.getStatusCode() == HttpStatus.CONFLICT) {
+                    assertThat(r.getBody().get("code").asString()).isEqualTo("client_sale_in_progress");
+                } else {
+                    assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+                    ids.add(r.getBody().get("id").asString());
+                }
+            }
+            assertThat(ids).isNotEmpty();
+            assertThat(ids.stream().distinct().count()).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(sales()).isEqualTo(1);
+        assertThat(balance()).isEqualTo("19.000");
+    }
+
     /** Review fix 1: a sale sent after a manager discarded it is refused and never recorded, whatever key it carries. */
     @Test
     void aSaleSentAfterItWasDiscardedIsRefused() {

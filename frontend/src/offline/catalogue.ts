@@ -97,10 +97,12 @@ export function offlineSale(args: {
   branchName: string;
   pricesAsOf?: string;
   buyerName?: string;
+  /** An online request whose answer was lost: it goes as it was sent, dated when it was sent (ADR-067 decision 5). */
+  sent?: { body: SaleRequest; at: string };
   now: Date;
 }): OutboxItem {
-  const { draft, clientSaleId, key, scope, branchName, pricesAsOf, now } = args;
-  const occurredAt = now.toISOString();
+  const { draft, clientSaleId, key, scope, branchName, pricesAsOf, now, sent } = args;
+  const occurredAt = sent?.at ?? now.toISOString();
   const lines = draft.lines.map((l) => {
     const f = lineFigures(l);
     if (!f) throw new Error('invalid line');
@@ -116,16 +118,15 @@ export function offlineSale(args: {
     };
   });
   const buyer = args.buyerName?.trim();
-  const request: SaleRequest = {
+  const delivery = { occurred_at: occurredAt, recorded_offline: true, ...(pricesAsOf ? { prices_as_of: pricesAsOf } : {}) };
+  const request: SaleRequest = sent ? { ...sent.body, client_sale_id: clientSaleId, ...delivery } : {
     branch_id: draft.branchId,
     payment_method: draft.method,
     ...(draft.customerId ? { customer_id: draft.customerId } : {}),
     ...(!draft.customerId && buyer ? { buyer_name: buyer } : {}),
     lines: lines.map((l) => l.request),
     client_sale_id: clientSaleId,
-    occurred_at: occurredAt,
-    recorded_offline: true,
-    ...(pricesAsOf ? { prices_as_of: pricesAsOf } : {}),
+    ...delivery,
   };
   return {
     id: clientSaleId,

@@ -6,8 +6,8 @@ import type { Product } from '../api/retail';
 
 // Record a sale with the network off (issue #458, ADR-067; NFR-OFF-07): the items come from the phone's copy, a credit sale
 // is not offered, the sale goes to the outbox with every price as charged, the provisional receipt shows, and once the
-// phone is online the server's number replaces it. A sale whose answer was lost is kept with the same client sale id and a
-// new key, so it is recorded once. Every request fails as with no network. Fabricated people, items and amounts.
+// phone is online the server's number replaces it. A sale whose answer was lost locks the form and is kept as it was sent,
+// with the same client sale id and a new key, so it is recorded once. Every request fails as with no network. Fabricated people, items and amounts.
 
 vi.setConfig({ testTimeout: 20000 });
 vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
@@ -119,13 +119,24 @@ describe('Record a sale offline', () => {
     await waitFor(() => expect(save.disabled).toBe(false));
     fireEvent.click(save);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Keep it on this phone' }));
+    // The answer is lost: the form is locked, so the cashier cannot change the lines and send them under the same id.
+    const keepIt = await screen.findByRole('button', { name: 'Keep it on this phone' });
+    const qty = screen.getAllByRole('textbox').find((i) => (i as HTMLInputElement).value === '1') as HTMLInputElement;
+    expect(qty.matches(':disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await screen.findByRole('button', { name: 'Keep it on this phone' });
+    expect(createSale).toHaveBeenCalledTimes(2);
+    expect(createSale.mock.calls[1]).toEqual(createSale.mock.calls[0]);
+
+    fireEvent.click(keepIt.isConnected ? keepIt : screen.getByRole('button', { name: 'Keep it on this phone' }));
     expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
-    const [body, key] = createSale.mock.calls[0] as [{ client_sale_id?: string }, string];
+    const [body, key] = createSale.mock.calls[0] as [{ client_sale_id?: string; lines?: unknown }, string];
     expect(body.client_sale_id).toBe(key);
     const [item] = offline.engine.snapshot().items;
     expect(item?.id).toBe(key);
     expect(item?.request.client_sale_id).toBe(key);
+    expect(item?.request.lines).toEqual(body.lines);
+    expect(item?.request.recorded_offline).toBe(true);
     expect(item?.key).not.toBe(key);
   });
 });

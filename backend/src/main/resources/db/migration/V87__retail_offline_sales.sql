@@ -7,8 +7,8 @@
 -- Numbered V87: main is at V80, and V81 to V86 are claimed by the open lending (#270, #271, #272, #290) and payments (#315,
 -- #318) pull requests. Flyway runs with outOfOrder off; renumbered at merge if needed.
 --
--- Expand only, safe on a populated database. Three nullable or constant-default columns on retail_sales, a partial unique
--- index, a small trigger that keeps the three columns as written, two new tables and one permission. No existing row changes.
+-- Expand only, safe on a populated database. Four nullable or constant-default columns on retail_sales, a partial unique
+-- index, a small trigger that keeps the four columns as written, two new tables and one permission. No existing row changes.
 --
 -- Locks, said plainly. Flyway runs this file in one transaction, so the locks are held to the commit. ADD COLUMN with a
 -- constant default is a catalogue change in PostgreSQL 16 (no table rewrite) but takes ACCESS EXCLUSIVE on retail_sales, which
@@ -24,22 +24,25 @@ SET LOCAL lock_timeout = '5s';
 ALTER TABLE retail_sales ADD COLUMN client_sale_id uuid;
 ALTER TABLE retail_sales ADD COLUMN occurred_at timestamptz;
 ALTER TABLE retail_sales ADD COLUMN recorded_offline boolean NOT NULL DEFAULT false;
+-- The SHA-256 of the request without how it was delivered: a second send under the client sale id must carry the same sale.
+ALTER TABLE retail_sales ADD COLUMN request_hash char(64);
 ALTER TABLE retail_sales ADD CONSTRAINT retail_sales_offline_chk
-    CHECK (NOT recorded_offline OR (client_sale_id IS NOT NULL AND occurred_at IS NOT NULL)) NOT VALID;
+    CHECK ((NOT recorded_offline OR (client_sale_id IS NOT NULL AND occurred_at IS NOT NULL))
+      AND (request_hash IS NULL OR client_sale_id IS NOT NULL)) NOT VALID;
 ALTER TABLE retail_sales VALIDATE CONSTRAINT retail_sales_offline_chk;
 CREATE UNIQUE INDEX retail_sales_client_sale_id ON retail_sales (tenant_id, client_sale_id) WHERE client_sale_id IS NOT NULL;
 
--- The three columns are written once, with the sale. retail_sales_guard_update (V45) lists the columns that never change; this
--- trigger adds these three without rewriting that function.
+-- The four columns are written once, with the sale. retail_sales_guard_update (V45) lists the columns that never change; this
+-- trigger adds these four without rewriting that function.
 CREATE FUNCTION retail_sales_offline_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     IF session_user = 'bms_owner' AND coalesce(current_setting('bms.allow_mutation', true), '') = 'on' THEN
         RETURN NEW;
     END IF;
-    IF (NEW.client_sale_id, NEW.occurred_at, NEW.recorded_offline)
-       IS DISTINCT FROM (OLD.client_sale_id, OLD.occurred_at, OLD.recorded_offline) THEN
-        RAISE EXCEPTION 'retail_sales: the client sale id, the time it happened and the offline flag do not change'
+    IF (NEW.client_sale_id, NEW.occurred_at, NEW.recorded_offline, NEW.request_hash)
+       IS DISTINCT FROM (OLD.client_sale_id, OLD.occurred_at, OLD.recorded_offline, OLD.request_hash) THEN
+        RAISE EXCEPTION 'retail_sales: the client sale id, the time it happened, the offline flag and the request do not change'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
     RETURN NEW;

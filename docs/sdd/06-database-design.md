@@ -1916,9 +1916,10 @@ Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `cre
 | `historical` | boolean | Imported history posts no journal (FR-RET-12) |
 | `client_sale_id` | uuid | ADR-067, V87: the id the device made for the sale; unique per tenant (`retail_sales_client_sale_id`, partial on not null), so a send after the key expired is the same sale |
 | `occurred_at` | timestamptz | ADR-067: when the sale happened on the device, as recorded (a clock more than five minutes ahead is recorded as the server's now) |
-| `recorded_offline` | boolean | ADR-067: the sale was taken with no network; needs `client_sale_id` and `occurred_at` (CHECK). The three columns never change (trigger `retail_sales_offline_guard`) |
+| `recorded_offline` | boolean | ADR-067: the sale was taken with no network; needs `client_sale_id` and `occurred_at` (CHECK) |
+| `request_hash` | char(64) | ADR-067: the SHA-256 of the request without `occurred_at`, `recorded_offline` and `prices_as_of`, only with a `client_sale_id` (CHECK); a send under the same client sale id with another request is 422 `client_sale_conflict`. The four columns never change (trigger `retail_sales_offline_guard`) |
 
-Built: retail sales offline (issue #458, ADR-067, migration `V87`; renumbered at merge if needed). Besides the three columns
+Built: retail sales offline (issue #458, ADR-067, migration `V87`; renumbered at merge if needed). Besides the four columns
 above, two tables, each with forced row-level security, composite foreign keys on the tenant and no delete grant.
 `retail_sale_clashes` holds what changed while an offline sale was away: `sale_id`, `branch_id`, `line_no` and `product_id`
 (null together for `clock_ahead`), `kind` (`stock_short`, `item_inactive`, `price_changed`, `below_cost`, `clock_ahead`),
