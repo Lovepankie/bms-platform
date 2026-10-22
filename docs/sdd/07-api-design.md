@@ -842,7 +842,7 @@ Built (#466, ADR-071, migration `V91`): existing loans brought in from a paper r
 | POST | `/lending/existing-loans/import` | `lending.loans.bring_in` | `{csv}` (at most 1,000,000 characters and 2,000 rows; comma, semicolon or tab). Columns `kind` (`loan` or `repayment`), `ref` (the register number), then for a loan `member_no`, `product_code`, `principal`, `disbursement_date`, `term?`, `agreed_total?`, `purpose?`, and for a repayment `repayment_date`, `amount`, `method`, `note?`; amounts in major units, dates year-month-day only. `dry_run=true` (the default) checks; `false` commits, recording nothing when any row is an error. Returns `{dry_run, rows_read, loans, repayments, added, skipped, errors, rows: [{line, ref, outcome, message, loan_id}]}` (`added`: the loans recorded, or on a check the loans that would be; 0 while any row is an error) with outcomes `ready`, `added`, `skipped` (the `ref` is in use) and `error` |
 
 On approval of `loan_bring_in` the loan becomes `active` (or `closed` when repaid in full) with historic transactions
-(`GET .../transactions` shows them with no `journal_entry_id` and no receipt number) and one opening entry at go-live.
+(`GET .../transactions` shows them with `historic` true, no `journal_entry_id` and no receipt number) and one opening entry at go-live.
 `POST .../transactions/{txn_id}/reverse` of a historic repayment is 422 `historic_not_reversible`.
 
 ### 7.11.14 Lending: collateral (`/lending/collateral`)

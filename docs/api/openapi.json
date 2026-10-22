@@ -5611,6 +5611,10 @@
           "external_reference" : {
             "type" : "string"
           },
+          "historic" : {
+            "description" : "From the paper register before go-live (ADR-071): no journal entry, no receipt number, not counted as cash in the app's books",
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"

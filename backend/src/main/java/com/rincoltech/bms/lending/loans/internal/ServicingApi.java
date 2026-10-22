@@ -188,7 +188,12 @@ final class ServicingApi {
             UUID approvalRequestId,
             UUID recordedBy,
             Instant createdAt,
-            List<AllocationRow> allocations) {}
+            List<AllocationRow> allocations,
+
+            @Schema(
+                    description =
+                            "From the paper register before go-live (ADR-071): no journal entry, no receipt number, not counted as cash in the app's books")
+            boolean historic) {}
 
     @Schema(name = "LoanTransactionList")
     record TransactionList(List<LoanTransaction> items) {}

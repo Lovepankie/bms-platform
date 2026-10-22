@@ -331,6 +331,31 @@ class ExistingLoansIT extends LoanFixtures {
                         .asString()))
                 .containsExactly("cash_on_hand:100000:0", "loans_receivable:0:100000");
         assertThat(receivableOf(id)).isEqualTo(400_000);
+        List<String> labelled = new ArrayList<>();
+        send(HttpMethod.GET, LOANS + "/" + id + "/transactions", as(admin, adminPerms, "*", null), null)
+                .getBody()
+                .get("items")
+                .forEach(x -> labelled.add(x.get("txn_type").asString() + ":"
+                        + x.get("amount_minor").asLong() + ":"
+                        + x.get("historic").asBoolean()));
+        assertThat(labelled)
+                .as("the register's rows are labelled historic, today's repayment is not")
+                .containsExactlyInAnyOrder(
+                        "disbursement:1200000:true",
+                        "repayment:520000:true",
+                        "repayment:300000:true",
+                        "repayment:100000:false");
+
+        // Insights: a loan brought in was never an application in the app, so it is in no funnel and no decision time.
+        JsonNode members = send(
+                        HttpMethod.GET,
+                        "/api/v1/lending/insights/members?from=" + today.minusDays(5) + "&to=" + today,
+                        as(admin, adminPerms, "*", null),
+                        null)
+                .getBody();
+        List<String> metrics = new ArrayList<>();
+        members.get("metrics").forEach(x -> metrics.add(x.get("key").asString() + "=" + x.get("value")));
+        assertThat(metrics).contains("members.applied=0", "members.median_decision_hours=null");
 
         // A repayment from the register is not reversed: it moved no cash in the books.
         String historic = TestDatabase.owner()

@@ -605,7 +605,8 @@ class ServicingRepository {
                             t.approvalRequestId(),
                             t.recordedBy(),
                             t.createdAt(),
-                            List.copyOf(rows.getOrDefault(t.id(), List.of())));
+                            List.copyOf(rows.getOrDefault(t.id(), List.of())),
+                            rs.getBoolean("is_historic"));
                 })
                 .list();
     }

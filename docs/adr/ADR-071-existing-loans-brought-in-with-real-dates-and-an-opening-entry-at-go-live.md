@@ -42,7 +42,9 @@ fit every lending business, not one register.
 3. **History, not cash.** On approval, in one transaction, the disbursement and every repayment become
    `lending_loan_transactions` rows with `is_historic` true, no journal and no receipt or voucher number (the V29 check
    already allows a historic row without a journal; receipt numbers stay gap-free for the app's own receipts), with their
-   allocation rows. The loan becomes `active`, or `closed` on its last repayment's date when the register shows it repaid
+   allocation rows; the API marks them `historic` and the loan screen labels them as from the paper register. Insights
+   leave a brought-in loan out of the application funnel and the median time to decision, since it was never decided
+   as an application in the app. The loan becomes `active`, or `closed` on its last repayment's date when the register shows it repaid
    in full. A historic repayment cannot be reversed (422 `historic_not_reversible`): it moved no cash in the books, so a
    mistake in it is corrected by withdrawing or recording the loan again before approval.
 4. **One opening entry at go-live.** For the principal still owed, one journal entry dated at the business's go-live

@@ -465,7 +465,10 @@ class InsightsQueries {
         return jdbc.sql(sql).params(p).query(InsightsQueries::dayTotal).list();
     }
 
-    /** Applied, appraised, approved and disbursed among applications submitted in the range. */
+    /**
+     * Applied, appraised, approved and disbursed among applications submitted in the range. A loan brought in from a
+     * paper register (ADR-071, go_live_on set) was never an application in the app and is left out.
+     */
     long[] funnel(Scope s, ZoneId zone) {
         if (s.empty()) {
             return new long[] {0, 0, 0, 0};
@@ -478,7 +481,8 @@ class InsightsQueries {
                        count(*) FILTER (WHERE l.approved_at IS NOT NULL) AS approved,
                        count(*) FILTER (WHERE l.disbursed_on IS NOT NULL) AS disbursed
                   FROM lending_loans l
-                 WHERE l.submitted_at >= :fromTs AND l.submitted_at < :toTs""" + s.loanFilter("l", p);
+                 WHERE l.submitted_at >= :fromTs AND l.submitted_at < :toTs
+                   AND l.go_live_on IS NULL""" + s.loanFilter("l", p);
         return jdbc.sql(sql)
                 .params(p)
                 .query((rs, n) -> new long[] {
@@ -487,7 +491,10 @@ class InsightsQueries {
                 .single();
     }
 
-    /** Median hours from submission to approval or rejection, for decisions made in the range; null for none. */
+    /**
+     * Median hours from submission to approval or rejection, for decisions made in the range; null for none. A loan
+     * brought in from a paper register (ADR-071) is left out: its recording and approval time is not a lending decision.
+     */
     Long medianDecisionHours(Scope s, ZoneId zone) {
         if (s.empty()) {
             return null;
@@ -500,7 +507,8 @@ class InsightsQueries {
                                     (SELECT min(h.created_at) FROM lending_loan_status_history h
                                       WHERE h.loan_id = l.id AND h.to_status = 'rejected')) AS decided_at
                       FROM lending_loans l
-                     WHERE l.submitted_at IS NOT NULL AND l.status NOT IN ('draft', 'submitted', 'appraised', 'cancelled')""" + s.loanFilter("l", p) + """
+                     WHERE l.submitted_at IS NOT NULL AND l.status NOT IN ('draft', 'submitted', 'appraised', 'cancelled')
+                       AND l.go_live_on IS NULL""" + s.loanFilter("l", p) + """
 
                 )
                 SELECT round(percentile_cont(0.5) WITHIN GROUP (

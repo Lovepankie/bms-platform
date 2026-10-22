@@ -9092,6 +9092,8 @@ export interface components {
             created_at?: string;
             currency?: string;
             external_reference?: string;
+            /** @description From the paper register before go-live (ADR-071): no journal entry, no receipt number, not counted as cash in the app's books */
+            historic?: boolean;
             /** Format: uuid */
             id?: string;
             /** Format: uuid */
