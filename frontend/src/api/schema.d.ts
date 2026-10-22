@@ -4512,6 +4512,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/barcodes/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make a Code 128 label code for each item that has no made code yet; idempotent (#345) */
+        post: operations["generateRetailBarcodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/by-barcode/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The active item a scanned barcode belongs to; with branch_id, with that branch's balance (#345) */
+        get: operations["findRetailProductByBarcode"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products/import": {
         parameters: {
             query?: never;
@@ -4562,6 +4596,41 @@ export interface paths {
         head?: never;
         /** Edit a product's non-price fields */
         patch: operations["updateRetailProduct"];
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/barcodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The barcodes of an item (#345) */
+        get: operations["listRetailProductBarcodes"];
+        put?: never;
+        /** Add a barcode to an item or one of its pack sizes; check digits are checked (#345) */
+        post: operations["addRetailProductBarcode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/barcodes/{barcode_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a barcode from an item (#345) */
+        delete: operations["removeRetailProductBarcode"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/retail/products/{product_id}/family": {
@@ -9598,6 +9667,54 @@ export interface components {
             business_date?: string;
             reference?: string;
         };
+        /** @description Issue #345: one barcode of a product, for its base unit or one pack size */
+        RetailBarcode: {
+            code?: string;
+            /** @description ean13, ean8, upca or code128 */
+            format?: string;
+            /** @description True for a Code 128 code the system made for the product's labels */
+            generated?: boolean;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            product_id?: string;
+            /** @description The name of that pack's unit */
+            unit?: string;
+            /**
+             * Format: uuid
+             * @description The pack size this barcode is on; absent for the product's own unit
+             */
+            unit_id?: string;
+        };
+        /** @description Issue #345: the items to make a label code for */
+        RetailBarcodeGenerateRequest: {
+            product_ids: string[];
+        };
+        RetailBarcodeList: {
+            items?: components["schemas"]["RetailBarcode"][];
+        };
+        /** @description Issue #345: the active product a scanned barcode belongs to */
+        RetailBarcodeMatch: {
+            barcode?: components["schemas"]["RetailBarcode"];
+            product?: components["schemas"]["RetailProduct"];
+            /**
+             * Format: uuid
+             * @description The pack size the barcode is on, to add the line in that unit; absent for the base unit
+             */
+            unit_id?: string;
+        };
+        /** @description Issue #345: add a barcode to a product */
+        RetailBarcodeRequest: {
+            /** @description As printed or scanned; EAN-13, EAN-8 and UPC-A check digits are checked */
+            code: string;
+            /** @description ean13, ean8, upca or code128; by default read from the code (13, 12 or 8 digits, else Code 128) */
+            format?: string;
+            /**
+             * Format: uuid
+             * @description A pack size of the product (the units capability); absent for the product's own unit
+             */
+            unit_id?: string;
+        };
         /** @description One entry per branch of the page, in the page's branch order */
         RetailBranchBalance: {
             /** Format: uuid */
@@ -12417,6 +12534,8 @@ export interface components {
         };
         RetailProduct: {
             active?: boolean;
+            /** @description Issue #345: the barcodes of this product and of its pack sizes, sent by the list, the get and the barcode lookup; scan any of them to find the product */
+            barcodes?: components["schemas"]["RetailBarcode"][];
             category?: string;
             /** Format: uuid */
             category_id?: string;
@@ -24366,6 +24485,54 @@ export interface operations {
             };
         };
     };
+    generateRetailBarcodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailBarcodeGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBarcodeList"];
+                };
+            };
+        };
+    };
+    findRetailProductByBarcode: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBarcodeMatch"];
+                };
+            };
+        };
+    };
     importRetailProducts: {
         parameters: {
             query?: {
@@ -24463,6 +24630,75 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RetailProduct"];
                 };
+            };
+        };
+    };
+    listRetailProductBarcodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBarcodeList"];
+                };
+            };
+        };
+    };
+    addRetailProductBarcode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailBarcodeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailBarcode"];
+                };
+            };
+        };
+    };
+    removeRetailProductBarcode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+                barcode_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

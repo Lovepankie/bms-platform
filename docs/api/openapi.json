@@ -7356,6 +7356,103 @@
         },
         "required" : [ "amount_minor" ]
       },
+      "RetailBarcode" : {
+        "description" : "Issue #345: one barcode of a product, for its base unit or one pack size",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "format" : {
+            "description" : "ean13, ean8, upca or code128",
+            "type" : "string"
+          },
+          "generated" : {
+            "description" : "True for a Code 128 code the system made for the product's labels",
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit" : {
+            "description" : "The name of that pack's unit",
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "The pack size this barcode is on; absent for the product's own unit",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailBarcodeGenerateRequest" : {
+        "description" : "Issue #345: the items to make a label code for",
+        "properties" : {
+          "product_ids" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 200,
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "product_ids" ]
+      },
+      "RetailBarcodeList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBarcode"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailBarcodeMatch" : {
+        "description" : "Issue #345: the active product a scanned barcode belongs to",
+        "properties" : {
+          "barcode" : {
+            "$ref" : "#/components/schemas/RetailBarcode"
+          },
+          "product" : {
+            "$ref" : "#/components/schemas/RetailProduct"
+          },
+          "unit_id" : {
+            "description" : "The pack size the barcode is on, to add the line in that unit; absent for the base unit",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailBarcodeRequest" : {
+        "description" : "Issue #345: add a barcode to a product",
+        "properties" : {
+          "code" : {
+            "description" : "As printed or scanned; EAN-13, EAN-8 and UPC-A check digits are checked",
+            "maxLength" : 48,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "format" : {
+            "description" : "ean13, ean8, upca or code128; by default read from the code (13, 12 or 8 digits, else Code 128)",
+            "maxLength" : 10,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "unit_id" : {
+            "description" : "A pack size of the product (the units capability); absent for the product's own unit",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "code" ]
+      },
       "RetailBranchBalance" : {
         "description" : "One entry per branch of the page, in the page's branch order",
         "properties" : {
@@ -12649,6 +12746,13 @@
         "properties" : {
           "active" : {
             "type" : "boolean"
+          },
+          "barcodes" : {
+            "description" : "Issue #345: the barcodes of this product and of its pack sizes, sent by the list, the get and the barcode lookup; scan any of them to find the product",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailBarcode"
+            },
+            "type" : "array"
           },
           "category" : {
             "type" : "string"
@@ -32817,6 +32921,70 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/products/barcodes/generate" : {
+      "post" : {
+        "operationId" : "generateRetailBarcodes",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailBarcodeGenerateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBarcodeList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Make a Code 128 label code for each item that has no made code yet; idempotent (#345)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/by-barcode/{code}" : {
+      "get" : {
+        "operationId" : "findRetailProductByBarcode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "code",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBarcodeMatch"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The active item a scanned barcode belongs to; with branch_id, with that branch's balance (#345)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/products/import" : {
       "post" : {
         "operationId" : "importRetailProducts",
@@ -32966,6 +33134,99 @@
           }
         },
         "summary" : "Edit a product's non-price fields",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/barcodes" : {
+      "get" : {
+        "operationId" : "listRetailProductBarcodes",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBarcodeList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The barcodes of an item (#345)",
+        "tags" : [ "retail-catalogue" ]
+      },
+      "post" : {
+        "operationId" : "addRetailProductBarcode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailBarcodeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailBarcode"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a barcode to an item or one of its pack sizes; check digits are checked (#345)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/barcodes/{barcode_id}" : {
+      "delete" : {
+        "operationId" : "removeRetailProductBarcode",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "barcode_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a barcode from an item (#345)",
         "tags" : [ "retail-catalogue" ]
       }
     },
