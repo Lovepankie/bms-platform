@@ -7,6 +7,7 @@ import { retail } from '../../../api/retail';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { LabelsPage } from './labels';
+import { ReceiveBlindPage } from './goods-receive';
 import { RestockForm } from './restock';
 import { SaleForm } from './sale';
 import { StocktakePage } from './stocktake';
@@ -391,6 +392,37 @@ describe('FR-RET-68 a pack barcode the sale cannot use', () => {
     wedge('TEST-LAMP-BOX');
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('switched off'));
     expect(document.querySelectorAll('[id^="qty-"]')).toHaveLength(0);
+  });
+});
+
+describe('FR-RET-68 a pack barcode the restock and goods received cannot use', () => {
+  const ROLL = '00000000-0000-4000-8000-0000000d0001';
+
+  it('refuses a pack barcode on the restock while pack sizes are off, and adds no single piece in its place', async () => {
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    screenOf(<RestockForm />);
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    expect(document.getElementById(`q-0-${BRANCH}`)).toBeNull();
+  });
+
+  it('refuses a pack barcode on goods received while pack sizes are off, and receives no single piece in its place', async () => {
+    const read = await retail.capabilities();
+    await retail.changeCapabilities({ purchasing: true }, read.version);
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    await retail.addBarcode(LAMP, { code: EAN });
+    screenOf(<ReceiveBlindPage />, 'admin', BRANCH, ['purchasing']);
+    await screen.findByLabelText('Scan or type a barcode, then press Enter');
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    expect(screen.queryByText(/^Added /)).toBeNull();
+    // The item's own barcode is still received, at 1.
+    wedge(EAN);
+    await waitFor(() => expect(screen.getByText('Added LED bulb 9W screw.')).toBeTruthy());
   });
 });
 
