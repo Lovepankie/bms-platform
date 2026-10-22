@@ -59,7 +59,9 @@ never change data, never show one business another's rows, and never hold a larg
    switch is on. A weekly backup the Owner keeps does not need a member's national ID or phone to serve its purpose (knowing
    who owes what), while the copy inside BMS is reached only after sign-in (with two-step sign-in where the business requires
    it), for the person it was made for, for 30 days. So the default email carries the minimum, and the full copy stays behind
-   the sign-in. Once the run is ready the email goes through the outbox, keyed by the week's row so it is queued once: the
+   the sign-in. Once the run is ready the email goes through the outbox, keyed by the week's row so it is queued once (the week
+   is then `queued`, and `emailed` only when the outbox records it sent, or `failed` with `email_failed` when the outbox gives it
+   up, so the card's "last weekly email" is an email that went): the
    workbook attached when it is at most `bms.data-export.attach-max-bytes` (5 MiB), otherwise the email has no file and a link
    to Business set-up on the business's own sign-in page (decision 9). The attachment is named in the outbox row as a
    reference, never as bytes; the sender reads it through the `EmailAttachments` port of `core.notifications`, for the row's

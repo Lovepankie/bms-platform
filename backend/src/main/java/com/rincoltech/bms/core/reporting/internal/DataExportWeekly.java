@@ -40,9 +40,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       personal data because it is made to be emailed (decision 6), and the week's row of
  *       {@code data_export_weekly} is written. The row is unique per business and week, so a second tick, a second instance
  *       or a restart queues nothing more. With no active Owner who has an email address the week is recorded as skipped.
- *   <li><b>Email.</b> A week whose run is ready is emailed to the Owner through the outbox, once (the row's id is the
- *       outbox key): the workbook attached when it is at most {@code bms.data-export.attach-max-bytes}, else a link to
- *       Business set-up, where the signed-in Owner downloads the full copy. A run that failed or was cancelled
+ *   <li><b>Email.</b> A week whose run is ready is written to the outbox for the Owner, once (the row's id is the outbox
+ *       key), and the week is {@code queued}; it becomes {@code emailed} only when the outbox records the email sent, or
+ *       {@code failed} ({@code email_failed}) when the outbox gives it up, so the card shows what happened. The workbook is attached when it is at most
+ *       {@code bms.data-export.attach-max-bytes}, else the email links to Business set-up, where the signed-in Owner
+ *       downloads the full copy. A run that failed or was cancelled
  *       ends the week as failed with its code.
  * </ol>
  *
@@ -172,7 +174,7 @@ class DataExportWeekly {
         Requested run = runs.insert(report, "xlsx", report.weekly(), owner.get().id(), false);
         int written = jdbc.sql("""
                         INSERT INTO data_export_weekly (id, tenant_id, week_of, run_id, recipient_user_id, status)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, 'queued')
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, 'preparing')
                         ON CONFLICT (tenant_id, week_of) DO NOTHING
                         """)
                 .params(UUID.randomUUID(), week, run.run().id(), owner.get().id())
@@ -185,6 +187,7 @@ class DataExportWeekly {
 
     private record Week(
             UUID id,
+            String status,
             UUID runId,
             UUID recipient,
             String runStatus,
@@ -195,14 +198,16 @@ class DataExportWeekly {
 
     private int deliver() {
         List<Week> open = jdbc.sql("""
-                        SELECT w.id, w.run_id, w.recipient_user_id, r.status, r.size_bytes, r.as_of, r.expires_at, r.error
+                        SELECT w.id, w.status AS week_status, w.run_id, w.recipient_user_id, r.status, r.size_bytes, r.as_of,
+                               r.expires_at, r.error
                           FROM data_export_weekly w JOIN report_runs r ON r.id = w.run_id
-                         WHERE w.status = 'queued'
+                         WHERE w.status IN ('preparing', 'queued')
                          ORDER BY w.week_of
                            FOR UPDATE OF w SKIP LOCKED
                         """)
                 .query((rs, n) -> new Week(
                         rs.getObject("id", UUID.class),
+                        rs.getString("week_status"),
                         rs.getObject("run_id", UUID.class),
                         rs.getObject("recipient_user_id", UUID.class),
                         rs.getString("status"),
@@ -215,6 +220,10 @@ class DataExportWeekly {
                 .list();
         int emailed = 0;
         for (Week w : open) {
+            if (w.status().equals("queued")) {
+                outcome(w);
+                continue;
+            }
             switch (w.runStatus()) {
                 case "ready" -> {
                     if (email(w)) {
@@ -256,8 +265,33 @@ class DataExportWeekly {
                 "core.data_export_weekly:" + w.id(),
                 null,
                 w.expiresAt()));
-        close(w.id(), "emailed", attach, null);
+        jdbc.sql("UPDATE data_export_weekly SET status = 'queued', attached = ? WHERE id = ?")
+                .params(attach, w.id())
+                .update();
         return true;
+    }
+
+    /**
+     * A week whose email is in the outbox ends as the outbox says: emailed once it was sent (a sent row is purged after its
+     * days, so no row is a sent one), failed when the outbox gave it up; still pending, the next tick looks again.
+     */
+    private void outcome(Week w) {
+        // One row, its value null when the outbox has no row for the week.
+        String sent = jdbc.sql("SELECT app_data_export_weekly_email_status(?)")
+                .param(w.id())
+                .query(String.class)
+                .list()
+                .get(0);
+        if (sent == null || sent.equals("sent")) {
+            jdbc.sql("UPDATE data_export_weekly SET status = 'emailed', finished_at = ? WHERE id = ?")
+                    .params(Timestamp.from(clock.now()), w.id())
+                    .update();
+        } else if (sent.equals("failed")) {
+            jdbc.sql(
+                            "UPDATE data_export_weekly SET status = 'failed', reason = 'email_failed', finished_at = ? WHERE id = ?")
+                    .params(Timestamp.from(clock.now()), w.id())
+                    .update();
+        }
     }
 
     private void close(UUID id, String status, Boolean attached, String reason) {

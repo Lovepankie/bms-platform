@@ -37,8 +37,9 @@ SELECT bms_grant_app('data_export_settings', 'SELECT, INSERT, UPDATE');
 -- data_export_weekly (ADR-074): one row per business per week (the Monday that starts it), written by the weekly job when
 -- it queues that week's workbook for the Owner, so a job that runs twice, or on two instances, queues one workbook and sends
 -- one email (the unique key). A week while the switch is off gets no row, so turning it on mid-week sends that week's copy.
--- status: queued (the run is being made), emailed (the outbox row is written), skipped (no active Owner with an email
--- address), failed (the run did not finish ready). reason is a stable code, never a message.
+-- status: preparing (the run is being made), queued (the email is written to the outbox), emailed (the outbox recorded it
+-- sent), skipped (no active Owner with an email address), failed (the run did not finish ready, or the outbox gave the email
+-- up). reason is a stable code, never a message.
 -- ---------------------------------------------------------------------------------------------
 
 CREATE TABLE data_export_weekly (
@@ -48,7 +49,7 @@ CREATE TABLE data_export_weekly (
     week_of           date        NOT NULL CHECK (extract(isodow FROM week_of) = 1),
     run_id            uuid,
     recipient_user_id uuid,
-    status            text        NOT NULL CHECK (status IN ('queued', 'emailed', 'skipped', 'failed')),
+    status            text        NOT NULL CHECK (status IN ('preparing', 'queued', 'emailed', 'skipped', 'failed')),
     attached          boolean,
     reason            text        CHECK (reason ~ '^[a-z][a-z0-9_]{2,60}$'),
     finished_at       timestamptz,
@@ -57,12 +58,24 @@ CREATE TABLE data_export_weekly (
     FOREIGN KEY (tenant_id, run_id) REFERENCES report_runs (tenant_id, id),
     FOREIGN KEY (tenant_id, recipient_user_id) REFERENCES users (tenant_id, id),
     CHECK ((status = 'skipped') = (run_id IS NULL)),
-    CHECK ((status = 'queued') = (finished_at IS NULL))
+    CHECK ((status IN ('preparing', 'queued')) = (finished_at IS NULL))
 );
-CREATE INDEX data_export_weekly_open ON data_export_weekly (tenant_id) WHERE status = 'queued';
+CREATE INDEX data_export_weekly_open ON data_export_weekly (tenant_id) WHERE status IN ('preparing', 'queued');
 SELECT bms_apply_tenant_rls('data_export_weekly');
 SELECT bms_grant_app('data_export_weekly', 'SELECT, INSERT');
 GRANT UPDATE (status, attached, reason, finished_at) ON data_export_weekly TO bms_app;
+
+-- What the outbox made of a week's email, for the bound tenant only: pending, sent or failed, or null when there is no row
+-- (a sent row is purged after its days). The outbox is reached only through functions (V23); this one reads one row by the
+-- week's own key and returns its status, nothing else.
+CREATE FUNCTION app_data_export_weekly_email_status(p_week_id uuid) RETURNS text
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT o.status FROM notification_outbox o
+     WHERE o.idempotency_key = 'core.data_export_weekly:' || p_week_id::text
+       AND o.tenant_id = current_setting('app.tenant_id')::uuid
+$$;
+REVOKE ALL ON FUNCTION app_data_export_weekly_email_status(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_data_export_weekly_email_status(uuid) TO bms_app;
 
 -- ---------------------------------------------------------------------------------------------
 -- The runner's functions of V49, now over active and suspended tenants. A suspended business is read only: it cannot queue

@@ -515,6 +515,22 @@ class DataExportIT extends LendingBookSupport {
                         .param(tenantId)
                         .query(String.class)
                         .single())
+                .as("written to the outbox, not yet sent")
+                .isEqualTo("queued true");
+        assertThat(card(s.t(), owner, PERM).getBody().get("last_emailed_at").isNull())
+                .as("the card says emailed only once the email went")
+                .isTrue();
+        // The outbox sends it; the next tick reads that outcome.
+        TestDatabase.owner()
+                .sql("UPDATE notification_outbox SET status = 'sent', sent_at = now() WHERE recipient = ?")
+                .param(email)
+                .update();
+        weekly.tick();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status || ' ' || attached FROM data_export_weekly WHERE tenant_id = ?")
+                        .param(tenantId)
+                        .query(String.class)
+                        .single())
                 .isEqualTo("emailed true");
         JsonNode card = card(s.t(), owner, PERM).getBody();
         assertThat(card.get("weekly_email").asBoolean()).isTrue();
@@ -542,6 +558,28 @@ class DataExportIT extends LendingBookSupport {
                         "SELECT count(*) FROM data_export_weekly WHERE tenant_id = ? AND week_of = DATE '2026-10-12'",
                         tenantId))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void aWeekWhoseEmailTheOutboxGaveUpEndsAsFailedAndIsNotShownAsEmailed() throws Exception {
+        Shop s = shop("DXF");
+        UUID owner = owner(s.t());
+        weekly.tick();
+        drain();
+        weekly.tick();
+        TestDatabase.owner()
+                .sql("UPDATE notification_outbox SET status = 'failed', failed_at = now() WHERE recipient = ?")
+                .param(ownerEmail(s.t()))
+                .update();
+        weekly.tick();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status || ' ' || reason FROM data_export_weekly WHERE tenant_id = ?")
+                        .param(s.t().tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("failed email_failed");
+        assertThat(card(s.t(), owner, PERM).getBody().get("last_emailed_at").isNull())
+                .isTrue();
     }
 
     @Test
