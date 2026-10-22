@@ -14,6 +14,7 @@ import { usePersistedDraft } from './idempotency';
 import { qtyString, showQty } from './maths';
 import { showDate } from './transfers';
 import { Gate, Problem, money } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The supplier credit note form (the purchasing capability, issue #199). Choose the supplier invoice the credit note is against, say
 // whether goods are sent back or a price is adjusted, and type, line by line, how many are sent back (or how much is taken off), then
@@ -137,7 +138,8 @@ export function CreditFormView({ form, bill, loadingLines, busy, error, onChange
       <input id="credit-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && form.billId !== '' && used.length > 0 && <p role="alert" className="rt-flag" data-testid="credit-problem">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="credit-save">{busy ? 'Saving' : 'Save credit note'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="credit-save">Save credit note</BusyButton>
+
     </form>
   );
 }

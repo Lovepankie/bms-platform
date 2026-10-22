@@ -402,6 +402,13 @@ class OutboxTemplates {
                     new Template(
                             "Your order was delivered",
                             "An order you took at {branch_name} was delivered and is now a sale.")),
+            // A loan the nightly arrears run could not update two nights running (#270 review): a safeguard, no switch.
+            Map.entry(
+                    "lending.arrears_loan_failing",
+                    new Template(
+                            "A loan was not updated overnight",
+                            "Loan {loan_no} failed the nightly arrears run two nights in a row. Its arrears may be out of"
+                                    + " date: tell support.")),
             Map.entry(
                     "retail.low_stock",
                     new Template("Stock is running low", "{item_name} at {branch_name} is {reason}. Restock it soon.")),
@@ -518,6 +525,38 @@ class OutboxTemplates {
                             null,
                             "{tenant_name}: Investment {account_no} of {currency} {amount} matures on {maturity_date}."
                                     + " Please contact us about your instruction.")),
+            // The reminders and arrears notices of FR-NTF-02 (issue #227), queued by the nightly arrears run, in the
+            // wording of chapter 11 section 11.3.1: the business, the loan number, the amount and the due date or the
+            // days overdue, never the member's name or anyone else, and never a threat (the chapter's "to avoid
+            // penalties" is left out for that reason). The first notice says "overdue" without a count, so it never
+            // reads "1 days".
+            Map.entry(
+                    "loan.due_in_3_days",
+                    new Template(
+                            null,
+                            "{tenant_name}: Reminder, {currency} {amount} for loan {loan_no} is due on {due_date}.")),
+            Map.entry(
+                    "loan.due_today",
+                    new Template(
+                            null, "{tenant_name}: {currency} {amount} for loan {loan_no} is due today, {due_date}.")),
+            Map.entry(
+                    "loan.overdue_1",
+                    new Template(
+                            null,
+                            "{tenant_name}: Loan {loan_no} is overdue. Amount in arrears {currency} {arrears}. Please pay or"
+                                    + " contact us.")),
+            Map.entry(
+                    "loan.overdue_7",
+                    new Template(
+                            null,
+                            "{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}."
+                                    + " Please pay or contact us.")),
+            Map.entry(
+                    "loan.overdue_30",
+                    new Template(
+                            null,
+                            "{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}."
+                                    + " Please pay or contact us.")),
             Map.entry(
                     "investment.paid_out",
                     new Template(

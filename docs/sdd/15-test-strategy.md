@@ -360,10 +360,76 @@ breaking, and answers 503 when no render slot is free. A statement read is one R
 snapshot (`LoanDocumentsIsolationIT`, with a READ COMMITTED control), a five hundred line statement
 renders in a child JVM with a 224 MB heap (`StatementMemoryTest`), document responses are
 `no-store`, another branch and another tenant get 404 (403 on the core document route across
-branches), and `PenaltyDatingGuardTest` stops penalties shipping without dated charges.
+branches), and `PenaltyDatingGuardTest` keeps the documents on dated penalty charges.
+
+Arrears (#264). `PenaltiesTest` covers R-PEN without a database: the grace days, each period unit,
+flat and percent charges, the cap and the periods already charged. `LoanServicingIT` runs the
+nightly job on a loan five days overdue: five penalty charges, DPD 5, the `1_30` bucket, the
+arrears, nothing more on a rerun, a repayment that pays the penalty first and posts it to penalty
+income, a statement with one penalty line per day that reconciles, and a charge that the owner
+cannot delete or change. `LoanLedgerTest` places penalties on their own dates and keeps a later
+penalty out of an earlier receipt. After the review of #270: `PenaltiesTest` also checks that nothing is
+charged before the first run and that a percent rounding to nothing charges nothing; `ServicingTest`
+that a payment never pays a penalty charged after its value date; `LoanLedgerTest` that a cancelled
+penalty is credited on its own day and kept on an earlier receipt; and `LoanServicingIT` a back-dated
+repayment that pays an item up and cancels the five later penalties, a first run that charges only
+its own day, and a run held by another worker's lease, taken over when the lease lapses and not run
+again once finished. The second review added: `PenaltiesTest` recomputes the 100,000
+instalment at 5% a week after a back-dated 80,000 (week 1 stands at 1,000, 4,000 cancelled);
+`LoanServicingIT` charges the cancelled penalties again when the back-dated payment is reversed, and
+when reversing payment A means payment B no longer pays the instalment up; catches up a missed run
+around a payment posted in between; stamps a repayment racing the run after the charge it pays; checks
+that a rerun moves no version or time; and runs the job for its own business only; `ArrearsRunIT`
+refuses a stale attempt at finish and runs a business in another time zone for its own date. The delta review added: a reversal that sets the penalties before
+it re-allocates the surviving payment (penalty first), the charges again and cancels printed on the
+day they were recorded, a back-dated partial payment through the reconcile with percent penalties and
+the cap freed by the cancelled amount, an imported loan not back-charged, and the push sent for a loan
+failing two nights running, none for a loan that did not fail on the previous finished run, and the
+push still sent when a night with no run lies between the two failing runs; the time-zone case runs on a
+pinned clock.
+
+Waivers (#265). `ServicingTest` replays a schedule with a standing waiver and a rebate: the waiver
+stays, the rebate is recomputed. `LoanLedgerTest` credits a waiver on its date between the two
+payments of that day by when it was recorded, and counts it only for the later receipt.
+`LoanServicingIT` waives part of a penalty through maker and checker (the maker cannot approve,
+nothing changes before the checker, nothing is posted, the statement shows it and reconciles),
+refuses more than is left, waives the rest without an amount, closes the loan on payoff, and
+reverses a payment made after two waivers without undoing them. After the review of #271 it also checks that the maker's
+own decision is refused as `self_approval_forbidden`, that waivers split under the threshold reach a
+checker once their total passes it, and that a waiver is refused on a written-off loan and not found
+from another branch. The second review added: a partly waived penalty still cancelled by a
+back-dated repayment (3,500 of 4,000), a waiver of a later penalty that never blocks paying an earlier
+one, the checker seeing the waiver's own amount, and the loan's officer refused as a decider.
+from another branch.
+
+Collections (#266). `PromisesTest` covers kept, open and broken without a database.
+`LoanServicingIT` reassigns two loans at once (audited, all or none against an unknown loan,
+refusing a cashier, an officer of another branch, an unknown user and a caller without the
+permission), lists the items due today and over a range with its limit, lists arrears by bucket,
+logs actions with each refusal, and lets the nightly run keep one promise, break one and leave one
+open, with the action guard refusing a change of note. A pending approval stays current across the
+nightly run (`frArr01_theNightlyRunLeavesPendingApprovalsCurrent`). After the review of #272: a list capped at its limit says it
+was cut and keeps the bucket totals, a caller without members read sees masked phones, one payment
+keeps one promise only, and a reversal reopens a kept promise the next night. After the second
+review: the real cashier and auditor roles see masked phones and the loan officer whole ones, a loan
+officer sees only their own portfolio, a reassignment needs a reason and refuses a deactivated officer,
+the Owner moves loans of two branches in one call, and a payment recorded before a promise never keeps
+it while one entered after and dated back into its window does.
+keeps one promise only, and a reversal reopens a kept promise the next night.
+
+Reminders and arrears notices (#227). `LoanRemindersTest` covers the selection without a database: from three days before a
+due date, on it, never for a paid instalment, the arrears steps by DPD on the oldest unpaid instalment. `LoanEventSmsIT` runs
+the nightly job with a fixed clock: a reminder queued at 21:00 Kampala waits for 08:00, a rerun queues nothing, the arrears
+notices step from 1 to 7 days once each, a tenant without SMS gets none. `SmsEventsIT` sends each of the five through the real
+channel with its exact default text in one segment; `SmsTemplateLanguageTest` and `SmsTemplatesIT` list them with their
+placeholders.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
-of the quality bar before a template change is merged.
+of the quality bar before a template change is merged. After the review of #290: `LoanRemindersTest` checks that a step goes
+only on its night or the next and that a loan 400 days late gets nothing; `LoanEventSmsIT` runs at the job's real time
+(just after midnight), withdraws an overdue notice when the member pays at 07:30, expires a due-today text with its day,
+sends no backlog on the first run and texts each loan once when a crashed run is resumed; `SmsEventsIT` refuses an
+arrears notice to an opted-out member (`blocked_optout`).
 
 Updating a golden file is allowed only in a pull request that explains why the expected
 output changed.

@@ -11,6 +11,7 @@ import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } 
 import { milliOf } from './maths';
 import { TRANSFER, TRANSFER_RECEIPT, capabilityOn, holdsAt, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -122,9 +123,10 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       {problem && draft.lines.length > 0 && <p>{problem}</p>}
       <Problem error={save.error} />
       <span data-tour="transfer-save">
-        <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
-          {save.isPending ? 'Saving' : sends ? 'Send stock' : 'Move stock'}
-        </button>
+        <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null}>
+          {sends ? 'Send stock' : 'Move stock'}
+        </BusyButton>
+
       </span>
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>

@@ -70,7 +70,7 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
 const open = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 const qty = () => screen.getByLabelText(/Right quantity/) as HTMLInputElement;
 const reason = () => screen.getByLabelText('Why is it being corrected?') as HTMLSelectElement;
-const save = () => screen.getByRole('button', { name: /Save the right quantity|Saving/ }) as HTMLButtonElement;
+const save = () => screen.getByRole('button', { name: /Save the right quantity/ }) as HTMLButtonElement;
 
 describe('the Correct button on a stock row', () => {
   it('is offered on the list of one branch to someone who may correct there, and opens the choices', () => {
@@ -135,7 +135,13 @@ describe('the right quantity', () => {
     expect(correctStock.mock.calls[0]?.[0]).toEqual({ branch_id: branch, product_id: 'p1', new_qty: '6.000', expected_qty: '10.000', reason_code: 'entry_mistake', note: 'Typed ten, really six' });
     expect(typeof correctStock.mock.calls[0]?.[1]).toBe('string');
     finish({ id: 'c1', old_qty: '10.000', new_qty: '6.000', reason_code: 'entry_mistake' });
-    const done = await screen.findByRole('status');
+    const done = await waitFor(() => {
+      const shown = screen.getAllByRole('status').find((s) => (s.textContent ?? '').includes('is now'));
+      expect(shown).toBeDefined();
+      return shown as HTMLElement;
+    });
+
+
     expect(done.textContent).toContain('Cable 2.5mm is now 6 roll (it was 10)');
     expect(done.textContent).toContain('does not count as shrinkage');
   });
@@ -221,7 +227,8 @@ describe('a 409 after the list already moved', () => {
     fireEvent.change(reason(), { target: { value: 'miscount' } });
     view.rerender(tree('8.000'));
     await waitFor(() => expect(qty().value).toBe('8'));
-    expect(screen.getByRole('status').textContent).toContain('changed to 8');
+    expect(screen.getAllByRole('status').some((s) => (s.textContent ?? '').includes('changed to 8'))).toBe(true);
+
     fireEvent.change(reason(), { target: { value: 'miscount' } });
     fireEvent.change(qty(), { target: { value: '5' } });
     fireEvent.click(save());
@@ -257,7 +264,7 @@ describe('the category', () => {
     open('The category is wrong');
     const select = (await screen.findByLabelText('The right category')) as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.text)).toEqual(['Cables', 'Fittings']);
-    const move = () => screen.getByRole('button', { name: /Move to this category|Saving/ }) as HTMLButtonElement;
+    const move = () => screen.getByRole('button', { name: /Move to this category/ }) as HTMLButtonElement;
     expect(move().disabled).toBe(true);
     fireEvent.change(select, { target: { value: 'c2' } });
     fireEvent.click(move());

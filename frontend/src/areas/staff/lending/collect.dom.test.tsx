@@ -13,7 +13,7 @@ import { StaffContext } from '../context';
 // repayment and shows the receipt number, and says plainly where an unallocated payment is. All names, numbers and links are invented.
 
 const pay = { startLoanRepayment: vi.fn(), intent: vi.fn(), cancelIntent: vi.fn() };
-const lend = { listTransactions: vi.fn() };
+const lend = { listTransactions: vi.fn(), repay: vi.fn() };
 
 vi.mock('../../../api/payments', async (original) => {
   const real = await original<typeof import('../../../api/payments')>();
@@ -22,11 +22,12 @@ vi.mock('../../../api/payments', async (original) => {
 });
 vi.mock('../../../api/lending', async (original) => {
   const real = await original<typeof import('../../../api/lending')>();
-  return { ...real, lending: new Proxy({}, { get: (_t, name: string) => (name === 'listTransactions' ? lend.listTransactions : (real.lending as never)[name]) }) };
+  return { ...real, lending: new Proxy({}, { get: (_t, name: string) => (name in lend ? lend[name as keyof typeof lend] : (real.lending as never)[name]) }) };
 });
 
 const { PaymentsError } = await import('../../../api/payments');
 const { CollectPanel } = await import('./collect');
+const { RepaymentForm } = await import('./actions');
 
 const loan: Loan = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -66,6 +67,7 @@ afterEach(() => {
   cleanup();
   Object.values(pay).forEach((m) => m.mockReset());
   lend.listTransactions.mockReset();
+  lend.repay.mockReset();
 });
 
 describe('starting a collection', () => {
@@ -130,5 +132,33 @@ describe('following the payment', () => {
     fireEvent.change(screen.getByLabelText("Payer's mobile number"), { target: { value: '0700000216' } });
     fireEvent.click(screen.getByRole('button', { name: 'Make the payment link' }));
     expect(await screen.findByText(/unallocated receipt/)).toBeTruthy();
+  });
+});
+
+describe('recording a repayment by hand', () => {
+  it('shows the record button working while the request runs and sends a double click once', async () => {
+    let answer: (r: unknown) => void = () => undefined;
+    lend.repay.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    render(
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: { ...mockMe('admin'), permissions: ['lending.loans.read', 'lending.loans.repay'] }, branch: null }}>
+          <RepaymentForm loan={loan} onDone={() => undefined} />
+        </StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: '52000' } });
+    const button = screen.getByRole('button', { name: 'Record repayment' }) as HTMLButtonElement;
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.textContent).toBe('Record repayment');
+    expect(button.querySelector('.busy-spinner')).not.toBeNull();
+    fireEvent.click(button);
+    expect(lend.repay).toHaveBeenCalledTimes(1);
+    answer({ transaction: { receipt_no: 'RC-HQ-000043', amount_minor: 5_200_000 }, loan_status: 'active' });
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBeNull());
+    expect(lend.repay).toHaveBeenCalledTimes(1);
   });
 });

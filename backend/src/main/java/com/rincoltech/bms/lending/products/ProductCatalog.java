@@ -28,6 +28,18 @@ public interface ProductCatalog {
     /** One fee for one principal; {@code timing} is {@code deducted_at_disbursement}, {@code added_to_loan} or {@code paid_upfront}. */
     record FeeCharge(String name, String timing, long amountMinor) {}
 
+    /**
+     * R-PEN, chapter 3 section 3.4: the version's penalty rule. {@code method} is {@code none},
+     * {@code flat_per_period} or {@code percent_of_overdue_per_period}; the amount fields are null
+     * when the method does not use them, and {@code capBp} is null for no cap.
+     */
+    record PenaltyRule(String method, int graceDays, String periodUnit, Long flatMinor, Integer rateBp, Integer capBp) {
+
+        public boolean charges() {
+            return !"none".equals(method);
+        }
+    }
+
     record ProductTerms(
             UUID productId,
             String productCode,
@@ -44,7 +56,8 @@ public interface ProductCatalog {
             Integer minCollateralCoverBp,
             boolean requiresGuarantor,
             List<String> allocationOrder,
-            boolean flatEarlySettlementRebate) {
+            boolean flatEarlySettlementRebate,
+            PenaltyRule penalty) {
 
         public ProductTerms {
             allocationOrder = List.copyOf(allocationOrder);

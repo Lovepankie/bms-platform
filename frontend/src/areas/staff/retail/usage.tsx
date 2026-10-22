@@ -9,6 +9,7 @@ import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString, showQty } from './maths';
 import { BranchRequired, CategoryLabel, Gate, Problem, useStockingBranch } from './ui';
 import { canUse, needsOf } from './permissions';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -96,7 +97,8 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
         </div>
       ))}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" data-tour="usage-save" disabled={!valid || save.isPending}>{save.isPending ? 'Saving' : 'Save'}</button>
+      <BusyButton type="submit" className="rt-primary" data-tour="usage-save" busy={save.isPending} disabled={!valid}>Save</BusyButton>
+
       {(lines.length > 0 || reason !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}

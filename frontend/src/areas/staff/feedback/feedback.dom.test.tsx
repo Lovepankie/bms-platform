@@ -71,6 +71,27 @@ describe('the feedback form', () => {
     expect(screen.getByText('Your message is 2001 characters. Keep it to 2000.')).toBeTruthy();
   });
 
+  // JUSTIFICATION-A3: the busy-button test case issue #456 asks for.
+  it('shows the send button as busy while sending, and a double click sends once', async () => {
+    let finish: (item: FeedbackItem) => void = () => undefined;
+    const send = vi.fn((_: FeedbackSend) => new Promise<FeedbackItem>((resolve) => { finish = resolve; }));
+    show(<FeedbackForm send={send} from={() => null} />);
+    fireEvent.click(screen.getByLabelText(/An idea/));
+    fireEvent.change(message(), { target: { value: 'Test idea' } });
+    const button = sendButton();
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+    const busy = button;
+    expect(busy.getAttribute('aria-disabled')).toBe('true');
+    expect(busy.querySelector('.busy-spinner')).not.toBeNull();
+    fireEvent.click(busy);
+    expect(send).toHaveBeenCalledTimes(1);
+    finish(SENT);
+    await screen.findByText(/Thank you. Your feedback was sent to the BMS team./);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it('shows the server refusal as it is, and keeps what was typed', async () => {
     const send = vi.fn(() =>
       Promise.reject(new FeedbackError('You have sent 10 messages in the last hour. Please wait a little and send this one later.', 429, 'feedback_rate_limited')),

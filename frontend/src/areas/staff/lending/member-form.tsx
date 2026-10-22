@@ -262,7 +262,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
         </Group>
       )}
       <Problem error={failure ? new Error(failure) : null} />
-      <SaveBar label={editing ? 'Save changes' : 'Save member'} busyLabel="Saving" busy={busy} blocked={blocked}
+      <SaveBar label={editing ? 'Save changes' : 'Save member'} busy={busy} blocked={blocked}
         cancel={<Link to={editing ? '/staff/lending/members/$memberId' : '/staff/lending/members'} params={editing ? { memberId: member?.id ?? '' } : undefined as never} className="btn btn-ghost">Cancel</Link>}
         tourId="member-save" />
     </form>

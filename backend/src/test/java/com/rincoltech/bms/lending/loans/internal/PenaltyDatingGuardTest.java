@@ -7,26 +7,28 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * A tripwire for ADR-034. The statement and the "loan after this payment" of a receipt place the
- * schedule's penalties at the start of the loan, which is right only while nothing writes
- * {@code penalties_due_minor}: it is zero on every item today. Penalties (increment 6) accrue later,
- * and then a receipt first opened after one accrued would include it, and the statement would show it
- * charged at disbursement.
+ * A tripwire for ADR-034. The statement and the "loan after this payment" of a receipt place each
+ * penalty by its dated charge row ({@code lending_loan_charges}, R-PEN), never by the item's running
+ * {@code penalties_due_minor}, which has no date: read from there, a receipt first opened after a
+ * penalty accrued would include it, and the statement would show it charged at disbursement.
  *
- * <p>This test fails the moment any code outside {@link ServicingRepository}'s two reads touches the
- * column, so increment 6 cannot ship without a decision: record each penalty charge with its date (a
- * transaction or ledger row), and have {@code LoanLedger} take penalties from those dated charges.
- * When that is done, delete this test and the ADR note.
+ * <p>This test fails when {@link LoanLedger} reads the item's penalties, or when anything other than
+ * the nightly arrears run ({@link ArrearsRun}, which writes the dated charge next to it) and the cancel
+ * of a charge a back-dated repayment made wrong ({@link ServicingRepository}, which stamps the charge's
+ * cancel date next to it) writes the column. Reads elsewhere (the schedule, the due list) are fine. Whoever adds a new writer records
+ * the penalty with its date too and updates this guard.
  */
 class PenaltyDatingGuardTest {
 
     @Test
-    void nothingWritesPenaltiesDueUntilPenaltyChargesAreDated() throws IOException {
-        List<String> found = new ArrayList<>();
+    void penaltiesReachTheDocumentsOnlyThroughDatedCharges() throws IOException {
+        List<String> writes = new ArrayList<>();
+        Pattern write = Pattern.compile("penalties_due_minor\\s*=(?!=)");
         try (Stream<Path> files = Files.walk(Path.of("src/main"))) {
             for (Path p : files.filter(Files::isRegularFile)
                     .filter(f -> f.toString().endsWith(".java") || f.toString().endsWith(".sql"))
@@ -36,20 +38,29 @@ class PenaltyDatingGuardTest {
                 }
                 List<String> lines = Files.readAllLines(p);
                 for (int i = 0; i < lines.size(); i++) {
-                    if (lines.get(i).contains("penalties_due_minor")) {
-                        found.add(p.getFileName() + ":" + (i + 1) + ": "
+                    if (write.matcher(lines.get(i)).find()) {
+                        writes.add(p.getFileName() + ":" + (i + 1) + ": "
                                 + lines.get(i).strip());
                     }
                 }
             }
         }
-        assertThat(found)
+        assertThat(writes)
                 .as("""
-                        penalties_due_minor is used somewhere new. Penalties must be recorded with the date they
-                        were charged before LoanLedger (statement lines and the receipt's loan after this payment)
-                        can place them in time; see ADR-034, then update this guard.""")
+                        penalties_due_minor is written somewhere new. A penalty must be recorded with the date it
+                        was charged so LoanLedger (statement lines and the receipt's loan after this payment)
+                        can place it in time; see ADR-034, then update this guard.""")
                 .hasSize(2)
-                .allSatisfy(l ->
-                        assertThat(l).startsWith("ServicingRepository.java:").contains("rs.getLong("));
+                .allSatisfy(l -> assertThat(l)
+                        .satisfiesAnyOf(
+                                r -> assertThat(r)
+                                        .startsWith("ArrearsRun.java:")
+                                        .contains("penalties_due_minor = penalties_due_minor + ?"),
+                                r -> assertThat(r)
+                                        .startsWith("ServicingRepository.java:")
+                                        .contains("penalties_due_minor = penalties_due_minor + ?")));
+        assertThat(Files.readString(Path.of("src/main/java/com/rincoltech/bms/lending/loans/internal/LoanLedger.java")))
+                .as("LoanLedger takes penalties from the dated charges, not from the schedule items")
+                .doesNotContain("penaltiesDueMinor");
     }
 }

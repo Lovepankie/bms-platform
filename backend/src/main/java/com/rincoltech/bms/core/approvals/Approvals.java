@@ -15,7 +15,9 @@ public interface Approvals {
 
     /**
      * @param subjectVersion the subject's {@code version} now, checked again on approval
-     * @param amountMinor the amount the threshold and the queue show, or {@code null}
+     * @param amountMinor the amount the queue and the checker see, or {@code null}
+     * @param thresholdMinor the amount weighed against the tenant's threshold: the same as {@code amountMinor} unless
+     *     the action weighs a running total (a waiver weighs everything waived on the loan with it)
      * @param payload the snapshot executed on approval (FR-APR-08); JSON-compatible values only
      */
     record ActionRequest(
@@ -24,8 +26,21 @@ public interface Approvals {
             UUID subjectId,
             Integer subjectVersion,
             Long amountMinor,
+            Long thresholdMinor,
             String currency,
-            Map<String, Object> payload) {}
+            Map<String, Object> payload) {
+
+        public ActionRequest(
+                String actionType,
+                UUID branchId,
+                UUID subjectId,
+                Integer subjectVersion,
+                Long amountMinor,
+                String currency,
+                Map<String, Object> payload) {
+            this(actionType, branchId, subjectId, subjectVersion, amountMinor, amountMinor, currency, payload);
+        }
+    }
 
     /** @param approvalId the pending request, or {@code null} when the action executed at once */
     record Outcome(boolean executed, UUID approvalId) {}

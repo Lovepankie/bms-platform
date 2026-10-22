@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type Banking, type BankingDay, type BankingExpected } from '../../../api/retail';
 import { useStaff } from '../context';
 import { alreadyBankedLabel, bankingPrefill } from './banking-state';
@@ -64,9 +65,9 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
       <label htmlFor="banking-reference">Bank reference (optional)</label>
       <input id="banking-reference" maxLength={100} value={draft.reference} onChange={(e) => setDraft((d) => ({ ...d, reference: e.target.value }))} />
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={blocked}>
-        {save.isPending ? 'Saving' : 'Save banking'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+        Save banking
+      </BusyButton>
     </form>
   );
 }

@@ -6,6 +6,7 @@ import { branchLabel } from '../../../auth/branch';
 import { MIN_REASON, reasonOf, reversalKeys } from './account-state';
 import { newIdempotencyKey } from './idempotency';
 import { Problem } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Small pieces the purchasing screens share (ADR-033, issue #198): a cursor-paged list, the "why" panel every void, cancel and
 // reversal asks for, and the supplier and branch fields. They hold no purchasing rules; those are in purchasing-state.ts and
@@ -78,7 +79,8 @@ export function ReasonPanel({ openLabel, question, hint, confirmLabel, busy, err
       {hint && <p className="hint">{hint}</p>}
       <Problem error={error} />
       <p className="cluster">
-        <button type="submit" disabled={reasonOf(reason) === null || busy}>{confirmLabel}</button>
+        <BusyButton type="submit" busy={busy === true} disabled={reasonOf(reason) === null}>{confirmLabel}</BusyButton>
+
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Back</button>
       </p>
     </form>

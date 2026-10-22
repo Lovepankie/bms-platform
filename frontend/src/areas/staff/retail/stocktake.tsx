@@ -8,6 +8,7 @@ import { milliOf, parseCount, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
 import { needsOf } from './permissions';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -15,7 +16,7 @@ import { needsOf } from './permissions';
 /** The variance written at commit once committed, otherwise the draft's (counted less expected). */
 const variance = (l: StocktakeLine): string => l.committed_variance_qty ?? l.variance_qty ?? '0';
 
-export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake: Stocktake; onCommit?: () => void; committing?: boolean }) {
+export function StocktakeReview({ stocktake, onCommit, busy }: { stocktake: Stocktake; onCommit?: () => void; busy?: boolean }) {
   const changed = (stocktake.lines ?? []).filter((l) => milliOf(variance(l)) !== 0);
   return (
     <section aria-label="Stock-take review">
@@ -50,9 +51,9 @@ export function StocktakeReview({ stocktake, onCommit, committing }: { stocktake
         </table></div>
       )}
       {stocktake.status === 'draft' && onCommit && (
-        <button type="button" className="rt-primary" disabled={committing} onClick={onCommit}>
-          {committing ? 'Saving' : 'Commit the count'}
-        </button>
+        <BusyButton type="button" className="rt-primary" busy={busy === true} onClick={onCommit}>
+          Commit the count
+        </BusyButton>
       )}
     </section>
   );
@@ -92,7 +93,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   if (draft) {
     return (
       <>
-        <StocktakeReview stocktake={draft} onCommit={() => commit.mutate()} committing={commit.isPending} />
+        <StocktakeReview stocktake={draft} onCommit={() => commit.mutate()} busy={commit.isPending} />
         <Problem error={commit.error} />
         {draft.status === 'draft' && <button type="button" onClick={() => setDraft(null)}>Back to the count</button>}
         {draft.status === 'committed' && <button type="button" onClick={() => { setDraft(null); setCounts({}); }}>Start another count</button>}
@@ -124,9 +125,10 @@ function CountSheet({ branchId }: { branchId: string }) {
       })}
       {bad && <p role="alert" className="rt-flag">Some counts are not valid quantities.</p>}
       <Problem error={review.error} />
-      <button type="button" className="rt-primary" disabled={entered.length === 0 || bad || review.isPending} onClick={() => review.mutate()} data-tour="count-review">
-        {review.isPending ? 'Working out' : `Review variance (${entered.length} counted)`}
-      </button>
+      <BusyButton type="button" className="rt-primary" busy={review.isPending} disabled={entered.length === 0 || bad} onClick={() => review.mutate()} data-tour="count-review">
+        {`Review variance (${entered.length} counted)`}
+      </BusyButton>
+
     </>
   );
 }

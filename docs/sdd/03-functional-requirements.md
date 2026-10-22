@@ -415,6 +415,20 @@ delivery log, the opt-out and the cost record.
 | FR-NTF-24 | The system shall push the everyday notices of retail, each to its own people and never with a customer's name, a phone number or an amount: a new order from outside the shop to the staff of its shop (not the person who took it, not the administrators); an order out for delivery and delivered to the person who took it, unless they did it; an item low at a branch (FR-RET-63) to that branch's stock readers and the administrators, at most once per item, branch and day; credit sales due today or overdue since yesterday, each morning between 08:00 and 12:00, to the administrators once and to the supervisors of each shop; and the number of sales at each shop at the business's closing time to the administrators, or the next morning as yesterday's when the server was down at that time (issue #412, ADR-057). | `PushEverydayNoticesIT`: each publisher through its route or the job at chosen times; branch scope, role, the taker, the dedupe of low stock, the morning hour, the summary time and once a day. | MVP |
 | FR-NTF-25 | A tenant administrator shall switch each everyday notice off and on, and set the time of the daily summary (a quarter hour up to 23:30 on the business's clock, 20:00 unless changed), in the tenant settings group `notifications`, versioned and audited; the safeguard notices of ADR-050 have no switch (issue #412). | `PushEverydayNoticesIT`: the defaults, a bad time refused, `If-Match` required, a non-administrator refused, a switched-off notice queues nothing. | MVP |
 
+Built in extras B5 (#227): the reminders and arrears notices of FR-NTF-02, queued by the nightly arrears run of FR-ARR-01
+after each active loan's recompute, through `SmsEvents` (FR-NTF-22). `loan.due_in_3_days` from three days before an unpaid
+instalment's due date and `loan.due_today` on it (category `reminder`); `loan.overdue_1`, `loan.overdue_7` and
+`loan.overdue_30` once the loan's DPD reaches the step, on its oldest unpaid instalment with the loan's arrears and DPD
+(category `arrears`). The event reference is the schedule item, so the outbox key holds (schedule item, reminder type) and a
+rerun queues nothing new (FR-NTF-06). The window, the expiry at the end of the window day, the opt-out and the caps are the
+channel's (FR-NTF-04, FR-NTF-14, FR-NTF-17, FR-NTF-18). Texts in chapter 11 section 11.3.1. After the review of
+#290: an arrears step goes only on the night the loan reaches it (DPD 1, 7 or 30) or the night after, never as a backlog,
+so switching the run or SMS on texts nobody already far in arrears; a loan gets at most one arrears notice about another
+instalment in seven days (`lending_loan_notices`, migration V84; the steps of one instalment always go); a due reminder
+expires at the end of its due date and an arrears notice at the end of the day it was queued, so neither arrives late;
+`loan.due_today` names its date; and a repayment withdraws the not-yet-sent reminders of the instalments it reached, as
+closing or writing off a loan withdraws all of them.
+
 ## 3.12 Document generation (DOC)
 
 | ID | Requirement | Acceptance criteria | Phase |
@@ -651,10 +665,65 @@ SMS and PDF are deferred.
 
 | ID | Requirement | Acceptance criteria | Phase |
 |---|---|---|---|
-| FR-ARR-01 | A nightly job (00:30 tenant local time) shall, for every active loan: update item statuses, recompute DPD and arrears (R-DPD), assess penalties (R-PEN), and expire stale approvals (FR-ORG-08). | Rerunning for the same business date changes nothing. | MVP |
+| FR-ARR-01 | A nightly job (shortly after midnight, tenant local time) shall, for every active loan: update item statuses, recompute DPD and arrears (R-DPD), assess penalties (R-PEN), and expire stale approvals (FR-ORG-08). | Rerunning for the same business date changes nothing. | MVP |
 | FR-ARR-02 | The job shall record a daily snapshot per loan (business date, principal outstanding, arrears, DPD) for portfolio trend and PAR history reports. | One row per active loan per business date; a rerun upserts. | MVP |
 | FR-ARR-03 | The loan view shall show arrears amount, DPD, PAR bucket (chapter 14) and assessed penalties. | Tested with fixed clocks. | MVP |
 | FR-ARR-04 | A branch manager shall request a waiver of all or part of an assessed penalty (or, with accountant role, of fees or interest) with a reason; the waiver is maker-checker and is recorded on the item as `waived`. | Waived penalties are never posted to income. Waiving principal is not allowed (that is a write-off). | MVP |
+
+Built in increment 6 T1 (#264, migration V81): FR-ARR-01 and FR-ARR-03. The job ticks every
+quarter hour and runs each lending tenant once per business date, at the first tick after the
+tenant's own midnight (so the 00:30 of the table above is now "shortly after midnight, tenant local
+time"; the approval expiry stays its own job, FR-ORG-08). The run claims its date in
+`lending_arrears_runs` with a ten minute lease that it renews as it goes: a second worker leaves a
+held date alone, a crashed run is taken over when its lease lapses, and a finished date is never
+run again. Each loan is one short transaction under its row lock, so one loan that fails is logged
+and counted (`failed_loans` on the run and its audit row) and the others go on. For every active
+loan it charges the R-PEN periods due by the business date as `lending_loan_charges` rows (keyed by
+item and period, so two runs never charge a period twice), adds them to the items' penalties due,
+and recomputes item statuses, DPD and arrears, writing only what moved and keeping the loan's
+version (ADR-015 addendum of 2026-10-22); a rerun the same day writes nothing. Penalties start at
+the business's first arrears run: a period dated before it is never charged, so switching the run
+on does not charge a long overdue loan every period since its due date in one night; a missed
+night is caught up with each period on its own date; the percent base is the overdue principal and
+interest unpaid at the run, and an item no longer overdue is charged nothing, even for a missed
+period (the borrower's side of the doubt). A repayment reaches only the penalties charged on or
+before its value date (R-ALLOC with dated penalties, also on a reversal's replay). After every
+repayment and reversal each charged period is recomputed from the payments by value date: owed only
+when the item was overdue at the start of its date, a percent penalty on the principal and interest
+unpaid then, never more than first charged; a back-dated repayment cancels the excess (in whole or in
+part, never what was waived or paid, `lending_charge_cancels`), and a reversal that shows a cancelled
+amount was owed after all charges it again as a new row (`penalty_recharge`), set before the
+surviving repayments are re-allocated so a penalty-first order meets them, so a bounced payment
+loses no penalty and a paid-up loan is never penalised. Penalties start at the later of the business's
+first run and the loan's own start in the system, and a loan that fails the run two nights running
+(the business's last two finished runs, so a night with no run between them does not hide it) is
+pushed to its branch's managers and the administrators (`lending.arrears_loan_failing`). A
+repayment is stamped with the clock when it is recorded, under the loan's lock, so a receipt places
+the penalties it paid exactly. The loan's `balances` add `par_bucket` (`current`,
+`1_30`, `31_60`, `61_90`, `over_90`) and `penalties_assessed_minor` (cancelled amounts left out).
+The statement charges each penalty on its own business date and credits a cancel on the day it was
+made, and a receipt counts only the penalties recorded before its payment (ADR-034 addenda). The
+insights snapshot (FR-ARR-02, 00:45) computes each date's positions itself and does not wait for
+this run. FR-ARR-04 is T2 (#265).
+
+Built in increment 6 T2 (#265): FR-ARR-04 for penalties. A user with
+`lending.charges.waive_request` requests a waiver of all or part of one penalty charge with a
+reason (`charge_waiver`; the tenant threshold is weighed against everything already waived on the
+loan plus this request, so a waiver split into small requests still reaches a checker); the checker holds
+`lending.charges.waive_approve`. At most the charge's unwaived amount, and never more than the
+item's unpaid penalties, can be waived (`waiver_exceeds_charge`, `nothing_to_waive`). The approved
+waiver is a dated `lending_charge_waivers` row, taken off the item's penalties as `waived`, posted
+nowhere, shown on the statement on its date, kept by a reversal's replay (ADR-026), and closes the
+loan when nothing else is owed. Waivers of fees and of interest by the accountant are not built:
+the route of chapter 7 names a charge, and fees and interest on the schedule are not charges, so
+they need a route of their own (an open question on #265). The loan is locked before the charge is read; a
+charge cancelled by a back-dated repayment is not listed and cannot be waived; the charges list reads
+the loan's items once (migration V82). After the second review: a waiver is netted against its own
+charge (a waiver of a later penalty never hides an earlier one from a payment); a back-dated repayment
+cancels the unwaived rest of a partly waived charge; the approval request shows the waiver's own amount
+while the threshold weighs the loan's running total; the loan's own officer may not decide its waiver
+(`approver_conflict`); and one waiver at a time waits on a loan: a second request while one is pending
+is refused as `approval_already_pending` (409), the checker decides the first.
 
 ## 3.22 Closure, write-off and restructure (LCL)
 
@@ -799,6 +868,30 @@ expense credited 20,000, cash 1,020,000.
 | FR-CLN-04 | An officer shall log a collection action on a loan: `call`, `visit`, `sms`, `letter`, `promise_to_pay` (with promised date and amount), `other`, with a note. | Actions are append only and shown as a timeline on the loan. | MVP |
 | FR-CLN-05 | A promise to pay shall be marked `kept` when repayments between the promise and the promised date reach the promised amount, else `broken` the day after the promised date. | Nightly job tested. | MVP |
 | FR-CLN-06 | Officer performance shall be reported: portfolio, disbursements, collections due versus collected, PAR by officer. | Chapter 14. | MVP |
+
+Built in increment 6 T3 (#266): FR-CLN-01 to FR-CLN-05. A holder of `lending.collections.assign`
+moves one loan or up to 500 to an officer, all or none, audited per loan; the officer must be an
+active staff user who can create loans in each loan's branch (`officer_not_eligible`, checked
+through `core.identity`'s `StaffDirectory`), and a reassignment is not a new loan version, so a
+pending money approval stays current. Loans that are finished (closed, rejected, cancelled,
+restructured) keep their officer. Collection actions are logged on an active or written-off loan;
+every action but a promise needs a note, and a promise needs a date (today or later) and an amount.
+The due list, the arrears list (all four buckets, or one) and the promise list follow chapter 14
+section 14.4 in the caller's `lending.collections.read` scope, each at most `limit` lines (200 by
+default, 500 at most) with `truncated` when more matched (the arrears bucket totals still count every
+loan), and a member's phone is shown whole only to a caller holding `lending.members.contact` in the
+loan's branch (administrators, branch managers and loan officers), masked (`+256*****0001`) otherwise;
+without `lending.collections.all_officers` (the loan officer) every list covers only the caller's own
+portfolio (ADR-064, migration V83). The nightly arrears run settles promises
+last, in a transaction of its own: kept when repayments and recoveries not reversed, valued from the
+day the promise was made to its date and recorded after the promise was made, reach its amount;
+broken the day after its date otherwise; each payment counts toward one promise only (a loan's
+promises, due soonest first, take the payments in their own window); a promise is for a date at most
+60 days ahead (`promised_date_too_far`); a reassignment needs a reason of 5 to 300 characters, kept in
+the audit row, and every open promise and every promise due in the last 31 days is settled again
+each night from the payments that stand, so a back-dated payment can keep a broken promise and a
+reversal can break or reopen a kept one. A reassignment asks `StaffDirectory` once per branch.
+FR-CLN-06 is a report (extras D3, #222).
 
 ## 3.27 Member self-service (MSS)
 

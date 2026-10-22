@@ -63,7 +63,9 @@ class JdbcOutbox implements Outbox {
             // (ADR-036 decisions 5 and 14); the tenant is bound, as in every enqueue of an SMS.
             SmsWindow window = SmsWindow.of(settings.smsWindowStart(), settings.smsWindowEnd());
             notBefore = notBefore == null ? window.nextOpen(now) : notBefore;
-            expiresAt = expiresAt == null ? window.endOfDay(notBefore) : expiresAt;
+            // A message's own expiry (a "due today" text at the end of its due date) is kept when it comes first.
+            Instant windowEnd = window.endOfDay(notBefore);
+            expiresAt = expiresAt == null || expiresAt.isAfter(windowEnd) ? windowEnd : expiresAt;
         }
         Subject subject = message.subject();
         return Boolean.TRUE.equals(
@@ -84,6 +86,15 @@ class JdbcOutbox implements Outbox {
                                 notBefore == null ? null : Timestamp.from(notBefore))
                         .query(Boolean.class)
                         .single());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelUnclaimed(String eventRef, String reason) {
+        return jdbc.sql("SELECT notification_outbox_cancel_unclaimed(?, ?, ?)")
+                .params(eventRef, Timestamp.from(clock.now()), reason)
+                .query(Integer.class)
+                .single();
     }
 
     @Override

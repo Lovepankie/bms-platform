@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { FieldMessages } from '../../../api/lending-forms';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Accessible form pieces shared by the member and collateral forms (issue #280): a label above every
 // input, a hint and an error tied to the input with aria-describedby, aria-invalid on a refused input,
@@ -168,15 +169,15 @@ export function Group({ title, children, tourId }: { title: string; children: Re
  * The save bar: sticks to the bottom of the screen on a phone so the main action is always under the thumb, says in words
  * what is stopping it, and keeps Cancel next to it.
  */
-export function SaveBar({ label, busyLabel, busy, blocked, cancel, tourId }: { label: string; busyLabel: string; busy: boolean; blocked?: string; cancel: ReactNode; tourId?: string }) {
+export function SaveBar({ label, busy, blocked, cancel, tourId }: { label: string; busy: boolean; blocked?: string; cancel: ReactNode; tourId?: string }) {
   return (
     <div className="mf-savebar" data-tour={tourId}>
       {blocked && <p className="mf-savebar-note" role="status">{blocked}</p>}
       <div className="mf-savebar-row">
         {cancel}
-        <button type="submit" className="rt-primary" disabled={busy || !!blocked} aria-disabled={busy || !!blocked}>
-          {busy ? busyLabel : label}
-        </button>
+        <BusyButton busy={busy} type="submit" className="rt-primary" disabled={!!blocked} aria-disabled={busy || !!blocked}>
+          {label}
+        </BusyButton>
       </div>
     </div>
   );

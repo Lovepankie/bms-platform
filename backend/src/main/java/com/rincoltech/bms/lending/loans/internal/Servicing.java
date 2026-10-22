@@ -7,6 +7,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /**
@@ -37,7 +39,7 @@ final class Servicing {
         final long principalDue;
         final long interestDue;
         final long feesDue;
-        final long penaltiesDue;
+        long penaltiesDue;
         long principalPaid;
         long interestPaid;
         long feesPaid;
@@ -46,6 +48,14 @@ final class Servicing {
         long feesWaived;
         long penaltiesWaived;
         LocalDate paidOn;
+
+        /**
+         * The item's penalty charges (R-PEN) by the business date they were charged for, each net of what was
+         * cancelled and waived on it, summed per date, when they were loaded; null means undated (a fabricated item
+         * in a test). A payment only ever reaches the penalties charged on or before its value date (ADR-034, the
+         * review of #270).
+         */
+        NavigableMap<LocalDate, Long> penaltyCharges;
 
         Item(UUID id, int no, LocalDate dueDate, long principalDue, long interestDue, long feesDue, long penaltiesDue) {
             this.id = id;
@@ -57,9 +67,53 @@ final class Servicing {
             this.penaltiesDue = penaltiesDue;
         }
 
-        /** The same contracted amounts with nothing paid or waived: the starting point of a replay. */
+        /**
+         * The starting point of a replay: the same amounts due (penalty charges included) and the
+         * standing fee and penalty waivers (FR-ARR-04), with nothing paid. A reversal re-applies
+         * the repayments around a waiver and never undoes it (ADR-026). Waived interest is left
+         * out: today it is only the early settlement rebate, which the replay recomputes.
+         */
         Item fresh() {
-            return new Item(id, no, dueDate, principalDue, interestDue, feesDue, penaltiesDue);
+            Item i = new Item(id, no, dueDate, principalDue, interestDue, feesDue, penaltiesDue);
+            i.penaltyCharges = penaltyCharges == null ? null : new TreeMap<>(penaltyCharges);
+            i.feesWaived = feesWaived;
+            i.penaltiesWaived = penaltiesWaived;
+            return i;
+        }
+
+        /** Adds one dated penalty charge to the item's dated charges (the loader's step). */
+        void chargedOn(LocalDate date, long amountMinor) {
+            if (penaltyCharges == null) {
+                penaltyCharges = new TreeMap<>();
+            }
+            penaltyCharges.merge(date, amountMinor, Long::sum);
+        }
+
+        /**
+         * What a payment of value date {@code date} may pay on a component: as {@link #unpaid}, except that a
+         * penalty charged after that date is out of its reach, so a back-dated payment never pays a penalty
+         * that did not exist on its value date (the review of #270, finding 1). The dated charges are each net of
+         * what was cancelled and waived on that charge, so a waiver of a later penalty never blocks the payment of
+         * an earlier one (the review of #271).
+         */
+        long unpaidOn(String component, LocalDate date) {
+            if (!component.equals("penalty") || penaltyCharges == null) {
+                return unpaid(component);
+            }
+            long sum = 0;
+            for (long amount : penaltyCharges.headMap(date, true).values()) {
+                sum = Math.addExact(sum, amount);
+            }
+            return Math.max(0, Math.min(sum - penaltiesPaid, unpaid("penalty")));
+        }
+
+        /** A penalty charged ({@code delta} above 0) or cancelled (below 0) on {@code date}, on this item in memory. */
+        void penaltyAdjusted(LocalDate date, long delta) {
+            penaltiesDue += delta;
+            if (penaltyCharges != null) {
+                penaltyCharges.merge(date, delta, Long::sum);
+                penaltyCharges.remove(date, 0L);
+            }
         }
 
         long unpaid(String component) {
@@ -163,7 +217,7 @@ final class Servicing {
         for (Item i : byDueDate(items)) {
             principal += i.unpaid("principal");
             fees += i.unpaid("fee");
-            penalties += i.unpaid("penalty");
+            penalties += i.unpaidOn("penalty", valueDate);
             long unpaidInterest = i.unpaid("interest");
             boolean charged = !rebating || !i.dueDate.isAfter(valueDate) || !nextTaken;
             if (rebating && i.dueDate.isAfter(valueDate)) {
@@ -205,7 +259,7 @@ final class Servicing {
             for (Item i : byDueDate(items)) {
                 long rebated = quote.rebates().getOrDefault(i.id, 0L);
                 for (String component : order) {
-                    long amount = i.unpaid(component) - (component.equals("interest") ? rebated : 0);
+                    long amount = i.unpaidOn(component, valueDate) - (component.equals("interest") ? rebated : 0);
                     take(rows, i, component, amount, valueDate);
                 }
                 take(rows, i, REBATE, rebated, valueDate);
@@ -219,7 +273,7 @@ final class Servicing {
         long remaining = amountMinor;
         for (Item i : byDueDate(items)) {
             for (String component : order) {
-                long amount = Math.min(remaining, i.unpaid(component));
+                long amount = Math.min(remaining, i.unpaidOn(component, valueDate));
                 take(rows, i, component, amount, valueDate);
                 remaining -= amount;
             }

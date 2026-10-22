@@ -22,6 +22,7 @@ import com.rincoltech.bms.lending.loans.internal.Servicing.Replay;
 import com.rincoltech.bms.lending.loans.internal.ServicingRepository.Txn;
 import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ProductCatalog.FeeCharge;
+import com.rincoltech.bms.lending.products.ProductCatalog.PenaltyRule;
 import com.rincoltech.bms.lending.products.ProductCatalog.ProductTerms;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import java.time.LocalDate;
@@ -61,6 +62,7 @@ class LoanServicer implements LoanServicing {
     private final AuditLog audit;
     private final CollateralLookup collateral;
     private final LoanNotices notices;
+    private final PenaltyReconciler penalties;
 
     LoanServicer(
             LoanRepository loans,
@@ -73,7 +75,8 @@ class LoanServicer implements LoanServicing {
             BusinessClock clock,
             AuditLog audit,
             CollateralLookup collateral,
-            LoanNotices notices) {
+            LoanNotices notices,
+            PenaltyReconciler penalties) {
         this.loans = loans;
         this.repo = repo;
         this.products = products;
@@ -85,6 +88,7 @@ class LoanServicer implements LoanServicing {
         this.audit = audit;
         this.collateral = collateral;
         this.notices = notices;
+        this.penalties = penalties;
     }
 
     LocalDate today() {
@@ -415,6 +419,25 @@ class LoanServicer implements LoanServicing {
         }
         if (!recovery) {
             repo.insertAllocations(txnId, txnId, applied.allocations());
+            // The reminders of the instalments this payment paid up are withdrawn before they are sent; one still
+            // overdue
+            // after a small payment keeps its notice (#290 review).
+            java.util.Set<UUID> reached = applied.allocations().stream()
+                    .map(Allocation::itemId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            List<UUID> paidUp = new ArrayList<>();
+            for (Item i : items) {
+                if (i.unpaidContract() == 0 && reached.contains(i.id)) {
+                    paidUp.add(i.id);
+                }
+            }
+            notices.withdrawReminders(paidUp);
+            PenaltyReconciler.Moved moved =
+                    penalties.reconcile(loan.id(), terms(loan).penalty(), items, txnId, today);
+            if (moved.cancelledMinor() > 0) {
+                after.put("penalties_cancelled_minor", moved.cancelledMinor());
+            }
             repo.saveItems(items, today);
             credit += applied.excessMinor();
             after.put("payoff", applied.payoff());
@@ -461,6 +484,7 @@ class LoanServicer implements LoanServicing {
     /** As above; with the repayment that settled the loan, the borrower is thanked (SMS, issue #221). */
     private void close(Loan loan, LocalDate on, UUID by, UUID closingTxnId) {
         loans.move(loan.id(), "active", "closed", by, null, Map.of());
+        notices.withdrawReminders(repo.items(loan.id()).stream().map(i -> i.id).toList());
         repo.closedOn(loan.id(), on);
         audit.record(new AuditLog.Entry(
                 "lending.loan.closed",
@@ -590,11 +614,50 @@ class LoanServicer implements LoanServicing {
         return gone;
     }
 
+    /** At most this many replays settle where the surviving repayments go once the penalties are set right. */
+    static final int MAX_REPLAYS = 4;
+
+    /**
+     * The delta review of #270: a reversal can show that cancelled penalties were owed after all, and the surviving
+     * repayments must meet them as they are when allocated (a penalty-first order pays them first). So the replay is
+     * planned, the penalties it implies are set on a fresh copy of the items, and the replay is done again on that
+     * copy, until the planned penalties are the same as the pass before (a pass may raise one period and, under a
+     * cap, lower another). When they have not settled within {@link #MAX_REPLAYS} passes the reversal is refused
+     * (409 {@code reversal_not_settled}) before anything is written. The penalties are written afterwards, with the
+     * reversal.
+     */
+    private Replay replayWithPenaltiesSetFirst(Loan loan, Txn txn, List<Txn> survivors, LocalDate today) {
+        PenaltyRule rule = terms(loan).penalty();
+        Map<UUID, LocalDate> valueDates = new LinkedHashMap<>();
+        survivors.forEach(t -> valueDates.put(t.id(), t.valueDate()));
+        return PenaltyReconciler.settleReplay(
+                repo.items(loan.id()),
+                planned -> replayWithout(loan, txn, survivors, planned),
+                replay -> {
+                    List<Item> next = repo.items(loan.id());
+                    penalties.reconcile(
+                            loan.id(),
+                            rule,
+                            next,
+                            null,
+                            today,
+                            PenaltyReconciler.paidBy(replay, valueDates),
+                            false,
+                            true);
+                    return next;
+                },
+                MAX_REPLAYS);
+    }
+
     /** The schedule replayed without this repayment: what the loan would owe once it is reversed. */
     private Replay replayWithout(Loan loan, Txn txn, List<Txn> survivors) {
+        return replayWithout(loan, txn, survivors, repo.items(loan.id()));
+    }
+
+    private Replay replayWithout(Loan loan, Txn txn, List<Txn> survivors, List<Item> contracted) {
         ProductTerms product = terms(loan);
         return Servicing.replay(
-                repo.items(loan.id()),
+                contracted,
                 survivors.stream()
                         .map(t -> new Payment(t.id(), t.amountMinor(), t.valueDate()))
                         .toList(),
@@ -614,8 +677,12 @@ class LoanServicer implements LoanServicing {
         if (!txn.txnType().equals("repayment")) {
             return false;
         }
+        // The replay with its penalties set right, as the reversal will write it, so the checker sees a reopening
+        // (and collateral that cannot be restored) that only the charged-again penalties cause.
         return !Servicing.position(
-                        replayWithout(loan, txn, survivorsOf(loan, txn)).items(), today())
+                        replayWithPenaltiesSetFirst(loan, txn, survivorsOf(loan, txn), today())
+                                .items(),
+                        today())
                 .settled();
     }
 
@@ -646,7 +713,7 @@ class LoanServicer implements LoanServicing {
             entry = books.reverse(txn.journalEntryId(), today, txn.receiptNo(), key);
         } else {
             List<Txn> survivors = survivorsOf(loan, txn);
-            replay = replayWithout(loan, txn, survivors);
+            replay = replayWithPenaltiesSetFirst(loan, txn, survivors, today);
             Map<UUID, List<Allocation>> before = repo.allocationsByRepayment(loan.id());
             deltas.put(txn.id(), Servicing.difference(before.getOrDefault(txn.id(), List.of()), List.of()));
             boolean othersMoved = false;
@@ -697,6 +764,17 @@ class LoanServicer implements LoanServicing {
                 makerId,
                 null));
         deltas.forEach((appliesTo, rows) -> repo.insertAllocations(reversalId, appliesTo, rows));
+        PenaltyReconciler.Moved moved = replay == null
+                ? new PenaltyReconciler.Moved(0, 0)
+                : penalties.reconcile(
+                        loan.id(),
+                        terms(loan).penalty(),
+                        replay.items(),
+                        reversalId,
+                        today,
+                        repo.contractPaidByValueDate(loan.id()),
+                        true,
+                        false);
         long credit = repo.creditBalance(loan.id());
         if (replay != null) {
             credit = replay.allocations().values().stream()
@@ -716,6 +794,10 @@ class LoanServicer implements LoanServicing {
         after.put("amount_minor", txn.amountMinor());
         after.put("reason", reason);
         after.put("re_allocated_repayments", Math.max(0, deltas.size() - 1));
+        if (moved.rechargedMinor() > 0 || moved.cancelledMinor() > 0) {
+            after.put("penalties_charged_again_minor", moved.rechargedMinor());
+            after.put("penalties_cancelled_minor", moved.cancelledMinor());
+        }
         after.put("approval_request_id", approvalId);
         audit.record(
                 AuditLog.Entry.created("lending.loan.repayment_reversed", SUBJECT, loan.id(), loan.branchId(), after));
@@ -798,6 +880,7 @@ class LoanServicer implements LoanServicing {
                 makerId,
                 null));
         repo.writeOffItems(items);
+        notices.withdrawReminders(items.stream().map(i -> i.id).toList());
         repo.position(loan.id(), new Position(0, 0, 0, 0, 0, 0, null, true));
         repo.writtenOffOn(loan.id(), today);
         loans.move(loan.id(), "active", "written_off", checkerId != null ? checkerId : makerId, reason, Map.of());
@@ -813,6 +896,86 @@ class LoanServicer implements LoanServicing {
                 "lending.loan.written_off", SUBJECT, loan.id(), loan.branchId(), Map.of("status", "active"), after));
     }
 
+    // ---- Waiver (FR-ARR-04) ---------------------------------------------------------------
+
+    /**
+     * What may still be waived on a penalty charge: its amount less what is already waived on it,
+     * and never more than the item's unpaid penalties (a penalty paid is not waived). Refused on a
+     * loan that is not active or a charge that is not a penalty of this loan.
+     */
+    long waivable(Loan loan, ServicingRepository.Charge charge) {
+        return waivable(loan, charge, repo.items(loan.id()));
+    }
+
+    /**
+     * What a waiver may still take off {@code charge}, with the loan's items read once by the caller (the charges list
+     * reads them once for every charge, the review of #271). A cancelled charge is owed by no one: nothing to waive.
+     */
+    long waivable(Loan loan, ServicingRepository.Charge charge, List<Item> items) {
+        requireStatus(loan, Set.of("active"));
+        if (!charge.loanId().equals(loan.id())) {
+            throw ApiException.notFound();
+        }
+        if (!charge.chargeType().startsWith("penalty")) {
+            throw ApiException.rule("not_waivable", "Only a penalty can be waived on this route.");
+        }
+        long unpaid = items.stream()
+                .filter(i -> i.id.equals(charge.itemId()))
+                .findFirst()
+                .orElseThrow()
+                .unpaid("penalty");
+        // What stands of this charge: less what was waived on it and what a back-dated payment cancelled.
+        return Math.max(0, Math.min(charge.amountMinor() - charge.waivedMinor() - charge.cancelledMinor(), unpaid));
+    }
+
+    /** The checks of a waiver request, run again at execution: the amount, all that is waivable when null. */
+    long checkWaiver(Loan loan, ServicingRepository.Charge charge, Long amountMinor) {
+        long waivable = waivable(loan, charge);
+        if (waivable == 0) {
+            throw ApiException.rule("nothing_to_waive", "Nothing is left to waive on this charge.");
+        }
+        long amount = amountMinor == null ? waivable : amountMinor;
+        if (amount <= 0 || amount > waivable) {
+            throw ApiException.rule("waiver_exceeds_charge", "At most " + waivable + " can be waived on this charge.");
+        }
+        return amount;
+    }
+
+    /**
+     * FR-ARR-04: the approved waiver is recorded with its date and taken off the item's penalties;
+     * nothing is posted, because the penalty never was (ADR-004). A waiver that leaves nothing owing
+     * closes the loan.
+     */
+    void waive(UUID chargeId, long amountMinor, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+        // The loan is locked before the charge is read, so what is checked is what is waived (the review of #271).
+        UUID loanId =
+                repo.charge(chargeId).map(ServicingRepository.Charge::loanId).orElseThrow(ApiException::notFound);
+        Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
+        ServicingRepository.Charge charge = repo.charge(chargeId).orElseThrow(ApiException::notFound);
+        long amount = checkWaiver(loan, charge, amountMinor);
+        LocalDate today = today();
+        UUID waiverId = UUID.randomUUID();
+        repo.insertWaiver(waiverId, charge, amount, today, reason, approvalId, makerId, checkerId);
+        List<Item> items = repo.items(loan.id());
+        for (Item i : items) {
+            if (i.id.equals(charge.itemId())) {
+                // The dated charges were read after the waiver was recorded, so they are already net of it.
+                i.penaltiesWaived += amount;
+            }
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("waiver_id", waiverId);
+        after.put("charge_id", charge.id());
+        after.put("item_no", charge.itemNo());
+        after.put("amount_minor", amount);
+        after.put("reason", reason);
+        after.put("approval_request_id", approvalId);
+        audit.record(AuditLog.Entry.created("lending.loan.charge_waived", SUBJECT, loan.id(), loan.branchId(), after));
+        if (refresh(loan.id(), items, today).settled()) {
+            close(loan, today, checkerId != null ? checkerId : makerId);
+        }
+    }
+
     // ---- Payoff quote (FR-REP-06) ---------------------------------------------------------
 
     Quote quote(Loan loan, LocalDate valueDate) {
@@ -825,6 +988,17 @@ class LoanServicer implements LoanServicing {
     }
 
     // ---- Shared ---------------------------------------------------------------------------
+
+    /**
+     * FR-ARR-01: the nightly run's recompute of statuses, DPD and arrears for one loan. Nothing is paid overnight, so
+     * only an item whose status moved is written, and the loan only when its position moved: a rerun writes nothing.
+     */
+    Position refreshPosition(UUID loanId, List<Item> items, LocalDate today) {
+        repo.saveStatuses(items, today);
+        Position position = Servicing.position(items, today);
+        repo.positionIfChanged(loanId, position);
+        return position;
+    }
 
     /** Item statuses, balances, arrears and DPD as of {@code today} (R-DPD). */
     private Position refresh(UUID loanId, List<Item> items, LocalDate today) {

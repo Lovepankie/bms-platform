@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import { type KeyboardEvent, type ReactNode, type TouchEvent, createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import { BusyAnnouncer, BusyButton } from '../app/ui/BusyButton';
 import { useTour } from '../tour/host';
 import { icons } from './icons';
 
@@ -132,12 +133,23 @@ export function SideNav({ label, tour, links, tours = [], head }: { label: strin
   const root = useRef<HTMLDivElement>(null);
   const { target } = useTour();
   const anchors = [tour, ...links.map((l) => l.tour), ...tours].filter(Boolean);
-  // Unfolded while a tour step points into it, so the step can show the label it talks about.
-  const shownFolded = folded && !(target !== undefined && anchors.includes(target));
+  const forTour = target !== undefined && anchors.includes(target);
+  // A press during a tour step wins for that step. A step that points somewhere else, or the tour ending, forgets the press, so
+  // the next step, going back to this one, or the next run of the tour unfolds it again.
+  const [pressed, setPressed] = useState(false);
+  const [pressTarget, setPressTarget] = useState(target);
+  if (pressTarget !== target) {
+    setPressTarget(target);
+    setPressed(false);
+  }
+  // Unfolded while a tour step points into it, so the step can show the label it talks about, unless the person pressed.
+  const shownFolded = folded && (!forTour || pressed);
 
+  // From what the person sees: unfolded for a tour step, a press folds it, and the choice is kept.
   function toggle() {
-    keepFolded(!folded);
-    setChoice(!folded);
+    keepFolded(!shownFolded);
+    setChoice(!shownFolded);
+    if (forTour) setPressed(true);
   }
 
   // Narrowed to a phone while the focus is in the sidebar: it goes to the menu button that now holds the list. A layout effect, so
@@ -169,9 +181,10 @@ export function SideNav({ label, tour, links, tours = [], head }: { label: strin
 
 /**
  * The menu button and its drawer. `label` names the list of links, `tour` is its data-tour id, `tours` the ids inside the groups,
+ * `busy` holds Sign out while signing out runs.
  * `head` what is shown above the links (the shop in use, issue #461).
  */
-export function SideMenu({ label, tour, links, name, onSignOut, tours = [], head }: { label: string; tour?: string; links: MenuLink[]; name?: string; onSignOut: () => void; tours?: string[]; head?: ReactNode }) {
+export function SideMenu({ label, tour, links, name, onSignOut, busy = false, tours = [], head }: { label: string; tour?: string; links: MenuLink[]; name?: string; onSignOut: () => void; busy?: boolean; tours?: string[]; head?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const heading = useId();
   const button = useRef<HTMLButtonElement>(null);
@@ -261,11 +274,17 @@ export function SideMenu({ label, tour, links, name, onSignOut, tours = [], head
         ref={panel}
         className="side-menu-panel"
         role="dialog"
-        aria-modal="true"
+        aria-modal={open ? 'true' : undefined}
         aria-labelledby={heading}
         onKeyDown={onKeyDown}
         onClick={(event) => {
-          if (open && event.target instanceof Element && event.target.closest('a')) close();
+          const link = event.target instanceof Element ? event.target.closest('a') : null;
+          if (!open || !link) return;
+          // A link to another page opens it here, and it keeps its own scroll, not the old page's position. The same page, or a
+          // link opened elsewhere (Ctrl, Cmd, Shift or a middle click), leaves this page, so its position comes back.
+          const elsewhere = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0;
+          if (link.pathname !== pathname && !elsewhere) restoreScroll.current = false;
+          close();
         }}
         onTouchStart={(event) => {
           const touch = event.touches[0];
@@ -286,10 +305,13 @@ export function SideMenu({ label, tour, links, name, onSignOut, tours = [], head
             <span className="avatar">{icons.user}</span>
             <span className="staff-user-name">{name}</span>
           </span>
-          <button type="button" className="btn-ghost" onClick={onSignOut}>
+          <BusyButton type="button" className="btn-ghost" busy={busy} onClick={onSignOut}>
             {icons.signOut}
             <span>Sign out</span>
-          </button>
+          </BusyButton>
+          {/* The drawer the person opened is aria-modal, which hides the shell's announcer, so it carries its own while open and
+              the shell's steps aside, so there is one Working at a time. */}
+          {open && <BusyAnnouncer modal />}
         </div>
       </div>
     </div>

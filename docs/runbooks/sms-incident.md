@@ -30,7 +30,9 @@ listed?), and the failed rows with tenant, category, masked recipient and `last_
 | `blocked_optout` | The member opted out | Nothing; it is logged on purpose |
 | `tenant_sms_off` | The operator, or the tenant's own administrator, switched the tenant off after the row was queued | Nothing, or switch it on (a tenant's own switch is in its SMS settings; switching on drops the queued rows) |
 | `backlog_dropped` | Sending was switched on and this row was older than that moment | Nothing |
-| `expired` | A receipt older than an hour, or a reminder past its window day | Nothing; stale messages are not sent |
+| `expired` | A receipt older than an hour, a reminder past its window day, or a loan reminder or arrears notice past its own day (one held back by the daily cap is not sent the next day: "due today" would be wrong) | Nothing; stale messages are not sent |
+| `cancelled_reversed` | The entry the text was about was reversed before it went | Nothing; a correction is the cashier's word |
+| `cancelled_settled` | A loan reminder or arrears notice withdrawn before it went because the member paid the instalment up, or the loan was closed or written off | Nothing; the member no longer needs it |
 
 ## "SMS stopped for a tenant" checklist
 
@@ -42,7 +44,19 @@ A tenant says its members get no text. Read `GET /api/v1/platform/tenants/{tenan
    to switch SMS on after reading the notice.
 3. **A cap of 0**, theirs or yours, stops everything including receipts; a lowered cap reached holds reminders until tomorrow
    and receipts at twice the cap. The tenant's settings page shows both caps and the use today and this month.
-4. **The window** holds reminders and arrears notices outside it; receipts are not held by it.
+4. **The window** holds reminders and arrears notices outside it; receipts are not held by it. Reminders and arrears notices
+   are queued by the nightly arrears job (`lending.loan-arrears`, shortly after the tenant's midnight, #227), so they appear in the outbox
+   after midnight and wait for the window; the job's audit row (`lending.arrears.run`) counts `reminders_queued`.
+   A repayment withdraws the unsent reminders of the instalments it paid; closing or writing off a loan withdraws all.
+
+### Rolling the reminders out (#290)
+
+The first night after deploy, or after a business switches SMS on, sends only what is due that night: due reminders for
+instalments due within three days and arrears notices for loans that reached DPD 1, 7 or 30 that night or the night before.
+A loan already further in arrears gets nothing, so there is no backlog and no surprise cost. Before switching a business
+on: check its SMS window and daily cap, look at the next morning's outbox for that tenant (pending rows with category
+`reminder` or `arrears`) before 08:00, and if anything looks wrong turn the tenant's SMS switch off; pending rows are not
+sent while it is off and expire at the end of their day.
 5. **The sender id was withdrawn**: messages still go, from the shared sender.
 6. **The member or the number is on the opt-out list** (`blocked_optout`): the business administrator lifts it from the member's page or the opt-out list, giving a reason; do it only when the person asked.
 

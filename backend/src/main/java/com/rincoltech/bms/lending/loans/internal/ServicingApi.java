@@ -59,6 +59,31 @@ final class ServicingApi {
     @Schema(name = "LoanReasonRequest")
     record ReasonRequest(@NotBlank @Size(max = 500) String reason) {}
 
+    @Schema(name = "ChargeWaiverRequest", description = "FR-ARR-04: amount_minor left out waives all that is waivable")
+    record WaiverRequest(
+            @Positive Long amountMinor,
+            @NotBlank @Size(max = 500) String reason) {}
+
+    @Schema(name = "LoanCharge", description = "R-PEN: one charge on a schedule item, and what can still be waived")
+    record ChargeRow(
+            UUID id,
+            Integer itemNo,
+
+            @Schema(description = "penalty or fee") String chargeType,
+
+            @Schema(description = "The penalty period; null for a fee")
+            Integer periodNo,
+
+            LocalDate businessDate,
+            long amountMinor,
+            long waivedMinor,
+
+            @Schema(description = "What a waiver may still take: unwaived and not yet paid")
+            long waivableMinor) {}
+
+    @Schema(name = "LoanChargeList")
+    record ChargeList(List<ChargeRow> items) {}
+
     @Schema(
             name = "LoanActionOutcome",
             description = "executed: the action took effect now (below the tenant's threshold); otherwise it waits for"
@@ -84,7 +109,27 @@ final class ServicingApi {
             long totalPaidMinor,
 
             @Schema(description = "Overpayment held for the member (R-ALLOC step 4)")
-            long creditBalanceMinor) {}
+            long creditBalanceMinor,
+
+            @Schema(description = "FR-ARR-03, chapter 14: current, 1_30, 31_60, 61_90 or over_90")
+            String parBucket,
+
+            @Schema(description = "FR-ARR-03: penalties charged so far (R-PEN), paid or not")
+            long penaltiesAssessedMinor) {}
+
+    /** Chapter 14: the PAR bucket of a number of days past due. */
+    static String parBucket(int daysPastDue) {
+        if (daysPastDue <= 0) {
+            return "current";
+        }
+        if (daysPastDue <= 30) {
+            return "1_30";
+        }
+        if (daysPastDue <= 60) {
+            return "31_60";
+        }
+        return daysPastDue <= 90 ? "61_90" : "over_90";
+    }
 
     @Schema(name = "LoanScheduleRow")
     record ScheduleRow(

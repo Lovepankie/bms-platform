@@ -10,6 +10,7 @@ import { InvestmentsGate } from './investments';
 import { money, parseAmount } from './loan-state';
 import { useStaff } from '../context';
 import { MemberLink } from './member-ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The subscribe form (FR-INV-02): choose the member, the product, the amount and the term, see the
 // return schedule the server works out for them (R-INV-1 to R-INV-4), record the member's maturity
@@ -136,9 +137,9 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
         </dl>
       )}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary btn-block" data-tour="investment-open" disabled={amountMinor === null || !termOk || save.isPending}>
-        {save.isPending ? 'Opening' : 'Open the investment'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary btn-block" data-tour="investment-open" disabled={amountMinor === null || !termOk}>
+        Open the investment
+      </BusyButton>
       <p className="field-hint">It opens pending funding; record the money received on the next screen.</p>
     </form>
   );

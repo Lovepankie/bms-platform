@@ -262,6 +262,31 @@ class ServicingTest {
         assertThat(items.get(1).paidTotal()).isEqualTo(300_000);
     }
 
+    /**
+     * FR-ARR-04 with ADR-026: a replay starts from the penalties charged and the standing waivers,
+     * so reversing a payment brings back what it paid and never what was waived; the early
+     * settlement rebate is not a standing waiver and is recomputed.
+     */
+    @Test
+    void aReplayKeepsStandingWaiversButNotTheRebate() {
+        Item item = new Item(UUID.randomUUID(), 1, LocalDate.of(2026, 2, 15), 400_000, 120_000, 0, 10_000);
+        item.penaltiesWaived = 4_000;
+        item.interestWaived = 50_000;
+        UUID pay = UUID.randomUUID();
+        Applied paid = Servicing.apply(List.of(item), 6_000, LocalDate.of(2026, 2, 20), "flat", false, ORDER);
+        assertThat(paid.allocations()).containsExactly(new Allocation(item.id, "penalty", 6_000));
+
+        Replay none = Servicing.replay(List.of(item), List.of(), "flat", false, ORDER);
+        Item fresh = none.items().get(0);
+        assertThat(fresh.penaltiesWaived).isEqualTo(4_000);
+        assertThat(fresh.unpaid("penalty")).isEqualTo(6_000);
+        assertThat(fresh.interestWaived).isZero();
+
+        Replay again = Servicing.replay(
+                List.of(item), List.of(new Payment(pay, 6_000, LocalDate.of(2026, 2, 20))), "flat", false, ORDER);
+        assertThat(again.allocations().get(pay)).isEqualTo(paid.allocations());
+    }
+
     /** R-ROUND carried through: a schedule with a residue on the last item still sums to the minor unit. */
     @Test
     void residuesOnTheLastItemAreSettledToTheMinorUnit() {
@@ -277,5 +302,38 @@ class ServicingTest {
         Applied a = Servicing.apply(items, q.totalMinor(), LocalDate.of(2026, 1, 16), "flat", false, ORDER);
         assertThat(sum(a.allocations())).isEqualTo(1_300_001);
         assertThat(items).allMatch(Item::settled);
+    }
+
+    /**
+     * The review of #270, finding 1: a payment reaches only the penalties charged on or before its value date, so a
+     * back-dated payment pays the item's principal and interest, and the later penalties are left to be cancelled; a
+     * payment dated after them pays them first, as the allocation order says.
+     */
+    @Test
+    void aPaymentNeverPaysAPenaltyChargedAfterItsValueDate() {
+        LocalDate due = LocalDate.of(2026, 10, 1);
+        Servicing.Item back = datedItem(due);
+        Servicing.Applied a = Servicing.apply(java.util.List.of(back), 520_000, due, "flat", false, null);
+        assertThat(a.allocations()).noneMatch(r -> r.component().equals("penalty"));
+        assertThat(back.unpaidContract()).isZero();
+        assertThat(back.unpaidOn("penalty", due))
+                .as("none of the three existed on its value date")
+                .isZero();
+
+        Servicing.Item later = datedItem(due);
+        Servicing.Applied b = Servicing.apply(java.util.List.of(later), 6_000, due.plusDays(3), "flat", false, null);
+        assertThat(b.allocations()).singleElement().satisfies(r -> {
+            assertThat(r.component()).isEqualTo("penalty");
+            assertThat(r.amountMinor()).isEqualTo(6_000);
+        });
+        assertThat(later.unpaid("penalty")).isZero();
+    }
+
+    private static Servicing.Item datedItem(LocalDate due) {
+        Servicing.Item i = new Servicing.Item(java.util.UUID.randomUUID(), 1, due, 400_000, 120_000, 0, 6_000);
+        for (int d = 1; d <= 3; d++) {
+            i.chargedOn(due.plusDays(d), 2_000);
+        }
+        return i;
     }
 }

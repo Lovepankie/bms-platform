@@ -82,7 +82,10 @@ class SmsPureTest {
                 Map.entry("next_amount", "123,456,789"),
                 Map.entry("next_due_date", "15/11/2026"),
                 Map.entry("maturity_date", "15/10/2027"),
-                Map.entry("voucher_no", "VC-HQ-000001"));
+                Map.entry("voucher_no", "VC-HQ-000001"),
+                Map.entry("due_date", "15/11/2026"),
+                Map.entry("arrears", "123,456,789"),
+                Map.entry("dpd", "365"));
         // The templates that may take two segments: the ones that carry a balance.
         for (String key : OutboxTemplates.keys("sms")) {
             int segments = SmsSegments.count(

@@ -694,6 +694,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/collections/arrears": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loans in arrears by PAR bucket (FR-CLN-03) */
+        get: operations["getArrearsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collections/due-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every item of an active loan due in a range, today by default (FR-CLN-02) */
+        get: operations["getDueList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collections/promises": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Promises to pay by status, pending by default (FR-CLN-05) */
+        get: operations["listPromises"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/collections/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reassign many loans to one officer, all or none (FR-CLN-01) */
+        post: operations["reassignLoans"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/insights/brief": {
         parameters: {
             query?: never;
@@ -1331,6 +1399,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The loan's penalty charges with what each still allows a waiver to take (R-PEN) */
+        get: operations["listLoanCharges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/charges/{charge_id}/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a waiver of all or part of a penalty, with a reason (FR-ARR-04) */
+        post: operations["requestLoanChargeWaiver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/collateral": {
         parameters: {
             query?: never;
@@ -1342,6 +1444,24 @@ export interface paths {
         /** Set a draft's pledged collateral (FR-ORG-02) */
         put: operations["setLoanCollateral"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/collection-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A loan's collection actions, newest first (FR-CLN-04) */
+        get: operations["listCollectionActions"];
+        put?: never;
+        /** Log a call, visit, SMS, letter, promise to pay or other action (FR-CLN-04) */
+        post: operations["logCollectionAction"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1426,6 +1546,23 @@ export interface paths {
         get?: never;
         /** Set a draft's guarantors (FR-ORG-02) */
         put: operations["setLoanGuarantors"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/loans/{loan_id}/officer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Reassign a loan's responsible officer (FR-CLN-01) */
+        put: operations["setLoanOfficer"];
         post?: never;
         delete?: never;
         options?: never;
@@ -6781,6 +6918,55 @@ export interface components {
             items?: components["schemas"]["Approval"][];
             next_cursor?: string;
         };
+        ArrearsBucket: {
+            /** Format: int64 */
+            arrears_minor?: number;
+            items?: components["schemas"]["ArrearsListLine"][];
+            /** Format: int32 */
+            loans?: number;
+            par_bucket?: string;
+        };
+        /** @description FR-CLN-03, chapter 14 lending.arrears_list: loans with DPD above 0 by PAR bucket */
+        ArrearsList: {
+            buckets?: components["schemas"]["ArrearsBucket"][];
+            /** @description More loans matched than the limit; the bucket totals still count every loan */
+            truncated?: boolean;
+        };
+        ArrearsListLine: {
+            /** Format: int64 */
+            arrears_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int32 */
+            days_past_due?: number;
+            /** Format: date-time */
+            last_action_at?: string;
+            last_action_type?: string;
+            /** Format: date */
+            last_repayment_on?: string;
+            /** Format: uuid */
+            loan_id?: string;
+            loan_no?: string;
+            member_name?: string;
+            member_no?: string;
+            officer_name?: string;
+            /** Format: uuid */
+            officer_user_id?: string;
+            par_bucket?: string;
+            /** Format: int64 */
+            penalties_outstanding_minor?: number;
+            /** @description Masked (+256*****0001) unless the caller holds lending.members.contact in the loan's branch */
+            phone?: string;
+            /** Format: int64 */
+            principal_outstanding_minor?: number;
+            /** Format: int64 */
+            promised_amount_minor?: number;
+            /**
+             * Format: date
+             * @description The earliest pending promise to pay, if any
+             */
+            promised_date?: string;
+        };
         /** @description Identifiers in data are masked (FR-AUD-05) */
         AuditEvent: {
             action?: string;
@@ -6886,6 +7072,12 @@ export interface components {
             payments?: components["schemas"]["SubscriptionPayment"][];
             plan_price?: components["schemas"]["PlanPrice"];
             tenant?: components["schemas"]["PlatformTenant"];
+        };
+        /** @description FR-ARR-04: amount_minor left out waives all that is waivable */
+        ChargeWaiverRequest: {
+            /** Format: int64 */
+            amount_minor?: number;
+            reason: string;
         };
         /** @description The reason is required only when the branch still holds stock or has transfers on their way (422 branch_close_needs_reason says which). */
         CloseBranchRequest: {
@@ -7012,6 +7204,39 @@ export interface components {
              */
             valued_on: string;
             valuer_name?: string;
+        };
+        CollectionAction: {
+            action_type?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            loan_id?: string;
+            note?: string;
+            /** Format: date-time */
+            performed_at?: string;
+            /** Format: uuid */
+            performed_by?: string;
+            performed_by_name?: string;
+            /** @description pending, kept or broken; null unless a promise to pay */
+            promise_status?: string;
+            /** Format: int64 */
+            promised_amount_minor?: number;
+            /** Format: date */
+            promised_date?: string;
+        };
+        /** @description FR-CLN-04: the loan's timeline, newest first */
+        CollectionActionList: {
+            items?: components["schemas"]["CollectionAction"][];
+        };
+        /** @description FR-CLN-04: a promise to pay carries a date and an amount */
+        CollectionActionRequest: {
+            /** @description call, visit, sms, letter, promise_to_pay or other */
+            action_type: string;
+            note?: string;
+            /** Format: int64 */
+            promised_amount_minor?: number;
+            /** Format: date */
+            promised_date?: string;
         };
         CreateBranchRequest: {
             code: string;
@@ -7200,6 +7425,45 @@ export interface components {
             /** Format: date-time */
             expires_at?: string;
             url?: string;
+        };
+        /** @description FR-CLN-02, chapter 14 lending.due_list: sorted by officer then due date */
+        DueList: {
+            /** Format: date */
+            date_from?: string;
+            /** Format: date */
+            date_to?: string;
+            items?: components["schemas"]["DueListLine"][];
+            /** @description More lines matched than the limit; narrow by officer, branch or dates */
+            truncated?: boolean;
+        };
+        DueListLine: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date */
+            due_date?: string;
+            /**
+             * Format: int64
+             * @description principal, interest, fees and penalties due
+             */
+            due_minor?: number;
+            /** Format: int32 */
+            item_no?: number;
+            /** Format: uuid */
+            loan_id?: string;
+            loan_no?: string;
+            member_name?: string;
+            member_no?: string;
+            officer_name?: string;
+            /** Format: uuid */
+            officer_user_id?: string;
+            /** Format: int64 */
+            outstanding_minor?: number;
+            /** Format: int64 */
+            paid_minor?: number;
+            /** @description Masked (+256*****0001) unless the caller holds lending.members.contact in the loan's branch */
+            phone?: string;
+            /** Format: int64 */
+            waived_minor?: number;
         };
         DuplicateCandidate: {
             /** Format: uuid */
@@ -8169,6 +8433,13 @@ export interface components {
             maturity_date?: string;
             /** Format: date */
             next_due_date?: string;
+            /** @description FR-ARR-03, chapter 14: current, 1_30, 31_60, 61_90 or over_90 */
+            par_bucket?: string;
+            /**
+             * Format: int64
+             * @description FR-ARR-03: penalties charged so far (R-PEN), paid or not
+             */
+            penalties_assessed_minor?: number;
             /** Format: int64 */
             penalties_outstanding_minor?: number;
             /** Format: int64 */
@@ -8181,6 +8452,34 @@ export interface components {
             total_paid_minor?: number;
             /** Format: date */
             written_off_on?: string;
+        };
+        /** @description R-PEN: one charge on a schedule item, and what can still be waived */
+        LoanCharge: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date */
+            business_date?: string;
+            /** @description penalty or fee */
+            charge_type?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: int32 */
+            item_no?: number;
+            /**
+             * Format: int32
+             * @description The penalty period; null for a fee
+             */
+            period_no?: number;
+            /**
+             * Format: int64
+             * @description What a waiver may still take: unwaived and not yet paid
+             */
+            waivable_minor?: number;
+            /** Format: int64 */
+            waived_minor?: number;
+        };
+        LoanChargeList: {
+            items?: components["schemas"]["LoanCharge"][];
         };
         LoanDecisionRequest: {
             /**
@@ -8268,6 +8567,12 @@ export interface components {
         };
         LoanNoteRequest: {
             note: string;
+        };
+        LoanOfficerRequest: {
+            /** Format: uuid */
+            officer_user_id: string;
+            /** @description Why; kept in the loan's audit row */
+            reason: string;
         };
         LoanPage: {
             items?: components["schemas"]["LoanListItem"][];
@@ -8413,6 +8718,20 @@ export interface components {
         };
         LoanReasonRequest: {
             reason: string;
+        };
+        /** @description FR-CLN-01: all or none of the loans move */
+        LoanReassignRequest: {
+            loan_ids: string[];
+            /** Format: uuid */
+            officer_user_id: string;
+            /** @description Why; kept in each loan's audit row */
+            reason: string;
+        };
+        LoanReassignResult: {
+            /** Format: uuid */
+            officer_user_id?: string;
+            /** Format: int32 */
+            reassigned?: number;
         };
         /** @description FR-DIS-04: the items and a totals row that equals the loan totals */
         LoanSchedule: {
@@ -9109,6 +9428,32 @@ export interface components {
         PreviewSmsTemplateRequest: {
             /** @description Wording to preview without saving; omitted: the saved wording, else the default */
             text?: string;
+        };
+        PromiseList: {
+            items?: components["schemas"]["PromiseListLine"][];
+            /** @description More promises matched than the limit */
+            truncated?: boolean;
+        };
+        PromiseListLine: {
+            /** Format: uuid */
+            action_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            loan_id?: string;
+            loan_no?: string;
+            member_name?: string;
+            /** Format: uuid */
+            officer_user_id?: string;
+            /** Format: date-time */
+            performed_at?: string;
+            /** Format: uuid */
+            performed_by?: string;
+            promise_status?: string;
+            /** Format: int64 */
+            promised_amount_minor?: number;
+            /** Format: date */
+            promised_date?: string;
         };
         PushConfig: {
             enabled?: boolean;
@@ -17824,6 +18169,106 @@ export interface operations {
             };
         };
     };
+    getArrearsList: {
+        parameters: {
+            query?: {
+                bucket?: string;
+                officer_user_id?: string;
+                branch_id?: string[];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrearsList"];
+                };
+            };
+        };
+    };
+    getDueList: {
+        parameters: {
+            query?: {
+                date_from?: string;
+                date_to?: string;
+                officer_user_id?: string;
+                branch_id?: string[];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueList"];
+                };
+            };
+        };
+    };
+    listPromises: {
+        parameters: {
+            query?: {
+                promise_status?: string;
+                officer_user_id?: string;
+                branch_id?: string[];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromiseList"];
+                };
+            };
+        };
+    };
+    reassignLoans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanReassignRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanReassignResult"];
+                };
+            };
+        };
+    };
     getInsightsBrief: {
         parameters: {
             query?: {
@@ -18955,6 +19400,57 @@ export interface operations {
             };
         };
     };
+    listLoanCharges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanChargeList"];
+                };
+            };
+        };
+    };
+    requestLoanChargeWaiver: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+                charge_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeWaiverRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActionOutcome"];
+                };
+            };
+        };
+    };
     setLoanCollateral: {
         parameters: {
             query?: never;
@@ -18979,6 +19475,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    listCollectionActions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionActionList"];
+                };
+            };
+        };
+    };
+    logCollectionAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionActionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAction"];
                 };
             };
         };
@@ -19135,6 +19679,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Loan"];
+                };
+            };
+        };
+    };
+    setLoanOfficer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoanOfficerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanReassignResult"];
                 };
             };
         };
