@@ -42,8 +42,9 @@ data, and a business must not be able to refer itself.
    optional cap on the referral's total), `fixed_first_payment` (a fixed amount once, on the referred business's first payment)
    and `fixed_per_month` (a fixed amount per paid month for the first N paid months). The operator sets a platform default rule
    and may override it on any one referral at any time, each with a reason, audited. Rules are append-only: a change is a new rule
-   and the pointer moves (`referral_settings.default_rule_id`, `tenant_referrals.rule_id`). The default starts empty: until the
-   operator sets one, nothing is worked out. No rate or amount appears in code, migrations, fixtures or docs.
+   and the pointer moves (`referral_settings.default_rule_id`, `tenant_referrals.rule_id`). `V89` seeds the platform default
+   the product owner decided (decision 14); every other rate or amount is typed by the operator, and no plan price appears in
+   code, migrations or fixtures.
 5. **A payment the operator records adds the commission line from the rule in force at that moment.** In the same transaction as
    `POST /platform/tenants/{id}/payments` (and behind its Idempotency-Key, so a repeat adds nothing), the definer function
    `platform_referral_commission_for_payment` finds the paying business's current referral and the rule in force (its override,
@@ -108,6 +109,35 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
     same mailbox) and brings a code, the code is attached to that application if it has no referrer yet and is still
     `submitted`; a code never replaces an earlier one, and an application already in review keeps what it has
     (`onboarding_application_set_referrer` holds both conditions).
+
+The product owner decided the default rule on 22 Oct 2026.
+
+14. **Default rule.** Unless the operator says otherwise, a business that refers another earns 10 percent of each subscription
+    payment the referred business makes, for that business's first 12 paid months; then it stops. There is no cap. The 12
+    months are per referred business: each referred business has its own 12 months, counted from when its referral was
+    created (decision 9), so a referrer with two referred businesses earns on each for its own 12 paid months. A payment that
+    covers several months counts as the months it covers: a year paid upfront earns 10 percent of that payment once and uses up
+    all 12 months, so the next payment earns nothing. A payment that runs past the twelfth month earns only on the months still
+    inside it (decision 5).
+
+    Worked example on the approved monthly prices (UGX):
+
+    | Plan     | Monthly payment | Commission per payment | Over the 12 months |
+    | -------- | --------------: | ---------------------: | -----------------: |
+    | Starter  |          30,000 |                  3,000 |             36,000 |
+    | Growing  |          60,000 |                  6,000 |             72,000 |
+    | Business |          90,000 |                  9,000 |            108,000 |
+    | Lending  |         100,000 |                 10,000 |            120,000 |
+
+    A Growing business paying monthly earns its referrer 6,000 on each of its first 12 payments and nothing on the 13th. A
+    Growing business that pays for a year upfront earns its referrer 10 percent of that one payment, and nothing on later
+    payments.
+
+    `V89` stores this as the platform default rule (`percent_of_payment`, 1000 basis points, 12 months, no cap) with a
+    `platform.referral.default_rule_changed` audit row giving the product owner's decision as the reason, and only when no
+    default is set, so it never overwrites one the operator chose. The operator can change the default at any time (later
+    payments follow the new default; lines already worked out keep the rule they used) and can override the rule on any one
+    referral (decision 4).
 
 ## Consequences
 
