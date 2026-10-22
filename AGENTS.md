@@ -191,6 +191,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   and the five icon paths are the exact paths `TenantResolutionFilter` lets through without a tenant). `index.html` links both; vite-plugin-pwa runs with
   `manifest: false`; the shell sets `apple-mobile-web-app-title` to the same short name. An iPhone keeps the icon it took at Add to Home
   Screen. Tests: `AppManifestIT`, `AppManifestShortNameTest`, `app-manifest.test.ts`, `branding.test.ts`, `app-title.dom.test.tsx`.
+- **Built (retail sales offline, issue #458, FR-RET-67, NFR-OFF-07, NFR-OFF-08, ADR-067):** migration `V87` (renumbered at merge if
+  needed; `V81` to `V86` are claimed by the open lending and payments pull requests): `client_sale_id` (unique per tenant),
+  `occurred_at` and `recorded_offline` on `retail_sales`, kept as written by a trigger; `retail_sale_clashes`; `retail_offline_failures`;
+  the permission `retail.offline.resolve` (administrators and the Supervisor). `POST /retail/sales` takes them optionally: a client sale id
+  already recorded by the caller is answered as a replay after the key expired too; the sale is dated the day it happened, five minutes
+  of clock skew allowed; a sale recorded offline records short stock (the balance may go negative), an item switched off, a changed
+  price (kept as charged, an override naming the offline sale) and a price not above cost as clashes instead of refusing, and pushes
+  `retail.sale_clash` to the branch's holders of `retail.offline.resolve`; never a credit sale. Routes `/retail/sale-clashes` (list,
+  resolve with a note) and `/retail/offline-failures` (report, mine, list, retry, discard with an audited reason). The PWA
+  (`frontend/src/offline/`): the catalogue copy and the outbox per business host and person in IndexedDB, the sale screen offline with a
+  provisional receipt, a sync engine (one at a time, oldest first, backoff, stops on an expired session, reports refusals), the dot
+  with the count in the staff bar and its sheet, sign-out that asks while sales wait, and the app opened offline with the last profile.
+  Lending is unchanged and never cached. Tests: `RetailOfflineSalesIT`, `PushPublishersIT`, `outbox.test.ts`, `sync-engine.test.ts`,
+  `catalogue.test.ts`, `offline-sale.dom.test.tsx`, `sync-status.dom.test.tsx`. Notes: `docs/specs/retail-ui-notes.md` (Sell offline).
 - **Built (light and dark theme selector, issue #429):** PWA only, no migration, no API change, nothing stored on the server. A System, Light, Dark selector at the top right of the shell's header (every area), kept per device in `localStorage` (`bms.theme`), following the system setting by default, set before first paint by the blocking `frontend/public/theme-init.js` (the CSP is `script-src 'self'`), applied afterwards by `frontend/src/app/theme-mode.ts`; one `:root[data-theme='dark']` token set in `theme.css`, stylesheets draw with colour roles only (`design-guard.test.ts`), the tenant brand pair is untouched and its link and focus colours are derived again for dark, the `theme-color` meta follows the choice (the manifest stays light); the three welcome tours gain a "Light or dark" step (`admin-welcome` v16, `retail-sales` v9, `staff-welcome` v4). Token pairs in `docs/ui/design-system.md`; tests `theme-mode.dom.test.tsx`, `tokens.test.ts`.
 - **Built (theme button and Appearance, issue #452):** PWA only, no migration, no API change. The header `<select>` of #429 becomes an icon button (sun, moon, or a phone for the device choice, `aria-label` "Theme: <choice>") opening an accessible three item menu (`ThemeMenu` in `frontend/src/app/shell.tsx`); the Notifications and app page gains an Appearance radio group on the same `useThemeChoice`. The label of `system` is "Same as my phone" everywhere; `theme-mode.ts` is unchanged. Tour `page-notifications` v3. Tests `theme-mode.dom.test.tsx`, `notifications.dom.test.tsx`, `shell.test.tsx`.
 - **Built (slow movers on Stock health, issue #414, FR-RET-64):** reports only, no migration, no permission: `slow_movers` in

@@ -1,0 +1,228 @@
+import { describe, expect, it, vi } from 'vitest';
+import { provisionalNumber, type OutboxItem } from './outbox';
+import { memoryStore } from './store';
+import { SyncEngine, type Answer, type Decision, type SyncDeps } from './sync-engine';
+
+// The sync engine (issue #458, ADR-067 decisions 4, 5 and 8; NFR-OFF-07): one at a time, oldest first, backoff, a refusal
+// kept and reported, an expired session that stops it, a manager's decision followed, and never two sends of one sale at
+// once. The clock is the test's. Fabricated ids and amounts.
+
+const SCOPE = 'test.example|u1';
+
+function item(id: string, minutes: number, patch: Partial<OutboxItem> = {}): OutboxItem {
+  return {
+    id,
+    scope: SCOPE,
+    key: `key-${id}`,
+    request: { payment_method: 'cash', lines: [], client_sale_id: id, recorded_offline: true },
+    occurredAt: new Date(Date.parse('2026-10-22T08:00:00Z') + minutes * 60_000).toISOString(),
+    branchId: 'b1',
+    branchName: 'Test Branch A',
+    method: 'cash',
+    totalMinor: 1000,
+    lines: [],
+    provisionalNo: provisionalNumber(id),
+    state: 'queued',
+    attempts: 0,
+    nextAttemptAt: 0,
+    ...patch,
+  };
+}
+
+function setup(send: (item: OutboxItem) => Promise<Answer>, extra: Partial<SyncDeps> = {}) {
+  let now = 1_000_000;
+  const store = memoryStore();
+  const sent: string[] = [];
+  const deps: SyncDeps = {
+    store,
+    scope: SCOPE,
+    send: async (i) => {
+      sent.push(`${i.id}:${i.key}`);
+      return send(i);
+    },
+    refreshSession: vi.fn(async () => false),
+    report: vi.fn(async (i: OutboxItem): Promise<Decision> => ({ id: `f-${i.id}`, client_sale_id: i.id, status: 'open' })),
+    decisions: vi.fn(async (): Promise<Decision[]> => []),
+    now: () => now,
+    later: () => () => {},
+    ...extra,
+  };
+  const engine = new SyncEngine(deps);
+  return { engine, store, sent, deps, tick: (ms: number) => (now += ms), now: () => now };
+}
+
+const ok = (i: OutboxItem): Answer => ({ status: 201, body: { id: `sale-${i.id}`, sale_no: `RS-${i.id}` } });
+
+describe('the sync engine', () => {
+  it('sends the outbox oldest first, one at a time, and keeps the server number', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const { engine, sent } = setup(async (i) => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      return ok(i);
+    });
+    await engine.queue(item('c', 3));
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await Promise.all([engine.sync(), engine.sync(), engine.sync()]);
+    expect(sent).toEqual(['a:key-a', 'b:key-b', 'c:key-c']);
+    expect(most).toBe(1);
+    expect(engine.snapshot().items.map((i) => [i.id, i.state, i.sale?.saleNo])).toEqual([
+      ['a', 'sent', 'RS-a'],
+      ['b', 'sent', 'RS-b'],
+      ['c', 'sent', 'RS-c'],
+    ]);
+  });
+
+  it('backs off on a failure of the network and keeps the order', async () => {
+    let fail = true;
+    const { engine, sent, tick } = setup(async (i) => {
+      if (fail) throw new TypeError('Failed to fetch');
+      return ok(i);
+    });
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a']);
+    expect(engine.snapshot().items.map((i) => i.state)).toEqual(['queued', 'queued']);
+    expect(engine.snapshot().items[0]?.attempts).toBe(1);
+
+    fail = false;
+    tick(4_000);
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a']);
+    tick(1_000);
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a', 'a:key-a', 'b:key-b']);
+  });
+
+  it('sends again at once on Sync now, still in order', async () => {
+    let fail = true;
+    const { engine, sent } = setup(async (i) => {
+      if (fail) return { status: 503, body: {} };
+      return ok(i);
+    });
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    fail = false;
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a', 'a:key-a']);
+    expect(engine.snapshot().items[0]?.state).toBe('sent');
+  });
+
+  it('keeps a refused sale with its reason, reports it, and goes on with the next', async () => {
+    const { engine, sent, deps } = setup(async (i) =>
+      i.id === 'a' ? { status: 422, body: { code: 'period_closed', detail: 'The period 2026-9 is closed.' } } : ok(i),
+    );
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a', 'b:key-b']);
+    const [a, b] = engine.snapshot().items;
+    expect(a).toMatchObject({ state: 'failed', error: { code: 'period_closed', message: 'The period 2026-9 is closed.' }, failureId: 'f-a', decision: 'open' });
+    expect(b?.state).toBe('sent');
+    expect(deps.report).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops on an expired session after one refresh, and asks to sign in', async () => {
+    const { engine, sent, deps } = setup(async () => ({ status: 401, body: {} }));
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.sync();
+    expect(deps.refreshSession).toHaveBeenCalledTimes(1);
+    expect(sent).toEqual(['a:key-a']);
+    expect(engine.snapshot().needsSignIn).toBe(true);
+    expect(engine.snapshot().items.map((i) => i.state)).toEqual(['queued', 'queued']);
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a']);
+    engine.resume();
+    expect(engine.snapshot().needsSignIn).toBe(false);
+  });
+
+  it('sends again once the refresh brings a new session', async () => {
+    let first = true;
+    const { engine, sent } = setup(
+      async (i) => {
+        if (first) {
+          first = false;
+          return { status: 401, body: {} };
+        }
+        return ok(i);
+      },
+      { refreshSession: async () => true },
+    );
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    expect(sent).toEqual(['a:key-a', 'a:key-a']);
+    expect(engine.snapshot().items[0]?.state).toBe('sent');
+  });
+
+  it("follows a manager's decision: sent again on retry, removed on discard", async () => {
+    const decided: Decision[] = [];
+    const { engine, sent } = setup(
+      async (i) => (i.id === 'a' && sent.length < 2 ? { status: 422, body: { detail: 'This branch does not sell.' } } : ok(i)),
+      { decisions: async () => decided },
+    );
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.sync();
+    expect(engine.snapshot().items.find((i) => i.id === 'a')?.state).toBe('failed');
+
+    decided.push({ id: 'f-a', client_sale_id: 'a', status: 'retry' });
+    await engine.sync();
+    expect(sent.filter((s) => s.startsWith('a:'))).toEqual(['a:key-a', 'a:key-a']);
+    expect(engine.snapshot().items.find((i) => i.id === 'a')?.state).toBe('sent');
+  });
+
+  it('removes a sale from the phone once a manager discarded it', async () => {
+    const decided: Decision[] = [];
+    const { engine, store } = setup(async () => ({ status: 422, body: { detail: 'Refused.' } }), { decisions: async () => decided });
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    decided.push({ id: 'f-a', client_sale_id: 'a', status: 'discarded' });
+    await engine.sync();
+    expect(engine.snapshot().items).toEqual([]);
+    expect(await store.outbox(SCOPE)).toEqual([]);
+  });
+
+  it('lets the seller send a failed sale again with the same key', async () => {
+    let refuse = true;
+    const { engine, sent } = setup(async (i) => (refuse ? { status: 422, body: { detail: 'Refused.' } } : ok(i)));
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    refuse = false;
+    await engine.sendAgain('a');
+    expect(sent).toEqual(['a:key-a', 'a:key-a']);
+    expect(engine.snapshot().items[0]?.state).toBe('sent');
+  });
+
+  it('keeps the outbox on the device across a reload, and a sale on its way goes again with its key', async () => {
+    const store = memoryStore();
+    await store.putItem(item('a', 1, { state: 'sending' }));
+    const sent: string[] = [];
+    const engine = new SyncEngine({
+      store,
+      scope: SCOPE,
+      send: async (i) => {
+        sent.push(i.key);
+        return ok(i);
+      },
+      refreshSession: async () => false,
+      report: async (i) => ({ id: i.id, client_sale_id: i.id, status: 'open' }),
+      decisions: async () => [],
+      now: () => 1,
+      later: () => () => {},
+    });
+    await engine.load();
+    await engine.sync();
+    expect(sent).toEqual(['key-a']);
+  });
+
+  it("never sends another person's outbox", async () => {
+    const { engine } = setup(async (i) => ok(i));
+    await expect(engine.queue(item('a', 1, { scope: 'test.example|someone-else' }))).rejects.toThrow();
+  });
+});

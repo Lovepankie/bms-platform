@@ -263,7 +263,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     },
     onSuccess: (item) => {
       finish();
-      void offline?.engine.sync();
+      if (offline?.connectivity.online()) void offline.engine.sync();
       onQueued?.(item);
     },
   });
