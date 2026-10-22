@@ -328,6 +328,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.referrals   -> bms.db "Referral codes, referrals and commission lines (forced RLS on the referrer, select only), rules and the default (closed); every write through the V89 definer functions"
         bms.api.referrals   -> bms.api.audit "Writes the platform audit log of every referral and commission change"
         bms.api.referrals   -> bms.api.tenancy "Builds the referral link from BMS_PLATFORM_HOST"
+        bms.api.referrals   -> bms.api.operations "Adds a typed commission line once per Idempotency-Key"
         bms.api.onboarding  -> bms.db "Finds the businesses where an email is an active staff user, through the SECURITY DEFINER function app_staff_sign_in_pages (V72, ADR-016)"
         bms.api.onboarding  -> bms.api.notifications "Queues applicant emails, the activation email, operator alerts and the staff sign-in page email in the outbox"
         bms.api.onboarding  -> bms.api.audit "Writes the platform audit log"

@@ -145,6 +145,15 @@ class ReferralsIT extends IntegrationTest {
         return platform.call(HttpMethod.PUT, path, body, operator.accessToken());
     }
 
+    ResponseEntity<JsonNode> addLine(UUID referralId, long amount, String reason, String idempotencyKey) {
+        return platform.call(
+                HttpMethod.POST,
+                "/api/v1/platform/referrals/" + referralId + "/commissions",
+                Map.of("amount_minor", amount, "currency", "UGX", "reason", reason),
+                operator.accessToken(),
+                idempotencyKey == null ? Map.of() : Map.of("Idempotency-Key", idempotencyKey));
+    }
+
     JsonNode detail(UUID referralId) {
         ResponseEntity<JsonNode> got = platform.get("/api/v1/platform/referrals/" + referralId, operator.accessToken());
         assertThat(got.getStatusCode()).as("%s", got.getBody()).isEqualTo(HttpStatus.OK);
@@ -616,11 +625,9 @@ class ReferralsIT extends IntegrationTest {
                 .isEqualTo(422);
 
         // A typed line, then a reversal: never deleted, the opposite amount, once, and a reversal is not reversed.
-        ResponseEntity<JsonNode> typed = platform.post(
-                "/api/v1/platform/referrals/" + ry + "/commissions",
-                Map.of("amount_minor", 700, "currency", "UGX", "reason", "Test: a bonus agreed by phone"),
-                operator.accessToken());
-        assertThat(typed.getStatusCode()).as("%s", typed.getBody()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> typed =
+                addLine(ry, 700, "Test: a bonus agreed by phone", "ref-line-" + UUID.randomUUID());
+        assertThat(typed.getStatusCode()).as("%s", typed.getBody()).isEqualTo(HttpStatus.CREATED);
         assertThat(amounts(typed.getBody())).containsExactly(1500L, 700L);
         ResponseEntity<JsonNode> reversed = platform.post(
                 "/api/v1/platform/referrals/commissions/" + line + "/reverse",
@@ -780,10 +787,7 @@ class ReferralsIT extends IntegrationTest {
         setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
         setReferrer(y.id(), code(a.tenantId()), "Test: referred by the shop");
         UUID ry = currentReferral(y.id());
-        platform.post(
-                "/api/v1/platform/referrals/" + ry + "/commissions",
-                Map.of("amount_minor", 900, "currency", "UGX", "reason", "Test: worked out by hand"),
-                operator.accessToken());
+        addLine(ry, 900, "Test: worked out by hand", "ref-line-" + UUID.randomUUID());
         pay(y.id(), 10000, 1);
 
         String base = "/api/v1/platform/referrals?referrer_tenant_id=" + a.tenantId();
@@ -878,5 +882,35 @@ class ReferralsIT extends IntegrationTest {
         rule.put("percent_bp", bp);
         rule.put("months", months);
         return rule;
+    }
+
+    /**
+     * A typed line is behind the Idempotency-Key protocol: no key is refused, the same key again adds nothing and answers the
+     * first line, and the same key with another amount is refused.
+     */
+    @Test
+    void aTypedLineIsAddedOncePerIdempotencyKey() {
+        TestDatabase.Fixture a = TestDatabase.tenant("reftyped", false);
+        Business x = business("ref-typed");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+
+        ResponseEntity<JsonNode> noKey = addLine(rx, 800, "Test: worked out by hand", null);
+        assertThat(noKey.getStatusCode().value()).isEqualTo(422);
+        assertThat(noKey.getBody().get("code").asString()).isEqualTo("idempotency_key_missing");
+
+        String key = "ref-line-" + UUID.randomUUID();
+        ResponseEntity<JsonNode> first = addLine(rx, 800, "Test: worked out by hand", key);
+        assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> again = addLine(rx, 800, "Test: worked out by hand", key);
+        assertThat(again.getStatusCode()).as("%s", again.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(amounts(again.getBody())).containsExactly(800L);
+        assertThat(addLine(rx, 900, "Test: worked out by hand", key)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("idempotency_key_reused");
+        assertThat(amounts(detail(rx))).containsExactly(800L);
+        assertThat(audits("platform.referral.commission_added")).isEqualTo(1);
     }
 }

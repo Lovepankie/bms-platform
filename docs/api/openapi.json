@@ -29304,6 +29304,13 @@
             "format" : "uuid",
             "type" : "string"
           }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
         } ],
         "requestBody" : {
           "content" : {
@@ -29327,7 +29334,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Add a commission line with an amount the operator typed, with a reason",
+        "summary" : "Add a commission line with an amount the operator typed, with a reason. Needs an Idempotency-Key; a repeat adds nothing and answers 200",
         "tags" : [ "platform" ]
       }
     },

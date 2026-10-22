@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.referrals.internal;
 
 import com.rincoltech.bms.core.audit.PlatformAuditLog;
+import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.referrals.Referrals;
 import com.rincoltech.bms.core.referrals.internal.ReferralsController.MyReferral;
 import com.rincoltech.bms.core.referrals.internal.ReferralsController.MyReferrals;
@@ -8,6 +9,7 @@ import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.kernel.TenantContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -26,7 +28,9 @@ import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -55,12 +59,22 @@ class ReferralService implements Referrals {
     private final PlatformAuditLog audit;
     private final PlatformHost hosts;
     private final BusinessClock clock;
+    private final Idempotency idempotency;
+    private final TransactionTemplate transactions;
 
-    ReferralService(JdbcClient jdbc, PlatformAuditLog audit, PlatformHost hosts, BusinessClock clock) {
+    ReferralService(
+            JdbcClient jdbc,
+            PlatformAuditLog audit,
+            PlatformHost hosts,
+            BusinessClock clock,
+            Idempotency idempotency,
+            PlatformTransactionManager transactionManager) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.hosts = hosts;
         this.clock = clock;
+        this.idempotency = idempotency;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     // ---- The business's own view -------------------------------------------------------------
@@ -392,33 +406,50 @@ class ReferralService implements Referrals {
         return detail(referralId);
     }
 
+    /** What the Idempotency-Key protocol hashes, and what it keeps for a replay. */
+    record ManualLine(long amountMinor, String currency, String reason) {}
+
+    record AddedLine(UUID lineId) {}
+
+    /**
+     * Not {@code @Transactional}: the line is written in a transaction bound to the referrer, so its Idempotency-Key row is that
+     * business's (as a payment's is the paying business's); the reads around it run with no tenant bound.
+     */
     @Override
-    @Transactional
-    public ReferralDetail addLine(UUID referralId, long amountMinor, String currency, String reason, UUID operatorId) {
-        String cur = currency(currency, "currency");
+    public LineAdded addLine(
+            UUID referralId, String idempotencyKey, long amountMinor, String currency, String reason, UUID operatorId) {
         if (amountMinor < 1 || amountMinor > 1_000_000_000L) {
             throw ApiException.validation(List.of(new FieldProblem(
                     "amount_minor", "out_of_range", "The amount is from 1 to 1,000,000,000 minor units.")));
         }
-        UUID id = UUID.randomUUID();
-        UUID referrer = jdbc.sql("SELECT platform_referral_add_manual_line(?, ?, ?, ?, ?, ?)")
-                .params(id, referralId, amountMinor, cur, reason.trim(), operatorId)
-                .query(UUID.class)
-                .optional()
-                .orElse(null);
-        if (referrer == null) {
-            throw ApiException.notFound();
-        }
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("line_id", id);
-        data.put("referral_id", referralId);
-        data.put("kind", "manual");
-        data.put("amount_minor", amountMinor);
-        data.put("currency", cur);
-        data.put("referrer_tenant_id", referrer);
-        data.put("reason", reason.trim());
-        audit.record("platform.referral.commission_added", operatorId, referrer, data);
-        return detail(referralId);
+        String cur = transactions.execute(status -> currency(currency, "currency"));
+        UUID referrer = transactions
+                .execute(status -> referral(referralId))
+                .orElseThrow(ApiException::notFound)
+                .referrerTenantId();
+        String path = "/api/v1/platform/referrals/" + referralId + "/commissions";
+        ManualLine request = new ManualLine(amountMinor, cur, reason.trim());
+        Idempotency.Outcome<AddedLine> outcome = TenantContext.callAs(
+                referrer,
+                () -> transactions.execute(status ->
+                        idempotency.once(idempotencyKey, "POST", path, request, AddedLine.class, () -> {
+                            UUID id = UUID.randomUUID();
+                            jdbc.sql("SELECT platform_referral_add_manual_line(?, ?, ?, ?, ?, ?)")
+                                    .params(id, referralId, amountMinor, cur, request.reason(), operatorId)
+                                    .query()
+                                    .singleRow();
+                            Map<String, Object> data = new LinkedHashMap<>();
+                            data.put("line_id", id);
+                            data.put("referral_id", referralId);
+                            data.put("kind", "manual");
+                            data.put("amount_minor", amountMinor);
+                            data.put("currency", cur);
+                            data.put("referrer_tenant_id", referrer);
+                            data.put("reason", request.reason());
+                            audit.record("platform.referral.commission_added", operatorId, referrer, data);
+                            return new AddedLine(id);
+                        })));
+        return new LineAdded(transactions.execute(status -> detail(referralId)), outcome.replayed());
     }
 
     @Override

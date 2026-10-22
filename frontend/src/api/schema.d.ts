@@ -2954,7 +2954,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add a commission line with an amount the operator typed, with a reason */
+        /** Add a commission line with an amount the operator typed, with a reason. Needs an Idempotency-Key; a repeat adds nothing and answers 200 */
         post: operations["platformAddReferralCommission"];
         delete?: never;
         options?: never;
@@ -22321,7 +22321,9 @@ export interface operations {
     platformAddReferralCommission: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path: {
                 referral_id: string;
             };

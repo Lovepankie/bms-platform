@@ -67,8 +67,12 @@ public interface Referrals {
     /** Sets (or clears, with null: the default applies) the rule of one current referral, with a reason. */
     ReferralDetail setRule(UUID referralId, RuleInput rule, String reason, UUID operatorId);
 
-    /** A line with an amount the operator typed, with a reason. */
-    ReferralDetail addLine(UUID referralId, long amountMinor, String currency, String reason, UUID operatorId);
+    /**
+     * A line with an amount the operator typed, with a reason, behind the Idempotency-Key protocol (its key row is the
+     * referrer's): a repeat adds nothing and says it was replayed.
+     */
+    LineAdded addLine(
+            UUID referralId, String idempotencyKey, long amountMinor, String currency, String reason, UUID operatorId);
 
     /** The exact opposite of one line, with a reason; a line is reversed once and a reversal never. */
     ReferralDetail reverseLine(UUID lineId, String reason, UUID operatorId);
@@ -203,4 +207,6 @@ public interface Referrals {
             @Schema(description = "Oldest first") List<Line> lines) {}
 
     record Payout(LocalDate paidOn, String method, String reference, String note, String reason) {}
+
+    record LineAdded(ReferralDetail detail, boolean replayed) {}
 }

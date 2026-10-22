@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -232,15 +234,23 @@ class ReferralsAdminController {
     @PostMapping("/referrals/{referral_id}/commissions")
     @RequiresPermission("platform.tenants.manage")
     @Operation(
-            summary = "Add a commission line with an amount the operator typed, with a reason",
+            summary =
+                    "Add a commission line with an amount the operator typed, with a reason. Needs an Idempotency-Key; a"
+                            + " repeat adds nothing and answers 200",
             operationId = "platformAddReferralCommission")
-    ReferralDetail addLine(@PathVariable("referral_id") UUID referralId, @Valid @RequestBody LineRequest request) {
-        return referrals.addLine(
+    ResponseEntity<ReferralDetail> addLine(
+            @PathVariable("referral_id") UUID referralId,
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody LineRequest request) {
+        Referrals.LineAdded added = referrals.addLine(
                 referralId,
+                idempotencyKey,
                 request.amountMinor(),
                 request.currency(),
                 request.reason(),
                 CurrentPrincipal.require().userId());
+        return ResponseEntity.status(added.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
+                .body(added.detail());
     }
 
     @PostMapping("/referrals/commissions/{line_id}/reverse")

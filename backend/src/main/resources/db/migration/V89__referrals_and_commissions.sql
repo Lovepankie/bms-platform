@@ -685,20 +685,25 @@ BEGIN
 END
 $$;
 
--- A line the operator typed for one referral (current or ended). Returns the referrer.
+-- A line the operator typed for one referral (current or ended). Returns the referrer. It runs bound to the referrer, so its
+-- Idempotency-Key row is that business's (as a payment's is the paying business's), and only for an active platform user.
 CREATE FUNCTION platform_referral_add_manual_line(
     p_id uuid, p_referral_id uuid, p_amount_minor bigint, p_currency text, p_note text, p_platform_user_id uuid)
 RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
+    v_bound    uuid := nullif(current_setting('app.tenant_id', true), '')::uuid;
     v_referrer uuid;
 BEGIN
-    IF nullif(current_setting('app.tenant_id', true), '') IS NOT NULL THEN
+    IF NOT EXISTS (SELECT 1 FROM platform_users u WHERE u.id = p_platform_user_id AND u.is_active) THEN
         RAISE EXCEPTION 'commission lines are the platform operator''s' USING ERRCODE = 'insufficient_privilege';
     END IF;
     SELECT tenant_id INTO v_referrer FROM tenant_referrals WHERE id = p_referral_id;
     IF NOT FOUND THEN
         RETURN NULL;
+    END IF;
+    IF v_bound IS NOT NULL AND v_bound <> v_referrer THEN
+        RAISE EXCEPTION 'commission lines are the platform operator''s' USING ERRCODE = 'insufficient_privilege';
     END IF;
     INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, amount_minor, currency, note,
                                            created_by_platform_user_id)

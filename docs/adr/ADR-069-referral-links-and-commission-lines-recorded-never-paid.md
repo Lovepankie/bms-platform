@@ -55,7 +55,8 @@ data, and a business must not be able to refer itself.
    never change. The outcome (`added`, `no_referral`, `no_rule`, `not_first_payment`, `months_used`, `currency_differs`,
    `cap_reached`, `zero`) is never an error: the payment is recorded whatever it says.
 6. **Lines are recorded and marked paid, never paid by the app and never deleted.** The operator can add a line with an amount
-   worked out by hand (kind `manual`, with a reason), reverse a line once with a reason (kind `reversal`, the exact opposite
+   worked out by hand (kind `manual`, with a reason, behind the Idempotency-Key protocol: the key row is the referrer's, as a
+   payment's is the paying business's, so a double submit adds one line), reverse a line once with a reason (kind `reversal`, the exact opposite
    amount; a reversal is not reversed), and mark a line paid once (date, method `mtn_momo`, `airtel_money`, `bank_transfer`,
    `cash` or `other`, reference, note, reason). A trigger refuses any delete and any update other than setting the paid columns
    once. Every write is audited in `platform_audit_log` with the operator and the reason. These writes take a reason and no
@@ -70,7 +71,8 @@ data, and a business must not be able to refer itself.
    filters (referrer, status, commission due or paid) and exports them as CSV (at most 10,000 rows, audited), through definer
    functions that refuse a tenant-bound transaction. The PWA shows the page as Referrals under Business set-up
    (`/staff/setup/referrals`), with Copy and Share on WhatsApp buttons and its page tour.
-8. **A new core module.** `core.referrals` (allowed dependencies `kernel`, `core.tenancy`, `core.audit`) owns the tables and the
+8. **A new core module.** `core.referrals` (allowed dependencies `kernel`, `core.tenancy`, `core.audit`, `core.operations` for the
+   Idempotency-Key) owns the tables and the
    public port `Referrals`; `core.onboarding` uses it at the sign-up and Activate, `core.platform` at the payment and for the
    operator routes, as the feedback inbox does (ADR-065).
 
@@ -96,8 +98,7 @@ terms change by deal and over time without a deploy, and each line keeps the rul
 paid is auditable end to end and cannot be edited away; a referrer sees only its own referrals.
 
 **Worse:** the referrer can infer a referred business's subscription amount from a percent commission line; the operator list and
-the CSV read across every business through definer functions, outside RLS by design; a typed manual line has no Idempotency-Key, so
-a double submit adds two lines, which the operator reverses; codes are not secret, so anyone can type a valid code at the sign-up
+the CSV read across every business through definer functions, outside RLS by design; codes are not secret, so anyone can type a valid code at the sign-up
 (the operator still verifies every application before Activate).
 
 **Watch for:** the operator portal has no screen for referrals yet (the API is complete); when it comes, it has a page tour like

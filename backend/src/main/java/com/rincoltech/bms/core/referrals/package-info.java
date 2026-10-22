@@ -11,7 +11,7 @@
 @ApplicationModule(
         id = "core.referrals",
         displayName = "Core: Referrals",
-        allowedDependencies = {"kernel", "core.tenancy", "core.audit"})
+        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.operations"})
 package com.rincoltech.bms.core.referrals;
 
 import org.springframework.modulith.ApplicationModule;
