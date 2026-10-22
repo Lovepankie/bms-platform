@@ -660,6 +660,13 @@ read need `platform.tenants.read` and a status change or a linked issue `platfor
 `DocumentAccess` lets only its sender and an operator read it (a refusal is a 404). The operator reads across businesses only through
 the definer functions of `V80`, which refuse a tenant-bound transaction.
 
+The Owner's own plan (issue #472, ADR-073) adds no permission, so the matrix is unchanged: the Plan and modules card (`GET /plan`)
+needs `core.settings.manage`, so administrators see it, and asking for a module, stopping one, cancelling and undoing need it too and
+are then refused to anyone but the Owner (403 `owner_only`, ADR-062); stopping and cancelling also ask for the owner step-up. The end
+date (`GET /plan/status`) is open to every signed-in member of staff. The operator's lists need `platform.tenants.read`, an approval or
+a decline `platform.tenants.manage` (an approval also the operator's own authenticator code), on the platform host only. After a
+cancellation's end date the business is read only with `subscription_ended`, as a suspended one is with `tenant_suspended`.
+
 ### 8.3.3 Enforcement
 
 - Every route declares exactly one permission (`@RequiresPermission`), or is explicitly marked

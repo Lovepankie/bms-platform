@@ -597,6 +597,32 @@ one item, so the operator's screenshot read can bind it) and `platform_feedback_
 The status and the reply change only through `platform_feedback_set_status`, the linked issue only through
 `platform_feedback_set_linked_issue`.
 
+### `subscription_module_requests` (RLS)
+
+(ADR-073; migration `V93`, issue #472) One row per module the Owner asked for. `module_key text NOT NULL` (`^[a-z]{2,30}$`),
+`status text NOT NULL DEFAULT 'pending'` (`pending`, `approved`, `declined`), `requested_by uuid NOT NULL` (FK `(tenant_id,
+requested_by)` to `users`), `created_at`, `decided_at` (null exactly while pending), `decided_by_platform_user_id` (FK to
+`platform_users`, null when the system approved it), `decided_automatically boolean` (the plan already included the module),
+`decision_reason varchar(300)` (required when declined; shown to the Owner), `plan_before`, `plan_after` (plan codes). `UNIQUE
+(tenant_id, id)`; a partial unique index allows one pending request per module. Grants `SELECT, INSERT, UPDATE`: the row is a
+record only; the module is switched on through `platform_set_tenant_modules`, which checks the plan, so a row written by hand
+grants nothing. The operator reads across businesses through `platform_module_requests(status)` and binds the business of one
+request through `platform_module_request_tenant(id)` (both refuse a tenant-bound transaction, ADR-016).
+
+### `subscription_scheduled_changes` (RLS)
+
+(ADR-073; migration `V93`, issue #472) A module stopped or the subscription cancelled by the Owner, in force from a day.
+`kind text NOT NULL` (`stop_module`, `cancel`), `module_key` (set exactly for `stop_module`), `effective_on date NOT NULL` (the
+day after `subscriptions.current_period_end`, or the day asked when nothing is paid ahead), `status text NOT NULL DEFAULT
+'scheduled'` (`scheduled`, `applied`, `undone`; `applied_at` and `undone_at` set exactly with their status), `requested_by`,
+`undone_by` (FKs to `users`), `created_at`. A partial unique index allows one scheduled row per module and one scheduled
+cancellation per business; a partial index on `effective_on` serves the job. Grants `SELECT, INSERT, UPDATE`. The operator lists
+the scheduled rows across businesses through `platform_scheduled_changes()`; the job lists the businesses with one due through
+`platform_tenants_with_due_changes(through)`. `subscriptions.ended_on date` (V93) is the day an Owner's cancellation took effect;
+`platform_end_subscription(tenant_id, on)` (bound to that tenant only) sets it with the status `cancelled` and the tenant
+`suspended`; `platform_set_subscription_status` clears it when the subscription leaves `cancelled`; `app_resolve_tenant_status`
+answers `ended` for such a business, so its writes are refused with `subscription_ended`.
+
 ### `auth_sessions` (RLS)
 
 (std, no `version`) `user_id uuid NOT NULL`, `family_id uuid NOT NULL`,
