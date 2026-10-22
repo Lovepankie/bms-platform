@@ -2,8 +2,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/client';
-import { useShellBrand } from '../../app/branding';
+import { BRANDING_QUERY, appTitle, brandOf, useShellBrand } from '../../app/branding';
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
+import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
@@ -52,6 +53,8 @@ export function Setup() {
   const [suggested, setSuggested] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A saved logo or colour changes the installed app's icon (ADR-066), so the admin is told how it reaches a phone (issue #453).
+  const [iconSaved, setIconSaved] = useState(false);
 
   // The form is filled once from the saved settings and then belongs to the admin: a logo upload,
   // removal or dismissal changes the settings version but must not wipe what has been typed.
@@ -74,6 +77,17 @@ export function Setup() {
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: ['settings'] });
     await queryClient.invalidateQueries({ queryKey: ['branding'] });
+  }
+
+  /** After a logo or colour save: this device stores the new icon version, so its own new icon card stays away (issue #453). */
+  async function refreshIcon() {
+    await queryClient.invalidateQueries({ queryKey: ['settings'] });
+    try {
+      const branding = await queryClient.fetchQuery({ ...BRANDING_QUERY, staleTime: 0 });
+      rememberIconVersion(brandOf(branding, null).iconVersion ?? '');
+    } catch {
+      // The save itself worked; at worst this device shows the card once.
+    }
   }
 
   async function run(action: () => Promise<string | null>) {
@@ -103,7 +117,12 @@ export function Setup() {
         const problem = problemOf(error);
         throw new Error(problem.errors?.[0]?.message ?? problem.detail ?? 'Could not save.');
       }
-      await refresh();
+      if (body.theme_primary === undefined) {
+        await refresh();
+      } else {
+        await refreshIcon();
+        setIconSaved(true);
+      }
       return colour === '' ? 'Saved. The platform colour is in use.' : 'Saved.';
     });
   }
@@ -122,7 +141,8 @@ export function Setup() {
         },
       });
       if (error) throw new Error(problemOf(error).detail ?? 'Could not upload the logo.');
-      await refresh();
+      await refreshIcon();
+      setIconSaved(true);
       const found = await suggestFrom(file);
       if (found) {
         setColour(found);
@@ -137,7 +157,8 @@ export function Setup() {
     void run(async () => {
       const { error } = await api.DELETE('/api/v1/settings/logo');
       if (error) throw new Error(problemOf(error).detail ?? 'Could not remove the logo.');
-      await refresh();
+      await refreshIcon();
+      setIconSaved(false);
       return 'Logo removed.';
     });
   }
@@ -226,6 +247,7 @@ export function Setup() {
               Remove the logo
             </button>
           )}
+          {iconSaved && current.logo_document_id && <NewIconNote name={appTitle(brand)} />}
         </fieldset>
 
         <fieldset data-tour="setup-colour">

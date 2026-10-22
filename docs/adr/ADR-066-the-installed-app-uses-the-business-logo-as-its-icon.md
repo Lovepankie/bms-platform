@@ -51,7 +51,19 @@ resolves the business from the host on every request and already serves the logo
    API (`/api/*`) and neither Caddyfile changes.
 6. **When a change reaches a phone.** Android Chrome checks the manifest of an installed app from time to time and updates its icon
    and name by itself (it may ask the person to confirm). An iPhone takes the icon and the name when Add to Home Screen is tapped and
-   never looks again, so after a logo change the business's staff remove the app and add it again on an iPhone.
+   never looks again. So after a logo or colour change, the business's staff remove the app and add it again on an iPhone.
+   The app says so (issue #453). The icon version the shell computes from the logo address and the colour drives both messages.
+   After a logo or colour save while a logo is set, the set-up screen says the app has a new icon. Android updates it by itself.
+   An iPhone needs the app removed and added again, with the iPhone steps one tap away.
+   The words use the business's home screen name: press and hold the icon, then remove it.
+   They name no iOS menu item, since its wording varies.
+   That save also stores the new version on the admin's device, so the admin's own installed app does not ask again.
+   The installed app runs in display mode `standalone`, or with `navigator.standalone` on iOS.
+   There, on an iPhone or iPad, the staff area remembers the version per device in `localStorage`. The key is `bms.install.iconVersion`, per host and so per business.
+   The first run only stores it, and a removed logo is stored without a card.
+   When the business's version later differs, a one-time card says the app has a new icon.
+   It gives the business's address and the same steps. Done stores the new version, so that version never shows the card again.
+   It never shows on Android, on a desktop or in a browser tab. A device whose storage cannot be read shows nothing.
 
 ## Consequences
 
@@ -65,7 +77,10 @@ resolves the business from the host on every request and already serves the logo
 - The manifest is no longer a static file: the API must be up for a browser to read it, and a phone that installs while the API is down
   sees no manifest.
 - Drawing an icon costs some milliseconds of CPU the first time per logo, colour and size on each API instance.
-- An iPhone keeps the old icon until the app is added again.
+- An iPhone keeps the old icon until the app is added again. The installed app on an iPhone or iPad says so once per new logo or
+  colour (issue #453). The person still has to remove the app and add it again. A phone that does not open the app never sees it.
+- A phone installed before issue #453 shipped has no stored version. Its first run only stores the current one, so it is not told
+  about a logo changed before then. We accept this.
 
 **Watch for:**
 

@@ -5,6 +5,7 @@ import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { InstallPrompt } from '../../install/InstallPrompt';
+import { NewLogoCard } from '../../install/NewIcon';
 import { createPush } from '../../push/push';
 import { TurnOnCard } from '../../push/TurnOnCard';
 import { HelpMenu, TourProvider } from '../../tour/host';
@@ -103,6 +104,7 @@ function StaffLayout() {
         <CrumbProvider>
         <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
         <InstallPrompt />
+        {!mock && <NewLogoCard />}
         {!mock && <TurnOnCard push={push} />}
         {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
           <p role="status" className="alert alert-warning">

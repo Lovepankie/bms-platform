@@ -32,7 +32,8 @@ function displayModeQuery(): MediaQueryList | null {
   return window.matchMedia('(display-mode: standalone)');
 }
 
-function standalone(): boolean {
+/** Running as the installed app, opened from its icon, not in a browser tab. */
+export function standalone(): boolean {
   if (typeof window === 'undefined') return false;
   return displayModeQuery()?.matches === true || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 }

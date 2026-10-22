@@ -165,7 +165,7 @@ export const adminWelcome: Tour = {
       route: '/staff/setup',
       target: 'setup-logo',
       title: 'Add your logo',
-      body: 'Upload your logo here. You and your staff will see it at the top of every page.',
+      body: 'Upload your logo here. You and your staff will see it at the top of every page and as the app icon.',
     },
     {
       id: 'colour',
