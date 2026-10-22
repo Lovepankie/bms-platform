@@ -451,12 +451,7 @@ class ProductImportService {
         Barcodes.Checked c = Barcodes.check(raw, format).checked();
         barcodes.byKey(Barcodes.key(c)).ifPresent(h -> {
             if (h.productActive()) {
-                throw new ApiException(
-                        HttpStatus.CONFLICT,
-                        "import_conflict",
-                        "Import conflict",
-                        "Another change put the barcode " + c.code()
-                                + " on an item while this file was being applied. Nothing was added. Run the check again and apply the file again.");
+                throw barcodeConflict(c);
             }
             barcodes.delete(h.barcode().id());
             audit.record(new AuditLog.Entry(
@@ -468,13 +463,27 @@ class ProductImportService {
                     Map.of("product_id", productId)));
         });
         UUID id = UUID.randomUUID();
-        barcodes.insert(id, productId, unitId, c.code(), c.format().key, false, by);
+        try {
+            barcodes.insert(id, productId, unitId, c.code(), c.format().key, false, by);
+        } catch (DuplicateKeyException e) {
+            // Another writer took the code between the read above and this insert; the unique index refuses it.
+            throw barcodeConflict(c);
+        }
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("product_id", productId);
         after.put("code", c.code());
         after.put("format", c.format().key);
         after.put("source", "import");
         audit.record(AuditLog.Entry.created("retail.barcode.added", BarcodeService.BARCODE, id, null, after));
+    }
+
+    private static ApiException barcodeConflict(Barcodes.Checked c) {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "import_conflict",
+                "Import conflict",
+                "Another change put the barcode " + c.code()
+                        + " on an item while this file was being applied. Nothing was added. Run the check again and apply the file again.");
     }
 
     private record Pending(
