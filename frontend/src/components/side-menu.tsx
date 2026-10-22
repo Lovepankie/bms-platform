@@ -68,6 +68,11 @@ const SWIPE = 50;
 // True inside the folded sidebar, so a group's links fold with the items above them.
 const Folded = createContext(false);
 
+/** True inside the folded sidebar: what the sidebar shows above its links keeps only its picture, as the links keep their icons. */
+export function useFolded(): boolean {
+  return useContext(Folded);
+}
+
 const under = (pathname: string, path: string) => pathname === path || pathname.startsWith(`${path}/`);
 
 /**
@@ -227,9 +232,10 @@ function keepFolded(folded: boolean) {
 
 /**
  * The sidebar from 720px: the same list as the drawer, about 240px wide, or 64px of icons when folded. It starts folded below
- * 1024px and unfolded from there; once the person folds or unfolds it, that choice is kept on the device.
+ * 1024px and unfolded from there; once the person folds or unfolds it, that choice is kept on the device. `head` is shown above
+ * the links, as in the drawer (the shop in use, issue #461).
  */
-export function SideNav({ label, tour, links, tours = [], sections, person }: { label: string; tour?: string; links: MenuLink[]; tours?: string[]; sections?: MenuSection[]; person?: string }) {
+export function SideNav({ label, tour, links, tours = [], sections, person, head }: { label: string; tour?: string; links: MenuLink[]; tours?: string[]; sections?: MenuSection[]; person?: string; head?: ReactNode }) {
   const [choice, setChoice] = useState(readFolded);
   const narrow = useMedia(NARROW);
   const folded = choice ?? narrow;
@@ -276,6 +282,7 @@ export function SideNav({ label, tour, links, tours = [], sections, person }: { 
       >
         {icons.menu}
       </button>
+      {head && <Folded.Provider value={shownFolded}>{head}</Folded.Provider>}
       <MenuLinks label={label} tour={tour} links={links} folded={shownFolded} sections={sections} person={person} />
     </div>
   );
@@ -284,8 +291,9 @@ export function SideNav({ label, tour, links, tours = [], sections, person }: { 
 /**
  * The menu button and its drawer. `label` names the list of links, `tour` is its data-tour id, `tours` the ids inside the groups,
  * `sections` the headed parts, `person` whose folded sections are kept and `busy` holds Sign out while signing out runs.
+ * `head` what is shown above the links (the shop in use, issue #461).
  */
-export function SideMenu({ label, tour, links, name, onSignOut, busy = false, tours = [], sections, person }: { label: string; tour?: string; links: MenuLink[]; name?: string; onSignOut: () => void; busy?: boolean; tours?: string[]; sections?: MenuSection[]; person?: string }) {
+export function SideMenu({ label, tour, links, name, onSignOut, busy = false, tours = [], sections, person, head }: { label: string; tour?: string; links: MenuLink[]; name?: string; onSignOut: () => void; busy?: boolean; tours?: string[]; sections?: MenuSection[]; person?: string; head?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const heading = useId();
   const button = useRef<HTMLButtonElement>(null);
@@ -400,6 +408,7 @@ export function SideMenu({ label, tour, links, name, onSignOut, busy = false, to
             {icons.close}
           </button>
         </div>
+        {head}
         <MenuLinks label={label} tour={tour} links={links} sections={sections} person={person} />
         <div className="side-menu-foot">
           <span className="staff-user">

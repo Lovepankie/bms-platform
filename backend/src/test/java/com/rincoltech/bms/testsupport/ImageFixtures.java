@@ -177,6 +177,40 @@ public final class ImageFixtures {
         return write(new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB), "gif");
     }
 
+    /** The centre colour of every image a PDF draws, in page order: which logo a generated document carries. */
+    public static java.util.List<Color> pdfImageCentres(byte[] pdf) throws IOException {
+        java.util.List<Color> out = new java.util.ArrayList<>();
+        try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            for (org.apache.pdfbox.pdmodel.PDPage page : d.getPages()) {
+                collect(page.getResources(), out);
+            }
+        }
+        return out;
+    }
+
+    private static void collect(org.apache.pdfbox.pdmodel.PDResources resources, java.util.List<Color> out)
+            throws IOException {
+        if (resources == null) {
+            return;
+        }
+        for (org.apache.pdfbox.cos.COSName name : resources.getXObjectNames()) {
+            org.apache.pdfbox.pdmodel.graphics.PDXObject x = resources.getXObject(name);
+            if (x instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject image) {
+                BufferedImage b = image.getImage();
+                out.add(new Color(b.getRGB(b.getWidth() / 2, b.getHeight() / 2)));
+            } else if (x instanceof org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject form) {
+                collect(form.getResources(), out);
+            }
+        }
+    }
+
+    /** Two colours within what re-encoding a flat image shifts them by. */
+    public static boolean near(Color a, Color b) {
+        return Math.abs(a.getRed() - b.getRed()) < 24
+                && Math.abs(a.getGreen() - b.getGreen()) < 24
+                && Math.abs(a.getBlue() - b.getBlue()) < 24;
+    }
+
     private static byte[] write(BufferedImage image, String format) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();

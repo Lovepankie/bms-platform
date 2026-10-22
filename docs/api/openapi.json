@@ -946,6 +946,10 @@
           "location" : {
             "type" : "string"
           },
+          "logo_url" : {
+            "description" : "Same-origin URL of the shop's own logo, versioned by its document id, or null: the shop shows the business logo (issue #461, ADR-068)",
+            "type" : "string"
+          },
           "name" : {
             "type" : "string"
           },
@@ -5474,6 +5478,10 @@
           },
           "is_head_office" : {
             "type" : "boolean"
+          },
+          "logo_url" : {
+            "description" : "Same-origin URL of the shop's own logo, or null: show the business logo (#461, ADR-068)",
+            "type" : "string"
           },
           "name" : {
             "type" : "string"
@@ -22042,6 +22050,190 @@
           }
         },
         "summary" : "Close a branch and keep its history (FR-BR-01, ADR-041); 422 branch_close_needs_reason while stock or transfers on their way remain and no reason is sent",
+        "tags" : [ "branches" ]
+      }
+    },
+    "/api/v1/branches/{branch_id}/logo" : {
+      "delete" : {
+        "operationId" : "removeBranchLogo",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "No such branch in the caller's scope"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "The branch is closed (invalid_status_transition)"
+          }
+        },
+        "summary" : "Remove a shop's own logo; it shows the business logo again and the file is kept (issue #461)",
+        "tags" : [ "branches" ]
+      },
+      "get" : {
+        "operationId" : "getBranchLogo",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "v",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-None-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "304" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The ETag still matches"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "No such branch, no logo of its own, or an unknown host"
+          },
+          "503" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Storage cannot be read (logo_unavailable)"
+          }
+        },
+        "summary" : "A shop's own logo image (public, cacheable)",
+        "tags" : [ "branches" ]
+      },
+      "put" : {
+        "operationId" : "uploadBranchLogo",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "branch_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "required" : [ "file" ],
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "No such branch in the caller's scope"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "The branch is closed (invalid_status_transition)"
+          },
+          "413" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "Over 1 MB (file_too_large)"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "Not PNG, JPEG or WebP, or not decodable (unsupported_file_type)"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "svg_not_allowed, image_too_small, image_too_large (over 4 megapixels)"
+          }
+        },
+        "summary" : "Upload or replace a shop's own logo: the rules of the business logo, PNG, JPEG or WebP, 1 MB, 128 px or more (issue #461, ADR-068)",
         "tags" : [ "branches" ]
       }
     },

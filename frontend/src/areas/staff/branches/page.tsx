@@ -1,8 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { type ChangeEvent, useRef, useState } from 'react';
 import { type AdminBranch, BranchesError, branches } from '../../../api/branches';
 import { branchLabel } from '../../../auth/branch';
+import { ShopLogo } from '../branch-picker';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { money, useBranchRoles } from '../retail/ui';
@@ -11,13 +12,17 @@ import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGo
 // Branches (issue #329; ADR-041): which branches are open, close one without losing its history, reopen it, and say that a branch
 // keeps no goods (a head office). Everyone who may read branches sees the list; an administrator also closes, reopens and switches.
 // Closed branches are hidden until asked for. Closing over stock or transfers on the road shows the server's warning with the stock
-// value and asks for a reason; nothing is moved or written off.
+// value and asks for a reason; nothing is moved or written off. An administrator also gives each open branch its own logo, with the
+// rules of the business logo (issue #461, ADR-068); a branch without one shows the business logo on its receipts.
 
 // The ADR-033 branch role, when roles are on, shown beside the Store flag so the two are never read as one (ADR-048).
 const roleWords = (roles: { branch_id?: string; role?: string }[] | undefined, id: string | undefined): string | null => {
   const role = roles?.find((r) => r.branch_id === id)?.role;
   return role && role !== 'both' ? `Branch role: ${role}` : null;
 };
+
+/** The types the server takes for a logo, as on Business set-up; it checks the content and re-encodes it anyway. */
+const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp';
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
@@ -102,6 +107,22 @@ export function BranchesScreen() {
       return on ? `${branchLabel(branch)} is a shop again and sells.` : `${branchLabel(branch)} is now a store. It holds stock but does not sell.`;
     });
 
+  const uploadLogo = (branch: AdminBranch, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    void act(branch, async () => {
+      await branches.uploadLogo(branch, file);
+      return `Logo saved for ${branchLabel(branch)}. Its receipts and documents now carry it.`;
+    });
+  };
+
+  const removeLogo = (branch: AdminBranch) =>
+    act(branch, async () => {
+      await branches.removeLogo(branch);
+      return `Logo removed from ${branchLabel(branch)}. It shows the business logo again.`;
+    });
+
   const all = list.data ?? [];
   const shown = visibleBranches(all, showClosed);
   const hidden = closedCount(all);
@@ -134,7 +155,7 @@ export function BranchesScreen() {
                 return (
                   <li key={b.id} className="rt-card stack">
                     <p>
-                      <strong>{branchLabel(b)}</strong>{' '}
+                      <ShopLogo url={b.logo_url} name={branchLabel(b)} /> <strong>{branchLabel(b)}</strong>{' '}
                       {b.is_head_office && <span className="badge">Head office</span>}{' '}
                       {closed && <span className="badge badge-warning">Closed</span>}{' '}
                       {!closed && !keepsGoods(b) && <span className="badge">Keeps no goods</span>}{' '}
@@ -142,6 +163,23 @@ export function BranchesScreen() {
                       {!closed && roleWords(roles, b.id) && <span className="badge">{roleWords(roles, b.id)}</span>}
                     </p>
                     <p className="hint">{branchLine(b)}</p>
+                    {canManage && !closed && (
+                      <fieldset className="stack" aria-label={`Logo of ${branchLabel(b)}`}>
+                        <legend>Logo</legend>
+                        {!b.logo_url && <p className="hint">No logo of its own: its receipts and documents carry the business logo.</p>}
+                        <label>
+                          {b.logo_url ? 'Replace the logo' : 'Upload a logo'} (PNG, JPEG or WebP, up to 1 MB, at least 128 px)
+                          <input type="file" accept={LOGO_ACCEPT} disabled={busyId !== null} onChange={(e) => uploadLogo(b, e)} style={{ display: 'block' }} />
+                        </label>
+                        {b.logo_url && (
+                          <p>
+                            <BusyButton type="button" className="btn-sm" busy={busyId === b.id} disabled={busyId !== null} onClick={() => void removeLogo(b)}>
+                              Remove the logo
+                            </BusyButton>
+                          </p>
+                        )}
+                      </fieldset>
+                    )}
                     {closed && closedOn(b) && <p className="hint">{closedOn(b)}</p>}
                     {closed && b.closed_reason && <p className="hint">Reason: {b.closed_reason}</p>}
                     {closed && (b.stock_items ?? 0) > 0 && (
