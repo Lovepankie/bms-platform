@@ -720,6 +720,9 @@ class ExistingLoansIT extends LoanFixtures {
                 .as("%s", clean.getBody())
                 .isZero();
         assertThat(clean.getBody().get("rows").get(0).get("outcome").asString()).isEqualTo("ready");
+        assertThat(clean.getBody().get("added").asInt())
+                .as("the loans a commit would record")
+                .isEqualTo(2);
         ResponseEntity<JsonNode> committed = importCsv(good, false);
         assertThat(committed.getBody().get("added").asInt())
                 .as("%s", committed.getBody())

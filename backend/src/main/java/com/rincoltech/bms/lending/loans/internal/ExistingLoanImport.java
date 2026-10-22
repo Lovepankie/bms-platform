@@ -252,7 +252,7 @@ class ExistingLoanImport {
                     AuditLog.Entry.created("lending.loan.existing_imported", "lending.loan_import", null, null, after));
         }
         return new ImportResult(
-                dryRun, read, loans.size(), repaymentRows, dryRun || errors > 0 ? 0 : added, skipped, errors, report);
+                dryRun, read, loans.size(), repaymentRows, errors > 0 ? 0 : added, skipped, errors, report);
     }
 
     /** The loan columns of a loan row; the first problem, or null when it reads cleanly. */

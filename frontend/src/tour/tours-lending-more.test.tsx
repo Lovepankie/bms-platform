@@ -9,6 +9,8 @@ import { StaffHome } from '../areas/staff/home';
 import { Approvals } from '../areas/staff/approvals';
 import { Insights } from '../areas/staff/insights/page';
 import { CollateralForm } from '../areas/staff/lending/collateral-form';
+import { ExistingLoansPage } from '../areas/staff/lending/existing-loans';
+import { ExistingLoansImport } from '../areas/staff/lending/existing-loans-import';
 import { CertificateBody } from '../areas/staff/lending/investment-certificate';
 import { NewInvestment } from '../areas/staff/lending/investment-new';
 import { Products as InvestmentProducts } from '../areas/staff/lending/investment-products';
@@ -43,7 +45,7 @@ const ALL = [
   'lending.savings.read', 'lending.savings.deposit', 'lending.savings.withdraw', 'lending.savings.open', 'lending.savings_products.manage',
   'lending.members.read', 'lending.members.create', 'lending.members.update', 'lending.collateral.read', 'lending.collateral.manage',
   'lending.investments.read', 'lending.investments.open', 'lending.investments.fund', 'lending.investments.payout', 'lending.investment_products.manage',
-  'lending.loans.read', 'lending.insights.read', 'lending.reports.portfolio',
+  'lending.loans.read', 'lending.loans.bring_in', 'lending.insights.read', 'lending.reports.portfolio',
   'core.approvals.read', 'core.settings.read', 'core.settings.manage', 'core.payment_account.manage', 'core.users.manage',
   'core.notifications.read', 'core.notification_templates.manage',
 ];
@@ -169,6 +171,10 @@ function screen(path: string): ReactElement {
       return <OwnTwoStep />;
     case '/staff/sms/opt-outs':
       return <OptOutsScreen />;
+    case '/staff/lending/existing-loans':
+      return <ExistingLoansPage />;
+    case '/staff/lending/existing-loans/import':
+      return <ExistingLoansImport />;
     default:
       throw new Error(`No screen is mapped for ${path}: add it to tours-lending-more.test.tsx`);
   }
@@ -200,6 +206,8 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-sms-wording': [OWNER],
   'page-sms-opt-outs': [OWNER],
   'page-own-two-step': [OWNER],
+  'page-existing-loans': [OWNER],
+  'page-existing-loans-import': [OWNER],
 };
 
 describeTours('lending more', LENDING_MORE_TOURS, AUDIENCE, screen, seed);

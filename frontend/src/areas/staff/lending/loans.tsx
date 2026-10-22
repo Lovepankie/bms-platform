@@ -8,6 +8,7 @@ import { branchFilter } from '../../../auth/branch';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { money, statusBadge, words } from './loan-state';
+import { canBringIn } from './existing-loans-state';
 import { showLending } from './permissions';
 
 // Loans (FR-DIS, FR-REP): find a loan by its number, the member's number, name or phone, filter by
@@ -54,7 +55,7 @@ export function LoanRows({ items, term = '' }: { items: LoanListItem[]; term?: s
 }
 
 export function Loans() {
-  const { branch } = useStaff();
+  const { branch, me } = useStaff();
   const search = useLiveSearch();
   const [status, setStatus] = useState('');
   const pages = useInfiniteQuery({
@@ -70,6 +71,9 @@ export function Loans() {
 
   return (
     <LendingGate title="Loans">
+      {canBringIn(me) && (
+        <p><Link to="/staff/lending/existing-loans">Bring in existing loans from a paper register</Link></p>
+      )}
       <form role="search" className="ln-search" data-tour="loan-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox id="loan-q" label="Loan number, member number, name or phone" search={search} fetching={fetching} count={pages.data ? items.length : undefined} more={pages.hasNextPage} />
         <label htmlFor="loan-status">Status</label>

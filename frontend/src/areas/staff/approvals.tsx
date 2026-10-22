@@ -64,6 +64,12 @@ function Row({ item, id }: { item: Approval; id: string }) {
     <tr>
       <td data-label="Action">
         <What item={item} />
+        {item.action_type === 'loan_bring_in' && item.subject_id && (
+          <>
+            {' '}
+            <Link to="/staff/lending/loans/$loanId" params={{ loanId: item.subject_id }}>Open the loan</Link>
+          </>
+        )}
         {item.action_type === 'collateral_release' && item.subject_id && (
           <>
             {' '}

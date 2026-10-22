@@ -473,6 +473,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (`/platform/feedback`), the tours `page-feedback` and `page-operator-feedback`, and a Feedback step in `admin-welcome` v18,
   `retail-sales` v12 and `staff-welcome` v6. Tests: `FeedbackIT`, `RlsIsolationIT`, `ModularityTest`, `feedback-state.test.ts`,
   `feedback.dom.test.tsx`, `tours-operator.test.tsx`.
+- **Built (existing loans from a paper register, issue #466, FR-EXL-01 to FR-EXL-07, ADR-071):** migration `V91` (claimed
+  after V81 to V90; merges after #290): the loan status `brought_in`, the columns `go_live_on`, `brought_in_on`,
+  `register_ref`, `agreed_total_minor` and `opening_entry_id` on `lending_loans`, the append-only
+  `lending_brought_in_repayments`, and the permission `lending.loans.bring_in` (tenant admin, branch manager). Routes under
+  `/lending/existing-loans`: the go-live date, record with a check (`dry_run`) and an `Idempotency-Key`, list, get, cancel,
+  ask again, and the CSV import (check, then commit). The maker-checker action `loan_bring_in` (checker
+  `lending.disbursements.authorise`, no threshold) writes the schedule from the real date, historic transactions with no
+  journal and one opening entry at go-live (debit loans receivable, credit opening balance equity). The arrears run charges
+  no penalty period before `brought_in_on`. The go-live date is the tenant setting `go_live_date` (`PATCH /settings`, Owner
+  only; `PUT /platform/tenants/{id}/go-live` for the operator), defaulting to the first administrator sign-in
+  (`StaffDirectory.firstAdminSignIn`). The CSV reader of the retail item import moved to `kernel.CsvTable` so both imports
+  share it. The PWA: `/staff/lending/existing-loans` (the form, its check and the loans waiting) and
+  `/staff/lending/existing-loans/import`, linked from Loans, and an Open the loan link on a `loan_bring_in` approval. Tests:
+  `ExistingLoansIT`, `BringInTest`, `RlsIsolationIT`, `existing-loans-state.test.ts`, `existing-loans.dom.test.tsx`.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -549,7 +563,7 @@ package; `internal` is closed. Tables of a vertical are prefixed with its key (`
 | `lending.manifest` | The vertical's registration with the core | 5.4.3 | none | none |
 | `lending` members | Members, KYC, next of kin, relationships | MEM | 6.7 | 7.11.11 |
 | `lending` products | Loan products and versions | PRD | 6.7 | 7.11.12 |
-| `lending` loans | Origination, schedules, disbursement, repayments, arrears, closure | ORG, DIS, REP, ARR, LCL; 3.4 | 6.7 | 7.11.13 |
+| `lending` loans | Origination, schedules, disbursement, repayments, arrears, closure; existing loans brought in from a paper register (ADR-071) | ORG, DIS, REP, ARR, LCL, EXL; 3.4 | 6.7 | 7.11.13 |
 | `lending` collateral | Collateral register | COL | 6.7 | 7.11.14 |
 | `lending.seed` | The `seed-lending` command: fabricated loan book, savings and investments for one empty staging tenant (ADR-026, ADR-031, ADR-032) | none | none (writes 6.7 tables) | none (a command, `docs/runbooks/seed-lending.md`) |
 | `lending.savings` | Savings products, accounts, movements, end of day and interest, statements, savings reports (ADR-032) | SAV | 6.7 | 7.11.15 |

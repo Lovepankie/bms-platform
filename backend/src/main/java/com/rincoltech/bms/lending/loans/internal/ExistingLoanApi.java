@@ -176,7 +176,10 @@ final class ExistingLoanApi {
             int rowsRead,
             int loans,
             int repayments,
+
+            @Schema(description = "Loans recorded, or on a check the loans that would be; 0 while any row is an error")
             int added,
+
             int skipped,
             int errors,
             List<ImportRow> rows) {}
