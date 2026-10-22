@@ -10,19 +10,10 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import javax.imageio.ImageIO;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.cos.COSName;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDResources;
-import org.apache.pdfbox.pdmodel.graphics.PDXObject;
-import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -141,9 +132,7 @@ class BranchLogoIT extends IntegrationTest {
     }
 
     static boolean near(Color a, Color b) {
-        return Math.abs(a.getRed() - b.getRed()) < 24
-                && Math.abs(a.getGreen() - b.getGreen()) < 24
-                && Math.abs(a.getBlue() - b.getBlue()) < 24;
+        return ImageFixtures.near(a, b);
     }
 
     // ---- Upload, replace, remove -----------------------------------------------------------------------
@@ -258,6 +247,13 @@ class BranchLogoIT extends IntegrationTest {
         // A manager of another branch only cannot see this one: a 404, and nothing is stored.
         assertThat(upload(t, shop, ADMIN, t.headOffice().toString(), png).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(http.exchange(
+                                "/api/v1/branches/" + shop + "/logo",
+                                HttpMethod.DELETE,
+                                new HttpEntity<>(staff(t, ADMIN, t.headOffice().toString())),
+                                JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM documents WHERE tenant_id = ? AND subject_type = 'core.tenant'")
                         .param(t.tenantId())
@@ -265,6 +261,36 @@ class BranchLogoIT extends IntegrationTest {
                         .single())
                 .isZero();
         assertThat(upload(shop, png).getStatusCode()).isEqualTo(HttpStatus.OK);
+        // Out of scope, the delete is refused and the logo stays.
+        assertThat(http.exchange(
+                                "/api/v1/branches/" + shop + "/logo",
+                                HttpMethod.DELETE,
+                                new HttpEntity<>(staff(t, ADMIN, t.headOffice().toString())),
+                                JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(branch(shop).get("logo_url").isNull()).isFalse();
+    }
+
+    @Test
+    void aShopLogoLeavesTheBusinessBrandingAndManifestAsTheyWere() {
+        businessLogo(BUSINESS);
+        JsonNode branding =
+                publicGet("/api/v1/branding", t.slug(), JsonNode.class).getBody();
+        String manifest = publicGet("/api/v1/branding/app/manifest.webmanifest", t.slug(), String.class)
+                .getBody();
+        assertThat(branding.get("logo_url").asString()).startsWith("/api/v1/branding/logo?v=");
+
+        assertThat(upload(t.secondBranch(), ImageFixtures.png(256, 256, SHOP)).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        assertThat(publicGet("/api/v1/branding", t.slug(), JsonNode.class)
+                        .getBody()
+                        .get("logo_url"))
+                .isEqualTo(branding.get("logo_url"));
+        assertThat(publicGet("/api/v1/branding/app/manifest.webmanifest", t.slug(), String.class)
+                        .getBody())
+                .isEqualTo(manifest);
     }
 
     @Test
@@ -318,6 +344,31 @@ class BranchLogoIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(remove(other, shop, ADMIN).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(publicGet(url, t.slug(), byte[].class).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void anotherBusinessesHostWithItsOwnBranchAndOurDocumentIdNeverServesOurs() throws Exception {
+        TestDatabase.Fixture other = TestDatabase.tenant("shop-logo-c", false, true);
+        String ours = upload(t.secondBranch(), ImageFixtures.png(200, 200, SHOP))
+                .getBody()
+                .get("logo_url")
+                .asString();
+        String ourDocument = ours.substring(ours.indexOf("?v=") + 3);
+        String theirPath = "/api/v1/branches/" + other.secondBranch() + "/logo?v=" + ourDocument;
+
+        // Their branch has no logo yet: a 404, whatever document id the query names.
+        assertThat(publicGet(theirPath, other.slug(), JsonNode.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+
+        // With a logo of their own, they get theirs; ?v= only busts caches.
+        Color theirs = new Color(30, 160, 60);
+        assertThat(upload(other, other.secondBranch(), ADMIN, "*", ImageFixtures.png(200, 200, theirs))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<byte[]> served = publicGet(theirPath, other.slug(), byte[].class);
+        assertThat(served.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(near(centre(served.getBody()), theirs)).isTrue();
+        assertThat(near(centre(served.getBody()), SHOP)).isFalse();
     }
 
     // ---- Receipts and documents of each shop -------------------------------------------------------------
@@ -400,29 +451,7 @@ class BranchLogoIT extends IntegrationTest {
         return r.getBody();
     }
 
-    /** The centre colour of every image the PDF draws, in page order. */
     static List<Color> images(byte[] pdf) throws Exception {
-        List<Color> out = new ArrayList<>();
-        try (PDDocument d = Loader.loadPDF(pdf)) {
-            for (PDPage page : d.getPages()) {
-                collect(page.getResources(), out);
-            }
-        }
-        return out;
-    }
-
-    private static void collect(PDResources resources, List<Color> out) throws Exception {
-        if (resources == null) {
-            return;
-        }
-        for (COSName name : resources.getXObjectNames()) {
-            PDXObject x = resources.getXObject(name);
-            if (x instanceof PDImageXObject image) {
-                BufferedImage b = image.getImage();
-                out.add(new Color(b.getRGB(b.getWidth() / 2, b.getHeight() / 2)));
-            } else if (x instanceof PDFormXObject form) {
-                collect(form.getResources(), out);
-            }
-        }
+        return ImageFixtures.pdfImageCentres(pdf);
     }
 }
