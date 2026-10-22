@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Every SQL statement on {@code unallocated_receipts} beyond the insert that {@link UnallocatedReceipts} makes (migration
- * V59 and V84). Every method runs in the caller's transaction with the tenant bound. A receipt is settled once:
+ * V59 and V83). Every method runs in the caller's transaction with the tenant bound. A receipt is settled once:
  * {@link #settle} is conditional on the status {@code open} and on the version the caller read under the row lock, so of two
  * writers exactly one updates a row, and the database's guard trigger refuses any other change.
  */

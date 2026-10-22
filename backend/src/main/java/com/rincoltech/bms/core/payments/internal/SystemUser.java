@@ -7,7 +7,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The tenant's payments system user (migration V84, ADR-035 decision 16): a user of kind {@code system} with no credentials,
+ * The tenant's payments system user (migration V83, ADR-035 decision 16): a user of kind {@code system} with no credentials,
  * no role and no session, created the first time the platform has to raise a request itself. It is the maker of the reversal
  * requests raised when the provider reports a booked payment reversed, so the maker is never the checker and a person
  * always decides. Every staff query filters on kind {@code staff}, so it is listed nowhere and can sign in nowhere.

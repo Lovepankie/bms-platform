@@ -1,10 +1,10 @@
--- V84: the unallocated receipts queue (extras slice A5/7, first part, issue #224; ADR-035 and its amendment of 2026-10-19 for
+-- V83: the unallocated receipts queue (extras slice A5/7, first part, issue #224; ADR-035 and its amendment of 2026-10-19 for
 -- slice A5; docs/specs/client-extras.md sections 3.7, 3.8 and 3.16; FR-PAY-04). Flyway runs with outOfOrder off: V79 is the
--- last on main, the lending pull requests #270, #271, #272 and #290 use V80 to V82 and merge first (#290 adds
--- none), V83 is left unused, and this file takes V84. The number is checked again at merge time against what is then on main.
+-- last on main, the lending pull requests #270, #271 and #272 take V80, V81 and V82 (#290 adds none) and merge first, and this
+-- file takes V83, the next. The number is checked again at merge time against what is then on main.
 --
 -- Expand only, safe on a populated database. Six things and nothing else (4 to 6 belong to the governed reversal of a gateway
--- payment, the same slice; the nightly reconciliation of the second part of #224 takes V85):
+-- payment, the same slice; the nightly reconciliation of the second part of #224 takes V84):
 --
 --   1. `unallocated_receipts` stops being append-only: a receipt that is `open` may end exactly once, as `allocated` (the money
 --      became a loan repayment or a savings deposit through the servicing ports) or as `refunded` (the money went back out),
@@ -179,7 +179,7 @@ DECLARE
         ARRAY['booked', 'reversed_pending_review'], ARRAY['booked', 'reversed'],
         ARRAY['booked_unallocated', 'reversed_pending_review'], ARRAY['booked_unallocated', 'reversed'],
         ARRAY['reversed_pending_review', 'reversed'],
-        -- V84: a payment reported reversed and then completed again goes back to what it was.
+        -- V83: a payment reported reversed and then completed again goes back to what it was.
         ARRAY['reversed_pending_review', 'booked'], ARRAY['reversed_pending_review', 'booked_unallocated']];
     i integer;
     ok boolean := false;
@@ -215,7 +215,7 @@ BEGIN
             USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     IF NEW.status IS DISTINCT FROM OLD.status THEN
-        -- V84: an order whose money stands in a loan or account is taken out only by the approved reversal, never by this move.
+        -- V83: an order whose money stands in a loan or account is taken out only by the approved reversal, never by this move.
         IF OLD.status = 'needs_attention' AND NEW.status = 'reversed' AND OLD.booked_subject_txn_id IS NOT NULL THEN
             RAISE EXCEPTION 'payment_intents: needs_attention to reversed is refused for an order with a booked transaction'
                 USING ERRCODE = 'integrity_constraint_violation';

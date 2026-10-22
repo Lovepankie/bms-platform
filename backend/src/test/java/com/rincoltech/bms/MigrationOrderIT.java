@@ -1412,12 +1412,12 @@ class MigrationOrderIT {
     }
 
     /**
-     * The unallocated receipts queue (#224, V84) on a database a server already migrated to the version before it and that holds a staff user, a
+     * The unallocated receipts queue (#224, V83) on a database a server already migrated to the version before it and that holds a staff user, a
      * payment intent and an open receipt: the receipt keeps its row and stays {@code open} and bare, the new columns take their
      * defaults, the swap of {@code users_kind_check} keeps the staff user and lets the new {@code system} kind in (and nothing
      * else), the swap of the receipts' status check lets {@code reversed} in, a second system user is refused, the guard trigger
      * refuses a status the queue does not know, and the new permission lands on the three roles that decide it.
-     * JUSTIFICATION-A3: a new test case; no existing case migrates a populated receipts or users table across V84.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a populated receipts or users table across V83.
      */
     @Test
     void unallocatedReceiptsQueueMigrationKeepsPopulatedRowsAndSwapsTheChecks() {
@@ -1429,9 +1429,9 @@ class MigrationOrderIT {
 
     /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
     static void verifyUnallocatedReceiptsMigration(String url) {
-        // The version just before V84 on this branch (V79 today, V82 once the lending migrations V80 to V82 are on
+        // The version just before V83 on this branch (V79 today, V82 once the lending migrations V80 to V82 are on
         // main).
-        String before = VERSIONS.get(VERSIONS.indexOf("84") - 1);
+        String before = VERSIONS.get(VERSIONS.indexOf("83") - 1);
         assertThat(flyway(url, before).migrate().targetSchemaVersion).isEqualTo(before);
         JdbcClient owner =
                 JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
@@ -1443,7 +1443,7 @@ class MigrationOrderIT {
         UUID period = UUID.randomUUID();
         UUID entry = UUID.randomUUID();
         owner.sql(
-                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v61', 'Test Tenant V84', '00000000-0000-4000-8000-000000000001')")
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v61', 'Test Tenant V83', '00000000-0000-4000-8000-000000000001')")
                 .param(tenant)
                 .update();
         owner.sql(
@@ -1455,7 +1455,7 @@ class MigrationOrderIT {
                 .query((rs, n) -> 1)
                 .single();
         owner.sql(
-                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff V84', 'staff-v61@example.test', 'active')")
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff V83', 'staff-v61@example.test', 'active')")
                 .params(staff, tenant)
                 .update();
         owner.sql("INSERT INTO gl_periods (id, tenant_id, year, month, status) VALUES (?, ?, 2026, 1, 'open')")
@@ -1468,7 +1468,7 @@ class MigrationOrderIT {
         owner.sql(
                         "WITH e AS (INSERT INTO journal_entries (id, tenant_id, branch_id, entry_no, entry_date, period_id,"
                                 + " reference, source_module, source_type) VALUES (?, ?, ?, 'JE99999999', DATE '2026-01-15', ?,"
-                                + " 'V84-FIXTURE', 'test', 'fixture') RETURNING id)"
+                                + " 'V83-FIXTURE', 'test', 'fixture') RETURNING id)"
                                 + " INSERT INTO journal_lines (id, tenant_id, entry_id, line_no, account_id, debit, credit, currency)"
                                 + " SELECT ?, ?, e.id, 1, ?, 1000, 0, 'UGX' FROM e UNION ALL SELECT ?, ?, e.id, 2, ?, 0, 1000, 'UGX' FROM e")
                 .params(
@@ -1502,7 +1502,7 @@ class MigrationOrderIT {
                         INSERT INTO unallocated_receipts (id, tenant_id, branch_id, intent_id, purpose, subject_type, subject_id,
                                                           amount_minor, currency, value_date, confirmation_code, refusal_code,
                                                           journal_entry_id)
-                        VALUES (?, ?, ?, ?, 'test.payment', 'test_subject', ?, 1500, 'UGX', DATE '2026-01-15', 'V84-CONF-1',
+                        VALUES (?, ?, ?, ?, 'test.payment', 'test_subject', ?, 1500, 'UGX', DATE '2026-01-15', 'V83-CONF-1',
                                 'loan_closed', ?)
                         """)
                 .params(receipt, tenant, branch, intent, UUID.randomUUID(), entry)
@@ -1510,7 +1510,7 @@ class MigrationOrderIT {
         long permissions =
                 owner.sql("SELECT count(*) FROM permissions").query(Long.class).single();
 
-        assertThat(flyway(url, "84").migrate().targetSchemaVersion).isEqualTo("84");
+        assertThat(flyway(url, "83").migrate().targetSchemaVersion).isEqualTo("83");
 
         Map<String, Object> row = owner.sql("SELECT * FROM unallocated_receipts WHERE id = ?")
                 .param(receipt)
@@ -1551,7 +1551,7 @@ class MigrationOrderIT {
                                 .param(receipt)
                                 .update())
                 .hasMessageContaining("unallocated_receipts_reversed_complete");
-        // The replaced guard of payment_intents: the moves V84 added are allowed, the ones it narrows or never had are
+        // The replaced guard of payment_intents: the moves V83 added are allowed, the ones it narrows or never had are
         // refused.
         UUID other = UUID.randomUUID();
         owner.sql("""
@@ -1576,7 +1576,7 @@ class MigrationOrderIT {
                     .update();
             owner.sql("""
                             UPDATE payment_intents SET status = 'paid', paid_amount_minor = 1500, paid_currency = 'UGX',
-                                   confirmation_code = 'V84-CONF', paid_at = now(), verified_at = now() WHERE id = ?
+                                   confirmation_code = 'V83-CONF', paid_at = now(), verified_at = now() WHERE id = ?
                             """).param(id).update();
         }
         owner.sql(
@@ -1586,7 +1586,7 @@ class MigrationOrderIT {
         owner.sql("UPDATE payment_intents SET status = 'reversed_pending_review' WHERE id = ?")
                 .param(intent)
                 .update();
-        // V84: a payment reported reversed and then completed again goes back to booked.
+        // V83: a payment reported reversed and then completed again goes back to booked.
         owner.sql("UPDATE payment_intents SET status = 'booked' WHERE id = ?")
                 .param(intent)
                 .update();
@@ -1605,7 +1605,7 @@ class MigrationOrderIT {
                         .param(intent)
                         .update())
                 .hasMessageContaining("is not an allowed transition");
-        // V84 narrows needs_attention to reversed: refused for an order that carries a booked transaction.
+        // V83 narrows needs_attention to reversed: refused for an order that carries a booked transaction.
         owner.sql(
                         "UPDATE payment_intents SET status = 'needs_attention', booked_subject_txn_id = ?, booked_at = now() WHERE id = ?")
                 .params(UUID.randomUUID(), other)
@@ -1695,7 +1695,7 @@ class MigrationOrderIT {
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones and V57 (#233) the payment
         // account
-        // one, and V84 (the unallocated receipts queue, #224) the payments allocate_approve one, which are not V48's to
+        // one, and V83 (the unallocated receipts queue, #224) the payments allocate_approve one, which are not V48's to
         // answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"

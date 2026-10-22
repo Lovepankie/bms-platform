@@ -124,16 +124,16 @@ confirms it with an authenticated status query, and the booker records it as a r
    was made it goes stale and the next notification or the weekly look raises a fresh one. A booked payment is looked at again daily for 7 days when the provider names a mobile money wallet and for 120 days (daily for 14
    days, then weekly) for a card or an unknown method. A reversal of money the lender already refunded by hand raises no request (nothing in the books can be reversed): the loss is recorded by the accountant by manual journal.
 
-**Rolling back V84 (the unallocated receipts queue).** Flyway has no down step; the migration is expand only, so the previous application
+**Rolling back V83 (the unallocated receipts queue).** Flyway has no down step; the migration is expand only, so the previous application
 version runs on the new schema untouched. To go back to the previous release: deploy it (it ignores the new columns, the `system` user and
 the new permission), and leave the data. If the schema itself must be put back, in this order and only by the owner role, after the
 queue has been emptied (no `unallocated_allocation`, `unallocated_refund` or `gateway_payment_reversal` request pending; reject them):
-(1) drop the trigger `unallocated_receipts_guard` and its function, and restore `payment_intents_guard()` from V54 (V84 added the moves from review back to booked and narrowed needs_attention to reversed);
-(2) revoke `UPDATE` on `unallocated_receipts` from `bms_app` (the V59 grant was `SELECT, INSERT`) and drop the V84 columns and checks; a receipt
+(1) drop the trigger `unallocated_receipts_guard` and its function, and restore `payment_intents_guard()` from V54 (V83 added the moves from review back to booked and narrowed needs_attention to reversed);
+(2) revoke `UPDATE` on `unallocated_receipts` from `bms_app` (the V59 grant was `SELECT, INSERT`) and drop the V83 columns and checks; a receipt
 already `allocated`, `refunded` or `reversed` has lost its `status` explanation then, so keep a copy of
 `SELECT id, status, allocated_txn_id, cleared_entry_id, refund_method_key, refund_reference FROM unallocated_receipts WHERE status <> 'open'`
 first, and set those receipts back to `open` only if their journal entries are also reversed by the accountant (the books, not the status, are the record);
-(3) keep the `users` rows of kind `system` and leave `users_kind_check` as V84 made it: requests, allocations and audit rows name that user as their maker with no foreign key, and deleting it would leave them pointing at nothing (it has no credentials, role or session, and every staff query filters on kind `staff`); if the check must be put back, export the rows that reference those ids first;
+(3) keep the `users` rows of kind `system` and leave `users_kind_check` as V83 made it: requests, allocations and audit rows name that user as their maker with no foreign key, and deleting it would leave them pointing at nothing (it has no credentials, role or session, and every staff query filters on kind `staff`); if the check must be put back, export the rows that reference those ids first;
 (4) delete the permission `core.payments.allocate_approve` and its three role rows. Nothing of this is needed to roll the application back.
 
 ## 4e. Savings deposits by mobile money: operating them

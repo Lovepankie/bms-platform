@@ -43,7 +43,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>Exactly once, three times over. The receipt row is locked and must still be {@code open} (else the request ends stale,
  * FR-APR-08); its update is conditional on the status and version just read; and the database refuses a second settlement of a
- * settled receipt (guard trigger, V84), a second allocation transaction for one receipt (unique index) and a second reversal
+ * settled receipt (guard trigger, V83), a second allocation transaction for one receipt (unique index) and a second reversal
  * of the receipt's journal entry (ledger, FR-GL-04). An allocation books through the purpose handler registered by the owning
  * module, the same {@link PurposeHandler#book} the booker uses, so the repayment or deposit has the allocation, receipt number,
  * journal and notice of a cashier's, is idempotent on the order tracking id and is refused for a closed loan or a frozen account
