@@ -8,6 +8,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.PhoneNumbers;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
@@ -125,6 +126,7 @@ class SmsEventsService implements SmsEvents {
             String eventRef,
             String category,
             LocalDate valueDate,
+            Instant expiresAt,
             Supplier<String> phone,
             Supplier<Map<String, String>> params) {
         return guarded("queue " + templateKey, Result.FAILED, () -> {
@@ -134,8 +136,8 @@ class SmsEventsService implements SmsEvents {
             if (tooOld(valueDate)) {
                 return Result.TOO_OLD;
             }
-            return write(
-                    new MemberSms(templateKey, memberId, phone.get(), params.get(), eventRef, category, valueDate));
+            return write(new MemberSms(
+                    templateKey, memberId, phone.get(), params.get(), eventRef, category, valueDate, expiresAt));
         });
     }
 
@@ -143,6 +145,12 @@ class SmsEventsService implements SmsEvents {
     @Transactional(propagation = Propagation.MANDATORY)
     public int cancel(String eventRef) {
         return guarded("cancel", 0, () -> outbox.cancelUnclaimed(eventRef));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int cancelSettled(String eventRef) {
+        return guarded("cancel", 0, () -> outbox.cancelUnclaimed(eventRef, "cancelled_settled"));
     }
 
     /** Runs {@code body} in a savepoint; on any failure rolls back to it, logs the label and the error class, answers {@code onFailure}. */
@@ -203,7 +211,7 @@ class SmsEventsService implements SmsEvents {
                 params,
                 key,
                 null,
-                receipt ? clock.now().plus(RECEIPT_LIFETIME) : null,
+                receipt ? clock.now().plus(RECEIPT_LIFETIME) : message.expiresAt(),
                 message.category(),
                 Outbox.Subject.member(message.memberId()),
                 null));

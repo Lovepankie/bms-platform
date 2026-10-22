@@ -29,7 +29,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * FR-ARR-01, the nightly arrears run for one tenant: for every active loan, the penalty periods due
  * by today (R-PEN, {@link Penalties}) become charges on their items, then item statuses, DPD and
- * arrears are recomputed (R-DPD); last, the promises to pay are settled (FR-CLN-05). Charges are
+ * arrears are recomputed (R-DPD) and its due reminders and arrears notices queued ({@link LoanNotices},
+ * issue #227); last, the promises to pay are settled (FR-CLN-05). Charges are
  * memorandum items: nothing is posted here.
  *
  * <p>How it stays safe to run twice (the review of #270, finding 4, and ADR-008):
@@ -66,6 +67,7 @@ class ArrearsRun {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final CollectionsService collections;
+    private final LoanNotices notices;
     private final TransactionTemplate tx;
     private final ApplicationEventPublisher events;
 
@@ -82,6 +84,7 @@ class ArrearsRun {
             BusinessClock clock,
             AuditLog audit,
             CollectionsService collections,
+            LoanNotices notices,
             PlatformTransactionManager transactionManager,
             ApplicationEventPublisher events) {
         this.jdbc = jdbc;
@@ -93,6 +96,7 @@ class ArrearsRun {
         this.clock = clock;
         this.audit = audit;
         this.collections = collections;
+        this.notices = notices;
         this.tx = new TransactionTemplate(transactionManager);
         this.events = events;
     }
@@ -104,10 +108,11 @@ class ArrearsRun {
             long chargedMinor,
             int failedLoans,
             int promisesKept,
-            int promisesBroken) {}
+            int promisesBroken,
+            int remindersQueued) {}
 
     /** What one loan's step did. */
-    record Outcome(int charges, long chargedMinor) {}
+    record Outcome(int charges, long chargedMinor, int reminders) {}
 
     /**
      * The bound tenant's run for its business date today, called outside any transaction (the job binds the tenant
@@ -131,6 +136,7 @@ class ArrearsRun {
         long charged = 0;
         int failed = 0;
         List<UUID> failedIds = new java.util.ArrayList<>();
+        int reminders = 0;
         int done = 0;
         for (UUID id : active) {
             if (done > 0 && done % RENEW_EVERY == 0 && !Boolean.TRUE.equals(tx.execute(s -> renew(today, attempt)))) {
@@ -146,6 +152,7 @@ class ArrearsRun {
                 if (o != null) {
                     charges += o.charges();
                     charged = Math.addExact(charged, o.chargedMinor());
+                    reminders += o.reminders();
                 }
             } catch (RuntimeException e) {
                 failed++;
@@ -170,7 +177,8 @@ class ArrearsRun {
                     e.getClass().getSimpleName(),
                     e);
         }
-        Result result = new Result(today, active.size(), charges, charged, failed, promises.kept(), promises.broken());
+        Result result = new Result(
+                today, active.size(), charges, charged, failed, promises.kept(), promises.broken(), reminders);
         return Boolean.TRUE.equals(tx.execute(s -> finish(result, attempt, failedIds)))
                 ? Optional.of(result)
                 : Optional.empty();
@@ -180,7 +188,7 @@ class ArrearsRun {
     private Outcome one(UUID id, LocalDate today, LocalDate from, Map<UUID, PenaltyRule> rules) {
         Loan loan = loans.lock(id).orElseThrow();
         if (!loan.status().equals("active")) {
-            return new Outcome(0, 0); // moved since the list was read
+            return new Outcome(0, 0, 0); // moved since the list was read
         }
         PenaltyRule rule = rules.computeIfAbsent(
                 loan.productVersionId(), v -> products.version(v).orElseThrow().penalty());
@@ -239,8 +247,12 @@ class ArrearsRun {
                 items = repo.items(id);
             }
         }
-        servicer.refreshPosition(id, items, today);
-        return new Outcome(charges, charged);
+        Servicing.Position position = servicer.refreshPosition(id, items, today);
+        // The due reminders and arrears notices (issue #227) in the loan's own transaction, through the outbox with
+        // the tenant's SMS settings, window and opt-outs; keyed by (item, notice), so a rerun queues nothing new.
+        int reminded = notices.remind(
+                loan, items, position, today, currentTenant.profile().timezone());
+        return new Outcome(charges, charged, reminded);
     }
 
     /** Claims the run for {@code today}; returns the attempt number, or null when it is finished or leased. */
@@ -333,6 +345,7 @@ class ArrearsRun {
         after.put("failed_loans", result.failedLoans());
         after.put("promises_kept", result.promisesKept());
         after.put("promises_broken", result.promisesBroken());
+        after.put("reminders_queued", result.remindersQueued());
         after.put("attempt", attempt);
         audit.record(
                 AuditLog.Entry.created("lending.arrears.run", "lending.arrears", null, null, after), null, "system");

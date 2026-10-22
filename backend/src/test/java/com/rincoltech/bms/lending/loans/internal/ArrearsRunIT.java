@@ -45,7 +45,7 @@ class ArrearsRunIT extends IntegrationTest {
                         + " VALUES (?, ?, now(), now() + interval '1 hour', 2)")
                 .params(t.tenantId(), day)
                 .update();
-        ArrearsRun.Result result = new ArrearsRun.Result(day, 0, 0, 0, 0, 0, 0);
+        ArrearsRun.Result result = new ArrearsRun.Result(day, 0, 0, 0, 0, 0, 0, 0);
         assertThat(jobs.callForTenant(t.tenantId(), () -> arrears.finish(result, 1, List.of())))
                 .isFalse();
         assertThat(TestDatabase.owner()
