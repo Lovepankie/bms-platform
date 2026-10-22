@@ -5,7 +5,7 @@ import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_SITE, type ShellBrand, THEM
 // The shared shell (FR-TEN-08): the brand bar, the theme colour and the Powered-by footer are
 // drawn here once, around every route, so sign-in, accept-invitation, the staff area, the member
 // portal and the platform console all inherit them. An area never draws its own footer or sets
-// its own brand colour.
+// its own brand colour. The controls at the top right (refresh, and the theme selector of #429) go in `actions`, one group.
 
 const THEME_LABELS: Record<ThemeChoice, string> = { system: 'System', light: 'Light', dark: 'Dark' };
 
@@ -29,7 +29,7 @@ export function ThemeSelector() {
   );
 }
 
-export function BrandBar({ brand }: { brand: ShellBrand }) {
+export function BrandBar({ brand, actions }: { brand: ShellBrand; actions?: ReactNode }) {
   return (
     <div className="brand-bar">
       {brand.logoSrc ? (
@@ -37,7 +37,10 @@ export function BrandBar({ brand }: { brand: ShellBrand }) {
       ) : (
         <span className="brand-name">{brand.name}</span>
       )}
-      <ThemeSelector />
+      <div className="header-actions">
+        {actions}
+        <ThemeSelector />
+      </div>
     </div>
   );
 }
@@ -54,7 +57,7 @@ export function Footer() {
   );
 }
 
-export function Shell({ brand = PLATFORM_BRAND, children }: { brand?: ShellBrand; children: ReactNode }) {
+export function Shell({ brand = PLATFORM_BRAND, actions, children }: { brand?: ShellBrand; actions?: ReactNode; children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     const vars = themeVars(brand);
@@ -67,7 +70,7 @@ export function Shell({ brand = PLATFORM_BRAND, children }: { brand?: ShellBrand
 
   return (
     <div className="app-shell">
-      <BrandBar brand={brand} />
+      <BrandBar brand={brand} actions={actions} />
       <div className="app-content">{children}</div>
       <Footer />
     </div>

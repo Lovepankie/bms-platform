@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { retail, type Product } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
@@ -151,13 +151,32 @@ export function PurchaseOrderEditPage() {
   useCrumbLabel(order.data?.order_no ? `Change ${order.data.order_no}` : undefined);
   const [form, setForm] = useState<OrderForm | null>(() => (order.data ? formFromOrder(order.data) : null));
   // The form is filled from the order when it is first read and again when someone else changes it (a new version), not on every refetch.
+  // If the buyer has unsaved edits when a newer version arrives (a Refresh, or the window regaining focus), the edits are kept and a
+  // notice offers the saved version instead of overwriting them.
   const version = order.data?.version;
+  const formRef = useRef(form);
+  formRef.current = form;
+  const loadedRef = useRef<string | null>(null);
+  // The version the form was filled from: Save sends this one, never the version of a refetch the buyer has not read, so the server refuses a stale write.
+  const loadedVersionRef = useRef<number | null>(null);
+  const [changedElsewhere, setChangedElsewhere] = useState(false);
+  const loadSaved = () => {
+    if (!order.data) return;
+    const fresh = formFromOrder(order.data);
+    loadedRef.current = JSON.stringify(fresh);
+    loadedVersionRef.current = order.data.version ?? null;
+    setForm(fresh);
+    setChangedElsewhere(false);
+  };
   useEffect(() => {
-    if (order.data) setForm(formFromOrder(order.data));
+    if (!order.data) return;
+    const dirty = loadedRef.current !== null && formRef.current !== null && JSON.stringify(formRef.current) !== loadedRef.current;
+    if (dirty) setChangedElsewhere(true);
+    else loadSaved();
   }, [version]);
   const suppliers = useSuppliers(form?.supplierId);
   const save = useMutation({
-    mutationFn: (f: OrderForm) => retail.updatePurchaseOrder(orderId, order.data?.version ?? 0, buildOrderRequest(f)),
+    mutationFn: (f: OrderForm) => retail.updatePurchaseOrder(orderId, loadedVersionRef.current ?? order.data?.version ?? 0, buildOrderRequest(f)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/purchase-orders/$orderId', params: { orderId } });
@@ -170,6 +189,12 @@ export function PurchaseOrderEditPage() {
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {order.data && order.data.status !== 'draft' && <p className="empty-state">This order has been sent, so it can no longer be changed.</p>}
+      {changedElsewhere && (
+        <div role="alert" className="alert alert-warning">
+          <p>Someone else changed this order while you were editing. Your changes are still here and have not been saved. Saving now would replace their changes.</p>
+          <button type="button" className="btn-ghost" onClick={loadSaved}>Discard my changes and show their version</button>
+        </div>
+      )}
       {order.data?.status === 'draft' && form && (
         <OrderFormView form={form} suppliers={suppliers} branches={branches} picker={picker} busy={save.isPending} error={save.error} submitLabel="Save changes" onChange={setForm} onSubmit={() => save.mutate(form)} />
       )}

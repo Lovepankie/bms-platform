@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Me, TenantSettings } from '../api/client';
 import { router as appRouter } from '../app/router';
 import { StaffContext } from '../areas/staff/context';
+import { RefreshButton } from '../app/refresh-button';
 import { StaffBar } from '../areas/staff/route';
 import { type Tour, stepsFor } from './model';
 
@@ -30,6 +31,7 @@ export function renderStaff(me: Me, screen: ReactElement, seed?: Seed): string {
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch }}>
+          <RefreshButton />
           <StaffBar me={me} branch={me.default_branch_id ?? null} onBranch={() => undefined} onSignOut={() => undefined} />
           {screen}
         </StaffContext.Provider>

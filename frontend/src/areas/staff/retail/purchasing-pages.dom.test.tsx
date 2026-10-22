@@ -53,7 +53,7 @@ function mount(path: string, Page: () => JSX.Element, url: string) {
     routeTree: root.addChildren([staff.addChildren([retailRoute.addChildren([page, ...stubs])])]),
     history: createMemoryHistory({ initialEntries: [url] }),
   });
-  return { router, ...render(<RouterProvider router={router} />) };
+  return { router, client, ...render(<RouterProvider router={router} />) };
 }
 
 const type = (label: RegExp | string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -94,6 +94,35 @@ describe('the purchase order pages', () => {
     click('Save changes');
     await waitFor(async () => expect((await retail.getPurchaseOrder(draft.id ?? '')).total_minor).toBe(42000), wait);
     expect((await retail.getPurchaseOrder(draft.id ?? '')).version).toBe(2);
+  });
+
+  it('keeps unsaved edits when someone else changed the order and a refresh brings the new version', async () => {
+    const draft = await retail.createPurchaseOrder({ supplier_id: SUPPLIER, branch_id: BRANCH, lines: [{ product_id: await bulbId(), qty: '10', cost_minor: 3500 }] }, 'k-keep');
+    const { client } = mount('/purchase-orders/$orderId/edit', PurchaseOrderEditPage, `/staff/retail/purchase-orders/${draft.id}/edit`);
+    const qty = (await screen.findByLabelText(/How many LED bulb 9W screw/, undefined, wait)) as HTMLInputElement;
+    fireEvent.change(qty, { target: { value: '12' } });
+    // A colleague saves the same order, then the buyer taps Refresh (the header button refetches the active queries).
+    await retail.updatePurchaseOrder(draft.id ?? '', draft.version ?? 1, { supplier_id: SUPPLIER, branch_id: BRANCH, lines: [{ product_id: await bulbId(), qty: '20', cost_minor: 3500 }] });
+    await client.refetchQueries({ type: 'active' });
+    expect((await screen.findByRole('alert', undefined, wait)).textContent).toMatch(/Someone else changed this order/);
+    expect((screen.getByLabelText(/How many LED bulb 9W screw/) as HTMLInputElement).value).toBe('12');
+    click(/Discard my changes/);
+    await waitFor(() => expect((screen.getByLabelText(/How many LED bulb 9W screw/) as HTMLInputElement).value).toBe('20'), wait);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('refuses a save made over a version the buyer never read, and leaves the colleague\'s lines in place', async () => {
+    const draft = await retail.createPurchaseOrder({ supplier_id: SUPPLIER, branch_id: BRANCH, lines: [{ product_id: await bulbId(), qty: '10', cost_minor: 3500 }] }, 'k-stale');
+    const { client } = mount('/purchase-orders/$orderId/edit', PurchaseOrderEditPage, `/staff/retail/purchase-orders/${draft.id}/edit`);
+    fireEvent.change((await screen.findByLabelText(/How many LED bulb 9W screw/, undefined, wait)) as HTMLInputElement, { target: { value: '12' } });
+    await retail.updatePurchaseOrder(draft.id ?? '', draft.version ?? 1, { supplier_id: SUPPLIER, branch_id: BRANCH, lines: [{ product_id: await bulbId(), qty: '20', cost_minor: 3500 }] });
+    await client.refetchQueries({ type: 'active' });
+    await screen.findByText(/Someone else changed this order/, undefined, wait);
+    click('Save changes');
+    await waitFor(() => expect(screen.getAllByRole('alert').some((a) => /changed by someone else/i.test(a.textContent ?? ''))).toBe(true), wait);
+    const saved = await retail.getPurchaseOrder(draft.id ?? '');
+    expect(saved.version).toBe(2);
+    expect(Number(saved.lines?.[0]?.qty)).toBe(20);
   });
 
   it('sends an order and then offers to receive goods against it', async () => {

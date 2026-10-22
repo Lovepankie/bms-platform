@@ -38,6 +38,7 @@ import { StockPage } from '../areas/staff/retail/stock';
 import { AllSales, CreditSales } from '../areas/staff/retail/sales';
 import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
+import { RefreshButton } from '../app/refresh-button';
 import { StaffBar } from '../areas/staff/route';
 import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
@@ -199,7 +200,7 @@ function render(me: Me, path: string | undefined): string {
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch }}>
-          <BrandBar brand={PLATFORM_BRAND} />
+          <BrandBar brand={PLATFORM_BRAND} actions={<RefreshButton />} />
           <StaffBarForTest />
           {screen(path)}
         </StaffContext.Provider>

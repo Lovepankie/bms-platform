@@ -1,6 +1,7 @@
-import { Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { Outlet, createRootRoute, createRoute, createRouter, useRouterState } from '@tanstack/react-router';
 import { useShellBrand } from './branding';
 import { Landing } from './landing';
+import { RefreshButton } from './refresh-button';
 import { Shell } from './shell';
 
 // Route-level split (ADR-009): /staff and /member are separate lazily loaded route trees, so a
@@ -10,9 +11,18 @@ import { Shell } from './shell';
 
 // The root layout is the shared shell (brand bar, theme colour, Powered-by footer): every route
 // below it inherits it, so no area draws its own.
+// The header controls show where there is data to refresh: the staff, member and operator areas, not the public pages.
+// The operator sign-in and first-run setup sit under /platform but are plain forms with no data, so they get no button.
+const DATA_AREA = /^\/(staff|member|platform)(\/|$)/;
+const NO_DATA = /^\/platform\/(sign-in|setup)\/?$/;
+
+/** Whether the header shows the refresh button on `pathname`. */
+export const showsRefresh = (pathname: string) => DATA_AREA.test(pathname) && !NO_DATA.test(pathname);
+
 function RootLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
-    <Shell brand={useShellBrand()}>
+    <Shell brand={useShellBrand()} actions={showsRefresh(pathname) ? <RefreshButton key={pathname} /> : undefined}>
       <Outlet />
     </Shell>
   );

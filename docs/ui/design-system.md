@@ -13,12 +13,12 @@ placeholder. Screens use class names from this catalogue and never write a raw c
 | `frontend/src/app/theme.css` | The tokens (CSS custom properties), after the shell's `--brand` pair from #87 |
 | `frontend/src/app/ui/index.css` | The entry: the Open Sans face, then every file below, imported once by `main.tsx` |
 | `ui/base.css` | Reset, typography, links, focus ring, `.lead`, `.muted`, `.hint`, `.eyebrow`, `.visually-hidden` |
-| `ui/layout.css` | The page frame around the shell (brand bar, content column, footer), `.page-header`, `.stack`, `.cluster`, `.grid-auto` |
+| `ui/layout.css` | The page frame around the shell (brand bar with its `.header-actions` group at the top right, content column, footer), `.page-header`, `.stack`, `.cluster`, `.grid-auto` |
 | `ui/buttons.css` | Buttons |
 | `ui/forms.css` | Labels, inputs, selects, choice rows, fieldsets, `.form-stack`, `.form-actions`, `.field-hint`, `.field-error`, `.input-code`, `.secret-box`, `.codes-box` |
 | `ui/surfaces.css` | `.card`, `.card-muted`, `<dialog>` and `.sheet` |
 | `ui/tables.css` | Tables and `.table-wrap` |
-| `ui/feedback.css` | `.alert-*`, `.badge-*`, `.empty-state`, `.loading`, `.spinner`, `.skeleton`, `.toast`, `.toast-success`, `.toast-danger` |
+| `ui/feedback.css` | `.alert-*`, `.badge-*`, `.empty-state`, `.loading`, `.spinner`, `.skeleton`, `.toast`, `.toast-success`, `.toast-danger`, the header refresh button (`.refresh`, `.refresh-status` readable by assistive tech but off screen below 720px, `.refresh-problem` visible at every width) |
 | `ui/illustrations.css` | The paint classes of the illustrations (`.ill-*`), the state components (`.empty-state-art`, `.status-panel`, `.brand-loader`, `.skeleton-list`) and the shared keyframes |
 | `ui/navigation.css` | The staff bar, `.tabs`, the retail `.bottom-nav` |
 | `ui/pages.css` | The landing page (hero, trust line, module cards), `.auth-card` and `.auth-art`, the portal cards, the approvals decision cell, the style page |
@@ -116,7 +116,7 @@ The platform host and a tenant without a colour show the Rincol blue.
 
 A selector in the header, at the top right of every area (staff, member, operator, public pages), offers **System**,
 **Light** and **Dark**. It is a native `<select>` with `aria-label="Theme"` and the shared focus ring, so it is reachable
-by keyboard, and the welcome tours point at it (`data-tour="theme-select"`, the step "Light or dark").
+by keyboard (it sits last in the `.header-actions` group, after the refresh button of #430), and the welcome tours point at it (`data-tour="theme-select"`, the step "Light or dark").
 
 - **Remembered per person per device.** The choice is kept in the browser's `localStorage` under `bms.theme` (`light` or
   `dark`; System keeps nothing). It is never sent to the server: a person's browser profile on a device is the person.

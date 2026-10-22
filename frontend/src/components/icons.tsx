@@ -363,6 +363,15 @@ export const icons = {
       <path d="M8 8h3M8 12h3M8 16h3M2 21h20" />
     </Svg>
   ),
+  // Two arrows chasing round: refresh the page (issue #430).
+  refresh: (
+    <Svg>
+      <path d="M20 11a8 8 0 0 0-14.3-4.5L4 8.5" />
+      <path d="M4 4v4.5h4.5" />
+      <path d="M4 13a8 8 0 0 0 14.3 4.5l1.7-2" />
+      <path d="M20 20v-4.5h-4.5" />
+    </Svg>
+  ),
   arrow: (
     <Svg>
       <path d="M5 12h14M13 6l6 6-6 6" />

@@ -58,7 +58,7 @@ body {
 
 /* The theme selector, at the right of the header (issue #429); the focus ring comes from forms.css. */
 .brand-bar .theme-select {
-  margin: 0 0 0 auto;
+  margin: 0;
   width: auto;
   flex: none;
 }

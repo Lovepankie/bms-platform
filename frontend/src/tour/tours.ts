@@ -37,6 +37,15 @@ const help: TourStep = {
   body: 'Lost? Tap Help to take this tour again, or to see a short tour of the page you are on.',
 };
 
+// The refresh button in the header (issue #430): the installed app has no browser reload.
+const refresh: TourStep = {
+  id: 'refresh',
+  target: 'refresh',
+  optional: true,
+  title: 'Refresh the page',
+  body: 'The installed app has no reload button, so tap Refresh at the top to get the latest figures. If it cannot refresh, or you are offline, it says so and keeps the figures you already have. On a wider screen it also says when the page was last updated.',
+};
+
 // The Notifications and app page (ADR-050): install BMS as an app and turn on notifications on this device. Everyone signed in has it.
 const notifications: TourStep = {
   id: 'notifications',
@@ -116,7 +125,8 @@ export const adminWelcome: Tour = {
   // Version 14 adds the Two-step sign-in step (issue #348): who must use a code from the phone, and how long they have to set it up.
   // Version 15 adds the Notifications step: install the app and turn on notifications (ADR-050).
   // Version 16 adds the Light or dark step (issue #429): the theme selector at the top right.
-  version: 16,
+  // Version 17 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
+  version: 17,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -347,6 +357,7 @@ export const adminWelcome: Tour = {
     },
     insights,
     notifications,
+    refresh,
     theme,
     help,
   ],
@@ -362,7 +373,8 @@ export const retailSales: Tour = {
   // Version 8 adds the Notifications step: install the app and turn on notifications (ADR-050).
   // Version 9 adds the Light or dark step (issue #429): the theme selector at the top right.
   // Version 10 words the Save step for Share receipt and WhatsApp customer (issue #439): send the receipt from your phone.
-  version: 10,
+  // Version 11 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
+  version: 11,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -505,6 +517,7 @@ export const retailSales: Tour = {
       body: 'On a phone, your most used pages are always at the bottom of the screen.',
     },
     notifications,
+    refresh,
     theme,
     help,
   ],
@@ -514,7 +527,8 @@ export const staffWelcome: Tour = {
   id: 'staff-welcome',
   // Version 3 adds the Notifications step: install the app and turn on notifications (ADR-050).
   // Version 4 adds the Light or dark step (issue #429): the theme selector at the top right.
-  version: 4,
+  // Version 5 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
+  version: 5,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -554,6 +568,7 @@ export const staffWelcome: Tour = {
       body: 'Sales and stock live here.',
     },
     notifications,
+    refresh,
     theme,
     help,
   ],
