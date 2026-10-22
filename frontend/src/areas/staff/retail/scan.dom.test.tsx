@@ -40,8 +40,8 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, 'mediaDevices');
 });
 
-function screenOf(node: ReactElement, role = 'admin', branch = BRANCH) {
-  const me = mockMe(role);
+function screenOf(node: ReactElement, role = 'admin', branch = BRANCH, capabilities?: string[]) {
+  const me = capabilities ? { ...mockMe(role), module_capabilities: { retail: capabilities } } : mockMe(role);
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <StaffContext.Provider value={{ me, branch }}>{node}</StaffContext.Provider>
@@ -252,6 +252,19 @@ describe('FR-RET-68 scanning on the stock count', () => {
     await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('is not on the count sheet of this branch'));
     expect(document.getElementById(`count-${LAMP}`)).toBeNull();
   });
+
+  it('refuses a pack barcode while pack sizes are off, and counts no single piece in its place', async () => {
+    const ROLL = '00000000-0000-4000-8000-0000000d0001';
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    screenOf(<StocktakePage />);
+    await screen.findByLabelText('Search by name, code or category');
+    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).not.toBeNull());
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    expect((document.getElementById(`count-${LAMP}`) as HTMLInputElement).value).toBe('');
+  });
 });
 
 describe('FR-RET-68 scanning on the restock form', () => {
@@ -333,7 +346,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
     await retail.addBarcode(LAMP, { code: EAN });
-    screenOf(<TransferForm fromBranchId={BRANCH} />);
+    screenOf(<TransferForm fromBranchId={BRANCH} />, 'admin', BRANCH, ['units']);
     wedge('TEST-LAMP-BOX');
     await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('10'));
     wedge(EAN);
@@ -341,6 +354,27 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     wedge('TEST-LAMP-BOX');
     await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('21'));
     expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(1);
+  });
+
+  it('refuses a barcode on a pack that was switched off, and moves no single piece in its place', async () => {
+    const ROLL = '00000000-0000-4000-8000-0000000d0001';
+    const pack = await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    await retail.updatePack(LAMP, ROLL, pack.version ?? 1, { active: false });
+    screenOf(<TransferForm fromBranchId={BRANCH} />, 'admin', BRANCH, ['units']);
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('switched off'));
+    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
+  });
+
+  it('refuses a pack barcode while pack sizes are off', async () => {
+    const ROLL = '00000000-0000-4000-8000-0000000d0001';
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    screenOf(<TransferForm fromBranchId={BRANCH} />);
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
   });
 });
 

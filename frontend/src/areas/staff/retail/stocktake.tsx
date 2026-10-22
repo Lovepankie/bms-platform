@@ -9,7 +9,9 @@ import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
-import { needsOf } from './permissions';
+import { UNITS, capabilityOn, needsOf } from './permissions';
+import { chosenPack } from './units-state';
+import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
@@ -73,6 +75,8 @@ export async function countableStock(branchId: string, api: Pick<typeof retail, 
 
 function CountSheet({ branchId }: { branchId: string }) {
   const queryClient = useQueryClient();
+  const { me } = useStaff();
+  const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Stocktake | null>(null);
@@ -84,7 +88,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     const id = p.id ?? '';
     if (!stock.data) return 'The count sheet is still loading. Scan again in a moment.';
     if (!stock.data.some((r) => r.product_id === id)) return `${p.description ?? p.code ?? 'This item'} is not on the count sheet of this branch. Restock it first, or count it at its own branch.`;
-    const pack = (p.packs ?? []).find((k) => k.unit_id === unitId && k.active !== false);
+    const pack = unitsOn ? chosenPack(p, unitId) : undefined;
     if (unitId && !pack) return PACK_UNUSABLE;
     search.clear();
     setCounts((c) => ({ ...c, [id]: plusOne(c[id], pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000) }));

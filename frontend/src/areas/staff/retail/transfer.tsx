@@ -9,10 +9,10 @@ import { ToStock } from './analytics-ui';
 import { parseQty, showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
-import { TRANSFER, TRANSFER_RECEIPT, capabilityOn, holdsAt, needsOf } from './permissions';
+import { TRANSFER, TRANSFER_RECEIPT, UNITS, capabilityOn, holdsAt, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 import { ScanBar } from './scan';
-import { plusOne, scanInto } from './barcode-state';
+import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { chosenPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
@@ -61,11 +61,14 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
   // A scan (issue #345): the item at 1, or one more on its line; a move is counted in the item's own unit, so a barcode
-  // on a pack adds the pack's factor (a carton of 12 adds 12).
+  // on a pack adds the pack's factor (a carton of 12 adds 12). A pack it cannot use is refused, never moved as one piece.
+  const unitsOn = capabilityOn(me, 'retail', UNITS);
   const scanAdd = (p: Product, unitId?: string) => {
-    const pack = chosenPack(p, unitId);
+    const pack = unitsOn ? chosenPack(p, unitId) : undefined;
+    if (unitId && !pack) return PACK_UNUSABLE;
     const step = pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000;
     setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, undefined, (l) => ({ ...l, qty: plusOne(l.qty, step) }), () => ({ product: p, qty: plusOne('', step) })) }));
+    return undefined;
   };
   // Memoised so the prefill effect below does not run again on every render.
   const destinations = useMemo(
