@@ -67,7 +67,8 @@ left, the branch, the period, the person's roles.
 7. **Clashes, recorded and flagged, never dropped.** A request with `recorded_offline: true` (which needs `client_sale_id`
    and `occurred_at`) is a sale whose money was already taken. For it, four checks that refuse an online sale record the sale
    and write a row in `retail_sale_clashes` instead: `stock_short` (the sale takes the balance below zero, or into stock kept
-   for orders; the movement is written and the balance may go negative), `item_inactive` (switched off since), `price_changed`
+   for orders; the movement is written and the balance may go negative), `item_inactive` (switched off since), `pack_inactive` (the
+   pack size sold was switched off since, or pack sizes were turned off for the business; the line is recorded in that pack), `price_changed`
    (the device charged the price it had saved, and today's price, or with price lists on the resolved price, differs; the line
    keeps the device price as an override whose reason names the offline sale and `prices_as_of`, or a strict list has no
    price), `price_typed` (decision 11: a typed price the online rules would not have taken)

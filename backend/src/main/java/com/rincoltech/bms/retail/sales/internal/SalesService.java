@@ -638,7 +638,7 @@ class SalesService {
                 problems.add(new FieldProblem(field + ".qty", "invalid", "At most three decimal places."));
                 continue;
             }
-            SaleUnit unit = saleUnit(field, p, l.unitId(), l.qty(), problems, agreed);
+            SaleUnit unit = saleUnit(field, p, l.unitId(), l.qty(), problems, agreed, clashes, i + 1);
             if (unit == null) {
                 continue;
             }
@@ -877,25 +877,48 @@ class SalesService {
      */
     private SaleUnit saleUnit(
             String field, ProductSnapshot p, UUID unitId, BigDecimal qty, List<FieldProblem> problems) {
-        return saleUnit(field, p, unitId, qty, problems, false);
+        return saleUnit(field, p, unitId, qty, problems, false, null, 0);
     }
 
-    /** As above; {@code agreed} keeps a pack switched off since a customer order was taken (issue #385). */
+    /**
+     * As above; {@code agreed} keeps a pack switched off since a customer order was taken (issue #385). With {@code clashes}
+     * not null (a sale recorded offline, ADR-067 decision 7) a pack switched off, or pack sizes turned off for the business,
+     * since the phone saved its copy records the line in that pack with a pack_inactive clash instead of refusing it.
+     */
     private SaleUnit saleUnit(
-            String field, ProductSnapshot p, UUID unitId, BigDecimal qty, List<FieldProblem> problems, boolean agreed) {
+            String field,
+            ProductSnapshot p,
+            UUID unitId,
+            BigDecimal qty,
+            List<FieldProblem> problems,
+            boolean agreed,
+            List<PendingClash> clashes,
+            int lineNo) {
         if (unitId == null || unitId.equals(p.unitId())) {
             return new SaleUnit(null, qty);
         }
-        if (!capabilities.enabled(RetailCapabilities.UNITS)) {
+        boolean unitsOff = !capabilities.enabled(RetailCapabilities.UNITS);
+        if (unitsOff && clashes == null) {
             problems.add(new FieldProblem(
                     field + ".unit_id", "capability_not_enabled", "Pack sizes are not enabled for this business."));
             return null;
         }
         PackUnit pack = catalogue.packUnit(p.id(), unitId).orElse(null);
-        if (pack == null || !pack.active() && !agreed) {
+        if (pack == null || !pack.active() && !agreed && clashes == null) {
             problems.add(
                     new FieldProblem(field + ".unit_id", "unknown_pack_unit", "This item is not sold in that unit."));
             return null;
+        }
+        if (clashes != null && (unitsOff || !pack.active() && !agreed)) {
+            clashes.add(new PendingClash(
+                    lineNo,
+                    p.id(),
+                    "pack_inactive",
+                    (unitsOff
+                                    ? "Pack sizes were turned off for the business"
+                                    : "The pack size " + pack.unit() + " of " + p.description() + " was switched off")
+                            + " while this sale was offline; line " + lineNo + " is recorded as sold in " + pack.unit()
+                            + "."));
         }
         BigDecimal baseQty = Quantities.toBase(qty, pack.factor())
                 .orElseThrow(() -> ApiException.rule(

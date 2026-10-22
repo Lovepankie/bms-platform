@@ -321,12 +321,15 @@ final class SalesApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) String saleNo,
             UUID branchId,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "The sale line; absent for clock_ahead")
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The sale line; absent for clock_ahead and clock_behind")
             Integer lineNo,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) UUID productId,
 
-            @Schema(description = "stock_short, item_inactive, price_changed, below_cost or clock_ahead")
+            @Schema(
+                    description = "stock_short, item_inactive, pack_inactive, price_changed, price_typed, below_cost,"
+                            + " clock_ahead or clock_behind")
             String kind,
 
             @Schema(description = "What happened, in plain words; never a cost")

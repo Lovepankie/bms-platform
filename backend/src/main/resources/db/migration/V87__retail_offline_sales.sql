@@ -54,7 +54,8 @@ CREATE TRIGGER retail_sales_offline_guard BEFORE UPDATE ON retail_sales
 
 -- ---------------------------------------------------------------------------------------------
 -- A clash of a sale recorded offline: written with the sale, resolved once with a note. kind is stock_short (the sale took the
--- balance below zero or into stock kept for orders), item_inactive, price_changed, price_typed (a typed price the online price
+-- balance below zero or into stock kept for orders), item_inactive, pack_inactive (a pack size switched off, or pack sizes turned
+-- off for the business, while the sale was offline), price_changed, price_typed (a typed price the online price
 -- rules would not take, ADR-067 decision 11), below_cost or clock_ahead (the device clock
 -- was more than five minutes ahead; the sale is dated the server's now). words is the plain sentence shown on the sale page; it
 -- never carries a cost. clock_behind: the sale said it happened before the server time at which the phone last saved its
@@ -70,8 +71,8 @@ CREATE TABLE retail_sale_clashes (
     line_no          integer      CHECK (line_no > 0),
     product_id       uuid,
     kind             text         NOT NULL
-                                  CHECK (kind IN ('stock_short', 'item_inactive', 'price_changed', 'price_typed', 'below_cost',
-                                                  'clock_ahead', 'clock_behind')),
+                                  CHECK (kind IN ('stock_short', 'item_inactive', 'pack_inactive', 'price_changed',
+                                                  'price_typed', 'below_cost', 'clock_ahead', 'clock_behind')),
     words            varchar(400) NOT NULL CHECK (btrim(words) <> ''),
     resolved_at      timestamptz,
     resolved_by      uuid,

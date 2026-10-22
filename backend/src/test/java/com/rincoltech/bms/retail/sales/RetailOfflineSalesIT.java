@@ -566,6 +566,65 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isEqualTo(dayIn(Instant.now()).toString());
     }
 
+    /**
+     * Review fix 9: a pack size switched off, or pack sizes turned off for the business, while the phone was offline records
+     * the offline sale in that pack with a pack_inactive clash; online the same line is still refused.
+     */
+    @Test
+    void aPackSwitchedOffWhileOfflineIsAClash() {
+        api.stockUp(t.headOffice(), product, "60");
+        switchUnits(true);
+        UUID carton = api.unit("carton");
+        ResponseEntity<JsonNode> added =
+                api.post("/products/" + product + "/units", Map.of("unit_id", carton, "factor", "12"), ADMIN);
+        assertThat(added.getStatusCode()).as("%s", added.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(api.call(
+                                HttpMethod.PATCH,
+                                "/products/" + product + "/units/" + carton,
+                                Map.of("active", false),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", added.getHeaders().getETag()))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        Map<String, Object> body =
+                offlineSale(UUID.randomUUID(), Instant.now().minus(Duration.ofMinutes(20)), "1", 24_000);
+        body.put(
+                "lines",
+                List.of(Map.of("product_id", product, "qty", "1", "unit_id", carton, "unit_price_minor", 24_000)));
+        Map<String, Object> online = new LinkedHashMap<>(body);
+        online.remove("recorded_offline");
+        assertThat(send(online, UUID.randomUUID().toString()).getBody().toString())
+                .contains("unknown_pack_unit");
+
+        ResponseEntity<JsonNode> sold = send(body, UUID.randomUUID().toString());
+        assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(sold.getBody())).containsExactly("pack_inactive");
+        assertThat(balance()).isEqualTo("48.000");
+
+        switchUnits(false);
+        Map<String, Object> unitsOff = new LinkedHashMap<>(body);
+        unitsOff.put("client_sale_id", UUID.randomUUID());
+        ResponseEntity<JsonNode> off = send(unitsOff, UUID.randomUUID().toString());
+        assertThat(off.getStatusCode()).as("%s", off.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(off.getBody())).containsExactly("pack_inactive");
+        assertThat(balance()).isEqualTo("36.000");
+    }
+
+    void switchUnits(boolean on) {
+        String settings = "core.settings.manage";
+        String etag = api.get("/settings/capabilities", settings).getHeaders().getETag();
+        ResponseEntity<JsonNode> r = api.call(
+                HttpMethod.PUT,
+                "/settings/capabilities",
+                Map.of("units", on),
+                settings,
+                "*",
+                etag == null ? Map.of() : Map.of("If-Match", etag));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
     /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
     @Test
     void aManagerCannotDecideTheirOwnRefusedSale() {
