@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.onboarding.internal;
 
+import com.rincoltech.bms.core.referrals.Referrals;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -99,7 +100,10 @@ class ApplicationsController {
             List<Duplicate> possibleDuplicates,
 
             @Schema(description = "A free slug from the business name (FR-TEN-02); editable at Activate")
-            String suggestedSlug) {}
+            String suggestedSlug,
+
+            @Schema(description = "The business whose referral code the applicant brought, or null (ADR-069)")
+            Referrals.ApplicationReferrer referredBy) {}
 
     @Schema(name = "ApplicationNoteRequest")
     record NoteRequest(@NotBlank @Size(max = 1000) String note) {}

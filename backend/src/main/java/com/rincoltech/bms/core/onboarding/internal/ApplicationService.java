@@ -13,6 +13,7 @@ import com.rincoltech.bms.core.onboarding.internal.SignUpController.SignUpReques
 import com.rincoltech.bms.core.platform.TenantProvisioning;
 import com.rincoltech.bms.core.platform.TenantProvisioning.Created;
 import com.rincoltech.bms.core.platform.TenantProvisioning.NewTenant;
+import com.rincoltech.bms.core.referrals.Referrals;
 import com.rincoltech.bms.core.tenancy.ModuleManifest;
 import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.kernel.ApiException;
@@ -89,6 +90,7 @@ class ApplicationService {
     private final BusinessClock clock;
     private final SignUpRateLimiter limiter;
     private final OnboardingProperties caps;
+    private final Referrals referrals;
     private final Set<String> moduleKeys;
 
     ApplicationService(
@@ -101,6 +103,7 @@ class ApplicationService {
             BusinessClock clock,
             SignUpRateLimiter limiter,
             OnboardingProperties caps,
+            Referrals referrals,
             List<ModuleManifest> manifests) {
         this.jdbc = jdbc;
         this.transactions = new TransactionTemplate(transactionManager);
@@ -111,6 +114,7 @@ class ApplicationService {
         this.clock = clock;
         this.limiter = limiter;
         this.caps = caps;
+        this.referrals = referrals;
         this.moduleKeys = manifests.stream().map(ModuleManifest::key).collect(Collectors.toUnmodifiableSet());
     }
 
@@ -140,6 +144,12 @@ class ApplicationService {
             throw ApiException.validation(
                     List.of(new FieldProblem("business_name", "required", "Give the business and contact names.")));
         }
+        // ADR-069: a code typed wrong is refused in plain words before anything is created; it says nothing about the
+        // email, so the same-answer rule below still holds.
+        Referrals.Code referral =
+                request.referralCode() == null || request.referralCode().isBlank()
+                        ? null
+                        : transactions.execute(status -> referrals.resolve(request.referralCode()));
         String token = token();
         String hash = sha256(token);
         Instant now = clock.now();
@@ -188,7 +198,16 @@ class ApplicationService {
             // (round 2 review item 2).
             String recipient = email;
             if (created) {
-                audit.record("platform.application.submitted", null, null, Map.of("application_id", id));
+                if (referral != null) {
+                    referrals.attachToApplication(id, referral);
+                }
+                audit.record(
+                        "platform.application.submitted",
+                        null,
+                        null,
+                        referral == null
+                                ? Map.of("application_id", id)
+                                : Map.of("application_id", id, "referrer_tenant_id", referral.tenantId()));
             } else {
                 Optional<String> open = jdbc.sql("SELECT reference FROM onboarding_application_relink(?, ?, ?, ?)")
                         .params(email, hash, Timestamp.from(now.plus(LINK_TTL)), Timestamp.from(now))
@@ -326,7 +345,11 @@ class ApplicationService {
                             strings(rs.getArray("matched_on"))))
                     .list();
             String slug = "activated".equals(application.status()) ? null : suggestSlug(application.businessName());
-            return new ApplicationDetail(application, duplicates, slug);
+            return new ApplicationDetail(
+                    application,
+                    duplicates,
+                    slug,
+                    referrals.applicationReferrer(id).orElse(null));
         });
     }
 
@@ -491,6 +514,8 @@ class ApplicationService {
                         data.put("payment_note_recorded", note != null && !note.isBlank());
                         data.put("contact_email", application.contactEmail());
                         audit.record("platform.application.activated", operator, tenant.tenantId(), data);
+                        // ADR-069: the code the applicant brought becomes the business's referral.
+                        referrals.recordFromApplication(id, tenant.tenantId(), operator);
                     }
                 });
         if (created.isEmpty()) {
