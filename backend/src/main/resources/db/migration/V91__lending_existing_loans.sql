@@ -45,7 +45,7 @@ ALTER TABLE lending_loans
             AND proposed_disbursement_date < go_live_on AND submitted_by IS NOT NULL)),
     ADD CONSTRAINT lending_loans_brought_in_before_go_live CHECK (
         go_live_on IS NULL OR disbursed_on IS NULL OR disbursed_on < go_live_on),
-    ADD CONSTRAINT lending_loans_brought_in_on_after_disbursement CHECK (
+    ADD CONSTRAINT lending_loans_brought_in_on_disbursed_from_go_live CHECK (
         brought_in_on IS NULL OR (disbursed_on IS NOT NULL AND brought_in_on >= go_live_on));
 
 CREATE UNIQUE INDEX lending_loans_register_ref ON lending_loans (tenant_id, lower(register_ref))

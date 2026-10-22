@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -303,7 +304,17 @@ class ExistingLoanService {
                 null,
                 null,
                 1);
-        repo.insert(loan, d.disbursementDate(), c.goLive(), d.registerRef(), d.agreedTotalMinor());
+        try {
+            repo.insert(loan, d.disbursementDate(), c.goLive(), d.registerRef(), d.agreedTotalMinor());
+        } catch (DuplicateKeyException e) {
+            // Another loan with this register number was recorded at the same moment (the form or an import).
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "register_ref_taken",
+                    "Register number taken",
+                    "A loan with the register number " + d.registerRef() + " was recorded at the same moment."
+                            + " Nothing was recorded; check again.");
+        }
         repo.insertLines(loan.id(), d.lines());
         loans.history(loan.id(), "brought_in", principal.userId());
         Position position = c.plan().position();
@@ -623,13 +634,19 @@ class ExistingLoanService {
     }
 
     /**
-     * A new request after the last one was rejected, expired or went stale: the loan is checked again against today's
-     * go-live date, which it then keeps.
+     * A new request after the last one was rejected, expired or went stale, by the person who recorded the loan only: the
+     * loan is checked again against today's go-live date, which it then keeps.
      */
     @Transactional
     ExistingLoan askAgain(UUID loanId) {
         Loan loan = lockInScope(loanId, PERMISSION);
         LoanServicer.requireStatus(loan, Set.of("brought_in"));
+        if (!loan.submittedBy().equals(CurrentPrincipal.require().userId())) {
+            // A request by anyone else would make the recorder an eligible checker of their own loan.
+            throw ApiException.rule(
+                    "self_approval_forbidden",
+                    "Only the person who recorded the loan asks for its approval again; they never approve it.");
+        }
         Facts f = repo.facts(loanId).orElseThrow();
         Draft d = new Draft(
                 members.find(loan.memberId()).orElseThrow(),

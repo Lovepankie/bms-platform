@@ -491,6 +491,27 @@ class ExistingLoansIT extends LoanFixtures {
         assertThat(count("SELECT count(*) FROM lending_loan_transactions WHERE loan_id = ?::uuid", id))
                 .isZero();
 
+        // Only the person who recorded the loan asks again: a request by anyone else would let the recorder approve it.
+        JsonNode other = recorded(request(borrower(15), product, 900_000, disbursed, List.of()));
+        String otherId = other.get("loan_id").asString();
+        assertThat(send(
+                                HttpMethod.POST,
+                                "/api/v1/approvals/"
+                                        + other.get("approval_request_id").asString() + "/reject",
+                                as(manager, managerPerms, "*", null),
+                                Map.of("note", "Check the date"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> byManager = send(
+                HttpMethod.POST, EXISTING + "/" + otherId + "/approval", as(manager, managerPerms, "*", null), null);
+        assertThat(byManager.getStatusCode()).as("%s", byManager.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(byManager)).isEqualTo("self_approval_forbidden");
+        ResponseEntity<JsonNode> byMaker =
+                send(HttpMethod.POST, EXISTING + "/" + otherId + "/approval", as(admin, adminPerms, "*", null), null);
+        assertThat(byMaker.getStatusCode()).as("%s", byMaker.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        approve(byMaker.getBody());
+        assertThat(loan(otherId).get("status").asString()).isEqualTo("active");
+
         // A loan officer neither records nor sees the route: the permission is the administrators' and managers'.
         ResponseEntity<JsonNode> officer = send(
                 HttpMethod.POST,
