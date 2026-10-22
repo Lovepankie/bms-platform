@@ -113,3 +113,57 @@ export const subjectProblem = (value: string): string | null => (UUID.test(value
 export const reasonProblem = (value: string): string | null => (value.trim().length >= 3 && value.length <= 300 ? null : 'Say why, in a few words (up to 300 characters).');
 /** The lender's own reference for a refund: printable characters, 1 to 100. */
 export const referenceProblem = (value: string): string | null => (/^[\x20-\x7E]{1,100}$/.test(value) && value.trim() !== '' ? null : 'Type the bank or wallet reference (up to 100 characters).');
+
+// The statement upload and the reconciliation report (extras slice A5 part 2, issue #224, task #317).
+
+export const PAYMENTS_MANAGE = 'core.payments.manage';
+
+/** Reading the report; uploading and running are for the holders of manage. */
+export const showReconciliation = (me: Pick<Me, 'permissions'>): boolean => held(me).includes(PAYMENTS_READ);
+export const canManageStatements = (me: Pick<Me, 'permissions'>): boolean => held(me).includes(PAYMENTS_MANAGE);
+
+/** What each difference means for the person reading it, in plain words. */
+export const FINDING_WORDS: Record<string, { title: string; help: string }> = {
+  completed_not_booked: { title: 'Paid but not recorded', help: 'The provider says this was paid and it is not on the loan or account yet. The system is trying again; if it stays, ask the person on call.' },
+  pending_over_24h: { title: 'Still unpaid after a day', help: 'A payment link made over a day ago that nobody has paid.' },
+  paid_differs: { title: 'Paid a different amount', help: 'The member paid more or less than the amount asked. The amount paid was recorded.' },
+  reversed_awaiting_review: { title: 'Reversed by the provider, waiting for a decision', help: 'A second person decides in the approvals inbox.' },
+  reversal_handed_over: { title: 'Reversed by the provider, nobody is waiting on it', help: 'It was rejected or could not be finished. Ask for it to be decided again, or leave it.' },
+  reversal_blocked: { title: 'Reversal refused by the books', help: 'The reversal cannot be done (for example the deposit was already withdrawn). Record the loss by manual journal and reject the request.' },
+  reversed_after_refund: { title: 'Reversed after it was already sent back', help: 'You sent this money back and the provider then reversed it too. Record the loss by manual journal.' },
+  manual_receipt_duplicate: { title: 'Entered by hand and also paid online', help: 'A cashier entered this payment as well as the online payment being recorded. Reverse the one entered by hand.' },
+  in_provider_not_in_bms: { title: 'On the statement, not recorded here', help: 'The statement has a payment this system does not hold as paid. It may be money for something outside this system.' },
+  in_bms_not_in_provider: { title: 'Recorded here, not on the statement', help: 'Booked on a day the statement covers but missing from it. Check the statement is complete.' },
+  amount_mismatch: { title: 'The amount differs from the statement', help: 'The statement and this system disagree about how much was paid.' },
+  currency_mismatch: { title: 'The currency differs from the statement', help: 'The statement and this system disagree about the currency.' },
+  ambiguous_statement_row: { title: 'A statement line fits several payments', help: 'Its payment code names more than one payment. Use the order tracking id column in the export.' },
+};
+
+export const findingWords = (kind: string | undefined) => (kind && FINDING_WORDS[kind]) || { title: 'A difference', help: 'Look at it with the person on call.' };
+
+export const MATCH_WORDS: Record<string, string> = {
+  matched: 'Matches',
+  amount_mismatch: 'Different amount',
+  currency_mismatch: 'Different currency',
+  not_paid_here: 'Not recorded as paid here',
+  ambiguous: 'Fits several payments',
+  unmatched: 'No payment of ours',
+};
+
+export const FEE_WORDS: Record<string, string> = {
+  posted: 'Fee recorded',
+  already_posted: 'Fee already recorded',
+  none: 'No fee',
+  held: 'Fee not recorded',
+  awaiting_approval: 'Fee above the automatic rate: waiting for a second person to approve',
+  not_approved: 'Fee not approved, not recorded',
+};
+
+/** A file that can be sent: a CSV (or plain text), up to 1 MB. */
+export function fileProblem(file: { name: string; size: number } | null | undefined): string | null {
+  if (!file) return 'Choose the statement file.';
+  if (file.size === 0) return 'The file is empty.';
+  if (file.size > 1_000_000) return 'The file is larger than 1 MB. Export a shorter period.';
+  if (!/\.(csv|txt)$/i.test(file.name)) return 'Use the CSV export of the statement.';
+  return null;
+}

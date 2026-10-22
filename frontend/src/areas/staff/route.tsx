@@ -21,7 +21,7 @@ import { showSavings } from './lending/savings-permissions';
 import { showReports } from './reports/permissions';
 import { RetailNav } from './retail/nav';
 import { canSeeProfit, showRetail } from './retail/permissions';
-import { showReceivePayments, showUnallocated } from './payments/state';
+import { showReceivePayments, showReconciliation, showUnallocated } from './payments/state';
 import { showSms } from './sms/state';
 import { showUsers } from './users/state';
 import { TwoStepNotices } from './two-step/notices';
@@ -148,6 +148,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showSms(me) && <Link to="/staff/sms">SMS</Link>}
         {showReceivePayments(me) && <Link to="/staff/payments">Receive payments</Link>}
         {showUnallocated(me) && <Link to="/staff/payments/unallocated">Unallocated payments</Link>}
+        {showReconciliation(me) && <Link to="/staff/payments/reconciliation">Payment reconciliation</Link>}
         {showUsers(me) && <Link to="/staff/users" data-tour="nav-users">Users</Link>}
         <Link to="/staff/notifications" data-tour="nav-notifications">Notifications</Link>
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}

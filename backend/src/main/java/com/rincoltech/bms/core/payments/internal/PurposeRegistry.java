@@ -26,6 +26,11 @@ class PurposeRegistry {
         }
     }
 
+    /** Every registered handler, once each. */
+    java.util.Collection<PurposeHandler> all() {
+        return java.util.List.copyOf(handlers.values());
+    }
+
     Optional<PurposeHandler> find(String purpose) {
         return Optional.ofNullable(purpose == null ? null : handlers.get(purpose));
     }

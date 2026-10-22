@@ -135,6 +135,12 @@ class SavingsDepositPurpose implements PurposeHandler {
     }
 
     @Override
+    public java.util.List<ManualReceipt> manualReceiptsWithReference(
+            java.util.Collection<String> references, java.util.Collection<UUID> excluding) {
+        return repo.manualWithReference(references, excluding);
+    }
+
+    @Override
     public Optional<String> reversalCheckerPermission() {
         return Optional.of("lending.savings.withdraw_approve");
     }

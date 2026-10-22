@@ -945,6 +945,45 @@ class RlsIsolationIT {
                         "INSERT INTO retail_notice_runs (tenant_id, kind, run_on) VALUES (?, 'daily_summary', DATE '2026-01-15')")
                 .param(t.tenantId())
                 .update();
+        // The merchant statement, its line, a reconciliation run and one of its findings (migration V85, #317).
+        // JUSTIFICATION-A3: one factory row per tenant table; they point at the fixture user, intent and journal entry
+        // above.
+        UUID statement = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_statements (id, tenant_id, uploaded_by, file_name, content_sha256, row_count,
+                            period_from, period_to, currency, matched_count, different_count, unmatched_count, fees_posted_minor)
+                        VALUES (?, ?, ?, 'statement.csv', ?, 1, DATE '2026-01-15', DATE '2026-01-15', 'UGX', 1, 0, 0, 0)
+                        """).params(statement, t.tenantId(), user, hex64(statement)).update();
+        UUID statementRow = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_statement_rows (id, tenant_id, statement_id, row_no, order_tracking_id, amount_minor,
+                            fee_minor, currency, paid_on, match_status, intent_id)
+                        VALUES (?, ?, ?, 1, ?, 1500, 0, 'UGX', DATE '2026-01-15', 'matched', ?)
+                        """)
+                .params(statementRow, t.tenantId(), statement, UUID.randomUUID().toString(), intent)
+                .update();
+        // The confirmer of a review is a second person (ADR-035 decision 66).
+        UUID confirmer = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff 02', ?, 'active')")
+                .params(confirmer, t.tenantId(), "confirmer-" + confirmer + "@example.test")
+                .update();
+        owner.sql("""
+                        INSERT INTO payment_statement_reviews (id, tenant_id, row_id, reviewed_by, confirmed_by, note)
+                        VALUES (?, ?, ?, ?, ?, 'Sale at the shop')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), statementRow, user, confirmer)
+                .update();
+        UUID run = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_reconciliation_runs (id, tenant_id, ran_on, trigger, window_from, intents_examined,
+                            statements_used, finding_count)
+                        VALUES (?, ?, DATE '2026-01-15', 'job', DATE '2025-09-17', 1, 1, 1)
+                        """).params(run, t.tenantId()).update();
+        owner.sql(
+                        "INSERT INTO payment_reconciliation_findings (id, tenant_id, run_id, kind, intent_id) VALUES (?, ?, ?, 'pending_over_24h', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), run, intent)
+                .update();
     }
 
     /**

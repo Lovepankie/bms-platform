@@ -210,6 +210,8 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.payments    -> bms.api.loans "Books succeeded payments through the registered purpose handler (registry, no code dependency)"
         bms.api.loans       -> bms.api.payments "Registers the lending.loan_repayment purpose (PurposeHandler, issue #216): describes a loan for a collection and books a verified payment through LoanServicing with method gateway; the handler is a bean the payments registry finds, so the core still imports no vertical"
         bms.web -> bms.api.loans "Loan page: Collect by mobile money or card (link, QR code, live status, receipt) through POST /payments/intents with purpose lending.loan_repayment; money goes only into the lender's own merchant account"
+        bms.api.payments    -> bms.api.loans "Reads, through the PurposeHandler interface, the repayments staff keyed by hand whose reference is a gateway confirmation code (the reconciliation, issue #317)"
+        bms.api.payments    -> bms.api.savings "Reads, through the PurposeHandler interface, the deposits staff keyed by hand whose reference is a gateway confirmation code (the reconciliation, issue #317)"
         bms.api.payments    -> bms.api.approvals "Registers the unallocated_allocation, unallocated_refund and gateway_payment_reversal approval actions (issue #224); raises the reversal request as the tenant's system user (requestAsSystem)"
         bms.api.payments    -> bms.api.ledger "Posts unallocated receipts (gateway_clearing to unallocated_receipts when a purpose handler refuses a completed payment, issue #216) and gateway charges"
         bms.api.payments    -> paymentGateway "Queries transaction status before booking a callback" "HTTPS"

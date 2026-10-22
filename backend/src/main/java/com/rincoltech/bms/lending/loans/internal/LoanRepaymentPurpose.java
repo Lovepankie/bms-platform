@@ -105,6 +105,12 @@ class LoanRepaymentPurpose implements PurposeHandler {
     }
 
     @Override
+    public java.util.List<ManualReceipt> manualReceiptsWithReference(
+            java.util.Collection<String> references, java.util.Collection<UUID> excluding) {
+        return repo.manualWithReference(references, excluding);
+    }
+
+    @Override
     public java.util.Optional<String> reversalCheckerPermission() {
         return java.util.Optional.of("lending.repayments.reverse_approve");
     }

@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.payments.internal;
 import com.github.kagkarlsson.scheduler.task.helper.RecurringTask;
 import com.github.kagkarlsson.scheduler.task.helper.Tasks;
 import com.github.kagkarlsson.scheduler.task.schedule.Schedules;
+import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.time.Duration;
 import java.time.LocalTime;
@@ -21,6 +22,7 @@ class PaymentJobs {
 
     static final String POLL = "core.payments.poll";
     static final String HOUSEKEEPING = "core.payments.housekeeping";
+    static final String RECONCILE = "core.payments.reconcile";
     static final String RESEAL = "core.payments.reseal-accounts";
 
     @Bean
@@ -28,6 +30,15 @@ class PaymentJobs {
     RecurringTask<Void> paymentPollTask(PaymentPoller poller) {
         return Tasks.recurring(POLL, Schedules.fixedDelay(Duration.ofSeconds(10)))
                 .execute((instance, context) -> poller.tick());
+    }
+
+    /** The nightly reconciliation of each business's gateway payments (FR-PAY-05), after the end of day. */
+    @Bean
+    @ConditionalOnProperty(name = "bms.payments.poller-enabled", havingValue = "true", matchIfMissing = true)
+    RecurringTask<Void> paymentReconcileTask(TenantJobs tenantJobs, ReconciliationService reconciliation) {
+        return Tasks.recurring(RECONCILE, Schedules.daily(BusinessClock.DEFAULT_ZONE, LocalTime.of(3, 10)))
+                .execute((instance, context) ->
+                        tenantJobs.forEachActiveTenant(RECONCILE, tenantId -> reconciliation.run("job", null, false)));
     }
 
     /** Re-seals lenders' stored credentials with the current data key after a rotation; a no-op when none is left. */

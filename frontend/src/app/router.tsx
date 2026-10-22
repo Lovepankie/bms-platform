@@ -190,6 +190,10 @@ const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path:
 const staffUnallocatedRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments/unallocated', staticData: { crumb: 'Unallocated payments' } }).lazy(() =>
   import('../areas/staff/payments/unallocated').then((m) => m.Route),
 );
+// Payment reconciliation and the statement upload (extras slice A5 part 2, issue #224, task #317).
+const staffReconciliationRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments/reconciliation', staticData: { crumb: 'Payment reconciliation' } }).lazy(() =>
+  import('../areas/staff/payments/reconciliation').then((m) => m.Route),
+);
 
 // Notifications and app: install BMS and turn notifications on for this device (ADR-050).
 const staffNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/notifications', staticData: { crumb: 'Notifications and app' } }).lazy(() =>
@@ -412,7 +416,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUnallocatedRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUnallocatedRoute, staffReconciliationRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

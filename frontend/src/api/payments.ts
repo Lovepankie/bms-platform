@@ -1,4 +1,5 @@
 import { api, problemOf } from './client';
+import { FormError, postFile } from './lending-forms';
 import type { components } from './schema';
 
 // The "Receive payments" client (extras slice A7, issue #233; chapter 7 section 7.11.10; ADR-035 amendment of 2026-10-18): the
@@ -130,6 +131,52 @@ export const receipts = {
     );
   },
 };
+
+// The merchant statement and the daily reconciliation (extras slice A5 part 2, issue #224, task #317; FR-PAY-05, FR-PAY-11). The statement is the
+// operator's CSV from the provider's dashboard; the report lists what differs between it, this system and the receipts keyed by hand.
+export type PaymentStatement = components['schemas']['PaymentStatement'];
+export type PaymentStatementDetail = components['schemas']['PaymentStatementDetail'];
+export type PaymentStatementRow = components['schemas']['PaymentStatementRow'];
+export type PaymentReconciliation = components['schemas']['PaymentReconciliation'];
+export type ReconciliationFinding = components['schemas']['PaymentReconciliationFinding'];
+
+export const statements = {
+  async list(): Promise<PaymentStatement[]> {
+    return unwrap(await api.GET('/api/v1/payments/statements'), 'Could not load the statements.').items ?? [];
+  },
+
+  async get(id: string): Promise<PaymentStatementDetail> {
+    return unwrap(await api.GET('/api/v1/payments/statements/{statement_id}', { params: { path: { statement_id: id } } }), 'Could not load the statement.');
+  },
+
+  /** Uploads the CSV. A file with an unreadable line is refused whole: the FormError carries a message per line. */
+  async upload(file: Blob, fileName: string, covered?: { from: string; to: string }): Promise<PaymentStatementDetail> {
+    return postFile<PaymentStatementDetail>('/api/v1/payments/statements', file, fileName, covered ? { covered_from: covered.from, covered_to: covered.to } : {});
+  },
+
+  /** Marks a line no order of ours has as money for something outside this system; it is no longer reported. */
+  async markOutside(statementId: string, rowNo: number, note: string): Promise<PaymentStatementRow> {
+    return unwrap(
+      await api.POST('/api/v1/payments/statements/{statement_id}/rows/{row_no}/outside-system', {
+        params: { path: { statement_id: statementId, row_no: rowNo } },
+        body: { note },
+      }),
+      'Could not mark the line.',
+    );
+  },
+};
+
+export const reconciliation = {
+  async latest(): Promise<PaymentReconciliation> {
+    return unwrap(await api.GET('/api/v1/payments/reconciliation'), 'Could not load the reconciliation.');
+  },
+
+  async run(): Promise<PaymentReconciliation> {
+    return unwrap(await api.POST('/api/v1/payments/reconciliation/run'), 'Could not run the reconciliation.');
+  },
+};
+
+export { FormError };
 
 export const payments = {
   /** Starts a collection for a loan. The same key returns the same intent, so a retry never makes a second link. */
