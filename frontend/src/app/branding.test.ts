@@ -23,20 +23,29 @@ describe('the home screen name', () => {
   });
 });
 
-// In local development a logo is fetched with the tenant header and shown from an object URL; a replaced logo's URL is let go.
+// In local development a logo is fetched with the tenant header and shown from an object URL; an older logo's URL stays usable.
 describe('a logo loaded with the tenant header', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('revokes the object URL of the logo it replaces, and only that one', async () => {
+  it('keeps the object URL of an older version of the same logo usable', async () => {
     let made = 0;
-    const revoke = vi.fn();
+    const live = new Set<string>();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['png']))));
-    vi.stubGlobal('URL', Object.assign(class extends URL {}, { createObjectURL: () => `blob:logo-${++made}`, revokeObjectURL: revoke }));
+    vi.stubGlobal(
+      'URL',
+      Object.assign(class extends URL {}, {
+        createObjectURL: () => {
+          const url = `blob:logo-${++made}`;
+          live.add(url);
+          return url;
+        },
+        revokeObjectURL: (url: string) => live.delete(url),
+      }),
+    );
     const first = await loadLogo('/api/v1/branches/b-two/logo?v=doc-1');
-    await loadLogo('/api/v1/branding/logo?v=doc-9');
-    expect(revoke).not.toHaveBeenCalled();
-    await loadLogo('/api/v1/branches/b-two/logo?v=doc-2');
-    expect(revoke).toHaveBeenCalledTimes(1);
-    expect(revoke).toHaveBeenCalledWith(first);
+    const second = await loadLogo('/api/v1/branches/b-two/logo?v=doc-2');
+    expect(second).not.toBe(first);
+    expect(live.has(first)).toBe(true);
+    expect(live.has(second)).toBe(true);
   });
 });
