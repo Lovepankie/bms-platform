@@ -19,13 +19,22 @@ public interface Referrals {
     /** The business a typed code belongs to, the code in upper case; 422 {@code referral_code_unknown} for none. */
     Code resolve(String code);
 
+    /**
+     * 422 {@code referral_self} when the applicant's email or phone (E.164) is that of the Owner or an administrator of the
+     * business the code belongs to: a business is not referred by its own people.
+     */
+    void refuseSelf(Code code, String email, String phoneE164);
+
     /** Records the referrer on an application just created. */
     void attachToApplication(UUID applicationId, Code code);
 
     /** The referrer an application carries, for the operator's application page. */
     Optional<ApplicationReferrer> applicationReferrer(UUID applicationId);
 
-    /** Activate: the application's referrer becomes the new business's referral, audited. Empty when it had none. */
+    /**
+     * Activate: the application's referrer becomes the new business's referral, audited. Empty when it had none, or when the
+     * applicant is now the Owner or an administrator of the referrer: then no referral is stored and the refusal is audited.
+     */
     Optional<UUID> recordFromApplication(UUID applicationId, UUID tenantId, UUID operatorId);
 
     /**

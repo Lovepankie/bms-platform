@@ -82,6 +82,11 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
     count does not compare creation times: recording a payment locks the business's subscription row first (`V75`), so two
     payments recorded at the same moment are counted one after the other and never both as the first. The cap stays per
     referral row.
+10. **A business is not referred by its own people.** At the sign-up, after the code resolves, the applicant's email (compared as
+    the sign-up compares addresses, `onboarding_email_key`) and phone (E.164) are compared with the Owner and the administrators
+    (not deactivated) of the business the code belongs to (`referral_is_self`); a match is 422 `referral_self` on the
+    `referral_code` field and nothing is created. Activate compares them again, since the referrer's people may have changed:
+    on a match no referral is stored and the refusal is audited `platform.referral.refused_self` with the referrer.
 
 ## Consequences
 
@@ -95,6 +100,6 @@ a double submit adds two lines, which the operator reverses; codes are not secre
 (the operator still verifies every application before Activate).
 
 **Watch for:** the operator portal has no screen for referrals yet (the API is complete); when it comes, it has a page tour like
-every operator page. Gaming by self-dealing through a second business with the same owner is caught only by the operator's review
+every operator page. Gaming by self-dealing through a second business run by someone who is not the Owner or an administrator of the referrer is caught only by the operator's review
 of the application. If agents (ADR-024 decision 5) arrive, their commission lines can reuse the rule kinds and the line table with
 an agent in place of a referring business.

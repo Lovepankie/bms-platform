@@ -118,6 +118,24 @@ class ReferralService implements Referrals {
     }
 
     @Override
+    public void refuseSelf(Code code, String email, String phoneE164) {
+        boolean self = Boolean.TRUE.equals(jdbc.sql("SELECT referral_is_self(?, ?, ?)")
+                .params(code.tenantId(), email, phoneE164)
+                .query(Boolean.class)
+                .single());
+        if (self) {
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "referral_self",
+                    "Your own referral code",
+                    "This code belongs to a business you run. A business is not referred by its own people; leave the"
+                            + " code empty.",
+                    List.of(new FieldProblem(
+                            "referral_code", "self", "This code belongs to a business you run. Leave it empty.")));
+        }
+    }
+
+    @Override
     public void attachToApplication(UUID applicationId, Code code) {
         jdbc.sql("SELECT onboarding_application_set_referrer(?, ?, ?)")
                 .params(applicationId, code.tenantId(), code.code())
@@ -139,19 +157,28 @@ class ReferralService implements Referrals {
 
     @Override
     public Optional<UUID> recordFromApplication(UUID applicationId, UUID tenantId, UUID operatorId) {
-        UUID referral = jdbc.sql("SELECT platform_referral_from_application(?, ?, ?)")
+        record Row(UUID referral, UUID referrer, String outcome) {}
+        Row row = jdbc.sql("SELECT * FROM platform_referral_from_application(?, ?, ?)")
                 .params(applicationId, tenantId, operatorId)
-                .query(UUID.class)
-                .optional()
-                .orElse(null);
-        if (referral != null) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("referral_id", referral);
-            data.put("application_id", applicationId);
+                .query((rs, n) -> new Row(
+                        rs.getObject("referral_id", UUID.class),
+                        rs.getObject("referrer_tenant_id", UUID.class),
+                        rs.getString("outcome")))
+                .single();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("application_id", applicationId);
+        if ("recorded".equals(row.outcome())) {
+            data.put("referral_id", row.referral());
             data.put("source", "sign_up");
             audit.record("platform.referral.recorded", operatorId, tenantId, data);
+        } else if ("self".equals(row.outcome())) {
+            // ADR-069 decision 10: the applicant is the Owner or an administrator of the referrer; checked again at
+            // Activate, since the referrer's people may have changed since the sign-up.
+            data.put("referrer_tenant_id", row.referrer());
+            data.put("refused", "referral_self");
+            audit.record("platform.referral.refused_self", operatorId, tenantId, data);
         }
-        return Optional.ofNullable(referral);
+        return Optional.ofNullable(row.referral());
     }
 
     // ---- The payment the operator records ----------------------------------------------------

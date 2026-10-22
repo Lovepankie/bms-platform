@@ -133,6 +133,21 @@ LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp AS $$
      WHERE id = p_id
 $$;
 
+-- True when the email or the phone is that of the Owner or an administrator (not deactivated) of the business: a business is
+-- not referred by its own people (ADR-069 decision 10). Emails compare as the sign-up compares them (onboarding_email_key),
+-- phones in E.164.
+CREATE FUNCTION referral_is_self(p_referrer uuid, p_email text, p_phone text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM users u
+         WHERE u.tenant_id = p_referrer AND u.kind = 'staff' AND u.status <> 'deactivated'
+           AND (u.is_owner OR EXISTS (SELECT 1 FROM user_role_assignments ra
+                                       WHERE ra.tenant_id = u.tenant_id AND ra.user_id = u.id
+                                         AND ra.role_key = 'tenant_admin' AND ra.revoked_at IS NULL))
+           AND ((u.email IS NOT NULL AND onboarding_email_key(u.email) = onboarding_email_key(p_email))
+                OR (u.phone_e164 IS NOT NULL AND u.phone_e164 = p_phone)))
+$$;
+
 -- The referrer of one application for the operator, or no row.
 CREATE FUNCTION onboarding_application_referrer(p_id uuid)
 RETURNS TABLE (code text, tenant_id uuid, tenant_slug text, tenant_name text)
@@ -431,26 +446,33 @@ $$;
 -- 7. Referral writes.
 -- ---------------------------------------------------------------------------------------------
 
--- Activate: the application's referrer, if any, becomes the new business's referral. Returns the referral, or null.
+-- Activate: the application's referrer, if any, becomes the new business's referral. outcome: recorded (referral_id is the
+-- new referral), none (no code, or the business already has a referrer), or self (the applicant is the Owner or an
+-- administrator of the referrer, checked again now: no referral is stored).
 CREATE FUNCTION platform_referral_from_application(p_application_id uuid, p_tenant_id uuid, p_platform_user_id uuid)
-RETURNS uuid
+RETURNS TABLE (referral_id uuid, referrer_tenant_id uuid, outcome text)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
-    v_referrer uuid;
-    v_code     text;
-    v_id       uuid;
+    v_code  text;
+    v_email text;
+    v_phone text;
 BEGIN
-    SELECT a.referrer_tenant_id, a.referral_code INTO v_referrer, v_code
+    SELECT a.referrer_tenant_id, a.referral_code, a.contact_email, a.contact_phone_e164
+      INTO referrer_tenant_id, v_code, v_email, v_phone
       FROM onboarding_applications a WHERE a.id = p_application_id;
-    IF v_referrer IS NULL OR v_referrer = p_tenant_id
+    IF referrer_tenant_id IS NULL
        OR EXISTS (SELECT 1 FROM tenant_referrals r WHERE r.referred_tenant_id = p_tenant_id AND r.ended_at IS NULL) THEN
-        RETURN NULL;
+        outcome := 'none';
+    ELSIF referrer_tenant_id = p_tenant_id OR referral_is_self(referrer_tenant_id, v_email, v_phone) THEN
+        outcome := 'self';
+    ELSE
+        referral_id := gen_random_uuid();
+        INSERT INTO tenant_referrals (id, tenant_id, referred_tenant_id, code, source, application_id,
+                                      created_by_platform_user_id)
+        VALUES (referral_id, referrer_tenant_id, p_tenant_id, v_code, 'sign_up', p_application_id, p_platform_user_id);
+        outcome := 'recorded';
     END IF;
-    v_id := gen_random_uuid();
-    INSERT INTO tenant_referrals (id, tenant_id, referred_tenant_id, code, source, application_id,
-                                  created_by_platform_user_id)
-    VALUES (v_id, v_referrer, p_tenant_id, v_code, 'sign_up', p_application_id, p_platform_user_id);
-    RETURN v_id;
+    RETURN NEXT;
 END
 $$;
 
@@ -749,6 +771,7 @@ $$;
 
 REVOKE ALL ON FUNCTION referral_code_tenant(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onboarding_application_set_referrer(uuid, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION referral_is_self(uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION onboarding_application_referrer(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_referrals_list(uuid, uuid, text, text, uuid, integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION tenant_referrals_mine() FROM PUBLIC;
@@ -766,6 +789,7 @@ REVOKE ALL ON FUNCTION platform_referral_mark_paid(uuid, date, text, text, text,
 REVOKE ALL ON FUNCTION platform_referral_of_line(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION referral_code_tenant(text) TO bms_app;
 GRANT EXECUTE ON FUNCTION onboarding_application_set_referrer(uuid, uuid, text) TO bms_app;
+GRANT EXECUTE ON FUNCTION referral_is_self(uuid, text, text) TO bms_app;
 GRANT EXECUTE ON FUNCTION onboarding_application_referrer(uuid) TO bms_app;
 GRANT EXECUTE ON FUNCTION platform_referrals_list(uuid, uuid, text, text, uuid, integer, integer) TO bms_app;
 GRANT EXECUTE ON FUNCTION tenant_referrals_mine() TO bms_app;

@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -359,6 +360,75 @@ class ReferralsIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1);
+    }
+
+    /**
+     * The Owner or an administrator of a business cannot bring its code: their email (compared as the sign-up compares it) or
+     * phone is refused at the sign-up with 422 referral_self and nothing is created; it is checked again at Activate, where no
+     * referral is stored and the refusal is audited (decision 10).
+     */
+    @Test
+    void theBusinesssOwnPeopleCannotUseItsCode() {
+        TestDatabase.Fixture referrer = TestDatabase.tenant("refself", false);
+        String code = code(referrer.tenantId());
+        String adminEmail = Api.email("ref-self-admin");
+        UUID admin = Api.staff(referrer, adminEmail, new Api.Role("tenant_admin", null));
+
+        ResponseEntity<JsonNode> byEmail =
+                apply(signUpForm(adminEmail.toUpperCase(Locale.ROOT), "Test Own Shop", code));
+        assertThat(byEmail.getStatusCode().value()).as("%s", byEmail.getBody()).isEqualTo(422);
+        assertThat(byEmail.getBody().get("code").asString()).isEqualTo("referral_self");
+        assertThat(byEmail.getBody().toString()).contains("referral_code");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM onboarding_applications WHERE lower(contact_email) = lower(?)")
+                        .param(adminEmail)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+
+        String phone = "+256700000299";
+        TestDatabase.owner()
+                .sql("UPDATE users SET phone_e164 = ? WHERE id = ?")
+                .params(phone, admin)
+                .update();
+        Map<String, Object> byPhone = signUpForm(Api.email("ref-self-phone"), "Test Own Phone Shop", code);
+        byPhone.put("contact_phone", phone);
+        ResponseEntity<JsonNode> refused = apply(byPhone);
+        assertThat(refused.getStatusCode().value()).as("%s", refused.getBody()).isEqualTo(422);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("referral_self");
+
+        // Accepted at the sign-up, then the applicant becomes an administrator of the referrer before Activate.
+        String later = Api.email("ref-self-later");
+        assertThat(apply(signUpForm(later, "Test Later Shop", code)).getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        UUID id = application(later);
+        confirmEmail(id);
+        Api.staff(referrer, later, new Api.Role("tenant_admin", null));
+        assertThat(platform.post("/api/v1/platform/applications/" + id + "/verify", Map.of(), operator.accessToken())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        Map<String, Object> activation = new LinkedHashMap<>();
+        activation.put("modules", List.of("retail"));
+        activation.put("term", "monthly");
+        activation.put("way_in", "trial");
+        activation.put("slug", "ref-self-" + UUID.randomUUID().toString().substring(0, 8));
+        ResponseEntity<JsonNode> activated =
+                platform.post("/api/v1/platform/applications/" + id + "/activate", activation, operator.accessToken());
+        assertThat(activated.getStatusCode()).as("%s", activated.getBody()).isEqualTo(HttpStatus.OK);
+        UUID tenant = UUID.fromString(activated.getBody().get("tenant_id").asString());
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM tenant_referrals WHERE referred_tenant_id = ?")
+                        .param(tenant)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT data ->> 'referrer_tenant_id' FROM platform_audit_log"
+                                + " WHERE action = 'platform.referral.refused_self' AND tenant_id = ?")
+                        .param(tenant)
+                        .query(String.class)
+                        .single())
+                .isEqualTo(referrer.tenantId().toString());
     }
 
     // ---- The operator ---------------------------------------------------------------------------
