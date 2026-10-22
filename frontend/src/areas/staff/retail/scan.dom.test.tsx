@@ -7,6 +7,7 @@ import { retail } from '../../../api/retail';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { LabelsPage } from './labels';
+import { RestockForm } from './restock';
 import { SaleForm } from './sale';
 import { StocktakePage } from './stocktake';
 import { ScannerSettings } from './scan';
@@ -39,11 +40,11 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, 'mediaDevices');
 });
 
-function screenOf(node: ReactElement, role = 'admin') {
+function screenOf(node: ReactElement, role = 'admin', branch = BRANCH) {
   const me = mockMe(role);
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me, branch: BRANCH }}>{node}</StaffContext.Provider>
+      <StaffContext.Provider value={{ me, branch }}>{node}</StaffContext.Provider>
     </QueryClientProvider>,
   );
 }
@@ -250,6 +251,21 @@ describe('FR-RET-68 scanning on the stock count', () => {
     wedge(EAN);
     await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('is not on the count sheet of this branch'));
     expect(document.getElementById(`count-${LAMP}`)).toBeNull();
+  });
+});
+
+describe('FR-RET-68 scanning on the restock form', () => {
+  it('asks for a branch first when none is chosen at the top, and adds the item there once one is', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    const first = screenOf(<RestockForm />, 'admin', '');
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge(EAN);
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('Choose the branch at the top of the page first'));
+    first.unmount();
+    screenOf(<RestockForm />);
+    (document.activeElement as HTMLElement | null)?.blur();
+    wedge(EAN);
+    await waitFor(() => expect((document.getElementById(`q-0-${BRANCH}`) as HTMLInputElement | null)?.value).toBe('1'));
   });
 });
 

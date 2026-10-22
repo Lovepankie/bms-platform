@@ -169,8 +169,11 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const scanAdd = (p: Product, unitId?: string) => {
     const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
     if (unitId && !unit) return PACK_UNUSABLE;
+    // Without a stocking branch chosen at the top, the scanned quantity would go nowhere.
+    if (!here) return 'Choose the branch at the top of the page first, so the scanned item is counted there.';
     const fresh: RestockLine = { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: '1' } : {} };
-    setLines((ls) => scanInto(ls, p, unit, (l) => (here ? { ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } } : l), () => (unit ? withUnit(fresh, unit) : fresh)));
+    setLines((ls) => scanInto(ls, p, unit, (l) => ({ ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } }), () => (unit ? withUnit(fresh, unit) : fresh)));
+    return undefined;
   };
   const patch = (i: number, change: Partial<RestockLine>) => setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...change } : l)));
   const patchWhole = (i: number, line: RestockLine) => setLines((ls) => ls.map((l, n) => (n === i ? line : l)));
