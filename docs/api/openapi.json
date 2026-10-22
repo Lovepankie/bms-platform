@@ -1942,6 +1942,36 @@
           }
         }
       },
+      "DataExportSettingsRequest" : {
+        "properties" : {
+          "weekly_email" : {
+            "description" : "Email the Owner a copy every week",
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "weekly_email" ]
+      },
+      "DataExportStatus" : {
+        "properties" : {
+          "last_emailed_at" : {
+            "description" : "When the weekly email last went to the Owner; null when never",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "last_export_at" : {
+            "description" : "When a workbook of the business's data was last made, by anyone; null when never",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "latest" : {
+            "$ref" : "#/components/schemas/ReportRun"
+          },
+          "weekly_email" : {
+            "description" : "Whether the Owner is emailed a copy every week (on until switched off)",
+            "type" : "boolean"
+          }
+        }
+      },
       "DisbursementRequest" : {
         "properties" : {
           "disbursement_date" : {
@@ -6945,6 +6975,7 @@
         }
       },
       "ReportRun" : {
+        "description" : "The caller's newest workbook, in any state; null when they never asked for one",
         "properties" : {
           "as_of" : {
             "format" : "date",
@@ -22235,6 +22266,81 @@
         },
         "summary" : "The tenant's logo image (public, cacheable)",
         "tags" : [ "branding" ]
+      }
+    },
+    "/api/v1/data-export" : {
+      "get" : {
+        "operationId" : "getDataExport",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DataExportStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The data export card: the weekly email switch, the last export and email, the caller's newest workbook",
+        "tags" : [ "reports" ]
+      }
+    },
+    "/api/v1/data-export/runs" : {
+      "post" : {
+        "operationId" : "createDataExport",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReportRun"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for a workbook of the whole business, made in the background; an identical one still queued or running is returned (202 new, 200 existing)",
+        "tags" : [ "reports" ]
+      }
+    },
+    "/api/v1/data-export/settings" : {
+      "put" : {
+        "operationId" : "updateDataExportSettings",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DataExportSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DataExportStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch the weekly email of the workbook to the Owner on or off, audited",
+        "tags" : [ "reports" ]
       }
     },
     "/api/v1/documents/{document_id}" : {

@@ -5,6 +5,7 @@ import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/cl
 import { BRANDING_QUERY, appTitle, brandOf, useShellBrand } from '../../app/branding';
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
 import { BusyButton } from '../../app/ui/BusyButton';
+import { DataExportCard } from './data-export';
 import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
 
@@ -290,6 +291,8 @@ export function Setup() {
             Let staff run reports (portfolio at risk and others), prepared in the background and kept for 30 days
           </label>
         </fieldset>
+
+        {permissions.includes('core.data_export.run') && <DataExportCard />}
 
         {permissions.includes('core.branches.read') && (
           <fieldset>

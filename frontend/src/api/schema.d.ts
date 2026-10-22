@@ -431,6 +431,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/data-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The data export card: the weekly email switch, the last export and email, the caller's newest workbook */
+        get: operations["getDataExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-export/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for a workbook of the whole business, made in the background; an identical one still queued or running is returned (202 new, 200 existing) */
+        post: operations["createDataExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/data-export/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Switch the weekly email of the workbook to the Owner on or off, audited */
+        put: operations["updateDataExportSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -7389,6 +7440,25 @@ export interface components {
             head_office_branch_id?: string;
             tenant?: components["schemas"]["PlatformTenant"];
         };
+        DataExportSettingsRequest: {
+            /** @description Email the Owner a copy every week */
+            weekly_email: boolean;
+        };
+        DataExportStatus: {
+            /**
+             * Format: date-time
+             * @description When the weekly email last went to the Owner; null when never
+             */
+            last_emailed_at?: string;
+            /**
+             * Format: date-time
+             * @description When a workbook of the business's data was last made, by anyone; null when never
+             */
+            last_export_at?: string;
+            latest?: components["schemas"]["ReportRun"];
+            /** @description Whether the Owner is emailed a copy every week (on until switched off) */
+            weekly_email?: boolean;
+        };
         DisbursementRequest: {
             /**
              * Format: date
@@ -9520,6 +9590,7 @@ export interface components {
             /** @description The allowed values of an enum */
             values?: string[];
         };
+        /** @description The caller's newest workbook, in any state; null when they never asked for one */
         ReportRun: {
             /** Format: date */
             as_of?: string;
@@ -17488,6 +17559,72 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    getDataExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportStatus"];
+                };
+            };
+        };
+    };
+    createDataExport: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportRun"];
+                };
+            };
+        };
+    };
+    updateDataExportSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DataExportSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataExportStatus"];
                 };
             };
         };
