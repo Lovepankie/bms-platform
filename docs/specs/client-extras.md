@@ -495,6 +495,45 @@ The twin of 3.14; only what differs is listed.
 - **Not built here.** The same as 3.14 (the system user and the reversal request of #224, a payment in another currency, allocation and refund of a receipt, FR-PAY-04). The savings
   transaction list does not yet show the provider's payment code (it is on the collect screen and the intent).
 
+### 3.16 As built in slice #224, part 1 (the unallocated receipts queue, governed reversal, review windows)
+
+Slice #224 is delivered as a stack: this part (the queue, the reversal of a gateway payment, the review windows) and a second part (the nightly reconciliation job and report, the statement upload and the
+fee posting, migration `V85`). Everything here is off with the collections switch: a business that never collected has no receipts and no payments to reverse.
+
+- **The queue.** `GET /payments/unallocated` (open by default) lists the money a loan or account would not take, with the order's facts staff match against the provider's statement (order reference, tracking id,
+  confirmation code, method, paid time), the refusal code, and the requests waiting on it; never the payer's phone. A receipt is read with `core.payments.read` in its branch (else 404).
+- **Allocate** (`POST .../allocate`) and **refund** (`POST .../refund`) are requests, never actions: a holder of `core.payments.allocate` in the receipt's branch (and, to allocate, in the loan's or account's branch, checked before
+  the subject is described) asks with a reason and an `Idempotency-Key`; the answer is 202 with an approval request (`unallocated_allocation` or `unallocated_refund`, always checked, decided with the new
+  `core.payments.allocate_approve`, held by tenant admin, branch manager and accountant; never the maker). The purposes offered are the lender's own (`lending.loan_repayment`, `lending.savings_deposit`); the platform's own
+  purposes are never offered. The subject must be able to take the money when asked (`subject_not_payable`), and is checked again when the checker approves.
+- **Exactly once.** A receipt has one change in its life (`open` to `allocated`, `refunded` or `reversed`) and a `version` that rises with it. On approval the receipt row and the payment's intent row are locked, the receipt must
+  still be open and the intent still `booked_unallocated` (else the request ends stale, 409 `receipt_not_open` or `payment_not_held`), the snapshot of amount and currency must match, and the settlement is a
+  conditional update; the database refuses a second settlement (guard trigger), a second allocation transaction for one receipt (unique index) and a second reversal of the receipt's journal entry (the ledger). Two requests on one receipt
+  can both wait; whichever is approved first wins and the other is stale.
+- **Allocation books through the purpose handler** (`PurposeHandler.book`, the same call the booker makes), with the order tracking id as the external reference, the payment's own day as the value date (today when the loan's last repayment or a closed period
+  forbids it), recorded by the maker; a refusal (a closed loan, a frozen account) fails the approval with the code and leaves it pending for the checker to reject. The receipt's entry (debit the account `gateway` is mapped to, credit `unallocated_receipts`) is then
+  reversed (debit the liability, credit that same account) and the repayment's or deposit's own posting debits the account again: the clearing balance is the same as for a payment that booked at once and the liability is released. The intent
+  keeps the status `booked_unallocated` and gains `booked_subject_txn_id`, the transaction that holds its money, which is the join the reconciliation uses (ADR-035 amendment).
+- **Refund** records that the money went back and by what method: `gateway` (through the provider, the receipt's entry is reversed), or `cash`, `bank`, `mtn_momo`, `airtel_money` (debit `unallocated_receipts`, credit that method's account, which must be mapped and active
+  or the request is refused `payment_method_unmapped`), with the lender's own reference. The refund is always the receipt's whole amount: it carries no amount to exceed, and a request whose snapshot amount differs is closed `receipt_changed`.
+- **A payment the provider reports reversed** (decision 16, spec 3.8): the intent goes to `reversed_pending_review` and the platform raises one `gateway_payment_reversal` request per order, made by the tenant's system user (a user of kind `system`, one per tenant, no credentials, no role, no session,
+  created on first use). The request names what stands: a repayment or deposit (booked at once or allocated from the queue) or a receipt still held. Approval needs `core.payments.allocate_approve` and the permission that reverses
+  the thing (`lending.repayments.reverse_approve`, `lending.savings.withdraw_approve`); it reverses a booked transaction through `PurposeHandler.reverseBooked` (the staff reversal code with the gateway guard lifted for this path only: `gateway_reversal_pending` is
+  still what a staff request gets), or clears a held receipt (`reversed`), and ends the intent `reversed`. A deposit already withdrawn is refused by the balance rule and the approval stays pending. The request is
+  stale when the loan, account or receipt moved (its version is compared on approval), and the next notification or the weekly look raises a fresh one; a rejected one is not raised again; a refunded or
+  already-reversed receipt raises none (nothing of ours can be reversed; the loss is the accountant's).
+- **After the attack review of PR #315.** The request is raised in the branch of the loan or account that is reversed (a receipt of one branch can be allocated to a loan of another), where the checker's lending permission is asked, and
+  the checker must also hold `core.payments.allocate_approve` in the branch the money was received in. A rejection needs the same permissions as an approval. An allocation clears the receipt's entry on the day the repayment or deposit is dated (not
+  today), so a month closing between the two never shows the money twice. A repayment that would reopen a loan without some of its pledges lists those items on the request, and the checker needs `lending.collateral.release_approve` as well (decision 47).
+  A reversal asked for three times that still stands (`reversal_unresolved`) or that a checker rejected (`reversal_rejected`) is handed to a person: the order stays `reversed_pending_review`, carries that word, and is no longer polled; a holder of
+  `core.payments.allocate_approve` puts it to a checker again with `POST /payments/intents/{id}/reversal-request` (the provider is asked first; the asker is the maker and so cannot decide the new request, and neither can whoever rejected an earlier one or asked for one in the same episode; only an order waiting for a reversal is asked about, at most once in ten seconds, and the answers are 202 with the request, 409 `try_again` (the provider could not be asked, or a checker is deciding the earlier request), 409 `completed_again` (it reports the payment completed), 409 `provider_disagrees` (it does not report a reversal), 409 `not_in_review` and 422 `nothing_to_reverse`; each report of the reversal after a completed-again is a new episode with its own requests and count). A look that could not read what it needs keeps its schedule. A payment the provider reports completed again while a reversal waits goes back
+  to `booked` (or `booked_unallocated`), the waiting request ends `stale` with a note, `completed_after_reversal` is counted once; after an approved reversal it is counted and logged for a person. Approving, rejecting and the queue's "you may decide" use one
+  hook (`ApprovalAction.mayDecide`), which for this action also asks `allocate_approve` in the branch the money was received in. The queue also filters `status=reversed`.
+- **Review windows (spec 3.9).** A booked or unallocated payment is asked about again daily for 7 days when the reported method is a mobile money wallet (the exact strings `MTN`, `AIRTEL`, `MPESA`, `M-PESA`, `TIGO`; any other string is reviewed as a card and logged once), and otherwise (a card, or a method string we do not know) daily for 14 days and weekly until 120 days after payment. A payment waiting for a checker
+  is looked at weekly. A payment that failed and is then paid on the same hosted order books when the next notification arrives (a failed order is not polled).
+- **Not built here (part 2).** The nightly reconciliation job and report, the statement CSV upload with fee posting (FR-PAY-06), the manual-receipt-versus-confirmation-code flag (joins `payment_intents.confirmation_code` through `booked_subject_txn_id`, never the loan transaction's
+  external reference), and the shortfall list. A payment in another currency than the intent's still ends `needs_attention`.
+
 ## 4. SMS (ADR-036)
 
 ### 4.1 Summary

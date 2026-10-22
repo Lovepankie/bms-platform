@@ -1098,6 +1098,37 @@ class LoanServicingIT extends LoanFixtures {
         assertThat(loan(s[0]).get("status").asString()).isEqualTo("active");
     }
 
+    /**
+     * #224 (attack review of #315): a rejection asks what an approval asks, for every approval action. A staff reversal flagged as
+     * an unsecured reopen can be rejected only by someone who may release collateral, as it can be approved only by them: the
+     * accountant, who may do neither, is refused; the branch manager rejects it, and the loan stays closed.
+     * JUSTIFICATION-A3: a new test of a rule that changed for all actions; it adds a case, no mechanism.
+     */
+    @Test
+    void frRep05_anUnsecuredReopenCanBeRejectedOnlyByAnApproverWhoMayReleaseCollateral() {
+        String[] s = securedPaidOff("UNSECREJ", 70);
+        custody(s[1], "released");
+        String approval = requestReversal(s[0], s[2]);
+        assertThat(approvalPayload(approval)).contains("reopen_would_be_unsecured");
+        ResponseEntity<JsonNode> accountantTry = send(
+                HttpMethod.POST,
+                "/api/v1/approvals/" + approval + "/reject",
+                as(UUID.randomUUID(), permissionsOf("accountant"), "*", null),
+                Map.of("note", "No"));
+        assertThat(accountantTry.getStatusCode())
+                .as("%s", accountantTry.getBody())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(approvalStatus(approval)).isEqualTo("pending");
+        ResponseEntity<JsonNode> managerTry = send(
+                HttpMethod.POST,
+                "/api/v1/approvals/" + approval + "/reject",
+                as(manager, managerPerms, "*", null),
+                Map.of("note", "No"));
+        assertThat(managerTry.getStatusCode()).as("%s", managerTry.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(approvalStatus(approval)).isEqualTo("rejected");
+        assertThat(loan(s[0]).get("status").asString()).isEqualTo("closed");
+    }
+
     /** A reopen that restores every item needs no more than the usual reversal approver. */
     @Test
     void frRep05_aFullyRestoredReopenNeedsOnlyTheUsualApprover() {

@@ -67,6 +67,8 @@ class StatusChecker {
     private final PaymentGateway gateway;
     private final OrderCreator creator;
     private final PaymentBooker booker;
+    private final GatewayReversals reversals;
+    private final ReversalTargets targets;
     private final PaymentCounters counters;
     private final BusinessClock clock;
     private final TransactionTemplate tx;
@@ -78,6 +80,8 @@ class StatusChecker {
             PaymentGateway gateway,
             OrderCreator creator,
             PaymentBooker booker,
+            GatewayReversals reversals,
+            ReversalTargets targets,
             PaymentCounters counters,
             BusinessClock clock,
             PlatformTransactionManager transactions) {
@@ -86,6 +90,8 @@ class StatusChecker {
         this.gateway = gateway;
         this.creator = creator;
         this.booker = booker;
+        this.reversals = reversals;
+        this.targets = targets;
         this.counters = counters;
         this.clock = clock;
         this.tx = new TransactionTemplate(transactions);
@@ -106,7 +112,14 @@ class StatusChecker {
         switch (intent.status()) {
             case "created" -> creator.create(intentId, JOB_CREATE_BUDGET);
             case "paid" -> booker.book(intentId);
-            case "pending", "expired", "failed", "cancelled", "booked", "booked_unallocated" -> verify(intent);
+            case "pending",
+                    "expired",
+                    "failed",
+                    "cancelled",
+                    "booked",
+                    "booked_unallocated",
+                    "reversed_pending_review",
+                    "reversed" -> verify(intent);
             default ->
                 tx.executeWithoutResult(status -> store.update(
                         intentId,
@@ -117,7 +130,30 @@ class StatusChecker {
         }
     }
 
-    private void verify(Intent first) {
+    /** What the provider said when an order waiting for a reversal decision was asked about. */
+    enum Asked {
+        /** Nothing was asked, or the answer could not be had (provider down, no usable credentials). */
+        UNREACHABLE,
+        REVERSED,
+        COMPLETED,
+        /** Pending, failed or something that makes no sense for a paid order. */
+        OTHER
+    }
+
+    /**
+     * Asks the provider about one order that is {@code reversed_pending_review}, and does nothing else: an intent in any other
+     * state is not touched and not asked about ({@link Asked#UNREACHABLE}).
+     */
+    Asked verifyInReview(UUID intentId) {
+        OrderCreator.requireNoTransaction();
+        Intent intent = read.execute(status -> store.find(intentId).orElse(null));
+        if (intent == null || !"reversed_pending_review".equals(intent.status())) {
+            return Asked.UNREACHABLE;
+        }
+        return verify(intent);
+    }
+
+    private Asked verify(Intent first) {
         Instant started = clock.now();
         Intent intent = first;
         if (intent.providerReference() == null) {
@@ -126,7 +162,7 @@ class StatusChecker {
                         first.id(), first.status(), null, started, nullColumns("next_check_at", "check_requested_at"));
                 store.finishCallbacks(first.id(), started, started, "unchanged", "{\"status\":\"no_order\"}");
             });
-            return;
+            return Asked.UNREACHABLE;
         }
         if ("pending".equals(intent.status()) && !started.isBefore(intent.expiresAt())) {
             // The payer is no longer offered the order, whether or not the provider can be reached now.
@@ -142,16 +178,16 @@ class StatusChecker {
                 // that). That is the lender's to fix, never evidence the borrower did not pay: the intent is neither
                 // closed nor cancelled at the provider, and is asked again until the credentials work.
                 noCredentials(intent, started, "provider_auth");
-                return;
+                return Asked.UNREACHABLE;
             }
             if (e.kind() == GatewayException.Kind.UNAVAILABLE && "not_configured".equals(e.code())) {
                 // Nothing was asked: the account has no credentials we can read (not connected yet, removed, or its key
                 // was dropped). That is not the provider being down and never closes an intent that may have been paid.
                 noCredentials(intent, started, "no_credentials");
-                return;
+                return Asked.UNREACHABLE;
             }
             unreachable(intent, e, started);
-            return;
+            return Asked.UNREACHABLE;
         }
         UUID id = intent.id();
         Applied applied = tx.execute(status -> apply(id, result, started));
@@ -166,6 +202,11 @@ class StatusChecker {
         if (applied.bookNext()) {
             booker.book(id);
         }
+        return switch (result.status()) {
+            case REVERSED -> Asked.REVERSED;
+            case COMPLETED -> Asked.COMPLETED;
+            default -> Asked.OTHER;
+        };
     }
 
     private Intent expire(Intent intent, Instant now) {
@@ -215,9 +256,7 @@ class StatusChecker {
             Map<String, Object> cols = new HashMap<>();
             cols.put("last_checked_at", now);
             cols.put("check_failures", failures);
-            cols.put(
-                    "next_check_at",
-                    PERIODIC.contains(i.status()) ? CheckSchedule.next(now, i.createdAt(), failures) : null);
+            cols.put("next_check_at", scheduleAfterFailure(i, now, failures));
             store.update(i.id(), i.status(), null, now, cols);
             store.finishCallbacks(i.id(), started, now, "rejected", json);
             return false;
@@ -231,6 +270,24 @@ class StatusChecker {
                 // Best effort, and the provider was just unreachable.
             }
         }
+    }
+
+    /**
+     * When to look again after the provider could not be asked: an unpaid order keeps its growing wait; a booked or held payment
+     * keeps its review (the provider being down for an hour must not end the look for good); an order waiting for a checker keeps
+     * its weekly look; one handed to a person, none.
+     */
+    private static Instant scheduleAfterFailure(Intent i, Instant now, int failures) {
+        if (PERIODIC.contains(i.status())) {
+            return CheckSchedule.next(now, i.createdAt(), failures);
+        }
+        if (Set.of("booked", "booked_unallocated").contains(i.status()) && i.paidAt() != null) {
+            return CheckSchedule.nextReview(now, i.paidAt(), i.reportedMethod());
+        }
+        if ("reversed_pending_review".equals(i.status()) && !ReversalHandOver.handedOver(i)) {
+            return now.plus(CheckSchedule.REVIEW_OPEN_EVERY);
+        }
+        return null;
     }
 
     private void closeUnpaid(Intent i, Instant now) {
@@ -327,8 +384,32 @@ class StatusChecker {
 
     private Applied applyCompleted(Intent i, StatusResult r, Instant now, Instant started, String json) {
         String s = i.status();
-        if (Set.of("paid", "booked", "booked_unallocated", "reversed_pending_review", "reversed", "needs_attention")
-                .contains(s)) {
+        if ("reversed_pending_review".equals(s)) {
+            // The provider took the reversal back. The request a checker may be about to approve no longer stands on
+            // the
+            // facts: it is ended with a note, nothing is reversed, and a person looks (spec 3.16).
+            reversals.completedAgain(i);
+            store.finishCallbacks(i.id(), started, now, "status_mismatch", json);
+            return Applied.none();
+        }
+        if ("reversed".equals(s)) {
+            // A reversal was approved and the books gave the money back, and the provider now says it is paid after
+            // all: the
+            // borrower has paid and been given it back. Nothing can be done here; a person is told once (the marker is
+            // the word
+            // on the order), and the order is not looked at again.
+            boolean first = !ReversalHandOver.COMPLETED_AGAIN.equals(i.refusalCode());
+            Map<String, Object> cols = nullColumns("next_check_at", "check_requested_at");
+            cols.put("refusal_code", ReversalHandOver.COMPLETED_AGAIN);
+            store.update(i.id(), "reversed", null, now, cols);
+            store.finishCallbacks(i.id(), started, now, "status_mismatch", json);
+            if (first) {
+                audit.system(i, "completed_after_reversal", "reversed", Map.of("approved_reversal", true));
+                log.warn("payment intent {} reported completed after its reversal was approved", i.id());
+            }
+            return first ? new Applied(false, null, null, List.of(ReversalHandOver.COMPLETED_AGAIN)) : Applied.none();
+        }
+        if (Set.of("paid", "booked", "booked_unallocated", "needs_attention").contains(s)) {
             // Already counted: a replay or a second check that found the same completed order.
             store.finishCallbacks(i.id(), started, now, "duplicate", json);
             if ("paid".equals(s)) {
@@ -396,7 +477,11 @@ class StatusChecker {
         // to
         // one of them while the provider was being asked. Money was verified paid and is now reported reversed before
         // any booking.
-        if (("paid".equals(s) || "needs_attention".equals(s)) && i.verifiedAt() != null) {
+        // A needs_attention order that carries a booking or an allocation is not "never booked": it is left for a
+        // person
+        // (the database refuses the move too).
+        boolean unbooked = i.bookedTxnId() == null && targets.of(i).kind() == ReversalTargets.Kind.NONE;
+        if (("paid".equals(s) || ("needs_attention".equals(s) && unbooked)) && i.verifiedAt() != null) {
             Map<String, Object> cols = settled(i, now, 0, null);
             store.update(i.id(), s, "reversed", now, cols);
             audit.system(i, "reversed", "reversed", Map.of());
@@ -404,18 +489,43 @@ class StatusChecker {
             return new Applied(false, null, null, List.of("reversal"));
         }
         if ("booked".equals(s) || "booked_unallocated".equals(s)) {
-            // Never reversed automatically: a checker request follows in slice #224 (ADR-035 decision 16).
+            // Never reversed automatically: the system user raises one checker request and a person decides (ADR-035
+            // decision 16, spec 3.8). Nothing in the ledger moves here.
             Map<String, Object> cols = settled(i, now, 0, null);
+            cols.put("next_check_at", now.plus(CheckSchedule.REVIEW_OPEN_EVERY));
             store.update(i.id(), s, "reversed_pending_review", now, cols);
             audit.system(i, "reversal_reported", "reversed_pending_review", Map.of());
             store.finishCallbacks(i.id(), started, now, "reversed", json);
             log.warn("payment intent {} reported reversed by the provider after booking", i.id());
+            lookAgain(store.find(i.id()).orElse(i), now);
             return new Applied(false, null, null, List.of("reversal"));
         }
-        if ("reversed_pending_review".equals(s) || "reversed".equals(s)) {
+        if ("reversed_pending_review".equals(s)) {
+            // Asked again: a request that went stale, expired or was cancelled is raised afresh with today's facts; one
+            // that
+            // waits or was decided is left alone.
+            Applied same = unchanged(i, now, started, json, "duplicate");
+            lookAgain(i, now);
+            return same;
+        }
+        if ("reversed".equals(s) || "needs_attention".equals(s)) {
             return unchanged(i, now, started, json, "duplicate");
         }
         return mismatch(i, now, started, json, "reversed_unpaid", false);
+    }
+
+    /**
+     * Raises the checker request for a reversed order if none is waiting. With nothing waiting (a refused or decided request,
+     * nothing of ours to reverse, or the order handed to a person) there is nothing to look at again, so the weekly look ends;
+     * a request that waits is looked at weekly, since it may go stale or expire.
+     */
+    private void lookAgain(Intent i, Instant now) {
+        GatewayReversals.Raised raised = reversals.raise(i);
+        Intent after = store.find(i.id()).orElse(i);
+        // Only an explicit end ends the look; a call that could not read what it needs keeps the weekly look.
+        if (raised.fin() && "reversed_pending_review".equals(after.status())) {
+            store.update(after.id(), "reversed_pending_review", null, now, nullColumns("next_check_at"));
+        }
     }
 
     private Applied unchanged(Intent i, Instant now, Instant started, String json, String outcome) {
@@ -458,14 +568,19 @@ class StatusChecker {
         // A paid row's next check is the booking, due now: a stale answer must never clear it.
         Instant next = "paid".equals(i.status())
                 ? now
-                : Set.of("booked", "booked_unallocated").contains(i.status()) && i.paidAt() != null
-                        ? (again ? now.plus(CheckSchedule.THROTTLE) : CheckSchedule.nextReview(now, i.paidAt()))
-                        : again
-                                ? now.plus(CheckSchedule.THROTTLE)
-                                : started != null
-                                                && Set.of("pending", "expired").contains(i.status())
-                                        ? CheckSchedule.next(now, i.createdAt(), failures)
-                                        : null;
+                : "reversed_pending_review".equals(i.status())
+                        ? now.plus(CheckSchedule.REVIEW_OPEN_EVERY)
+                        : Set.of("booked", "booked_unallocated").contains(i.status()) && i.paidAt() != null
+                                ? (again
+                                        ? now.plus(CheckSchedule.THROTTLE)
+                                        : CheckSchedule.nextReview(now, i.paidAt(), i.reportedMethod()))
+                                : again
+                                        ? now.plus(CheckSchedule.THROTTLE)
+                                        : started != null
+                                                        && Set.of("pending", "expired")
+                                                                .contains(i.status())
+                                                ? CheckSchedule.next(now, i.createdAt(), failures)
+                                                : null;
         cols.put("next_check_at", next);
         if (!again) {
             cols.put("check_requested_at", null);

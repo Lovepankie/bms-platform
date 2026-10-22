@@ -52,13 +52,19 @@ class SavingsDepositPurpose implements PurposeHandler {
 
     private final SavingsRepository repo;
     private final SavingsServicing servicing;
+    private final SavingsServicer servicer;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
 
     SavingsDepositPurpose(
-            SavingsRepository repo, SavingsServicing servicing, CurrentTenant tenant, BusinessClock clock) {
+            SavingsRepository repo,
+            SavingsServicing servicing,
+            SavingsServicer servicer,
+            CurrentTenant tenant,
+            BusinessClock clock) {
         this.repo = repo;
         this.servicing = servicing;
+        this.servicer = servicer;
         this.tenant = tenant;
         this.clock = clock;
     }
@@ -121,6 +127,27 @@ class SavingsDepositPurpose implements PurposeHandler {
             }
             throw e;
         }
+    }
+
+    @Override
+    public Optional<Integer> subjectVersionOfTransaction(UUID transactionId) {
+        return repo.accountOfTxn(transactionId).flatMap(repo::account).map(AccountRow::version);
+    }
+
+    @Override
+    public Optional<String> reversalCheckerPermission() {
+        return Optional.of("lending.savings.withdraw_approve");
+    }
+
+    @Override
+    public void reverseBooked(
+            UUID transactionId,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            Set<String> listedCautions) {
+        servicer.reverse(transactionId, reason, approvalId, makerId, checkerId, true);
     }
 
     /** Active and dormant accounts take a deposit; a frozen or closed account does not (spec 3.7). */

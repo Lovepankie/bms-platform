@@ -51,6 +51,32 @@ public interface ApprovalAction {
     }
 
     /**
+     * Every permission the checker needs besides {@link #checkerPermission} for a request with this payload, in the request's
+     * branch: by default the one of {@link #extraCheckerPermission}. An action whose request can need more than one overrides
+     * this. Applied to a rejection as well as to an approval: whoever may not approve may not reject either.
+     */
+    default Set<String> extraCheckerPermissions(Map<String, Object> payload) {
+        return extraCheckerPermission(payload).map(Set::of).orElse(Set.of());
+    }
+
+    /**
+     * Whether this principal may decide (approve or reject) a request of this action in this branch with this payload: the checker
+     * permission and every extra permission of the payload in the request's branch, by default. An action whose request also
+     * binds another branch overrides this. The one hook approval, rejection and the queue's "you may decide" all use, so a person
+     * who cannot approve can neither reject nor be offered the decision.
+     */
+    default boolean mayDecide(com.rincoltech.bms.kernel.Principal checker, UUID branchId, Map<String, Object> payload) {
+        return checker.may(checkerPermission(), branchId)
+                && extraCheckerPermissions(payload).stream().allMatch(p -> checker.may(p, branchId));
+    }
+
+    /**
+     * Called in the rejection's transaction after the request is marked rejected, so the owning module can record what the
+     * rejection means for its subject. Nothing by default.
+     */
+    default void rejected(Execution request, String note) {}
+
+    /**
      * Performs the action with exactly the stored payload, inside the approval transaction. A
      * failure leaves the request pending with the error recorded (FR-APR-06).
      */

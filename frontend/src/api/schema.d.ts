@@ -2173,6 +2173,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/intents/{intent_id}/reversal-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put the reversal of a payment the provider reversed to a checker again (a person asking; 202 with the request) */
+        post: operations["requestPaymentReversalAgain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments/merchant-account": {
         parameters: {
             query?: never;
@@ -2221,6 +2238,74 @@ export interface paths {
         /** Change the tenant's payments settings, audited with before and after (ADR-035) */
         put: operations["updatePaymentsSettings"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/unallocated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The queue of unallocated receipts, oldest first (open by default; status open, allocated, refunded, reversed or all) */
+        get: operations["listUnallocatedReceipts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/unallocated/{receipt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One unallocated receipt with its requests */
+        get: operations["getUnallocatedReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/unallocated/{receipt_id}/allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask to put a receipt's money on a loan or a savings account (maker-checker, 202) */
+        post: operations["allocateUnallocatedReceipt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/unallocated/{receipt_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask to record that a receipt's money was sent back to the payer (maker-checker, 202) */
+        post: operations["refundUnallocatedReceipt"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6479,6 +6564,20 @@ export interface components {
             /** Format: int32 */
             version?: number;
         };
+        AllocateReceiptRequest: {
+            /**
+             * @description What the money is put on: lending.loan_repayment or lending.savings_deposit
+             * @example lending.loan_repayment
+             */
+            purpose: string;
+            /** @description Why this loan or account, for the checker */
+            reason: string;
+            /**
+             * Format: uuid
+             * @description The loan or the savings account
+             */
+            subject_id: string;
+        };
         ApplicantLinkRequest: {
             token: string;
         };
@@ -8892,6 +8991,38 @@ export interface components {
         PushUnsubscribeRequest: {
             endpoint: string;
         };
+        /** @description The request waits for a checker as approval_request_id */
+        ReceiptActionOutcome: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: uuid */
+            receipt_id?: string;
+        };
+        ReceiptAllocation: {
+            purpose?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            subject_type?: string;
+            /** Format: uuid */
+            transaction_id?: string;
+        };
+        /** @description What the payer meant to pay, as the order recorded it */
+        ReceiptIntendedSubject: {
+            purpose?: string;
+            /** Format: uuid */
+            subject_id?: string;
+            subject_type?: string;
+        };
+        /** @description Requests waiting for a checker (an open receipt) */
+        ReceiptPendingRequest: {
+            action_type?: string;
+            /** Format: uuid */
+            approval_request_id?: string;
+        };
+        ReceiptRefund: {
+            method_key?: string;
+            reference?: string;
+        };
         RecoveryCodes: {
             /** @description Shown once; each works once */
             recovery_codes?: string[];
@@ -8899,6 +9030,17 @@ export interface components {
         RecoveryCodesRequest: {
             /** @description A current TOTP code */
             code: string;
+        };
+        RefundReceiptRequest: {
+            /**
+             * @description How the money went or goes back: gateway (through the provider), cash, bank, mtn_momo or airtel_money
+             * @example bank
+             */
+            method_key: string;
+            /** @description Why it is returned, for the checker */
+            reason: string;
+            /** @description The lender's own reference for the refund (a bank or wallet reference), printable characters */
+            reference: string;
         };
         RelatedMember: {
             full_name?: string;
@@ -14993,6 +15135,12 @@ export interface components {
             /** @description Why the debt is written off; at least 5 characters, kept with the write-off and in the audit */
             reason: string;
         };
+        ReversalRequestOutcome: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: uuid */
+            intent_id?: string;
+        };
         Role: {
             key?: string;
             mfa_required?: boolean;
@@ -15956,6 +16104,53 @@ export interface components {
         UnlockSignInRequest: {
             /** @description Why; kept in the tenant's audit log */
             reason: string;
+        };
+        UnallocatedReceipt: {
+            allocation?: components["schemas"]["ReceiptAllocation"];
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description The provider's payment code, as shown on the provider's statement */
+            confirmation_code?: string;
+            /** Format: date-time */
+            created_at?: string;
+            currency?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** Format: uuid */
+            decided_by?: string;
+            /** Format: uuid */
+            id?: string;
+            intended_subject?: components["schemas"]["ReceiptIntendedSubject"];
+            /** @description Why it was allocated or refunded, as the maker wrote it */
+            note?: string;
+            /** @description Our reference for the order (BMS-...) */
+            order_reference?: string;
+            /** @description The provider's order tracking id */
+            order_tracking_id?: string;
+            /** Format: date-time */
+            paid_at?: string;
+            /** @description Requests waiting for a checker (an open receipt) */
+            pending_requests?: components["schemas"]["ReceiptPendingRequest"][];
+            refund?: components["schemas"]["ReceiptRefund"];
+            /** @description Why the loan or account did not take it, a closed word such as invalid_status_transition */
+            refusal_code?: string;
+            reported_method?: string;
+            /** Format: uuid */
+            requested_by?: string;
+            /** @enum {string} */
+            status?: "open" | "allocated" | "refunded" | "reversed";
+            /** Format: date */
+            value_date?: string;
+            /** Format: int32 */
+            version?: number;
+        };
+        UnallocatedReceiptPage: {
+            items?: components["schemas"]["UnallocatedReceipt"][];
+            next_cursor?: string;
         };
         /** @description Omitted fields are unchanged */
         UpdateAdvisorSettingsRequest: {
@@ -20090,6 +20285,28 @@ export interface operations {
             };
         };
     };
+    requestPaymentReversalAgain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReversalRequestOutcome"];
+                };
+            };
+        };
+    };
     getMerchantAccount: {
         parameters: {
             query?: never;
@@ -20220,6 +20437,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentsSettings"];
+                };
+            };
+        };
+    };
+    listUnallocatedReceipts: {
+        parameters: {
+            query?: {
+                status?: string;
+                branch_id?: string[];
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnallocatedReceiptPage"];
+                };
+            };
+        };
+    };
+    getUnallocatedReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnallocatedReceipt"];
+                };
+            };
+        };
+    };
+    allocateUnallocatedReceipt: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateReceiptRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptActionOutcome"];
+                };
+            };
+        };
+    };
+    refundUnallocatedReceipt: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                receipt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundReceiptRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptActionOutcome"];
                 };
             };
         };

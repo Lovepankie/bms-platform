@@ -53,8 +53,17 @@ class IntentStore {
             "order_verified_at");
 
     /** The statuses a notification may ask a re-check of; a final one or one a person must look at is left alone. */
-    static final Set<String> CHECKABLE =
-            Set.of("created", "pending", "expired", "failed", "cancelled", "paid", "booked", "booked_unallocated");
+    static final Set<String> CHECKABLE = Set.of(
+            "created",
+            "pending",
+            "expired",
+            "failed",
+            "cancelled",
+            "paid",
+            "booked",
+            "booked_unallocated",
+            "reversed_pending_review",
+            "reversed");
 
     /** One row, as the checker, the creator and the views see it. */
     record Intent(

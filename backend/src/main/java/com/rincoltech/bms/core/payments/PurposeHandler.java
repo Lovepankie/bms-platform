@@ -49,6 +49,50 @@ public interface PurposeHandler {
      */
     UUID book(Booking booking) throws PurposeRefusal;
 
+    /**
+     * The version of the subject that holds the money a transaction booked (a loan's, an account's), compared on approval so a
+     * reversal request is stale (FR-APR-08) when anything moved on the subject since it was raised. Empty: unknown.
+     */
+    default java.util.Optional<Integer> subjectVersionOfTransaction(UUID transactionId) {
+        return java.util.Optional.empty();
+    }
+
+    /** The permission, besides the payments one, that a checker of a reversal of this purpose's booking also needs. */
+    default java.util.Optional<String> reversalCheckerPermission() {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Reverses a transaction this purpose booked, because the provider reported the payment reversed and a checker approved
+     * (ADR-035 decision 16): the same reversal, posting, re-allocation and audit as a staff reversal, which refuses a gateway
+     * transaction. Runs in the approval's transaction. A business refusal (a deposit already withdrawn would leave the balance
+     * negative) is an {@code ApiException}: the approval fails and stays pending, nothing is changed.
+     */
+    default void reverseBooked(
+            UUID transactionId,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            java.util.Set<String> listedCautions) {
+        throw new UnsupportedOperationException("purpose " + purpose() + " cannot reverse a booking");
+    }
+
+    /**
+     * What a checker must accept knowingly if this transaction were reversed now (for a loan: the pledged items that would not
+     * come back when the loan reopens, as identifiers), or empty. Raised with the request and handed back to
+     * {@link #reverseBooked} as {@code listedCautions}, so a reversal the checker saw in full is not refused as stale because it
+     * listed nothing. A read.
+     */
+    default java.util.List<String> reversalCautions(UUID transactionId) {
+        return java.util.List.of();
+    }
+
+    /** The permission, besides the two above, a checker needs to accept the cautions of {@link #reversalCautions}. */
+    default java.util.Optional<String> cautionCheckerPermission() {
+        return java.util.Optional.empty();
+    }
+
     /** @param subjectType a word such as {@code loan} or {@code savings_account} */
     record Subject(String subjectType, UUID branchId) {}
 

@@ -100,9 +100,7 @@ class ApprovalService implements Approvals {
         if (!maker.may(action.makerPermission(), request.branchId())) {
             throw denied();
         }
-        if ((request.amountMinor() == null) != (request.currency() == null)) {
-            throw new IllegalArgumentException("amount and currency go together");
-        }
+        checkAmount(request);
         if (action.thresholdApplies()
                 && request.amountMinor() != null
                 && request.amountMinor() < settings.approvalThresholdMinor(action.actionType())) {
@@ -117,6 +115,88 @@ class ApprovalService implements Approvals {
                     summary(request)));
             return new Outcome(true, null);
         }
+        UUID id = insert(maker.userId(), action, request);
+        audit.record(AuditLog.Entry.created(
+                "core.approval.requested", "core.approval_request", id, request.branchId(), summary(request)));
+        return new Outcome(false, id);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Outcome requestAsSystem(UUID makerUserId, ActionRequest request) {
+        ApprovalAction action = action(request.actionType());
+        if (action.thresholdApplies()) {
+            throw new IllegalArgumentException("a system request never executes below a threshold");
+        }
+        checkAmount(request);
+        // The caller holds the subject's row lock, so two raisers meet here one after the other; a request already
+        // waiting is
+        // the answer. (A duplicate insert would abort the whole transaction in PostgreSQL, so it is looked for first.)
+        Optional<UUID> waiting = jdbc.sql("""
+                        SELECT id FROM approval_requests
+                         WHERE action_type = ? AND subject_id = ? AND status = 'pending'
+                        """)
+                .params(action.actionType(), request.subjectId())
+                .query(UUID.class)
+                .optional();
+        if (waiting.isPresent()) {
+            return new Outcome(false, waiting.get());
+        }
+        UUID id = insert(makerUserId, action, request);
+        // The platform's own user is a "system" actor; a person who asked on the platform's behalf is named as
+        // themselves.
+        String kind = jdbc.sql("SELECT kind FROM users WHERE id = ?")
+                .param(makerUserId)
+                .query(String.class)
+                .optional()
+                .map(k -> "system".equals(k) ? "system" : "staff")
+                .orElse("system");
+        audit.record(
+                AuditLog.Entry.created(
+                        "core.approval.requested", "core.approval_request", id, request.branchId(), summary(request)),
+                makerUserId,
+                kind);
+        return new Outcome(false, id);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean markStale(String actionType, UUID subjectId, String note) {
+        List<Row> pending = jdbc.sql(
+                        "SELECT " + COLUMNS
+                                + " FROM approval_requests r LEFT JOIN users u ON u.id = r.requested_by"
+                                + " WHERE r.action_type = ? AND r.subject_id = ? AND r.status = 'pending' FOR UPDATE OF r SKIP LOCKED")
+                .params(actionType, subjectId)
+                .query(this::map)
+                .list();
+        for (Row row : pending) {
+            setStatus(row, "stale", null, note, clock.now());
+            Map<String, Object> after = new LinkedHashMap<>();
+            after.put("status", "stale");
+            after.put("action_type", row.actionType());
+            after.put("subject_id", row.subjectId());
+            after.put("note", note);
+            audit.record(
+                    new AuditLog.Entry(
+                            "core.approval.stale",
+                            "core.approval_request",
+                            row.id(),
+                            row.branchId(),
+                            Map.of("status", row.status()),
+                            after),
+                    row.requestedBy(),
+                    "system");
+        }
+        return !pending.isEmpty();
+    }
+
+    private static void checkAmount(ActionRequest request) {
+        if ((request.amountMinor() == null) != (request.currency() == null)) {
+            throw new IllegalArgumentException("amount and currency go together");
+        }
+    }
+
+    private UUID insert(UUID makerId, ApprovalAction action, ActionRequest request) {
         UUID id = UUID.randomUUID();
         Instant now = clock.now();
         try {
@@ -137,7 +217,7 @@ class ApprovalService implements Approvals {
                             request.currency(),
                             mapper.writeValueAsString(request.payload()),
                             request.subjectVersion(),
-                            maker.userId(),
+                            makerId,
                             Timestamp.from(now),
                             Timestamp.from(now.plus(VALIDITY)))
                     .update();
@@ -148,15 +228,13 @@ class ApprovalService implements Approvals {
                     "Approval already pending",
                     "A request for this action on this subject is already waiting for a checker.");
         }
-        audit.record(AuditLog.Entry.created(
-                "core.approval.requested", "core.approval_request", id, request.branchId(), summary(request)));
         // The checkers with a device hear that a decision waits for them (ADR-050); the maker is never one of them.
         events.publishEvent(new PushNotice(
                 "core.approval_waiting",
                 id.toString(),
-                new PushNotice.Holders(action.checkerPermission(), request.branchId(), maker.userId()),
+                new PushNotice.Holders(action.checkerPermission(), request.branchId(), makerId),
                 Map.of("action_label", label(action.actionType()), "path", "/staff/approvals")));
-        return new Outcome(false, id);
+        return id;
     }
 
     /** "retail_purchase_order" read as "Retail purchase order": the action's name as a person says it. */
@@ -261,7 +339,7 @@ class ApprovalService implements Approvals {
     private Decided decide(Principal checker, UUID approvalId, String note) {
         Row row = lockVisible(checker, approvalId);
         ApprovalAction action = action(row.actionType());
-        if (!checker.may(action.checkerPermission(), row.branchId()) || missingExtraPermission(checker, action, row)) {
+        if (!action.mayDecide(checker, row.branchId(), row.payload())) {
             throw denied();
         }
         if (!"pending".equals(row.status())) {
@@ -287,6 +365,15 @@ class ApprovalService implements Approvals {
             throw e;
         } catch (ApiException e) {
             throw new ExecutionFailed(e.code() + ": " + e.getMessage(), e);
+        } catch (org.springframework.dao.PessimisticLockingFailureException e) {
+            // Another transaction held what this one needed (a status check of the same payment): nothing was changed
+            // and
+            // nothing is recorded against the request; the checker simply tries again.
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "try_again",
+                    "Try again",
+                    "Another change to the same record was in progress. Nothing was changed; try again.");
         } catch (RuntimeException e) {
             log.error("approval {} execution failed", approvalId, e);
             throw new ExecutionFailed("internal_error", e);
@@ -305,13 +392,17 @@ class ApprovalService implements Approvals {
         Principal checker = CurrentPrincipal.require();
         Row row = lockVisible(checker, approvalId);
         ApprovalAction action = action(row.actionType());
-        if (!checker.may(action.checkerPermission(), row.branchId())) {
+        if (!action.mayDecide(checker, row.branchId(), row.payload())) {
             throw denied();
         }
         requirePending(row);
         refuseMakerAndConflicts(checker, row, action);
         setStatus(row, "rejected", checker.userId(), note.trim(), clock.now());
         audit.record(transition(row, "core.approval.rejected", "rejected"));
+        action.rejected(
+                new ApprovalAction.Execution(
+                        row.id(), row.branchId(), row.subjectId(), row.payload(), row.requestedBy(), checker.userId()),
+                note.trim());
         return get(approvalId);
     }
 
@@ -442,8 +533,8 @@ class ApprovalService implements Approvals {
         boolean canDecide = pending
                 && action != null
                 && !r.requestedBy().equals(principal.userId())
-                && principal.may(action.checkerPermission(), r.branchId())
-                && !missingExtraPermission(principal, action, r);
+                && action.mayDecide(principal, r.branchId(), r.payload())
+                && !action.conflictedDeciders(r.subjectId(), r.payload()).contains(principal.userId());
         boolean canCancel = pending && r.requestedBy().equals(principal.userId());
         return new ApprovalResponse(
                 r.id(),
@@ -511,12 +602,6 @@ class ApprovalService implements Approvals {
         if (!clock.now().isBefore(row.expiresAt())) {
             throw ApiException.rule("approval_expired", "The request expired.");
         }
-    }
-
-    private static boolean missingExtraPermission(Principal checker, ApprovalAction action, Row row) {
-        return action.extraCheckerPermission(row.payload())
-                .filter(p -> !checker.may(p, row.branchId()))
-                .isPresent();
     }
 
     private void setStatus(Row row, String status, UUID decidedBy, String note, Instant at) {

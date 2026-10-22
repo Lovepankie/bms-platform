@@ -135,6 +135,17 @@ Money that arrives without a usable intent (for example a member paying the tena
 merchant number directly, reported in the settlement file) becomes an unallocated
 receipt (FR-PAY-04).
 
+As built in slice #224. A cashier puts a receipt on a loan or a savings account, or records that it went back,
+through a maker-checker request (`unallocated_allocation`, `unallocated_refund`); on approval the allocation books
+through the same purpose handler as a payment that booked at once (so the repayment or deposit has the
+allocation, receipt number, journal and text of a cashier's, and is idempotent on the order tracking id) and the
+receipt's own entry is reversed to clear the liability, once. A payment the provider later reports reversed
+raises one `gateway_payment_reversal` request per order, made by the tenant's system user (or by the person who asked again after a hand-over, who then cannot decide it); approving it reverses
+the repayment or deposit through the same code as a staff reversal (which still refuses a gateway transaction by
+hand), or clears the receipt if the money is still in the queue, and ends the order `reversed`. Nothing in the
+ledger moves until a person decides. A booked payment is kept under review for 7 days when the provider names a
+mobile money wallet, and for 120 days (daily for 14 days, then weekly) otherwise.
+
 ### 12.4.3 Direct mobile money without a gateway
 
 Cash-desk receipts by mobile money (a member sends money to the tenant's own wallet and

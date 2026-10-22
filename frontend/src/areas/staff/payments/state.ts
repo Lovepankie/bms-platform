@@ -55,3 +55,61 @@ export const CREDENTIAL = /^[\x21-\x7E]{8,256}$/;
 export function credentialProblem(value: string): string | null {
   return CREDENTIAL.test(value.trim()) ? null : 'Paste it exactly as Pesapal shows it, with no spaces.';
 }
+
+// The unallocated payments screen (extras slice A5, issue #224). The API is the authority; this only decides what the menu and the
+// page offer, from the /me permissions.
+
+export const PAYMENTS_READ = 'core.payments.read';
+/** Asking to put a payment on a loan or an account, or to record that it went back. */
+export const PAYMENTS_ALLOCATE = 'core.payments.allocate';
+/** Deciding such a request (done in the approvals inbox). */
+export const PAYMENTS_ALLOCATE_APPROVE = 'core.payments.allocate_approve';
+
+export const showUnallocated = (me: Pick<Me, 'permissions'>): boolean => held(me).includes(PAYMENTS_READ);
+export const canAskAllocate = (me: Pick<Me, 'permissions'>): boolean => held(me).includes(PAYMENTS_ALLOCATE);
+
+/** Why the loan or account did not take the money, in plain words. */
+const REFUSAL_WORDS: Record<string, string> = {
+  invalid_status_transition: 'The loan was already closed or written off',
+  account_closed: 'The savings account was closed',
+  account_frozen: 'The savings account was frozen',
+  account_dormant: 'The savings account was dormant',
+  value_date_in_future: 'The payment date was in the future',
+  before_opening: 'The payment was dated before the account opened',
+  value_date_closed: 'The payment was dated into a day already closed',
+  below_minimum_opening: 'The first deposit was below the minimum',
+  payment_method_unmapped: 'Mobile money has no account set up',
+  duplicate_reference: 'The same payment reference was already used',
+  period_closed: 'The accounting period was closed',
+  currency_mismatch: 'The payment was in another currency',
+  subject_not_payable: 'The loan or account cannot take payments',
+};
+
+export const refusalWords = (code: string | undefined): string => (code && REFUSAL_WORDS[code]) || 'The loan or account could not take it';
+
+export const STATUS_FILTERS: { value: 'open' | 'allocated' | 'refunded' | 'reversed' | 'all'; label: string }[] = [
+  { value: 'open', label: 'Waiting' },
+  { value: 'allocated', label: 'Put on a loan or account' },
+  { value: 'refunded', label: 'Sent back' },
+  { value: 'reversed', label: 'Reversed by the provider' },
+  { value: 'all', label: 'All' },
+];
+
+export const REFUND_METHODS: { value: string; label: string }[] = [
+  { value: 'gateway', label: 'Through the payment provider' },
+  { value: 'bank', label: 'Bank' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'mtn_momo', label: 'MTN mobile money' },
+  { value: 'airtel_money', label: 'Airtel money' },
+];
+
+export const ALLOCATE_PURPOSES: { value: string; label: string }[] = [
+  { value: 'lending.loan_repayment', label: 'A loan repayment' },
+  { value: 'lending.savings_deposit', label: 'A savings deposit' },
+];
+
+const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+export const subjectProblem = (value: string): string | null => (UUID.test(value.trim()) ? null : 'Paste the loan or account identifier exactly as shown on its page.');
+export const reasonProblem = (value: string): string | null => (value.trim().length >= 3 && value.length <= 300 ? null : 'Say why, in a few words (up to 300 characters).');
+/** The lender's own reference for a refund: printable characters, 1 to 100. */
+export const referenceProblem = (value: string): string | null => (/^[\x20-\x7E]{1,100}$/.test(value) && value.trim() !== '' ? null : 'Type the bank or wallet reference (up to 100 characters).');

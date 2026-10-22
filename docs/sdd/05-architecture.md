@@ -113,7 +113,7 @@ core.onboarding       -> core.tenancy, core.platform, core.audit, core.notificat
                          (Activate creates the tenant through core.platform's TenantProvisioning, ADR-024)
 core.notifications    -> core.audit (the operator's "send again" is audited)
 core.imports          -> core.ledger, core.documents   (templates register into it)
-core.payments         -> core.tenancy, core.audit, core.jobs, core.ledger, core.operations (built in #213; booking is delegated through the PurposeHandler registry of beans the owning modules supply; it depends on no vertical)
+core.payments         -> core.tenancy, core.audit, core.jobs, core.ledger, core.operations, core.approvals (the unallocated receipts queue and the reversal of a gateway payment are approval actions it registers, #224; built in #213; booking is delegated through the PurposeHandler registry of beans the owning modules supply; it depends on no vertical)
 core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, core.operations
                          (queued runs, the snapshot transaction, the spool, the JSON, CSV, PDF and Excel renderers, the file
                          expiry; the PDF is laid out by core.documents' shared report template under the letterhead of

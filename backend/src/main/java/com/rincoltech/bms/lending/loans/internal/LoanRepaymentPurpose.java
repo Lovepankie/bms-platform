@@ -40,6 +40,7 @@ class LoanRepaymentPurpose implements PurposeHandler {
 
     private final LoanRepository loans;
     private final LoanServicer servicer;
+    private final ServicingRepository repo;
     private final LoanServicing servicing;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
@@ -47,11 +48,13 @@ class LoanRepaymentPurpose implements PurposeHandler {
     LoanRepaymentPurpose(
             LoanRepository loans,
             LoanServicer servicer,
+            ServicingRepository repo,
             LoanServicing servicing,
             CurrentTenant tenant,
             BusinessClock clock) {
         this.loans = loans;
         this.servicer = servicer;
+        this.repo = repo;
         this.servicing = servicing;
         this.tenant = tenant;
         this.clock = clock;
@@ -79,6 +82,41 @@ class LoanRepaymentPurpose implements PurposeHandler {
             throw new PurposeRefusal("exceeds_payoff");
         }
         return new Subject("loan", loan.branchId());
+    }
+
+    @Override
+    public java.util.Optional<Integer> subjectVersionOfTransaction(UUID transactionId) {
+        return repo.txn(transactionId).flatMap(t -> loans.find(t.loanId())).map(Loan::version);
+    }
+
+    @Override
+    public java.util.Optional<String> reversalCheckerPermission() {
+        return java.util.Optional.of("lending.repayments.reverse_approve");
+    }
+
+    @Override
+    public void reverseBooked(
+            UUID transactionId,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            java.util.Set<String> listedCautions) {
+        servicer.reverse(transactionId, reason, approvalId, makerId, checkerId, listedCautions, true);
+    }
+
+    @Override
+    public java.util.List<String> reversalCautions(UUID transactionId) {
+        return repo.txn(transactionId)
+                .flatMap(t -> loans.find(t.loanId()).map(l -> servicer.unrestorable(l, t)))
+                .orElse(java.util.List.of());
+    }
+
+    @Override
+    public java.util.Optional<String> cautionCheckerPermission() {
+        // The authority that lets collateral go, as for a staff reversal that reopens a loan without its pledges
+        // (#176).
+        return java.util.Optional.of(ReversalAction.UNSECURED_REOPEN_PERMISSION);
     }
 
     @Override

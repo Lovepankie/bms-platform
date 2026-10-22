@@ -455,15 +455,23 @@ class SavingsServicer implements SavingsServicing {
      * reversed before, on an account that is not closed, and for a deposit enough balance left.
      */
     Transaction checkReversible(AccountRow a, Transaction t) {
+        return checkReversible(a, t, false);
+    }
+
+    /**
+     * As above. A deposit collected through the gateway is reversed only when the provider reports it reversed: the payments
+     * module raises the request and its checker approves ({@code viaProvider}, issue #224). A staff request is refused, because
+     * the money would leave the clearing account while the provider still holds it for the lender. The balance rule stands
+     * for both: a deposit already withdrawn is not reversed into a negative balance.
+     */
+    Transaction checkReversible(AccountRow a, Transaction t, boolean viaProvider) {
         if (a.status().equals("closed")) {
             throw closed();
         }
-        if (GATEWAY.equals(t.paymentMethodKey())) {
-            // The clearing debit and the payment's reference would be left behind; the reversal of a gateway payment
-            // is the payments module's review (issue #224).
+        if (GATEWAY.equals(t.paymentMethodKey()) && !viaProvider) {
             throw ApiException.rule(
                     "gateway_reversal_pending",
-                    "A deposit collected by mobile money cannot be reversed here yet; it is reviewed with the payment provider.");
+                    "A deposit collected by mobile money is reversed only when the payment provider reports it reversed.");
         }
         if (!REVERSIBLE.contains(t.txnType())) {
             throw ApiException.rule(
@@ -485,9 +493,13 @@ class SavingsServicer implements SavingsServicing {
     }
 
     void reverse(UUID txnId, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+        reverse(txnId, reason, approvalId, makerId, checkerId, false);
+    }
+
+    void reverse(UUID txnId, String reason, UUID approvalId, UUID makerId, UUID checkerId, boolean viaProvider) {
         Transaction t = repo.transaction(txnId).orElseThrow(ApiException::notFound);
         AccountRow a = repo.lock(repo.accountOfTxn(txnId).orElseThrow()).orElseThrow(ApiException::notFound);
-        checkReversible(a, t);
+        checkReversible(a, t, viaProvider);
         // The message of the movement being reversed, if the sender has not taken it yet, must not go.
         notices.reversed(t.id());
         LocalDate today = today();

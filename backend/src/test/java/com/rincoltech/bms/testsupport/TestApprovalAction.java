@@ -24,6 +24,9 @@ public class TestApprovalAction implements ApprovalAction {
     public final List<Execution> executions = new CopyOnWriteArrayList<>();
     public final Map<UUID, Integer> versions = new ConcurrentHashMap<>();
     public final Set<UUID> failing = ConcurrentHashMap.newKeySet();
+    /** Subjects whose execution loses a deadlock (JUSTIFICATION-A3: a case for the retryable error of #224, no mechanism). */
+    public final Set<UUID> deadlocked = ConcurrentHashMap.newKeySet();
+
     public final Map<UUID, Set<UUID>> conflicts = new ConcurrentHashMap<>();
 
     @Override
@@ -63,6 +66,9 @@ public class TestApprovalAction implements ApprovalAction {
 
     @Override
     public void execute(Execution execution) {
+        if (deadlocked.contains(execution.subjectId())) {
+            throw new org.springframework.dao.DeadlockLoserDataAccessException("the fabricated deadlock", null);
+        }
         if (failing.contains(execution.subjectId())) {
             throw new IllegalStateException("the fabricated subject refuses to execute");
         }

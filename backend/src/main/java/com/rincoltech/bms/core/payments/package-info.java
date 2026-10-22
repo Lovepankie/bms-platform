@@ -21,6 +21,7 @@
             "core.audit",
             "core.jobs",
             "core.ledger",
+            "core.approvals",
             "core.operations",
             "core.identity",
             "core.notifications"

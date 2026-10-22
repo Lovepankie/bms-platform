@@ -478,15 +478,22 @@ class LoanServicer implements LoanServicing {
 
     /** The checks of a reversal request, run again at execution. */
     Txn checkReversible(Loan loan, Txn txn) {
+        return checkReversible(loan, txn, false);
+    }
+
+    /**
+     * As above. A payment collected through the gateway is reversed only when the provider reports it reversed: the payments
+     * module raises the request and its checker approves ({@code viaProvider}, issue #224). A staff request for one is refused,
+     * because the money would leave the clearing account while the provider still holds it for the lender.
+     */
+    Txn checkReversible(Loan loan, Txn txn, boolean viaProvider) {
         if (!txn.loanId().equals(loan.id())) {
             throw ApiException.notFound();
         }
-        if ("gateway".equals(txn.paymentMethodKey())) {
-            // The clearing debit and the confirmation code would be left behind; the reversal of a gateway payment is
-            // the payments module's review (issue #224).
+        if ("gateway".equals(txn.paymentMethodKey()) && !viaProvider) {
             throw ApiException.rule(
                     "gateway_reversal_pending",
-                    "A payment collected by mobile money cannot be reversed here yet; it is reviewed with the payment provider.");
+                    "A payment collected by mobile money is reversed only when the payment provider reports it reversed.");
         }
         if (!Set.of("repayment", "recovery").contains(txn.txnType())) {
             throw ApiException.rule("not_reversible", "Only a repayment or a recovery is reversed here.");
@@ -631,9 +638,20 @@ class LoanServicer implements LoanServicing {
             UUID makerId,
             UUID checkerId,
             Set<String> unsecuredItemsListedOnRequest) {
+        reverse(txnId, reason, approvalId, makerId, checkerId, unsecuredItemsListedOnRequest, false);
+    }
+
+    void reverse(
+            UUID txnId,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId,
+            Set<String> unsecuredItemsListedOnRequest,
+            boolean viaProvider) {
         Txn txn = repo.txn(txnId).orElseThrow(ApiException::notFound);
         Loan loan = loans.lock(txn.loanId()).orElseThrow(ApiException::notFound);
-        checkReversible(loan, txn);
+        checkReversible(loan, txn, viaProvider);
         // The receipt (and the thanks) of the entry being reversed, if the sender has not taken them yet, must not go.
         notices.reversed(txn.id());
         LocalDate today = today();

@@ -253,6 +253,34 @@ class ApprovalsIT extends IntegrationTest {
         assertThat(action.executionsOf(subject)).isEqualTo(1);
     }
 
+    /**
+     * #224 (attack review of #315): a transaction that loses a deadlock while executing is not an internal error recorded against the
+     * request: nothing changes, the checker is told to try again (409 try_again), the request stays pending without an error, and
+     * the same approval then goes through.
+     * JUSTIFICATION-A3: a new test of a new error path; it adds a case, no mechanism.
+     */
+    @Test
+    void aLostDeadlockIsARetryableConflictNotARecordedFailure() {
+        UUID subject = UUID.randomUUID();
+        UUID approval = pending(cashier, subject);
+        action.deadlocked.add(subject);
+        ResponseEntity<JsonNode> lost = approve(manager, approval);
+        assertThat(lost.getStatusCode()).as("%s", lost.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(lost.getBody().get("code").asString()).isEqualTo("try_again");
+        assertThat(status(approval)).isEqualTo("pending");
+        JsonNode detail =
+                api.get("/api/v1/approvals/" + approval, manager.accessToken()).getBody();
+        assertThat(detail.get("execution_error") == null
+                        || detail.get("execution_error").isNull())
+                .as("no error is recorded against the request")
+                .isTrue();
+        assertThat(action.executionsOf(subject)).isZero();
+        action.deadlocked.remove(subject);
+        assertThat(approve(manager, approval).getBody().get("status").asString())
+                .isEqualTo("approved");
+        assertThat(action.executionsOf(subject)).isEqualTo(1);
+    }
+
     /** FR-APR-04: below the threshold the action executes without a checker. */
     @Test
     void belowTheThresholdTheActionExecutesAtOnce() {

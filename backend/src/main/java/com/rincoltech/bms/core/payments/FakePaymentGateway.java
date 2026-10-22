@@ -175,6 +175,13 @@ public final class FakePaymentGateway implements PaymentGateway {
         o.status = Status.COMPLETED;
     }
 
+    /** As {@link #complete}, reported as paid by this method (a card, say) instead of the default wallet. */
+    public synchronized void complete(
+            String providerReference, long paidMinor, String paidCurrency, String confirmationCode, String method) {
+        complete(providerReference, paidMinor, paidCurrency, confirmationCode);
+        byProviderReference.get(providerReference).method = method;
+    }
+
     /** The status answer names this merchant reference instead of the order's own (a confused or hostile provider). */
     public synchronized void reportReference(String providerReference, String merchantReference) {
         byProviderReference.get(providerReference).reportedReference = merchantReference;
