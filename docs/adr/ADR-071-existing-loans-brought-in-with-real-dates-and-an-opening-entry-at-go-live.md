@@ -57,11 +57,14 @@ fit every lending business, not one register.
    operator sets for a business with a reason, both audited; until set, it is the business date of the first sign-in of
    an administrator. A go-live date moved after a loan was recorded makes its pending request stale (409
    `go_live_changed`); asking again checks the loan against the new date.
-6. **No penalties for the time before the bring-in** (the default; Hillary may change it later). Each brought-in loan
-   keeps `brought_in_on`, the later of the go-live date and the approval's business date. The nightly arrears run charges
-   no penalty period dated before it (it already starts at the later of the business's first run and the loan's own
-   start; the bring-in date joins that rule), and charges the periods after it as for any loan. Days past due, the
-   arrears, the collection lists and the reminders count from the real due dates.
+6. **No penalties for the time before the bring-in** (Hillary's default, the borrower-friendly one; it may be changed
+   later). Each brought-in loan keeps `brought_in_on`, the later of the go-live date and the approval's business date. The
+   nightly arrears run charges a penalty period of a brought-in loan only when the period STARTS on or after
+   `brought_in_on`, its start being its date less one period unit (a day, a week or a month). A period that began before
+   the bring-in and ends after it is not charged either, and a daily period is charged only on a day strictly after
+   `brought_in_on`: none on the bring-in day itself. This sits on top of the rule every loan already has (no period dated
+   before the later of the business's first run and the loan's own start). Later periods are charged as for any loan.
+   Days past due, the arrears, the collection lists and the reminders count from the real due dates.
 7. **The CSV import** reuses the check-then-commit pattern of the retail item import (#146), with its CSV reader moved
    into the kernel (`CsvTable`) so both share one: rows of kind `loan` and `repayment` tied by `ref`, the register
    number; a check reports every row; a commit with any error records nothing; a loan whose `ref` is already in the app
@@ -103,5 +106,5 @@ business's true history but was never in the app's cash.
 
 **Watch for:** an opening entry dated in a closed period is refused (`period_closed`) and the request stays pending
 with the error, so bring the book in before closing the go-live month. A go-live date moved later reopens the window
-for bringing loans in; that is why only the Owner and the operator move it, and why each move is audited. If Hillary
-changes the penalty default (decision 6), the change is the start date the arrears run reads, nothing else.
+for bringing loans in; that is why only the Owner and the operator move it, and why each move is audited. If the
+penalty default of decision 6 changes, the change is the bring-in rule in `Penalties.due`, nothing else.

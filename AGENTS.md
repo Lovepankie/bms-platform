@@ -481,7 +481,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   ask again, and the CSV import (check, then commit). The maker-checker action `loan_bring_in` (checker
   `lending.disbursements.authorise`, no threshold) writes the schedule from the real date, historic transactions with no
   journal and one opening entry at go-live (debit loans receivable, credit opening balance equity). The arrears run charges
-  no penalty period before `brought_in_on`. The go-live date is the tenant setting `go_live_date` (`PATCH /settings`, Owner
+  no penalty period that starts before `brought_in_on` (none on the bring-in day). The go-live date is the tenant setting `go_live_date` (`PATCH /settings`, Owner
   only; `PUT /platform/tenants/{id}/go-live` for the operator), defaulting to the first administrator sign-in
   (`StaffDirectory.firstAdminSignIn`). The CSV reader of the retail item import moved to `kernel.CsvTable` so both imports
   share it. The PWA: `/staff/lending/existing-loans` (the form, its check and the loans waiting) and

@@ -194,15 +194,15 @@ class ArrearsRun {
                 loan.productVersionId(), v -> products.version(v).orElseThrow().penalty());
         // Penalties start at the later of the business's first run and the loan's own start in the system, so a long
         // overdue loan imported today is not charged every period since the first run in one night. A loan brought in
-        // from a paper register (ADR-071) starts at its bring-in date, the later of go-live and its approval: no period
-        // before it is charged, while its days overdue still count from the real due dates.
-        LocalDate start = jdbc.sql(
-                        "SELECT greatest((created_at AT TIME ZONE ?)::date, brought_in_on) FROM lending_loans"
-                                + " WHERE id = ?")
+        // from a paper register (ADR-071 decision 6) is charged only for periods that start on or after its bring-in
+        // date, the later of go-live and its approval, while its days overdue still count from the real due dates.
+        LocalDate[] start = jdbc.sql(
+                        "SELECT (created_at AT TIME ZONE ?)::date, brought_in_on FROM lending_loans WHERE id = ?")
                 .params(currentTenant.profile().timezone().getId(), id)
-                .query((rs, n) -> rs.getObject(1, LocalDate.class))
+                .query((rs, n) -> new LocalDate[] {rs.getObject(1, LocalDate.class), rs.getObject(2, LocalDate.class)})
                 .single();
-        LocalDate penaltiesFrom = start.isAfter(from) ? start : from;
+        LocalDate penaltiesFrom = start[0].isAfter(from) ? start[0] : from;
+        LocalDate broughtInOn = start[1];
         List<Item> items = repo.items(id);
         int charges = 0;
         long charged = 0;
@@ -226,6 +226,7 @@ class ArrearsRun {
                         rule,
                         today,
                         penaltiesFrom,
+                        broughtInOn,
                         periods.getOrDefault(item.id, Set.of()),
                         sums.getOrDefault(item.id, 0L))) {
                     int inserted = jdbc.sql("""

@@ -49,6 +49,23 @@ final class Penalties {
             LocalDate from,
             Set<Integer> charged,
             long chargedSoFar) {
+        return due(item, rule, businessDate, from, null, charged, chargedSoFar);
+    }
+
+    /**
+     * As above, for a loan brought in from a paper register (ADR-071 decision 6) on {@code broughtInOn}: a period counts
+     * only when it starts (its date less one period unit) on or after that day, so the borrower is never charged for time
+     * before the app knew the loan, not even a period that began before and ends after it. A daily period is therefore
+     * charged only on a day strictly after the bring-in, none on the day itself. Null for any other loan.
+     */
+    static List<Charge> due(
+            Item item,
+            PenaltyRule rule,
+            LocalDate businessDate,
+            LocalDate from,
+            LocalDate broughtInOn,
+            Set<Integer> charged,
+            long chargedSoFar) {
         List<Charge> out = new ArrayList<>();
         if (rule == null || !rule.charges() || !overdue(item, businessDate)) {
             return out;
@@ -62,6 +79,9 @@ final class Penalties {
                 break;
             }
             if (charged.contains(k) || on.isBefore(from)) {
+                continue;
+            }
+            if (broughtInOn != null && step(on, rule.periodUnit(), -1).isBefore(broughtInOn)) {
                 continue;
             }
             long amount = rule.method().equals("flat_per_period")

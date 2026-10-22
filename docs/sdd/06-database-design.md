@@ -1207,7 +1207,7 @@ creation and replaced by the approved terms at approval.
 | `import_row_id` | `uuid` | When `channel = import`. |
 | `created_by` | `uuid` | |
 | `go_live_on` | `date` | V91, ADR-071: the business's go-live date an existing loan was checked against; set only on a loan brought in, and the date of its opening entry. `CHECK (disbursed_on < go_live_on)` |
-| `brought_in_on` | `date` | V91: set on approval, the later of `go_live_on` and the approval's business date; no penalty period dated before it is charged (FR-EXL-07). `CHECK (brought_in_on >= go_live_on)` |
+| `brought_in_on` | `date` | V91: set on approval, the later of `go_live_on` and the approval's business date; no penalty period starting before it is charged (FR-EXL-07). `CHECK (brought_in_on >= go_live_on)` |
 | `register_ref` | `varchar(40)` | V91: the loan's number in the paper register; unique per tenant, ignoring case, among loans not cancelled or rejected (`lending_loans_register_ref`) |
 | `agreed_total_minor` | `bigint` | V91: the total the borrower agreed to repay, when the register gives it instead of the rate; `CHECK (> 0)` |
 | `opening_entry_id` | `uuid` | V91: the opening entry at go-live (debit `loans_receivable` with the loan as subledger, credit `opening_balance_equity`), null when no principal was owed. Composite foreign key to `journal_entries` |

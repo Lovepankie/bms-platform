@@ -490,8 +490,9 @@ class ExistingLoansIT extends LoanFixtures {
 
     /**
      * A loan overdue for months is brought in on a product that charges 2,000 a day after the due date. The arrears run
-     * charges no period dated before the bring-in date (today), only today's, while days past due count from the real
-     * due date. Once the loan has been in the app for three more days, those three days are charged and none before.
+     * charges no period that starts before the bring-in date (today): none at all on the bring-in day, while days past
+     * due count from the real due date. Once the loan has been in the app for three days, the three days after the
+     * bring-in are charged and none on or before it (ADR-071 decision 6).
      */
     @Test
     void frExl05_noPenaltyForTheTimeBeforeTheBringInButPenaltiesAfterIt() {
@@ -520,21 +521,16 @@ class ExistingLoansIT extends LoanFixtures {
                         """).param(t.tenantId()).update();
 
         ArrearsTestRun.run(context, t.tenantId());
-        assertThat(TestDatabase.owner()
-                        .sql("SELECT business_date FROM lending_loan_charges WHERE loan_id = ?::uuid ORDER BY 1")
-                        .param(id)
-                        .query(LocalDate.class)
-                        .list())
-                .as("item 1, 2 and 3 are overdue, each charged for today only")
-                .containsOnly(today)
-                .hasSize(3);
+        assertThat(count("SELECT count(*) FROM lending_loan_charges WHERE loan_id = ?::uuid", id))
+                .as("items 1, 2 and 3 are overdue, but today's period started yesterday, before the bring-in")
+                .isZero();
         JsonNode b = loan(id).get("balances");
         assertThat(b.get("days_past_due").asInt())
                 .as("from the real due date of item 1")
                 .isEqualTo((int) ChronoUnit.DAYS.between(disbursed.plusMonths(1), today));
-        assertThat(b.get("penalties_outstanding_minor").asLong()).isEqualTo(6_000);
+        assertThat(b.get("penalties_outstanding_minor").asLong()).isZero();
 
-        // Three days later in the app: the loan has been in since today minus three, so those days are charged.
+        // Three days later in the app: the loan has been in since today minus three, so the days after it are charged.
         TestDatabase.owner()
                 .sql("UPDATE lending_loans SET brought_in_on = ?, created_at = created_at - interval '3 days'"
                         + " WHERE id = ?::uuid")
@@ -550,9 +546,9 @@ class ExistingLoansIT extends LoanFixtures {
                 .param(id)
                 .query(LocalDate.class)
                 .list();
-        assertThat(charged).containsExactly(today.minusDays(3), today.minusDays(2), today.minusDays(1), today);
+        assertThat(charged).containsExactly(today.minusDays(2), today.minusDays(1), today);
         assertThat(loan(id).get("balances").get("penalties_outstanding_minor").asLong())
-                .isEqualTo(3 * 4 * 2_000);
+                .isEqualTo(3 * 3 * 2_000);
     }
 
     // ---- The go-live guard (FR-EXL-03) ----------------------------------------------------
