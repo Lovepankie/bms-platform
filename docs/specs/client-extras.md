@@ -498,7 +498,7 @@ The twin of 3.14; only what differs is listed.
 ### 3.16 As built in slice #224, part 1 (the unallocated receipts queue, governed reversal, review windows)
 
 Slice #224 is delivered as a stack: this part (the queue, the reversal of a gateway payment, the review windows) and a second part (the nightly reconciliation job and report, the statement upload and the
-fee posting, migration `V84`). Everything here is off with the collections switch: a business that never collected has no receipts and no payments to reverse.
+fee posting, migration `V85`). Everything here is off with the collections switch: a business that never collected has no receipts and no payments to reverse.
 
 - **The queue.** `GET /payments/unallocated` (open by default) lists the money a loan or account would not take, with the order's facts staff match against the provider's statement (order reference, tracking id,
   confirmation code, method, paid time), the refusal code, and the requests waiting on it; never the payer's phone. A receipt is read with `core.payments.read` in its branch (else 404).

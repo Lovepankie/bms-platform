@@ -498,7 +498,7 @@ Additive; nothing above is rewritten. The twin of the amendment for #216: the sa
 
 ## Amendment (2026-10-19, slice A5, issue #224, part 1): the unallocated receipts queue and the governed reversal
 
-Additive; nothing above is rewritten. Spec `docs/specs/client-extras.md` section 3.16; migration `V83`.
+Additive; nothing above is rewritten. Spec `docs/specs/client-extras.md` section 3.16; migration `V84`.
 
 39. **The queue is maker-checker, and ends once.** Putting an unallocated receipt on a loan or a savings account, and recording that it went back, are requests (`unallocated_allocation`, `unallocated_refund`) made with
     `core.payments.allocate` and decided with the new `core.payments.allocate_approve` (tenant admin, branch manager, accountant), never below a threshold and never by the maker. A receipt has one change in its life
@@ -510,14 +510,14 @@ Additive; nothing above is rewritten. Spec `docs/specs/client-extras.md` section
     money: the reconciliation joins through `payment_intents.confirmation_code` and that column, never through a loan transaction's external reference (#312).
 41. **A refund is a record, not a payout.** The provider has no payout interface (spec 3.1), so staff send the money back and the request records the method and the lender's reference; the checker approves the record and the liability is cleared (the receipt's entry reversed
     for `gateway`, a debit of the liability against that method's mapped account otherwise). A method with no active account is refused when asked. A refund is always the whole receipt.
-42. **Decision 16 is built.** A payment reported reversed raises one `gateway_payment_reversal` request per order, made by the tenant's payments system user (migration `V83` lets `users.kind` be `system`; one per tenant; no credentials, role or session; every staff query filters on
+42. **Decision 16 is built.** A payment reported reversed raises one `gateway_payment_reversal` request per order, made by the tenant's payments system user (migration `V84` lets `users.kind` be `system`; one per tenant; no credentials, role or session; every staff query filters on
     `staff`). It is raised in the status checker's transaction under the intent's row lock through `Approvals.requestAsSystem`, which returns a request already waiting instead of failing, so a notification, a poll and a review are one request. The checker needs `core.payments.allocate_approve`
     and the permission that reverses the thing (`lending.repayments.reverse_approve`, `lending.savings.withdraw_approve`). Approval reverses a booked transaction through `PurposeHandler.reverseBooked` or clears a held receipt, and ends the intent `reversed`. A request is stale
     when the subject moved (its version is the loan's, the account's or the receipt's) and is raised again; a rejected one is not; an order whose money was already refunded by hand raises none.
 43. **Staff still cannot reverse a gateway transaction by hand.** `gateway_reversal_pending` stays the answer to the staff routes (decisions 31 and 37): the money would leave the clearing account while the provider still holds it for the lender. The provider-reported path is the only one, and it lifts the guard for itself alone. This replaces "until #224" in those decisions.
 44. **Review windows follow spec 3.9.** A booked payment is reviewed daily for 7 days when the reported method is a mobile money wallet, and otherwise (card, or any method string not known) daily for 14 days and weekly to 120 days; a payment waiting for a checker is looked at weekly; a notification
     can ask for a look at it. The previous 14 day rule (decision 11 of the amendment of 2026-10-17) is replaced.
-45. **Split.** The nightly reconciliation job and report, the statement upload with fee posting, and the duplicate-receipt flag are the second part of #224 (migration `V84`).
+45. **Split.** The nightly reconciliation job and report, the statement upload with fee posting, and the duplicate-receipt flag are the second part of #224 (migration `V85`).
 
 ### Review of 2026-10-19 (attack review of PR #315), decisions added to the amendment
 
