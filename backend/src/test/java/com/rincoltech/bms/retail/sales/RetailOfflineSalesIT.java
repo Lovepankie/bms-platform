@@ -547,6 +547,25 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(clashKinds(noReason.getBody())).containsExactly("price_typed");
     }
 
+    /**
+     * Review fix 8: a sale that says it happened before the server time the phone last saved its prices had a clock behind;
+     * it is dated when it reached the server with a clock_behind clash, never refused for the wrong day.
+     */
+    @Test
+    void aPhoneClockBehindIsDatedNowAndFlagged() {
+        api.stockUp(t.headOffice(), product, "5");
+        Instant before = Instant.now();
+        Map<String, Object> body = offlineSale(UUID.randomUUID(), before.minus(Duration.ofDays(400)), "1", 2_000);
+        body.put("prices_as_of", before.minus(Duration.ofMinutes(30)).toString());
+        ResponseEntity<JsonNode> sold = send(body, UUID.randomUUID().toString());
+        assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(sold.getBody())).containsExactly("clock_behind");
+        assertThat(Instant.parse(sold.getBody().get("device").get("occurred_at").asString()))
+                .isBetween(before, Instant.now());
+        assertThat(sold.getBody().get("sale_date").asString())
+                .isEqualTo(dayIn(Instant.now()).toString());
+    }
+
     /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
     @Test
     void aManagerCannotDecideTheirOwnRefusedSale() {

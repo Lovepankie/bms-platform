@@ -22,19 +22,25 @@ export function sellingBranchesOf(me: Me): { id: string; name: string }[] {
 }
 
 export interface CatalogueSource {
-  /** One page of the active items of a branch, with their stock there. */
-  products(branchId: string, cursor?: string): Promise<{ items?: Product[]; next_cursor?: string }>;
+  /** One page of the active items of a branch, with their stock there, and the server's Date header when it has one. */
+  products(branchId: string, cursor?: string): Promise<{ items?: Product[]; next_cursor?: string; serverTime?: string }>;
   customers(): Promise<Customer[]>;
 }
 
-/** Fetches the whole copy, then writes it at once, so a refresh cut half way leaves the last full copy in place. */
+/**
+ * Fetches the whole copy, then writes it at once, so a refresh cut half way leaves the last full copy in place. The prices
+ * are as of the server's time (its Date header on the first page), not the phone's, so the server can tell a phone clock
+ * that is behind (ADR-067 decision 6); the phone's time is used only when the server sent none.
+ */
 export async function refreshCatalogue(source: CatalogueSource, me: Me, scope: string, store: OfflineStore, now: Date): Promise<Catalogue> {
   const products: Record<string, Product[]> = {};
+  let serverTime: string | undefined;
   for (const b of sellingBranchesOf(me)) {
     const rows: Product[] = [];
     let cursor: string | undefined;
     do {
       const page = await source.products(b.id, cursor);
+      serverTime ??= serverIso(page.serverTime);
       rows.push(...(page.items ?? []));
       cursor = page.next_cursor;
     } while (cursor);
@@ -46,10 +52,17 @@ export async function refreshCatalogue(source: CatalogueSource, me: Me, scope: s
   } catch {
     // A person who may not read buyers sells without naming one.
   }
-  const catalogue: Catalogue = { pricesAsOf: now.toISOString(), products, customers };
+  const catalogue: Catalogue = { pricesAsOf: serverTime ?? now.toISOString(), products, customers };
   await store.putCatalogue(scope, catalogue);
   await store.putProfile(scope, me);
   return catalogue;
+}
+
+/** An HTTP Date header as an ISO time, or undefined when absent or unreadable. */
+export function serverIso(date: string | null | undefined): string | undefined {
+  if (!date) return undefined;
+  const at = Date.parse(date);
+  return Number.isNaN(at) ? undefined : new Date(at).toISOString();
 }
 
 /** The items of a branch matching the words, as the server's search does: code, name or category, any case. */

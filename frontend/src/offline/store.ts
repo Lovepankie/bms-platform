@@ -9,7 +9,7 @@ import type { OutboxItem } from './outbox';
 
 /** What the sale screen needs with no network, for one person on one business. */
 export interface Catalogue {
-  /** When the copy was last refreshed in full (ISO): the "prices as of" time. */
+  /** When the copy was last refreshed in full (ISO), by the server's clock (its Date header): the "prices as of" time. */
   pricesAsOf: string;
   /** The active items of each branch the person may sell at, with their packs and stock when refreshed. */
   products: Record<string, Product[]>;

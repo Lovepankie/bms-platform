@@ -28,7 +28,8 @@ left, the branch, the period, the person's roles.
    items of each branch the person may sell at (`GET /retail/products?active=true&branch_id=`, every page, with their pack
    sizes, which are the price rules a seller can read; items with sizes and colours are products and come with them), the
    person's selling branches, the customers list, the four sale payment methods, the person's profile, and `prices_as_of`,
-   the time of the last full refresh. It refreshes when the app comes online, on sign-in and every 15 minutes while online.
+   the time of the last full refresh by the server's clock (the `Date` header of its first answer; the phone's clock only when
+   the server sent none). It refreshes when the app comes online, on sign-in and every 15 minutes while online.
    Price lists are not cached: a seller may not read them (`retail.pricelist.manage`), so an offline sale is priced at the
    retail price or the pack price on the device, or a price typed under the rules of decision 11.
 3. **The outbox.** A sale saved offline, or whose answer was lost, goes into the outbox store with its whole request, a
@@ -56,7 +57,10 @@ left, the branch, the period, the person's roles.
 6. **When it happened.** `occurred_at` is optional. When given, the sale is dated the day of `occurred_at` in the business's
    time zone (a `sale_date` that disagrees is 422 `sale_date_mismatch`) and `occurred_at` is stored on the sale. Up to 5
    minutes ahead of the server clock is clock skew and is recorded as the server's now. Further ahead, an online request is
-   refused (422 `occurred_at_in_future`); an offline one is recorded at the server's now and flagged `clock_ahead`. Retail has
+   refused (422 `occurred_at_in_future`); an offline one is recorded at the server's now and flagged `clock_ahead`. An offline
+   sale whose `occurred_at` is earlier than its `prices_as_of` (the server's time when the phone last saved its prices) had a
+   phone clock behind: it is recorded at the server's now and flagged `clock_behind`, so a wrong phone clock never makes it
+   `period_closed`. Retail has
    no daily close; the bound in the past is the accounting period: a sale dated in a closed month is refused by the ledger
    (`period_closed`) and becomes a failure (decision 7), never a silent drop. If a daily close is built later it adds the same
    refusal.
@@ -68,7 +72,7 @@ left, the branch, the period, the person's roles.
    keeps the device price as an override whose reason names the offline sale and `prices_as_of`, or a strict list has no
    price), `price_typed` (decision 11: a typed price the online rules would not have taken)
    and `below_cost` (the price is not above cost without `retail.price.below_cost`; the clash words never carry the cost).
-   `clock_ahead` is the fifth kind. A push notice `retail.sale_clash` goes to every holder of `retail.offline.resolve` at the
+   `clock_ahead` and `clock_behind` (decision 6) are the clock kinds. A push notice `retail.sale_clash` goes to every holder of `retail.offline.resolve` at the
    branch (the administrators, the owner among them, and the branch's Supervisors), once per sale. The sale page shows its
    clashes; `GET /retail/sale-clashes` lists the open ones; `POST /retail/sale-clashes/{clash_id}/resolve` closes one with a
    note, audited. Resolving changes nothing else: a stock count or a correction is done the usual way.

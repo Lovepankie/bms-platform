@@ -85,7 +85,7 @@ export function browserServices(): OfflineServices {
           params: { query: { branch_id: branchId, active: true, limit: 200, cursor } },
         });
         if (error || !data || !response.ok) throw new Error('Could not load the items');
-        return data;
+        return { ...data, serverTime: response.headers.get('Date') ?? undefined };
       },
       customers: () => retail.listCustomers(),
     },

@@ -1922,7 +1922,7 @@ Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `cre
 Built: retail sales offline (issue #458, ADR-067, migration `V87`; renumbered at merge if needed). Besides the four columns
 above, two tables, each with forced row-level security, composite foreign keys on the tenant and no delete grant.
 `retail_sale_clashes` holds what changed while an offline sale was away: `sale_id`, `branch_id`, `line_no` and `product_id`
-(null together for `clock_ahead`), `kind` (`stock_short`, `item_inactive`, `price_changed`, `price_typed`, `below_cost`, `clock_ahead`),
+(null together for `clock_ahead` and `clock_behind`), `kind` (`stock_short`, `item_inactive`, `price_changed`, `price_typed`, `below_cost`, `clock_ahead`, `clock_behind`),
 `words` (the plain sentence, never a cost), and `resolved_at`, `resolved_by`, `resolution_note` (at least five characters),
 set together once (the application role may update only those three; a guard trigger refuses a second resolve); indexes by
 sale and on the open ones by branch. `retail_offline_failures` is a sale the server refused, reported by the device of the

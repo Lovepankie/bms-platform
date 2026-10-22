@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/client';
 import type { Product } from '../api/retail';
 import type { Draft } from '../areas/staff/retail/sale-state';
-import { offlineProblem, offlineSale, refreshCatalogue, searchCatalogue, sellingBranchesOf } from './catalogue';
+import { offlineProblem, offlineSale, refreshCatalogue, searchCatalogue, sellingBranchesOf, serverIso } from './catalogue';
 import { createConnectivity } from './connectivity';
 import { memoryStore, scopeOf } from './store';
 
@@ -40,6 +40,15 @@ describe('the catalogue copy', () => {
     expect(c.pricesAsOf).toBe('2026-10-22T09:14:00.000Z');
     expect(await store.catalogue(scope)).toEqual(c);
     expect((await store.profile(scope))?.user_id).toBe('u1');
+  });
+
+  it("dates the prices by the server's clock when it sends one, so a phone clock behind can be told", async () => {
+    const store = memoryStore();
+    const scope = scopeOf('test.example', 'u1');
+    const products = async () => ({ items: [cable], serverTime: 'Thu, 22 Oct 2026 09:20:00 GMT' });
+    const c = await refreshCatalogue({ products, customers: async () => [] }, seller, scope, store, new Date('2026-10-20T07:00:00Z'));
+    expect(c.pricesAsOf).toBe('2026-10-22T09:20:00.000Z');
+    expect(serverIso('not a date')).toBeUndefined();
   });
 
   it('keeps the last full copy when a refresh is cut half way', async () => {

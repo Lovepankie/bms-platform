@@ -493,7 +493,9 @@ class SalesService {
 
     /**
      * When the sale happened (ADR-067 decision 6): null when the request does not say; up to {@link #CLOCK_SKEW} ahead is now;
-     * further ahead an online request is refused and a sale recorded offline is dated now with a clock_ahead clash.
+     * further ahead an online request is refused and a sale recorded offline is dated now with a clock_ahead clash. A sale
+     * recorded offline that says it happened before prices_as_of (the server's time when the phone last saved its prices)
+     * had a phone clock behind: it is dated now with a clock_behind clash, never refused for a closed period because of it.
      */
     private Instant occurredAt(SaleRequest r, List<PendingClash> clashes) {
         List<FieldProblem> problems = new ArrayList<>();
@@ -511,6 +513,15 @@ class SalesService {
             return null;
         }
         Instant now = clock.now();
+        if (clashes != null && r.pricesAsOf() != null && r.occurredAt().isBefore(r.pricesAsOf())) {
+            clashes.add(new PendingClash(
+                    null,
+                    null,
+                    "clock_behind",
+                    "The phone's clock was behind: the sale said it happened before the phone last saved its prices"
+                            + " from the server, so it is dated when it reached the server."));
+            return now;
+        }
         if (!r.occurredAt().isAfter(now.plus(CLOCK_SKEW))) {
             return r.occurredAt().isAfter(now) ? now : r.occurredAt();
         }

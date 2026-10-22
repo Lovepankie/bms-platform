@@ -54,9 +54,11 @@ CREATE TRIGGER retail_sales_offline_guard BEFORE UPDATE ON retail_sales
 
 -- ---------------------------------------------------------------------------------------------
 -- A clash of a sale recorded offline: written with the sale, resolved once with a note. kind is stock_short (the sale took the
--- balance below zero or into stock kept for orders), item_inactive, price_changed, below_cost or clock_ahead (the device clock
+-- balance below zero or into stock kept for orders), item_inactive, price_changed, price_typed (a typed price the online price
+-- rules would not take, ADR-067 decision 11), below_cost or clock_ahead (the device clock
 -- was more than five minutes ahead; the sale is dated the server's now). words is the plain sentence shown on the sale page; it
--- never carries a cost.
+-- never carries a cost. clock_behind: the sale said it happened before the server time at which the phone last saved its
+-- prices, so its clock was behind; the sale is dated the server's now.
 -- ---------------------------------------------------------------------------------------------
 
 CREATE TABLE retail_sale_clashes (
@@ -68,7 +70,8 @@ CREATE TABLE retail_sale_clashes (
     line_no          integer      CHECK (line_no > 0),
     product_id       uuid,
     kind             text         NOT NULL
-                                  CHECK (kind IN ('stock_short', 'item_inactive', 'price_changed', 'price_typed', 'below_cost', 'clock_ahead')),
+                                  CHECK (kind IN ('stock_short', 'item_inactive', 'price_changed', 'price_typed', 'below_cost',
+                                                  'clock_ahead', 'clock_behind')),
     words            varchar(400) NOT NULL CHECK (btrim(words) <> ''),
     resolved_at      timestamptz,
     resolved_by      uuid,
@@ -77,7 +80,7 @@ CREATE TABLE retail_sale_clashes (
     FOREIGN KEY (tenant_id, sale_id) REFERENCES retail_sales (tenant_id, id),
     FOREIGN KEY (tenant_id, branch_id) REFERENCES branches (tenant_id, id),
     FOREIGN KEY (tenant_id, product_id) REFERENCES retail_products (tenant_id, id),
-    CHECK ((kind = 'clock_ahead') = (line_no IS NULL)),
+    CHECK ((kind IN ('clock_ahead', 'clock_behind')) = (line_no IS NULL)),
     CHECK ((line_no IS NULL) = (product_id IS NULL)),
     CHECK ((resolved_at IS NULL) = (resolved_by IS NULL)),
     CHECK ((resolved_at IS NULL) = (resolution_note IS NULL)),
