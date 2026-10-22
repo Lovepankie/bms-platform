@@ -979,6 +979,15 @@ class RlsIsolationIT {
                         INSERT INTO feedback_items (id, tenant_id, sender_user_id, kind, message, app_version)
                         VALUES (?, ?, ?, 'idea', 'Test feedback message', 'test (abc123)')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // The Owner's own plan (migration V93, #472): a module asked for and a cancellation scheduled.
+        owner.sql("""
+                        INSERT INTO subscription_module_requests (id, tenant_id, module_key, requested_by)
+                        VALUES (?, ?, 'retail', ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        owner.sql("""
+                        INSERT INTO subscription_scheduled_changes (id, tenant_id, kind, effective_on, requested_by)
+                        VALUES (?, ?, 'cancel', DATE '2026-12-01', ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
     }
 
     /**
