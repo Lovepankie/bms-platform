@@ -625,6 +625,58 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
     }
 
+    /**
+     * Review fix 7: a phone holding another person's queued sales sends a short summary of them; managers see them as
+     * waiting on a phone until the sale is recorded or its refusal reported. A sale already recorded is skipped.
+     */
+    @Test
+    void salesWaitingOnASharedPhoneAreSeenByManagers() {
+        api.stockUp(t.headOffice(), product, "5");
+        RetailTestSupport nextPerson = new RetailTestSupport(http, t);
+        UUID waiting = UUID.randomUUID();
+        UUID refused = UUID.randomUUID();
+        Instant at = Instant.now().minus(Duration.ofHours(1));
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (UUID id : List.of(waiting, refused)) {
+            items.add(Map.of(
+                    "client_sale_id", id,
+                    "branch_id", t.headOffice(),
+                    "made_by", api.userId(),
+                    "occurred_at", at.toString(),
+                    "total_minor", 2_000));
+        }
+        ResponseEntity<JsonNode> told = nextPerson.post("/offline-waiting", Map.of("items", items), SALES);
+        assertThat(told.getStatusCode()).as("%s", told.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(told.getBody().get("accepted").asInt()).isEqualTo(2);
+        Map<String, Object> nowhere = new LinkedHashMap<>(items.get(0));
+        nowhere.put("branch_id", UUID.randomUUID());
+        assertThat(nextPerson
+                        .post("/offline-waiting", Map.of("items", List.of(nowhere)), SALES)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        assertThat(api.get("/offline-waiting", SALES).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        RetailTestSupport boss = new RetailTestSupport(http, t);
+        JsonNode seen = boss.get("/offline-waiting", MANAGER).getBody().get("items");
+        assertThat(seen).hasSize(2);
+        assertThat(seen.get(0).get("made_by").asString()).isEqualTo(api.userId().toString());
+        assertThat(seen.get(0).get("reported_by").asString())
+                .isEqualTo(nextPerson.userId().toString());
+
+        // The seller signs in again: one sale is recorded, the other refused and reported; both leave the list.
+        assertThat(send(offlineSale(waiting, at, "1", 2_000), UUID.randomUUID().toString())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        api.post("/offline-failures", failureReport(refused, offlineSale(refused, at, "1", 2_000)), SALES);
+        assertThat(boss.get("/offline-waiting", MANAGER).getBody().get("items")).isEmpty();
+        assertThat(nextPerson
+                        .post("/offline-waiting", Map.of("items", items), SALES)
+                        .getBody()
+                        .get("accepted")
+                        .asInt())
+                .isZero();
+    }
+
     /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
     @Test
     void aManagerCannotDecideTheirOwnRefusedSale() {

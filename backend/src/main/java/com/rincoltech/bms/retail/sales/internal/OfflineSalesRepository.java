@@ -2,6 +2,8 @@ package com.rincoltech.bms.retail.sales.internal;
 
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Clash;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Failure;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Waiting;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingSale;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -113,6 +115,73 @@ class OfflineSalesRepository {
                                 r.message())
                         .update()
                 == 1;
+    }
+
+    /**
+     * Keeps or refreshes the summary of a sale waiting on a phone, unless a sale or a reported refusal already has its client
+     * sale id; true when kept.
+     */
+    boolean upsertWaiting(WaitingSale w, UUID reportedBy) {
+        return jdbc.sql("""
+                        INSERT INTO retail_offline_waiting (id, tenant_id, client_sale_id, branch_id, made_by, occurred_at,
+                            total_minor, reported_by)
+                        SELECT ?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?
+                         WHERE NOT EXISTS (SELECT 1 FROM retail_sales s WHERE s.client_sale_id = ?)
+                           AND NOT EXISTS (SELECT 1 FROM retail_offline_failures f WHERE f.client_sale_id = ?)
+                        ON CONFLICT (tenant_id, client_sale_id) DO UPDATE
+                           SET reported_at = now(), reported_by = excluded.reported_by, branch_id = excluded.branch_id,
+                               occurred_at = excluded.occurred_at, total_minor = excluded.total_minor
+                        """)
+                        .params(
+                                UUID.randomUUID(),
+                                w.clientSaleId(),
+                                w.branchId(),
+                                w.madeBy(),
+                                Timestamp.from(w.occurredAt()),
+                                w.totalMinor(),
+                                reportedBy,
+                                w.clientSaleId(),
+                                w.clientSaleId())
+                        .update()
+                == 1;
+    }
+
+    /** The summary of a sale waiting on a phone goes once the sale is recorded or its refusal reported. */
+    void dropWaiting(UUID clientSaleId) {
+        jdbc.sql("DELETE FROM retail_offline_waiting WHERE client_sale_id = ?")
+                .param(clientSaleId)
+                .update();
+    }
+
+    /** Sales waiting on a phone in these branches (null: every branch), oldest first, at most 200. */
+    List<Waiting> waiting(List<UUID> branchIds) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        var statement = jdbc.sql("""
+                        SELECT w.client_sale_id, w.branch_id, w.made_by, m.full_name AS made_by_name, w.occurred_at,
+                               w.total_minor, w.reported_by, r.full_name AS reported_by_name, w.reported_at
+                          FROM retail_offline_waiting w
+                          LEFT JOIN users m ON m.id = w.made_by
+                          LEFT JOIN users r ON r.id = w.reported_by
+                        """
+                + (branchIds == null ? "" : " WHERE w.branch_id IN (:branches)")
+                + " ORDER BY w.occurred_at, w.client_sale_id LIMIT 200");
+        if (branchIds != null) {
+            statement = statement.param("branches", branchIds);
+        }
+        return statement
+                .query((rs, n) -> new Waiting(
+                        rs.getObject("client_sale_id", UUID.class),
+                        rs.getObject("branch_id", UUID.class),
+                        rs.getObject("made_by", UUID.class),
+                        rs.getString("made_by_name"),
+                        instant(rs, "occurred_at"),
+                        rs.getLong("total_minor"),
+                        rs.getObject("reported_by", UUID.class),
+                        rs.getString("reported_by_name"),
+                        instant(rs, "reported_at")))
+                .list();
     }
 
     /** A retry that was refused again: open with the new refusal. */

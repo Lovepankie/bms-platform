@@ -1930,7 +1930,9 @@ person who made it: `client_sale_id` (unique per tenant), `branch_id`, `made_by`
 `total_minor`, `request` (the sale request as the device holds it, jsonb), `code`, `message`, `status` (`open`, `retry`,
 `discarded`, `recorded`; a guard trigger allows open to retry, discarded or recorded, and retry to open, discarded or
 recorded, and nothing from the last two), `decided_by`, `decided_at`, `discard_reason` (exactly when discarded) and `sale_id`
-(exactly when recorded). A sale recorded with a client sale id closes its open or retry report in the same transaction. The
+(exactly when recorded). A sale recorded with a client sale id closes its open or retry report in the same transaction. `retail_offline_waiting` is a sale another person left queued on a phone, in short (`client_sale_id`
+unique per tenant, `branch_id`, `made_by`, `occurred_at`, `total_minor`, `reported_by`, `reported_at`), upserted by a signed-in
+phone and deleted when the sale is recorded or its refusal reported; nothing is posted from it. The
 permission `retail.offline.resolve` is seeded for `tenant_admin` and `retail_supervisor`. `ADD COLUMN` with a constant
 default takes an access exclusive lock on `retail_sales` to the commit (no rewrite); the unique index is partial and empty;
 `lock_timeout` is five seconds.

@@ -11381,6 +11381,106 @@
         },
         "required" : [ "branch_id", "client_sale_id", "code", "message", "occurred_at", "payment_method", "request", "total_minor" ]
       },
+      "RetailOfflineWaiting" : {
+        "description" : "A sale waiting on a phone (ADR-067)",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "client_sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "made_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "made_by_name" : {
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reported_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "reported_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reported_by_name" : {
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOfflineWaitingAccepted" : {
+        "properties" : {
+          "accepted" : {
+            "description" : "How many were kept; a sale already recorded or reported as refused is skipped",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOfflineWaitingPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOfflineWaiting"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailOfflineWaitingRequest" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOfflineWaitingSale"
+            },
+            "maxItems" : 200,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "items" ]
+      },
+      "RetailOfflineWaitingSale" : {
+        "description" : "ADR-067: a sale queued on a phone by a person who is not signed in there now, in short",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "client_sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "made_by" : {
+            "description" : "The person who made the sale (the seller)",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "branch_id", "client_sale_id", "made_by", "occurred_at", "total_minor" ]
+      },
       "RetailOpenSale" : {
         "properties" : {
           "balance_minor" : {
@@ -14359,11 +14459,11 @@
             "type" : "string"
           },
           "kind" : {
-            "description" : "stock_short, item_inactive, price_changed, below_cost or clock_ahead",
+            "description" : "stock_short, item_inactive, pack_inactive, price_changed, price_typed, below_cost, clock_ahead or clock_behind",
             "type" : "string"
           },
           "line_no" : {
-            "description" : "The sale line; absent for clock_ahead",
+            "description" : "The sale line; absent for clock_ahead and clock_behind",
             "format" : "int32",
             "type" : "integer"
           },
@@ -31930,6 +32030,64 @@
           }
         },
         "summary" : "Ask the device that reported it to send the sale again (ADR-067); audited",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/offline-waiting" : {
+      "get" : {
+        "operationId" : "listRetailOfflineWaiting",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineWaitingPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sales waiting on a phone in the caller's branch scope, oldest first (ADR-067)",
+        "tags" : [ "retail-sales" ]
+      },
+      "post" : {
+        "operationId" : "reportRetailOfflineWaiting",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOfflineWaitingRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineWaitingAccepted"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A phone tells which sales other people left queued on it, in short, so managers see them waiting (ADR-067); upserted on the client sale id",
         "tags" : [ "retail-sales" ]
       }
     },

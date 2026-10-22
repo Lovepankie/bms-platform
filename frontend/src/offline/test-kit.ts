@@ -31,7 +31,14 @@ export function testConnectivity(initial = true): TestConnectivity {
 
 export function testOffline(
   me: Me,
-  options: { online?: boolean; catalogue?: Catalogue | null; deps?: Partial<SyncDeps>; store?: OfflineStore; connectivity?: TestConnectivity } = {},
+  options: {
+    online?: boolean;
+    catalogue?: Catalogue | null;
+    deps?: Partial<SyncDeps>;
+    store?: OfflineStore;
+    connectivity?: TestConnectivity;
+    othersWaiting?: number;
+  } = {},
 ): (Offline & { connectivity: TestConnectivity }) | null {
   if (!sellsOffline(me)) return null;
   const store = options.store ?? memoryStore();
@@ -56,6 +63,7 @@ export function testOffline(
     connectivity,
     catalogue: options.catalogue ?? null,
     manager: (me.permissions ?? []).includes('retail.offline.resolve'),
+    othersWaiting: options.othersWaiting ?? 0,
     refresh: async () => {},
     forget: async () => {
       await store.deleteCatalogue(scope);

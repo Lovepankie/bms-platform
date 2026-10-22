@@ -92,7 +92,11 @@ left, the branch, the period, the person's roles.
 9. **Sign-out safety.** Signing out while anything is queued or failed asks first ("3 sales are waiting to sync. Sync now,
    or keep them on this phone and sign out?"). The waiting sales stay in the person's own outbox on this device and are sent
    when the same person signs in here again; the catalogue copy is cleared at sign-out. Another person on the same device
-   never sees or sends them. Reopening the app with no network after a sign-in shows the last profile of the last person
+   never sees or sends them, but is told "2 sales from another person are waiting on this phone", and whenever any session
+   on that phone is online it sends a short summary of them (client sale id, branch, total, `occurred_at`, the seller) to
+   `POST /retail/offline-waiting`; managers see them in the sync sheet as "waiting on a phone" (`GET
+   /retail/offline-waiting`, `retail.offline.resolve`, branch scoped) until the sale is recorded or its refusal reported,
+   which removes the summary. Nothing is posted from a summary. Reopening the app with no network after a sign-in shows the last profile of the last person
    signed in on this device, read from IndexedDB, with only the sale screen and the outbox working; anything needing the
    server says it is offline. The refresh cookie is never read or kept by the app.
 10. **Status in the header.** A dot in the staff bar on every staff screen: green online, grey offline, amber while syncing,

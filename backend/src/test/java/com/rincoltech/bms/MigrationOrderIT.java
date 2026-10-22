@@ -50,12 +50,12 @@ class MigrationOrderIT {
      * answers for its own migration. V70 (customer orders, #385) adds retail_sale_lines.price_overridden_by.
      */
     static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'"
-            // V87 (offline sales, #458) adds three columns to retail_sales, which are not the earlier migrations' to
+            // V87 (offline sales, #458) adds four columns to retail_sales, which are not the earlier migrations' to
             // answer
             // for; named with their table, so a column of that name elsewhere (stock movements' occurred_at) still
             // counts.
             + " AND NOT (table_name = 'retail_sales'"
-            + " AND column_name IN ('client_sale_id', 'occurred_at', 'recorded_offline'))";
+            + " AND column_name IN ('client_sale_id', 'occurred_at', 'recorded_offline', 'request_hash'))";
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();

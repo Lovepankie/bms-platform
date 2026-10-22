@@ -8,7 +8,7 @@
 -- #318) pull requests. Flyway runs with outOfOrder off; renumbered at merge if needed.
 --
 -- Expand only, safe on a populated database. Four nullable or constant-default columns on retail_sales, a partial unique
--- index, a small trigger that keeps the four columns as written, two new tables and one permission. No existing row changes.
+-- index, a small trigger that keeps the four columns as written, three new tables and one permission. No existing row changes.
 --
 -- Locks, said plainly. Flyway runs this file in one transaction, so the locks are held to the commit. ADD COLUMN with a
 -- constant default is a catalogue change in PostgreSQL 16 (no table rewrite) but takes ACCESS EXCLUSIVE on retail_sales, which
@@ -169,6 +169,31 @@ $$;
 
 CREATE TRIGGER retail_offline_failures_guard_update BEFORE UPDATE ON retail_offline_failures
     FOR EACH ROW EXECUTE FUNCTION retail_offline_failures_guard_update();
+
+-- ---------------------------------------------------------------------------------------------
+-- A sale waiting on a phone: a short summary a signed-in phone sends of the sales other people left queued on it (a shared
+-- phone), so a manager sees them before they reach the server. Upserted on the client sale id, removed when the sale is
+-- recorded or its refusal reported. Informational only: nothing is posted from it.
+-- ---------------------------------------------------------------------------------------------
+
+CREATE TABLE retail_offline_waiting (
+    id               uuid         NOT NULL PRIMARY KEY,
+    tenant_id        uuid         NOT NULL REFERENCES tenants (id),
+    created_at       timestamptz  NOT NULL DEFAULT now(),
+    reported_at      timestamptz  NOT NULL DEFAULT now(),
+    client_sale_id   uuid         NOT NULL,
+    branch_id        uuid         NOT NULL,
+    made_by          uuid         NOT NULL,
+    occurred_at      timestamptz  NOT NULL,
+    total_minor      bigint       NOT NULL CHECK (total_minor >= 0),
+    reported_by      uuid         NOT NULL,
+    UNIQUE (tenant_id, id),
+    UNIQUE (tenant_id, client_sale_id),
+    FOREIGN KEY (tenant_id, branch_id) REFERENCES branches (tenant_id, id)
+);
+CREATE INDEX retail_offline_waiting_branch ON retail_offline_waiting (tenant_id, branch_id, occurred_at);
+SELECT bms_apply_tenant_rls('retail_offline_waiting');
+SELECT bms_grant_app('retail_offline_waiting', 'SELECT, INSERT, UPDATE, DELETE');
 
 -- ---------------------------------------------------------------------------------------------
 -- retail.offline.resolve: resolve a clash, have a refused offline sale sent again or discard it, at the branch. The

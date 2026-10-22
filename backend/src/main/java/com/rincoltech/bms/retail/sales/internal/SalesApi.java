@@ -389,6 +389,44 @@ final class SalesApi {
     @Schema(name = "RetailOfflineFailurePage")
     record FailurePage(List<Failure> items) {}
 
+    @Schema(
+            name = "RetailOfflineWaitingSale",
+            description = "ADR-067: a sale queued on a phone by a person who is not signed in there now, in short")
+    record WaitingSale(
+            @NotNull UUID clientSaleId,
+            @NotNull UUID branchId,
+
+            @NotNull @Schema(description = "The person who made the sale (the seller)")
+            UUID madeBy,
+
+            @NotNull Instant occurredAt,
+
+            @NotNull @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long totalMinor) {}
+
+    @Schema(name = "RetailOfflineWaitingRequest")
+    record WaitingRequest(@NotNull @Size(max = 200) List<@Valid @NotNull WaitingSale> items) {}
+
+    @Schema(name = "RetailOfflineWaitingAccepted")
+    record WaitingAccepted(
+            @Schema(description = "How many were kept; a sale already recorded or reported as refused is skipped")
+            int accepted) {}
+
+    @Schema(name = "RetailOfflineWaiting", description = "A sale waiting on a phone (ADR-067)")
+    record Waiting(
+            UUID clientSaleId,
+            UUID branchId,
+            UUID madeBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String madeByName,
+            Instant occurredAt,
+            long totalMinor,
+            UUID reportedBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String reportedByName,
+            Instant reportedAt) {}
+
+    @Schema(name = "RetailOfflineWaitingPage")
+    record WaitingPage(List<Waiting> items) {}
+
     @Schema(name = "RetailOfflineFailureDiscard")
     record DiscardRequest(
             @NotBlank @Size(min = 5, max = 300) String reason) {}

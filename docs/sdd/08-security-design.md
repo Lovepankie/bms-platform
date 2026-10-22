@@ -514,8 +514,10 @@ Notes:
   recorded as a clash. The price rules are those of an online sale (ADR-067 decision 11): a price other than the one saved on
   the phone stands without a clash only for a holder of `retail.price.override` at the branch with a reason; any other is
   recorded as charged with a `price_typed` clash and told to the holders of `retail.offline.resolve` at the branch, which is the control on a
-  seller who sets the flag by hand. A clash's words never carry a cost. The device keeps the catalogue and the outbox per business
-  host and per person in IndexedDB and clears the catalogue on sign-out; lending data is never cached. Tests: `RetailOfflineSalesIT`.
+  seller who sets the flag by hand. A clash's words never carry a cost. A phone
+  tells the server, under `retail.sale.create`, which sales other people left queued on it (`/retail/offline-waiting`: ids,
+  branch, total, time and seller only, never posted), which only holders of `retail.offline.resolve` read. The device keeps the
+  catalogue and the outbox per business host and per person in IndexedDB and clears the catalogue on sign-out; lending data is never cached. Tests: `RetailOfflineSalesIT`.
 - Retail cash book (ADR-022, FR-RET-32, migration V34): the ten `retail.cashbook.*`,
   `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
   `retail.advance.*` permissions are rows of the matrix above, seeded by the cash book migration.

@@ -4142,6 +4142,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/offline-waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales waiting on a phone in the caller's branch scope, oldest first (ADR-067) */
+        get: operations["listRetailOfflineWaiting"];
+        put?: never;
+        /** A phone tells which sales other people left queued on it, in short, so managers see them waiting (ADR-067); upserted on the client sale id */
+        post: operations["reportRetailOfflineWaiting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/orders": {
         parameters: {
             query?: never;
@@ -11875,6 +11893,54 @@ export interface components {
             /** Format: int64 */
             total_minor: number;
         };
+        /** @description A sale waiting on a phone (ADR-067) */
+        RetailOfflineWaiting: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            client_sale_id?: string;
+            /** Format: uuid */
+            made_by?: string;
+            made_by_name?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            /** Format: date-time */
+            reported_at?: string;
+            /** Format: uuid */
+            reported_by?: string;
+            reported_by_name?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailOfflineWaitingAccepted: {
+            /**
+             * Format: int32
+             * @description How many were kept; a sale already recorded or reported as refused is skipped
+             */
+            accepted?: number;
+        };
+        RetailOfflineWaitingPage: {
+            items?: components["schemas"]["RetailOfflineWaiting"][];
+        };
+        RetailOfflineWaitingRequest: {
+            items: components["schemas"]["RetailOfflineWaitingSale"][];
+        };
+        /** @description ADR-067: a sale queued on a phone by a person who is not signed in there now, in short */
+        RetailOfflineWaitingSale: {
+            /** Format: uuid */
+            branch_id: string;
+            /** Format: uuid */
+            client_sale_id: string;
+            /**
+             * Format: uuid
+             * @description The person who made the sale (the seller)
+             */
+            made_by: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: int64 */
+            total_minor: number;
+        };
         RetailOpenSale: {
             /** Format: int64 */
             balance_minor?: number;
@@ -13372,11 +13438,11 @@ export interface components {
             created_at?: string;
             /** Format: uuid */
             id?: string;
-            /** @description stock_short, item_inactive, price_changed, below_cost or clock_ahead */
+            /** @description stock_short, item_inactive, pack_inactive, price_changed, price_typed, below_cost, clock_ahead or clock_behind */
             kind?: string;
             /**
              * Format: int32
-             * @description The sale line; absent for clock_ahead
+             * @description The sale line; absent for clock_ahead and clock_behind
              */
             line_no?: number;
             /** Format: uuid */
@@ -23860,6 +23926,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailOfflineFailure"];
+                };
+            };
+        };
+    };
+    listRetailOfflineWaiting: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineWaitingPage"];
+                };
+            };
+        };
+    };
+    reportRetailOfflineWaiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailOfflineWaitingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineWaitingAccepted"];
                 };
             };
         };

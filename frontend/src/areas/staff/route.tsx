@@ -6,7 +6,7 @@ import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { getAccessToken, refreshFailedOffline, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { OfflineProvider, lastProfile, useOfflineSupport, waitingNow } from '../../offline/offline-context';
 import { SignOutWarning } from '../../offline/sign-out-warning';
-import { SyncStatus } from '../../offline/sync-status';
+import { OthersWaitingNote, SyncStatus } from '../../offline/sync-status';
 import { InstallPrompt } from '../../install/InstallPrompt';
 import { NewLogoCard } from '../../install/NewIcon';
 import { createPush } from '../../push/push';
@@ -142,6 +142,7 @@ function StaffLayout() {
             <div className="nav-layout-main">
               <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
               <InstallPrompt />
+              <OthersWaitingNote />
               {!mock && <NewLogoCard />}
               {!mock && <TurnOnCard push={push} />}
               {profile.mfa_enabled && recoveryCodesLeft <= 2 && (

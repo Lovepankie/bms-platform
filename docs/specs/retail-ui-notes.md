@@ -1288,6 +1288,9 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
   failed sales, **Sync now** and, for a failed one, **Send again**. A manager (`retail.offline.resolve`: administrators and
   Supervisors) also sees the sales other phones could not record, with **Send it again** and **Discard** (a reason of at least 5
   characters, never recorded, audited), and the open clashes with **Mark resolved** and a note.
+- **A shared phone**: when someone else signs in on a phone that holds another person's queued sales, a notice says "2 sales
+  from another person are waiting on this phone. They are sent when that person signs in here again." While online the phone
+  tells the server in short, and a manager's sheet lists them under **Waiting on a phone**.
 - **Sign out** with sales waiting asks first: "3 sales are waiting to sync." with Sync now, Keep them and sign out, and Cancel.
   Kept sales go when the same person signs in on that phone again.
 - **Opened with no network**, the app shows the last person signed in on this phone, with Record a sale and the outbox working;

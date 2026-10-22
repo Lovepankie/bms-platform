@@ -66,6 +66,24 @@ export function SyncStatus() {
   );
 }
 
+/** "2 sales from another person are waiting on this phone", or an empty string. */
+export function othersWords(count: number): string {
+  if (count === 0) return '';
+  return count === 1 ? '1 sale from another person is waiting on this phone.' : `${count} sales from another person are waiting on this phone.`;
+}
+
+/** On a shared phone: what other people left queued here, sent when they sign in on it again (ADR-067 decision 9). */
+export function OthersWaitingNote() {
+  const offline = useOffline();
+  const count = offline?.othersWaiting ?? 0;
+  if (count === 0) return null;
+  return (
+    <p role="status" className="alert alert-warning" data-testid="others-waiting">
+      {othersWords(count)} They are sent when that person signs in here again. Managers can see them meanwhile.
+    </p>
+  );
+}
+
 function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }) {
   const offline = useOffline();
   const outbox = useOutbox();
@@ -80,6 +98,7 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
           ? 'Sales made on this phone are sent to the server one at a time, oldest first.'
           : 'Sales you make now are kept on this phone. They are sent when the phone is back online.'}
       </p>
+      {offline.othersWaiting > 0 && <p className="muted">{othersWords(offline.othersWaiting)}</p>}
       {outbox.needsSignIn && (
         <p role="alert" className="alert alert-warning">
           Your sign-in has expired. Sign in again to send the waiting sales.
@@ -170,6 +189,17 @@ function ManagerQueue() {
     enabled: holds,
     retry: false,
   });
+  const onPhones = useQuery({
+    queryKey: ['retail', 'offline-waiting'],
+    queryFn: async () => {
+      const { data, error, response } = await api.GET('/api/v1/retail/offline-waiting', { params: { query: {} } });
+      if (response.status === 403) return null;
+      if (error || !data) throw new Error(problemOf(error).detail ?? 'Could not load the sales waiting on phones');
+      return data.items ?? [];
+    },
+    enabled: holds,
+    retry: false,
+  });
   const [discarding, setDiscarding] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState<Record<string, string>>({});
@@ -194,7 +224,8 @@ function ManagerQueue() {
   });
   const rows = failures.data ?? [];
   const open = clashes.data ?? [];
-  if (!holds || (rows.length === 0 && open.length === 0)) return null;
+  const parked = onPhones.data ?? [];
+  if (!holds || (rows.length === 0 && open.length === 0 && parked.length === 0)) return null;
   return (
     <section aria-labelledby="sync-manager-title" className="stack">
       <h3 id="sync-manager-title">For a manager</h3>
@@ -234,6 +265,20 @@ function ManagerQueue() {
                   </button>
                 </div>
               )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {parked.length > 0 && (
+        <ul className="sync-list" aria-label="Waiting on a phone">
+          {parked.map((w) => (
+            <li key={w.client_sale_id} className="sync-row">
+              <div>
+                {w.made_by_name ?? 'A seller'}, {w.occurred_at ? when(w.occurred_at) : ''}, {money(w.total_minor ?? 0)}
+              </div>
+              <p className="muted">
+                Waiting on a phone{w.reported_by_name ? ` (seen on ${w.reported_by_name}'s sign-in)` : ''}: sent when {w.made_by_name ?? 'the seller'} signs in on it again.
+              </p>
             </li>
           ))}
         </ul>

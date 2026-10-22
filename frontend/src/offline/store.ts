@@ -18,6 +18,8 @@ export interface Catalogue {
 
 export interface OfflineStore {
   outbox(scope: string): Promise<OutboxItem[]>;
+  /** Every queued item on this device, whoever made it (to say what other people left waiting on a shared phone). */
+  allOutbox(): Promise<OutboxItem[]>;
   putItem(item: OutboxItem): Promise<void>;
   deleteItem(id: string): Promise<void>;
   catalogue(scope: string): Promise<Catalogue | null>;
@@ -41,6 +43,7 @@ export function memoryStore(): OfflineStore {
   const copy = <T,>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T));
   return {
     outbox: async (scope) => [...items.values()].filter((i) => i.scope === scope).map(copy),
+    allOutbox: async () => [...items.values()].map(copy),
     putItem: async (item) => void items.set(item.id, copy(item)),
     deleteItem: async (id) => void items.delete(id),
     catalogue: async (scope) => copy((kv.get(`catalogue:${scope}`) as Catalogue | undefined) ?? null),
@@ -84,6 +87,7 @@ export function indexedDbStore(): OfflineStore {
   const del = async (key: string) => void (await tx('kv', 'readwrite', (s) => s.delete(key)));
   return {
     outbox: async (scope) => (await tx('outbox', 'readonly', (s) => s.index('scope').getAll(scope))) as OutboxItem[],
+    allOutbox: async () => (await tx('outbox', 'readonly', (s) => s.getAll())) as OutboxItem[],
     putItem: async (item) => void (await tx('outbox', 'readwrite', (s) => s.put(item))),
     deleteItem: async (id) => void (await tx('outbox', 'readwrite', (s) => s.delete(id))),
     catalogue: (scope) => get<Catalogue>(`catalogue:${scope}`),

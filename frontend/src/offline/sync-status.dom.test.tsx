@@ -7,7 +7,7 @@ import { mockMe } from '../api/retail-mock';
 import { OfflineProvider } from './offline-context';
 import { provisionalNumber, type OutboxItem } from './outbox';
 import { SignOutWarning, waitingSentence } from './sign-out-warning';
-import { SyncStatus, dotState, statusWords } from './sync-status';
+import { OthersWaitingNote, SyncStatus, dotState, statusWords } from './sync-status';
 import { testOffline } from './test-kit';
 
 // The status in the staff bar and sign-out with sales waiting (issue #458, ADR-067 decisions 9 and 10; NFR-OFF-05,
@@ -151,6 +151,16 @@ describe('the sheet', () => {
     await act(() => offline.engine.sync());
     fireEvent.click(screen.getByRole('button', { name: /waiting to sync/ }));
     expect(await screen.findByText('Your sign-in has expired. Sign in again to send the waiting sales.')).toBeTruthy();
+  });
+});
+
+describe('a shared phone', () => {
+  it('says how many sales another person left waiting on this phone', async () => {
+    show(testOffline(seller, { online: true, othersWaiting: 2 }), <OthersWaitingNote />);
+    expect(screen.getByTestId('others-waiting').textContent).toContain('2 sales from another person are waiting on this phone.');
+    cleanup();
+    show(testOffline(seller, { online: true }), <OthersWaitingNote />);
+    expect(screen.queryByTestId('others-waiting')).toBeNull();
   });
 });
 

@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.sales.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Clash;
@@ -9,6 +10,10 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.ClashPage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Failure;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.FailurePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.FailureRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingAccepted;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingPage;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingSale;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,6 +92,7 @@ class OfflineSalesService {
             throw ApiException.validation(
                     List.of(new ApiException.FieldProblem("branch_id", "unknown_branch", "No such branch.")));
         }
+        repo.dropWaiting(r.clientSaleId());
         if (!repo.insertFailure(r, by)) {
             Failure existing = repo.failureByClient(r.clientSaleId(), true).orElseThrow();
             if (!existing.madeBy().equals(by)) {
@@ -98,6 +104,34 @@ class OfflineSalesService {
             }
         }
         return repo.failureByClient(r.clientSaleId(), false).orElseThrow();
+    }
+
+    /**
+     * A phone's summary of the sales other people left queued on it (ADR-067 decision 9): kept per client sale id for the
+     * managers to see as waiting on a phone. A sale already recorded or reported as refused is skipped; nothing is posted.
+     */
+    @Transactional
+    WaitingAccepted reportWaiting(WaitingRequest r) {
+        UUID by = CurrentPrincipal.require().userId();
+        List<FieldProblem> problems = new java.util.ArrayList<>();
+        for (int i = 0; i < r.items().size(); i++) {
+            if (!repo.branchExists(r.items().get(i).branchId())) {
+                problems.add(new FieldProblem("items[" + i + "].branch_id", "unknown_branch", "No such branch."));
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw ApiException.validation(problems);
+        }
+        int accepted = 0;
+        for (WaitingSale w : r.items()) {
+            accepted += repo.upsertWaiting(w, by) ? 1 : 0;
+        }
+        return new WaitingAccepted(accepted);
+    }
+
+    @Transactional(readOnly = true)
+    WaitingPage waiting(List<UUID> branchIds) {
+        return new WaitingPage(repo.waiting(CurrentPrincipal.require().branchFilter(RESOLVE, branchIds)));
     }
 
     @Transactional(readOnly = true)

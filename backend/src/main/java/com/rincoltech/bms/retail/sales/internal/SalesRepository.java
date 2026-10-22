@@ -314,6 +314,10 @@ class SalesRepository {
                         UPDATE retail_offline_failures SET status = 'recorded', sale_id = ?, updated_at = now()
                          WHERE client_sale_id = ? AND status IN ('open', 'retry')
                         """).params(saleId, clientSaleId).update();
+        // And a summary of it waiting on a phone goes.
+        jdbc.sql("DELETE FROM retail_offline_waiting WHERE client_sale_id = ?")
+                .param(clientSaleId)
+                .update();
     }
 
     void insertClash(UUID saleId, UUID branchId, Integer lineNo, UUID productId, String kind, String words) {

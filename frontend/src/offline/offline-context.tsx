@@ -5,6 +5,31 @@ import { refreshSession } from '../auth/session';
 import { REFRESH_EVERY_MS, refreshCatalogue, type CatalogueSource } from './catalogue';
 import { browserConnectivity, type Connectivity } from './connectivity';
 import { waiting, type OutboxItem } from './outbox';
+
+/** A sale another person left waiting on this phone, in short, for the managers (ADR-067 decision 9). */
+export interface WaitingSummary {
+  client_sale_id: string;
+  branch_id: string;
+  made_by: string;
+  occurred_at: string;
+  total_minor: number;
+}
+
+/** The sales other people left waiting on this phone for this business, from every item on the device. */
+export function othersOnPhone(all: OutboxItem[], host: string, scope: string): OutboxItem[] {
+  return waiting(all.filter((i) => i.scope !== scope && i.scope.startsWith(`${host}|`)));
+}
+
+/** The short summary of each, for POST /retail/offline-waiting. */
+export function summaries(items: OutboxItem[]): WaitingSummary[] {
+  return items.map((i) => ({
+    client_sale_id: i.id,
+    branch_id: i.branchId,
+    made_by: i.scope.slice(i.scope.indexOf('|') + 1),
+    occurred_at: i.occurredAt,
+    total_minor: i.totalMinor,
+  }));
+}
 import { deviceStore, scopeOf, type Catalogue, type OfflineStore } from './store';
 import { SyncEngine, type SyncDeps, type SyncSnapshot } from './sync-engine';
 
@@ -22,6 +47,8 @@ export interface Offline {
   catalogue: Catalogue | null;
   /** The person holds retail.offline.resolve somewhere: the sheet shows other people's refused sales and the clashes. */
   manager: boolean;
+  /** Sales other people left waiting on this phone for this business (a shared phone): sent when they sign in here again. */
+  othersWaiting: number;
   /** Fetches the catalogue copy again (when online). */
   refresh(): Promise<void>;
   /** At sign-out: the catalogue copy and the profile pointer go; the person's outbox stays for their next sign-in here. */
@@ -65,6 +92,8 @@ export interface OfflineServices {
   connectivity: Connectivity;
   source: CatalogueSource;
   engineDeps(store: OfflineStore, scope: string): SyncDeps;
+  /** Tells the server, in short, which sales other people left waiting on this phone. */
+  reportWaiting(items: WaitingSummary[]): Promise<void>;
   host: string;
   now(): Date;
 }
@@ -88,6 +117,10 @@ export function browserServices(): OfflineServices {
         return { ...data, serverTime: response.headers.get('Date') ?? undefined };
       },
       customers: () => retail.listCustomers(),
+    },
+    reportWaiting: async (items) => {
+      const { error } = await api.POST('/api/v1/retail/offline-waiting', { body: { items } });
+      if (error) throw new Error('Could not report the waiting sales');
     },
     engineDeps: (store, scope) => ({
       store,
@@ -142,9 +175,26 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
   const scope = svc && userId ? scopeOf(svc.host, userId) : null;
   const engine = useMemo(() => (svc && scope ? new SyncEngine(svc.engineDeps(svc.store, scope)) : null), [svc, scope]);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
+  const [others, setOthers] = useState(0);
   // The latest profile, read when a refresh runs, so a new copy of the same profile does not restart the watch.
   const profile = useRef(me);
   profile.current = me;
+
+  // Sales other people left on this phone: counted for the notice, and while online told to the server in short, so the
+  // managers see them waiting on a phone (ADR-067 decision 9).
+  const lookAtOthers = useMemo(
+    () => async (online: boolean) => {
+      if (!svc || !scope) return;
+      try {
+        const theirs = othersOnPhone(await svc.store.allOutbox(), svc.host, scope);
+        setOthers(theirs.length);
+        if (online && theirs.length > 0) await svc.reportWaiting(summaries(theirs).slice(0, 200));
+      } catch {
+        // Told on the next refresh.
+      }
+    },
+    [svc, scope],
+  );
 
   const refresh = useMemo(
     () => async () => {
@@ -156,14 +206,16 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       } catch {
         // The last full copy stays; the next refresh tries again.
       }
+      await lookAtOthers(true);
     },
-    [svc, scope],
+    [svc, scope, lookAtOthers],
   );
 
   useEffect(() => {
     if (!svc || !scope || !engine) return;
     let live = true;
     void svc.store.catalogue(scope).then((c) => live && setCatalogue((now) => now ?? c));
+    void lookAtOthers(false);
     void engine.load().then(() => {
       if (svc.connectivity.online()) void engine.sync();
     });
@@ -180,7 +232,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       engine.stop();
       svc.connectivity.stop();
     };
-  }, [svc, scope, engine, refresh]);
+  }, [svc, scope, engine, refresh, lookAtOthers]);
 
   useEffect(() => {
     if (!svc || !signedIn) return;
@@ -195,6 +247,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
     if (!svc || !scope || !engine) return null;
     return {
       manager,
+      othersWaiting: others,
       scope,
       userId: userId ?? '',
       store: svc.store,
@@ -207,7 +260,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
         await svc.store.setLastPerson(svc.host, null);
       },
     };
-  }, [svc, scope, engine, catalogue, refresh, manager, userId]);
+  }, [svc, scope, engine, catalogue, refresh, manager, userId, others]);
 }
 
 /** The number of sales waiting on this device for the signed-in person (queued and failed). */

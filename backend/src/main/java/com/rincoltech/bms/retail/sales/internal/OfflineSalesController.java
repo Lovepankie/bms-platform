@@ -8,6 +8,9 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.DiscardRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Failure;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.FailurePage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.FailureRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingAccepted;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingPage;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -94,6 +97,25 @@ class OfflineSalesController {
             operationId = "retryRetailOfflineFailure")
     Failure retry(@PathVariable("failure_id") UUID id) {
         return service.retry(id);
+    }
+
+    @PostMapping("/offline-waiting")
+    @RequiresPermission("retail.sale.create")
+    @Operation(
+            summary = "A phone tells which sales other people left queued on it, in short, so managers see them waiting"
+                    + " (ADR-067); upserted on the client sale id",
+            operationId = "reportRetailOfflineWaiting")
+    WaitingAccepted waiting(@Valid @RequestBody WaitingRequest request) {
+        return service.reportWaiting(request);
+    }
+
+    @GetMapping("/offline-waiting")
+    @RequiresPermission(OfflineSalesService.RESOLVE)
+    @Operation(
+            summary = "Sales waiting on a phone in the caller's branch scope, oldest first (ADR-067)",
+            operationId = "listRetailOfflineWaiting")
+    WaitingPage waitingList(@RequestParam(name = "branch_id", required = false) List<UUID> branchIds) {
+        return service.waiting(branchIds);
     }
 
     @PostMapping("/offline-failures/{failure_id}/discard")
