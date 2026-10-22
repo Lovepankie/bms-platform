@@ -299,12 +299,14 @@ expired rows are deleted 90 days after `closed_at` (FR-ONB-09).
 `id uuid PK`, `kind text NOT NULL` [`percent_of_payment`, `fixed_first_payment`, `fixed_per_month`], `percent_bp integer` (1 to
 10000 basis points), `amount_minor bigint` (1 to 50,000,000), `currency char(3)` (FK `currencies`), `months integer` (1 to 120, the
 first paid months of the referred business it applies to; null for no end), `cap_minor bigint` (1 to 1,000,000,000, a percent rule
-only, with its currency), `created_by_platform_user_id` (FK `platform_users`), `created_at`; a CHECK holds the shape of each kind.
-`referral_settings`: one row (`id boolean PK CHECK (id)`) with `default_rule_id` (FK, null until the operator sets a rule: nothing is
-worked out), `updated_by_platform_user_id`, `updated_at`. Row-level security is enabled and forced with no policy on both, and nothing
+only, with its currency), `created_by_platform_user_id` (FK `platform_users`; null only on the default rule `V89` seeds), `created_at`; a CHECK holds the
+shape of each kind. `referral_settings`: one row (`id boolean PK CHECK (id)`) with `default_rule_id` (FK; null means no rule, so
+nothing is worked out), `updated_by_platform_user_id`, `updated_at`. Row-level security is enabled and forced with no policy on both, and nothing
 is granted to `bms_app`: the definer functions `platform_referral_add_rule`, `platform_referral_set_default_rule`,
-`platform_referral_set_rule` and `platform_referral_rule` are the only way in, each refusing a transaction bound to a tenant. No rate
-or amount is seeded.
+`platform_referral_set_rule` and `platform_referral_rule` are the only way in, each refusing a transaction bound to a tenant. `V89` seeds one
+rule, the default the product owner decided (ADR-069 decision 14: `percent_of_payment`, 1000 basis points, 12 months, no cap,
+fixed id `00000000-0000-4000-8000-000000000890`), and points the default at it only when none is set, with a
+`platform.referral.default_rule_changed` audit row.
 
 `referral_payment_outcomes` (same protection, append-only): what each payment of a referred business gave under its referral,
 `payment_id uuid PK` (FK `subscription_payments`), `referral_id` (FK `tenant_referrals`), `outcome text` [`added`, `no_rule`,

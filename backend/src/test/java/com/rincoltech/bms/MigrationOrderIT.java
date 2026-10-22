@@ -1993,7 +1993,8 @@ class MigrationOrderIT {
 
     /**
      * #464 (ADR-069): the referral migration gives every business that already exists its own code, and a business made
-     * afterwards gets one from the trigger; the default commission rule starts empty.
+     * afterwards gets one from the trigger; the default commission rule is the product owner's (ADR-069 decision 14), audited
+     * once.
      * JUSTIFICATION-A3: a new test case; no existing case migrates a database with businesses across V89.
      */
     @Test
@@ -2030,10 +2031,17 @@ class MigrationOrderIT {
                             .query(String.class)
                             .single())
                     .startsWith("LATER");
-            assertThat(owner.sql("SELECT default_rule_id IS NULL FROM referral_settings")
-                            .query(Boolean.class)
+            assertThat(owner.sql(
+                                    "SELECT r.kind || ' ' || r.percent_bp || ' ' || r.months || ' ' || (r.cap_minor IS NULL)"
+                                            + " FROM referral_settings s JOIN referral_commission_rules r ON r.id = s.default_rule_id")
+                            .query(String.class)
                             .single())
-                    .isTrue();
+                    .isEqualTo("percent_of_payment 1000 12 true");
+            assertThat(owner.sql("SELECT data->>'reason' FROM platform_audit_log"
+                                    + " WHERE action = 'platform.referral.default_rule_changed'")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("default set by product owner decision 22 Oct 2026");
         }
     }
 

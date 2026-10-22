@@ -5,8 +5,9 @@
 -- Expand only, safe on a populated database. Every business gets a referral code (a trigger on tenants, and a backfill for the
 -- businesses that exist); the public sign-up records the code an applicant brings; Activate turns it into a referral; the
 -- platform operator sets or corrects the referrer of a business, sets the commission rule (a platform default and an override
--- per referral), and records and marks paid the commission lines. The app records commissions and never pays them. No rate,
--- no amount and no rule is written here: the default rule starts empty and nothing is worked out until the operator sets one.
+-- per referral), and records and marks paid the commission lines. The app records commissions and never pays them. The one
+-- rule written here is the platform default the product owner decided (section 3, ADR-069 decision 14); the operator can change
+-- it or override it on any referral.
 --
 -- Tables:
 --   referral_codes             the code of each business (tenant-owned, forced RLS, SELECT for bms_app: a business reads its own)
@@ -176,7 +177,8 @@ CREATE TABLE referral_commission_rules (
     currency                    char(3)     REFERENCES currencies (code),
     months                      integer     CHECK (months BETWEEN 1 AND 120),
     cap_minor                   bigint      CHECK (cap_minor BETWEEN 1 AND 1000000000),
-    created_by_platform_user_id uuid        NOT NULL REFERENCES platform_users (id),
+    -- Null only for the default rule seeded below, which no operator typed.
+    created_by_platform_user_id uuid        REFERENCES platform_users (id),
     created_at                  timestamptz NOT NULL DEFAULT now(),
     CHECK (CASE kind
         WHEN 'percent_of_payment' THEN percent_bp IS NOT NULL AND amount_minor IS NULL
@@ -191,14 +193,33 @@ ALTER TABLE referral_commission_rules FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON referral_commission_rules FROM PUBLIC;
 SELECT bms_make_append_only('referral_commission_rules');
 
--- The platform default rule: one row, empty until the operator sets a rule.
+-- The platform default rule: one row.
 CREATE TABLE referral_settings (
     id                          boolean     NOT NULL PRIMARY KEY DEFAULT true CHECK (id),
     default_rule_id             uuid        REFERENCES referral_commission_rules (id),
     updated_by_platform_user_id uuid        REFERENCES platform_users (id),
     updated_at                  timestamptz
 );
-INSERT INTO referral_settings (id) VALUES (true);
+INSERT INTO referral_settings (id) VALUES (true) ON CONFLICT (id) DO NOTHING;
+
+-- The default the product owner decided on 22 Oct 2026 (ADR-069 decision 14): 10% (1000 basis points) of each subscription
+-- payment for the referred business's first 12 paid months, no cap. Safe to run again, and never over a default already set.
+INSERT INTO referral_commission_rules (id, kind, percent_bp, months)
+VALUES ('00000000-0000-4000-8000-000000000890', 'percent_of_payment', 1000, 12)
+ON CONFLICT (id) DO NOTHING;
+WITH seeded AS (
+        UPDATE referral_settings
+           SET default_rule_id = '00000000-0000-4000-8000-000000000890', updated_at = now()
+         WHERE default_rule_id IS NULL
+        RETURNING default_rule_id)
+INSERT INTO platform_audit_log (id, action, data)
+SELECT gen_random_uuid(), 'platform.referral.default_rule_changed',
+       jsonb_build_object('before', null, 'after', s.default_rule_id::text,
+                          'rule', jsonb_build_object('id', s.default_rule_id::text, 'kind', 'percent_of_payment',
+                                                     'percent_bp', 1000, 'amount_minor', null, 'currency', null,
+                                                     'months', 12, 'cap_minor', null),
+                          'reason', 'default set by product owner decision 22 Oct 2026')
+  FROM seeded s;
 ALTER TABLE referral_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE referral_settings FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON referral_settings FROM PUBLIC;
