@@ -199,10 +199,14 @@ class RunStore {
 
     /** When a run of this report last finished ready, by anyone in the business; null when none has. */
     Instant lastReadyAt(String reportKey) {
-        return jdbc.sql("SELECT max(finished_at) FROM report_runs WHERE report_key = ? AND status = 'ready'")
+        return jdbc.sql("""
+                        SELECT finished_at FROM report_runs WHERE report_key = ? AND status = 'ready'
+                         ORDER BY finished_at DESC LIMIT 1
+                        """)
                 .param(reportKey)
-                .query((rs, n) -> instant(rs, "max"))
-                .single();
+                .query((rs, n) -> instant(rs, "finished_at"))
+                .optional()
+                .orElse(null);
     }
 
     int countCreatedSince(UUID requestedBy, Instant since) {

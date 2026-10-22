@@ -55,9 +55,13 @@ class DataExportService {
     @Transactional(readOnly = true)
     DataExportApi.Status status() {
         Principal principal = CurrentPrincipal.require();
-        Instant emailed = jdbc.sql("SELECT max(finished_at) AS at FROM data_export_weekly WHERE status = 'emailed'")
-                .query((rs, n) -> instant(rs.getTimestamp("at")))
-                .single();
+        Instant emailed = jdbc.sql("""
+                        SELECT finished_at FROM data_export_weekly WHERE status = 'emailed'
+                         ORDER BY finished_at DESC LIMIT 1
+                        """)
+                .query((rs, n) -> instant(rs.getTimestamp("finished_at")))
+                .optional()
+                .orElse(null);
         return new DataExportApi.Status(
                 weeklyEmail(),
                 store.lastReadyAt(DataExportReport.KEY),
