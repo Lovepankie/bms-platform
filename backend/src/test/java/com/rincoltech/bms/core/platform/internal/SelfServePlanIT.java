@@ -26,9 +26,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -81,7 +83,15 @@ class SelfServePlanIT extends IntegrationTest {
 
     /** A business on a plan, with an Owner, another administrator and a cashier, paid until the day given (or not). */
     Business business(String planCode, boolean retail, LocalDate paidUntil) {
+        return business(planCode, retail, paidUntil, false);
+    }
+
+    /** The same, with two-step sign-in required of administrators when asked, so the Owner proves changes with a code. */
+    Business business(String planCode, boolean retail, LocalDate paidUntil, boolean twoStep) {
         TestDatabase.Fixture t = TestDatabase.tenant("plan", true, retail);
+        if (twoStep) {
+            Api.requireTwoStepForAdmins(t);
+        }
         JdbcCall.run(
                 "UPDATE tenants SET plan_id = (SELECT id FROM plans WHERE code = ?) WHERE id = ?",
                 planCode,
@@ -621,6 +631,128 @@ class SelfServePlanIT extends IntegrationTest {
         assertThat(modules(b.t().tenantId())).containsExactly("lending", "retail");
         assertThat(platformAudits("platform.tenant.subscription_ended", b.t().tenantId()))
                 .isEqualTo(1);
+    }
+
+    /**
+     * The owner step-up for a stop and a cancel: a wrong password is refused; an Owner with an authenticator proves it with
+     * a current code, the password alone being refused with {@code totp_required}.
+     */
+    @Test
+    void stopAndCancelNeedTheOwnersStepUp() {
+        Business b = business(bothPlan, true, today.plusDays(10));
+        Map<String, Object> wrong = Map.of("password", "Not-The-Password-1");
+        assertRefused(
+                b.api()
+                        .post(
+                                "/api/v1/plan/modules/retail/stop",
+                                wrong,
+                                b.ownerSession().accessToken()),
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "invalid_password");
+        assertRefused(
+                b.api().post("/api/v1/plan/cancel", wrong, b.ownerSession().accessToken()),
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "invalid_password");
+        assertRefused(
+                b.api().post("/api/v1/plan/cancel", Map.of(), b.ownerSession().accessToken()),
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "password_required");
+
+        Business c = business(bothPlan, true, today.plusDays(10), true);
+        Session owner = c.ownerSession();
+        assertRefused(
+                withPassword(c.api(), "/api/v1/plan/modules/retail/stop", owner),
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "totp_required");
+        assertRefused(
+                withPassword(c.api(), "/api/v1/plan/cancel", owner), HttpStatus.UNPROCESSABLE_CONTENT, "totp_required");
+        Api.allowTotpReuse(c.owner());
+        ResponseEntity<JsonNode> stopped = c.api()
+                .post(
+                        "/api/v1/plan/modules/retail/stop",
+                        Map.of("totp_code", Api.totp(owner.totpSecret(), Instant.now())),
+                        owner.accessToken());
+        assertThat(stopped.getStatusCode()).as("%s", stopped.getBody()).isEqualTo(HttpStatus.CREATED);
+        Api.allowTotpReuse(c.owner());
+        ResponseEntity<JsonNode> cancelled = c.api()
+                .post(
+                        "/api/v1/plan/cancel",
+                        Map.of("totp_code", Api.totp(owner.totpSecret(), Instant.now())),
+                        owner.accessToken());
+        assertThat(cancelled.getStatusCode()).as("%s", cancelled.getBody()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    /**
+     * After the end one write of every area is refused with {@code subscription_ended} (a retail sale, a disbursement, a
+     * repayment, an import, an upload, a settings change, an invitation); the nightly lending job (arrears and penalties)
+     * no longer lists the business; the operator still acts on it, and the operator's resume makes it writable again.
+     */
+    @Test
+    void afterTheEndEveryAreaIsReadOnlyUntilTheOperatorResumes() {
+        LocalDate paidUntil = today.plusDays(5);
+        Business b = business(bothPlan, true, paidUntil);
+        UUID tenantId = b.t().tenantId();
+        assertThat(lendingJobTenants()).contains(tenantId);
+        assertThat(withPassword(b.api(), "/api/v1/plan/cancel", b.ownerSession())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(applyDue(tenantId, paidUntil.plusDays(1))).isEqualTo(1);
+
+        String admin = b.adminSession().accessToken();
+        String loan = "/api/v1/lending/loans/" + UUID.randomUUID();
+        LinkedMultiValueMap<String, Object> logo = new LinkedMultiValueMap<>();
+        logo.add("file", new ByteArrayResource(new byte[] {1, 2, 3}) {
+            @Override
+            public String getFilename() {
+                return "logo.png";
+            }
+        });
+        List<ResponseEntity<JsonNode>> writes = List.of(
+                b.api().post("/api/v1/retail/sales", Map.of(), admin),
+                b.api().post(loan + "/disbursements", Map.of(), admin),
+                b.api().post(loan + "/repayments", Map.of(), admin),
+                b.api().post("/api/v1/retail/products/import?dry_run=false", Map.of("csv", "name\nTest"), admin),
+                b.api().call(HttpMethod.PUT, "/api/v1/settings/logo", logo, admin),
+                b.api().call(HttpMethod.PATCH, "/api/v1/settings", Map.of("name", "Test Business"), admin),
+                b.api().post("/api/v1/users", Map.of("email", Api.email("invited")), admin));
+        for (ResponseEntity<JsonNode> write : writes) {
+            assertRefused(write, HttpStatus.LOCKED, "subscription_ended");
+        }
+        assertThat(lendingJobTenants()).doesNotContain(tenantId);
+
+        Operator op = operator();
+        String base = "/api/v1/platform/tenants/" + tenantId;
+        ResponseEntity<JsonNode> modules = op.api()
+                .call(
+                        HttpMethod.PUT,
+                        base + "/modules",
+                        Map.of("modules", List.of("lending", "retail"), "reason", "Test: checked after the end"),
+                        op.session().accessToken());
+        assertThat(modules.getStatusCode()).as("%s", modules.getBody()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> resumed = op.api()
+                .post(
+                        base + "/resume",
+                        Map.of("reason", "Test: the owner paid again"),
+                        op.session().accessToken());
+        assertThat(resumed.getStatusCode()).as("%s", resumed.getBody()).isEqualTo(HttpStatus.OK);
+
+        assertThat(b.api()
+                        .post("/api/v1/branches", Map.of("code", "BR5", "name", "Test Branch Five"), admin)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        JsonNode card =
+                b.api().get("/api/v1/plan", b.ownerSession().accessToken()).getBody();
+        assertThat(card.get("ended_on").isNull()).isTrue();
+        assertThat(card.get("subscription_status").asString()).isNotEqualTo("cancelled");
+        assertThat(lendingJobTenants()).contains(tenantId);
+    }
+
+    /** The businesses the nightly lending job (arrears and penalties) runs for. */
+    static List<UUID> lendingJobTenants() {
+        return TestDatabase.owner()
+                .sql("SELECT app_list_active_tenants_with_module('lending')")
+                .query(UUID.class)
+                .list();
     }
 
     /** Nothing of one business shows to another: its requests, its changes and its undo. */
