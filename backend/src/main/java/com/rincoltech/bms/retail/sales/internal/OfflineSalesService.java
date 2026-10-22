@@ -271,8 +271,7 @@ class OfflineSalesService {
                 .orElseThrow(ApiException::notFound);
         if (f.madeBy().equals(principal.userId())) {
             // ADR-067 decision 11 (d): a seller or a Supervisor never decides their own refused sale; an administrator
-            // (the
-            // Owner included) may discard it, with a second written reason.
+            // (the Owner included) may discard it, with a second written reason.
             if (selfReason == null || !repo.isTenantAdmin(principal.userId())) {
                 throw new ApiException(
                         HttpStatus.FORBIDDEN,
@@ -292,8 +291,7 @@ class OfflineSalesService {
                 f.code().equals("client_sale_conflict") ? Optional.empty() : repo.saleByClient(f.clientSaleId());
         if (sale.isPresent()) {
             // The sale was recorded after all (a report that crossed its send): closed by it, never discarded. The
-            // close
-            // is kept although the request is refused.
+            // close is kept although the request is refused.
             repo.closeAsRecorded(f.id(), sale.get().saleId());
             throw new ApiException(
                     HttpStatus.CONFLICT,
