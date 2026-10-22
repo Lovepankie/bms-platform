@@ -693,6 +693,13 @@ class RlsIsolationIT {
                         VALUES (?, ?, ?, ?, 'penalty', 1, DATE '2026-02-16', 1000)
                         """).params(charge, t.tenantId(), loan, item).update();
         owner.sql("""
+                        INSERT INTO lending_charge_waivers (id, tenant_id, loan_id, charge_id, amount_minor, business_date,
+                                                            reason, requested_by)
+                        VALUES (?, ?, ?, ?, 400, DATE '2026-02-17', 'Test waiver', ?)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), loan, charge, user)
+                .update();
+        owner.sql("""
                         INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at)
                         VALUES (?, DATE '2026-02-17', now(), now(), now())
                         """).params(t.tenantId()).update();
