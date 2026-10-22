@@ -4,7 +4,8 @@
 -- A product carries any number of barcodes, each for the product's base unit or for one of its
 -- pack sizes (V39). The application validates the format and its check digit (EAN-13, EAN-8,
 -- UPC-A, Code 128) before a row is written; the checks below keep the shapes honest. A slash or a
--- backslash is refused, since the lookup carries the code in its path.
+-- backslash is refused, and so is a code made only of dots, since the lookup carries the code in
+-- its path.
 --
 -- A code is unique per tenant: lookup_key folds a code stored as UPC-A (format upca) into the
 -- thirteen digit EAN-13 form a scanner may report for it, so the same printed code can never sit
@@ -25,7 +26,7 @@ CREATE TABLE retail_product_barcodes (
     created_by  uuid,
     product_id  uuid        NOT NULL,
     unit_id     uuid,
-    code        text        NOT NULL CHECK (code ~ '^[!-~]{1,48}$' AND code !~ '[/\\]'),
+    code        text        NOT NULL CHECK (code ~ '^[!-~]{1,48}$' AND code !~ '[/\\]' AND code !~ '^[.]+$'),
     format      text        NOT NULL CHECK (format IN ('ean13', 'ean8', 'upca', 'code128')),
     generated   boolean     NOT NULL DEFAULT false,
     lookup_key  text        GENERATED ALWAYS AS (

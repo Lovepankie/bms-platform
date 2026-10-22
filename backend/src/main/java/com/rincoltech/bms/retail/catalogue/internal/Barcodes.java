@@ -80,6 +80,10 @@ final class Barcodes {
             // refuses an encoded slash, backslash, percent or semicolon, and ? and # end the path.
             return Result.refused("A barcode here cannot hold % ; ? # / or \\.");
         }
+        if (code.chars().allMatch(c -> c == '.')) {
+            // "." and ".." in the lookup's path would name the folder above, not a code.
+            return Result.refused("A barcode cannot be made only of dots.");
+        }
         Format format;
         if (asked != null && !asked.isBlank()) {
             format = Format.of(asked).orElse(null);

@@ -44,6 +44,7 @@ export function checkBarcode(raw: string, asked?: BarcodeFormat): BarcodeCheck {
   if (code.length > MAX_BARCODE) return { ok: false, problem: `A barcode has at most ${MAX_BARCODE} characters.` };
   if (!/^[!-~]+$/.test(code)) return { ok: false, problem: 'A barcode holds only letters, digits and signs, with no spaces.' };
   if (/[%;?#/\\]/.test(code)) return { ok: false, problem: 'A barcode here cannot hold % ; ? # / or \\.' };
+  if (/^\.+$/.test(code)) return { ok: false, problem: 'A barcode cannot be made only of dots.' };
   if (asked === undefined && spreadsheetDamaged(code)) return { ok: false, problem: SPREADSHEET_DAMAGE, spreadsheet: true };
   const format = asked ?? inferredFormat(code);
   if (format === 'code128') return { ok: true, code, format };

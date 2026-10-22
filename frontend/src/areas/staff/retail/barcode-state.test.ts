@@ -19,6 +19,8 @@ describe('FR-RET-68 barcode formats', () => {
     expect(checkBarcode('TEST-ITEM-01')).toMatchObject({ ok: true, format: 'code128' });
     expect(checkBarcode('4006381333932', 'code128').ok).toBe(true);
     expect(checkBarcode('with space').ok).toBe(false);
+    for (const dots of ['.', '..', '...']) expect(checkBarcode(dots, 'code128')).toMatchObject({ ok: false, problem: expect.stringContaining('only of dots') });
+    expect(checkBarcode('A.B').ok).toBe(true);
     for (const sign of ['/', '\\', '%', ';', '?', '#']) expect(checkBarcode(`A${sign}B`, 'code128')).toMatchObject({ ok: false, problem: expect.stringContaining('cannot hold') });
     expect(checkBarcode('x'.repeat(49)).ok).toBe(false);
     expect(checkBarcode('').ok).toBe(false);
