@@ -196,7 +196,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   merge if `V81` to `V88` land after it): `referral_codes` (a code per business from a trigger on `tenants`, backfilled; letters of
   the slug and two characters without 0, 1, I or O), `tenant_referrals` and `referral_commission_lines` (forced RLS on the
   **referrer**, SELECT only for `bms_app`, never deleted, a line paid once), the closed platform tables `referral_commission_rules`
-  (append-only) and `referral_settings` (the default rule, empty: nothing is worked out until the operator sets one), two columns
+  (append-only) and `referral_settings` (the default rule; `V89` seeds the product owner's default, 10% of each payment for the first 12 paid months, no cap, ADR-069 decision 14, only when none is set), two columns
   on `onboarding_applications`, the definer functions, and the permission `core.referrals.read` (tenant admin, so the Owner). New
   module `core.referrals` with the port `Referrals`. The sign-up takes `referral_code` (422 `referral_code_unknown`), Activate makes
   the referral; `POST /platform/tenants/{id}/payments` adds the commission line from the rule in force (a percent for the first N
