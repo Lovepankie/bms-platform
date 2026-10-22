@@ -17,6 +17,7 @@ import { mayManageCollateral, mayReleaseCollateral } from './member-permissions'
 import { CollateralGate } from './member-ui';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // One collateral item (FR-COL-01 to FR-COL-04): the facts, the photos and scans, valuations over time, the custody history
 // with the changes that are allowed from where the item is now, and the request to give it back. Giving an item back is not
@@ -47,17 +48,21 @@ function Photos({ id, canAdd }: { id: string; canAdd: boolean }) {
   const docs = useQuery({ queryKey: ['collateral', 'documents', id], queryFn: () => api.listDocuments(id) });
   const queue = usePhotoQueue();
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
   const sender: Sender<unknown> = async (p, o) => {
     const out = await api.uploadDocument(id, p.blob, p.fileName, o);
     void queryClient.invalidateQueries({ queryKey: ['collateral', 'documents', id] });
     return out;
   };
   const open = async (documentId: string) => {
+    setOpening(documentId);
     setError(null);
     try {
       await openInNewTab(() => api.documentUrl(documentId));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The file could not be opened.');
+    } finally {
+      setOpening(null);
     }
   };
   const items = docs.data ?? [];
@@ -73,7 +78,7 @@ function Photos({ id, canAdd }: { id: string; canAdd: boolean }) {
           <li key={d.document_id} className="rt-card cluster">
             <span>Photo or scan {i + 1}</span>
             <span className="hint">{d.created_at ? d.created_at.slice(0, 10) : ''}</span>
-            <button type="button" className="btn-sm" aria-label={`Open photo or scan ${i + 1}`} onClick={() => void open(d.document_id ?? '')}>Open</button>
+            <BusyButton busy={opening === (d.document_id ?? '')} type="button" className="btn-sm" aria-label={`Open photo or scan ${i + 1}`} onClick={() => void open(d.document_id ?? '')}>Open</BusyButton>
           </li>
         ))}
       </ul>
@@ -143,7 +148,7 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
           </Group>
           <SaveGuardNotice guard={guard} what="valuation" found={() => <button type="button" className="btn-sm" onClick={() => { setOpen(false); void queryClient.invalidateQueries({ queryKey: ['collateral'] }); guard.release(); }}>Close</button>} />
           <Problem error={failure ? new Error(failure) : null} />
-          <SaveBar label="Save valuation" busyLabel="Saving" busy={busy} blocked={guard.blocked ? 'Wait for the check above before saving again.' : undefined} cancel={<button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>} />
+          <SaveBar label="Save valuation" busy={busy} blocked={guard.blocked ? 'Wait for the check above before saving again.' : undefined} cancel={<button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>} />
         </form>
       )}
     </section>
@@ -188,7 +193,7 @@ function CustodyChange({ id, version, custody, onDone }: { id: string; version: 
         <TextField name="note" label="Note" form={form} required={type === 'note'} type="textarea" value={note} onChange={setNote} maxLength={1000} />
       </Group>
       <Problem error={failure ? new Error(failure) : null} />
-      <SaveBar label="Save" busyLabel="Saving" busy={busy} cancel={<button type="button" className="btn btn-ghost" onClick={onDone}>Cancel</button>} />
+      <SaveBar label="Save" busy={busy} cancel={<button type="button" className="btn btn-ghost" onClick={onDone}>Cancel</button>} />
     </form>
   );
 }
@@ -234,7 +239,7 @@ function ReleaseRequest({ id, version, onDone }: { id: string; version: number; 
         <p className="field-hint">A loan that this item secures must be closed first. A second person agrees in the approvals inbox.</p>
       </Group>
       <Problem error={failure ? new Error(failure) : null} />
-      <SaveBar label="Send the request" busyLabel="Sending" busy={busy} blocked={by.trim() === '' ? 'Say who is collecting it.' : undefined}
+      <SaveBar label="Send the request" busy={busy} blocked={by.trim() === '' ? 'Say who is collecting it.' : undefined}
         cancel={<button type="button" className="btn btn-ghost" onClick={onDone}>Cancel</button>} />
     </form>
   );

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type AccountPayment, type CustomerAccount, type OpenSale, type Statement } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
@@ -67,7 +68,7 @@ export function AccountSummary({ account, canManage, busy, error, onSave }: {
           <p className="hint">A credit sale to this buyer is refused above the limit unless someone who may override gives a reason. The terms set the date a sale falls due.</p>
           {problem && <p role="alert" className="rt-flag">{problem}</p>}
           <p className="cluster">
-            <button type="submit" disabled={problem !== null || busy}>Save</button>
+            <BusyButton busy={busy ?? false} type="submit" disabled={problem !== null}>Save</BusyButton>
             <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
           </p>
         </form>
@@ -155,7 +156,7 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
           )}
           {problem && amountText !== '' && <p role="alert" className="rt-flag">{problem}</p>}
           <Problem error={error} />
-          <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : 'Save payment'}</button>
+          <BusyButton busy={busy ?? false} type="submit" className="rt-primary" disabled={problem !== null}>Save payment</BusyButton>
         </form>
       )}
     </section>
@@ -199,7 +200,7 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
               <input id={`reverse-${r.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
               <p className="hint">The sales owe this money again. To pay different sales, take the payment again afterwards.</p>
               <p className="cluster">
-                <button type="submit" disabled={reasonOf(reason) === null || busy}>Reverse this payment</button>
+                <BusyButton busy={busy ?? false} type="submit" disabled={reasonOf(reason) === null}>Reverse this payment</BusyButton>
                 <button type="button" className="btn-ghost" onClick={() => setReversing(null)}>Cancel</button>
               </p>
             </form>
@@ -357,9 +358,9 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
         {statement.data && <StatementView statement={statement.data} />}
         {canIssueDocuments(me) && holds(me, DOCUMENT_ISSUE) && (
           <p>
-            <button type="button" disabled={!ranged || statementPdf.isPending} data-tour="account-statement-pdf" onClick={() => statementPdf.mutate()}>
-              {statementPdf.isPending ? 'Making the PDF' : 'Open the statement as a PDF'}
-            </button>
+            <BusyButton busy={statementPdf.isPending} type="button" disabled={!ranged} data-tour="account-statement-pdf" onClick={() => statementPdf.mutate()}>
+              Open the statement as a PDF
+            </BusyButton>
             <Problem error={statementPdf.error} />
           </p>
         )}

@@ -1,6 +1,7 @@
 import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { api, type MfaEnrolment, problemOf } from '../../api/client';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { invitationToken, normaliseSecondFactor, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
@@ -156,9 +157,9 @@ export function ResetPassword({ token, initial = { kind: 'password' } }: { token
           <ErrorLine message={message} />
           <form onSubmit={submitPassword} className="form-stack" noValidate>
             <PasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} />
-            <button className="btn-primary btn-lg" disabled={busy}>
-              {busy ? 'Saving' : 'Save and sign in'}
-            </button>
+            <BusyButton className="btn-primary btn-lg" busy={busy}>
+              Save and sign in
+            </BusyButton>
           </form>
           <InstallPrompt />
         </>
@@ -174,9 +175,9 @@ export function ResetPassword({ token, initial = { kind: 'password' } }: { token
               <input id="reset-code" className="input-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
               <span className="field-hint">Lost your phone? Type one of your recovery codes instead.</span>
             </div>
-            <button className="btn-primary btn-lg" disabled={busy}>
-              {busy ? 'Checking' : 'Continue'}
-            </button>
+            <BusyButton className="btn-primary btn-lg" busy={busy}>
+              Continue
+            </BusyButton>
           </form>
         </>
       )}

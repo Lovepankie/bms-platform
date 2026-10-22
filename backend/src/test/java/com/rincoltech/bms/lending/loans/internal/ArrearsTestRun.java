@@ -25,7 +25,7 @@ public final class ArrearsTestRun {
             int attempt,
             java.util.List<UUID> failed) {
         ArrearsRun arrears = context.getBean(ArrearsRun.class);
-        ArrearsRun.Result result = new ArrearsRun.Result(day, failed.size(), 0, 0, failed.size(), 0, 0);
+        ArrearsRun.Result result = new ArrearsRun.Result(day, failed.size(), 0, 0, failed.size(), 0, 0, 0);
         return context.getBean(TenantJobs.class).callForTenant(tenantId, () -> arrears.finish(result, attempt, failed));
     }
 }

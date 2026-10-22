@@ -353,8 +353,14 @@ final class SmsOutboxChannel implements OutboxChannel {
             if (transactional) {
                 return Prepared.done(Result.deferred(holdUntil), alerts);
             }
-            // Tomorrow's window, and an expiry that reaches its end (the row expired at the end of today's).
             Instant tomorrow = window.nextDayStart(now);
+            if (Outbox.ARREARS.equals(row.category()) || row.templateKey().startsWith("loan.")) {
+                // A loan reminder or arrears notice is true for its own day only ("due today, 15/11/2026", "7 days
+                // overdue"): it waits for tomorrow's window without moving its expiry, so it expires at its own time
+                // rather than arrive a day late (the review of #290).
+                return Prepared.done(Result.deferred(tomorrow), alerts);
+            }
+            // Tomorrow's window, and an expiry that reaches its end (the row expired at the end of today's).
             return Prepared.done(Result.deferred(tomorrow, window.endOfDay(tomorrow)), alerts);
         }
 

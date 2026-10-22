@@ -414,6 +414,20 @@ delivery log, the opt-out and the cost record.
 | FR-NTF-24 | The system shall push the everyday notices of retail, each to its own people and never with a customer's name, a phone number or an amount: a new order from outside the shop to the staff of its shop (not the person who took it, not the administrators); an order out for delivery and delivered to the person who took it, unless they did it; an item low at a branch (FR-RET-63) to that branch's stock readers and the administrators, at most once per item, branch and day; credit sales due today or overdue since yesterday, each morning between 08:00 and 12:00, to the administrators once and to the supervisors of each shop; and the number of sales at each shop at the business's closing time to the administrators, or the next morning as yesterday's when the server was down at that time (issue #412, ADR-057). | `PushEverydayNoticesIT`: each publisher through its route or the job at chosen times; branch scope, role, the taker, the dedupe of low stock, the morning hour, the summary time and once a day. | MVP |
 | FR-NTF-25 | A tenant administrator shall switch each everyday notice off and on, and set the time of the daily summary (a quarter hour up to 23:30 on the business's clock, 20:00 unless changed), in the tenant settings group `notifications`, versioned and audited; the safeguard notices of ADR-050 have no switch (issue #412). | `PushEverydayNoticesIT`: the defaults, a bad time refused, `If-Match` required, a non-administrator refused, a switched-off notice queues nothing. | MVP |
 
+Built in extras B5 (#227): the reminders and arrears notices of FR-NTF-02, queued by the nightly arrears run of FR-ARR-01
+after each active loan's recompute, through `SmsEvents` (FR-NTF-22). `loan.due_in_3_days` from three days before an unpaid
+instalment's due date and `loan.due_today` on it (category `reminder`); `loan.overdue_1`, `loan.overdue_7` and
+`loan.overdue_30` once the loan's DPD reaches the step, on its oldest unpaid instalment with the loan's arrears and DPD
+(category `arrears`). The event reference is the schedule item, so the outbox key holds (schedule item, reminder type) and a
+rerun queues nothing new (FR-NTF-06). The window, the expiry at the end of the window day, the opt-out and the caps are the
+channel's (FR-NTF-04, FR-NTF-14, FR-NTF-17, FR-NTF-18). Texts in chapter 11 section 11.3.1. After the review of
+#290: an arrears step goes only on the night the loan reaches it (DPD 1, 7 or 30) or the night after, never as a backlog,
+so switching the run or SMS on texts nobody already far in arrears; a loan gets at most one arrears notice about another
+instalment in seven days (`lending_loan_notices`, migration V84; the steps of one instalment always go); a due reminder
+expires at the end of its due date and an arrears notice at the end of the day it was queued, so neither arrives late;
+`loan.due_today` names its date; and a repayment withdraws the not-yet-sent reminders of the instalments it reached, as
+closing or writing off a loan withdraws all of them.
+
 ## 3.12 Document generation (DOC)
 
 | ID | Requirement | Acceptance criteria | Phase |

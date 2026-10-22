@@ -160,7 +160,10 @@ describe('correcting a restock', () => {
     fireEvent.click(only());
     expect((await screen.findByRole('alert')).textContent).toContain('only 12 are in stock there now');
     voidPurchase.mockResolvedValueOnce({ ...restock, status: 'voided' });
+    await new Promise((r) => setTimeout(r));
+    await new Promise((r) => setTimeout(r));
     fireEvent.click(only());
+
     await waitFor(() => expect(voidPurchase).toHaveBeenCalledTimes(2));
     expect(voidPurchase.mock.calls[1]?.[2]).toBe(voidPurchase.mock.calls[0]?.[2]);
   });

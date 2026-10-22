@@ -7,6 +7,7 @@ import { Problem } from '../retail/ui';
 import { money, parseAmount, words } from './loan-state';
 import { SavingsGate } from './savings';
 import { mayManageProducts } from './savings-permissions';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Savings product set-up (FR-SAV-01): each product's interest rule, posting frequency, minimum
 // and opening balances, withdrawal fee and limits, and dormancy days. Once an account uses a
@@ -191,9 +192,9 @@ export function ProductForm({ product, currency, onDone }: { product?: SavingsPr
       )}
       {typeof terms === 'string' && d.name !== '' && <p className="field-hint">{terms}</p>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary btn-block" disabled={!codeOk || typeof terms === 'string' || save.isPending}>
-        {save.isPending ? 'Saving' : product ? 'Save changes' : 'Create product'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary btn-block" disabled={!codeOk || typeof terms === 'string'}>
+        {product ? 'Save changes' : 'Create product'}
+      </BusyButton>
       <button type="button" className="btn-block" onClick={onDone}>Cancel</button>
     </form>
   );

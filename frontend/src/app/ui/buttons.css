@@ -133,3 +133,73 @@ button[aria-disabled='true'],
   height: 20px;
   flex: none;
 }
+
+/*
+ * Busy (#456, BusyButton in src/app/ui): while its request runs a button that writes keeps its label,
+ * is aria-busy and aria-disabled (so it keeps focus and reads as off, hover and press included), and
+ * shows a small spinner placed absolutely in its end padding, so the button never changes width and the
+ * spinner does not depend on the gap. Under reduced motion it is a dot that pulses instead of turning.
+ */
+.busy-button {
+  position: relative;
+}
+
+/*
+ * The spinner takes the last 0.85em of the end padding (0.25em in, 0.6em wide), so a busy button keeps at
+ * least 1.1em there and the label never runs under it. --busy-pad-end is the size's own end padding, so a
+ * size whose padding already holds the spinner keeps its width. A small busy button (.btn-sm) has the same
+ * end padding when idle, so it keeps its width too. A class that sets its own padding sets its own --busy-pad-end too, or it takes 18px.
+ */
+.busy-button {
+  --busy-pad-end: 18px;
+}
+
+.btn-lg.busy-button {
+  --busy-pad-end: 24px;
+}
+
+.btn-sm.busy-button {
+  --busy-pad-end: 12px;
+}
+
+.btn-sm.busy-button,
+.busy-button[aria-busy='true'] {
+  padding-inline-end: max(1.1em, var(--busy-pad-end));
+}
+
+.busy-button[aria-busy='true'],
+.busy-button[aria-busy='true']:is(:hover, :active) {
+  cursor: progress;
+  background: var(--color-neutral-tint);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  box-shadow: none;
+  transform: none;
+}
+
+.busy-spinner {
+  position: absolute;
+  inset-inline-end: 0.25em;
+  top: 50%;
+  width: 0.6em;
+  height: 0.6em;
+  margin-top: -0.3em;
+  border: 2px solid var(--color-border-strong);
+  border-top-color: var(--color-focus);
+  border-radius: 50%;
+  animation: rt-spin 0.8s linear infinite;
+}
+
+@keyframes rt-busy-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy-spinner {
+    border: 0;
+    background: var(--color-focus);
+    animation: rt-busy-pulse 1.6s ease-in-out infinite !important;
+  }
+}

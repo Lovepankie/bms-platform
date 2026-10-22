@@ -52,7 +52,7 @@ function mount(node: ReactElement, opts: { me?: Me; members?: MemberRecord[]; it
 }
 
 const type = (label: RegExp | string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
-const save = () => screen.getByRole('button', { name: /Register collateral|Save changes|Saving/ }) as HTMLButtonElement;
+const save = () => screen.getByRole('button', { name: /Register collateral|Save changes/ }) as HTMLButtonElement;
 
 describe('registering collateral', () => {
   it('needs the member, a description and, for a vehicle, the plate number, each named in plain words', async () => {
@@ -125,7 +125,7 @@ describe('the collateral item page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ask to give it back' }));
     type(/^Who is collecting it/, 'Test Owner 01');
     fireEvent.click(screen.getByRole('button', { name: 'Send the request' }));
-    expect((await screen.findByRole('status')).textContent).toMatch(/second person must agree in the approvals inbox/);
+    expect((await screen.findByText(/second person must agree in the approvals inbox/)).closest('[role="status"]')).not.toBeNull();
   });
 
   it('lists the loan cover value apart from the estimate', () => {

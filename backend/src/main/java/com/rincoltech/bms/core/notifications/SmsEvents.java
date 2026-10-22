@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.notifications;
 
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
@@ -81,11 +82,14 @@ public interface SmsEvents {
      *     unless the tenant asked for it ({@link #includeBalance})
      * @param eventRef what makes the event one event, for example the id of the transaction; with the template and the
      *     member it is the idempotency key, and it is what {@link #cancel} withdraws
-     * @param category {@link Outbox#TRANSACTIONAL} (a receipt, not held by the sending window, expires after an hour)
-     *     or {@link Outbox#REMINDER} (held for the tenant's window)
+     * @param category {@link Outbox#TRANSACTIONAL} (a receipt, not held by the sending window, expires after an hour),
+     *     {@link Outbox#REMINDER} or {@link Outbox#ARREARS} (both held for the tenant's window and expiring at its end)
      * @param valueDate the date the event is for (the repayment's value date, the funding date); older than the cutoff
      *     ({@code BMS_SMS_EVENT_MAX_AGE_DAYS}, default 3 days before the tenant's today) queues nothing; null for an
      *     event that is about today by nature (the maturity reminder)
+     * @param expiresAt for a reminder or an arrears notice, when it stops being true (a "due today" text at the end of
+     *     the due date); it then expires at the earlier of this and the end of the window day, so a text deferred by the
+     *     daily cap or a run resumed after the window is never sent late. Null: the end of the window day.
      */
     record MemberSms(
             String templateKey,
@@ -94,15 +98,27 @@ public interface SmsEvents {
             Map<String, String> params,
             String eventRef,
             String category,
-            LocalDate valueDate) {
+            LocalDate valueDate,
+            Instant expiresAt) {
 
         public MemberSms {
             params = Map.copyOf(params);
             category = category == null ? Outbox.TRANSACTIONAL : category;
         }
 
+        public MemberSms(
+                String templateKey,
+                UUID memberId,
+                String phone,
+                Map<String, String> params,
+                String eventRef,
+                String category,
+                LocalDate valueDate) {
+            this(templateKey, memberId, phone, params, eventRef, category, valueDate, null);
+        }
+
         public MemberSms(String templateKey, UUID memberId, String phone, Map<String, String> params, String eventRef) {
-            this(templateKey, memberId, phone, params, eventRef, null, null);
+            this(templateKey, memberId, phone, params, eventRef, null, null, null);
         }
 
         public MemberSms(
@@ -112,7 +128,7 @@ public interface SmsEvents {
                 Map<String, String> params,
                 String eventRef,
                 String category) {
-            this(templateKey, memberId, phone, params, eventRef, category, null);
+            this(templateKey, memberId, phone, params, eventRef, category, null, null);
         }
     }
 
@@ -154,12 +170,25 @@ public interface SmsEvents {
      * whole of it, {@code phone} and {@code params} included, runs inside the guard. {@code phone} and {@code params} are
      * asked for only when SMS is active and the event is not too old.
      */
+    default Result queueWhenActive(
+            String templateKey,
+            UUID memberId,
+            String eventRef,
+            String category,
+            LocalDate valueDate,
+            Supplier<String> phone,
+            Supplier<Map<String, String>> params) {
+        return queueWhenActive(templateKey, memberId, eventRef, category, valueDate, null, phone, params);
+    }
+
+    /** As above, with the message's own expiry ({@link MemberSms#expiresAt}). */
     Result queueWhenActive(
             String templateKey,
             UUID memberId,
             String eventRef,
             String category,
             LocalDate valueDate,
+            Instant expiresAt,
             Supplier<String> phone,
             Supplier<Map<String, String>> params);
 
@@ -169,4 +198,10 @@ public interface SmsEvents {
      * sender may be at the provider and is left. Guarded like the rest; returns how many were withdrawn (0 on a failure).
      */
     int cancel(String eventRef);
+
+    /**
+     * As {@link #cancel}, for a reminder or arrears notice the member no longer needs (the instalment was paid, the loan
+     * closed or written off): the rows are labelled {@code cancelled_settled}, not as a reversal. Guarded likewise.
+     */
+    int cancelSettled(String eventRef);
 }

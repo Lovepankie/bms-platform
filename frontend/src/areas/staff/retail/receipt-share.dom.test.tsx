@@ -129,8 +129,9 @@ describe('Share receipt', () => {
     await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
     await waitFor(async () => expect(((await shareButton()) as HTMLButtonElement).disabled).toBe(false));
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryAllByRole('status').filter((s) => s.textContent !== '')).toEqual([]);
   });
+
 
   it('asks for a second tap once, and downloads after a second refusal', async () => {
     const share = sharing(true, () => Promise.reject(new DOMException('no gesture', 'NotAllowedError')));

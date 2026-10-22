@@ -11,6 +11,7 @@ import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useSingleBranch } from './ui';
 import { showDate } from './transfers';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Cash withdrawn from the bank into a shop's till (FR-RET-25). A withdrawal above the bank balance on
 // record is saved and comes back with a warning, never a refusal.
@@ -41,9 +42,10 @@ export function WithdrawalForm({ branchId, onSaved }: { branchId: string; onSave
       <input id="withdrawal-purpose" maxLength={200} value={draft.purpose} onChange={(e) => setDraft((d) => ({ ...d, purpose: e.target.value }))} />
       <p className="hint">The cash goes into this shop's till.</p>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={blocked}>
-        {save.isPending ? 'Saving' : 'Save withdrawal'}
-      </button>
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={blocked}>
+        Save withdrawal
+      </BusyButton>
+
     </form>
   );
 }

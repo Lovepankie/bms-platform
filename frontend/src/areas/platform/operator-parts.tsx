@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useState } from 'react';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { useTour } from '../../tour/host';
 import { reasonProblem } from './operator-state';
 
@@ -76,10 +77,10 @@ export function ConfirmPanel({ id, sentence, confirm, needsReason = true, danger
         </p>
       )}
       <div className="cluster">
-        <button type="submit" className={danger ? 'btn-danger' : 'btn-primary'} disabled={busy}>
-          {busy ? 'Saving' : confirm}
-        </button>
-        <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>
+        <BusyButton type="submit" className={danger ? 'btn-danger' : 'btn-primary'} busy={busy}>
+          {confirm}
+        </BusyButton>
+        <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
       </div>

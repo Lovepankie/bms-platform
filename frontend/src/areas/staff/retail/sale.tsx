@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
 import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
@@ -430,9 +431,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
               <input id="buyer-contact" inputMode="tel" value={draft.newBuyerContact} onChange={(e) => update({ newBuyerContact: e.target.value })} />
               {accountsOn && (
                 <>
-                  <button type="button" className="rt-primary" disabled={draft.newBuyerName.trim() === '' || addBuyer.isPending} onClick={() => addBuyer.mutate()}>
-                    {addBuyer.isPending ? 'Adding' : 'Add this buyer'}
-                  </button>
+                  <BusyButton type="button" className="rt-primary" busy={addBuyer.isPending} disabled={draft.newBuyerName.trim() === ''} onClick={() => addBuyer.mutate()}>
+                    Add this buyer
+                  </BusyButton>
                   <Problem error={addBuyer.error} />
                 </>
               )}
@@ -476,9 +477,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
             <>
               <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
               <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
-              <button type="button" disabled={keep.isPending} onClick={() => keep.mutate()}>
+              <BusyButton type="button" busy={keep.isPending} onClick={() => keep.mutate()}>
                 Keep it on this phone
-              </button>
+              </BusyButton>
             </>
           ) : (
             <>
@@ -489,9 +490,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
         </div>
       )}
       {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
-      <button type="submit" className="rt-primary" disabled={(problem !== null && !locked) || save.isPending || keep.isPending} data-tour="sale-save">
-        {save.isPending || keep.isPending ? 'Saving' : offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : 'Save sale'}
-      </button>
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending || keep.isPending} disabled={problem !== null && !locked} data-tour="sale-save">
+        {offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : 'Save sale'}
+      </BusyButton>
       {draft.lines.length > 0 && !save.isPending && !confirmClear && (
         <button type="button" onClick={() => (draft.sent ? setConfirmClear(true) : clear())}>
           Clear this sale

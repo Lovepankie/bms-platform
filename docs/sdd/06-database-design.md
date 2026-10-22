@@ -2131,6 +2131,8 @@ Built: landed cost and supplier credit notes (issue #199, migration V48, FR-RET-
 
 Built: lending arrears (issue #264, migration V81, increment 6). `lending_loan_charges` and `lending_charge_cancels` as section 6.7 describes them, and `lending_arrears_runs` (one row per tenant and business date: `started_at`, the lease `lease_until`, `attempts`, `finished_at`, the finished run's counts and `failed_loan_ids`; its first date is where the business's penalties start, or a loan's own start in the system when later), both with `tenant_id`, forced RLS and composite foreign keys; no permission and no chart account is added. The waivers (`lending_charge_waivers`, V82, #265) and collection actions (`lending_collection_actions`, V83, #266) follow in their own migrations.
 
+Built: the arrears notices' record (issue #227, migration V84, pull request #290). `lending_loan_notices` (`loan_id`, `schedule_item_id`, `template_key` one of `loan.overdue_1`, `_7`, `_30`, `business_date`), append-only, forced RLS, composite foreign keys: one row per arrears notice queued, so a loan is not sent another about a different instalment within seven days.
+
 Optional tables and columns for the trade capabilities (FR-RET-33 to FR-RET-40): `retail_branch_roles`,
 `retail_product_units`, `retail_price_lists`, `retail_price_list_items`, `retail_customer_groups`,
 `retail_document_series`, `retail_documents`, `retail_quotations`, `retail_purchase_orders`,

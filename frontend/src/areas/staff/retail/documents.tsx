@@ -65,7 +65,7 @@ export function DocumentsPage() {
         )}
       </div>
       <Problem error={series.error} />
-      {series.data && <SeriesPanel series={series.data} canEdit={holds(me, 'core.settings.manage')} saving={save.isPending} onSave={(kind, prefix) => save.mutate({ kind, prefix })} />}
+      {series.data && <SeriesPanel series={series.data} canEdit={holds(me, 'core.settings.manage')} busy={save.isPending} onSave={(kind, prefix) => save.mutate({ kind, prefix })} />}
       <Problem error={save.error} />
     </Gate>
   );

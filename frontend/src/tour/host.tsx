@@ -117,6 +117,7 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
       setProgress((p) => ({ ...p, [id]: { status, version } }));
       if (!saveProgress) return;
       // Progress is a convenience: a failed save only means the tour may show once more.
+      // busy-exempt: no button waits for this save, the tour closes at once
       void api
         .PUT('/api/v1/me/tours/{tour_id}', { params: { path: { tour_id: id } }, body: { status, version } })
         .catch(() => undefined);

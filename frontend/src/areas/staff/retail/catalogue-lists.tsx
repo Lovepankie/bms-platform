@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Category, type Unit } from '../../../api/retail';
 import { AddPanel, BackToCatalogue } from './catalogue';
 import { ScreenLink } from './screen-link';
@@ -43,18 +44,18 @@ export function NamedRow({ row, noun, busy, onRename, onToggle, extra }: {
           <label htmlFor={`rename-${row.id}`}>New name</label>
           <input id={`rename-${row.id}`} value={name} maxLength={noun === 'unit' ? 30 : 100} onChange={(e) => setName(e.target.value)} />
           <p className="cluster">
-            <button type="button" disabled={busy || name.trim() === '' || name.trim() === row.name} onClick={() => { onRename(name.trim()); setEditing(false); }}>
+            <BusyButton busy={busy ?? false} type="button" disabled={name.trim() === '' || name.trim() === row.name} onClick={() => { onRename(name.trim()); setEditing(false); }}>
               Save name
-            </button>
+            </BusyButton>
             <button type="button" className="btn-ghost" onClick={() => { setName(row.name ?? ''); setEditing(false); }}>Cancel</button>
           </p>
         </div>
       ) : (
         <p className="cluster">
           <button type="button" className="btn-sm" onClick={() => setEditing(true)} aria-label={`Rename ${row.name}`}>Rename</button>
-          <button type="button" className="btn-sm" disabled={busy} onClick={onToggle} aria-label={`${off ? 'Switch on' : 'Switch off'} ${row.name}`}>
+          <BusyButton busy={busy ?? false} type="button" className="btn-sm" onClick={onToggle} aria-label={`${off ? 'Switch on' : 'Switch off'} ${row.name}`}>
             {off ? 'Switch on' : 'Switch off'}
-          </button>
+          </BusyButton>
           {extra}
         </p>
       )}
@@ -100,7 +101,7 @@ function NamedList({ noun, plural, list, create, update }: {
           <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
             <label htmlFor={`new-${plural}`}>Name of the new {noun}</label>
             <input id={`new-${plural}`} value={name} maxLength={noun === 'unit' ? 30 : 100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
-            <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
+            <BusyButton busy={add.isPending} type="submit" className="rt-primary" disabled={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
           </form>
           <Problem error={add.error} />
         </AddPanel>

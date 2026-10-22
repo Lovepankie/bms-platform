@@ -724,6 +724,11 @@ class RlsIsolationIT {
                         VALUES (?, ?, ?, 'call', 'Test call', ?, now())
                         """).params(UUID.randomUUID(), t.tenantId(), loan, user).update();
         owner.sql("""
+                        INSERT INTO lending_loan_notices (id, tenant_id, loan_id, schedule_item_id, template_key,
+                                                          business_date)
+                        VALUES (?, ?, ?, ?, 'loan.overdue_1', DATE '2026-02-17')
+                        """).params(UUID.randomUUID(), t.tenantId(), loan, item).update();
+        owner.sql("""
                         INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at)
                         VALUES (?, DATE '2026-02-17', now(), now(), now())
                         """).params(t.tenantId()).update();
