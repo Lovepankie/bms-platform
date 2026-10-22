@@ -2209,6 +2209,14 @@
           "term_count" : {
             "format" : "int32",
             "type" : "integer"
+          },
+          "warnings" : {
+            "description" : "Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart",
+            "items" : {
+              "description" : "Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart",
+              "type" : "string"
+            },
+            "type" : "array"
           }
         }
       },

@@ -180,12 +180,14 @@ class LoanNotices {
      * Queues what {@link #reminders} calls for; each is a no-op when it was queued before or SMS is off. A due reminder
      * expires at the end of its due date and an arrears notice at the end of today, in {@code zone}, so neither reaches
      * the member a day late. An arrears notice is skipped when the loan had one about another instalment in the last
-     * {@link #ARREARS_GAP_DAYS} days; the steps of one instalment (1, 7, 30) always go. Returns how many were queued.
+     * {@link #ARREARS_GAP_DAYS} days; the steps of one instalment (1, 7, 30) always go. With {@code arrearsHeld} (a loan
+     * in its first days after a bring-in, ADR-071 decision 10) no arrears notice is queued; due reminders still are.
+     * Returns how many were queued.
      */
-    int remind(Loan loan, List<Item> items, Position position, LocalDate today, ZoneId zone) {
+    int remind(Loan loan, List<Item> items, Position position, LocalDate today, ZoneId zone, boolean arrearsHeld) {
         int queued = 0;
         for (Reminder r : reminders(items, position, today)) {
-            if (r.arrears() && recentArrearsNotice(loan.id(), r.itemId(), today)) {
+            if (r.arrears() && (arrearsHeld || recentArrearsNotice(loan.id(), r.itemId(), today))) {
                 continue;
             }
             LocalDate lastDay = r.arrears() ? today : r.dueDate();

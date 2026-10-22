@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * {@code /api/v1/lending/existing-loans}: loans brought in from a paper register with their real dates and past
- * repayments (chapter 7 section 7.11.13; FR-EXL-01 to FR-EXL-08, ADR-071). Recording needs an {@code Idempotency-Key};
+ * repayments (chapter 7 section 7.11.13; FR-EXL-01 to FR-EXL-09, ADR-071). Recording needs an {@code Idempotency-Key};
  * a check ({@code dry_run=true}) saves nothing.
  */
 @RestController

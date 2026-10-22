@@ -114,6 +114,9 @@ class ArrearsRun {
     /** What one loan's step did. */
     record Outcome(int charges, long chargedMinor, int reminders) {}
 
+    /** The days after its bring-in date in which a brought-in loan gets no arrears SMS (ADR-071 decision 10). */
+    static final int BRING_IN_ARREARS_HOLD_DAYS = 7;
+
     /**
      * The bound tenant's run for its business date today, called outside any transaction (the job binds the tenant
      * with {@code TenantJobs.callAs}). Empty when that date's run has finished or another worker holds its lease.
@@ -255,8 +258,11 @@ class ArrearsRun {
         Servicing.Position position = servicer.refreshPosition(id, items, today);
         // The due reminders and arrears notices (issue #227) in the loan's own transaction, through the outbox with
         // the tenant's SMS settings, window and opt-outs; keyed by (item, notice), so a rerun queues nothing new.
+        // A loan brought in from a paper register gets no arrears notice in its first days in the app (ADR-071 decision
+        // 10): the borrower hears first from the business, and a register mistake can still be put right.
+        boolean arrearsHeld = broughtInOn != null && today.isBefore(broughtInOn.plusDays(BRING_IN_ARREARS_HOLD_DAYS));
         int reminded = notices.remind(
-                loan, items, position, today, currentTenant.profile().timezone());
+                loan, items, position, today, currentTenant.profile().timezone(), arrearsHeld);
         return new Outcome(charges, charged, reminded);
     }
 

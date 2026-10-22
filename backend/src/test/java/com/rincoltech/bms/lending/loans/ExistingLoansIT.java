@@ -6,6 +6,7 @@ import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.loans.internal.ArrearsTestRun;
 import com.rincoltech.bms.testsupport.Api;
+import com.rincoltech.bms.testsupport.SmsTenants;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Existing loans brought in from a paper register on real PostgreSQL (issue #466, ADR-071; FR-EXL-01 to FR-EXL-08): the
+ * Existing loans brought in from a paper register on real PostgreSQL (issue #466, ADR-071; FR-EXL-01 to FR-EXL-09): the
  * schedule from the real past date, the past repayments applied in date order by the product's allocation order, the
  * position (balance, next due date, days overdue from the real due dates), the checker's approval before it counts,
  * historic transactions and one opening entry at go-live, no penalty for the time before the bring-in, the go-live
@@ -584,6 +585,74 @@ class ExistingLoansIT extends LoanFixtures {
                 as(UUID.randomUUID(), officerPerms, "*", null),
                 request(borrower(6), product, 900_000, disbursed, List.of()));
         assertThat(officer.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * The same member, amount and date with no register number to tell them apart: the check and the waiting loan carry a
+     * warning; it stops nothing. A register number on the second removes it.
+     */
+    @Test
+    void frExl02_aLikelyDuplicateIsFlaggedButNotRefused() {
+        String product = product("EXL12", Map.of());
+        String member = borrower(17);
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = request(member, product, 700_000, today.minusDays(30), List.of());
+        assertThat(check(body).getBody().get("warnings")).isEmpty();
+        JsonNode first = recorded(body);
+        assertThat(first.get("warnings")).as("not a duplicate of itself").isEmpty();
+
+        ResponseEntity<JsonNode> again = check(body);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(again.getBody().get("warnings").get(0).asString())
+                .contains(first.get("loan_no").asString());
+        JsonNode second = recorded(body);
+        assertThat(send(
+                                HttpMethod.GET,
+                                EXISTING + "/" + second.get("loan_id").asString(),
+                                as(admin, adminPerms, "*", null),
+                                null)
+                        .getBody()
+                        .get("warnings"))
+                .as("the checker sees it too")
+                .hasSize(1);
+        body.put("register_ref", "REG-DUP-2");
+        assertThat(check(body).getBody().get("warnings")).isEmpty();
+    }
+
+    /**
+     * No arrears SMS goes to the borrower of a brought-in loan in the 7 days after its bring-in date (ADR-071 decision
+     * 10); after them the notices follow the steps as for any loan.
+     */
+    @Test
+    void frExl05_noArrearsSmsInTheFirstSevenDaysAfterTheBringIn() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        // Weekly instalments from eight days ago: the first was due yesterday, one day past due today.
+        String product = product(
+                "EXL13", Map.of("rate_unit", "per_week", "term_unit", "week", "instalment_frequency", "weekly"));
+        assertThat(setGoLive(today.minusDays(5)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode loan = recorded(request(borrower(18), product, 1_200_000, today.minusDays(8), List.of()));
+        approve(loan);
+        String id = loan.get("loan_id").asString();
+        assertThat(loan(id).get("balances").get("days_past_due").asInt()).isEqualTo(1);
+
+        ArrearsTestRun.run(context, t.tenantId());
+        assertThat(count("SELECT count(*) FROM lending_loan_notices WHERE loan_id = ?::uuid", id))
+                .as("one day past due, but brought in today")
+                .isZero();
+
+        TestDatabase.owner()
+                .sql("UPDATE lending_loans SET brought_in_on = ?, go_live_on = ? WHERE id = ?::uuid")
+                .params(today.minusDays(7), today.minusDays(7), id)
+                .update();
+        TestDatabase.owner()
+                .sql("DELETE FROM lending_arrears_runs WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        ArrearsTestRun.run(context, t.tenantId());
+        assertThat(count("SELECT count(*) FROM lending_loan_notices WHERE loan_id = ?::uuid", id))
+                .as("seven days after the bring-in")
+                .isEqualTo(1);
     }
 
     // ---- No retroactive penalties (FR-EXL-05) ---------------------------------------------

@@ -89,6 +89,16 @@ async function fillTheLoan() {
 }
 
 describe('recording an existing loan', () => {
+  it('shows a warning from the check without stopping the record', async () => {
+    const warning = 'Loan LN000099 of this member for the same amount and date is already in the app. Check it is not the same loan entered twice.';
+    const api = fakeApi({ check: vi.fn(async () => ({ ...preview, warnings: [warning] })) });
+    mount(<ExistingLoanForm api={api} />);
+    await fillTheLoan();
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    await screen.findByText(warning);
+    expect(screen.getByRole('button', { name: 'Record and send for approval' })).toBeTruthy();
+  });
+
   it('checks first, shows the true position from the real date, then records it once with an Idempotency-Key', async () => {
     const api = fakeApi();
     mount(<ExistingLoanForm api={api} />);

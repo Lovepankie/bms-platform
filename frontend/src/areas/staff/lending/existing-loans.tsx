@@ -39,6 +39,7 @@ export function ExistingLoanView({ loan }: { loan: ExistingLoan }) {
         </dl>
       )}
       {p?.settled && <p>The register shows this loan repaid in full. It is closed when approved.</p>}
+      {(loan.warnings ?? []).map((w) => <Note key={w}>{w}</Note>)}
       <div className="table-wrap" tabIndex={0}>
         <table aria-label="Schedule">
           <thead>

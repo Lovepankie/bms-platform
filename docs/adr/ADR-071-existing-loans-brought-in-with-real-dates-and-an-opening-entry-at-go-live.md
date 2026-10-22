@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (Hillary Arinda, Dev Lead, 22 Oct 2026, issue #466; the penalty default of decision 6 is his to change later).
-Migration `V91`. FR-EXL-01 to FR-EXL-08. Builds on ADR-004 (integer money and the double-entry ledger), ADR-015
+Migration `V91`. FR-EXL-01 to FR-EXL-09. Builds on ADR-004 (integer money and the double-entry ledger), ADR-015
 (maker-checker actions registered by their modules), ADR-026 (loan servicing: allocation rows by repayment), ADR-062
 (the Owner of a business) and the arrears run of #270 (penalties start at the business's first run).
 
@@ -90,6 +90,12 @@ fit every lending business, not one register.
    figures and cancels it, which frees its register number for the correct entry. It is refused (422
    `bring_in_has_activity`) once the loan has any transaction made in the app or a penalty charge: from then it is a loan
    of the app's own books and is corrected the usual way. Audited `lending.loan.bring_in_reversed`.
+10. **No arrears SMS in the first seven days.** The nightly run queues no arrears notice for a brought-in loan until
+    seven days after its bring-in date (due reminders still go): a borrower long behind on paper hears first from the
+    business, not from an automatic text the night the loan is approved, and a register mistake can still be put right
+    (decision 9). The approvals inbox says so beside a `loan_bring_in` request. The check and the waiting loan also warn,
+    without refusing, when a loan of the same member for the same principal and date is already in the app and no
+    register number tells them apart.
 
 ### How an accountant reconciles it
 

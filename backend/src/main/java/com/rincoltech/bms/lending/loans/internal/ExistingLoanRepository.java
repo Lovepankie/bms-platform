@@ -175,6 +175,23 @@ class ExistingLoanRepository implements GoLiveDate.Dependent {
                 .update();
     }
 
+    /**
+     * The number of a live loan (not cancelled or rejected) of the member for this principal given out on this date, other
+     * than {@code except}: likely the same loan entered twice when no register number tells them apart.
+     */
+    Optional<String> sameLoan(UUID memberId, long principalMinor, LocalDate date, UUID except) {
+        return jdbc.sql("""
+                        SELECT loan_no FROM lending_loans
+                         WHERE member_id = ? AND coalesce(approved_principal_minor, requested_principal_minor) = ?
+                           AND coalesce(disbursed_on, proposed_disbursement_date) = ? AND id <> ?
+                           AND status NOT IN ('cancelled', 'rejected')
+                         ORDER BY created_at LIMIT 1
+                        """)
+                .params(memberId, principalMinor, date, except)
+                .query(String.class)
+                .optional();
+    }
+
     /** True when a live loan (not cancelled or rejected) already carries this register number, in any case. */
     boolean registerRefTaken(String registerRef) {
         return jdbc.sql("""

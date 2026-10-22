@@ -48,7 +48,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Existing loans brought in from a paper register (ADR-071; FR-EXL-01 to FR-EXL-08). A tenant administrator or branch
+ * Existing loans brought in from a paper register (ADR-071; FR-EXL-01 to FR-EXL-09). A tenant administrator or branch
  * manager records the loan with its real disbursement date, terms and past repayments; the app builds the schedule from
  * that date, applies the repayments by the product's allocation order and shows the true position. The loan waits as
  * {@code brought_in}, counting nowhere, until a second person approves {@code loan_bring_in}; the approval writes the
@@ -755,7 +755,15 @@ class ExistingLoanService {
                 pendingRequest(loan),
                 repayments(lines),
                 rows(items, today),
-                position(position, paid, last));
+                position(position, paid, last),
+                "brought_in".equals(loan.status())
+                        ? warnings(
+                                loan.memberId(),
+                                loan.approvedPrincipalMinor(),
+                                f.disbursementDate(),
+                                f.registerRef(),
+                                loanId)
+                        : List.of());
     }
 
     /** The view of a check: nothing is saved, so there is no loan id, number or request. */
@@ -782,7 +790,19 @@ class ExistingLoanService {
                 repayments(d.lines()),
                 rows(c.plan().items(), today()),
                 position(
-                        c.plan().position(), c.plan().totalPaidMinor(), c.plan().lastRepaymentOn()));
+                        c.plan().position(), c.plan().totalPaidMinor(), c.plan().lastRepaymentOn()),
+                warnings(d.member().id(), d.principalMinor(), d.disbursementDate(), d.registerRef(), loanId));
+    }
+
+    /** What the maker and the checker should look at; nothing here stops the loan. */
+    private List<String> warnings(UUID memberId, long principal, LocalDate date, String registerRef, UUID self) {
+        if (registerRef != null) {
+            return List.of();
+        }
+        return repo.sameLoan(memberId, principal, date, self == null ? new UUID(0, 0) : self)
+                .map(no -> List.of("Loan " + no + " of this member for the same amount and date is already in the app."
+                        + " Check it is not the same loan entered twice."))
+                .orElse(List.of());
     }
 
     /** The request waiting on the loan: its bring-in while {@code brought_in}, its reversal once approved. */

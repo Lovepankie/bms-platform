@@ -120,7 +120,12 @@ final class ExistingLoanApi {
 
             List<Repayment> repayments,
             List<ScheduleRow> schedule,
-            Position position) {}
+            Position position,
+
+            @Schema(
+                    description =
+                            "Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart")
+            List<String> warnings) {}
 
     @Schema(name = "ExistingLoanPage")
     record ExistingLoanPage(List<ExistingLoanSummary> items) {}

@@ -7648,6 +7648,8 @@ export interface components {
             status?: string;
             /** Format: int32 */
             term_count?: number;
+            /** @description Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart */
+            warnings?: string[];
         };
         ExistingLoanImportRequest: {
             /** @description The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units */
