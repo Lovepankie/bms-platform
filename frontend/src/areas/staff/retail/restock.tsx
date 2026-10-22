@@ -11,6 +11,8 @@ import { usePersistedDraft } from './idempotency';
 import { lineTotalMinor, parseQty, qtyString, showDate, showQty } from './maths';
 import { chosenUnitHint, redraftOf } from './restock-correct-state';
 import { CategoryLabel, Gate, Note, Problem, money, useProfitAccess } from './ui';
+import { ScanBar } from './scan';
+import { plusOne, scanInto } from './barcode-state';
 import { UNITS, capabilityOn } from './permissions';
 import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, packPriceMinor } from './units-state';
 
@@ -162,6 +164,13 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
         ? ls
         : [...ls, { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: { ...(branch && branches.some((b) => b.id === branch) ? { [branch]: '' } : {}) } }],
     );
+  // A scan (issue #345): the item at 1 for this branch, or one more on its line in the pack the barcode is on.
+  const here = branch && branches.some((b) => b.id === branch) ? branch : undefined;
+  const scanAdd = (p: Product, unitId?: string) => {
+    const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
+    const fresh: RestockLine = { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: '1' } : {} };
+    setLines((ls) => scanInto(ls, p, unit, (l) => (here ? { ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } } : l), () => (unit ? withUnit(fresh, unit) : fresh)));
+  };
   const patch = (i: number, change: Partial<RestockLine>) => setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...change } : l)));
   const patchWhole = (i: number, line: RestockLine) => setLines((ls) => ls.map((l, n) => (n === i ? line : l)));
 
@@ -198,6 +207,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       <div data-tour="restock-search">
       <SearchBox id="restock-search" label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
       </div>
+      <ScanBar id="restock-scan" onFound={scanAdd} />
       {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
       <SearchResults fetching={finding}>
       <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>

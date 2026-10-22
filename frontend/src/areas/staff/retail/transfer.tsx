@@ -11,6 +11,8 @@ import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } 
 import { milliOf } from './maths';
 import { TRANSFER, TRANSFER_RECEIPT, capabilityOn, holdsAt, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
+import { ScanBar } from './scan';
+import { plusOne, scanInto } from './barcode-state';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -56,6 +58,9 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   const update = (patch: Partial<TransferDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
+  // A scan (issue #345): the item at 1, or one more on its line; a move is counted in the item's own unit.
+  const scanAdd = (p: Product) =>
+    setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, undefined, (l) => ({ ...l, qty: plusOne(l.qty) }), () => ({ product: p, qty: '1' })) }));
   // Memoised so the prefill effect below does not run again on every render.
   const destinations = useMemo(
     () => (me.branches ?? []).filter((b) => b.id !== fromBranchId && b.stocks_goods !== false),
@@ -96,6 +101,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       <div data-tour="transfer-search">
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />
       </div>
+      <ScanBar id="transfer-scan" branchId={fromBranchId} onFound={scanAdd} />
 
       <h2 data-tour="transfer-items">Items to move</h2>
       {draft.lines.length === 0 && <p>No items yet. Search above and tap Add.</p>}

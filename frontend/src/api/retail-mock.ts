@@ -1,4 +1,5 @@
 import type {
+  Barcode,
   AllBranchesRow, Category, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
 } from './retail';
@@ -14,6 +15,7 @@ import { createAccountsMock } from './retail-accounts-mock';
 import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
 import { createPurchasingMock } from './retail-purchasing-mock';
+import { barcodeKey, checkBarcode } from '../areas/staff/retail/barcode-state';
 import { MAX_VARIANTS, cleanOption, planVariants, variantDescription, variantKey, variantLabel } from './retail-variants';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
@@ -179,6 +181,10 @@ export function createMockRetail(): RetailApi {
   const categoryId = (name: string): string => cats.find((c) => c.name === name)?.id ?? '';
   const history = new Map<string, PriceChange[]>();
   const packs = new Map<string, Pack[]>();
+  // Barcodes of this mock instance (issue #345), by item; codes are unique across the items.
+  const barcodes = new Map<string, Barcode[]>();
+  let made = 0;
+  const barcodesOf = (id: string) => ((barcodes.get(id) ?? []).length > 0 ? { barcodes: barcodes.get(id) } : {});
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
   const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
   // Items with sizes and colours of this mock instance (issue #384): the item's own row; its variants are products.
@@ -194,7 +200,7 @@ export function createMockRetail(): RetailApi {
     return f ? { variant: { family_id: f.id, family_name: f.name, ...(p.size ? { size: p.size } : {}), ...(p.colour ? { colour: p.colour } : {}), position: p.position ?? 0 } } : {};
   };
   const asProduct = (p: MockProduct): Product =>
-    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1, ...variantOf(p), ...photoOf(p) }, { cost_minor: p.costMinor });
+    cost({ id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: p.active !== false, version: p.version ?? 1, ...variantOf(p), ...photoOf(p), ...barcodesOf(p.id) }, { cost_minor: p.costMinor });
   const clash = (list: { id: string; name: string }[], id: string, name: string, code: string, what: string) => {
     if (list.some((x) => x.id !== id && x.name.toLowerCase() === name.trim().toLowerCase())) refuse(409, code, `A ${what} with this name exists.`);
   };
@@ -394,7 +400,7 @@ export function createMockRetail(): RetailApi {
     listProducts: ({ query, branchId }) =>
       delay([...products.values()].filter((p) => p.active !== false && matches(p, query)).map((p): Product => {
         const row: Product = {
-          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: true, ...photoOf(p),
+          id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, unit_id: unitRows.find((u) => u.name === p.unit)?.id, sell_minor: p.sellMinor, currency: 'UGX', active: true, ...photoOf(p), ...barcodesOf(p.id),
         };
         if (branchId) {
           row.qty = fromMilli(bal(branchId, p.id));
@@ -644,6 +650,48 @@ export function createMockRetail(): RetailApi {
         packs.set(productId, rows.map((k) => (k.unit_id === unitId ? next : k)));
         return next;
       }),
+
+    findByBarcode: (code, branchId) =>
+      run(() => {
+        const key = barcodeKey(code);
+        for (const [id, list] of barcodes) {
+          const b = list.find((x) => barcodeKey(x.code ?? '') === key);
+          const p = b ? products.get(id) : undefined;
+          if (b && p && p.active !== false) {
+            const product = asProduct(p);
+            return { product: branchId ? { ...product, qty: fromMilli(bal(branchId, id)) } : product, barcode: b, ...(b.unit_id ? { unit_id: b.unit_id } : {}) };
+          }
+        }
+        return null;
+      }),
+
+    addBarcode: (productId, body) =>
+      run(() => {
+        const p = find(productId);
+        const checked = checkBarcode(body.code);
+        if (!checked.ok) refuse(422, 'validation_failed', checked.problem);
+        const code = body.code.trim();
+        if ([...barcodes.values()].flat().some((b) => barcodeKey(b.code ?? '') === barcodeKey(code))) refuse(409, 'barcode_taken', 'This barcode is on another item already.');
+        const row: Barcode = { id: nextId('bc'), product_id: p.id, code, format: checked.ok ? checked.format : 'code128', generated: false, ...(body.unit_id ? { unit_id: body.unit_id } : {}) };
+        barcodes.set(p.id, [...(barcodes.get(p.id) ?? []), row]);
+        return row;
+      }),
+
+    removeBarcode: (productId, barcodeId) =>
+      run(() => {
+        barcodes.set(productId, (barcodes.get(productId) ?? []).filter((b) => b.id !== barcodeId));
+      }),
+
+    generateBarcodes: (productIds) =>
+      run(() =>
+        [...new Set(productIds)].sort().map((id) => {
+          const own = (barcodes.get(id) ?? []).find((b) => b.generated);
+          if (own) return own;
+          const row: Barcode = { id: nextId('bc'), product_id: find(id).id, code: `IN${String((made += 1)).padStart(8, '0')}`, format: 'code128', generated: true };
+          barcodes.set(id, [...(barcodes.get(id) ?? []), row]);
+          return row;
+        }),
+      ),
 
     importProducts: (csv, dryRun) =>
       run(() => {

@@ -13,6 +13,10 @@ import type { components } from './schema';
 type S = components['schemas'];
 
 export type Product = S['RetailProduct'];
+/** A barcode of an item or one of its pack sizes (ADR-070, issue #345). */
+export type Barcode = S['RetailBarcode'];
+/** The active item a scanned barcode belongs to, and the pack it names (`unit_id`), if any. */
+export type BarcodeMatch = S['RetailBarcodeMatch'];
 /** A pack size of an item (units of measure, ADR-033): `factor` base units in one pack of `unit`, three places ("12.000"). */
 export type Pack = S['RetailPack'];
 export type StockRow = S['RetailStockRow'];
@@ -400,6 +404,12 @@ export interface RetailApi {
   updatePack(productId: string, unitId: string, version: number, body: { factor?: string; active?: boolean }): Promise<Pack>;
   /** The CSV item import: a dry run reports, an apply adds the rows that are fine (administrators only). */
   importProducts(csv: string, dryRun: boolean): Promise<ImportResult>;
+  /** Issue #345: the active item a scanned code belongs to, with the branch's balance when given; null for an unknown code. */
+  findByBarcode(code: string, branchId?: string, signal?: AbortSignal): Promise<BarcodeMatch | null>;
+  addBarcode(productId: string, body: { code: string; format?: string; unit_id?: string }): Promise<Barcode>;
+  removeBarcode(productId: string, barcodeId: string): Promise<void>;
+  /** A Code 128 label code for each item that has no made one yet; an item keeps the one it has. */
+  generateBarcodes(productIds: string[]): Promise<Barcode[]>;
   createCategory(name: string): Promise<Category>;
   updateCategory(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Category>;
   listUnits(): Promise<Unit[]>;
@@ -785,6 +795,31 @@ const realRetail: RetailApi = {
 
   async importProducts(csv, dryRun) {
     return unwrap(await api.POST('/api/v1/retail/products/import', { params: { query: { dry_run: dryRun } }, body: { csv } }));
+  },
+
+  async findByBarcode(code, branchId, signal) {
+    const result = await api.GET('/api/v1/retail/products/by-barcode/{code}', {
+      params: { path: { code }, query: { branch_id: branchId } },
+      signal,
+    });
+    if (result.response.status === 404 && problemOf(result.error).code === 'barcode_not_found') return null;
+    return unwrap(result);
+  },
+
+  async addBarcode(productId, body) {
+    return unwrap(await api.POST('/api/v1/retail/products/{product_id}/barcodes', { params: { path: { product_id: productId } }, body }));
+  },
+
+  async removeBarcode(productId, barcodeId) {
+    const result = await api.DELETE('/api/v1/retail/products/{product_id}/barcodes/{barcode_id}', {
+      params: { path: { product_id: productId, barcode_id: barcodeId } },
+    });
+    // 204 has no body, so unwrap is only for the refusal.
+    if (!result.response.ok) unwrap(result);
+  },
+
+  async generateBarcodes(productIds) {
+    return unwrap(await api.POST('/api/v1/retail/products/barcodes/generate', { body: { product_ids: productIds } })).items ?? [];
   },
 
   async createCategory(name) {

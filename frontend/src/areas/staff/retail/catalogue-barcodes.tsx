@@ -1,0 +1,109 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { retail, type Product } from '../../../api/retail';
+import { useStaff } from '../context';
+import { checkBarcode, code128Widths, formatName } from './barcode-state';
+import { UNITS, capabilityOn, holds } from './permissions';
+import { Problem } from './ui';
+import { activePacks } from './units-state';
+
+// The barcodes of an item on its edit form (ADR-070, issue #345; FR-RET-68): several per item, each for the item's own
+// unit or one of its pack sizes. The format is read from the code and its check digit checked here, as the server does.
+
+/** A Code 128 barcode of `text` as bars, black on white whatever the theme; read back by any scanner or the camera. */
+export function BarcodeSvg({ text }: { text: string }) {
+  const widths = code128Widths(text);
+  const quiet = 10;
+  const total = widths.reduce((a, b) => a + b, 0) + quiet * 2;
+  let x = quiet;
+  const bars = widths.map((w, i) => {
+    const at = x;
+    x += w;
+    return i % 2 === 0 ? <rect key={i} x={at} y={0} width={w} height={50} /> : null;
+  });
+  return (
+    <svg viewBox={`0 0 ${total} 50`} preserveAspectRatio="none" shapeRendering="crispEdges" role="img" aria-label={`Barcode ${text}`} fill="currentColor">
+      {bars}
+    </svg>
+  );
+}
+
+export function BarcodeEditor({ product }: { product: Product }) {
+  const { me } = useStaff();
+  const queryClient = useQueryClient();
+  const canManage = holds(me, 'retail.catalogue.manage');
+  const id = product.id ?? '';
+  const packs = capabilityOn(me, 'retail', UNITS) ? activePacks(product) : [];
+  const codes = useQuery({ queryKey: ['retail', 'barcodes', id], queryFn: () => retail.getProduct(id).then((p) => p.barcodes ?? []), initialData: product.barcodes ?? [] });
+  const [code, setCode] = useState('');
+  const [unitId, setUnitId] = useState('');
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ['retail'] });
+  const add = useMutation({
+    mutationFn: () => retail.addBarcode(id, { code: code.trim(), ...(unitId ? { unit_id: unitId } : {}) }),
+    onSuccess: () => {
+      setCode('');
+      refresh();
+    },
+  });
+  const remove = useMutation({ mutationFn: (barcodeId: string) => retail.removeBarcode(id, barcodeId), onSuccess: refresh });
+  const make = useMutation({ mutationFn: () => retail.generateBarcodes([id]), onSuccess: refresh });
+  const checked = code.trim() === '' ? null : checkBarcode(code);
+  const list = codes.data ?? [];
+  return (
+    <fieldset data-testid="barcode-editor" data-tour="item-barcodes" onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
+      <legend>Barcodes</legend>
+      <p className="hint">Scan the barcode on the item into the box, or type it. A scan when selling, restocking or counting then finds this item.</p>
+      {list.length === 0 && <p className="empty-state">No barcode yet.</p>}
+      <ul style={{ listStyle: 'none', padding: 0 }}>
+        {list.map((b) => (
+          <li key={b.id} className="rt-card rt-row">
+            <span>
+              <strong>{b.code}</strong> {formatName(b.format)}
+              {b.unit ? `, on the ${b.unit}` : ''}
+              {b.generated ? ', made for labels' : ''}
+            </span>
+            {canManage && (
+              <button type="button" className="btn-ghost" disabled={remove.isPending} onClick={() => remove.mutate(b.id ?? '')} aria-label={`Remove barcode ${b.code}`}>
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <Problem error={remove.error ?? make.error} />
+      {canManage && (
+        <>
+          <label htmlFor="barcode-new">Add a barcode</label>
+          <input
+            id="barcode-new"
+            autoComplete="off"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            aria-invalid={checked !== null && !checked.ok}
+            aria-describedby={checked !== null && !checked.ok ? 'barcode-problem' : undefined}
+          />
+          {checked !== null && !checked.ok && <p id="barcode-problem" className="rt-flag">{checked.problem}</p>}
+          {checked?.ok && <p className="hint">{formatName(checked.format)}</p>}
+          {packs.length > 0 && (
+            <>
+              <label htmlFor="barcode-unit">This barcode is on</label>
+              <select id="barcode-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+                <option value="">One {product.unit}</option>
+                {packs.map((k) => <option key={k.unit_id} value={k.unit_id}>One {k.unit}</option>)}
+              </select>
+            </>
+          )}
+          <Problem error={add.error} />
+          <button type="button" disabled={!checked?.ok || add.isPending} onClick={() => add.mutate()}>
+            {add.isPending ? 'Saving' : 'Add barcode'}
+          </button>
+          {!list.some((b) => b.generated) && (
+            <button type="button" className="btn-ghost" disabled={make.isPending} onClick={() => make.mutate()}>
+              {make.isPending ? 'Making' : 'Make a barcode for labels'}
+            </button>
+          )}
+        </>
+      )}
+    </fieldset>
+  );
+}

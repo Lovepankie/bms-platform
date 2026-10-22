@@ -15,7 +15,7 @@ export const ALL_SELLERS = 'retail.sale.all_sellers';
 
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'orders' | 'ordersReport' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'
-  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer'
+  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer' | 'labels'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
   // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed.
@@ -53,7 +53,7 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
 };
 
 /** The catalogue management screens (#146); the Catalogue tile opens when any of them may be used. */
-export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers'];
+export const CATALOGUE_SCREENS: RetailScreen[] = ['products', 'categories', 'units', 'suppliers', 'buyers', 'labels'];
 
 export const TRANSFER = 'retail.stock.transfer';
 /** Take, pack, send, deliver and cancel customer orders, and read their reports (issue #385). */
@@ -165,6 +165,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   buyers: ['retail.customer.manage', 'retail.sale.read'],
   // Importing items needs the catalogue permission; core.settings.manage is the administrator's (#146).
   importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
+  // Barcode labels (issue #345): making a code for an item is a catalogue change, so the catalogue permission.
+  labels: ['retail.catalogue.manage', 'retail.stock.read'],
   // The cash book screens each need the permission that records on them; the lists and reports on
   // them need retail.cashbook.read, and a void needs retail.cashbook.void (checked where it is offered).
   savings: [SAVINGS_RECORD, TILL],
@@ -361,6 +363,7 @@ export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: strin
   { screen: 'units', path: '/staff/retail/catalogue/units', label: 'Units', hint: 'Piece, roll, kilogram and so on' },
   { screen: 'suppliers', path: '/staff/retail/catalogue/suppliers', label: 'Suppliers', hint: 'Who you buy from' },
   { screen: 'buyers', path: '/staff/retail/catalogue/buyers', label: 'Credit buyers', hint: 'Who buys on credit' },
+  { screen: 'labels', path: '/staff/retail/catalogue/labels', label: 'Barcode labels', hint: 'Print labels with a barcode for your items' },
 ];
 
 /**

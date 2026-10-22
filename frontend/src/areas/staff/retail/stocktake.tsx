@@ -3,8 +3,10 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { NoResults, SearchBox } from '../../../app/ui/SearchBox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
-import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
-import { milliOf, parseCount, showQty } from './maths';
+import { retail, type Product, type Stocktake, type StocktakeLine } from '../../../api/retail';
+import { milliOf, parseCount, parseQty, showQty } from './maths';
+import { ScanBar } from './scan';
+import { plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
 import { needsOf } from './permissions';
@@ -75,6 +77,12 @@ function CountSheet({ branchId }: { branchId: string }) {
   const [draft, setDraft] = useState<Stocktake | null>(null);
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
 
+  // A scan (issue #345) counts one more of the item, or a whole pack when the barcode is on a pack.
+  const scanAdd = (p: Product, unitId?: string) => {
+    const pack = (p.packs ?? []).find((k) => k.unit_id === unitId && k.active !== false);
+    const id = p.id ?? '';
+    setCounts((c) => ({ ...c, [id]: plusOne(c[id], pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000) }));
+  };
   const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const review = useMutation({
@@ -107,6 +115,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       <div data-tour="count-search">
         <SearchBox id="count-search" label="Search by name, code or category" search={search} fetching={false} count={stock.data ? rows.length : undefined} />
       </div>
+      <ScanBar id="count-scan" branchId={branchId} onFound={scanAdd} />
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
       {stock.data && rows.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}

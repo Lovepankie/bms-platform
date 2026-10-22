@@ -167,6 +167,20 @@ export const importPage: Tour = {
   ],
 };
 
+export const labelsPage: Tour = {
+  id: 'page-labels',
+  version: 1,
+  title: 'This page: barcode labels',
+  audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
+  autoStart: false,
+  page: '/staff/retail/catalogue/labels',
+  steps: [
+    step({ id: 'pick', target: 'labels-pick', title: 'Choose the items', body: 'Find each item and tap Add. Set how many labels you want of each.' }),
+    step({ id: 'make', target: 'labels-make', title: 'Items without a barcode', body: 'An item with no barcode gets one made for it when you tap Make the labels. A scan then finds it.' }),
+    step({ id: 'print', target: 'labels-print', title: 'Print', body: 'Tap Print and choose A4. The sheet has 24 labels, each with the name, the price and the barcode.' }),
+  ],
+};
+
 export const bankingPage: Tour = {
   id: 'page-banking',
   version: 1,
@@ -333,7 +347,7 @@ export const customerAgeingPage: Tour = {
 };
 
 export const RETAIL_CASH_TOURS: readonly Tour[] = [
-  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, unitsPage, suppliersPage, buyersPage, importPage,
+  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, unitsPage, suppliersPage, buyersPage, importPage, labelsPage,
   bankingPage, bankingReportPage, expensesPage, expensesReportPage, expenseListsPage, withdrawalsPage, advancesPage, cashSummaryPage, savingsPage,
   branchRolesPage, customerGroupsPage, customerAgeingPage,
 ];

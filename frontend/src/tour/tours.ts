@@ -385,7 +385,8 @@ export const retailSales: Tour = {
   // Version 10 words the Save step for Share receipt and WhatsApp customer (issue #439): send the receipt from your phone.
   // Version 11 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
   // Version 12 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
-  version: 12,
+  // Version 13 adds the Scan step (issue #345): a barcode scanner, a typed barcode or the phone camera adds the item.
+  version: 13,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -412,6 +413,15 @@ export const retailSales: Tour = {
       optional: true,
       title: 'Find the item',
       body: 'Type part of the name or code, then tap Add.',
+    },
+    {
+      id: 'sale-scan',
+      route: '/staff/retail/sale',
+      target: 'scan-bar',
+      module: 'retail',
+      optional: true,
+      title: 'Scan the barcode',
+      body: 'With a barcode scanner, just scan: the item is added, and scanning it again adds one more. You can also type the barcode and press Enter, or tap Scan to use the phone camera.',
     },
     {
       id: 'sale-payment',

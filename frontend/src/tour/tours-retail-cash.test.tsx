@@ -6,6 +6,7 @@ import { BankingReportScreen, BankingScreen } from '../areas/staff/retail/bankin
 import { BranchRoles } from '../areas/staff/retail/branch-roles';
 import { CashSummary } from '../areas/staff/retail/cash-summary';
 import { ImportPage } from '../areas/staff/retail/catalogue-import';
+import { LabelsPage } from '../areas/staff/retail/labels';
 import { CategoriesPage, UnitsPage } from '../areas/staff/retail/catalogue-lists';
 import { BuyersPage, SuppliersPage } from '../areas/staff/retail/catalogue-people';
 import { ProductsPage } from '../areas/staff/retail/catalogue-products';
@@ -39,6 +40,7 @@ function screen(path: string): ReactElement {
     case '/staff/retail/catalogue/suppliers': return <SuppliersPage />;
     case '/staff/retail/catalogue/buyers': return <BuyersPage />;
     case '/staff/retail/catalogue/import': return <ImportPage />;
+    case '/staff/retail/catalogue/labels': return <LabelsPage />;
     case '/staff/retail/banking': return <BankingScreen />;
     case '/staff/retail/banking-report': return <BankingReportScreen />;
     case '/staff/retail/expenses': return <ExpensesScreen />;
@@ -68,6 +70,7 @@ describeTours(
     'page-suppliers': [ADMIN],
     'page-buyers': [ADMIN],
     'page-import': [ADMIN],
+    'page-labels': [ADMIN],
     'page-banking': [ADMIN, SELLER],
     'page-banking-report': [ADMIN, SELLER],
     'page-expenses': [ADMIN, SELLER],
