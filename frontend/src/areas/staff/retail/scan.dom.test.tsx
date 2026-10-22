@@ -193,6 +193,23 @@ describe('FR-RET-68 scanning on the move stock form', () => {
   });
 });
 
+describe('FR-RET-68 scanning a pack on the move stock form', () => {
+  it('adds the pack factor in the base unit for a barcode on a pack', async () => {
+    const ROLL = '00000000-0000-4000-8000-0000000d0001';
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    await retail.addBarcode(LAMP, { code: EAN });
+    screenOf(<TransferForm fromBranchId={BRANCH} />);
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('10'));
+    wedge(EAN);
+    await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('11'));
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('21'));
+    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(1);
+  });
+});
+
 describe('FR-RET-68 the label sheet', () => {
   it('makes a code for an item without one and draws a barcode on each label', async () => {
     screenOf(<LabelsPage />);

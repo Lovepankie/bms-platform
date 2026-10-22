@@ -6,13 +6,14 @@ import { branchLabel } from '../../../auth/branch';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { ToStock } from './analytics-ui';
-import { showQty } from './maths';
+import { parseQty, showQty } from './maths';
 import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
 import { TRANSFER, TRANSFER_RECEIPT, capabilityOn, holdsAt, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 import { ScanBar } from './scan';
 import { plusOne, scanInto } from './barcode-state';
+import { chosenPack } from './units-state';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -58,9 +59,13 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   const update = (patch: Partial<TransferDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
-  // A scan (issue #345): the item at 1, or one more on its line; a move is counted in the item's own unit.
-  const scanAdd = (p: Product) =>
-    setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, undefined, (l) => ({ ...l, qty: plusOne(l.qty) }), () => ({ product: p, qty: '1' })) }));
+  // A scan (issue #345): the item at 1, or one more on its line; a move is counted in the item's own unit, so a barcode
+  // on a pack adds the pack's factor (a carton of 12 adds 12).
+  const scanAdd = (p: Product, unitId?: string) => {
+    const pack = chosenPack(p, unitId);
+    const step = pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000;
+    setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, undefined, (l) => ({ ...l, qty: plusOne(l.qty, step) }), () => ({ product: p, qty: plusOne('', step) })) }));
+  };
   // Memoised so the prefill effect below does not run again on every render.
   const destinations = useMemo(
     () => (me.branches ?? []).filter((b) => b.id !== fromBranchId && b.stocks_goods !== false),
