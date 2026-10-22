@@ -1475,12 +1475,14 @@ class MigrationOrderIT {
                 .as("the existing tables keep their shape")
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
-        // account one and V83 (collections, #266) the two collection list ones, which are not V48's to answer for.
+        // account one, V83 (collections, #266) the two collection list ones and V94 (download my data, #334) its own,
+        // which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
-                                        + " 'lending.members.contact', 'lending.collections.all_officers')")
+                                        + " 'lending.members.contact', 'lending.collections.all_officers',"
+                                        + " 'core.data_export.run')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")

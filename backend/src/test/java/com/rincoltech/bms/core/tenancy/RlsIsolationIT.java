@@ -984,6 +984,15 @@ class RlsIsolationIT {
                         INSERT INTO feedback_items (id, tenant_id, sender_user_id, kind, message, app_version)
                         VALUES (?, ?, ?, 'idea', 'Test feedback message', 'test (abc123)')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // Download my data (migration V94, #334): the weekly email switch, and a week skipped for want of an Owner.
+        owner.sql("""
+                        INSERT INTO data_export_settings (id, tenant_id, weekly_email, updated_by)
+                        VALUES (?, ?, false, ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        owner.sql("""
+                        INSERT INTO data_export_weekly (id, tenant_id, week_of, status, reason, finished_at)
+                        VALUES (?, ?, DATE '2026-10-05', 'skipped', 'no_owner_email', now())
+                        """).params(UUID.randomUUID(), t.tenantId()).update();
     }
 
     /**
