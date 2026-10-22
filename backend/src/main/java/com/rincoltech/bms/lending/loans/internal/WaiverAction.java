@@ -53,6 +53,14 @@ class WaiverAction implements ApprovalAction {
         return true;
     }
 
+    /** The loan's own officer may not decide a waiver on it (they collect from the borrower). */
+    @Override
+    public java.util.Set<UUID> conflictedDeciders(UUID subjectId, java.util.Map<String, Object> payload) {
+        return loans.find(subjectId)
+                .map(l -> java.util.Set.of(l.officerUserId()))
+                .orElse(java.util.Set.of());
+    }
+
     @Override
     public Optional<Integer> subjectVersion(UUID subjectId) {
         return loans.find(subjectId).map(Loan::version);

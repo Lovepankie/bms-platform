@@ -427,6 +427,12 @@ class ServicingRepository {
                           JOIN lending_loan_charges c ON c.id = x.charge_id
                           JOIN lending_schedule_items s ON s.id = c.schedule_item_id
                          WHERE x.loan_id = ?
+                        UNION ALL
+                        SELECT s.item_no, w.business_date, w.created_at, w.amount_minor, 'WAIVED'
+                          FROM lending_charge_waivers w
+                          JOIN lending_loan_charges c ON c.id = w.charge_id
+                          JOIN lending_schedule_items s ON s.id = c.schedule_item_id
+                         WHERE w.loan_id = ?
                          ORDER BY 2, 3, 1
                         """)
                 .params(loanId, loanId, loanId)
@@ -450,11 +456,11 @@ class ServicingRepository {
             LocalDate businessDate,
             long amountMinor,
             long waivedMinor,
-            boolean cancelled) {}
+            long cancelledMinor) {}
 
     private static final String CHARGE = """
             SELECT c.id, c.loan_id, c.schedule_item_id, s.item_no, c.charge_type, c.period_no, c.business_date,
-                   c.amount_minor, c.waived_minor, c.cancelled_on IS NOT NULL
+                   c.amount_minor, c.waived_minor, c.cancelled_minor
               FROM lending_loan_charges c
               JOIN lending_schedule_items s ON s.id = c.schedule_item_id
             """;
@@ -470,7 +476,7 @@ class ServicingRepository {
                 rs.getObject(7, LocalDate.class),
                 rs.getLong(8),
                 rs.getLong(9),
-                rs.getBoolean(10));
+                rs.getLong(10));
     }
 
     Optional<Charge> charge(UUID chargeId) {
@@ -488,9 +494,9 @@ class ServicingRepository {
                 .single();
     }
 
-    /** The loan's standing charges, oldest first; a cancelled one is owed by no one and shows on the statement only. */
+    /** The loan's charges with something standing, oldest first; one cancelled in full shows on the statement only. */
     List<Charge> charges(UUID loanId) {
-        return jdbc.sql(CHARGE + " WHERE c.loan_id = ? AND c.cancelled_on IS NULL"
+        return jdbc.sql(CHARGE + " WHERE c.loan_id = ? AND c.amount_minor > c.cancelled_minor"
                         + " ORDER BY c.business_date, s.item_no, c.period_no")
                 .param(loanId)
                 .query(ServicingRepository::charge)

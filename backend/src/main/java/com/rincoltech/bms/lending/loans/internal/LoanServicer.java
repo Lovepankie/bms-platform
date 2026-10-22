@@ -900,18 +900,16 @@ class LoanServicer implements LoanServicing {
         if (!charge.loanId().equals(loan.id())) {
             throw ApiException.notFound();
         }
-        if (!charge.chargeType().equals("penalty")) {
+        if (!charge.chargeType().startsWith("penalty")) {
             throw ApiException.rule("not_waivable", "Only a penalty can be waived on this route.");
-        }
-        if (charge.cancelled()) {
-            return 0;
         }
         long unpaid = items.stream()
                 .filter(i -> i.id.equals(charge.itemId()))
                 .findFirst()
                 .orElseThrow()
                 .unpaid("penalty");
-        return Math.max(0, Math.min(charge.amountMinor() - charge.waivedMinor(), unpaid));
+        // What stands of this charge: less what was waived on it and what a back-dated payment cancelled.
+        return Math.max(0, Math.min(charge.amountMinor() - charge.waivedMinor() - charge.cancelledMinor(), unpaid));
     }
 
     /** The checks of a waiver request, run again at execution: the amount, all that is waivable when null. */
@@ -945,6 +943,7 @@ class LoanServicer implements LoanServicing {
         List<Item> items = repo.items(loan.id());
         for (Item i : items) {
             if (i.id.equals(charge.itemId())) {
+                // The dated charges were read after the waiver was recorded, so they are already net of it.
                 i.penaltiesWaived += amount;
             }
         }

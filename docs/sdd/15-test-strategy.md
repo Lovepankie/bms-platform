@@ -397,7 +397,9 @@ refuses more than is left, waives the rest without an amount, closes the loan on
 reverses a payment made after two waivers without undoing them. After the review of #271 it also checks that the maker's
 own decision is refused as `self_approval_forbidden`, that waivers split under the threshold reach a
 checker once their total passes it, and that a waiver is refused on a written-off loan and not found
-from another branch.
+from another branch. The second review added: a partly waived penalty still cancelled by a
+back-dated repayment (3,500 of 4,000), a waiver of a later penalty that never blocks paying an earlier
+one, the checker seeing the waiver's own amount, and the loan's officer refused as a decider.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

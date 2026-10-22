@@ -181,6 +181,7 @@ class ServicingService {
                             loan.branchId(),
                             loan.id(),
                             loan.version(),
+                            amount,
                             cumulative,
                             loan.currency(),
                             payload));
@@ -203,7 +204,7 @@ class ServicingService {
                         c.businessDate(),
                         c.amountMinor(),
                         c.waivedMinor(),
-                        active && c.chargeType().equals("penalty") ? servicer.waivable(loan, c, items) : 0))
+                        active && c.chargeType().startsWith("penalty") ? servicer.waivable(loan, c, items) : 0))
                 .toList());
     }
 

@@ -703,7 +703,12 @@ loan when nothing else is owed. Waivers of fees and of interest by the accountan
 the route of chapter 7 names a charge, and fees and interest on the schedule are not charges, so
 they need a route of their own (an open question on #265). The loan is locked before the charge is read; a
 charge cancelled by a back-dated repayment is not listed and cannot be waived; the charges list reads
-the loan's items once (migration V81).
+the loan's items once (migration V81). After the second review: a waiver is netted against its own
+charge (a waiver of a later penalty never hides an earlier one from a payment); a back-dated repayment
+cancels the unwaived rest of a partly waived charge; the approval request shows the waiver's own amount
+while the threshold weighs the loan's running total; the loan's own officer may not decide its waiver
+(`approver_conflict`); and one waiver at a time waits on a loan: a second request while one is pending
+is refused as `approval_already_pending` (409), the checker decides the first.
 
 ## 3.22 Closure, write-off and restructure (LCL)
 
