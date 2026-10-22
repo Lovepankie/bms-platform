@@ -449,11 +449,12 @@ class ServicingRepository {
             Integer periodNo,
             LocalDate businessDate,
             long amountMinor,
-            long waivedMinor) {}
+            long waivedMinor,
+            boolean cancelled) {}
 
     private static final String CHARGE = """
             SELECT c.id, c.loan_id, c.schedule_item_id, s.item_no, c.charge_type, c.period_no, c.business_date,
-                   c.amount_minor, c.waived_minor
+                   c.amount_minor, c.waived_minor, c.cancelled_on IS NOT NULL
               FROM lending_loan_charges c
               JOIN lending_schedule_items s ON s.id = c.schedule_item_id
             """;
@@ -468,7 +469,8 @@ class ServicingRepository {
                 rs.getObject(6, Integer.class),
                 rs.getObject(7, LocalDate.class),
                 rs.getLong(8),
-                rs.getLong(9));
+                rs.getLong(9),
+                rs.getBoolean(10));
     }
 
     Optional<Charge> charge(UUID chargeId) {
@@ -478,9 +480,18 @@ class ServicingRepository {
                 .optional();
     }
 
-    /** The loan's charges, oldest first. */
+    /** Everything waived on the loan so far, for the waiver threshold (FR-APR-04). */
+    long waivedOnLoan(UUID loanId) {
+        return jdbc.sql("SELECT coalesce(sum(amount_minor), 0) FROM lending_charge_waivers WHERE loan_id = ?")
+                .param(loanId)
+                .query(Long.class)
+                .single();
+    }
+
+    /** The loan's standing charges, oldest first; a cancelled one is owed by no one and shows on the statement only. */
     List<Charge> charges(UUID loanId) {
-        return jdbc.sql(CHARGE + " WHERE c.loan_id = ? ORDER BY c.business_date, s.item_no, c.period_no")
+        return jdbc.sql(CHARGE + " WHERE c.loan_id = ? AND c.cancelled_on IS NULL"
+                        + " ORDER BY c.business_date, s.item_no, c.period_no")
                 .param(loanId)
                 .query(ServicingRepository::charge)
                 .list();

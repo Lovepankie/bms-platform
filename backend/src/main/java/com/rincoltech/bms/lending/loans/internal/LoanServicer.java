@@ -888,6 +888,14 @@ class LoanServicer implements LoanServicing {
      * loan that is not active or a charge that is not a penalty of this loan.
      */
     long waivable(Loan loan, ServicingRepository.Charge charge) {
+        return waivable(loan, charge, repo.items(loan.id()));
+    }
+
+    /**
+     * What a waiver may still take off {@code charge}, with the loan's items read once by the caller (the charges list
+     * reads them once for every charge, the review of #271). A cancelled charge is owed by no one: nothing to waive.
+     */
+    long waivable(Loan loan, ServicingRepository.Charge charge, List<Item> items) {
         requireStatus(loan, Set.of("active"));
         if (!charge.loanId().equals(loan.id())) {
             throw ApiException.notFound();
@@ -895,7 +903,10 @@ class LoanServicer implements LoanServicing {
         if (!charge.chargeType().equals("penalty")) {
             throw ApiException.rule("not_waivable", "Only a penalty can be waived on this route.");
         }
-        long unpaid = repo.items(loan.id()).stream()
+        if (charge.cancelled()) {
+            return 0;
+        }
+        long unpaid = items.stream()
                 .filter(i -> i.id.equals(charge.itemId()))
                 .findFirst()
                 .orElseThrow()
@@ -922,8 +933,11 @@ class LoanServicer implements LoanServicing {
      * closes the loan.
      */
     void waive(UUID chargeId, long amountMinor, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+        // The loan is locked before the charge is read, so what is checked is what is waived (the review of #271).
+        UUID loanId =
+                repo.charge(chargeId).map(ServicingRepository.Charge::loanId).orElseThrow(ApiException::notFound);
+        Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
         ServicingRepository.Charge charge = repo.charge(chargeId).orElseThrow(ApiException::notFound);
-        Loan loan = loans.lock(charge.loanId()).orElseThrow(ApiException::notFound);
         long amount = checkWaiver(loan, charge, amountMinor);
         LocalDate today = today();
         UUID waiverId = UUID.randomUUID();

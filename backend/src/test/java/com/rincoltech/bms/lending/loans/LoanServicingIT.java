@@ -2538,9 +2538,9 @@ class LoanServicingIT extends LoanFixtures {
         ResponseEntity<JsonNode> r = requestWaiver(loan, first, 1_500L);
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
         String approval = r.getBody().get("approval_request_id").asString();
-        assertThat(decide(approval, manager, managerPerms).getStatusCode())
-                .as("the maker never approves")
-                .isNotEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> self = decide(approval, manager, managerPerms);
+        assertThat(self.getStatusCode()).as("the maker never approves").isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(self.getBody().get("code").asString()).isEqualTo("self_approval_forbidden");
         assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
                 .as("nothing changes before the checker")
                 .isEqualTo(10_000);
@@ -2881,6 +2881,68 @@ class LoanServicingIT extends LoanFixtures {
         } finally {
             pool.shutdownNow();
         }
+    /**
+     * The review of #271: the waiver threshold weighs everything already waived on the loan with the request, so a
+     * waiver split into requests each under the threshold still reaches a checker once the total passes it.
+     */
+    @Test
+    void frArr04_splitWaiversCannotAvoidTheChecker() {
+        TestDatabase.owner()
+                .sql("INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (?, ?,"
+                        + " '{\"approval_thresholds_minor\": {\"charge_waiver\": 5000}}')")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        String loan = approved(dailyPenaltyProduct("WAIVESPLIT"), 1_200_000, 3, 93);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        JsonNode charges = get(loan, "/charges").get("items");
+        for (int i = 0; i < 2; i++) {
+            ResponseEntity<JsonNode> r =
+                    requestWaiver(loan, charges.get(i).get("id").asString(), null);
+            assertThat(r.getStatusCode().is2xxSuccessful())
+                    .as("%s", r.getBody())
+                    .isTrue();
+            assertThat(r.getBody().get("executed").asBoolean())
+                    .as("%s waived in all, under the threshold", 2_000 * (i + 1))
+                    .isTrue();
+        }
+        ResponseEntity<JsonNode> third =
+                requestWaiver(loan, charges.get(2).get("id").asString(), null);
+        assertThat(third.getStatusCode()).as("%s", third.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(third.getBody().get("executed").asBoolean())
+                .as("6,000 waived in all would pass the threshold")
+                .isFalse();
+        assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
+                .isEqualTo(6_000);
+    }
+
+    /** The review of #271: a waiver is refused on a written-off loan and is not found from another branch. */
+    @Test
+    void frArr04_noWaiverOnAWrittenOffLoanOrFromAnotherBranch() {
+        String loan = approved(dailyPenaltyProduct("WAIVENOT"), 1_200_000, 3, 92);
+        disburse(loan, today.minusMonths(1).minusDays(5));
+        runArrears();
+        String charge = get(loan, "/charges").get("items").get(0).get("id").asString();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("reason", "Test goodwill");
+        ResponseEntity<JsonNode> elsewhere = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/charges/" + charge + "/waive",
+                withKey(as(manager, managerPerms, t.secondBranch().toString(), null), key()),
+                body);
+        assertThat(elsewhere.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+
+        ResponseEntity<JsonNode> w = send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/write-off",
+                withKey(as(accountant, accountantPerms, "*", null), key()),
+                Map.of("reason", "Test borrower unreachable"));
+        assertThat(w.getStatusCode()).as("%s", w.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        ResponseEntity<JsonNode> d =
+                decide(w.getBody().get("approval_request_id").asString(), admin, adminPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(requestWaiver(loan, charge, null).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     /**

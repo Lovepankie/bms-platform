@@ -9,6 +9,7 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.lending.loans.internal.LoanRepository.Loan;
+import com.rincoltech.bms.lending.loans.internal.Servicing.Item;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Quote;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ActionOutcome;
 import com.rincoltech.bms.lending.loans.internal.ServicingApi.ChargeList;
@@ -167,6 +168,10 @@ class ServicingService {
                     Loan loan = lock(id, "lending.charges.waive_request");
                     ServicingRepository.Charge charge = repo.charge(chargeId).orElseThrow(ApiException::notFound);
                     long amount = servicer.checkWaiver(loan, charge, r.amountMinor());
+                    // The threshold is weighed against everything waived on the loan with this one, so a large waiver
+                    // cannot be split into requests each under it to avoid the checker (the review of #271, as the
+                    // retail returns do).
+                    long cumulative = Math.addExact(repo.waivedOnLoan(loan.id()), amount);
                     Map<String, Object> payload = new LinkedHashMap<>();
                     payload.put(WaiverAction.CHARGE, charge.id().toString());
                     payload.put(WaiverAction.AMOUNT, amount);
@@ -176,7 +181,7 @@ class ServicingService {
                             loan.branchId(),
                             loan.id(),
                             loan.version(),
-                            amount,
+                            cumulative,
                             loan.currency(),
                             payload));
                     return outcome(id, o);
@@ -188,6 +193,7 @@ class ServicingService {
     ChargeList charges(UUID id) {
         Loan loan = inScope(id);
         boolean active = loan.status().equals("active");
+        List<Item> items = active ? repo.items(id) : List.of();
         return new ChargeList(repo.charges(id).stream()
                 .map(c -> new ChargeRow(
                         c.id(),
@@ -197,7 +203,7 @@ class ServicingService {
                         c.businessDate(),
                         c.amountMinor(),
                         c.waivedMinor(),
-                        active && c.chargeType().equals("penalty") ? servicer.waivable(loan, c) : 0))
+                        active && c.chargeType().equals("penalty") ? servicer.waivable(loan, c, items) : 0))
                 .toList());
     }
 

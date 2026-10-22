@@ -394,7 +394,10 @@ payments of that day by when it was recorded, and counts it only for the later r
 `LoanServicingIT` waives part of a penalty through maker and checker (the maker cannot approve,
 nothing changes before the checker, nothing is posted, the statement shows it and reconciles),
 refuses more than is left, waives the rest without an amount, closes the loan on payoff, and
-reverses a payment made after two waivers without undoing them.
+reverses a payment made after two waivers without undoing them. After the review of #271 it also checks that the maker's
+own decision is refused as `self_approval_forbidden`, that waivers split under the threshold reach a
+checker once their total passes it, and that a waiver is refused on a written-off loan and not found
+from another branch.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
 of the quality bar before a template change is merged.

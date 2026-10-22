@@ -693,14 +693,17 @@ this run. FR-ARR-04 is T2 (#265).
 
 Built in increment 6 T2 (#265): FR-ARR-04 for penalties. A user with
 `lending.charges.waive_request` requests a waiver of all or part of one penalty charge with a
-reason (`charge_waiver`, the tenant threshold applies); the checker holds
+reason (`charge_waiver`; the tenant threshold is weighed against everything already waived on the
+loan plus this request, so a waiver split into small requests still reaches a checker); the checker holds
 `lending.charges.waive_approve`. At most the charge's unwaived amount, and never more than the
 item's unpaid penalties, can be waived (`waiver_exceeds_charge`, `nothing_to_waive`). The approved
 waiver is a dated `lending_charge_waivers` row, taken off the item's penalties as `waived`, posted
 nowhere, shown on the statement on its date, kept by a reversal's replay (ADR-026), and closes the
 loan when nothing else is owed. Waivers of fees and of interest by the accountant are not built:
 the route of chapter 7 names a charge, and fees and interest on the schedule are not charges, so
-they need a route of their own (an open question on #265).
+they need a route of their own (an open question on #265). The loan is locked before the charge is read; a
+charge cancelled by a back-dated repayment is not listed and cannot be waived; the charges list reads
+the loan's items once (migration V81).
 
 ## 3.22 Closure, write-off and restructure (LCL)
 
