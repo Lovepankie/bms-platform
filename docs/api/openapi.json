@@ -576,6 +576,9 @@
             },
             "type" : "array"
           },
+          "referred_by" : {
+            "$ref" : "#/components/schemas/ApplicationReferrer"
+          },
           "suggested_slug" : {
             "description" : "A free slug from the business name (FR-TEN-02); editable at Activate",
             "type" : "string"
@@ -610,6 +613,24 @@
           }
         },
         "required" : [ "note" ]
+      },
+      "ApplicationReferrer" : {
+        "description" : "The business whose referral code the applicant brought",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant_name" : {
+            "type" : "string"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          }
+        }
       },
       "Approval" : {
         "properties" : {
@@ -5787,6 +5808,55 @@
         },
         "required" : [ "code", "mfa_token" ]
       },
+      "MyReferral" : {
+        "description" : "A business this business referred: its name, when it joined, never more",
+        "properties" : {
+          "joined_at" : {
+            "description" : "When the business was created, or the application sent",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "referred_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "applied, active, paying or ended",
+            "type" : "string"
+          },
+          "totals" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReferralTotal"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "MyReferrals" : {
+        "properties" : {
+          "code" : {
+            "description" : "The business's referral code",
+            "type" : "string"
+          },
+          "items" : {
+            "description" : "Newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/MyReferral"
+            },
+            "type" : "array"
+          },
+          "link" : {
+            "description" : "The public sign-up with the code filled in",
+            "type" : "string"
+          },
+          "totals" : {
+            "description" : "Every referral together, one row per currency",
+            "items" : {
+              "$ref" : "#/components/schemas/ReferralTotal"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "NextOfKin" : {
         "properties" : {
           "created_at" : {
@@ -6479,6 +6549,107 @@
         },
         "required" : [ "reason" ]
       },
+      "PlatformReferral" : {
+        "description" : "The current referral of the business, or null when it has no referrer",
+        "properties" : {
+          "application_id" : {
+            "description" : "The sign-up application, while it is open or when the referral came from one",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "ended_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "joined_at" : {
+            "description" : "When the business was created, or the application sent",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "referral_id" : {
+            "description" : "Null for an application not activated yet",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "referred_name" : {
+            "type" : "string"
+          },
+          "referred_slug" : {
+            "type" : "string"
+          },
+          "referred_tenant_id" : {
+            "description" : "Null while the referred business is an application",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "referrer_name" : {
+            "type" : "string"
+          },
+          "referrer_slug" : {
+            "type" : "string"
+          },
+          "referrer_tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rule_override" : {
+            "description" : "True when the operator set a rule for this referral",
+            "type" : "boolean"
+          },
+          "source" : {
+            "description" : "sign_up or operator",
+            "type" : "string"
+          },
+          "started_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "applied, active, paying or ended",
+            "type" : "string"
+          },
+          "totals" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ReferralTotal"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "PlatformReferralDetail" : {
+        "properties" : {
+          "lines" : {
+            "description" : "Oldest first",
+            "items" : {
+              "$ref" : "#/components/schemas/ReferralCommissionLine"
+            },
+            "type" : "array"
+          },
+          "referral" : {
+            "$ref" : "#/components/schemas/PlatformReferral"
+          },
+          "rule_in_force" : {
+            "$ref" : "#/components/schemas/ReferralCommissionRule"
+          },
+          "rule_source" : {
+            "description" : "override, default or none",
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformReferralList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformReferral"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "PlatformSignInResetLink" : {
         "description" : "Shown once to the operator, who hands it to the tenant admin",
         "properties" : {
@@ -6804,6 +6975,261 @@
           }
         },
         "required" : [ "code" ]
+      },
+      "ReferralCommissionLine" : {
+        "description" : "Oldest first",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "payment (worked out from a rule), manual (typed) or reversal",
+            "type" : "string"
+          },
+          "months_counted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "note" : {
+            "type" : "string"
+          },
+          "paid_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "paid_by_name" : {
+            "type" : "string"
+          },
+          "paid_method" : {
+            "type" : "string"
+          },
+          "paid_note" : {
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "paid_reference" : {
+            "type" : "string"
+          },
+          "payment_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reversed_by_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "reverses_line_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "rule_snapshot" : {
+            "additionalProperties" : {
+              "description" : "The rule as it was when the line was worked out, and the payment it was applied to",
+              "type" : "object"
+            },
+            "description" : "The rule as it was when the line was worked out, and the payment it was applied to",
+            "type" : "object"
+          }
+        }
+      },
+      "ReferralCommissionRule" : {
+        "description" : "The rule a payment recorded now would use, or null",
+        "properties" : {
+          "amount_minor" : {
+            "description" : "Minor units: once (fixed_first_payment) or per paid month (fixed_per_month)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cap_minor" : {
+            "description" : "The most a referral earns under a percent rule, in currency; null: no cap",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "percent_of_payment, fixed_first_payment or fixed_per_month",
+            "type" : "string"
+          },
+          "months" : {
+            "description" : "The first paid months of the referred business it applies to; null: no end",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "percent_bp" : {
+            "description" : "Basis points of each payment: 1000 is 10%",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ReferralDefaultRule" : {
+        "properties" : {
+          "rule" : {
+            "$ref" : "#/components/schemas/ReferralCommissionRule"
+          }
+        }
+      },
+      "ReferralLinePaidRequest" : {
+        "description" : "The commission was paid outside the app; this records it",
+        "properties" : {
+          "method" : {
+            "minLength" : 1,
+            "pattern" : "mtn_momo|airtel_money|bank_transfer|cash|other",
+            "type" : "string"
+          },
+          "note" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "reference" : {
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "method", "paid_on", "reason" ]
+      },
+      "ReferralLineRequest" : {
+        "description" : "A commission the operator works out and types",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "currency" : {
+            "minLength" : 1,
+            "pattern" : "^[A-Za-z]{3}$",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept on the line and in the audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "currency", "reason" ]
+      },
+      "ReferralLineReverseRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "ReferralRuleBody" : {
+        "description" : "The rule; null clears it (the default: nothing is worked out; a referral: the default)",
+        "properties" : {
+          "amount_minor" : {
+            "description" : "The fixed amount in minor units",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cap_minor" : {
+            "description" : "percent_of_payment: the most one referral earns; null: no cap",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "pattern" : "^[A-Za-z]{3}$",
+            "type" : "string"
+          },
+          "kind" : {
+            "minLength" : 1,
+            "pattern" : "percent_of_payment|fixed_first_payment|fixed_per_month",
+            "type" : "string"
+          },
+          "months" : {
+            "description" : "The first paid months it applies to; null: no end",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "percent_bp" : {
+            "description" : "percent_of_payment: basis points, 1000 is 10%",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "kind" ]
+      },
+      "ReferralRuleRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "rule" : {
+            "$ref" : "#/components/schemas/ReferralRuleBody"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "ReferralTotal" : {
+        "description" : "One currency: everything earned, what was marked paid, and the rest",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "earned_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
       },
       "RelatedMember" : {
         "properties" : {
@@ -19631,6 +20057,12 @@
             "minItems" : 0,
             "type" : "array"
           },
+          "referral_code" : {
+            "description" : "Optional: the referral code of the business that referred the applicant (the ?ref= of its link). An unknown code is 422 referral_code_unknown (ADR-069)",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "term" : {
             "minLength" : 1,
             "pattern" : "monthly|annual",
@@ -20393,6 +20825,34 @@
           }
         },
         "required" : [ "plan_code", "reason" ]
+      },
+      "TenantReferrer" : {
+        "properties" : {
+          "referral" : {
+            "$ref" : "#/components/schemas/PlatformReferral"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "TenantReferrerRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "referrer_code" : {
+            "description" : "The referral code of the business that referred this one; null or empty clears it",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
       },
       "TenantSettings" : {
         "properties" : {
@@ -28583,6 +29043,332 @@
         "tags" : [ "platform" ]
       }
     },
+    "/api/v1/platform/referrals" : {
+      "get" : {
+        "operationId" : "platformListReferrals",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "referrer_tenant_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "commission",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformReferralList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Referrals across the platform and open applications with a code, newest first; filters: referrer_tenant_id, status (applied, active, paying, ended), commission (due, paid)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/commissions/{line_id}/paid" : {
+      "post" : {
+        "operationId" : "platformMarkReferralCommissionPaid",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "line_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReferralLinePaidRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformReferralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that one commission line was paid (date, method, reference, note), with a reason; the app never pays; 409 commission_already_paid",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/commissions/{line_id}/reverse" : {
+      "post" : {
+        "operationId" : "platformReverseReferralCommission",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "line_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReferralLineReverseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformReferralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reverse one commission line with a reason (lines are never deleted); 409 commission_line_already_reversed, 422 commission_line_is_reversal",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/default-rule" : {
+      "get" : {
+        "operationId" : "platformGetReferralDefaultRule",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferralDefaultRule"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The platform default commission rule, or null",
+        "tags" : [ "platform" ]
+      },
+      "put" : {
+        "operationId" : "platformSetReferralDefaultRule",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReferralRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferralDefaultRule"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set or clear the platform default commission rule, with a reason; it applies to payments recorded from now on",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/export" : {
+      "get" : {
+        "operationId" : "platformExportReferrals",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "referrer_tenant_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "commission",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/csv" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The same referrals as CSV, one row per referral and currency, at most 10,000; audited",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/{referral_id}" : {
+      "get" : {
+        "operationId" : "platformGetReferral",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "referral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformReferralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One referral, the rule a payment recorded now would use, and its commission lines",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/{referral_id}/commissions" : {
+      "post" : {
+        "operationId" : "platformAddReferralCommission",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "referral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReferralLineRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformReferralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Add a commission line with an amount the operator typed, with a reason",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/referrals/{referral_id}/rule" : {
+      "put" : {
+        "operationId" : "platformSetReferralRule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "referral_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReferralRuleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformReferralDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/sign-up/applications" : {
       "post" : {
         "operationId" : "signUpApply",
@@ -29048,6 +29834,44 @@
           }
         },
         "summary" : "Move the business to another active plan, with a reason; the same plan again changes nothing (FR-TEN-04)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/referrer" : {
+      "put" : {
+        "operationId" : "platformSetTenantReferrer",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantReferrerRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantReferrer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set, correct or clear the business that referred this one, with a reason; 422 referral_self and referral_code_unknown; lines already earned stay with their referrer; the same referrer again changes nothing",
         "tags" : [ "platform" ]
       }
     },
@@ -29570,6 +30394,25 @@
         },
         "summary" : "Lift the sign-in lock of a tenant's staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059)",
         "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/referrals" : {
+      "get" : {
+        "operationId" : "myReferrals",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MyReferrals"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The business's referral code and link, the businesses it referred, and the commission earned, paid and due (ADR-069)",
+        "tags" : [ "referrals" ]
       }
     },
     "/api/v1/report-runs" : {

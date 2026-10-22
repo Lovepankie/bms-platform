@@ -77,6 +77,10 @@ const staffTwoStepPolicyRoute = createRoute({ getParentRoute: () => staffRoute, 
 const staffBusinessNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/notifications', staticData: { crumb: 'Notifications for the business' } }).lazy(() =>
   import('../areas/staff/notifications/business').then((m) => m.Route),
 );
+// Referrals (issue #464, ADR-069): the business's own link to the sign-up and the businesses it referred. Under Business set-up.
+const staffReferralsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/referrals', staticData: { crumb: 'Referrals' } }).lazy(() =>
+  import('../areas/staff/referrals/page').then((m) => m.Route),
+);
 const staffOwnTwoStepRoute = createRoute({ getParentRoute: () => staffRoute, path: '/two-step', staticData: { crumb: 'Your two-step sign-in' } }).lazy(() =>
   import('../areas/staff/two-step/own').then((m) => m.Route),
 );
@@ -314,7 +318,7 @@ export const router = createRouter({
     forgotPasswordRoute,
     resetPasswordRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffReferralsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailCreditSalesRoute,

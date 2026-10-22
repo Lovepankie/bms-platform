@@ -2842,6 +2842,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/referrals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Referrals across the platform and open applications with a code, newest first; filters: referrer_tenant_id, status (applied, active, paying, ended), commission (due, paid) */
+        get: operations["platformListReferrals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/commissions/{line_id}/paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that one commission line was paid (date, method, reference, note), with a reason; the app never pays; 409 commission_already_paid */
+        post: operations["platformMarkReferralCommissionPaid"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/commissions/{line_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse one commission line with a reason (lines are never deleted); 409 commission_line_already_reversed, 422 commission_line_is_reversal */
+        post: operations["platformReverseReferralCommission"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/default-rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The platform default commission rule, or null */
+        get: operations["platformGetReferralDefaultRule"];
+        /** Set or clear the platform default commission rule, with a reason; it applies to payments recorded from now on */
+        put: operations["platformSetReferralDefaultRule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The same referrals as CSV, one row per referral and currency, at most 10,000; audited */
+        get: operations["platformExportReferrals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/{referral_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One referral, the rule a payment recorded now would use, and its commission lines */
+        get: operations["platformGetReferral"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/{referral_id}/commissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a commission line with an amount the operator typed, with a reason */
+        post: operations["platformAddReferralCommission"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/referrals/{referral_id}/rule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended */
+        put: operations["platformSetReferralRule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/sign-up/applications": {
         parameters: {
             query?: never;
@@ -3064,6 +3201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_id}/referrer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set, correct or clear the business that referred this one, with a reason; 422 referral_self and referral_code_unknown; lines already earned stay with their referrer; the same referrer again changes nothing */
+        put: operations["platformSetTenantReferrer"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_id}/resume": {
         parameters: {
             query?: never;
@@ -3264,6 +3418,23 @@ export interface paths {
         put?: never;
         /** Lift the sign-in lock of a tenant's staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059) */
         post: operations["platformUnlockUserSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/referrals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business's referral code and link, the businesses it referred, and the commission earned, paid and due (ADR-069) */
+        get: operations["myReferrals"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6844,6 +7015,7 @@ export interface components {
         ApplicationDetail: {
             application?: components["schemas"]["Application"];
             possible_duplicates?: components["schemas"]["PossibleDuplicate"][];
+            referred_by?: components["schemas"]["ApplicationReferrer"];
             /** @description A free slug from the business name (FR-TEN-02); editable at Activate */
             suggested_slug?: string;
         };
@@ -6856,6 +7028,14 @@ export interface components {
         };
         ApplicationNoteRequest: {
             note: string;
+        };
+        /** @description The business whose referral code the applicant brought */
+        ApplicationReferrer: {
+            code?: string;
+            /** Format: uuid */
+            tenant_id?: string;
+            tenant_name?: string;
+            tenant_slug?: string;
         };
         Approval: {
             action_type?: string;
@@ -9005,6 +9185,28 @@ export interface components {
             code: string;
             mfa_token: string;
         };
+        /** @description A business this business referred: its name, when it joined, never more */
+        MyReferral: {
+            /**
+             * Format: date-time
+             * @description When the business was created, or the application sent
+             */
+            joined_at?: string;
+            referred_name?: string;
+            /** @description applied, active, paying or ended */
+            status?: string;
+            totals?: components["schemas"]["ReferralTotal"][];
+        };
+        MyReferrals: {
+            /** @description The business's referral code */
+            code?: string;
+            /** @description Newest first */
+            items?: components["schemas"]["MyReferral"][];
+            /** @description The public sign-up with the code filled in */
+            link?: string;
+            /** @description Every referral together, one row per currency */
+            totals?: components["schemas"]["ReferralTotal"][];
+        };
         NextOfKin: {
             /** Format: date-time */
             created_at?: string;
@@ -9326,6 +9528,58 @@ export interface components {
             /** @description Why; kept in the platform audit log */
             reason: string;
         };
+        /** @description The current referral of the business, or null when it has no referrer */
+        PlatformReferral: {
+            /**
+             * Format: uuid
+             * @description The sign-up application, while it is open or when the referral came from one
+             */
+            application_id?: string;
+            code?: string;
+            /** Format: date-time */
+            ended_at?: string;
+            /**
+             * Format: date-time
+             * @description When the business was created, or the application sent
+             */
+            joined_at?: string;
+            /**
+             * Format: uuid
+             * @description Null for an application not activated yet
+             */
+            referral_id?: string;
+            referred_name?: string;
+            referred_slug?: string;
+            /**
+             * Format: uuid
+             * @description Null while the referred business is an application
+             */
+            referred_tenant_id?: string;
+            referrer_name?: string;
+            referrer_slug?: string;
+            /** Format: uuid */
+            referrer_tenant_id?: string;
+            /** @description True when the operator set a rule for this referral */
+            rule_override?: boolean;
+            /** @description sign_up or operator */
+            source?: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** @description applied, active, paying or ended */
+            status?: string;
+            totals?: components["schemas"]["ReferralTotal"][];
+        };
+        PlatformReferralDetail: {
+            /** @description Oldest first */
+            lines?: components["schemas"]["ReferralCommissionLine"][];
+            referral?: components["schemas"]["PlatformReferral"];
+            rule_in_force?: components["schemas"]["ReferralCommissionRule"];
+            /** @description override, default or none */
+            rule_source?: string;
+        };
+        PlatformReferralList: {
+            items?: components["schemas"]["PlatformReferral"][];
+        };
         /** @description Shown once to the operator, who hands it to the tenant admin */
         PlatformSignInResetLink: {
             /** Format: date-time */
@@ -9466,6 +9720,133 @@ export interface components {
         RecoveryCodesRequest: {
             /** @description A current TOTP code */
             code: string;
+        };
+        /** @description Oldest first */
+        ReferralCommissionLine: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            created_by_name?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description payment (worked out from a rule), manual (typed) or reversal */
+            kind?: string;
+            /** Format: int32 */
+            months_counted?: number;
+            note?: string;
+            /** Format: date-time */
+            paid_at?: string;
+            paid_by_name?: string;
+            paid_method?: string;
+            paid_note?: string;
+            /** Format: date */
+            paid_on?: string;
+            paid_reference?: string;
+            /** Format: uuid */
+            payment_id?: string;
+            /** Format: uuid */
+            reversed_by_line_id?: string;
+            /** Format: uuid */
+            reverses_line_id?: string;
+            /** @description The rule as it was when the line was worked out, and the payment it was applied to */
+            rule_snapshot?: {
+                [key: string]: Record<string, never>;
+            };
+        };
+        /** @description The rule a payment recorded now would use, or null */
+        ReferralCommissionRule: {
+            /**
+             * Format: int64
+             * @description Minor units: once (fixed_first_payment) or per paid month (fixed_per_month)
+             */
+            amount_minor?: number;
+            /**
+             * Format: int64
+             * @description The most a referral earns under a percent rule, in currency; null: no cap
+             */
+            cap_minor?: number;
+            /** Format: date-time */
+            created_at?: string;
+            created_by_name?: string;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description percent_of_payment, fixed_first_payment or fixed_per_month */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description The first paid months of the referred business it applies to; null: no end
+             */
+            months?: number;
+            /**
+             * Format: int32
+             * @description Basis points of each payment: 1000 is 10%
+             */
+            percent_bp?: number;
+        };
+        ReferralDefaultRule: {
+            rule?: components["schemas"]["ReferralCommissionRule"];
+        };
+        /** @description The commission was paid outside the app; this records it */
+        ReferralLinePaidRequest: {
+            method: string;
+            note?: string;
+            /** Format: date */
+            paid_on: string;
+            reason: string;
+            reference?: string;
+        };
+        /** @description A commission the operator works out and types */
+        ReferralLineRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            currency: string;
+            /** @description Why; kept on the line and in the audit log */
+            reason: string;
+        };
+        ReferralLineReverseRequest: {
+            reason: string;
+        };
+        /** @description The rule; null clears it (the default: nothing is worked out; a referral: the default) */
+        ReferralRuleBody: {
+            /**
+             * Format: int64
+             * @description The fixed amount in minor units
+             */
+            amount_minor?: number;
+            /**
+             * Format: int64
+             * @description percent_of_payment: the most one referral earns; null: no cap
+             */
+            cap_minor?: number;
+            currency?: string;
+            kind: string;
+            /**
+             * Format: int32
+             * @description The first paid months it applies to; null: no end
+             */
+            months?: number;
+            /**
+             * Format: int32
+             * @description percent_of_payment: basis points, 1000 is 10%
+             */
+            percent_bp?: number;
+        };
+        ReferralRuleRequest: {
+            reason: string;
+            rule?: components["schemas"]["ReferralRuleBody"];
+        };
+        /** @description One currency: everything earned, what was marked paid, and the rest */
+        ReferralTotal: {
+            currency?: string;
+            /** Format: int64 */
+            due_minor?: number;
+            /** Format: int64 */
+            earned_minor?: number;
+            /** Format: int64 */
+            paid_minor?: number;
         };
         RelatedMember: {
             full_name?: string;
@@ -16077,6 +16458,8 @@ export interface components {
             country: string;
             message?: string;
             modules: string[];
+            /** @description Optional: the referral code of the business that referred the applicant (the ?ref= of its link). An unknown code is 422 referral_code_unknown (ADR-069) */
+            referral_code?: string;
             term: string;
             /** @description trial: one month free; paid: subscribe now */
             way_in: string;
@@ -16413,6 +16796,17 @@ export interface components {
         TenantPlanRequest: {
             plan_code: string;
             reason: string;
+        };
+        TenantReferrer: {
+            referral?: components["schemas"]["PlatformReferral"];
+            /** Format: uuid */
+            tenant_id?: string;
+        };
+        TenantReferrerRequest: {
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+            /** @description The referral code of the business that referred this one; null or empty clears it */
+            referrer_code?: string;
         };
         TenantSettings: {
             allow_loans_before_kyc_verified?: boolean;
@@ -21756,6 +22150,226 @@ export interface operations {
             };
         };
     };
+    platformListReferrals: {
+        parameters: {
+            query?: {
+                referrer_tenant_id?: string;
+                status?: string;
+                commission?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReferralList"];
+                };
+            };
+        };
+    };
+    platformMarkReferralCommissionPaid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralLinePaidRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReferralDetail"];
+                };
+            };
+        };
+    };
+    platformReverseReferralCommission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                line_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralLineReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReferralDetail"];
+                };
+            };
+        };
+    };
+    platformGetReferralDefaultRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralDefaultRule"];
+                };
+            };
+        };
+    };
+    platformSetReferralDefaultRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferralDefaultRule"];
+                };
+            };
+        };
+    };
+    platformExportReferrals: {
+        parameters: {
+            query?: {
+                referrer_tenant_id?: string;
+                status?: string;
+                commission?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+        };
+    };
+    platformGetReferral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                referral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReferralDetail"];
+                };
+            };
+        };
+    };
+    platformAddReferralCommission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                referral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralLineRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReferralDetail"];
+                };
+            };
+        };
+    };
+    platformSetReferralRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                referral_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReferralDetail"];
+                };
+            };
+        };
+    };
     signUpApply: {
         parameters: {
             query?: never;
@@ -22094,6 +22708,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformSetTenantReferrer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantReferrerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantReferrer"];
                 };
             };
         };
@@ -22444,6 +23084,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    myReferrals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyReferrals"];
+                };
             };
         };
     };

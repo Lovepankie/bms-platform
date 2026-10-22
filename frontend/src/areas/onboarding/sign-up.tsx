@@ -6,6 +6,7 @@ import {
   EMPTY_SIGN_UP,
   MODULES,
   type Problems,
+  referralCodeFrom,
   type SignUpForm,
   signUpProblems,
   TERMS,
@@ -16,7 +17,7 @@ import {
 
 // The public sign-up page on the platform host (FR-ONB-01, spec section 10): phone first, plain
 // wording, the Rincoltech brand and the footer from the shared shell. No sign-in. The answer is the
-// same whether or not the email is known: "check your email".
+// same whether or not the email is known: "check your email". A referral link fills in Referred by.
 
 export interface SignUpViewProps {
   form: SignUpForm;
@@ -167,7 +168,23 @@ export function SignUpView({ form, problems, busy, error, done, onChange, onSubm
             </label>
           ))}
         </fieldset>
-        <Field id="agent_code" label="Agent code (if someone referred you)" problem={problems.agent_code}>
+        <Field id="referral_code" label="Referred by (optional)" problem={problems.referral_code}>
+          <input
+            id="referral_code"
+            value={form.referral_code}
+            onChange={(e) => set({ referral_code: e.target.value })}
+            maxLength={10}
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={Boolean(problems.referral_code)}
+            aria-describedby={problems.referral_code ? 'referral_code-problem' : 'referral_code-hint'}
+          />
+          <span id="referral_code-hint" className="hint">
+            The code of the business that told you about BMS, if one did.
+          </span>
+        </Field>
+        <Field id="agent_code" label="Agent code (optional)" problem={problems.agent_code}>
           <input
             id="agent_code"
             value={form.agent_code}
@@ -193,8 +210,9 @@ export function SignUpView({ form, problems, busy, error, done, onChange, onSubm
   );
 }
 
-function SignUp() {
-  const [form, setForm] = useState<SignUpForm>(EMPTY_SIGN_UP);
+export function SignUp() {
+  // A referral link (`?ref=`) fills in the Referred by box; the applicant can change or clear it (ADR-069).
+  const [form, setForm] = useState<SignUpForm>(() => ({ ...EMPTY_SIGN_UP, referral_code: referralCodeFrom(window.location.search) }));
   const [problems, setProblems] = useState<Problems>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

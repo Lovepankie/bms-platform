@@ -984,6 +984,81 @@ class RlsIsolationIT {
                         INSERT INTO feedback_items (id, tenant_id, sender_user_id, kind, message, app_version)
                         VALUES (?, ?, ?, 'idea', 'Test feedback message', 'test (abc123)')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // A business this one referred and a commission line the operator typed (migration V89, #464); the referral
+        // code
+        // of every business is written by the trigger on tenants.
+        UUID referred = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, ?, 'Test Referred Shop', '00000000-0000-4000-8000-000000000001')")
+                .params(referred, "rls-ref-" + referred.toString().substring(0, 8))
+                .update();
+        UUID referral = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO tenant_referrals (id, tenant_id, referred_tenant_id, code, source)
+                        VALUES (?, ?, ?, 'TESTRF22', 'operator')
+                        """).params(referral, t.tenantId(), referred).update();
+        owner.sql("""
+                        INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, amount_minor, currency, note)
+                        VALUES (?, ?, ?, 'manual', 1000, 'UGX', 'Test commission')
+                        """).params(UUID.randomUUID(), t.tenantId(), referral).update();
+    }
+
+    /**
+     * Referrals (V89, #464, ADR-069): bound to A, no code, referral or commission line of B is read; the application role
+     * writes none of them; the operator's cross-business functions refuse a tenant-bound call; and A's own list holds only A's
+     * referrals.
+     */
+    @Test
+    void referralsAreIsolatedPerBusiness() throws SQLException {
+        for (String table : List.of("referral_codes", "tenant_referrals", "referral_commission_lines")) {
+            long ofB = asApp(
+                    a.tenantId(),
+                    c -> count(c, "SELECT count(*) FROM " + table + " WHERE tenant_id = ?", b.tenantId()));
+            long ofA = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table));
+            assertThat(ofB).as("rows of B in %s", table).isZero();
+            assertThat(ofA).as("rows of A in %s", table).isPositive();
+            assertThatThrownBy(() -> asApp(
+                            a.tenantId(),
+                            c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
+                    .as("DELETE on %s", table)
+                    .hasStackTraceContaining("permission denied");
+        }
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps = c.prepareStatement("""
+                            INSERT INTO tenant_referrals (id, tenant_id, referred_tenant_id, code, source)
+                            VALUES (gen_random_uuid(), ?, ?, 'TESTRF33', 'operator')
+                            """)) {
+                        ps.setObject(1, a.tenantId());
+                        ps.setObject(2, b.tenantId());
+                        return ps.executeUpdate();
+                    }
+                }))
+                .hasStackTraceContaining("permission denied");
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(
+                                c,
+                                "SELECT count(*) FROM platform_referrals_list(NULL, NULL, NULL, NULL, NULL, 10, 0)")))
+                .hasStackTraceContaining("platform operator only");
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(
+                                c,
+                                "SELECT count(*) FROM platform_referral_set_referrer(?, NULL, NULL, now())",
+                                a.tenantId())))
+                .hasStackTraceContaining("platform operator only");
+        for (String table : List.of("referral_commission_rules", "referral_settings")) {
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
+                    .as("SELECT on %s", table)
+                    .hasStackTraceContaining("permission denied");
+        }
+        long mine = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM tenant_referrals_mine()"));
+        long all = TestDatabase.owner()
+                .sql("SELECT count(*) FROM tenant_referrals WHERE tenant_id = ? AND ended_at IS NULL")
+                .param(a.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(mine).isEqualTo(all).isPositive();
     }
 
     /**

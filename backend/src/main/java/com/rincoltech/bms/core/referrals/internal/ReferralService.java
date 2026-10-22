@@ -100,7 +100,8 @@ class ReferralService implements Referrals {
                 ? jdbc.sql("SELECT referral_code_tenant(?)")
                         .param(typed)
                         .query(UUID.class)
-                        .single()
+                        .optional()
+                        .orElse(null)
                 : null;
         if (tenant == null) {
             throw new ApiException(
@@ -141,7 +142,8 @@ class ReferralService implements Referrals {
         UUID referral = jdbc.sql("SELECT platform_referral_from_application(?, ?, ?)")
                 .params(applicationId, tenantId, operatorId)
                 .query(UUID.class)
-                .single();
+                .optional()
+                .orElse(null);
         if (referral != null) {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("referral_id", referral);
@@ -320,7 +322,8 @@ class ReferralService implements Referrals {
         UUID previous = jdbc.sql("SELECT platform_referral_set_default_rule(?, ?, ?)")
                 .params(ruleId, operatorId, Timestamp.from(clock.now()))
                 .query(UUID.class)
-                .single();
+                .optional()
+                .orElse(null);
         Optional<Rule> after = defaultRule();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("before", previous == null ? null : previous.toString());
@@ -374,7 +377,8 @@ class ReferralService implements Referrals {
         UUID referrer = jdbc.sql("SELECT platform_referral_add_manual_line(?, ?, ?, ?, ?, ?)")
                 .params(id, referralId, amountMinor, cur, reason.trim(), operatorId)
                 .query(UUID.class)
-                .single();
+                .optional()
+                .orElse(null);
         if (referrer == null) {
             throw ApiException.notFound();
         }

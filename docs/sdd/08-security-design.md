@@ -251,6 +251,7 @@ platform API and holds no tenant permissions.
 | `core.settings.read` | Y | Y | | | Y | Y | | | | | | |
 | `core.settings.manage` | Y | | | | | | | | | | | |
 | `core.payment_account.manage` | Y | | | | | | | | | | | |
+| `core.referrals.read` | Y | | | | | | | | | | | |
 | `core.branches.read` | Y | Y | Y | Y | Y | Y | | | | | | |
 | `core.branches.manage` | Y | | | | | | | | | | | |
 | `core.users.read` | Y | Y | | | | Y | | | | | | |

@@ -1475,12 +1475,14 @@ class MigrationOrderIT {
                 .as("the existing tables keep their shape")
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
-        // account one and V83 (collections, #266) the two collection list ones, which are not V48's to answer for.
+        // account one, V83 (collections, #266) the two collection list ones and V89 (referrals, #464)
+        // core.referrals.read, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
-                                        + " 'lending.members.contact', 'lending.collections.all_officers')")
+                                        + " 'lending.members.contact', 'lending.collections.all_officers',"
+                                        + " 'core.referrals.read')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
@@ -1986,6 +1988,52 @@ class MigrationOrderIT {
                                     """).query(Long.class).single())
                     .as("every constraint ends validated")
                     .isZero();
+        }
+    }
+
+    /**
+     * #464 (ADR-069): the referral migration gives every business that already exists its own code, and a business made
+     * afterwards gets one from the trigger; the default commission rule starts empty.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a database with businesses across V89.
+     */
+    @Test
+    void referralsMigrationGivesEveryExistingBusinessACode() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("89") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            for (String slug : List.of("dodos-shop", "dodos-mart", "x9-42")) {
+                owner.sql(
+                                "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, ?, 'Test Tenant V89', '00000000-0000-4000-8000-000000000001')")
+                        .params(UUID.randomUUID(), slug)
+                        .update();
+            }
+
+            DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            List<String> codes = owner.sql(
+                            "SELECT c.code FROM referral_codes c JOIN tenants t ON t.id = c.tenant_id ORDER BY t.slug")
+                    .query(String.class)
+                    .list();
+            assertThat(codes).hasSize(3).doesNotHaveDuplicates();
+            assertThat(codes.get(0)).startsWith("DODOS");
+            assertThat(codes.get(1)).startsWith("DODOS");
+            UUID later = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'later-shop', 'Test Tenant Later', '00000000-0000-4000-8000-000000000001')")
+                    .param(later)
+                    .update();
+            assertThat(owner.sql("SELECT code FROM referral_codes WHERE tenant_id = ?")
+                            .param(later)
+                            .query(String.class)
+                            .single())
+                    .startsWith("LATER");
+            assertThat(owner.sql("SELECT default_rule_id IS NULL FROM referral_settings")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
         }
     }
 
