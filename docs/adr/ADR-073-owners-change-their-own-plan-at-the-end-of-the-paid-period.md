@@ -2,10 +2,10 @@
 
 ## Status
 
-Accepted (owner decision of 22 Oct 2026, issue #472, FR-SUB-03 to FR-SUB-07). Builds on ADR-024 (per-module subscriptions and
+Proposed until #474 merges (owner decision of 22 Oct 2026, issue #472, FR-SUB-03 to FR-SUB-07). Builds on ADR-024 (per-module subscriptions and
 manual payments), ADR-056 (the operator's Business page, the paid-until date, a reason on every operator change), ADR-062 (the
 Owner of a business and the owner step-up) and ADR-016 (platform operations through definer functions). Migration `V93`
-(the number claimed for this work; `V82` to `V92` are claimed by open pull requests; renumbered at merge if needed).
+(the number claimed for this work; `V80` to `V83` are merged and `V84` to `V91` are claimed by open pull requests; renumbered at merge if needed).
 
 ## Context
 
