@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.identity;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -80,6 +81,14 @@ public interface TenantAdmins {
      *     policy, ADR-046); the activation email says so only then (issue #396)
      */
     record Invitation(UUID userId, String url, Instant expiresAt, boolean twoStepRequired) {}
+
+    /**
+     * The Owner of the request's business (ADR-062) with the name and email a notice goes to, or empty while it has none. For
+     * an act only the Owner may do outside identity (the plan and the subscription, ADR-073).
+     */
+    Optional<Owner> owner();
+
+    record Owner(UUID userId, String fullName, String email) {}
 
     record ResetLink(String url, Instant expiresAt) {}
 }

@@ -273,6 +273,15 @@ class UserService implements TenantAdmins {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<Owner> owner() {
+        return jdbc.sql("SELECT id, full_name, email FROM users WHERE kind = 'staff' AND is_owner")
+                .query((rs, n) ->
+                        new Owner(rs.getObject("id", UUID.class), rs.getString("full_name"), rs.getString("email")))
+                .optional();
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public void requireInvitedFirstAdmin(UUID userId) {
         UserResponse user = find(userId).orElseThrow(ApiException::notFound);

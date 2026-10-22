@@ -28,7 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 class TenantResolutionFilter extends OncePerRequestFilter {
 
     static final String TENANT_HEADER = "X-Tenant";
-    /** Request attribute holding the resolved tenant's status, {@code active} or {@code suspended}. */
+    /** Request attribute holding the resolved tenant's status: {@code active}, {@code suspended}, or {@code ended} (ADR-073). */
     static final String STATUS_ATTRIBUTE = "bms.tenant.status";
 
     /**
