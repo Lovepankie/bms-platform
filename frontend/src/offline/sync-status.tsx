@@ -6,7 +6,7 @@ import { discarded, failedCount, waiting, waitingWords, type OutboxItem } from '
 import { useOffline, useOnline, useOutbox } from './offline-context';
 
 // The status in the staff bar (issue #458, ADR-067 decision 10): a dot, green online, grey offline, amber while sending,
-// with "3 waiting to sync" beside it. Tapping it opens a sheet of the queued and failed sales with Sync now and, for a
+// with the state in words (Online, Offline, Syncing) and "3 waiting to sync" beside it ("3 waiting" on a narrow screen). Tapping it opens a sheet of the queued and failed sales with Sync now and, for a
 // manager (retail.offline.resolve), the sales other people's phones could not record. Nothing is drawn for a person who
 // does not sell.
 
@@ -57,7 +57,16 @@ export function SyncStatus() {
     <div className="sync-status" data-tour="sync-status">
       <button type="button" className="btn-ghost btn-sm sync-button" aria-haspopup="dialog" aria-label={words} title={words} onClick={() => openSheet(sheet.current)}>
         <span className={`sync-dot sync-dot-${state}`} data-testid="sync-dot" data-state={state} aria-hidden="true" />
-        {list.length > 0 && <span className="sync-count">{waitingWords(list.length)}</span>}
+        {/* The state in words beside the dot, so it never rests on colour alone (WCAG 1.4.1); the button's name says it all. */}
+        <span className="sync-word" data-testid="sync-word" aria-hidden="true">
+          {DOT_WORDS[state]}
+        </span>
+        {list.length > 0 && (
+          <span className="sync-count" aria-hidden="true">
+            <span className="sync-long">{waitingWords(list.length)}</span>
+            <span className="sync-short">{list.length} waiting</span>
+          </span>
+        )}
       </button>
       <dialog ref={sheet} className="sheet sync-sheet" aria-labelledby="sync-title">
         <SyncSheet online={online} onClose={() => closeSheet(sheet.current)} />

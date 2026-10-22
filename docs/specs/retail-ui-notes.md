@@ -1284,7 +1284,8 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
   new one.
 - A sale a manager **discarded** shows in the sheet as "Discarded by a manager. It is not recorded and is not sent again." for a
   day, and on its receipt.
-- **The dot** in the staff bar: green online, grey offline, amber sending, with "3 waiting to sync". Its sheet lists the waiting and
+- **The dot** in the staff bar: green online, grey offline, amber sending, always with the word **Online**, **Offline** or
+  **Syncing** beside it, and "3 waiting to sync" ("3 waiting" at 480 px and below); the button's name says it all. Its sheet lists the waiting and
   failed sales, **Sync now** and, for a failed one, **Send again**. A manager (`retail.offline.resolve`: administrators and
   Supervisors) also sees the sales other phones could not record, with **Send it again** and **Discard** (a reason of at least 5
   characters, never recorded, audited), and the open clashes with **Mark resolved** and a note.

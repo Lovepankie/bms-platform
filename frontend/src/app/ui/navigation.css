@@ -463,9 +463,24 @@ body.side-menu-open {
   background: var(--color-warning);
 }
 
+.sync-word,
 .sync-count {
   font-size: var(--text-sm);
   white-space: nowrap;
+}
+
+.sync-short {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .sync-long {
+    display: none;
+  }
+
+  .sync-short {
+    display: inline;
+  }
 }
 
 .sync-list {

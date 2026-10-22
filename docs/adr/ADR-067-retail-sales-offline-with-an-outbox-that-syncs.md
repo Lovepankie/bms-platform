@@ -106,7 +106,8 @@ left, the branch, the period, the person's roles.
    signed in on this device, read from IndexedDB, with only the sale screen and the outbox working; anything needing the
    server says it is offline. The refresh cookie is never read or kept by the app.
 10. **Status in the header.** A dot in the staff bar on every staff screen: green online, grey offline, amber while syncing,
-    with "3 waiting to sync" beside it when the outbox is not empty and "1 failed" when one is failed. Tapping it opens a sheet
+    with the state in words beside it (Online, Offline, Syncing; never colour alone) and "3 waiting to sync" ("3 waiting" on a
+    narrow screen) when the outbox is not empty and "1 failed" when one is failed. Tapping it opens a sheet
     listing queued and failed sales (time, branch, total, the reason of a failure), a Sync now button and, for a holder of
     `retail.offline.resolve`, the failures other people reported. It is mounted in `frontend/src/areas/staff/route.tsx`, not in
     the shell, and is drawn only for a person who holds `retail.sale.create`.

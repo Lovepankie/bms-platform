@@ -69,6 +69,8 @@ describe('the status dot', () => {
     const dot = await screen.findByTestId('sync-dot');
     expect(dot.getAttribute('data-state')).toBe('online');
     expect(screen.getByRole('button', { name: 'Online' })).toBeTruthy();
+    // The state is in words beside the dot, not in its colour alone.
+    expect(screen.getByTestId('sync-word').textContent).toBe('Online');
     expect(screen.queryByText(/^\d+ waiting to sync$/)).toBeNull();
   });
 
@@ -78,6 +80,7 @@ describe('the status dot', () => {
     await withItems(offline, [item('a', 1), item('b', 2), item('c', 3, { state: 'failed', error: { message: 'This branch does not sell.' } })]);
     show(offline);
     expect(screen.getByTestId('sync-dot').getAttribute('data-state')).toBe('offline');
+    expect(screen.getByTestId('sync-word').textContent).toBe('Offline');
     expect(screen.getByText('3 waiting to sync')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Offline, 3 waiting to sync, 1 failed' })).toBeTruthy();
     act(() => offline.connectivity.set(true));
