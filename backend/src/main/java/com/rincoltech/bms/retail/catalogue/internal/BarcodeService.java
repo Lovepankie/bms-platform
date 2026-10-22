@@ -110,7 +110,7 @@ class BarcodeService {
      * audit row while a product that is switched off holds it.
      */
     private void release(String code, Product taker) {
-        BarcodeRepository.Held held = repo.byKey(Barcodes.key(code), true).orElse(null);
+        BarcodeRepository.Held held = repo.byKey(Barcodes.key(code)).orElse(null);
         if (held == null) {
             return;
         }
@@ -172,7 +172,7 @@ class BarcodeService {
             do {
                 // A person may have typed a code of the same shape by hand; the sequence then moves past it.
                 code = Barcodes.generated(sequences.next(SEQUENCE));
-            } while (repo.byKey(code, false).isPresent());
+            } while (repo.byKey(code).isPresent());
             UUID id = UUID.randomUUID();
             repo.insert(id, productId, null, code, Barcodes.Format.CODE128.key, true, by);
             audit.record(AuditLog.Entry.created(
@@ -192,7 +192,7 @@ class BarcodeService {
         String clean = code == null ? "" : code.strip();
         BarcodeRepository.Held held = clean.isEmpty() || clean.length() > Barcodes.MAX_LENGTH
                 ? null
-                : repo.byKey(Barcodes.key(clean), false)
+                : repo.byKey(Barcodes.key(clean))
                         .filter(BarcodeRepository.Held::productActive)
                         .orElse(null);
         if (held == null) {

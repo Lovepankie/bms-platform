@@ -55,9 +55,12 @@ class BarcodeRepository {
                 rs.getBoolean("generated"));
     }
 
-    /** The row holding this lookup key; locked when {@code lock}, so a concurrent add of the same code waits. */
-    Optional<Held> byKey(String key, boolean lock) {
-        return jdbc.sql(SELECT_BARCODE + " WHERE b.lookup_key = ?" + (lock ? " FOR UPDATE OF b" : ""))
+    /**
+     * The row holding this lookup key. Not locked (the application role may not update the table): two writers of the
+     * same code meet at the unique index instead, and the second is refused.
+     */
+    Optional<Held> byKey(String key) {
+        return jdbc.sql(SELECT_BARCODE + " WHERE b.lookup_key = ?")
                 .param(key)
                 .query(BarcodeRepository::held)
                 .optional();
