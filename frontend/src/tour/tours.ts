@@ -62,12 +62,12 @@ const feedback: TourStep = {
   body: 'Tap Feedback to send the BMS team an idea, a problem or a question. Add a picture of the screen if it helps. You see our reply there too. On a phone it is also under Help.',
 };
 
-// The theme selector in the header (issue #429): System, Light or Dark, kept on this device. Every area has it.
+// The theme button in the header (issues #429 and #452): Light, Dark or Same as my phone, kept on this device. Every area has it.
 const theme: TourStep = {
   id: 'theme',
   target: 'theme-select',
   title: 'Light or dark',
-  body: 'Choose System, Light or Dark here, at the top right. System follows your phone or computer, and your choice is kept on this device.',
+  body: 'Tap the sun, moon or phone at the top right to choose Light, Dark or Same as my phone. Your choice is kept on this device.',
 };
 
 const insights: TourStep = {
@@ -953,7 +953,8 @@ export const usersPage: Tour = {
 // tour in this file is; the new screen needs exactly this one.
 export const notificationsPage: Tour = {
   id: 'page-notifications',
-  version: 2,
+  // Version 3 adds the Appearance step (issue #452), so whoever finished version 2 sees it once.
+  version: 3,
   title: 'This page: notifications and the app',
   audience: () => true,
   autoStart: false,
@@ -964,6 +965,12 @@ export const notificationsPage: Tour = {
       target: 'install-app',
       title: 'Install the app',
       body: 'Add BMS to your home screen or app list. On an iPhone or iPad use Safari: tap Share, then Add to Home Screen. If you cannot see them, try ⋯ or View More.',
+    },
+    {
+      id: 'appearance',
+      target: 'appearance',
+      title: 'How BMS looks',
+      body: 'Choose Light, Dark or Same as my phone. It changes only this device, like the button at the top right.',
     },
     {
       id: 'toggle',

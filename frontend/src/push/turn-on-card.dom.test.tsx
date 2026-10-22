@@ -191,7 +191,7 @@ describe('the turn-on card', () => {
 });
 
 describe('the Notifications and app page', () => {
-  it('stays as it was: its three sections and no turn-on card', async () => {
+  it('stays as it was: its sections (Appearance since #452) and no turn-on card', async () => {
     vi.resetModules();
     const { NotificationsPage } = await import('../areas/staff/notifications/page');
     const push = {
@@ -209,7 +209,7 @@ describe('the Notifications and app page', () => {
       </QueryClientProvider>,
     );
     const headings = screen.getAllByRole('heading').map((h) => h.textContent);
-    expect(headings).toEqual(['Notifications and app', 'Install the app', 'Notifications on this device', 'Your devices']);
+    expect(headings).toEqual(['Notifications and app', 'Install the app', 'Appearance', 'Notifications on this device', 'Your devices']);
     expect(title()).toBeNull();
     expect(push.turnOn).not.toHaveBeenCalled();
   });

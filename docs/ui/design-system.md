@@ -113,15 +113,23 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Tour rules (issue #292) | `tour/model.ts` `autoTourFor`, `host.tsx` | At most one tour starts by itself per page load; the rest wait for the next visit. A user with no tour history gets only the first-run (Welcome) tour, and every "New:" tour is marked seen for them at that moment, since they have nothing to compare against. One "Do not show tours again" checkbox (progress key `tours-off`) stops every automatic tour, "New:" ones included; Help still replays any tour |
 | Help | `HelpMenu` in the staff bar | A `dialog.sheet` with Take the tour and Show me this page |
 
-## Light and dark theme (#429)
+## Light and dark theme (#429, #452)
 
-A selector in the header, at the top right of every area (staff, member, operator, public pages), offers **System**,
-**Light** and **Dark**. It is a native `<select>` with `aria-label="Theme"` and the shared focus ring, so it is reachable
-by keyboard (it sits last in the `.header-actions` group, after the refresh button of #430), and the welcome tours point at it (`data-tour="theme-select"`, the step "Light or dark").
+An icon button in the header, at the top right of every area (staff, member, operator, public pages), offers **Light**,
+**Dark** and **Same as my phone** (issue #452 replaced the `<select>` of #429, which read "System" and was not recognised
+as a theme control). The button shows a sun for Light, a moon for Dark and a phone outline for Same as my phone, drawn in
+`src/components/icons.tsx` at the size and stroke of the refresh icon, in `currentColor`. Its `aria-label` and `title` say
+"Theme: " and the current choice. It follows the menu button pattern: `aria-haspopup="menu"` and `aria-expanded`; a tap,
+or the down or up arrow, opens a menu of three `menuitemradio` items with the current one `aria-checked` and ticked; the
+arrow keys, Home and End move, Escape closes and gives focus back to the button, a tap outside or Tab closes it. The menu
+hangs from the button's right edge above the page (`--z-overlay`), so it fits a 360px screen. It sits last in the
+`.header-actions` group, after the refresh button of #430, and the welcome tours point at it (`data-tour="theme-select"`,
+the step "Light or dark"). The same three choices are the **Appearance** radio group on the Notifications and app page
+("How BMS looks on this device."), bound to the same choice, with a step in the page tour (`page-notifications` v3).
 
 - **Remembered per person per device.** The choice is kept in the browser's `localStorage` under `bms.theme` (`light` or
-  `dark`; System keeps nothing). It is never sent to the server: a person's browser profile on a device is the person.
-- **Follows the system by default.** While the choice is System the theme follows `prefers-color-scheme`, live.
+  `dark`; Same as my phone, stored as `system`, keeps nothing). It is never sent to the server: a person's browser profile on a device is the person.
+- **Follows the system by default.** While the choice is Same as my phone the theme follows `prefers-color-scheme`, live.
 - **No flash.** `frontend/public/theme-init.js` is a blocking script in the `<head>` (a file, because the production CSP is
   `script-src 'self'`). Before the first paint it sets `data-theme="light|dark"` and the inline `color-scheme` on `<html>` (so the canvas and scrollbars match the choice, not the
   system, before the stylesheet lands) and the `theme-color` meta tag. The app's `src/app/theme-mode.ts` does the same afterwards and holds the same key and colours.
@@ -135,7 +143,7 @@ by keyboard (it sits last in the `.header-actions` group, after the refresh butt
   meta tag replaces the theme colour as soon as it loads. **iOS limitation:** an installed iPhone app takes its status bar
   from `apple-mobile-web-app-status-bar-style`, which stays `default` (a light bar) whatever the choice, so in Dark the
   status bar of the installed iOS app stays light; Android and desktop browsers follow the `theme-color` meta tag.
-- **Blocked storage.** If the browser blocks `localStorage`, the choice is held in memory for the visit, so the picker, the
+- **Blocked storage.** If the browser blocks `localStorage`, the choice is held in memory for the visit, so the button, the
   page and the system-follow listener stay in step until the app is closed.
 - **Logos.** A logo may be dark on transparent, so in the dark theme the brand bar and footer logos sit on a white plate
   (`--color-logo-plate`).

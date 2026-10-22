@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { THEME_KEY, resetThemeMemory } from '../../../app/theme-mode';
 import type { createPush, PushState } from '../../../push/push';
 
 // The "Notifications on this device" switch and the list of the person's devices (ADR-050). The permission question belongs to the
@@ -122,10 +123,38 @@ describe('the devices', () => {
     expect(await screen.findByText(/No device receives notifications for you yet/)).toBeTruthy();
   });
 
-  it('carries the anchors of the tour on the install control, the switch and the list', async () => {
+  it('carries the anchors of the tour on the install control, the appearance choice, the switch and the list', async () => {
     const view = await show(fakePush('off'));
-    for (const id of ['install-app', 'notifications-toggle', 'notifications-devices']) {
+    for (const id of ['install-app', 'appearance', 'notifications-toggle', 'notifications-devices']) {
       expect(view.container.querySelector(`[data-tour="${id}"]`)).not.toBeNull();
     }
+  });
+});
+
+describe('the appearance (issue #452)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    resetThemeMemory();
+  });
+
+  it('offers Light, Dark and Same as my phone in plain words, the current choice checked', async () => {
+    window.localStorage.setItem(THEME_KEY, 'dark');
+    await show(fakePush('off'));
+    const group = screen.getByRole('radiogroup', { name: 'Appearance' });
+    expect(group.getAttribute('aria-describedby')).toBe('appearance-words');
+    expect(screen.getByText('How BMS looks on this device.')).toBeTruthy();
+    const radios = within(group).getAllByRole('radio') as HTMLInputElement[];
+    expect(radios.map((r) => [r.parentElement?.textContent?.trim(), r.checked])).toEqual([['Same as my phone', false], ['Light', false], ['Dark', true]]);
+  });
+
+  it('changes the theme on this device, the same choice the header button holds', async () => {
+    await show(fakePush('off'));
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }));
+    expect(window.localStorage.getItem(THEME_KEY)).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect((screen.getByRole('radio', { name: 'Dark' }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: 'Same as my phone' }));
+    expect(window.localStorage.getItem(THEME_KEY)).toBeNull();
+    expect((screen.getByRole('radio', { name: 'Same as my phone' }) as HTMLInputElement).checked).toBe(true);
   });
 });

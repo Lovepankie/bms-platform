@@ -2,11 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { type PushDevice, pushApi } from '../../../api/push';
+import { THEME_LABELS } from '../../../app/shell';
+import { THEME_CHOICES, useThemeChoice } from '../../../app/theme-mode';
 import { InstallPanel } from '../../../install/InstallPrompt';
 import { isIosDevice } from '../../../install/install';
 import { type PushState, createPush } from '../../../push/push';
 
-// Notifications and app (ADR-050). Two things for the person using this device: install BMS as an app, and turn on notifications
+// Notifications and app (ADR-050). For the person using this device: install BMS as an app, choose how it looks (issue #452), and turn on notifications
 // for the things that need them (a sale voided, a write-off made alone, an approval limit raised, stock sent to their branch, an
 // approval waiting for them). The permission question is asked only when the switch is tapped, never when the page opens. The
 // list below shows the person's own devices and lets them remove one; the server never shows an address or a key.
@@ -133,6 +135,22 @@ function Devices() {
   );
 }
 
+/** Light, Dark or Same as my phone, kept on this device (issue #452): the same choice as the theme button in the header. */
+export function Appearance() {
+  const [choice, setChoice] = useThemeChoice();
+  return (
+    <div role="radiogroup" aria-labelledby="appearance-title" aria-describedby="appearance-words">
+      <p id="appearance-words">How BMS looks on this device.</p>
+      {THEME_CHOICES.map((value) => (
+        <label key={value}>
+          <input type="radio" name="appearance" value={value} checked={choice === value} onChange={() => setChoice(value)} />{' '}
+          {THEME_LABELS[value]}
+        </label>
+      ))}
+    </div>
+  );
+}
+
 export function NotificationsPage({ push = defaultPush }: { push?: ReturnType<typeof createPush> }) {
   return (
     <main className="rt ln">
@@ -140,6 +158,10 @@ export function NotificationsPage({ push = defaultPush }: { push?: ReturnType<ty
       <section className="rt-card stack" aria-labelledby="install-title" data-tour="install-app">
         <h2 id="install-title">Install the app</h2>
         <InstallPanel />
+      </section>
+      <section className="rt-card stack" aria-labelledby="appearance-title" data-tour="appearance">
+        <h2 id="appearance-title">Appearance</h2>
+        <Appearance />
       </section>
       <section className="rt-card stack" aria-labelledby="notify-title" data-tour="notifications-toggle">
         <h2 id="notify-title">Notifications on this device</h2>

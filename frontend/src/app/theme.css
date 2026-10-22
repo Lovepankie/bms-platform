@@ -56,11 +56,62 @@ body {
   border-radius: var(--radius-sm);
 }
 
-/* The theme selector, at the right of the header (issue #429); the focus ring comes from forms.css. */
-.brand-bar .theme-select {
-  margin: 0;
-  width: auto;
+/*
+ * The theme button, at the right of the header (issue #452), and its menu. The menu hangs from the button's right edge, so it
+ * stays on a 360px screen, and sits above the page; the header clips nothing.
+ */
+.theme-menu {
+  position: relative;
   flex: none;
+}
+
+.theme-icon,
+.theme-tick {
+  display: inline-flex;
+}
+
+.theme-menu-list {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: var(--z-overlay);
+  min-width: 13rem;
+  max-width: calc(100vw - 2 * var(--space-4));
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-menu-item:hover,
+.theme-menu-item:focus-visible {
+  background: var(--color-accent-tint);
+}
+
+.theme-menu-text {
+  flex: 1;
+}
+
+.theme-tick {
+  width: 24px;
+  color: var(--color-primary);
 }
 
 .btn-brand,

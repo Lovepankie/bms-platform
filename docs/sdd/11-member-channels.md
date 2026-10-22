@@ -122,8 +122,10 @@ cards below 560px (`.table-cards`); and motion of 150 to 250 ms that stops under
 `prefers-reduced-motion`. The public landing page follows the tenant's enabled modules (#99). A
 living style page at `/style` (development builds and the platform host only, a chunk of its own)
 shows every component and illustration, and `src/app/ui/design-guard.test.ts` fails a component
-that renders a `<style>` element or writes a hex colour outside `theme.css`. Dark mode is still
-left out: the tenant colour rule and the AA checks are written for light surfaces.
+that renders a `<style>` element or writes a hex colour outside `theme.css`. A light and a
+dark theme follow (#429): the person picks Light, Dark or Same as my phone with the sun or moon button at the top
+right of the header, or under Appearance on the Notifications and app page (#452), kept on the device; the tokens, the
+menu and the dark pairs are in `docs/ui/design-system.md`.
 
 ## 11.3 SMS
 

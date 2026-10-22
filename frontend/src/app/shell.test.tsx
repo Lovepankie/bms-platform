@@ -55,11 +55,11 @@ describe('the shared shell (FR-TEN-08)', () => {
     }
   });
 
-  it('puts the header actions and then the theme selector at the top right, in one group inside the brand bar', () => {
+  it('puts the header actions and then the theme button at the top right, in one group inside the brand bar', () => {
     const html = renderToStaticMarkup(<Shell brand={tenant} actions={<button type="button">Refresh</button>}>x</Shell>);
-    expect(html).toMatch(/<div class="header-actions"><button type="button">Refresh<\/button><select [^>]*data-tour="theme-select"/);
+    expect(html).toMatch(/<div class="header-actions"><button type="button">Refresh<\/button><div class="theme-menu"><button [^>]*data-tour="theme-select"/);
     const bare = renderToStaticMarkup(<Shell brand={tenant}>x</Shell>);
-    expect(bare).toMatch(/<div class="header-actions"><select [^>]*data-tour="theme-select"/);
+    expect(bare).toMatch(/<div class="header-actions"><div class="theme-menu"><button [^>]*data-tour="theme-select"/);
     expect(bare).not.toContain('Refresh');
   });
 });

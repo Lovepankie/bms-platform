@@ -377,6 +377,30 @@ export const icons = {
       <path d="M5 12h14M13 6l6 6-6 6" />
     </Svg>
   ),
+  // The theme button in the header (issue #452): a sun for Light, a moon for Dark, a phone for Same as my phone, and the tick of the
+  // current choice. JUSTIFICATION-A3: four new icons in the one icon table, the same shape as every entry above.
+  sun: (
+    <Svg>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </Svg>
+  ),
+  moon: (
+    <Svg>
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+    </Svg>
+  ),
+  phone: (
+    <Svg>
+      <rect x="7" y="2.5" width="10" height="19" rx="2" />
+      <path d="M11 18.5h2" />
+    </Svg>
+  ),
+  check: (
+    <Svg>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </Svg>
+  ),
 } as const;
 
 export type IconName = keyof typeof icons;
