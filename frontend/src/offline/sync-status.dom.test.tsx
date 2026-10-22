@@ -4,10 +4,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/client';
 import { mockMe } from '../api/retail-mock';
-import { OfflineProvider } from './offline-context';
+import { OfflineProvider, isAdmin } from './offline-context';
 import { provisionalNumber, type OutboxItem } from './outbox';
 import { SignOutWarning, waitingSentence } from './sign-out-warning';
-import { OthersWaitingNote, SyncStatus, dotState, statusWords } from './sync-status';
+import { OthersWaitingNote, SyncStatus, discardReady, dotState, ownSaleRule, statusWords } from './sync-status';
 import { testOffline } from './test-kit';
 
 // The status in the staff bar and sign-out with sales waiting (issue #458, ADR-067 decisions 9 and 10; NFR-OFF-05,
@@ -196,5 +196,20 @@ describe('signing out with sales waiting', () => {
     expect(await offline.store.profile(offline.scope)).toBeNull();
     expect(await offline.store.outbox(offline.scope)).toHaveLength(3);
     expect(waitingSentence(1)).toBe('1 sale is waiting to sync.');
+  });
+});
+
+describe('deciding a refused sale (ADR-067 decision 11 d)', () => {
+  it('leaves a seller or Supervisor their own sale for another manager, and lets an administrator discard theirs with a second reason', () => {
+    expect(ownSaleRule('u2', 'u1', false)).toBe('decide');
+    expect(ownSaleRule('u1', 'u1', false)).toBe('others');
+    expect(ownSaleRule('u1', 'u1', true)).toBe('admin');
+    expect(isAdmin({ roles: [{ role_key: 'retail_supervisor' }] })).toBe(false);
+    expect(isAdmin({ roles: [{ role_key: 'tenant_admin' }] })).toBe(true);
+    expect(discardReady('Typed twice', null)).toBe(true);
+    expect(discardReady('no', null)).toBe(false);
+    expect(discardReady('Typed twice', '')).toBe(false);
+    expect(discardReady('Typed twice', 'typed TWICE ')).toBe(false);
+    expect(discardReady('Typed twice', 'The buyer returned it')).toBe(true);
   });
 });

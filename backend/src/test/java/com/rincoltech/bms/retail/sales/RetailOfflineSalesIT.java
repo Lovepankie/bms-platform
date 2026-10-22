@@ -694,9 +694,12 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isZero();
     }
 
-    /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
+    /**
+     * Review fix 4 and round 2 fix 4 (ADR-067 decision 11 d): a Supervisor who made the refused sale can neither discard it,
+     * even with a second reason, nor ask for it again; another manager can.
+     */
     @Test
-    void aManagerCannotDecideTheirOwnRefusedSale() {
+    void aSupervisorCannotDecideTheirOwnRefusedSale() {
         UUID client = UUID.randomUUID();
         Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "1", 2_000);
         String id = api.post("/offline-failures", failureReport(client, request), MANAGER)
@@ -704,8 +707,10 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .get("id")
                 .asString();
         for (String action : List.of("discard", "retry")) {
-            ResponseEntity<JsonNode> own =
-                    api.post("/offline-failures/" + id + "/" + action, Map.of("reason", "My own mistake"), MANAGER);
+            ResponseEntity<JsonNode> own = api.post(
+                    "/offline-failures/" + id + "/" + action,
+                    Map.of("reason", "My own mistake", "self_discard_reason", "Typed it twice by hand"),
+                    MANAGER);
             assertThat(own.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             assertThat(own.getBody().get("code").asString()).isEqualTo("own_offline_sale");
         }
@@ -714,6 +719,60 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 other.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
         assertThat(decided.getStatusCode()).as("%s", decided.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(decided.getBody().get("status").asString()).isEqualTo("discarded");
+    }
+
+    /**
+     * Round 2 fix 4 (ADR-067 decision 11 d): an administrator may discard their own refused sale with a second written reason,
+     * audited as self_discard; never without it, never with the same words, and never ask for it again.
+     */
+    @Test
+    void anAdministratorDiscardsTheirOwnRefusedSaleWithASecondReason() {
+        TestDatabase.owner()
+                .sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                        + " VALUES (?, ?, 'staff', 'Test Admin 01', ?, 'active')")
+                .params(api.userId(), t.tenantId(), "test.admin." + api.userId() + "@example.invalid")
+                .update();
+        TestDatabase.owner()
+                .sql("INSERT INTO user_role_assignments (id, tenant_id, user_id, role_key, granted_by)"
+                        + " VALUES (?, ?, ?, 'tenant_admin', ?)")
+                .params(UUID.randomUUID(), t.tenantId(), api.userId(), api.userId())
+                .update();
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "1", 2_000);
+        String id = api.post("/offline-failures", failureReport(client, request), MANAGER)
+                .getBody()
+                .get("id")
+                .asString();
+        String path = "/offline-failures/" + id + "/discard";
+        assertThat(api.post("/offline-failures/" + id + "/retry", Map.of(), MANAGER)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        ResponseEntity<JsonNode> without = api.post(path, Map.of("reason", "Entered again by hand"), MANAGER);
+        assertThat(without.getStatusCode()).as("%s", without.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(without.getBody().toString()).contains("self_discard_reason");
+        ResponseEntity<JsonNode> same = api.post(
+                path,
+                Map.of("reason", "Entered again by hand", "self_discard_reason", "entered again by hand"),
+                MANAGER);
+        assertThat(same.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        ResponseEntity<JsonNode> discarded = api.post(
+                path,
+                Map.of(
+                        "reason",
+                        "Entered again by hand",
+                        "self_discard_reason",
+                        "The buyer returned the goods at once"),
+                MANAGER);
+        assertThat(discarded.getStatusCode()).as("%s", discarded.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(discarded.getBody().get("status").asString()).isEqualTo("discarded");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT data->'after'->>'self_discard_reason' FROM audit_log"
+                                + " WHERE action = 'retail.offline_sale.self_discard' AND entity_id = ?")
+                        .param(UUID.fromString(id))
+                        .query(String.class)
+                        .single())
+                .isEqualTo("The buyer returned the goods at once");
     }
 
     /** Review fix 1: a sale sent after a manager discarded it is refused and never recorded, whatever key it carries. */

@@ -11770,6 +11770,12 @@
             "maxLength" : 300,
             "minLength" : 5,
             "type" : "string"
+          },
+          "self_discard_reason" : {
+            "description" : "A second written reason, needed when an administrator (or the Owner) discards a sale they made themselves (ADR-067 decision 11 d); audited as self_discard",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
           }
         },
         "required" : [ "reason" ]
@@ -32833,7 +32839,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067)",
+        "summary" : "Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067). The caller's own sale only by an administrator, with self_discard_reason",
         "tags" : [ "retail-sales" ]
       }
     },

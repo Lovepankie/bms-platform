@@ -4254,7 +4254,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067) */
+        /** Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067). The caller's own sale only by an administrator, with self_discard_reason */
         post: operations["discardRetailOfflineFailure"];
         delete?: never;
         options?: never;
@@ -12216,6 +12216,8 @@ export interface components {
         };
         RetailOfflineFailureDiscard: {
             reason: string;
+            /** @description A second written reason, needed when an administrator (or the Owner) discards a sale they made themselves (ADR-067 decision 11 d); audited as self_discard */
+            self_discard_reason?: string;
         };
         RetailOfflineFailurePage: {
             items?: components["schemas"]["RetailOfflineFailure"][];

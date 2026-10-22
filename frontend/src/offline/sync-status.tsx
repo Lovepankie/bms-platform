@@ -171,6 +171,22 @@ function SyncRow({ item, onAgain }: { item: OutboxItem; onAgain: () => void }) {
   );
 }
 
+/**
+ * Who decides a refused sale (ADR-067 decision 11 d): another person's is the caller's to decide; their own is another
+ * manager's, except that an administrator may discard their own with a second reason (never ask for it again).
+ */
+export function ownSaleRule(madeBy: string | undefined, userId: string | undefined, admin: boolean): 'decide' | 'admin' | 'others' {
+  if (!madeBy || madeBy !== userId) return 'decide';
+  return admin ? 'admin' : 'others';
+}
+
+/** The discard can be sent: a reason of at least 5 characters, and for one's own sale a second, different one. */
+export function discardReady(reason: string, selfReason: string | null): boolean {
+  if (reason.trim().length < 5) return false;
+  if (selfReason === null) return true;
+  return selfReason.trim().length >= 5 && selfReason.trim().toLowerCase() !== reason.trim().toLowerCase();
+}
+
 /** For a manager: the sales other phones could not record, to send again or discard (audited), and the open clashes. */
 function ManagerQueue() {
   const offline = useOffline();
@@ -211,16 +227,19 @@ function ManagerQueue() {
   });
   const [discarding, setDiscarding] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  const [selfReason, setSelfReason] = useState('');
   const [note, setNote] = useState<Record<string, string>>({});
   const decide = useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: 'retry' | 'discard' }) => {
+    mutationFn: async ({ id, action, own }: { id: string; action: 'retry' | 'discard'; own?: boolean }) => {
       const path = action === 'retry' ? '/api/v1/retail/offline-failures/{failure_id}/retry' : '/api/v1/retail/offline-failures/{failure_id}/discard';
-      const { error } = await api.POST(path, { params: { path: { failure_id: id } }, body: action === 'discard' ? { reason: reason.trim() } : undefined } as never);
+      const body = action === 'discard' ? { reason: reason.trim(), ...(own ? { self_discard_reason: selfReason.trim() } : {}) } : undefined;
+      const { error } = await api.POST(path, { params: { path: { failure_id: id } }, body } as never);
       if (error) throw new Error(problemOf(error).detail ?? 'Could not save the decision');
     },
     onSuccess: () => {
       setDiscarding(null);
       setReason('');
+      setSelfReason('');
       void queryClient.invalidateQueries({ queryKey: ['retail', 'offline-failures'] });
     },
   });
@@ -240,23 +259,32 @@ function ManagerQueue() {
       <h3 id="sync-manager-title">For a manager</h3>
       {rows.length > 0 && (
         <ul className="sync-list" aria-label="Sales other phones could not record">
-          {rows.map((f) => (
+          {rows.map((f) => {
+            const who = ownSaleRule(f.made_by, offline?.userId, offline?.admin === true);
+            return (
             <li key={f.id} className="sync-row sync-row-failed">
               <div>
                 {f.made_by_name ?? 'A seller'}, {f.occurred_at ? when(f.occurred_at) : ''}, {METHOD_WORDS[f.payment_method ?? ''] ?? f.payment_method} {money(f.total_minor ?? 0)}
               </div>
               <p className="sync-reason">Not recorded: {f.message}</p>
-              {f.made_by === offline?.userId ? (
+              {who === 'others' ? (
                 <p className="muted">Your own sale: another manager decides it. You can send it again from your phone.</p>
-              ) : f.status === 'retry' ? (
+              ) : f.status === 'retry' && who === 'decide' ? (
                 <p className="muted">Waiting for the seller's phone to send it again.</p>
               ) : discarding === f.id ? (
                 <div className="stack">
                   <label htmlFor={`discard-${f.id}`}>Why discard this sale? (at least 5 characters)</label>
                   <input id={`discard-${f.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
+                  {who === 'admin' && (
+                    <>
+                      <label htmlFor={`self-discard-${f.id}`}>This is your own sale. Give a second reason, in other words (at least 5 characters)</label>
+                      <input id={`self-discard-${f.id}`} value={selfReason} maxLength={300} onChange={(e) => setSelfReason(e.target.value)} />
+                    </>
+                  )}
                   <p className="muted">The sale is never recorded. Your name and the reason are kept.</p>
+                  {decide.error && <p role="alert">{decide.error.message}</p>}
                   <div className="cluster">
-                    <button type="button" className="btn-danger btn-sm" disabled={reason.trim().length < 5 || decide.isPending} onClick={() => decide.mutate({ id: f.id ?? '', action: 'discard' })}>
+                    <button type="button" className="btn-danger btn-sm" disabled={!discardReady(reason, who === 'admin' ? selfReason : null) || decide.isPending} onClick={() => decide.mutate({ id: f.id ?? '', action: 'discard', own: who === 'admin' })}>
                       Discard for good
                     </button>
                     <button type="button" className="btn-ghost btn-sm" onClick={() => setDiscarding(null)}>
@@ -266,16 +294,21 @@ function ManagerQueue() {
                 </div>
               ) : (
                 <div className="cluster">
-                  <button type="button" className="btn-sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: f.id ?? '', action: 'retry' })}>
-                    Send it again
-                  </button>
+                  {who === 'decide' ? (
+                    <button type="button" className="btn-sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: f.id ?? '', action: 'retry' })}>
+                      Send it again
+                    </button>
+                  ) : (
+                    <p className="muted">Your own sale: you can send it again from your phone, or discard it as an administrator.</p>
+                  )}
                   <button type="button" className="btn-ghost btn-sm" onClick={() => setDiscarding(f.id ?? null)}>
                     Discard
                   </button>
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       {parked.length > 0 && (

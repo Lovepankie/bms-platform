@@ -178,7 +178,7 @@ class OfflineSalesService {
     /** Asks the device that reported it to send the sale again, once the cause is fixed. */
     @Transactional(noRollbackFor = ApiException.class)
     Failure retry(UUID id) {
-        Failure f = decidable(id);
+        Failure f = decidable(id, null);
         if (f.status().equals("retry")) {
             return f;
         }
@@ -194,42 +194,76 @@ class OfflineSalesService {
         return repo.failure(id, false).orElseThrow();
     }
 
-    /** Discards the refused sale with a reason: it is never recorded, and the decision is audited. */
+    /**
+     * Discards the refused sale with a reason: it is never recorded, and the decision is audited. An administrator discarding
+     * a sale they made themselves gives a second written reason, audited as self_discard (ADR-067 decision 11 d).
+     */
     @Transactional(noRollbackFor = ApiException.class)
-    Failure discard(UUID id, String reason) {
-        Failure f = decidable(id);
+    Failure discard(UUID id, String reason, String selfReason) {
         String trimmed = reason.trim();
+        String selfTrimmed = selfReason == null ? "" : selfReason.trim();
+        Failure f = decidable(id, selfTrimmed);
         if (trimmed.length() < 5) {
             throw ApiException.validation(List.of(
                     new ApiException.FieldProblem("reason", "invalid", "Give a reason of at least 5 characters.")));
         }
         UUID by = CurrentPrincipal.require().userId();
+        boolean self = f.madeBy().equals(by);
+        if (self && selfTrimmed.equalsIgnoreCase(trimmed)) {
+            throw ApiException.validation(List.of(new ApiException.FieldProblem(
+                    "self_discard_reason",
+                    "invalid",
+                    "Say it again in other words: a second reason, not the same one.")));
+        }
         repo.decide(id, "discarded", by, trimmed);
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("status", "discarded");
         after.put("reason", trimmed);
+        if (self) {
+            after.put("self_discard", true);
+            after.put("self_discard_reason", selfTrimmed);
+        }
         after.put("client_sale_id", f.clientSaleId());
         after.put("made_by", f.madeBy());
         after.put("total_minor", f.totalMinor());
         after.put("payment_method", f.paymentMethod());
         after.put("refusal_code", f.code());
         audit.record(new AuditLog.Entry(
-                "retail.offline_sale.discarded", FAILURE, id, f.branchId(), Map.of("status", f.status()), after));
+                self ? "retail.offline_sale.self_discard" : "retail.offline_sale.discarded",
+                FAILURE,
+                id,
+                f.branchId(),
+                Map.of("status", f.status()),
+                after));
         return repo.failure(id, false).orElseThrow();
     }
 
-    private Failure decidable(UUID id) {
+    /**
+     * The failure, locked, when the caller may decide it. {@code selfReason} is null for a retry and the second reason (maybe
+     * blank) for a discard.
+     */
+    private Failure decidable(UUID id, String selfReason) {
         Principal principal = CurrentPrincipal.require();
         Failure f = repo.failure(id, true)
                 .filter(x -> principal.may(RESOLVE, x.branchId()))
                 .orElseThrow(ApiException::notFound);
         if (f.madeBy().equals(principal.userId())) {
-            // ADR-067 decision 11 (d): nobody decides their own refused sale, a Supervisor included.
-            throw new ApiException(
-                    HttpStatus.FORBIDDEN,
-                    "own_offline_sale",
-                    "Your own sale",
-                    "Another manager decides a sale you made. You can send it again from your phone.");
+            // ADR-067 decision 11 (d): a seller or a Supervisor never decides their own refused sale; an administrator
+            // (the
+            // Owner included) may discard it, with a second written reason.
+            if (selfReason == null || !repo.isTenantAdmin(principal.userId())) {
+                throw new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "own_offline_sale",
+                        "Your own sale",
+                        "Another manager decides a sale you made. You can send it again from your phone.");
+            }
+            if (selfReason.length() < 5) {
+                throw ApiException.validation(List.of(new ApiException.FieldProblem(
+                        "self_discard_reason",
+                        "required",
+                        "This is your own sale: give a second reason of at least 5 characters.")));
+            }
         }
         Optional<OfflineSalesRepository.Recorded> sale = repo.saleByClient(f.clientSaleId());
         if (sale.isPresent()) {

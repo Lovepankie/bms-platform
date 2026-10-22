@@ -96,6 +96,14 @@ class OfflineSalesRepository {
                 .optional();
     }
 
+    /** The user holds the tenant_admin role (an administrator or the Owner) now. */
+    boolean isTenantAdmin(UUID userId) {
+        return jdbc.sql("""
+                                SELECT count(*) FROM user_role_assignments
+                                 WHERE user_id = ? AND role_key = 'tenant_admin' AND revoked_at IS NULL
+                                """).param(userId).query(Long.class).single() > 0;
+    }
+
     boolean branchExists(UUID branchId) {
         return jdbc.sql("SELECT count(*) FROM branches WHERE id = ?")
                         .param(branchId)

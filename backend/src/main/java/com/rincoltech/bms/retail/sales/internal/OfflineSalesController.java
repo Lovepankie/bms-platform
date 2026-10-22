@@ -121,9 +121,11 @@ class OfflineSalesController {
     @PostMapping("/offline-failures/{failure_id}/discard")
     @RequiresPermission(OfflineSalesService.RESOLVE)
     @Operation(
-            summary = "Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067)",
+            summary =
+                    "Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067). The caller's own"
+                            + " sale only by an administrator, with self_discard_reason",
             operationId = "discardRetailOfflineFailure")
     Failure discard(@PathVariable("failure_id") UUID id, @Valid @RequestBody DiscardRequest request) {
-        return service.discard(id, request.reason());
+        return service.discard(id, request.reason(), request.selfDiscardReason());
     }
 }

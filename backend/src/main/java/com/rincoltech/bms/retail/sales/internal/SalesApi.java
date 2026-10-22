@@ -436,7 +436,14 @@ final class SalesApi {
 
     @Schema(name = "RetailOfflineFailureDiscard")
     record DiscardRequest(
-            @NotBlank @Size(min = 5, max = 300) String reason) {}
+            @NotBlank @Size(min = 5, max = 300) String reason,
+
+            @Size(min = 5, max = 300)
+            @Schema(
+                    description =
+                            "A second written reason, needed when an administrator (or the Owner) discards a sale they"
+                                    + " made themselves (ADR-067 decision 11 d); audited as self_discard")
+            String selfDiscardReason) {}
 
     @Schema(name = "RetailSaleWriteOffInfo", description = "A credit sale whose unpaid part was written off as a loss")
     record WriteOffInfo(

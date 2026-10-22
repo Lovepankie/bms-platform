@@ -47,6 +47,8 @@ export interface Offline {
   catalogue: Catalogue | null;
   /** The person holds retail.offline.resolve somewhere: the sheet shows other people's refused sales and the clashes. */
   manager: boolean;
+  /** The person is an administrator (tenant_admin, the Owner included): they may discard their own refused sale with a second reason. */
+  admin: boolean;
   /** Sales other people left waiting on this phone for this business (a shared phone): sent when they sign in here again. */
   othersWaiting: number;
   /** Fetches the catalogue copy again (when online). */
@@ -84,6 +86,11 @@ export function useOutbox(): SyncSnapshot {
 /** The person may sell in retail: the only staff work that runs offline. */
 export function sellsOffline(me: Pick<Me, 'permissions' | 'modules'>): boolean {
   return (me.modules ?? []).includes('retail') && (me.permissions ?? []).includes('retail.sale.create');
+}
+
+/** An administrator (tenant_admin, the Owner included), who may discard their own refused sale with a second reason (ADR-067 decision 11 d). */
+export function isAdmin(me: Pick<Me, 'roles'> | undefined): boolean {
+  return (me?.roles ?? []).some((r) => r.role_key === 'tenant_admin');
 }
 
 /** What the engine and the catalogue use in the browser; tests pass their own. */
@@ -256,10 +263,12 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
   }, [svc, signedIn, engine, refresh]);
 
   const manager = (me?.permissions ?? []).includes('retail.offline.resolve');
+  const admin = isAdmin(me);
   return useMemo(() => {
     if (!svc || !scope || !engine) return null;
     return {
       manager,
+      admin,
       othersWaiting: others,
       scope,
       userId: userId ?? '',
@@ -274,7 +283,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
         await svc.store.setLastPerson(svc.host, null);
       },
     };
-  }, [svc, scope, engine, catalogue, refresh, manager, userId, others]);
+  }, [svc, scope, engine, catalogue, refresh, manager, admin, userId, others]);
 }
 
 /** Asks the browser to keep this site's storage (the outbox) when space runs low; a refusal or no support changes nothing. */

@@ -1,6 +1,6 @@
 import type { Me } from '../api/client';
 import type { Connectivity } from './connectivity';
-import { sellsOffline, type Offline } from './offline-context';
+import { isAdmin, sellsOffline, type Offline } from './offline-context';
 import { memoryStore, scopeOf, type Catalogue, type OfflineStore } from './store';
 import { SyncEngine, type SyncDeps } from './sync-engine';
 
@@ -63,6 +63,7 @@ export function testOffline(
     connectivity,
     catalogue: options.catalogue ?? null,
     manager: (me.permissions ?? []).includes('retail.offline.resolve'),
+    admin: isAdmin(me),
     othersWaiting: options.othersWaiting ?? 0,
     refresh: async () => {},
     forget: async () => {

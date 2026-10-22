@@ -512,7 +512,9 @@ Notes:
   never in any API field; the owner may reverse it. Tests: `SaleReceiptPdfIT`.
 - Retail sales offline (issue #458, ADR-067, migration `V87`): `retail.offline.resolve` (administrators and the Supervisor, scoped
   by branch) lists and resolves the clashes of sales recorded offline and lists, resends or discards the sales the server refused
-  (`/retail/sale-clashes`, `/retail/offline-failures`); a discard needs a reason and is audited (`retail.offline_sale.discarded`).
+  (`/retail/sale-clashes`, `/retail/offline-failures`); a discard needs a reason and is audited (`retail.offline_sale.discarded`). Nobody decides a refused
+  sale they made themselves (403 `own_offline_sale`), except that a `tenant_admin` may discard their own with a second written
+  reason, audited `retail.offline_sale.self_discard` (ADR-067 decision 11 d).
   Recording a sale offline adds no permission: it is `retail.sale.create`, and the device reports its own refused sales under it
   (`/retail/offline-failures/mine` shows only the caller's). A sale sent with `recorded_offline` is not refused for short stock, an
   item switched off, a saved price that changed since, or a price not above cost (no `retail.price.below_cost` check): each is

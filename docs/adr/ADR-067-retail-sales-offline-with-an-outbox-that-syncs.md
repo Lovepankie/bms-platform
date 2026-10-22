@@ -101,8 +101,14 @@ left, the branch, the period, the person's roles.
    discarded failure is marked discarded on the seller's device on its next sync, shown for a day and never sent again. The
    server refuses a sale whose client sale id belongs to a discarded failure, before any other check of the sale, with 422
    `offline_sale_discarded`, whatever key it carries; the device marks it discarded on that answer too. A failure later recorded as a sale is closed by
-   that sale in the same transaction. The seller may send their own failed sale again at any time; they cannot discard it, and nobody decides (retry or
-   discard) a sale they made themselves, a Supervisor or an administrator included: 403 `own_offline_sale`.
+   that sale in the same transaction. The seller may send their own failed sale again at any time. A seller or a Supervisor never decides (retry or
+   discard) a sale they made themselves: 403 `own_offline_sale`. An administrator (`tenant_admin`, the Owner included) may
+   discard their own, never ask for it again, and only with a second written reason (`self_discard_reason`, at least 5
+   characters and not the first reason again; else 422), audited `retail.offline_sale.self_discard` with both reasons (decision
+   11 d). A failure whose client sale id already has a sale (a refusal reported for a sale whose answer was lost) is written,
+   or closed, as `recorded` with that sale, and is never discarded: 409 `offline_failure_decided`. A send of the sale locks
+   the failure row before it checks for a discard, so a discard and a send of the same sale at once end with exactly one of
+   them.
 9. **Sign-out safety.** Signing out while anything is queued or failed asks first ("3 sales are waiting to sync. Sync now,
    or keep them on this phone and sign out?"). The waiting sales stay in the person's own outbox on this device and are sent
    when the same person signs in here again; the catalogue copy and the person's saved profile are cleared at sign-out. Another person on the same device
@@ -128,7 +134,9 @@ left, the branch, the period, the person's roles.
     changed since is kept and flagged `price_changed`; a sale is never repriced. A price not above cost stays a `below_cost`
     clash. (b) An offline sale is never a credit sale. (c) A sale
     refused for a closed branch or a closed month is kept on the device and decided by a manager, never recorded against the
-    rule. (d) A seller cannot discard their own failed sale. (e) Waiting sales survive a sign-out on that device.
+    rule. (d) A seller or a Supervisor cannot discard their own failed sale. An administrator (an owner or administrator,
+    `tenant_admin`) may, with a second written reason, audited as `self_discard` (Hillary's default, decided 22 Oct 2026,
+    review of #463). (e) Waiting sales survive a sign-out on that device.
 
 ## Consequences
 
