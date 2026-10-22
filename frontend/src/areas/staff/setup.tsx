@@ -333,7 +333,7 @@ export function Setup() {
           </label>
         </fieldset>
 
-        {permissions.includes('core.data_export.run') && <DataExportCard />}
+        {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} />}
 
         {permissions.includes('core.branches.read') && (
           <fieldset>

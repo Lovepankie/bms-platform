@@ -32,7 +32,7 @@ vi.mock('../../api/client', async (original) => ({
   api: new Proxy({}, { get: (_t, name: string) => (client as Record<string, unknown>)[name] }),
 }));
 
-const { DataExportCard } = await import('./data-export');
+const { DataExportCard, exportWording } = await import('./data-export');
 
 function show() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -80,6 +80,13 @@ describe('the Download my data card', () => {
     status.latest = { id: 'run-1', status: 'failed', document_id: null, expired: false, error: 'timeout' };
     show();
     expect(await screen.findByRole('alert')).toBeTruthy();
+  });
+
+  it('names only the tables of the modules the business has on', () => {
+    expect(exportWording(['retail'])).not.toContain('loans');
+    expect(exportWording(['lending'])).toBe('members, loans, repayments and arrears');
+    expect(exportWording(undefined)).toContain('sales');
+    expect(exportWording(undefined)).toContain('loans');
   });
 
   it('switches the weekly email off', async () => {

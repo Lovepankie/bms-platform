@@ -14,7 +14,18 @@ function when(at: string | null): string {
   return new Date(at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function DataExportCard() {
+/** The tables the workbook holds, for the modules the business has on (all of them when not known). */
+export function exportWording(modules: string[] | null | undefined): string {
+  const retail = !modules || modules.includes('retail');
+  const lending = !modules || modules.includes('lending');
+  const tables = [
+    ...(retail ? ['sales, stock, restocks, credit buyers, the cash book, customers and products'] : []),
+    ...(lending ? ['members, loans, repayments and arrears'] : []),
+  ];
+  return tables.length === 0 ? 'your branches' : tables.join('; ');
+}
+
+export function DataExportCard({ modules }: { modules?: string[] | null }) {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const status = useQuery({
@@ -56,8 +67,8 @@ export function DataExportCard() {
     <fieldset data-tour="setup-data-export">
       <legend>Download my data</legend>
       <p>
-        Every table of the business in one Excel workbook, a sheet each: sales, stock, restocks, credit buyers, the cash book,
-        customers and products, or members, loans, repayments and arrears. It changes nothing and is kept for 30 days.
+        Every table of the business in one Excel workbook, a sheet each: {exportWording(modules)}. It changes nothing and is kept
+        for 30 days.
       </p>
       {status.isError && <p role="alert">Could not load the data export.</p>}
       {data && (
