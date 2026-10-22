@@ -54,19 +54,21 @@ export function ShopLogo({ url, name }: { url?: string | null; name: string }) {
  * The shop in use at the top of the side menu and the phone drawer (issue #461, ADR-068): its own logo, small and rounded, beside
  * its name; a shop without one, or whose logo cannot be read, shows the business logo, and without that no image. The folded
  * sidebar keeps only the image, the name as its tooltip. While the shop's logo loads, an empty space the size of the logo holds its
- * place, so the business logo never shows for a moment first.
+ * place, so the business logo never shows for a moment first. In production the image loads straight from its URL, so an image
+ * that fails to load is passed over for the next one (the business logo, then none).
  */
 export function CurrentShop({ me, branch }: { me: Me; branch: string | null }) {
   const folded = useFolded();
   const active = (me.branches ?? []).find((b) => b.id === branch);
   const shop = useLogo(active?.logo_url ?? null);
   const brand = useShellBrand();
+  const [broken, setBroken] = useState<string[]>([]);
   if (!active && branch !== ALL_BRANCHES) return null;
   const name = active ? branchLabel(active) : 'All branches';
-  const src = shop.src ?? (brand === PLATFORM_BRAND ? null : brand.logoSrc);
+  const src = [shop.src, brand === PLATFORM_BRAND ? null : brand.logoSrc].find((s) => s && !broken.includes(s)) ?? null;
   return (
     <div className="current-shop" title={folded ? name : undefined}>
-      {shop.loading ? <span className="current-shop-logo" aria-hidden="true" /> : src && <img className="current-shop-logo" src={src} alt={`Logo of ${name}`} />}
+      {shop.loading ? <span className="current-shop-logo" aria-hidden="true" /> : src && <img className="current-shop-logo" src={src} alt={`Logo of ${name}`} onError={() => setBroken((b) => [...b, src])} />}
       <span className={folded ? 'visually-hidden' : 'current-shop-name'}>{name}</span>
     </div>
   );

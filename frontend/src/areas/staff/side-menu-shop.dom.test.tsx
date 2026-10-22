@@ -109,6 +109,18 @@ describe('the shop in use in the sidebar (issue #461)', () => {
     expect(image.getAttribute('src')).toBe(BUSINESS);
   });
 
+  it('falls back to the business logo when the shop logo fails to load, and to the name alone when that fails too', async () => {
+    brand = { name: 'Test Traders', logoSrc: BUSINESS, themePrimary: null, themeText: null };
+    show('b-two');
+    const image = (await within(sidebarShop()).findByAltText('Logo of Test Shop Two (KLA)')) as HTMLImageElement;
+    expect(image.getAttribute('src')).toBe(LOGO);
+    fireEvent.error(image);
+    expect(within(sidebarShop()).getByAltText('Logo of Test Shop Two (KLA)').getAttribute('src')).toBe(BUSINESS);
+    fireEvent.error(within(sidebarShop()).getByAltText('Logo of Test Shop Two (KLA)'));
+    expect(within(sidebarShop()).queryByRole('img')).toBeNull();
+    expect(within(sidebarShop()).getByText('Test Shop Two (KLA)')).toBeTruthy();
+  });
+
   it('shows the name with no image when neither the shop nor the business has a logo', () => {
     show('b-one');
     expect(within(sidebarShop()).getByText('Test Shop One (HQ)')).toBeTruthy();
