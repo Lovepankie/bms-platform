@@ -201,6 +201,28 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect(qtyOf(0)).toBe('5');
   });
 
+  it('puts back the field a scan lands in after a Tab from another field, not the field typed in before', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge(EAN);
+    await waitFor(() => expect(qtyOf(0)).toBe('1'));
+    const price = document.getElementById('price-0') as HTMLInputElement;
+    const qty = document.getElementById('qty-0') as HTMLInputElement;
+    fireEvent.change(qty, { target: { value: '12' } });
+    price.focus();
+    price.select();
+    // Keys in the price at scanner speed, then a Tab into the quantity and a scan there within the idle time.
+    let at = (clock += 10000);
+    for (const ch of '5500') press(ch, (at += 8));
+    qty.focus();
+    qty.setSelectionRange(1, 1);
+    at += 100;
+    for (const ch of EAN) press(ch, (at += 8));
+    expect(press('Enter', (clock = at + 8)).defaultPrevented).toBe(true);
+    expect(qtyOf(0)).toBe('12');
+    expect(qty.selectionStart).toBe(1);
+  });
+
   it('waits in the scan box, so a scanner too slow to be told from typing still adds the item', async () => {
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP' });
     screenOf(<SaleForm branchId={BRANCH} />);

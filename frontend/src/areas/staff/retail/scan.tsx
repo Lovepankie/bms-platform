@@ -105,8 +105,10 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
       } else if (e.key.length === 1) {
         const t = e.target;
         // The snapshot is taken when a new run of keys starts outside a burst (a scan right after typing keeps what was
-        // typed), never inside one, so a mid-code pause cannot replace it with half a code.
-        if (wedge.key(e.key, e.timeStamp || performance.now())) before = editable(t) ? { field: t, value: t.value, start: t.selectionStart, end: t.selectionEnd } : null;
+        // typed), never inside one, so a mid-code pause cannot replace it with half a code; a key in another field (after
+        // a Tab) snapshots that field, so the field the scan lands in is the one put back.
+        const fresh = wedge.key(e.key, e.timeStamp || performance.now());
+        if (fresh || t !== before?.field) before = editable(t) ? { field: t, value: t.value, start: t.selectionStart, end: t.selectionEnd } : null;
       }
     };
     document.addEventListener('keydown', down, true);
