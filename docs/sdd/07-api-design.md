@@ -409,13 +409,13 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | POST | `/platform/tenants/{tenant_id}/users/{user_id}/reset-sign-in` | `platform.tenants.manage` | **Built (#320).** Body `{totp_code, reason}`: a current code from the operator's own authenticator, used once, checked after the target and before anything is done (422 `invalid_mfa_code`), and a reason of 5 to 300 characters kept in the audit row (#407). Tenant admins only (422 `not_a_tenant_admin`), active only (409). Returns `{url, expires_at}` once, `no-store`, for the operator to hand to the admin; audited in both audit logs (`platform.tenant_admin.sign_in_reset`); the admin is emailed that a reset was issued, without the link. After the reset an admin with two-step sign-in still types the code, and one without it is sent to enrolment. FR-IAM-15, ADR-042 |
 | POST | `/platform/tenants/{tenant_id}/support-sessions` | | FR-TEN-07 (P2) |
 | GET | `/platform/tenants/{tenant_id}/usage` | | Users, members, SMS segments. FR-NTF-07. Not built yet |
-| POST | `/platform/sign-up/applications` | public | The sign-up form (FR-ONB-01). Always 202 `{status: check_your_email}`, for a new, a known or a honeypot request (FR-ONB-03); 429 `rate_limited` |
+| POST | `/platform/sign-up/applications` | public | The sign-up form (FR-ONB-01). Always 202 `{status: check_your_email}`, for a new, a known or a honeypot request (FR-ONB-03); 429 `rate_limited`. An optional `referral_code` (the `?ref=` of a referral link, any case) is resolved first: one no business has is 422 `referral_code_unknown` on that field and nothing is created (FR-REF-02, ADR-069, #464) |
 | POST | `/platform/find-sign-in` | public | **Built (#383).** `{email}`. Always 202 `{message}` with the same words and after at least a 400 ms floor, whether or not the address is an active staff user of any active business. When it is, the sign-in page of each such business is emailed to that address only (`identity.find_sign_in`, through the outbox). Limited to 10 an hour per client address (429 `rate_limited`) and 3 emails an hour per mailbox (counted from the outbox, answered like any other request); every call is audited in `platform_audit_log` with the address masked |
 | POST | `/platform/sign-up/verify` | public (link token) | `{token}`: confirms the email on first use and returns the applicant view (FR-ONB-02) |
 | POST | `/platform/sign-up/status` | public (link token) | `{token}`: the applicant view, no contact details (FR-ONB-04) |
 | POST | `/platform/sign-up/reply` | public (link token) | `{token, reply}`: answers a `needs_info` note; back to `submitted` (FR-ONB-04) |
 | GET | `/platform/applications` | `platform.tenants.read` | `?status=` (repeatable). Confirmed applications, newest first, at most 500, and `counts` per status (FR-ONB-05) |
-| GET | `/platform/applications/{application_id}` | `platform.tenants.read` | The application, `possible_duplicates` and a free `suggested_slug` (FR-ONB-05) |
+| GET | `/platform/applications/{application_id}` | `platform.tenants.read` | The application, `possible_duplicates`, a free `suggested_slug` (FR-ONB-05) and `referred_by` (`{code, tenant_id, tenant_slug, tenant_name}` of the business whose code the applicant brought, or null; Activate makes it the referral, FR-REF-02) |
 | POST | `/platform/applications/{application_id}/verify` | `platform.tenants.manage` | FR-ONB-06 |
 | POST | `/platform/applications/{application_id}/needs-info` | `platform.tenants.manage` | `{note}`, which the applicant sees (FR-ONB-06) |
 | POST | `/platform/applications/{application_id}/reject` | `platform.tenants.manage` | `{note}`, the reason the applicant sees (FR-ONB-06) |
@@ -437,6 +437,27 @@ Feedback from every business (issue #447, ADR-065, FR-FBK-03), served by `core.p
 | PUT | `/platform/feedback/{feedback_id}/status` | `platform.tenants.manage` | `{status, reply_note?}`: forward only (new, seen, done); 422 `feedback_status_backwards`; the same status keeps it and its date and may change the reply (null keeps it, empty or white space only clears it); audited `platform.feedback.status_changed` with before and after |
 | PUT | `/platform/feedback/{feedback_id}/linked-issue` | `platform.tenants.manage` | `{linked_issue_number}`: the number of the issue opened for the item (a whole number above zero, else 422), or null to clear it; 404 when there is no such item; audited `platform.feedback.issue_linked` with before and after. Through `platform_feedback_set_linked_issue` (V80) |
 | GET | `/platform/feedback/{feedback_id}/screenshot` | `platform.tenants.read` | The picture (PNG or JPEG), read with the item's business bound (`TenantContext.callAs`); 404 when there is none |
+
+Referrals and their commissions across every business (issue #464, ADR-069, FR-REF-03 to FR-REF-06 and FR-REF-08), served by
+`core.platform` through the `Referrals` port of `core.referrals`. Every change takes a `reason` (5 to 300 characters) kept in the
+platform audit log; none takes an authenticator code (they record money moved outside the app, as a subscription payment does).
+The app never pays a commission; amounts are minor units.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/platform/referrals` | `platform.tenants.read` | `?referrer_tenant_id=`, `status=` (`applied`, `active`, `paying`, `ended`; else 422), `commission=` (`due`: something left to pay, `paid`: something paid), `limit` (1 to 500, default 100), `offset`. `{items: [PlatformReferral]}` newest first: the referrals and the open, confirmed applications that carry a code, each with the referrer (id, slug, name), the code, the referred business (id, slug, name; only the name for an application), `status`, `source` (`sign_up`, `operator`), `joined_at`, `started_at`, `ended_at`, `rule_override` and `totals` (`[{currency, earned_minor, paid_minor, due_minor}]`) |
+| GET | `/platform/referrals/export` | `platform.tenants.read` | The same filters as CSV (`text/csv`, `referrals.csv`): one row per referral and currency, at most 10,000, a leading formula character neutralised; audited `platform.referral.exported` |
+| GET | `/platform/referrals/{referral_id}` | `platform.tenants.read` | `{referral, rule_in_force, rule_source, lines}`: the rule a payment recorded now would use (`override`, `default` or `none`; none for an ended referral) and every line oldest first with its kind (`payment`, `manual`, `reversal`), amount, `months_counted`, `rule_snapshot`, note and paid columns; 404 for an unknown id |
+| PUT | `/platform/tenants/{tenant_id}/referrer` | `platform.tenants.manage` | `{referrer_code, reason}`: sets or corrects the business that referred this one by its code (any case), or clears it with a null or empty code; 422 `referral_self` for the business's own code, 422 `referral_code_unknown`, 404 for an unknown tenant. A change ends the current referral and starts one with source `operator`; the same referrer again changes nothing and writes nothing. `{tenant_id, referral}` (the current referral or null). Audited `platform.referral.referrer_changed` with before and after |
+| GET | `/platform/referrals/default-rule` | `platform.tenants.read` | `{rule}`: the platform default commission rule, or null (nothing is worked out) |
+| PUT | `/platform/referrals/default-rule` | `platform.tenants.manage` | `{rule, reason}`; `rule` is `{kind, percent_bp?, amount_minor?, currency?, months?, cap_minor?}` (`percent_of_payment`: `percent_bp` 1 to 10000, `months` 1 to 120 or null, `cap_minor` with its `currency`; `fixed_first_payment`: `amount_minor` 1 to 50,000,000 and `currency`, no months; `fixed_per_month`: `amount_minor`, `currency`, `months` or null), or null to clear it; 422 `validation_failed` in plain words for a shape that does not fit the kind. Applies to payments recorded from then on. Audited `platform.referral.default_rule_changed` |
+| PUT | `/platform/referrals/{referral_id}/rule` | `platform.tenants.manage` | `{rule, reason}` as above: this referral's own rule, or null so the default applies; 422 `referral_ended` for a referral that was moved to another referrer. Audited `platform.referral.rule_changed`. Returns the detail |
+| POST | `/platform/referrals/{referral_id}/commissions` | `platform.tenants.manage` | `{amount_minor (1 to 1,000,000,000), currency, reason}`: a line the operator worked out (kind `manual`, the reason as its note). No Idempotency-Key: a double submit is reversed. Audited `platform.referral.commission_added`. Returns the detail |
+| POST | `/platform/referrals/commissions/{line_id}/reverse` | `platform.tenants.manage` | `{reason}`: a line of the exact opposite amount (kind `reversal`); 409 `commission_line_already_reversed`, 422 `commission_line_is_reversal`. Audited `platform.referral.commission_reversed`. Returns the detail |
+| POST | `/platform/referrals/commissions/{line_id}/paid` | `platform.tenants.manage` | `{paid_on, method (mtn_momo, airtel_money, bank_transfer, cash, other), reference?, note?, reason}`: records that the line was paid outside the app; a day from 1 Jan 2026 to today; 409 `commission_already_paid`. Audited `platform.referral.commission_paid`. Returns the detail |
+
+`POST /platform/tenants/{tenant_id}/payments` also adds the referrer's commission line when the business has a current referral and
+a rule is in force (FR-REF-05), in the payment's transaction and behind its Idempotency-Key; the payment's answer is unchanged.
 
 The sign-up endpoints sit under `/platform` so they are served only on the platform host and
 resolve no tenant; they need no token. Their link token travels in the body: the emailed link
@@ -1381,6 +1402,14 @@ side is in section 7.11.3.
 | POST | `/feedback` | authenticated staff | `multipart/form-data`: `kind` (`idea`, `problem`, `question`), `message` (1 to 2000 characters), `page_path` (optional; only the path is kept), `screenshot` (optional PNG or JPEG, at most 2 MB). The user agent is read from the request and the version from the server's own build. 201 with the `FeedbackItem`. 422 `validation_failed`, `screenshot_not_an_image`, `screenshot_too_large`; 429 `feedback_rate_limited` with `Retry-After` after 10 in an hour (FR-FBK-01, FR-FBK-05). Queues the operator email in a savepoint (FR-FBK-04) |
 | GET | `/feedback` | authenticated staff | `{items: [FeedbackItem]}`: the caller's own, newest first, at most 100, with status, reply and `has_screenshot` (FR-FBK-02) |
 | GET | `/feedback/{feedback_id}/screenshot` | authenticated staff | The picture of one of the caller's own items; 404 for anyone else's or none |
+
+### 7.11.26 Referrals (`/referrals`, ADR-069, issue #464)
+
+The business's own referrals, for its owner and administrators. The operator's side is in section 7.11.3.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/referrals` | `core.referrals.read` | `{code, link, items, totals}`: the business's referral code, the public sign-up link with it (`{platform origin}/sign-up?ref=CODE`), and for each business it referred, newest first, `referred_name`, `joined_at`, `status` (`applied` for a confirmed application not activated yet, `active`, `paying`, or `ended` for a referral moved to another referrer that carries lines) and `totals` per currency (`earned_minor`, `paid_minor`, `due_minor`); `totals` adds them up. Nothing else of the referred business. FR-REF-01, FR-REF-07 |
 
 ## 7.12 Example: record a repayment
 
