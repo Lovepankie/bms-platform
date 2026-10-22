@@ -144,7 +144,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.web -> bms.api.audit "Searches and exports the audit log"
         bms.web -> bms.api.members "Registers, searches and verifies members"
         bms.web -> bms.api.products "Configures loan products; previews schedules"
-        bms.web -> bms.api.loans "Applications, appraisal, decisions, disbursement and repayment requests"
+        bms.web -> bms.api.loans "Applications, appraisal, decisions, disbursement and repayment requests; Home's Lending card reads GET /lending/loans/summary (ADR-072)"
         bms.web -> bms.api.collateral "Registers and releases collateral"
         bms.web -> bms.api.savings "Savings products, accounts, deposits, withdrawals, statements and reports"
         bms.web -> bms.api.investments "Sets up investment products; opens, funds, pays out, rolls over and withdraws investments; reads the maturity ladder"

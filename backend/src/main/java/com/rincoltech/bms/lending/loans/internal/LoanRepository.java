@@ -602,4 +602,47 @@ class LoanRepository {
     private static Instant instant(Timestamp ts) {
         return ts == null ? null : ts.toInstant();
     }
+
+    record HomeFigures(int dueTodayCount, long dueTodayMinor, int inArrearsCount, long inArrearsMinor) {}
+
+    /**
+     * Issue #471: what is left on the active loans' instalments due today and due before today, in {@code currency}.
+     * {@code branchIds} already intersected with the scope, null for every branch; {@code officers} is the ADR-064
+     * limit, so a loan officer counts only their own portfolio, as on the collections lists.
+     */
+    HomeFigures homeFigures(
+            List<UUID> branchIds, CollectionsRepository.Officers officers, LocalDate today, String currency) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return new HomeFigures(0, 0, 0, 0);
+        }
+        Map<String, Object> p = new LinkedHashMap<>();
+        p.put("today", today);
+        p.put("currency", currency);
+        StringBuilder filters = new StringBuilder();
+        CollectionsRepository.filters(filters, p, branchIds, officers);
+        return jdbc.sql("""
+                        WITH owed AS (
+                            SELECT i.loan_id, i.due_date,
+                                   i.principal_due_minor + i.interest_due_minor + i.fees_due_minor + i.penalties_due_minor
+                                   - i.principal_paid_minor - i.interest_paid_minor - i.fees_paid_minor - i.penalties_paid_minor
+                                   - i.interest_waived_minor - i.fees_waived_minor - i.penalties_waived_minor
+                                   - i.written_off_minor AS left_minor
+                            FROM lending_schedule_items i JOIN lending_loans l ON l.id = i.loan_id
+                            WHERE l.status = 'active' AND l.currency = :currency AND i.due_date <= :today
+                              AND i.status NOT IN ('paid', 'waived', 'written_off')%s
+                        )
+                        SELECT count(DISTINCT loan_id) FILTER (WHERE due_date = :today) AS due_count,
+                               coalesce(sum(left_minor) FILTER (WHERE due_date = :today), 0) AS due_minor,
+                               count(DISTINCT loan_id) FILTER (WHERE due_date < :today) AS arrears_count,
+                               coalesce(sum(left_minor) FILTER (WHERE due_date < :today), 0) AS arrears_minor
+                        FROM owed WHERE left_minor > 0
+                        """.formatted(filters))
+                .params(p)
+                .query((rs, n) -> new HomeFigures(
+                        rs.getInt("due_count"),
+                        rs.getLong("due_minor"),
+                        rs.getInt("arrears_count"),
+                        rs.getLong("arrears_minor")))
+                .single();
+    }
 }
