@@ -1,6 +1,7 @@
 import { createLazyRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { applyForAccount, OnboardingError } from '../../api/onboarding';
+import { BusyButton } from '../../app/ui/BusyButton';
 import {
   COUNTRIES,
   EMPTY_SIGN_UP,
@@ -185,9 +186,9 @@ export function SignUpView({ form, problems, busy, error, done, onChange, onSubm
           <label htmlFor="website">Website</label>
           <input id="website" name="website" tabIndex={-1} autoComplete="off" value={form.website} onChange={(e) => set({ website: e.target.value })} />
         </div>
-        <button className="btn-brand" type="submit" disabled={busy}>
-          {busy ? 'Sending' : 'Send application'}
-        </button>
+        <BusyButton className="btn-brand" type="submit" busy={busy}>
+          Send application
+        </BusyButton>
       </form>
     </main>
   );

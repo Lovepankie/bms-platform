@@ -1,6 +1,7 @@
 import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useRef, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { invitationToken, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
@@ -130,9 +131,9 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
           <ErrorLine message={message} />
           <form onSubmit={submitPassword} className="form-stack" noValidate>
             <PasswordFields password={password} confirm={confirm} onPassword={setPassword} onConfirm={setConfirm} />
-            <button className="btn-primary btn-lg" disabled={busy}>
-              {busy ? 'Saving' : 'Save and continue'}
-            </button>
+            <BusyButton className="btn-primary btn-lg" busy={busy}>
+              Save and continue
+            </BusyButton>
           </form>
           <InstallPrompt />
         </>
@@ -150,10 +151,10 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
           </p>
           <ErrorLine message={message} />
           <div className="form-actions">
-            <button type="button" className="btn-primary btn-lg" disabled={busy} onClick={turnOn}>
-              {busy ? 'Starting' : 'Turn on two-step sign-in'}
-            </button>
-            <button type="button" className="btn-lg" disabled={busy} onClick={home}>
+            <BusyButton type="button" className="btn-primary btn-lg" busy={busy} onClick={turnOn}>
+              Turn on two-step sign-in
+            </BusyButton>
+            <button type="button" /* busy-exempt: skip waits for the request */ className="btn-lg" disabled={busy} onClick={home}>
               Skip for now
             </button>
           </div>
@@ -171,7 +172,7 @@ export function AcceptInvitation({ token, initial = { kind: 'password' } }: { to
           <ErrorLine message={message} />
           <TwoStepSetup enrolment={step.enrolment} code={code} onCode={setCode} busy={busy} onSubmit={(e) => confirmCode(e, step.mfaToken)}>
             {!step.mfaToken && (
-              <button type="button" className="btn-ghost" disabled={busy} onClick={home}>
+              <button type="button" /* busy-exempt: skip waits for the request */ className="btn-ghost" disabled={busy} onClick={home}>
                 Skip for now
               </button>
             )}

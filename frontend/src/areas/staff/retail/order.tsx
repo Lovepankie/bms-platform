@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type Product } from '../../../api/retail';
 import { retailOrders, type Order } from '../../../api/retail-orders';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
@@ -74,7 +75,7 @@ function ChangeDetails({ order }: { order: Order }) {
       <p className="hint">To change the items, use Change the items.</p>
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={save.error} />
-      <button type="button" disabled={problem !== null || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Save the changes'}</button>
+      <BusyButton busy={save.isPending} type="button" disabled={problem !== null} onClick={() => save.mutate()}>Save the changes</BusyButton>
       <button type="button" onClick={() => setOpen(false)}>Close</button>
     </fieldset>
   );
@@ -149,7 +150,7 @@ function ChangeItems({ order }: { order: Order }) {
         </>
       )}
       <Problem error={save.error} />
-      <button type="button" className="rt-primary" disabled={!shown || problem !== null || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Save the new items'}</button>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!shown || problem !== null} onClick={() => save.mutate()}>Save the new items</BusyButton>
       <button type="button" onClick={() => { setOpen(false); setLines(null); save.reset(); }}>Close</button>
     </fieldset>
   );
@@ -178,7 +179,7 @@ function PayFee({ order }: { order: Order }) {
         <option value="bank">Bank</option>
       </select>
       <Problem error={pay.error} />
-      <button type="button" disabled={pay.isPending} onClick={() => pay.mutate()}>{pay.isPending ? 'Saving' : 'Save: the fee is paid'}</button>
+      <BusyButton busy={pay.isPending} type="button" onClick={() => pay.mutate()}>Save: the fee is paid</BusyButton>
     </fieldset>
   );
 }

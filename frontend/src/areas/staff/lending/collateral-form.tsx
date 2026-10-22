@@ -137,7 +137,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
         </Group>
       )}
       <Problem error={failure ? new Error(failure) : null} />
-      <SaveBar label={editing ? 'Save changes' : 'Register collateral'} busyLabel="Saving" busy={busy} blocked={guard.blocked ? 'Wait for the check above before saving again.' : photos.busy ? 'Wait for the photo to be ready.' : undefined}
+      <SaveBar label={editing ? 'Save changes' : 'Register collateral'} busy={busy} blocked={guard.blocked ? 'Wait for the check above before saving again.' : photos.busy ? 'Wait for the photo to be ready.' : undefined}
         cancel={editing ? <Link to="/staff/lending/collateral/$collateralId" params={{ collateralId: item?.id ?? '' }} className="btn btn-ghost">Cancel</Link> : <Link to="/staff/lending/collateral" className="btn btn-ghost">Cancel</Link>} tourId="collateral-save" />
     </form>
   );

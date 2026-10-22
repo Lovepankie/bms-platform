@@ -12,6 +12,7 @@ import {
 } from './payables-state';
 import { SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { Gate, Problem, money } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The supplier invoice form (the purchasing capability, ADR-033, issue #198). Choose the supplier and the goods received from them
 // that the invoice is for, then type what the invoice says: its number, dates, the supplier's price and the total as printed. The
@@ -144,7 +145,8 @@ export function BillFormView({ form, suppliers, loadingLines, match, checking, m
       <input id="bill-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && ticked(form).length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy || checking} data-tour="bill-save">{busy ? 'Saving' : 'Save supplier invoice'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null || checking} data-tour="bill-save">Save supplier invoice</BusyButton>
+
     </form>
   );
 }

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Customer } from '../../../api/retail';
 import { useStaff } from '../context';
 import { PRICELIST_MANAGE, PRICE_LISTS, capabilityOn, holds } from './permissions';
@@ -47,7 +48,7 @@ export function BuyerPricing({ row }: { row: Customer }) {
           </select>
           <Problem error={save.error && new Error(changeFailureText(save.error, queryClient))} />
           <p className="cluster">
-            <button type="button" disabled={save.isPending} onClick={() => save.mutate()}>Save</button>
+            <BusyButton busy={save.isPending} type="button" onClick={() => save.mutate()}>Save</BusyButton>
             <button type="button" className="btn-ghost" onClick={() => { setGroupId(row.customer_group_id ?? ''); setListId(row.price_list_id ?? ''); setEditing(false); save.reset(); }}>Cancel</button>
           </p>
         </div>

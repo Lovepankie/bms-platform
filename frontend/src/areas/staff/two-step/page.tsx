@@ -3,6 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { users } from '../../../api/users';
 import { type Choice, type Policy, twoStep } from '../../../api/two-step';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { DEFAULT_GRACE, canManageTwoStep, choiceOf, deadlineWords, differs, graceChoices, needsProof, policyOf, ready, reviewLines } from './state';
 
@@ -183,7 +184,7 @@ export function TwoStepPolicyScreen() {
       )}
       {choice && !reviewing && (
         <p className="cluster">
-          <button type="button" className="rt-primary" disabled={busy || !changed || !ready(choice)} onClick={() => setReviewing(true)}>
+          <button type="button" /* busy-exempt: opens the review */ className="rt-primary" disabled={busy || !changed || !ready(choice)} onClick={() => setReviewing(true)}>
             Review and save
           </button>
           {!changed && <span className="hint">Nothing has changed yet.</span>}
@@ -213,10 +214,10 @@ export function TwoStepPolicyScreen() {
             </label>
           )}
           <p className="cluster">
-            <button type="button" className="rt-primary" disabled={busy || (savedState !== null && needsProof(savedState, choice, new Date()) && proof.trim() === '')} onClick={() => void save()}>
-              {busy ? 'Saving' : choice.policy === 'off' ? 'Yes, make it optional' : 'Yes, save this'}
-            </button>
-            <button type="button" className="btn-ghost" disabled={busy} onClick={() => setReviewing(false)}>
+            <BusyButton type="button" className="rt-primary" busy={busy} disabled={savedState !== null && needsProof(savedState, choice, new Date()) && proof.trim() === ''} onClick={() => void save()}>
+              {choice.policy === 'off' ? 'Yes, make it optional' : 'Yes, save this'}
+            </BusyButton>
+            <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={() => setReviewing(false)}>
               Go back
             </button>
           </p>

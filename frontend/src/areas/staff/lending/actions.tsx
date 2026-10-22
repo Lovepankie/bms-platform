@@ -5,6 +5,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { allocationSummary, isIsoDate, localDate, money, parseAmount, words } from './loan-state';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The money-moving forms of the loan page: repayment, disbursement, reversal and write-off, plus
 // the payoff quote. Each write keeps its draft and one Idempotency-Key in this tab until the
@@ -126,9 +127,9 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
       <MethodChoice name="repay-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="repay-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={!valid || save.isPending}>
-        {save.isPending ? 'Saving' : 'Record repayment'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!valid}>
+        Record repayment
+      </BusyButton>
       {draft.amount !== '' && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}
@@ -173,9 +174,9 @@ export function DisburseForm({ loan }: { loan: Loan }) {
       <MethodChoice name="disburse-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="disburse-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={!isIsoDate(draft.date) || save.isPending}>
-        {save.isPending ? 'Sending' : 'Disburse'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!isIsoDate(draft.date)}>
+        Disburse
+      </BusyButton>
     </form>
   );
 }
@@ -238,9 +239,9 @@ function ReasonForm({ id, label, submit, draftName, send }: {
       <label htmlFor={id}>{label}</label>
       <textarea id={id} rows={2} maxLength={500} value={draft} onChange={(e) => setDraft(e.target.value)} />
       <Problem error={save.error} />
-      <button type="submit" className="btn-danger btn-block" disabled={draft.trim() === '' || save.isPending}>
-        {save.isPending ? 'Sending' : submit}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="btn-danger btn-block" disabled={draft.trim() === ''}>
+        {submit}
+      </BusyButton>
     </form>
   );
 }

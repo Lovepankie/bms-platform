@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BusinessDetail, Plan } from '../../api/operator';
@@ -25,6 +25,8 @@ const api = {
   setBusinessPilot: vi.fn(),
   resetOwnerSignIn: vi.fn(),
 };
+
+const settle = () => act(() => new Promise<void>((resolve) => setTimeout(() => setTimeout(() => setTimeout(resolve)))));
 
 vi.mock('../../api/operator', async (original) => {
   const real = await original<typeof import('../../api/operator')>();
@@ -136,9 +138,10 @@ describe('the Business page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yes, suspend it' }));
     expect(screen.getByText(/Say why in a few words/)).toBeTruthy();
     expect(api.suspendBusiness).not.toHaveBeenCalled();
+    await settle();
     fireEvent.change(screen.getByLabelText('Why (kept with the change)'), { target: { value: 'Test: unpaid after the free month' } });
     fireEvent.click(screen.getByRole('button', { name: 'Yes, suspend it' }));
-    fireEvent.click(screen.getByRole('button', { name: /Yes, suspend it|Saving/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Yes, suspend it/ }));
     await waitFor(() => expect(api.suspendBusiness).toHaveBeenCalledTimes(1));
     expect(api.suspendBusiness).toHaveBeenCalledWith('t-1', 'Test: unpaid after the free month');
     expect(await screen.findByText(/is suspended: read only, nothing deleted/)).toBeTruthy();
@@ -155,9 +158,10 @@ describe('the Business page', () => {
     expect(screen.getByText(/Record UGX 110,000 by MTN Mobile Money from Test Shop One, covering 31 Jan 2099/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Yes, record it' }));
     expect(api.recordPayment).not.toHaveBeenCalled();
+    await settle();
     fireEvent.change(screen.getByLabelText('Why (kept with the change)'), { target: { value: 'Test: seen on the statement' } });
     fireEvent.click(screen.getByRole('button', { name: 'Yes, record it' }));
-    fireEvent.click(screen.getByRole('button', { name: /Yes, record it|Saving/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Yes, record it/ }));
     await waitFor(() => expect(api.recordPayment).toHaveBeenCalledTimes(1));
     const [tenant, key, body] = api.recordPayment.mock.calls[0] as [string, string, Record<string, unknown>];
     expect(tenant).toBe('t-1');
@@ -207,6 +211,7 @@ describe('the Business page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yes, make the link' }));
     expect(screen.getByText(/Say why in a few words/)).toBeTruthy();
     expect(api.resetOwnerSignIn).not.toHaveBeenCalled();
+    await settle();
     fireEvent.change(screen.getByLabelText('Why (kept in the history)'), { target: { value: 'Test: owner called, forgot it' } });
     fireEvent.click(screen.getByRole('button', { name: 'Yes, make the link' }));
     await waitFor(() => expect(api.resetOwnerSignIn).toHaveBeenCalledWith('t-1', 'u-1', '123456', 'Test: owner called, forgot it'));
@@ -234,6 +239,7 @@ describe('Plans and prices', () => {
     expect(screen.getByText(/Test Small will cost UGX 12,000 a month and UGX 132,000 a year, from today/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Yes, save the price' }));
     expect(api.addPlanPrice).not.toHaveBeenCalled();
+    await settle();
     fireEvent.change(screen.getByLabelText('Why (kept with the change)'), { target: { value: 'Test: new price agreed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Yes, save the price' }));
     await waitFor(() => expect(api.addPlanPrice).toHaveBeenCalledTimes(1));
@@ -255,6 +261,7 @@ describe('Plans and prices', () => {
     fireEvent.change(screen.getByLabelText('Why (kept with the change)'), { target: { value: 'Test: new price agreed' } });
     fireEvent.click(screen.getByRole('button', { name: 'Yes, save the price' }));
     expect(api.addPlanPrice).not.toHaveBeenCalled();
+    await settle();
     fireEvent.click(screen.getByLabelText('I checked it: this is right'));
     fireEvent.click(screen.getByRole('button', { name: 'Yes, save the price' }));
     await waitFor(() => expect(api.addPlanPrice).toHaveBeenCalledTimes(1));

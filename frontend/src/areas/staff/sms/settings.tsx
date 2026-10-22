@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { SmsError, sms, type SmsSettings, type SmsSettingsChange } from '../../../api/sms';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import {
   capProblem,
@@ -72,9 +73,9 @@ export function SwitchPanel({ saved, canManage, busy, error, onChange }: {
       {error && <p role="alert" className="alert alert-danger">{error}</p>}
       {canManage && saved.enabled && (
         <p>
-          <button type="button" className="btn-ghost" disabled={busy} onClick={() => onChange({ enabled: false })}>
+          <BusyButton type="button" className="btn-ghost" busy={busy} onClick={() => onChange({ enabled: false })}>
             Switch SMS off
-          </button>
+          </BusyButton>
         </p>
       )}
       {canManage && !saved.enabled && !opening && (
@@ -98,10 +99,10 @@ export function SwitchPanel({ saved, canManage, busy, error, onChange }: {
             <input type="checkbox" checked={ticked} onChange={(e) => setTicked(e.target.checked)} /> I have read this and accept it for my business
           </label>
           <p className="cluster">
-            <button type="submit" className="rt-primary" disabled={!ticked || busy}>
-              {busy ? 'Switching on' : 'Switch SMS on'}
-            </button>
-            <button type="button" className="btn-ghost" disabled={busy} onClick={() => { setOpening(false); setTicked(false); }}>
+            <BusyButton type="submit" className="rt-primary" busy={busy} disabled={!ticked}>
+              Switch SMS on
+            </BusyButton>
+            <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={() => { setOpening(false); setTicked(false); }}>
               Not now
             </button>
           </p>
@@ -244,11 +245,11 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
 
         {canManage && (
           <p className="cluster">
-            <button type="submit" className="rt-primary" disabled={!submitted || save.isPending}>
-              {save.isPending ? 'Saving' : 'Save changes'}
-            </button>
+            <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={!submitted}>
+              Save changes
+            </BusyButton>
             {isChange(change) && (
-              <button type="button" className="btn-ghost" disabled={save.isPending} onClick={() => { save.reset(); setDraft(draftOf(saved)); }}>
+              <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={save.isPending} onClick={() => { save.reset(); setDraft(draftOf(saved)); }}>
                 Undo
               </button>
             )}

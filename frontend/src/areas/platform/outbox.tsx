@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { type OutboxStatus, outboxStatus, retryOutbox } from '../../api/onboarding';
 
 // Messages the senders could not deliver (FR-NTF-09): three failed attempts each. Recipients are
@@ -53,9 +54,9 @@ export function OutboxView({ status, busyId, onRetry }: { status: OutboxStatus; 
                 <td>{f.last_error}</td>
                 <td>{f.failed_at?.slice(0, 16).replace('T', ' ')}</td>
                 <td>
-                  <button type="button" disabled={busyId !== null} onClick={() => onRetry(f.id ?? '')}>
-                    {busyId === f.id ? 'Sending' : 'Send again'}
-                  </button>
+                  <BusyButton type="button" busy={busyId !== null && busyId === f.id} disabled={busyId !== null} onClick={() => onRetry(f.id ?? '')}>
+                    Send again
+                  </BusyButton>
                 </td>
               </tr>
             ))}

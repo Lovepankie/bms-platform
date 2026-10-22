@@ -4,6 +4,7 @@ import { type FormEvent, useState } from 'react';
 import type { MfaEnrolment } from '../../../api/client';
 import { twoStep } from '../../../api/two-step';
 import { ErrorLine, RecoveryCodes, TwoStepSetup } from '../../auth/steps';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { deadlineWords } from './state';
 
@@ -84,9 +85,9 @@ export function OwnTwoStep({ blocking = false }: { blocking?: boolean }) {
             <input type="password" autoComplete="current-password" value={password} disabled={busy} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <p className="cluster" data-tour="twostep-turn-on">
-            <button type="button" className="btn-primary btn-lg" disabled={busy || password === ''} onClick={() => void start()}>
-              {busy ? 'Starting' : 'Turn on two-step sign-in'}
-            </button>
+            <BusyButton type="button" className="btn-primary btn-lg" busy={busy} disabled={password === ''} onClick={() => void start()}>
+              Turn on two-step sign-in
+            </BusyButton>
             {!blocking && (
               <Link to="/staff" className="btn-ghost">
                 Not now

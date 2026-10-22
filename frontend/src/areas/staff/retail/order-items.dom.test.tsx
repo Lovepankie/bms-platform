@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
@@ -66,7 +66,7 @@ function page(o: Order) {
   );
 }
 
-const save = () => screen.getByRole('button', { name: /Save the new items|Saving/ }) as HTMLButtonElement;
+const save = () => screen.getByRole('button', { name: /Save the new items/ }) as HTMLButtonElement;
 
 describe('Change the items on the order page', () => {
   it('is offered while the order is ordered or packed, and not once it is out for delivery', () => {
@@ -123,9 +123,25 @@ describe('Change the items on the order page', () => {
     fireEvent.change(await screen.findByLabelText(/Quantity/), { target: { value: '9' } });
     fireEvent.click(save());
     expect(await screen.findByText(/not enough stock/i)).toBeTruthy();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve)); await new Promise((resolve) => setTimeout(resolve)); });
     fireEvent.click(save());
     await waitFor(() => expect(changeItems).toHaveBeenCalledTimes(2));
     expect(changeItems.mock.calls[1]?.[3]).toBe(changeItems.mock.calls[0]?.[3]);
+  });
+
+  it('shows the save as busy while its request runs, and a second press sends nothing', async () => {
+    getProduct.mockResolvedValue(romper);
+    changeItems.mockReturnValue(new Promise(() => undefined));
+    page(order('ordered'));
+    fireEvent.click(screen.getByRole('button', { name: 'Change the items' }));
+    fireEvent.change(await screen.findByLabelText(/Quantity/), { target: { value: '3' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(save().getAttribute('aria-busy')).toBe('true'));
+    expect(save().getAttribute('aria-disabled')).toBe('true');
+    expect(save().textContent).toBe('Save the new items');
+    expect(save().querySelector('.busy-spinner')).not.toBeNull();
+    fireEvent.click(save());
+    expect(changeItems).toHaveBeenCalledTimes(1);
   });
 
   it('will not save without any item', async () => {

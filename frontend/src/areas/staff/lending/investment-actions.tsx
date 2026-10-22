@@ -7,6 +7,7 @@ import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { instructionWords, investmentTxnWords, percent } from './investment-state';
 import { isIsoDate, localDate, money, words } from './loan-state';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The forms of the investment page: funding, return payout, maturity payout, rollover, early
 // withdrawal (with its quote), the maturity instruction and a reversal. Each write keeps its draft
@@ -77,9 +78,9 @@ export function FundForm({ inv }: { inv: Investment }) {
       <label htmlFor="fund-ref">Reference (optional)</label>
       <input id="fund-ref" maxLength={100} value={draft.reference} onChange={(e) => update({ reference: e.target.value })} autoComplete="off" />
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={!isIsoDate(draft.date) || save.isPending}>
-        {save.isPending ? 'Saving' : 'Record funding'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!isIsoDate(draft.date)}>
+        Record funding
+      </BusyButton>
     </form>
   );
 }
@@ -124,9 +125,9 @@ export function PayForm({ inv, kind }: { inv: Investment; kind: 'pay_return' | '
       <label htmlFor={`${kind}-ref`}>Reference (optional)</label>
       <input id={`${kind}-ref`} maxLength={100} value={draft.reference} onChange={(e) => setDraft((d) => ({ ...d, reference: e.target.value }))} autoComplete="off" />
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={save.isPending}>
-        {save.isPending ? 'Paying' : 'Pay now'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary">
+        Pay now
+      </BusyButton>
     </form>
   );
 }
@@ -163,9 +164,9 @@ export function RolloverForm({ inv, onDone }: { inv: Investment; onDone: (nextId
         </label>
       </fieldset>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={save.isPending}>
-        {save.isPending ? 'Rolling over' : 'Roll over'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary">
+        Roll over
+      </BusyButton>
     </form>
   );
 }
@@ -213,9 +214,9 @@ export function EarlyWithdrawalForm({ inv }: { inv: Investment }) {
       <label htmlFor="early-reason">Why does the member withdraw early?</label>
       <textarea id="early-reason" rows={2} maxLength={500} value={draft.reason} onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))} />
       <Problem error={save.error} />
-      <button type="submit" className="btn-danger btn-block" disabled={!q || draft.reason.trim() === '' || save.isPending}>
-        {save.isPending ? 'Sending' : 'Request early withdrawal'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="btn-danger btn-block" disabled={!q || draft.reason.trim() === ''}>
+        Request early withdrawal
+      </BusyButton>
     </form>
   );
 }
@@ -241,9 +242,9 @@ export function InstructionForm({ inv }: { inv: Investment }) {
       {inv.product_type === 'recurring' && <p className="field-hint">A recurring deposit renews with its return when no choice is given.</p>}
       <Problem error={save.error} />
       {save.isSuccess && <p role="status" className="alert alert-success">Saved.</p>}
-      <button type="submit" className="rt-primary" disabled={save.isPending}>
-        {save.isPending ? 'Saving' : 'Save the choice'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary">
+        Save the choice
+      </BusyButton>
     </form>
   );
 }
@@ -266,9 +267,9 @@ export function ReverseForm({ inv, txn }: { inv: Investment; txn: InvestmentTran
       <label htmlFor={`reverse-${txn.id ?? ''}`}>Why reverse this {investmentTxnWords(txn.txn_type).toLowerCase()}?</label>
       <textarea id={`reverse-${txn.id ?? ''}`} rows={2} maxLength={500} value={draft} onChange={(e) => setDraft(e.target.value)} />
       <Problem error={save.error} />
-      <button type="submit" className="btn-danger btn-block" disabled={draft.trim() === '' || save.isPending}>
-        {save.isPending ? 'Sending' : 'Request reversal'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="btn-danger btn-block" disabled={draft.trim() === ''}>
+        Request reversal
+      </BusyButton>
     </form>
   );
 }

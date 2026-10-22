@@ -1,5 +1,6 @@
 import { createLazyRoute, Link } from '@tanstack/react-router';
 import { type FormEvent, useEffect, useState } from 'react';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { applicantReply, applicantStatus, type ApplicantView, OnboardingError, statusLabel, verifyApplicant } from '../../api/onboarding';
 import { loadApplicantToken, MODULES, readLinkToken, saveApplicantToken } from './forms';
 
@@ -87,9 +88,9 @@ export function ApplicantPage({
         <section aria-labelledby="confirm-heading" className="form-stack">
           <h2 id="confirm-heading">Confirm your email</h2>
           <p>Press the button to confirm this is your email address. We then look at your application.</p>
-          <button className="btn-brand" type="button" disabled={confirming} onClick={onConfirm}>
-            {confirming ? 'Confirming' : 'Confirm my email'}
-          </button>
+          <BusyButton className="btn-brand" type="button" busy={confirming} onClick={onConfirm}>
+            Confirm my email
+          </BusyButton>
         </section>
       ) : (
         <p role="status">{NEXT_STEP[view.status ?? ''] ?? ''}</p>
@@ -103,9 +104,9 @@ export function ApplicantPage({
               <label htmlFor="reply">Your answer</label>
               <textarea id="reply" value={reply} onChange={(e) => onReplyChange(e.target.value)} rows={4} maxLength={1000} required />
             </div>
-            <button className="btn-brand" type="submit" disabled={replying || reply.trim().length === 0}>
-              {replying ? 'Sending' : 'Send answer'}
-            </button>
+            <BusyButton className="btn-brand" type="submit" busy={replying} disabled={reply.trim().length === 0}>
+              Send answer
+            </BusyButton>
           </form>
         </section>
       )}

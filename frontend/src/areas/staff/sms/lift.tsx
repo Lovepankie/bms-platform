@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Lifting an SMS opt-out (extras slice B3, issue #218; spec 4.14): the opt-out is the member's protection against being
 // pestered, so lifting it is the tenant administrator's, needs a reason that goes into the audit row, and is never one click:
@@ -48,10 +49,10 @@ export function LiftConfirm({ what, narrow = false, busy, error, onConfirm, onCa
       <p id="sms-lift-hint" className="field-hint">Words about why, not names or phone numbers. {reason.trim().length} of {MAX_REASON} characters.</p>
       {error && <p role="alert" className="field-error">{error}</p>}
       <p className="cluster">
-        <button type="submit" className="rt-primary" disabled={problem !== null || busy}>
-          {busy ? 'Saving' : narrow ? 'Narrow the opt-out' : 'Lift the opt-out'}
-        </button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>
+        <BusyButton type="submit" className="rt-primary" busy={busy} disabled={problem !== null}>
+          {narrow ? 'Narrow the opt-out' : 'Lift the opt-out'}
+        </BusyButton>
+        <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={onCancel}>
           Keep the opt-out
         </button>
       </p>

@@ -6,6 +6,7 @@ import { useStaff } from '../context';
 import { PURCHASING, SETTINGS_MANAGE, capabilityOn, holds } from './permissions';
 import { bpToPercentText, percentTextToBp } from './purchasing-state';
 import { Problem, Success, changeFailureText, money } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The purchasing settings block of the Retail settings screen (the purchasing capability, ADR-033, issue #198): the two tolerances,
 // in percent with two decimals and kept as basis points (100 is 1 per cent), saved under If-Match with the settings version. The
@@ -56,7 +57,8 @@ export function PurchasingSettingsForm({ settings, busy, error, saved, onSave }:
         <p className="hint" data-testid="order-threshold">No approval limit is set for purchase orders, so a single person can send any order.</p>
       )}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={bad || unchanged || busy}>{busy ? 'Saving' : 'Save purchasing settings'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={bad || unchanged}>Save purchasing settings</BusyButton>
+
     </form>
   );
 }

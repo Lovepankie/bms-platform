@@ -9,6 +9,7 @@ import { canUse } from './permissions';
 import { TransferDocument } from './documents-ui';
 import { TransferSummary, useBranchLabel } from './transfer';
 import { Gate, Problem, useSingleBranch } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Stock moves (FR-RET-16): transfers from or to the branch chosen at the top of the page (every
 // branch the session may read with "All branches"), newest first. Tapping one shows its items, and
@@ -95,9 +96,10 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
           <label htmlFor="transfer-void-reason">Reason to cancel this move</label>
           <input id="transfer-void-reason" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           <Problem error={cancel.error} />
-          <button type="submit" disabled={reason.trim() === '' || cancel.isPending}>
-            {cancel.isPending ? 'Cancelling' : 'Cancel this move'}
-          </button>
+          <BusyButton type="submit" busy={cancel.isPending} disabled={reason.trim() === ''}>
+            Cancel this move
+          </BusyButton>
+
         </form>
       )}
     </section>
