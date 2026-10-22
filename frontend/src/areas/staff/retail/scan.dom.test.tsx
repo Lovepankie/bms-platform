@@ -155,7 +155,7 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect(price.selectionStart).toBe(2);
   });
 
-  it('keeps the quantity it had before a scan that stalls part way, and never lets the stalled scan submit the sale', async () => {
+  it('looks a scan that stalls part way up as the whole code, keeps the quantity it had, and never lets it submit the sale', async () => {
     await retail.addBarcode(LAMP, { code: EAN });
     screenOf(<SaleForm branchId={BRANCH} />);
     wedge(EAN);
@@ -166,14 +166,18 @@ describe('FR-RET-68 scanning on the sale form', () => {
     fireEvent.change(qty, { target: { value: '12' } });
     qty.focus();
     qty.setSelectionRange(2, 2);
-    // A pause longer than the gap in the middle of the code, leaving a tail long enough to look like a code of its own.
+    // A pause longer than the gap in the middle of the code: the keys after it join the code, so the full EAN is found
+    // and its line goes from the 12 typed to 13, with nothing of the code left in the quantity.
     expect(stalled(EAN, 6, 120).defaultPrevented).toBe(true);
-    await waitFor(() => expect(screen.getByTestId('scan-unknown')).toBeTruthy());
     expect(qtyOf(0)).toBe('12');
-    // A pause just before the end, leaving a trailing fragment too short to be a code: still nothing typed, no submit.
+    await waitFor(() => expect(qtyOf(0)).toBe('13'));
+    expect(screen.queryByTestId('scan-unknown')).toBeNull();
+    // A pause just before the end, leaving a trailing fragment too short to be a code: still the full EAN, no submit.
+    qty.setSelectionRange(2, 2);
     expect(stalled(EAN, 11, 120).defaultPrevented).toBe(true);
-    expect(qtyOf(0)).toBe('12');
+    expect(qtyOf(0)).toBe('13');
     expect(qty.selectionStart).toBe(2);
+    await waitFor(() => expect(qtyOf(0)).toBe('14'));
     expect(submitted).not.toHaveBeenCalled();
   });
 

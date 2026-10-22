@@ -129,7 +129,8 @@ export const WEDGE_IDLE_MS = 500;
 
 /**
  * Collects the keys of one scanner burst: `key` with a printable character and its time, `enter` at the end. Returns
- * the code when Enter closes a burst of at least WEDGE_MIN characters that each came within WEDGE_GAP_MS of the last.
+ * the code when Enter closes a burst of at least WEDGE_MIN characters that each came within WEDGE_GAP_MS of the last, or
+ * after a stall shorter than WEDGE_IDLE_MS once those characters made a burst.
  */
 export function createWedge(gap = WEDGE_GAP_MS, min = WEDGE_MIN) {
   let buffer = '';
@@ -141,7 +142,8 @@ export function createWedge(gap = WEDGE_GAP_MS, min = WEDGE_MIN) {
     key(ch: string, at: number): boolean {
       const idle = !started || at - last >= WEDGE_IDLE_MS;
       if (idle) burst = false;
-      buffer = buffer === '' || at - last > gap ? ch : buffer + ch;
+      // A stall longer than the gap inside a burst is the same scanner pausing: its keys join the code, not replace it.
+      buffer = buffer === '' || (at - last > gap && !burst) ? ch : buffer + ch;
       if (buffer.length >= min) burst = true;
       started = true;
       last = at;

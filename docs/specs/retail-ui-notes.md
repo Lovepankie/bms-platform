@@ -1273,8 +1273,9 @@ ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability s
   35 ms of each other (this device's **Scanner speed** in Notifications and app, up to 80 ms for a slow Bluetooth scanner, kept in
   this browser), at least four, closed by Enter (`createWedge` in `barcode-state.ts`); with the cursor in a text field the field gets
   back the value and selection it had before the burst. A scanner that stalls part way through a code is still one burst until the
-  field has had no key for 500 ms: the field keeps the value from before the first key, and an Enter at scanner speed after a run of
-  scanner keys never reaches the form, even when the keys after the stall are too few to be a code. On the sale screen the cursor waits in the scan box (on a device with a
+  field has had no key for 500 ms: the keys after the stall join the code, so the whole code is looked up, the field keeps the
+  value from before the first key, and an Enter at scanner speed after a run of scanner keys never reaches the form, even when the
+  keys after the stall are too few to be a code. On the sale screen the cursor waits in the scan box (on a device with a
   mouse or trackpad; "Keep the cursor in the scan box on the sale screen" in Notifications and app turns it off), so a scan too slow
   to be told from typing still lands there and its Enter never submits the sale. A found item is added at 1 or its line gains one, in the pack the barcode is on (the sale and the restock,
   with pack sizes on); on the stock count it adds one to the count, or the pack factor, and clears the search so the counted line shows; an item not on the branch's count sheet is refused with "<item> is not on the count sheet of this branch." "Added <item>." is read out politely, with a
