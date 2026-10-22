@@ -567,6 +567,33 @@ class RetailOfflineSalesIT extends IntegrationTest {
     }
 
     /**
+     * Round 2 minor: a sale that says it happened up to 2 minutes before prices_as_of is the ordinary gap between two clocks,
+     * dated as it says with no clash; a prices_as_of later than now is taken as now, so it never makes a clock_behind.
+     */
+    @Test
+    void aSmallClockGapAndPricesAsOfInTheFutureAreNoClash() {
+        api.stockUp(t.headOffice(), product, "5");
+        Instant at = Instant.now().truncatedTo(ChronoUnit.MILLIS).minus(Duration.ofMinutes(10));
+        Map<String, Object> gap = offlineSale(UUID.randomUUID(), at, "1", 2_000);
+        gap.put("prices_as_of", at.plus(Duration.ofSeconds(90)).toString());
+        ResponseEntity<JsonNode> sold = send(gap, UUID.randomUUID().toString());
+        assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(sold.getBody())).isEmpty();
+        assertThat(Instant.parse(sold.getBody().get("device").get("occurred_at").asString()))
+                .isEqualTo(at);
+
+        Instant soon = Instant.now().truncatedTo(ChronoUnit.MILLIS).minus(Duration.ofMinutes(1));
+        Map<String, Object> ahead = offlineSale(UUID.randomUUID(), soon, "1", 2_000);
+        ahead.put("prices_as_of", Instant.now().plus(Duration.ofHours(3)).toString());
+        ResponseEntity<JsonNode> later = send(ahead, UUID.randomUUID().toString());
+        assertThat(later.getStatusCode()).as("%s", later.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(later.getBody())).isEmpty();
+        assertThat(Instant.parse(
+                        later.getBody().get("device").get("occurred_at").asString()))
+                .isEqualTo(soon);
+    }
+
+    /**
      * Review fix 9: a pack size switched off, or pack sizes turned off for the business, while the phone was offline records
      * the offline sale in that pack with a pack_inactive clash; online the same line is still refused.
      */

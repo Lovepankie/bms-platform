@@ -71,8 +71,8 @@ left, the branch, the period, the person's roles.
    time zone (a `sale_date` that disagrees is 422 `sale_date_mismatch`) and `occurred_at` is stored on the sale. Up to 5
    minutes ahead of the server clock is clock skew and is recorded as the server's now. Further ahead, an online request is
    refused (422 `occurred_at_in_future`); an offline one is recorded at the server's now and flagged `clock_ahead`. An offline
-   sale whose `occurred_at` is earlier than its `prices_as_of` (the server's time when the phone last saved its prices) had a
-   phone clock behind: it is recorded at the server's now and flagged `clock_behind`, so a wrong phone clock never makes it
+   sale whose `occurred_at` is more than 2 minutes earlier than its `prices_as_of` (the server's time when the phone last
+   saved its prices; a `prices_as_of` later than the server's now is taken as now) had a phone clock behind: it is recorded at the server's now and flagged `clock_behind`, so a wrong phone clock never makes it
    `period_closed`. Retail has
    no daily close; the bound in the past is the accounting period: a sale dated in a closed month is refused by the ledger
    (`period_closed`) and becomes a failure (decision 7), never a silent drop. If a daily close is built later it adds the same

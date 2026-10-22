@@ -163,6 +163,12 @@ class SalesService {
     /** How far ahead of the server a device clock may be and still count as now (ADR-067 decision 6). */
     static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
+    /**
+     * How far before prices_as_of a sale recorded offline may say it happened and still be dated as it says (ADR-067
+     * decision 6); further before, the phone clock was behind.
+     */
+    static final Duration CLOCK_BEHIND_SKEW = Duration.ofMinutes(2);
+
     @Transactional
     Outcome<Sale> create(String idempotencyKey, SaleRequest r) {
         // ADR-067: a sale already recorded with this client sale id is the same sale, whatever key it comes with, so a
@@ -279,7 +285,10 @@ class SalesService {
         boolean offline = r.offline();
         boolean credit = r.paymentMethod().equals("credit");
         List<PendingClash> clashes = offline ? new ArrayList<>() : null;
-        Instant occurredAt = occurredAt(r, clashes);
+        // A phone clock ahead of the server cannot date its prices in the future: they are as of now at the latest.
+        Instant pricesAsOf =
+                r.pricesAsOf() == null || r.pricesAsOf().isBefore(clock.now()) ? r.pricesAsOf() : clock.now();
+        Instant occurredAt = occurredAt(r, pricesAsOf, clashes);
         LocalDate occurredOn = occurredAt == null
                 ? null
                 : LocalDate.ofInstant(occurredAt, tenant.profile().timezone());
@@ -329,7 +338,7 @@ class SalesService {
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
         Priced priced = priceLines(
-                branch, saleDate, buyer, r.priceListId(), r.lines(), problems, agreements, clashes, r.pricesAsOf());
+                branch, saleDate, buyer, r.priceListId(), r.lines(), problems, agreements, clashes, pricesAsOf);
         Chosen list = priced.list();
         List<NewLine> lines = priced.lines();
         long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
@@ -503,7 +512,7 @@ class SalesService {
      * recorded offline that says it happened before prices_as_of (the server's time when the phone last saved its prices)
      * had a phone clock behind: it is dated now with a clock_behind clash, never refused for a closed period because of it.
      */
-    private Instant occurredAt(SaleRequest r, List<PendingClash> clashes) {
+    private Instant occurredAt(SaleRequest r, Instant pricesAsOf, List<PendingClash> clashes) {
         List<FieldProblem> problems = new ArrayList<>();
         if (r.offline() && r.clientSaleId() == null) {
             problems.add(
@@ -519,7 +528,8 @@ class SalesService {
             return null;
         }
         Instant now = clock.now();
-        if (clashes != null && r.pricesAsOf() != null && r.occurredAt().isBefore(r.pricesAsOf())) {
+        // Within CLOCK_BEHIND_SKEW of prices_as_of is the ordinary gap between two clocks, not a phone clock behind.
+        if (clashes != null && pricesAsOf != null && r.occurredAt().isBefore(pricesAsOf.minus(CLOCK_BEHIND_SKEW))) {
             clashes.add(new PendingClash(
                     null,
                     null,
