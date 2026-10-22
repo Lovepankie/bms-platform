@@ -84,6 +84,14 @@ class OfflineSalesRepository {
                 .optional();
     }
 
+    boolean branchExists(UUID branchId) {
+        return jdbc.sql("SELECT count(*) FROM branches WHERE id = ?")
+                        .param(branchId)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
     /** Inserts the report unless one with this client sale id exists; true when written. */
     boolean insertFailure(SalesApi.FailureRequest r, UUID madeBy) {
         return jdbc.sql("""

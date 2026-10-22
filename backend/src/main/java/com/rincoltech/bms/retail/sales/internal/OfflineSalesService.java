@@ -61,6 +61,10 @@ class OfflineSalesService {
                     "This clash is already resolved.");
         }
         String trimmed = note.trim();
+        if (trimmed.length() < 5) {
+            throw ApiException.validation(List.of(
+                    new ApiException.FieldProblem("note", "invalid", "Say what was done, in at least 5 characters.")));
+        }
         repo.resolveClash(clashId, principal.userId(), trimmed);
         audit.record(new AuditLog.Entry(
                 "retail.sale_clash.resolved",
@@ -79,6 +83,10 @@ class OfflineSalesService {
     @Transactional
     Failure report(FailureRequest r) {
         UUID by = CurrentPrincipal.require().userId();
+        if (!repo.branchExists(r.branchId())) {
+            throw ApiException.validation(
+                    List.of(new ApiException.FieldProblem("branch_id", "unknown_branch", "No such branch.")));
+        }
         if (!repo.insertFailure(r, by)) {
             Failure existing = repo.failureByClient(r.clientSaleId(), true).orElseThrow();
             if (!existing.madeBy().equals(by)) {

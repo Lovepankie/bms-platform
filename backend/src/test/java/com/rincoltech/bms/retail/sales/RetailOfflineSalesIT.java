@@ -310,6 +310,10 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(api.post("/sale-clashes/" + clash + "/resolve", Map.of("note", "Again and again"), MANAGER)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
+        String other = open.get(1).get("id").asString();
+        assertThat(api.post("/sale-clashes/" + other + "/resolve", Map.of("note", "    ok    "), MANAGER)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(api.get("/sale-clashes", MANAGER).getBody().get("items")).hasSize(3);
         assertThat(api.get("/sale-clashes?status=resolved", MANAGER).getBody().get("items"))
                 .hasSize(1);
@@ -339,6 +343,10 @@ class RetailOfflineSalesIT extends IntegrationTest {
         report.put("request", request);
         report.put("code", "period_closed");
         report.put("message", "The period is closed.");
+        Map<String, Object> nowhere = new LinkedHashMap<>(report);
+        nowhere.put("branch_id", UUID.randomUUID());
+        assertThat(api.post("/offline-failures", nowhere, SALES).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         ResponseEntity<JsonNode> reported = api.post("/offline-failures", report, SALES);
         assertThat(reported.getStatusCode()).as("%s", reported.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(reported.getBody().get("status").asString()).isEqualTo("open");
