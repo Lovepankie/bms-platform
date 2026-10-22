@@ -27,6 +27,9 @@ final class Barcodes {
     private static final java.util.regex.Pattern SCIENTIFIC =
             java.util.regex.Pattern.compile("[+-]?\\d+(?:[.,]\\d+)?[eE][+-]?\\d+");
 
+    /** The signs a code may not hold, since the lookup carries it in the path. */
+    static final String NOT_IN_PATH = "%;?#/\\";
+
     private Barcodes() {}
 
     enum Format {
@@ -71,9 +74,10 @@ final class Barcodes {
         if (!code.chars().allMatch(c -> c >= '!' && c <= '~')) {
             return Result.refused("A barcode holds only letters, digits and signs, with no spaces.");
         }
-        if (code.indexOf('/') >= 0 || code.indexOf('\\') >= 0) {
-            // A slash cannot travel in the lookup's path (GET /retail/products/by-barcode/{code}).
-            return Result.refused("A barcode here cannot hold a slash or a backslash.");
+        if (code.chars().anyMatch(c -> NOT_IN_PATH.indexOf(c) >= 0)) {
+            // These cannot travel in the lookup's path (GET /retail/products/by-barcode/{code}): the server's firewall
+            // refuses an encoded slash, backslash, percent or semicolon, and ? and # end the path.
+            return Result.refused("A barcode here cannot hold % ; ? # / or \\.");
         }
         Format format;
         if (asked != null && !asked.isBlank()) {

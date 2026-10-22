@@ -20,7 +20,7 @@ or Bluetooth scanner at the till, many have only phones.
    format, the product and, optionally, one of the product's pack sizes (V39), so a carton's barcode adds a carton. Changing barcodes
    does not move the product's version, like its packs.
 2. **Four formats, checked.** EAN-13, EAN-8 and UPC-A, whose last digit is checked by the GS1 rule, and Code 128 for any other
-   printable code up to 48 characters (no spaces, no slash or backslash, since the lookup carries the code in its path). A code of 13,
+   printable code up to 48 characters (no spaces, and none of `% ; ? # / \`, since the lookup carries the code in its path). A code of 13,
    12 or 8 digits is read as EAN-13, UPC-A or EAN-8 unless Code 128 is asked for. The server (`Barcodes.java`) and the PWA
    (`barcode-state.ts`) apply the same rules, so the item form says what is wrong before saving.
 3. **Unique per business among active items.** A unique index on `(tenant_id, lookup_key)`; `lookup_key` is a generated column that
@@ -66,7 +66,7 @@ or Bluetooth scanner at the till, many have only phones.
 an item with no manufacturer code gets a label; codes are checked, so a misread digit is caught at entry.
 
 **Worse:** one more table and one more lazy dependency (Quagga2, about 45 kB gzipped, loaded only on Scan). Quagga2 reads stills,
-so the iPhone camera is slower than the native detector. A code with a slash cannot be stored.
+so the iPhone camera is slower than the native detector. A code holding `% ; ? # / \` cannot be stored.
 
 **Watch for:** a scanner configured to send Tab instead of Enter (the scan box and the wedge both need Enter); scanners that type
 faster than the browser fires key events still fit the 35 ms window, a very slow Bluetooth scanner may not; label printers with other

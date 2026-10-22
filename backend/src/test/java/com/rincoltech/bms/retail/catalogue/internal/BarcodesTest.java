@@ -36,7 +36,14 @@ class BarcodesTest {
         // Asked for by name, thirteen digits are Code 128 and their last digit is not a check digit.
         assertThat(Barcodes.check("4006381333932", "code128").ok()).isTrue();
         assertThat(Barcodes.check("with space", null).ok()).isFalse();
-        assertThat(Barcodes.check("A/B", null).ok()).isFalse();
+        for (String sign : new String[] {"/", "\\", "%", ";", "?", "#"}) {
+            assertThat(Barcodes.check("A" + sign + "B", null).problem())
+                    .as(sign)
+                    .contains("cannot hold");
+            assertThat(Barcodes.check("A" + sign + "B", "code128").ok())
+                    .as(sign)
+                    .isFalse();
+        }
         assertThat(Barcodes.check("x".repeat(49), null).ok()).isFalse();
         assertThat(Barcodes.check("", null).ok()).isFalse();
     }
