@@ -423,6 +423,32 @@ month from the first session of a staff user, in the tenant's time zone (FR-SUB-
 transaction the platform console binds to it (`TenantContext.callAs`), in one transaction with
 the subscription move and the `Idempotency-Key` row. FR-SPM-01.
 
+### `subscription_receipts` (RLS; `bms_app` SELECT, INSERT; append-only; `V92`, ADR-075)
+
+(std, no `version`, no `updated_at`) `payment_id uuid NOT NULL` (composite FK `subscription_payments`, unique per tenant),
+`receipt_no varchar(20) NOT NULL UNIQUE` (`RT-<year>-<six digits or more>`, from the sequence `subscription_receipt_numbers`,
+across the platform; `bms_app` has USAGE on it), `business_name varchar(200) NOT NULL` and `plan_name varchar(200) NOT NULL` (as
+they were on the day, so the PDF never changes), `issued_on date NOT NULL`. Written in the payment's own transaction. The payments
+recorded before `V92` got theirs in the migration, numbered in the order they were recorded. FR-SUB-11.
+
+### `subscription_reminders` (RLS; `bms_app` SELECT, INSERT; append-only; `V92`, ADR-075)
+
+(std, no `version`, no `updated_at`) `kind text NOT NULL` [`due_in_7`, `due_in_1`, `due_today`, `trial_in_7`, `trial_in_1`,
+`trial_today`], `due_on date NOT NULL` (the last day paid for, or of the free month), `amount_minor bigint` and `currency char(3)`
+(the plan's monthly price the day after, both or neither), `channels text[] NOT NULL` (what was queued: `email`, `sms`, or none
+when the business has no Owner). `UNIQUE (tenant_id, kind, due_on)`: a reminder is written with its outbox rows in one transaction,
+so it goes once. FR-SUB-08.
+
+### `platform_billing_settings` (platform, no RLS, `bms_app` SELECT only; `V92`, ADR-075)
+
+One row (`id = 1`): `grace_days integer NOT NULL DEFAULT 7` (0 to 60), `how_to_pay varchar(1000)` (the operator's words, empty at
+first), `updated_at`, `updated_by_platform_user_id`. Changed only through `platform_set_billing_settings`. FR-SUB-09.
+
+`platform_mark_subscription_overdue(tenant, due_on, today)` (`V92`, definer): moves a subscription in its free month or paid, not a
+pilot, of an active tenant, whose last day is still `due_on` and before `today`, to `past_due`, and writes
+`platform.tenant.subscription_overdue` with no operator; anything else changes nothing. The only automatic status change; it never
+suspends. FR-SUB-09.
+
 Reads for the operator across tenants (`V75`, definer functions owned by `bms_owner`):
 `platform_tenant_overview()` (every tenant with its plan, subscription dates, modules, the
 first tenant admin as the owner and the latest staff sign-in), `platform_tenant_admins(tenant)`
