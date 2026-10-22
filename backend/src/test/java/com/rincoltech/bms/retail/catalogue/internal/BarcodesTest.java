@@ -48,6 +48,24 @@ class BarcodesTest {
     }
 
     @Test
+    void frRet68ACodeASpreadsheetMayHaveDamagedIsRefusedUnlessCode128IsAskedFor() {
+        for (String code : new String[] {
+            "123456", "1234567", "123456789", "1234567890", "36000291452", "12345678901231", "4.00638E+12", "4,00638e12"
+        }) {
+            Barcodes.Result r = Barcodes.check(code, null);
+            assertThat(r.ok()).as(code).isFalse();
+            assertThat(r.problem())
+                    .as(code)
+                    .contains("the spreadsheet may have dropped a leading zero or turned the code into a number");
+            assertThat(Barcodes.check(code, "code128").ok()).as(code).isTrue();
+        }
+        // Lengths a barcode format has, short codes and letters are not suspected.
+        assertThat(Barcodes.check("12345", null).ok()).isTrue();
+        assertThat(Barcodes.check("TEST-E12", null).ok()).isTrue();
+        assertThat(Barcodes.check("4006381333931", null).ok()).isTrue();
+    }
+
+    @Test
     void generatedCodesAreCode128WithTheInternalPrefix() {
         assertThat(Barcodes.generated(42)).isEqualTo("IN00000042");
         assertThat(Barcodes.inferred(Barcodes.generated(42))).isEqualTo(Barcodes.Format.CODE128);

@@ -244,9 +244,14 @@ class ProductImportService {
             }
             List<String> rowCodes = withBarcodes ? codes(cell(cells, columns, "barcode")) : List.of();
             List<String> rowPackCodes = withBarcodes ? codes(cell(cells, columns, "pack_barcode")) : List.of();
+            // Blank reads the format from each code; code128 takes an all-digit code a spreadsheet may have damaged as
+            // is.
+            String barcodeFormat =
+                    cell(cells, columns, "barcode_format").strip().toLowerCase(Locale.ROOT);
+            String rowFormat = barcodeFormat.isEmpty() ? null : barcodeFormat;
             String barcodeProblem = !rowPackCodes.isEmpty() && !hasPack
                     ? "A pack barcode needs a pack unit and a pack factor on the same row."
-                    : barcodeProblem(rowCodes, rowPackCodes, heldCodes, codesInFile, line);
+                    : barcodeProblem(rowCodes, rowPackCodes, rowFormat, heldCodes, codesInFile, line);
             if (barcodeProblem != null) {
                 seen.remove(key);
                 errors++;
@@ -278,7 +283,8 @@ class ProductImportService {
                     hasPack ? packUnit : null,
                     packFactor,
                     rowCodes,
-                    rowPackCodes));
+                    rowPackCodes,
+                    rowFormat));
         }
         if (!dryRun) {
             if (errors > 0) {
@@ -405,10 +411,10 @@ class ProductImportService {
                                 "import")));
             }
             for (String c : p.barcodes()) {
-                addBarcode(product.id(), null, c, by);
+                addBarcode(product.id(), null, c, p.barcodeFormat(), by);
             }
             for (String c : p.packBarcodes()) {
-                addBarcode(product.id(), packUnitId, c, by);
+                addBarcode(product.id(), packUnitId, c, p.barcodeFormat(), by);
             }
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("code", p.code());
@@ -428,8 +434,8 @@ class ProductImportService {
     }
 
     /** One imported barcode; a code an item that is switched off held is released to it first, as the screen does. */
-    private void addBarcode(UUID productId, UUID unitId, String raw, UUID by) {
-        Barcodes.Checked c = Barcodes.check(raw, null).checked();
+    private void addBarcode(UUID productId, UUID unitId, String raw, String format, UUID by) {
+        Barcodes.Checked c = Barcodes.check(raw, format).checked();
         barcodes.byKey(Barcodes.key(c.code())).ifPresent(h -> {
             if (h.productActive()) {
                 throw new ApiException(
@@ -468,7 +474,8 @@ class ProductImportService {
             String packUnit,
             java.math.BigDecimal packFactor,
             List<String> barcodes,
-            List<String> packBarcodes) {}
+            List<String> packBarcodes,
+            String barcodeFormat) {}
 
     /** The codes of a barcode cell: separated by spaces or a vertical bar, since the file's separator may be a comma. */
     private static List<String> codes(String text) {
@@ -484,13 +491,14 @@ class ProductImportService {
     private static String barcodeProblem(
             List<String> rowCodes,
             List<String> packCodes,
+            String format,
             Map<String, BarcodeRepository.Held> held,
             Map<String, Integer> inFile,
             int line) {
         List<String> all = new ArrayList<>(rowCodes);
         all.addAll(packCodes);
         for (String c : all) {
-            Barcodes.Result r = Barcodes.check(c, null);
+            Barcodes.Result r = Barcodes.check(c, format);
             if (!r.ok()) {
                 return "Barcode " + c + ": " + r.problem();
             }
@@ -538,6 +546,7 @@ class ProductImportService {
                 case "pack_factor", "pack_size" -> "pack_factor";
                 case "barcode", "barcodes", "ean", "upc" -> "barcode";
                 case "pack_barcode", "pack_barcodes" -> "pack_barcode";
+                case "barcode_format", "barcode_type" -> "barcode_format";
                 default -> null;
             };
             if (canonical != null) {

@@ -269,6 +269,30 @@ class RetailBarcodesIT extends IntegrationTest {
     }
 
     @Test
+    void frRet68AnImportedCodeASpreadsheetDamagedIsRefusedUnlessTheRowSaysCode128() {
+        String header = "code,description,category,unit,sell price,barcode,barcode format\n";
+        JsonNode rows = api.post(
+                        "/products/import?dry_run=true",
+                        Map.of(
+                                "csv",
+                                header
+                                        + "IMP-SD1,Test soap,Soap,bar,1000,36000291452,\n"
+                                        + "IMP-SD2,Test oil,Oil,bottle,2000,4.00638E+12,\n"
+                                        + "IMP-SD3,Test salt,Salt,packet,500,36000291452,code128\n"),
+                        ADMINISTRATOR)
+                .getBody()
+                .get("rows");
+        assertThat(rows.get(0).get("outcome").asString()).isEqualTo("error");
+        assertThat(rows.get(0).get("message").asString())
+                .contains("the spreadsheet may have dropped a leading zero or turned the code into a number");
+        assertThat(rows.get(1).get("outcome").asString()).isEqualTo("error");
+        assertThat(rows.get(2).get("outcome").asString()).isEqualTo("added");
+        ResponseEntity<JsonNode> screen = add(api.product("BC-SD", 100, 200), "36000291452");
+        assertThat(screen.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(screen.getBody().toString()).contains("spreadsheet may have dropped a leading zero");
+    }
+
+    @Test
     void frRet68TheImportFileCarriesBarcodesAndRefusesABadOrRepeatedOne() {
         String header = "code,description,category,unit,sell price,barcode\n";
         ResponseEntity<JsonNode> dry = api.post(

@@ -1289,6 +1289,8 @@ ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability s
 - **Barcode labels** (`/staff/retail/catalogue/labels`, `labels.tsx`, a Catalogue tile, tour `page-labels`): find items and Add, how
   many labels of each, **Make the labels** (a Code 128 code is made for an item without one), **Print**: an A4 sheet of 3 by 8
   labels of 70 by 37 mm with the name, the price and the barcode, black on white whatever the theme; print hides everything else.
-- **Import:** the item file takes `barcode` and `pack barcode` columns (several codes separated by spaces or `|`).
+- **Import:** the item file takes `barcode`, `pack barcode` and `barcode format` columns (several codes separated by spaces or `|`).
+  A code a spreadsheet may have damaged (all digits of 6, 7, 9, 10, 11 or 14, or `4.00638E+12`) is an error row unless the
+  row's `barcode format` is `code128`; on the item form the same code offers "This code is exactly as printed (Code 128)".
 - Tours: `retail-sales` version 13 adds the Scan step; `page-labels` version 1.
 - Tests: `barcode-state.test.ts`, `scan.dom.test.tsx`, `camera-scan.test.ts`; backend `BarcodesTest`, `RetailBarcodesIT`.

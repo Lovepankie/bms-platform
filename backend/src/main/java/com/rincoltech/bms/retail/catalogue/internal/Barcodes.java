@@ -14,6 +14,19 @@ final class Barcodes {
     /** The prefix of a Code 128 code the system makes for a product that has none (its labels). */
     static final String GENERATED_PREFIX = "IN";
 
+    /**
+     * Why an all-digit code of an unusual length, or a number in scientific notation, is refused unless Code 128 is
+     * asked for by name: a spreadsheet turns a barcode cell into a number, dropping a leading zero (a 13 digit EAN-13
+     * becomes 12 digits, a UPC-A 11) or writing it as 4.00638E+12.
+     */
+    static final String SPREADSHEET_DAMAGE =
+            "This does not look like a barcode: the spreadsheet may have dropped a leading"
+                    + " zero or turned the code into a number. Type the code exactly as printed under the bars, or set the"
+                    + " format to code128 if it really is this.";
+
+    private static final java.util.regex.Pattern SCIENTIFIC =
+            java.util.regex.Pattern.compile("[+-]?\\d+(?:[.,]\\d+)?[eE][+-]?\\d+");
+
     private Barcodes() {}
 
     enum Format {
@@ -69,6 +82,9 @@ final class Barcodes {
                 return Result.refused("The format must be ean13, ean8, upca or code128.");
             }
         } else {
+            if (spreadsheetDamaged(code)) {
+                return Result.refused(SPREADSHEET_DAMAGE);
+            }
             format = inferred(code);
         }
         if (format == Format.CODE128) {
@@ -82,6 +98,20 @@ final class Barcodes {
                     + " barcode does not match the others. Check it was typed or scanned correctly.");
         }
         return Result.ok(new Checked(code, format));
+    }
+
+    /** All digits of a length no barcode format has (6, 7, 9, 10, 11 or 14), or a number in scientific notation. */
+    static boolean spreadsheetDamaged(String code) {
+        if (SCIENTIFIC.matcher(code).matches()) {
+            return true;
+        }
+        if (!code.chars().allMatch(Character::isDigit)) {
+            return false;
+        }
+        return switch (code.length()) {
+            case 6, 7, 9, 10, 11, 14 -> true;
+            default -> false;
+        };
     }
 
     static Format inferred(String code) {

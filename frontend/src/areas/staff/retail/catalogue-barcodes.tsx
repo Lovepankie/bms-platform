@@ -37,17 +37,21 @@ export function BarcodeEditor({ product }: { product: Product }) {
   const codes = useQuery({ queryKey: ['retail', 'barcodes', id], queryFn: () => retail.getProduct(id).then((p) => p.barcodes ?? []), initialData: product.barcodes ?? [] });
   const [code, setCode] = useState('');
   const [unitId, setUnitId] = useState('');
+  // A code a spreadsheet may have damaged is taken only when the person says it is exactly as printed (Code 128).
+  const [asPrinted, setAsPrinted] = useState(false);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['retail'] });
   const add = useMutation({
-    mutationFn: () => retail.addBarcode(id, { code: code.trim(), ...(unitId ? { unit_id: unitId } : {}) }),
+    mutationFn: () => retail.addBarcode(id, { code: code.trim(), ...(asPrinted ? { format: 'code128' } : {}), ...(unitId ? { unit_id: unitId } : {}) }),
     onSuccess: () => {
       setCode('');
+      setAsPrinted(false);
       refresh();
     },
   });
   const remove = useMutation({ mutationFn: (barcodeId: string) => retail.removeBarcode(id, barcodeId), onSuccess: refresh });
   const make = useMutation({ mutationFn: () => retail.generateBarcodes([id]), onSuccess: refresh });
-  const checked = code.trim() === '' ? null : checkBarcode(code);
+  const inferred = code.trim() === '' ? null : checkBarcode(code);
+  const checked = inferred && !inferred.ok && inferred.spreadsheet && asPrinted ? checkBarcode(code, 'code128') : inferred;
   const list = codes.data ?? [];
   return (
     <fieldset data-testid="barcode-editor" data-tour="item-barcodes" onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
@@ -83,6 +87,11 @@ export function BarcodeEditor({ product }: { product: Product }) {
             aria-describedby={checked !== null && !checked.ok ? 'barcode-problem' : undefined}
           />
           {checked !== null && !checked.ok && <p id="barcode-problem" className="rt-flag">{checked.problem}</p>}
+          {inferred !== null && !inferred.ok && inferred.spreadsheet && (
+            <label>
+              <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={asPrinted} onChange={(e) => setAsPrinted(e.target.checked)} /> This code is exactly as printed (Code 128)
+            </label>
+          )}
           {checked?.ok && <p className="hint">{formatName(checked.format)}</p>}
           {packs.length > 0 && (
             <>

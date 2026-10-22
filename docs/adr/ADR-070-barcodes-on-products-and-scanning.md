@@ -53,8 +53,12 @@ or Bluetooth scanner at the till, many have only phones.
 8. **Who may do what.** Reading and scanning need `retail.stock.read` (every seller, storekeeper and administrator holds it). Adding,
    removing and making barcodes, and the labels page, need `retail.catalogue.manage` (administrators). No new permission.
 9. **The import file** takes the optional columns `barcode` (synonyms `barcodes`, `ean`, `upc`) and `pack barcode`, several codes in a
-   cell separated by spaces or `|`. A bad check digit, a code another active item holds or a code repeated in the file is an error
-   row, never a guess.
+   cell separated by spaces or `|`, and `barcode format` (blank, or a format name). A bad check digit, a code another active item
+   holds or a code repeated in the file is an error row, never a guess.
+10. **Codes a spreadsheet damaged.** An all-digit code of 6, 7, 9, 10, 11 or 14 digits, or a number in scientific notation
+   (`4.00638E+12`), is refused in the import and on the item form with "the spreadsheet may have dropped a leading zero or turned
+   the code into a number", unless the row's `barcode format` (or the request's `format`) is `code128`: no EAN or UPC has those
+   lengths, and a spreadsheet drops the leading zero of a UPC-A or an EAN-13 and writes long numbers that way.
 
 ## Consequences
 

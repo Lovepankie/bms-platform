@@ -24,6 +24,15 @@ describe('FR-RET-68 barcode formats', () => {
     expect(checkBarcode('').ok).toBe(false);
   });
 
+  it('refuses a code a spreadsheet may have damaged unless Code 128 is asked for', () => {
+    for (const code of ['123456', '1234567', '123456789', '1234567890', '36000291452', '12345678901231', '4.00638E+12', '4,00638e12']) {
+      expect(checkBarcode(code)).toMatchObject({ ok: false, spreadsheet: true, problem: expect.stringContaining('the spreadsheet may have dropped a leading zero or turned the code into a number') });
+      expect(checkBarcode(code, 'code128').ok).toBe(true);
+    }
+    expect(checkBarcode('12345').ok).toBe(true);
+    expect(checkBarcode('TEST-E12').ok).toBe(true);
+  });
+
   it('keys a UPC-A as the EAN-13 a scanner may report for it', () => {
     expect(barcodeKey('036000291452')).toBe(barcodeKey('0036000291452'));
     expect(barcodeKey('TEST-1')).toBe('TEST-1');

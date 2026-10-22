@@ -7,7 +7,7 @@ import { parseCount, qtyString, showQty } from './maths';
 
 export type BarcodeFormat = 'ean13' | 'ean8' | 'upca' | 'code128';
 
-export type BarcodeCheck = { ok: true; code: string; format: BarcodeFormat } | { ok: false; problem: string };
+export type BarcodeCheck = { ok: true; code: string; format: BarcodeFormat } | { ok: false; problem: string; spreadsheet?: true };
 
 export const MAX_BARCODE = 48;
 
@@ -19,6 +19,13 @@ export function checkDigitOk(digits: string): boolean {
   let sum = 0;
   for (let i = digits.length - 2, w = 3; i >= 0; i--, w = 4 - w) sum += Number(digits[i]) * w;
   return (10 - (sum % 10)) % 10 === Number(digits[digits.length - 1]);
+}
+
+export const SPREADSHEET_DAMAGE = 'This does not look like a barcode: the spreadsheet may have dropped a leading zero or turned the code into a number. Type the code exactly as printed under the bars, or set the format to code128 if it really is this.';
+
+/** All digits of a length no barcode format has (6, 7, 9, 10, 11 or 14), or a number in scientific notation (4.00638E+12). */
+export function spreadsheetDamaged(code: string): boolean {
+  return /^[+-]?\d+(?:[.,]\d+)?[eE][+-]?\d+$/.test(code) || (/^\d+$/.test(code) && [6, 7, 9, 10, 11, 14].includes(code.length));
 }
 
 export function inferredFormat(code: string): BarcodeFormat {
@@ -37,6 +44,7 @@ export function checkBarcode(raw: string, asked?: BarcodeFormat): BarcodeCheck {
   if (code.length > MAX_BARCODE) return { ok: false, problem: `A barcode has at most ${MAX_BARCODE} characters.` };
   if (!/^[!-~]+$/.test(code)) return { ok: false, problem: 'A barcode holds only letters, digits and signs, with no spaces.' };
   if (/[/\\]/.test(code)) return { ok: false, problem: 'A barcode here cannot hold a slash or a backslash.' };
+  if (asked === undefined && spreadsheetDamaged(code)) return { ok: false, problem: SPREADSHEET_DAMAGE, spreadsheet: true };
   const format = asked ?? inferredFormat(code);
   if (format === 'code128') return { ok: true, code, format };
   if (code.length !== DIGITS[format] || !/^\d+$/.test(code)) return { ok: false, problem: `A barcode in ${NAMES[format]} has exactly ${DIGITS[format]} digits.` };

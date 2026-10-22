@@ -670,7 +670,7 @@ export function createMockRetail(): RetailApi {
     addBarcode: (productId, body) =>
       run(() => {
         const p = find(productId);
-        const checked = checkBarcode(body.code);
+        const checked = checkBarcode(body.code, body.format === 'code128' ? 'code128' : undefined);
         if (!checked.ok) refuse(422, 'validation_failed', checked.problem);
         const code = body.code.trim();
         if ([...barcodes.values()].flat().some((b) => barcodeKey(b.code ?? '') === barcodeKey(code))) refuse(409, 'barcode_taken', 'This barcode is on another item already.');
