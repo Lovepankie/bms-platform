@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import type { StaffUser } from '../../../api/users';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { resetProofProblem } from './state';
 
 // Hand ownership to another administrator (ADR-062, FR-IAM-18). Only the Owner sees it, and only the active administrators are
@@ -83,10 +84,10 @@ export function TransferOwner({ targets, mfaEnabled, onSend, onCancel }: {
       {problem && <p role="alert" className="field-error">{problem}</p>}
       {error && <p role="alert" className="alert alert-danger">{error}</p>}
       <p className="cluster">
-        <button type="submit" className="btn-danger" disabled={!ready || busy}>
-          {busy ? 'Handing over' : to ? `Yes, make ${to.full_name} the owner` : 'Hand over ownership'}
-        </button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
+        <BusyButton type="submit" className="btn-danger" busy={busy} disabled={!ready}>
+          {to ? `Yes, make ${to.full_name} the owner` : 'Hand over ownership'}
+        </BusyButton>
+        <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </p>
     </form>
   );

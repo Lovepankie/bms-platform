@@ -11,6 +11,7 @@ import { canCancelOrder, canEditOrder, canReceiveOrder, canSendOrder, inLineUnit
 import { Facts, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // One purchase order (the purchasing capability, ADR-033, issue #198): its lines with ordered, received and (for whoever manages
 // supplier invoices) billed, its status and its receipts, and what may be done next: change a draft, send it, cancel it, or
@@ -133,7 +134,8 @@ export function PurchaseOrderPage() {
         <div className="stack" data-tour="order-actions">
           <p className="cluster">
             {canEditOrder(o) && <Link className="btn-sm" to="/staff/retail/purchase-orders/$orderId/edit" params={{ orderId }}>Change this order</Link>}
-            {canSendOrder(o) && <button type="button" className="rt-primary" disabled={send.isPending} onClick={() => send.mutate()}>{send.isPending ? 'Sending' : 'Send to the supplier'}</button>}
+            {canSendOrder(o) && <BusyButton type="button" className="rt-primary" busy={send.isPending} onClick={() => send.mutate()}>Send to the supplier</BusyButton>
+}
             {canReceiveOrder(o) && <Link className="btn rt-primary" to="/staff/retail/purchase-orders/$orderId/receive" params={{ orderId }}>Receive goods</Link>}
           </p>
           {canSendOrder(o) && <p className="hint">Sending locks the order. A large order needs a second person to approve it first.</p>}

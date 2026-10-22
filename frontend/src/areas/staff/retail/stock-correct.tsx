@@ -9,6 +9,7 @@ import { showQty } from './maths';
 import { holds, holdsAt } from './permissions';
 import { REASONS, correctionRequest, correctionWords, differenceWords, movementTitle, quantityProblem, signedQty, type ReasonCode } from './stock-correct-state';
 import { Problem, Success } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // "Correct" on a row of the stock list (issue #351, ADR-044): the owner fixes a mistake where he sees it, with a trail. Four small
 // choices, each opened on its own: the right quantity (a reason, posted as a correction that is not shrinkage), the category, a wrong
@@ -90,7 +91,7 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
         If the money was entered wrongly too, use Past restocks instead.
       </p>
       <Problem error={send.error} />
-      <button type="submit" className="rt-primary" disabled={!ready || send.isPending}>{send.isPending ? 'Saving' : 'Save the right quantity'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={send.isPending} disabled={!ready}>Save the right quantity</BusyButton>
     </form>
   );
 }
@@ -135,7 +136,8 @@ function CategoryForm({ row, onDone }: { row: StockRow; onDone: (message: string
       </select>
       <p className="hint">The change is recorded with the old and the new category.</p>
       <Problem error={send.error} />
-      <button type="submit" className="rt-primary" disabled={!ready || send.isPending}>{send.isPending ? 'Saving' : 'Move to this category'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={send.isPending} disabled={!ready}>Move to this category</BusyButton>
+
     </form>
   );
 }

@@ -12,6 +12,7 @@ import {
 import { BranchField, SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, money } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The supplier payment form (the purchasing capability, ADR-033, issue #198): choose the supplier and the branch that pays, how it is
 // paid and the amount. By default the payment clears the oldest first (an invoice or a credit restock, by its due date). Choosing
@@ -106,7 +107,8 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
       )}
       {problem && (form.amount.trim() !== '' || form.supplierId !== '') && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="payment-save">{busy ? 'Saving' : 'Save payment'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="payment-save">Save payment</BusyButton>
+
     </form>
   );
 }

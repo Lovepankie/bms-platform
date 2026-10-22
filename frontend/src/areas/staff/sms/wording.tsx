@@ -11,6 +11,7 @@ import {
 } from '../../../api/sms';
 import { SEARCH_DELAY_MS } from '../../../app/ui/useLiveSearch';
 import { formatMinor } from '../../../components/money';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { mayManageWording, mayReadNotifications } from './state';
 
@@ -130,9 +131,9 @@ function TestMessage({ eventKey, text, canSend }: { eventKey: string; text: stri
       {error && <p role="alert" className="field-error">{error.fields.to ?? error.message}</p>}
       {send.data && <p role="status" className="alert alert-info">{testWords(send.data)}</p>}
       <p>
-        <button type="submit" className="btn-ghost" disabled={to.trim() === '' || send.isPending}>
-          {send.isPending ? 'Sending' : 'Send a test message'}
-        </button>
+        <BusyButton type="submit" className="btn-ghost" busy={send.isPending} disabled={to.trim() === ''}>
+          Send a test message
+        </BusyButton>
       </p>
     </form>
   );
@@ -222,11 +223,11 @@ export function TemplateEditor({ template, canManage, onNotice, tour = false }: 
       {revert.error instanceof Error && <p role="alert" className="field-error">{revert.error.message}</p>}
       {canManage && (
         <p className="cluster">
-          <button type="button" className="rt-primary" data-tour={tour ? 'sms-wording-save' : undefined} disabled={!dirty || previewError !== null || save.isPending} onClick={() => save.mutate()}>
-            {save.isPending ? 'Saving' : 'Save my words'}
-          </button>
+          <BusyButton type="button" className="rt-primary" data-tour={tour ? 'sms-wording-save' : undefined} busy={save.isPending} disabled={!dirty || previewError !== null} onClick={() => save.mutate()}>
+            Save my words
+          </BusyButton>
           {dirty && (
-            <button type="button" className="btn-ghost" disabled={save.isPending} onClick={() => { setText(saved); save.reset(); }}>
+            <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={save.isPending} onClick={() => { setText(saved); save.reset(); }}>
               Undo
             </button>
           )}
@@ -237,9 +238,9 @@ export function TemplateEditor({ template, canManage, onNotice, tour = false }: 
           )}
           {template.override && reverting && (
             <>
-              <button type="button" className="btn-ghost" disabled={revert.isPending} onClick={() => revert.mutate()}>
-                {revert.isPending ? 'Going back' : 'Yes, use the default words'}
-              </button>
+              <BusyButton type="button" className="btn-ghost" busy={revert.isPending} onClick={() => revert.mutate()}>
+                Yes, use the default words
+              </BusyButton>
               <button type="button" className="btn-ghost" onClick={() => setReverting(false)}>
                 Keep my words
               </button>

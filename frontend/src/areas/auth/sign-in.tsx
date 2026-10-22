@@ -1,6 +1,7 @@
 import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { api, type MfaEnrolment, problemOf, type SignInResponse } from '../../api/client';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { normaliseSecondFactor, plainProblem } from '../../auth/codes';
 import { setAccessToken } from '../../auth/session';
 import { illustrations } from '../../components/illustrations';
@@ -128,7 +129,7 @@ export function SignIn() {
                 </button>
               </div>
             </div>
-            <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Signing in' : 'Sign in'}</button>
+            <BusyButton className="btn-primary btn-lg" busy={busy}>Sign in</BusyButton>
           </form>
           <p>
             <Link to="/forgot-password">Forgot password?</Link>
@@ -147,7 +148,7 @@ export function SignIn() {
               <input id="challenge-code" className="input-code" value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" required />
               <span className="field-hint">Lost your phone? Type one of your recovery codes instead.</span>
             </div>
-            <button className="btn-primary btn-lg" disabled={busy}>{busy ? 'Checking' : 'Continue'}</button>
+            <BusyButton className="btn-primary btn-lg" busy={busy}>Continue</BusyButton>
           </form>
         </>
       )}

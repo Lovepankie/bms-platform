@@ -75,6 +75,7 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Secondary button | `<button>` | The default; 44px tall. Pressed: it sinks to 98% and darkens. Disabled (`disabled` or `aria-disabled="true"`): flat grey with muted text |
 | Primary button | `.btn-primary` (retail: `.rt-primary`; #87: `.btn-brand`) | One per view, the main action, at the bottom of a form |
 | Danger, ghost | `.btn-danger`, `.btn-ghost` | Reject or destroy; quiet actions such as Remove and Sign out |
+| Busy button | `<BusyButton busy={save.isPending} className="btn-primary">Save</BusyButton>` (`app/ui/BusyButton.tsx`, `.busy-button`, `.busy-spinner`; #456) | Every button that writes (POST, PUT, PATCH, DELETE: a sale, a payment, an invitation, a setting, a sign-in, an approval). While busy it keeps its label (never swap it for Saving or Sending: the spinner shows the work), shows a small spinner placed absolutely in its end padding (the width does not jump; while busy the end padding is at least 1.1em, so the spinner never covers the label; `.btn-sm`, tighter than that, has the same 1.1em end padding when idle too, so it keeps its width as well), and is `aria-busy="true"` and `aria-disabled="true"` rather than `disabled`, so it keeps keyboard focus while its own press guard drops every press. It has no live region of its own: the one `BusyAnnouncer` the app shell mounts says Working once while any button is busy (twenty rows sharing one flag are announced once) and clears when the last is done. An `aria-modal` dialog hides the shell's announcer, so the phone menu drawer mounts its own `<BusyAnnouncer modal />` inside itself while the person has it open, and Sign out there is heard; while it is mounted the shell's announcer renders nothing, so there is only one Working live region at a time. A press holds it until busy shows, or until an `onClick` that awaits has settled (released in a `finally`, so a throw cannot stick it) and two tasks have passed, and for at most 10 seconds when busy never shows, so a double click sends once; a submit of its form that gets through (from code or another submit button) holds it the same way, so two submits in one task send once, and while busy its form drops an Enter re-submit. Under reduced motion the spinner is a pulsing dot. Takes every `<button>` prop |
 | Link as button | `<Link className="btn btn-primary">` | Sizes `.btn-lg`, `.btn-sm` (still 44px tall), `.btn-block` |
 | Field | `<label>Text<input/></label>` or `<label htmlFor>` then the input | Label above, `.field-hint` and `.field-error` under it; `aria-invalid="true"` turns the edge red; a focused field shows the focus edge and halo however it got focus, and a wrapping label turns the link colour |
 | Choice row | `<label><input type="radio"/>Text</label>` | The whole row is the tap target; the chosen row is tinted |
@@ -143,18 +144,24 @@ query, so the number is the token.
   `visually-hidden` span) and as its `title` tooltip, the retail group too. Once the person folds or unfolds it, the choice is
   kept per device in `localStorage` under `bms.sidebar` (`folded` or `open`; nothing kept means the width decides), read and
   written inside `try`/`catch`, so a browser that blocks storage still folds until the page is reloaded. The width changes
-  over `--motion`, and not at all under reduced motion.
+  over `--motion`, and not at all under reduced motion. A tour step that points into a folded sidebar unfolds it while the step
+  shows. The button acts on what the person sees and the press wins for the rest of that step: pressed during the step, the
+  sidebar folds (or unfolds again on a second press) at once, with `aria-expanded`, the `side-nav-folded` class and the
+  `title` following, and the choice is kept in `bms.sidebar`. A step that points somewhere else, or the tour ending, forgets the press: the next step that points into the sidebar, going back to the step, or the next run of the tour unfolds it again.
 - **Below 720px, the drawer** (`SideMenu`): a menu button (`.menu-button`, the `menu` icon, `aria-label="Menu"`) at the top
   left of the staff bar opens the list in a side drawer from the left: 85% of the width, at most 320px, over a dimmed backdrop
-  (`--color-scrim`). The person's name and Sign out sit at the bottom (one button in `SideMenu`, with an `onSignOut` prop). It
+  (`--color-scrim`). The person's name and Sign out sit at the bottom (one `BusyButton` in `SideMenu`, with an `onSignOut` prop and a `busy`
+  prop held true while signing out runs, like Sign out in the bar). It
   closes on the backdrop, Escape, a left swipe on the drawer (50px, more sideways than down), a chosen link, or any change of
   page (the back button, a tour, a redirect).
 - **One-tap Sell on a phone:** beside the menu button, a primary Sell button (`.staff-sell`, a link to the sale screen) for
-  anyone who can sell (`useSells`), so a sale is one tap as it was on the bottom bar. From 720px Sale is in the sidebar instead.
-- **Drawer accessibility:** the drawer is `role="dialog"` with `aria-modal="true"` and the heading Menu; focus moves to its
+  anyone who can sell (`useSells`), so a sale is one tap as it was on the bottom bar. With branch roles on, it waits until the
+  roles are read, so it never flashes up for a session whose every branch is a store. From 720px Sale is in the sidebar instead.
+- **Drawer accessibility:** the drawer is `role="dialog"` with the heading Menu, and `aria-modal="true"` only while the person
+  opened it (a tour step that opens it leaves the page reachable); focus moves to its
   first control, Tab and Shift+Tab stay inside, and focus returns to the menu button on close. The menu button carries
   `aria-expanded`. The page behind does not scroll: `body.side-menu-open` fixes the body at the scroll position (iOS Safari
-  ignores `overflow` on the body), and closing gives the position back, except after a change of page. If the window widens
+  ignores `overflow` on the body), and closing gives the position back, except after a change of page or a tapped link. If the window widens
   past the phone width while the drawer is open, the drawer, its backdrop and the lock go, and focus moves to the sidebar's
   first link; narrowing with focus in the sidebar moves it to the menu button.
 - **Phone edges, motion and theme:** the drawer pads itself with `env(safe-area-inset-top)`, `-bottom` and `-left` and slides
@@ -251,11 +258,25 @@ cannot be read on a dark page: `--color-link` and `--color-focus` become `color-
 4. Money through `formatMinor` (`src/components/money.ts`), in `.num` cells.
 5. A tenant colour is applied for you; never write a brand colour. Draw with the colour roles, never a palette token, so
    the screen follows the theme (see Light and dark theme above); check a new screen in both.
-6. Give the main controls of a new screen `data-tour` ids and add the screen's steps to
+6. A button that writes is a `BusyButton` with the mutation's `isPending` (or the screen's own submitting state) as
+   `busy`; never a plain `<button disabled={save.isPending}>`. Its label stays the same while busy: no
+   `{save.isPending ? 'Saving' : 'Save'}` and no busy label prop. Read-only buttons (refresh, filters, tabs, navigation,
+   opening a dialog) stay plain, and so does a Cancel that only waits, with `/* busy-exempt: <reason> */` in its tag. A
+   mutation that needs no busy button of its own (a save as you type, a switch that says Working itself, cards that
+   show their own busy state) has `// busy-exempt: <reason>` in the `//` comment lines directly above its
+   `const ... = useMutation(` line. `src/app/ui/busy-guard.test.ts` fails a mutation that a press (onClick, onSubmit or
+   a component callback, directly or through a local function) sends unless its pending flag reaches a `busy={...}`
+   attribute in that file, that comment exempts it (a comment with no reason does not), or the guard's `ALLOWED` list
+   names it with a reason. It is a text heuristic: it checks that the flag reaches some `busy=` in the file, not that
+   it is the busy of the button that sends.
+7. Give the main controls of a new screen `data-tour` ids and add the screen's steps to
    `frontend/src/tour/tours.ts` (a page tour at least), with plain, short sentences.
 
 ## Checks
 
+- `npm test` runs the busy guard (`src/app/ui/busy-guard.test.ts`, #456: every mutation a press sends, including
+  `useMutation<T>(`, destructured ones and local hooks that return one, hands its pending flag to `busy`, and no plain
+  button is disabled by a pending state; fixture tests prove it fails both wrong shapes) and `BusyButton.dom.test.tsx`.
 - `npm test` runs the token contrast test and the design guard (`src/app/ui/design-guard.test.ts`: no
   `<style>` element, no inline HTML, and no hex colour in a component or a design layer stylesheet, and no palette token that would not follow the theme);
   `src/app/theme-mode.dom.test.tsx` covers the three choices, persistence, following the system, the pre-paint script and the

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type InFlightReport, type InFlightTransfer } from '../../../api/retail';
 import { EmptyState, SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
@@ -58,9 +59,9 @@ function ReceiveForm({ transfer }: { transfer: InFlightTransfer }) {
       })}
       {problem && <p>{problem}</p>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending}>
-        {save.isPending ? 'Saving' : 'Mark as received'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={problem !== null}>
+        Mark as received
+      </BusyButton>
     </form>
   );
 }
@@ -80,9 +81,9 @@ function TakeBackForm({ transfer }: { transfer: InFlightTransfer }) {
       <label htmlFor={`takeback-${id}`}>Reason to take this back</label>
       <input id={`takeback-${id}`} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
       <Problem error={take.error} />
-      <button type="submit" disabled={reason.trim() === '' || take.isPending}>
-        {take.isPending ? 'Taking back' : 'Take this back'}
-      </button>
+      <BusyButton busy={take.isPending} type="submit" disabled={reason.trim() === ''}>
+        Take this back
+      </BusyButton>
     </form>
   );
 }

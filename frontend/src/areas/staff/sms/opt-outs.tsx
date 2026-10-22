@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from 
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { SmsError, sms, type SmsImportResult, type SmsOptOut } from '../../../api/sms';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useStaff } from '../context';
@@ -75,7 +76,7 @@ export function OptOutRows({ items, term, canManage, busy, onRemove }: {
               <td>{new Date(i.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</td>
               {canManage && (
                 <td>
-                  <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={() => onRemove(i)} aria-label={`Lift the opt-out for ${i.recipient_masked ?? 'this member'}`}>
+                  <button type="button" /* busy-exempt: opens the confirmation */ className="btn-ghost btn-sm" disabled={busy} onClick={() => onRemove(i)} aria-label={`Lift the opt-out for ${i.recipient_masked ?? 'this member'}`}>
                     Lift
                   </button>
                 </td>
@@ -119,9 +120,9 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
       {error?.fields.reason && <p role="alert" className="field-error">{error.fields.reason}</p>}
       {add.isSuccess && <p role="status" className="alert alert-success">Added.</p>}
       <p>
-        <button type="submit" className="rt-primary" disabled={phone.trim() === '' || add.isPending}>
-          {add.isPending ? 'Adding' : 'Add to the list'}
-        </button>
+        <BusyButton type="submit" className="rt-primary" busy={add.isPending} disabled={phone.trim() === ''}>
+          Add to the list
+        </BusyButton>
       </p>
     </form>
   );
@@ -167,13 +168,13 @@ function PasteList({ onAdded }: { onAdded: () => void }) {
         </div>
       )}
       <p className="cluster">
-        <button type="submit" className="btn-ghost" disabled={text.trim() === '' || run.isPending}>
+        <BusyButton type="submit" className="btn-ghost" busy={run.isPending && run.variables === true} disabled={text.trim() === '' || run.isPending}>
           Check the list
-        </button>
+        </BusyButton>
         {checked?.dry_run && checked.added + checked.changed > 0 && (
-          <button type="button" className="rt-primary" disabled={run.isPending} onClick={() => run.mutate(false)}>
-            {run.isPending ? 'Adding' : `Add ${checked.added + checked.changed} to the list`}
-          </button>
+          <BusyButton type="button" className="rt-primary" busy={run.isPending && run.variables === false} disabled={run.isPending} onClick={() => run.mutate(false)}>
+            {`Add ${checked.added + checked.changed} to the list`}
+          </BusyButton>
         )}
       </p>
     </form>

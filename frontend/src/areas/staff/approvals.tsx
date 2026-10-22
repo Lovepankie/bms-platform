@@ -6,6 +6,7 @@ import { branchFilter } from '../../auth/branch';
 import { formatMinor } from '../../components/money';
 import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { useCollateralApi } from '../../api/lending-context';
 import { custodyWords, typeWords } from './lending/collateral-state';
 import { money as lendingMoney } from './lending/loan-state';
@@ -79,18 +80,18 @@ function Row({ item, id }: { item: Approval; id: string }) {
           {item.can_decide && (
             <>
               <input placeholder="Note (required to reject)" aria-label="Note" value={note} onChange={(e) => setNote(e.target.value)} />{' '}
-              <button className="btn-primary" disabled={decide.isPending} onClick={() => decide.mutate('approve')}>
+              <BusyButton className="btn-primary" busy={decide.isPending && decide.variables === 'approve'} disabled={decide.isPending} onClick={() => decide.mutate('approve')}>
                 Approve
-              </button>{' '}
-              <button className="btn-danger" disabled={decide.isPending || note.trim() === ''} onClick={() => decide.mutate('reject')}>
+              </BusyButton>{' '}
+              <BusyButton className="btn-danger" busy={decide.isPending && decide.variables === 'reject'} disabled={decide.isPending || note.trim() === ''} onClick={() => decide.mutate('reject')}>
                 Reject
-              </button>
+              </BusyButton>
             </>
           )}
           {item.can_cancel && (
-            <button disabled={decide.isPending} onClick={() => decide.mutate('cancel')}>
+            <BusyButton busy={decide.isPending && decide.variables === 'cancel'} disabled={decide.isPending} onClick={() => decide.mutate('cancel')}>
               Cancel my request
-            </button>
+            </BusyButton>
           )}
           {item.execution_error && <p role="alert" className="alert alert-danger">Last attempt failed: {item.execution_error}</p>}
           {message && <p role="alert" className="alert alert-danger">{message}</p>}

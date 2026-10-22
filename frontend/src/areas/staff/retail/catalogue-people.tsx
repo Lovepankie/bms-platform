@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Customer, type Supplier } from '../../../api/retail';
@@ -50,16 +51,17 @@ export function PersonRow({ row, busy, extra, onSave, onToggle }: {
           <label htmlFor={`contact-${row.id}`}>Phone or other contact</label>
           <input id={`contact-${row.id}`} value={contact} maxLength={100} onChange={(e) => setContact(e.target.value)} />
           <p className="cluster">
-            <button
+            <BusyButton
+              busy={busy ?? false}
               type="button"
-              disabled={busy || name.trim() === ''}
+              disabled={name.trim() === ''}
               onClick={() => {
                 onSave({ ...(name.trim() !== row.name ? { name: name.trim() } : {}), ...(contact.trim() !== (row.contact ?? '') ? { contact: contact.trim() } : {}) });
                 setEditing(false);
               }}
             >
               Save
-            </button>
+            </BusyButton>
             <button type="button" className="btn-ghost" onClick={() => { setName(row.name ?? ''); setContact(row.contact ?? ''); setEditing(false); }}>Cancel</button>
           </p>
         </div>
@@ -67,9 +69,9 @@ export function PersonRow({ row, busy, extra, onSave, onToggle }: {
         <p className="cluster">
           <button type="button" className="btn-sm" onClick={() => setEditing(true)} aria-label={`Edit ${row.name}`}>Edit</button>
           {onToggle && (
-            <button type="button" className="btn-sm" disabled={busy} onClick={onToggle} aria-label={`${off ? 'Switch on' : 'Switch off'} ${row.name}`}>
+            <BusyButton busy={busy ?? false} type="button" className="btn-sm" onClick={onToggle} aria-label={`${off ? 'Switch on' : 'Switch off'} ${row.name}`}>
               {off ? 'Switch on' : 'Switch off'}
-            </button>
+            </BusyButton>
           )}
         </p>
       )}
@@ -137,7 +139,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
           <input id={`new-${queryKey}-name`} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" />
           <label htmlFor={`new-${queryKey}-contact`}>Phone or other contact (optional)</label>
           <input id={`new-${queryKey}-contact`} value={contact} maxLength={100} onChange={(e) => setContact(e.target.value)} autoComplete="off" />
-          <button type="submit" className="rt-primary" disabled={add.isPending || name.trim() === ''}>{add.isPending ? 'Adding' : `Add ${noun}`}</button>
+          <BusyButton busy={add.isPending} type="submit" className="rt-primary" disabled={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
         </form>
         <Problem error={add.error} />
         </AddPanel>

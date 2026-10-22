@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ImportResult } from '../../../api/retail';
 import { BackToCatalogue } from './catalogue';
 import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
@@ -104,17 +105,17 @@ export function ImportPage() {
       <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <button type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === '' || check.isPending} onClick={() => check.mutate()}>
-        {check.isPending ? 'Checking' : 'Check the file'}
-      </button>
+      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
+        Check the file
+      </BusyButton>
       {current && <ImportReport result={current} />}
       {current && current.errors === 0 && (current.added ?? 0) === 0 && <p className="empty-state">There is nothing new to add.</p>}
       {current && (current.errors ?? 0) > 0 && <p role="alert" className="alert alert-danger">Fix the rows with a problem in your file and check it again. Nothing is added while a row has a problem.</p>}
       <Problem error={apply.error} />
       {ready && (
-        <button type="button" className="rt-primary" disabled={apply.isPending} onClick={() => apply.mutate()}>
-          {apply.isPending ? 'Adding' : `Add ${current.added} items`}
-        </button>
+        <BusyButton busy={apply.isPending} type="button" className="rt-primary" onClick={() => apply.mutate()}>
+          {`Add ${current.added} items`}
+        </BusyButton>
       )}
       {done && <Success>Added {done.added} items and skipped {done.skipped} that were already there.</Success>}
       {done && <ImportReport result={done} />}

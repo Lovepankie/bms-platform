@@ -60,7 +60,7 @@ async function fillIn(description: string) {
   fireEvent.change(screen.getByLabelText(/Selling price/), { target: { value: '12000' } });
 }
 
-const addButton = () => screen.getByRole('button', { name: /^Add item|Saving$/ }) as HTMLButtonElement;
+const addButton = () => screen.getByRole('button', { name: /^Add item/ }) as HTMLButtonElement;
 
 describe('the same name', () => {
   it('is refused in the owner\'s words with a way to open the existing item', async () => {

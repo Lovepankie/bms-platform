@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail } from '../../../api/retail';
 
 // Item photos (issue #384, ADR-053): a small picture of an item in the item lists, the sale screen and the item's page, read
@@ -98,7 +99,7 @@ export function PhotoEditor({ inputId, photoId, shownId, label, onUpload, onClea
       {upload.isPending && <p className="loading">Sending the photo</p>}
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       {(upload.error || clear.error) && <p role="alert" className="rt-flag">{((upload.error ?? clear.error) as Error).message}</p>}
-      {photoId && <button type="button" className="btn-ghost" disabled={clear.isPending} onClick={() => clear.mutate()}>Take the photo off</button>}
+      {photoId && <BusyButton busy={clear.isPending} type="button" className="btn-ghost" onClick={() => clear.mutate()}>Take the photo off</BusyButton>}
     </div>
   );
 }

@@ -154,10 +154,10 @@ export function PlanFormView({ form, isNew, problems, busy, error, onChange, onS
         </p>
       )}
       <div className="cluster">
-        <button type="submit" className="btn-primary" disabled={busy}>
+        <button type="submit" /* busy-exempt: review only opens the confirmation */ className="btn-primary" disabled={busy}>
           Review
         </button>
-        <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>
+        <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
       </div>

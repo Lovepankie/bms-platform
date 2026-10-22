@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { type AdminCredential, resetUserSignIn } from '../../../api/sign-in-reset';
 import { type RoleAssignmentRequest, type StaffUser, users } from '../../../api/users';
 import { useShellBrand } from '../../../app/branding';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useStaff } from '../context';
@@ -171,7 +172,7 @@ export function UsersScreen() {
             <TransferOwner targets={targets} mfaEnabled={me.mfa_enabled === true} onSend={transferOwnership} onCancel={() => setTransferring(false)} />
           ) : (
             <p>
-              <button type="button" className="btn-ghost btn-sm" disabled={busyId !== null || list.isPending} onClick={() => { setTransferring(true); setError(null); }}>
+              <button type="button" /* busy-exempt: opens a panel */ className="btn-ghost btn-sm" disabled={busyId !== null || list.isPending} onClick={() => { setTransferring(true); setError(null); }}>
                 Transfer ownership
               </button>
             </p>
@@ -214,20 +215,20 @@ export function UsersScreen() {
                     {canActOn(me, u, all) && u.status !== 'deactivated' && mode?.id !== u.id && (
                       <p className="cluster">
                         {u.status === 'invited' && (
-                          <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => void resend(u)}>
-                            {busyId === u.id ? 'Making a link' : 'Send a new link'}
-                          </button>
+                          <BusyButton type="button" className="btn-sm" busy={busyId === u.id} disabled={busyId !== null} onClick={() => void resend(u)}>
+                            Send a new link
+                          </BusyButton>
                         )}
-                        <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'roles', id: u.id ?? '' }); setError(null); }}>
+                        <button type="button" /* busy-exempt: opens a panel */ className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'roles', id: u.id ?? '' }); setError(null); }}>
                           Change roles
                         </button>
                         {canResetSignIn(me, u) && (
-                          <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'reset', id: u.id ?? '' }); setError(null); }}>
+                          <button type="button" /* busy-exempt: opens a panel */ className="btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'reset', id: u.id ?? '' }); setError(null); }}>
                             Reset sign-in
                           </button>
                         )}
                         {u.id !== me.user_id && (
-                          <button type="button" className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'deactivate', id: u.id ?? '' }); setError(null); }}>
+                          <button type="button" /* busy-exempt: opens a panel */ className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'deactivate', id: u.id ?? '' }); setError(null); }}>
                             Deactivate
                           </button>
                         )}
@@ -244,10 +245,10 @@ export function UsersScreen() {
                         {error && <p role="alert" className="alert alert-danger">{error}</p>}
                         <p>Deactivate <strong>{u.full_name}</strong>? They are signed out at once and cannot sign in again. Everything they recorded stays on the books.</p>
                         <p className="cluster">
-                          <button type="button" className="btn-danger" disabled={busyId !== null} onClick={() => void deactivate(u)}>
-                            {busyId === u.id ? 'Deactivating' : 'Yes, deactivate'}
-                          </button>
-                          <button type="button" className="btn-ghost" disabled={busyId !== null} onClick={() => setMode(null)}>Keep them</button>
+                          <BusyButton type="button" className="btn-danger" busy={busyId === u.id} disabled={busyId !== null} onClick={() => void deactivate(u)}>
+                            Yes, deactivate
+                          </BusyButton>
+                          <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busyId !== null} onClick={() => setMode(null)}>Keep them</button>
                         </p>
                       </div>
                     )}

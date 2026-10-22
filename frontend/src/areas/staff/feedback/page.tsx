@@ -10,6 +10,7 @@ import {
   myScreenshot,
   sendFeedback,
 } from '../../../api/feedback';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { KIND_WORDS, KINDS, MESSAGE_MAX, SCREENSHOT_TYPES, STATUS_WORDS, messageProblem, pageBeforeFeedback, screenshotProblem } from './feedback-state';
 
 // Feedback (issue #447, ADR-065): any member of staff tells the BMS team an idea, a problem or a question, with a picture of the
@@ -123,9 +124,9 @@ export function FeedbackForm({ send = sendFeedback, from = pageBeforeFeedback }:
         </p>
       )}
       <div className="form-actions">
-        <button type="submit" className="btn-primary" disabled={submit.isPending} data-tour="feedback-send">
-          {submit.isPending ? 'Sending' : 'Send feedback'}
-        </button>
+        <BusyButton type="submit" className="btn-primary" busy={submit.isPending} data-tour="feedback-send">
+          Send feedback
+        </BusyButton>
       </div>
     </form>
   );

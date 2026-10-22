@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { BusyButton } from '../../app/ui/BusyButton';
 import {
   type FeedbackStatus,
   type PlatformFeedbackItem,
@@ -81,11 +82,13 @@ function FeedbackCard({ item, save, link, loadScreenshot }: {
   const issueChanged = issueNumber !== undefined && issueNumber !== (item.linked_issue_number ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pressed, setPressed] = useState('');
   const id = item.id ?? '';
   const moves = nextStatuses(item.status);
   const replyChanged = reply.trim() !== (item.reply_note ?? '');
 
   async function act(status: FeedbackStatus) {
+    setPressed(status);
     setBusy(true);
     setError(null);
     try {
@@ -99,6 +102,7 @@ function FeedbackCard({ item, save, link, loadScreenshot }: {
 
   async function saveIssue() {
     if (issueNumber === undefined) return;
+    setPressed('issue');
     setBusy(true);
     setError(null);
     try {
@@ -133,9 +137,9 @@ function FeedbackCard({ item, save, link, loadScreenshot }: {
           onChange={(e) => setIssue(e.target.value)}
           style={{ maxWidth: '10rem' }}
         />
-        <button type="button" className="btn-sm" disabled={busy || !issueChanged} onClick={() => void saveIssue()}>
+        <BusyButton type="button" className="btn-sm" busy={busy && pressed === 'issue'} disabled={busy || !issueChanged} onClick={() => void saveIssue()}>
           {issueNumber === null ? 'Clear the issue' : 'Save the issue'}
-        </button>
+        </BusyButton>
       </div>
       {issueNumber === undefined && <p className="hint">The issue number is a whole number above zero.</p>}
       <label htmlFor={`reply-${id}`}>Reply the sender sees</label>
@@ -147,13 +151,13 @@ function FeedbackCard({ item, save, link, loadScreenshot }: {
       )}
       <div className="form-actions" data-tour="feedback-actions">
         {moves.map((status) => (
-          <button key={status} type="button" disabled={busy} onClick={() => void act(status)}>
+          <BusyButton key={status} type="button" busy={busy && pressed === status} disabled={busy} onClick={() => void act(status)}>
             Mark as {status}
-          </button>
+          </BusyButton>
         ))}
-        <button type="button" disabled={busy || !replyChanged} onClick={() => void act((item.status ?? 'new') as FeedbackStatus)}>
+        <BusyButton type="button" busy={busy && pressed === (item.status ?? 'new')} disabled={busy || !replyChanged} onClick={() => void act((item.status ?? 'new') as FeedbackStatus)}>
           Save the reply
-        </button>
+        </BusyButton>
       </div>
     </li>
   );
@@ -173,10 +177,12 @@ export function FeedbackInbox({
   const client = useQueryClient();
   const [filter, setFilter] = useState<FeedbackStatus | null>('new');
   const list = useQuery({ queryKey: ['platform-feedback', filter], queryFn: () => load(filter) });
+  // busy-exempt: each FeedbackCard shows its own busy state
   const change = useMutation({
     mutationFn: ({ id, status, reply }: { id: string; status: FeedbackStatus; reply: string | null }) => save(id, status, reply),
     onSuccess: () => client.invalidateQueries({ queryKey: ['platform-feedback'] }),
   });
+  // busy-exempt: each FeedbackCard shows its own busy state
   const linkIssue = useMutation({
     mutationFn: ({ id, issueNumber }: { id: string; issueNumber: number | null }) => link(id, issueNumber),
     onSuccess: () => client.invalidateQueries({ queryKey: ['platform-feedback'] }),

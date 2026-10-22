@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { type PushDevice, pushApi } from '../../../api/push';
 import { THEME_LABELS } from '../../../app/shell';
 import { THEME_CHOICES, useThemeChoice } from '../../../app/theme-mode';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { InstallPanel } from '../../../install/InstallPrompt';
 import { isIosDevice } from '../../../install/install';
 import { type PushState, createPush } from '../../../push/push';
@@ -47,6 +48,7 @@ export function PushToggle({ push = defaultPush }: { push?: ReturnType<typeof cr
   const queryClient = useQueryClient();
   const state = useQuery({ queryKey: ['push-state'], queryFn: () => push.state(), retry: false });
   const [error, setError] = useState<string | null>(null);
+  // busy-exempt: the switch sends it on change and says Working itself
   const change = useMutation({
     mutationFn: (on: boolean) => (on ? push.enable() : push.disable()),
     onSuccess: (next) => {
@@ -124,9 +126,9 @@ function Devices() {
                   ) : null}
                 </span>
               </span>
-              <button type="button" className="btn-ghost btn-sm" disabled={remove.isPending} onClick={() => remove.mutate(device)}>
+              <BusyButton type="button" className="btn-ghost btn-sm" busy={remove.isPending && remove.variables?.id === device.id} disabled={remove.isPending} onClick={() => remove.mutate(device)}>
                 Remove
-              </button>
+              </BusyButton>
             </li>
           ))}
         </ul>
