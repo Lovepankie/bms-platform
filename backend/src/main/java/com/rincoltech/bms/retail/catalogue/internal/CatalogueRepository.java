@@ -544,6 +544,22 @@ class CatalogueRepository {
                 .optional();
     }
 
+    /** The sell price in force at {@code at} (see {@link com.rincoltech.bms.retail.catalogue.RetailCatalogue#sellMinorAt}). */
+    long sellMinorAt(UUID productId, java.time.Instant at) {
+        return jdbc.sql("""
+                        SELECT coalesce(
+                            (SELECT h.new_sell_minor FROM retail_price_history h
+                              WHERE h.product_id = :p AND h.created_at <= :at ORDER BY h.created_at DESC, h.id DESC LIMIT 1),
+                            (SELECT coalesce(h.old_sell_minor, h.new_sell_minor) FROM retail_price_history h
+                              WHERE h.product_id = :p AND h.created_at > :at ORDER BY h.created_at, h.id LIMIT 1),
+                            (SELECT p.sell_minor FROM retail_products p WHERE p.id = :p))
+                        """)
+                .param("p", productId)
+                .param("at", java.sql.Timestamp.from(at))
+                .query(Long.class)
+                .single();
+    }
+
     void insertPack(UUID id, UUID productId, UUID unitId, java.math.BigDecimal factor, UUID by) {
         jdbc.sql("""
                         INSERT INTO retail_product_units (id, tenant_id, product_id, unit_id, factor, created_by)

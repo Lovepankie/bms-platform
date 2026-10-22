@@ -1,7 +1,9 @@
 package com.rincoltech.bms.retail.sales.internal;
 
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Clash;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Device;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.LinePrice;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.OpenSale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Payment;
@@ -34,6 +36,7 @@ class SalesRepository {
             SELECT id, sale_no, branch_id, sale_date, payment_method, customer_id, buyer_name, buyer_contact,
                    due_date, status, currency, total_minor, paid_minor, cost_total_minor, historical, created_at,
                    created_by, voided_at, voided_by, void_reason, version, sale_entry_id, cost_entry_id, price_list_id,
+                   client_sale_id, occurred_at, recorded_offline,
                    (SELECT l.name FROM retail_price_lists l WHERE l.id = retail_sales.price_list_id) AS price_list,
                    (SELECT w.written_off_on FROM retail_sale_writeoffs w WHERE w.sale_id = retail_sales.id) AS written_off_on,
                    (SELECT w.unpaid_minor FROM retail_sale_writeoffs w WHERE w.sale_id = retail_sales.id) AS written_off_unpaid_minor,
@@ -247,13 +250,14 @@ class SalesRepository {
         }
     }
 
-    void insert(Sale s) {
+    void insert(Sale s, String requestHash) {
         jdbc.sql("""
                         INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, customer_id,
                             buyer_name, buyer_contact, due_date, currency, total_minor, cost_total_minor, paid_minor, status,
-                            created_by, price_list_id)
+                            created_by, price_list_id, client_sale_id, occurred_at, recorded_offline, request_hash)
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :branch, :no, :date, :method, :customer,
-                            :buyerName, :buyerContact, :due, :currency, :total, :cost, :paid, 'completed', :by, :priceList)
+                            :buyerName, :buyerContact, :due, :currency, :total, :cost, :paid, 'completed', :by, :priceList,
+                            :clientSaleId, :occurredAt, :offline, :requestHash)
                         """)
                 .param("id", s.id())
                 .param("branch", s.branchId())
@@ -270,6 +274,69 @@ class SalesRepository {
                 .param("paid", s.paidMinor())
                 .param("by", s.createdBy())
                 .param("priceList", s.priceListId())
+                .param("clientSaleId", s.device() == null ? null : s.device().clientSaleId())
+                .param(
+                        "occurredAt",
+                        s.device() == null || s.device().occurredAt() == null
+                                ? null
+                                : Timestamp.from(s.device().occurredAt()))
+                .param("offline", s.device() != null && s.device().recordedOffline())
+                .param("requestHash", requestHash)
+                .update();
+    }
+
+    /** The sale recorded with this client sale id, who made it and the fingerprint of its request (ADR-067), any branch. */
+    record ByClient(UUID saleId, UUID createdBy, String requestHash) {}
+
+    Optional<ByClient> byClientSaleId(UUID clientSaleId) {
+        return jdbc.sql("SELECT id, created_by, request_hash FROM retail_sales WHERE client_sale_id = ?")
+                .param(clientSaleId)
+                .query((rs, n) -> new ByClient(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("created_by", UUID.class),
+                        rs.getString("request_hash")))
+                .optional();
+    }
+
+    /**
+     * The status of the refused offline sale reported with this client sale id, its row locked to the commit (ADR-067 decision
+     * 8), so a manager's discard and a resend of the same sale queue on it and only one of them wins.
+     */
+    Optional<String> lockFailure(UUID clientSaleId) {
+        return jdbc.sql("SELECT status FROM retail_offline_failures WHERE client_sale_id = ? FOR UPDATE")
+                .param(clientSaleId)
+                .query(String.class)
+                .optional();
+    }
+
+    /** A refused offline sale reported with this client sale id is closed by the sale it became (ADR-067). */
+    void closeFailure(UUID clientSaleId, UUID saleId) {
+        int closed = jdbc.sql("""
+                        UPDATE retail_offline_failures SET status = 'recorded', sale_id = ?, updated_at = now()
+                         WHERE client_sale_id = ? AND status IN ('open', 'retry')
+                        """).params(saleId, clientSaleId).update();
+        if (closed == 0) {
+            // The row was locked before the sale was written, so a discarded one here is a broken invariant, never a
+            // race.
+            lockFailure(clientSaleId)
+                    .filter(status -> !status.equals("recorded"))
+                    .ifPresent(status -> {
+                        throw new IllegalStateException(
+                                "Offline failure for client sale " + clientSaleId + " is " + status + ", not recorded");
+                    });
+        }
+        // And a summary of it waiting on a phone goes.
+        jdbc.sql("DELETE FROM retail_offline_waiting WHERE client_sale_id = ?")
+                .param(clientSaleId)
+                .update();
+    }
+
+    void insertClash(UUID saleId, UUID branchId, Integer lineNo, UUID productId, String kind, String words) {
+        jdbc.sql("""
+                        INSERT INTO retail_sale_clashes (id, tenant_id, sale_id, branch_id, line_no, product_id, kind, words)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(UUID.randomUUID(), saleId, branchId, lineNo, productId, kind, words)
                 .update();
     }
 
@@ -372,9 +439,56 @@ class SalesRepository {
                                             rs.getLong("resolved_unit_price_minor"),
                                             rs.getString("price_override_reason"))));
         });
-        return sales.stream()
-                .map(s -> withLines(s, bySale.getOrDefault(s.id(), new ArrayList<>())))
+        Map<UUID, List<Clash>> clashes = new HashMap<>();
+        List<UUID> offline = sales.stream()
+                .filter(s -> s.device() != null && s.device().recordedOffline())
+                .map(Sale::id)
                 .toList();
+        if (!offline.isEmpty()) {
+            jdbc.sql(
+                            CLASHES
+                                    + " WHERE c.sale_id IN (:ids) ORDER BY c.sale_id, c.line_no NULLS FIRST, c.created_at, c.id")
+                    .param("ids", offline)
+                    .query(rs -> {
+                        clashes.computeIfAbsent(rs.getObject("sale_id", UUID.class), k -> new ArrayList<>())
+                                .add(clash(rs));
+                    });
+        }
+        return sales.stream()
+                .map(s -> withClashes(
+                        withLines(s, bySale.getOrDefault(s.id(), new ArrayList<>())),
+                        clashes.getOrDefault(s.id(), List.of())))
+                .toList();
+    }
+
+    static final String CLASHES = """
+            SELECT c.id, c.sale_id, s.sale_no, c.branch_id, c.line_no, c.product_id, c.kind, c.words, c.created_at,
+                   c.resolved_at, c.resolved_by, c.resolution_note
+              FROM retail_sale_clashes c JOIN retail_sales s ON s.tenant_id = c.tenant_id AND s.id = c.sale_id
+            """;
+
+    static Clash clash(ResultSet rs) throws SQLException {
+        return new Clash(
+                rs.getObject("id", UUID.class),
+                rs.getObject("sale_id", UUID.class),
+                rs.getString("sale_no"),
+                rs.getObject("branch_id", UUID.class),
+                rs.getObject("line_no", Integer.class),
+                rs.getObject("product_id", UUID.class),
+                rs.getString("kind"),
+                rs.getString("words"),
+                instant(rs, "created_at"),
+                instant(rs, "resolved_at"),
+                rs.getObject("resolved_by", UUID.class),
+                rs.getString("resolution_note"));
+    }
+
+    private static Sale withClashes(Sale s, List<Clash> clashes) {
+        if (s.device() == null || clashes.isEmpty()) {
+            return s;
+        }
+        return s.withDevice(new Device(
+                s.device().clientSaleId(), s.device().occurredAt(), s.device().recordedOffline(), clashes));
     }
 
     private static Sale withLines(Sale s, List<SaleLine> lines) {
@@ -407,7 +521,8 @@ class SalesRepository {
                 s.version(),
                 s.writeOff(),
                 s.countedWhenPaid(),
-                s.deliveryFeeOwedMinor());
+                s.deliveryFeeOwedMinor(),
+                s.device());
     }
 
     private static Sale header(ResultSet rs) throws SQLException {
@@ -451,7 +566,14 @@ class SalesRepository {
                                 rs.getString("written_off_reason"),
                                 rs.getLong("written_off_fee_minor") > 0 ? rs.getLong("written_off_fee_minor") : null),
                 false,
-                rs.getObject("fee_owed", Long.class));
+                rs.getObject("fee_owed", Long.class),
+                rs.getObject("client_sale_id", UUID.class) == null
+                        ? null
+                        : new Device(
+                                rs.getObject("client_sale_id", UUID.class),
+                                instant(rs, "occurred_at"),
+                                rs.getBoolean("recorded_offline"),
+                                List.of()));
     }
 
     // ---- Payments --------------------------------------------------------------------------

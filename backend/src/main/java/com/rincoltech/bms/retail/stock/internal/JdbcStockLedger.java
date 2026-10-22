@@ -41,6 +41,20 @@ class JdbcStockLedger implements StockLedger {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public List<UUID> record(LocalDate businessDate, List<Movement> movements) {
+        return write(businessDate, movements, null);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public List<Shortfall> recordAllowingShortfall(LocalDate businessDate, List<Movement> movements) {
+        List<Shortfall> shortfalls = new ArrayList<>();
+        write(businessDate, movements, shortfalls);
+        shortfalls.sort(Comparator.comparingInt(Shortfall::index));
+        return shortfalls;
+    }
+
+    /** Writes the movements; with {@code shortfalls} not null a guarded shortfall is collected there instead of refused. */
+    private List<UUID> write(LocalDate businessDate, List<Movement> movements, List<Shortfall> shortfalls) {
         UUID[] ids = new UUID[movements.size()];
         Integer[] order = new Integer[movements.size()];
         for (int i = 0; i < order.length; i++) {
@@ -58,7 +72,12 @@ class JdbcStockLedger implements StockLedger {
             Locked locked = lockRow(m.branchId(), m.productId());
             BigDecimal current = locked.qty();
             BigDecimal next = current.add(m.qty());
-            if (GUARDED.contains(m.kind()) && m.qty().signum() < 0 && next.compareTo(locked.reserved()) < 0) {
+            if (GUARDED.contains(m.kind())
+                    && m.qty().signum() < 0
+                    && next.compareTo(locked.reserved()) < 0
+                    && shortfalls != null) {
+                shortfalls.add(new Shortfall(i, m.branchId(), m.productId(), current, locked.reserved()));
+            } else if (GUARDED.contains(m.kind()) && m.qty().signum() < 0 && next.compareTo(locked.reserved()) < 0) {
                 if (next.signum() < 0 || locked.reserved().signum() == 0) {
                     throw ApiException.rule(
                             "insufficient_stock",

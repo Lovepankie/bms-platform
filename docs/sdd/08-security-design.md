@@ -342,6 +342,7 @@ platform API and holds no tenant permissions.
 | `retail.sale.read` | Y | | | | | | | Y | | | | Y |
 | `retail.sale.void` | Y | | | | | | | | | | | |
 | `retail.sale.all_sellers` | Y | | | | | | | | | | | Y |
+| `retail.offline.resolve` | Y | | | | | | | | | | | Y |
 | `retail.till.close` | Y | | | | | | | | | | Y | |
 | `retail.stock.read` | Y | | | | | | | Y | Y | Y | | Y |
 | `retail.stock.transfer` | Y | | | | | | | | Y | | | |
@@ -509,6 +510,21 @@ Notes:
   the printed receipt is signed "Issued by" the seller who made the sale, read as stored, though ADR-055 hides the maker from a
   caller without `retail.profit.read`. The name appears only in that printed signature of a receipt the caller may already fetch,
   never in any API field; the owner may reverse it. Tests: `SaleReceiptPdfIT`.
+- Retail sales offline (issue #458, ADR-067, migration `V86`): `retail.offline.resolve` (administrators and the Supervisor, scoped
+  by branch) lists and resolves the clashes of sales recorded offline and lists, resends or discards the sales the server refused
+  (`/retail/sale-clashes`, `/retail/offline-failures`); a discard needs a reason and is audited (`retail.offline_sale.discarded`). Nobody decides a refused
+  sale they made themselves (403 `own_offline_sale`), except that a `tenant_admin` may discard their own with a second written
+  reason, audited `retail.offline_sale.self_discard` (ADR-067 decision 11 d).
+  Recording a sale offline adds no permission: it is `retail.sale.create`, and the device reports its own refused sales under it
+  (`/retail/offline-failures/mine` shows only the caller's). A sale sent with `recorded_offline` is not refused for short stock, an
+  item switched off, a saved price that changed since, or a price not above cost (no `retail.price.below_cost` check): each is
+  recorded as a clash. The price rules are those of an online sale (ADR-067 decision 11): a price other than the one saved on
+  the phone stands without a clash only for a holder of `retail.price.override` at the branch with a reason; any other is
+  recorded as charged with a `price_typed` clash and told to the holders of `retail.offline.resolve` at the branch, which is the control on a
+  seller who sets the flag by hand. A clash's words never carry a cost. A phone
+  tells the server, under `retail.sale.create`, which sales other people left queued on it (`/retail/offline-waiting`: ids,
+  branch, total, time and seller only, never posted), which only holders of `retail.offline.resolve` read. The device keeps the
+  catalogue and the outbox per business host and per person in IndexedDB and clears the catalogue on sign-out; lending data is never cached. Tests: `RetailOfflineSalesIT`.
 - Retail cash book (ADR-022, FR-RET-32, migration V34): the ten `retail.cashbook.*`,
   `retail.savings.*`, `retail.banking.record`, `retail.expense.*`, `retail.withdrawal.record` and
   `retail.advance.*` permissions are rows of the matrix above, seeded by the cash book migration.

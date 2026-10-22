@@ -24,6 +24,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerBalance;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerList;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerPricingRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.CustomerRequest;
+import com.rincoltech.bms.retail.sales.internal.SalesApi.Device;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.OpenSale;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Payment;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.PaymentList;
@@ -56,14 +57,21 @@ import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.StockLedger.Recorded;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -148,11 +156,93 @@ class SalesService {
         };
     }
 
+    /** How far ahead of the server a device clock may be and still count as now (ADR-067 decision 6). */
+    static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
+
+    /**
+     * How far before prices_as_of a sale recorded offline may say it happened and still be dated as it says (ADR-067
+     * decision 6); further before, the phone clock was behind.
+     */
+    static final Duration CLOCK_BEHIND_SKEW = Duration.ofMinutes(2);
+
     @Transactional
     Outcome<Sale> create(String idempotencyKey, SaleRequest r) {
-        Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, r, Sale.class, () -> record(r));
-        return outcome;
+        // ADR-067: a sale already recorded with this client sale id is the same sale, whatever key it comes with, so a
+        // send after the key expired, or with a new key after a lost answer, answers it again and does nothing.
+        boolean[] earlier = {false};
+        Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, r, Sale.class, () -> {
+            if (r.clientSaleId() != null) {
+                Optional<Sale> found = recordedAs(r);
+                if (found.isPresent()) {
+                    earlier[0] = true;
+                    return found.get();
+                }
+            }
+            return record(r);
+        });
+        return earlier[0] ? new Outcome<>(outcome.body(), true) : outcome;
     }
+
+    /**
+     * The sale recorded with this request's client sale id, when the caller made it with the same request; 422 when someone
+     * else did, or when the request differs from the one recorded (a changed sale is never answered with the old one).
+     */
+    private Optional<Sale> recordedAs(SaleRequest r) {
+        Optional<SalesRepository.ByClient> found = repo.byClientSaleId(r.clientSaleId());
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!found.get().createdBy().equals(CurrentPrincipal.require().userId())) {
+            throw ApiException.rule(
+                    "client_sale_id_reused", "This client sale id belongs to a sale someone else recorded.");
+        }
+        if (found.get().requestHash() != null && !found.get().requestHash().equals(requestHash(r))) {
+            throw ApiException.rule(
+                    "client_sale_conflict",
+                    "A different sale was already recorded with this client sale id. Start a new sale for the changes.");
+        }
+        return Optional.of(
+                visible(repo.find(found.get().saleId(), false).orElseThrow().sale()));
+    }
+
+    /**
+     * The fingerprint of a request with a client sale id (ADR-067 decision 5): the SHA-256 of a fixed canonical text of what
+     * the sale is (the branch, the payment method, the credit buyer, and per line the item, the pack, the quantity and the
+     * price), never of how it was delivered or worded, so a sale whose answer was lost and that is sent again from the outbox
+     * is the same request, a new field on the request changes nothing, and a changed sale is not the same.
+     */
+    static String requestHash(SaleRequest r) {
+        StringBuilder text = new StringBuilder("v1")
+                .append('|')
+                .append(r.branchId())
+                .append('|')
+                .append(r.paymentMethod())
+                .append('|')
+                .append(r.customerId());
+        for (SaleLineRequest l : r.lines()) {
+            text.append("|line:")
+                    .append(l.productId())
+                    .append(',')
+                    .append(l.unitId())
+                    .append(',')
+                    .append(
+                            l.qty() == null
+                                    ? null
+                                    : l.qty().stripTrailingZeros().toPlainString())
+                    .append(',')
+                    .append(l.unitPriceMinor());
+        }
+        try {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256")
+                            .digest(text.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A clash found while recording a sale made offline, written once the sale exists (ADR-067 decision 7). */
+    record PendingClash(Integer lineNo, UUID productId, String kind, String words) {}
 
     /** FR-RET-04, FR-RET-05, FR-RET-11. */
     Sale record(SaleRequest r) {
@@ -176,18 +266,48 @@ class SalesService {
      * which the Controls page does not count again. Every other rule of a sale holds.
      */
     Sale record(SaleRequest r, Long creditDelta, List<Agreement> agreements) {
+        // ADR-067 decision 8: the refused offline sale's row is locked to the commit, so a manager's discard running
+        // now
+        // either finishes first and refuses this sale, or waits and finds it recorded. A discarded one is never
+        // recorded.
+        if (r.clientSaleId() != null
+                && repo.lockFailure(r.clientSaleId())
+                        .filter("discarded"::equals)
+                        .isPresent()) {
+            throw ApiException.rule(
+                    "offline_sale_discarded",
+                    "A manager discarded this sale, so it is not recorded. It is removed from the phone.");
+        }
         boolean agreed = agreements != null;
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // ADR-033: a store never sells; with branch_roles off every branch acts as both.
         roles.requireMaySell(branch);
         branches.requireSells(branch, "branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
-        LocalDate saleDate = r.saleDate() == null ? today : r.saleDate();
+        boolean offline = r.offline();
+        boolean credit = r.paymentMethod().equals("credit");
+        List<PendingClash> clashes = offline ? new ArrayList<>() : null;
+        // A phone clock ahead of the server cannot date its prices in the future: they are as of now at the latest.
+        Instant pricesAsOf =
+                r.pricesAsOf() == null || r.pricesAsOf().isBefore(clock.now()) ? r.pricesAsOf() : clock.now();
+        Instant occurredAt = occurredAt(r, pricesAsOf, clashes);
+        LocalDate occurredOn = occurredAt == null
+                ? null
+                : LocalDate.ofInstant(occurredAt, tenant.profile().timezone());
+        if (occurredOn != null && r.saleDate() != null && !r.saleDate().equals(occurredOn)) {
+            throw ApiException.rule(
+                    "sale_date_mismatch", "The sale date is not the day the sale happened (" + occurredOn + ").");
+        }
+        LocalDate saleDate = occurredOn != null ? occurredOn : r.saleDate() == null ? today : r.saleDate();
         List<FieldProblem> problems = new ArrayList<>();
         if (saleDate.isAfter(today)) {
             problems.add(new FieldProblem("sale_date", "invalid", "A sale cannot be dated in the future."));
         }
-        boolean credit = r.paymentMethod().equals("credit");
+        if (offline && credit) {
+            // ADR-067 decision 1: the buyer's limit cannot be checked on a phone with no network.
+            throw ApiException.rule(
+                    "offline_credit_sale", "A credit sale cannot be made offline. Record it again when online.");
+        }
         String buyerName = blankToNull(r.buyerName());
         Customer buyer =
                 r.customerId() == null ? null : repo.customer(r.customerId()).orElse(null);
@@ -219,7 +339,8 @@ class SalesService {
         LocalDate dueDate = r.dueDate() != null || account == null ? r.dueDate() : account.dueDate(saleDate);
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
-        Priced priced = priceLines(branch, saleDate, buyer, r.priceListId(), r.lines(), problems, agreements);
+        Priced priced = priceLines(
+                branch, saleDate, buyer, r.priceListId(), r.lines(), problems, agreements, clashes, pricesAsOf);
         Chosen list = priced.list();
         List<NewLine> lines = priced.lines();
         long total = lines.stream().mapToLong(NewLine::lineTotalMinor).reduce(0, Math::addExact);
@@ -264,24 +385,45 @@ class SalesService {
                 1,
                 null,
                 false,
-                null);
-        repo.insert(header);
+                null,
+                r.clientSaleId() == null ? null : new Device(r.clientSaleId(), occurredAt, offline, List.of()));
+        try {
+            repo.insert(header, r.clientSaleId() == null ? null : requestHash(r));
+        } catch (DuplicateKeyException e) {
+            // ADR-067: another send of the same client sale id is being recorded right now; its retry finds the sale.
+            // Any other unique violation is not that race and keeps its own error.
+            if (r.clientSaleId() == null || !String.valueOf(e.getMessage()).contains("retail_sales_client_sale_id")) {
+                throw e;
+            }
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "client_sale_in_progress",
+                    "Sale in progress",
+                    "This sale is being recorded by another request; try again shortly.");
+        }
         lines.forEach(l -> repo.insertLine(id, l));
-        stock.record(
-                saleDate,
-                lines.stream()
-                        .map(l -> new Movement(
-                                branch,
-                                l.productId(),
-                                "sale",
-                                l.qty().negate(),
-                                l.unitCostMinor(),
-                                SALE,
-                                id,
-                                l.id(),
-                                null,
-                                null))
-                        .toList());
+        List<Movement> movements = lines.stream()
+                .map(l -> new Movement(
+                        branch,
+                        l.productId(),
+                        "sale",
+                        l.qty().negate(),
+                        l.unitCostMinor(),
+                        SALE,
+                        id,
+                        l.id(),
+                        null,
+                        null))
+                .toList();
+        if (offline) {
+            // ADR-067 decision 7: the money was taken, so stock the branch did not have is written and flagged.
+            for (StockLedger.Shortfall f : stock.recordAllowingShortfall(saleDate, movements)) {
+                NewLine l = lines.get(f.index());
+                clashes.add(new PendingClash(l.lineNo(), l.productId(), "stock_short", shortWords(f, l.qty())));
+            }
+        } else {
+            stock.record(saleDate, movements);
+        }
         Leg receivable = Leg.debit(accountFor(r.paymentMethod()), total);
         if (credit) {
             receivable = receivable.withSubledger(SALE, id);
@@ -343,8 +485,91 @@ class SalesService {
             audit.record(
                     AuditLog.Entry.created("retail.credit.limit_overridden", SALE, id, branch, creditOverride.asMap()));
         }
+        if (r.clientSaleId() != null) {
+            after.put("client_sale_id", r.clientSaleId());
+            // A refused offline sale reported earlier (ADR-067 decision 8) is closed by the sale it became.
+            repo.closeFailure(r.clientSaleId(), id);
+        }
+        if (offline) {
+            after.put("recorded_offline", true);
+            after.put("occurred_at", occurredAt.toString());
+            if (!clashes.isEmpty()) {
+                after.put(
+                        "clashes",
+                        clashes.stream().map(PendingClash::kind).distinct().toList());
+            }
+        }
         audit.record(AuditLog.Entry.created("retail.sale.created", SALE, id, branch, after));
+        if (offline && !clashes.isEmpty()) {
+            clashes.forEach(c -> repo.insertClash(id, branch, c.lineNo(), c.productId(), c.kind(), c.words()));
+            // The administrators and the branch's managers with a device are told, once per sale (ADR-050, ADR-067).
+            events.publishEvent(new PushNotice(
+                    "retail.sale_clash",
+                    id.toString(),
+                    new PushNotice.Holders(OfflineSalesService.RESOLVE, branch, null),
+                    Map.of("branch_id", branch.toString(), "path", "/staff/retail/sales")));
+        }
         return visible(repo.find(id, false).orElseThrow().sale());
+    }
+
+    /**
+     * When the sale happened (ADR-067 decision 6): null when the request does not say; up to {@link #CLOCK_SKEW} ahead is now;
+     * further ahead an online request is refused and a sale recorded offline is dated now with a clock_ahead clash. A sale
+     * recorded offline that says it happened before prices_as_of (the server's time when the phone last saved its prices)
+     * had a phone clock behind: it is dated now with a clock_behind clash, never refused for a closed period because of it.
+     */
+    private Instant occurredAt(SaleRequest r, Instant pricesAsOf, List<PendingClash> clashes) {
+        List<FieldProblem> problems = new ArrayList<>();
+        if (r.offline() && r.clientSaleId() == null) {
+            problems.add(
+                    new FieldProblem("client_sale_id", "required", "A sale recorded offline carries its client id."));
+        }
+        if (r.offline() && r.occurredAt() == null) {
+            problems.add(new FieldProblem("occurred_at", "required", "A sale recorded offline says when it happened."));
+        }
+        if (!problems.isEmpty()) {
+            throw ApiException.validation(problems);
+        }
+        if (r.occurredAt() == null) {
+            return null;
+        }
+        Instant now = clock.now();
+        // Within CLOCK_BEHIND_SKEW of prices_as_of is the ordinary gap between two clocks, not a phone clock behind.
+        if (clashes != null && pricesAsOf != null && r.occurredAt().isBefore(pricesAsOf.minus(CLOCK_BEHIND_SKEW))) {
+            clashes.add(new PendingClash(
+                    null,
+                    null,
+                    "clock_behind",
+                    "The phone's clock was behind: the sale said it happened before the phone last saved its prices"
+                            + " from the server, so it is dated when it reached the server."));
+            return now;
+        }
+        if (!r.occurredAt().isAfter(now.plus(CLOCK_SKEW))) {
+            return r.occurredAt().isAfter(now) ? now : r.occurredAt();
+        }
+        if (clashes == null) {
+            throw ApiException.rule("occurred_at_in_future", "The time of the sale is in the future. Check the clock.");
+        }
+        long minutes = Duration.between(now, r.occurredAt()).toMinutes();
+        clashes.add(new PendingClash(
+                null,
+                null,
+                "clock_ahead",
+                "The phone's clock was " + minutes
+                        + " minutes ahead, so the sale is dated when it reached the server."));
+        return now;
+    }
+
+    /** The words of a stock clash: what the branch had, what the sale took, and what it has now. Never a cost. */
+    private String shortWords(StockLedger.Shortfall f, BigDecimal qty) {
+        String item =
+                catalogue.find(f.productId()).map(ProductSnapshot::description).orElse("An item");
+        String kept = f.reserved().signum() > 0
+                ? ", of which " + Quantities.format(f.reserved()) + " were kept for customer orders"
+                : "";
+        return item + " had " + Quantities.format(f.before()) + " in stock at this branch" + kept + " when this offline"
+                + " sale reached the server; it took " + Quantities.format(qty) + ", so the stock is now "
+                + Quantities.format(f.before().subtract(qty)) + ". Count it and correct it.";
     }
 
     /** The lines of a sale or a quotation, priced and checked, and the list that priced them (null when none applied). */
@@ -365,11 +590,6 @@ class SalesService {
         return priceLines(branch, saleDate, buyer, priceListId, requests, problems, null);
     }
 
-    /**
-     * As above; {@code agreements} prices lines a customer order agreed on (issue #385): see {@link #record(SaleRequest, Long, List)}.
-     * An entry may be null: that line is priced as a new one with every rule checked (a change of an order's items, issue #393,
-     * where only the lines left as they were carry an agreement).
-     */
     Priced priceLines(
             UUID branch,
             LocalDate saleDate,
@@ -378,6 +598,28 @@ class SalesService {
             List<SaleLineRequest> requests,
             List<FieldProblem> problems,
             List<Agreement> agreements) {
+        return priceLines(branch, saleDate, buyer, priceListId, requests, problems, agreements, null, null);
+    }
+
+    /**
+     * As above; {@code agreements} prices lines a customer order agreed on (issue #385): see {@link #record(SaleRequest, Long, List)}.
+     * An entry may be null: that line is priced as a new one with every rule checked (a change of an order's items, issue #393,
+     * where only the lines left as they were carry an agreement). With {@code clashes} not null the lines are those of a sale
+     * recorded offline (ADR-067 decision 7): an item switched off, a price that changed and a price not above cost are added
+     * there instead of refused, and the line keeps the price the device charged.
+     */
+    Priced priceLines(
+            UUID branch,
+            LocalDate saleDate,
+            Customer buyer,
+            UUID priceListId,
+            List<SaleLineRequest> requests,
+            List<FieldProblem> problems,
+            List<Agreement> agreements,
+            List<PendingClash> clashes,
+            Instant pricesAsOf) {
+        boolean offline = clashes != null;
+        String offlineReason = offline ? offlineReason(pricesAsOf) : null;
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
         boolean priced = pricing.on();
@@ -397,7 +639,13 @@ class SalesService {
                 problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
                 continue;
             }
-            if (!p.active() && !agreed) {
+            if (!p.active() && !agreed && offline) {
+                clashes.add(new PendingClash(
+                        i + 1,
+                        p.id(),
+                        "item_inactive",
+                        p.description() + " was switched off while this sale was offline; it is recorded as sold."));
+            } else if (!p.active() && !agreed) {
                 problems.add(new FieldProblem(
                         field + ".product_id",
                         "product_inactive",
@@ -412,19 +660,31 @@ class SalesService {
                 problems.add(new FieldProblem(field + ".qty", "invalid", "At most three decimal places."));
                 continue;
             }
-            SaleUnit unit = saleUnit(field, p, l.unitId(), l.qty(), problems, agreed);
+            SaleUnit unit = saleUnit(field, p, l.unitId(), l.qty(), problems, agreed, clashes, i + 1);
             if (unit == null) {
                 continue;
             }
             PackUnit pack = unit.pack();
             long defaultPrice = pack == null ? p.sellMinor() : Quantities.packPrice(p.sellMinor(), pack.factor());
             long price = l.unitPriceMinor() == null ? defaultPrice : l.unitPriceMinor();
+            // ADR-067 decision 11: offline, the price rules of an online sale. A device price stands when it is the
+            // catalogue or pack price in force when the phone saved its prices (or today's), or when the seller may
+            // change prices and gave a reason; any other is recorded as charged with a price_typed clash.
+            OfflinePrice offlinePrice = offline && l.unitPriceMinor() != null
+                    ? offlinePrice(p, pack, l, defaultPrice, pricesAsOf, branch, principal)
+                    : null;
+            if (!priced && offlinePrice == OfflinePrice.TYPED) {
+                clashes.add(typedClash(i + 1, p));
+            } else if (!priced && offlinePrice == OfflinePrice.PHONE && l.unitPriceMinor() != defaultPrice) {
+                clashes.add(priceClash(i + 1, p, "its price is different now"));
+            }
             LinePricing linePricing = null;
             if (priced) {
                 // ADR-033, issue #195: the server resolves the price; a different typed price is an override.
                 Decision d = pricing.decide(
                         list, p.id(), pack == null ? p.unitId() : pack.unitId(), l.qty(), defaultPrice, saleDate);
-                if (d.refused()) {
+                boolean devicePrice = offline && l.unitPriceMinor() != null;
+                if (d.refused() && !devicePrice) {
                     throw ApiException.rule(
                             "no_price_in_list",
                             "The price list " + list.name() + " has no price for " + p.description() + " on line "
@@ -446,6 +706,28 @@ class SalesService {
                     price = l.unitPriceMinor();
                     source = "order_agreed";
                     reason = blankToNull(l.priceOverrideReason());
+                } else if (devicePrice && (d.refused() || l.unitPriceMinor() != d.priceMinor())) {
+                    // ADR-067 decision 11: the price the customer paid on the phone stands, as an override that names
+                    // the offline sale; it is never repriced. A price typed as online allows is an override with its
+                    // reason and no clash; the saved price that the list prices otherwise is price_changed; any other
+                    // typed price is price_typed.
+                    if (offlinePrice == OfflinePrice.TYPED) {
+                        clashes.add(typedClash(i + 1, p));
+                    } else if (offlinePrice == OfflinePrice.PHONE || d.refused()) {
+                        clashes.add(priceClash(
+                                i + 1,
+                                p,
+                                d.refused()
+                                        ? "the price list " + list.name() + " has no price for it now"
+                                        : "its price is" + " different now"));
+                    }
+                    price = l.unitPriceMinor();
+                    source = "override";
+                    reason = offlinePrice == OfflinePrice.ALLOWED
+                            ? clip(l.priceOverrideReason().trim())
+                            : blankToNull(l.priceOverrideReason()) == null
+                                    ? offlineReason
+                                    : clip(l.priceOverrideReason().trim() + " (" + offlineReason + ")");
                 } else if (l.unitPriceMinor() != null && l.unitPriceMinor() != d.priceMinor()) {
                     if (!principal.may(SalesPricing.OVERRIDE, branch)) {
                         throw new ApiException(
@@ -524,7 +806,14 @@ class SalesService {
                 boolean below = l.saleUnitId() == null
                         ? l.unitPriceMinor() <= l.unitCostMinor()
                         : l.lineTotalMinor() <= l.lineCostMinor();
-                if (below) {
+                if (below && offline) {
+                    clashes.add(new PendingClash(
+                            l.lineNo(),
+                            l.productId(),
+                            "below_cost",
+                            "The price on line " + l.lineNo() + " is not above the item's cost; the offline sale is"
+                                    + " recorded at the price the customer paid."));
+                } else if (below) {
                     throw ApiException.rule(
                             "price_below_cost",
                             "The price on line " + l.lineNo() + " is too low: it must be above the product's cost.");
@@ -532,6 +821,73 @@ class SalesService {
             }
         }
         return new Priced(list, lines);
+    }
+
+    /**
+     * How the device price of an offline line stands against the online price rules (ADR-067 decision 11): PHONE, the
+     * catalogue or pack price in force at prices_as_of or today's; ALLOWED, another price typed by a holder of
+     * retail.price.override with a reason; TYPED, any other.
+     */
+    enum OfflinePrice {
+        PHONE,
+        ALLOWED,
+        TYPED
+    }
+
+    private OfflinePrice offlinePrice(
+            ProductSnapshot p,
+            PackUnit pack,
+            SaleLineRequest l,
+            long defaultPrice,
+            Instant pricesAsOf,
+            UUID branch,
+            Principal principal) {
+        long device = l.unitPriceMinor();
+        if (device == defaultPrice) {
+            return OfflinePrice.PHONE;
+        }
+        long saved = catalogue.sellMinorAt(p.id(), pricesAsOf == null ? clock.now() : pricesAsOf);
+        if (device == (pack == null ? saved : Quantities.packPrice(saved, pack.factor()))) {
+            return OfflinePrice.PHONE;
+        }
+        String reason = blankToNull(l.priceOverrideReason());
+        return principal.may(SalesPricing.OVERRIDE, branch)
+                        && reason != null
+                        && reason.length() >= SalesPricing.MIN_REASON
+                ? OfflinePrice.ALLOWED
+                : OfflinePrice.TYPED;
+    }
+
+    private static PendingClash typedClash(int lineNo, ProductSnapshot p) {
+        return new PendingClash(
+                lineNo,
+                p.id(),
+                "price_typed",
+                "The price of " + p.description() + " on line " + lineNo
+                        + " was typed on the phone while offline, and is not the price the phone had saved, by someone who"
+                        + " may not change prices or without a reason. The sale keeps the price the customer paid; check"
+                        + " it.");
+    }
+
+    /** The override reason of a line whose price the device charged (ADR-067). */
+    private static String offlineReason(Instant pricesAsOf) {
+        return pricesAsOf == null
+                ? "Price on the phone during an offline sale"
+                : "Price on the phone during an offline sale (prices as of " + pricesAsOf + ")";
+    }
+
+    private static PendingClash priceClash(int lineNo, ProductSnapshot p, String why) {
+        return new PendingClash(
+                lineNo,
+                p.id(),
+                "price_changed",
+                "The price of " + p.description() + " on line " + lineNo
+                        + " was taken from the phone while offline, and " + why
+                        + ". The sale keeps the price the customer paid.");
+    }
+
+    private static String clip(String s) {
+        return s.length() <= 300 ? s : s.substring(0, 300);
     }
 
     /** What a sale line's unit comes to: the pack (null for the base unit) and the quantity in base units. */
@@ -543,25 +899,48 @@ class SalesService {
      */
     private SaleUnit saleUnit(
             String field, ProductSnapshot p, UUID unitId, BigDecimal qty, List<FieldProblem> problems) {
-        return saleUnit(field, p, unitId, qty, problems, false);
+        return saleUnit(field, p, unitId, qty, problems, false, null, 0);
     }
 
-    /** As above; {@code agreed} keeps a pack switched off since a customer order was taken (issue #385). */
+    /**
+     * As above; {@code agreed} keeps a pack switched off since a customer order was taken (issue #385). With {@code clashes}
+     * not null (a sale recorded offline, ADR-067 decision 7) a pack switched off, or pack sizes turned off for the business,
+     * since the phone saved its copy records the line in that pack with a pack_inactive clash instead of refusing it.
+     */
     private SaleUnit saleUnit(
-            String field, ProductSnapshot p, UUID unitId, BigDecimal qty, List<FieldProblem> problems, boolean agreed) {
+            String field,
+            ProductSnapshot p,
+            UUID unitId,
+            BigDecimal qty,
+            List<FieldProblem> problems,
+            boolean agreed,
+            List<PendingClash> clashes,
+            int lineNo) {
         if (unitId == null || unitId.equals(p.unitId())) {
             return new SaleUnit(null, qty);
         }
-        if (!capabilities.enabled(RetailCapabilities.UNITS)) {
+        boolean unitsOff = !capabilities.enabled(RetailCapabilities.UNITS);
+        if (unitsOff && clashes == null) {
             problems.add(new FieldProblem(
                     field + ".unit_id", "capability_not_enabled", "Pack sizes are not enabled for this business."));
             return null;
         }
         PackUnit pack = catalogue.packUnit(p.id(), unitId).orElse(null);
-        if (pack == null || !pack.active() && !agreed) {
+        if (pack == null || !pack.active() && !agreed && clashes == null) {
             problems.add(
                     new FieldProblem(field + ".unit_id", "unknown_pack_unit", "This item is not sold in that unit."));
             return null;
+        }
+        if (clashes != null && (unitsOff || !pack.active() && !agreed)) {
+            clashes.add(new PendingClash(
+                    lineNo,
+                    p.id(),
+                    "pack_inactive",
+                    (unitsOff
+                                    ? "Pack sizes were turned off for the business"
+                                    : "The pack size " + pack.unit() + " of " + p.description() + " was switched off")
+                            + " while this sale was offline; line " + lineNo + " is recorded as sold in " + pack.unit()
+                            + "."));
         }
         BigDecimal baseQty = Quantities.toBase(qty, pack.factor())
                 .orElseThrow(() -> ApiException.rule(
@@ -1247,7 +1626,8 @@ class SalesService {
                 s.version(),
                 s.writeOff(),
                 counted,
-                s.deliveryFeeOwedMinor());
+                s.deliveryFeeOwedMinor(),
+                s.device());
     }
 
     /** 409 {@code sale_written_off}: what a sale whose unpaid part was written off refuses (ADR-043). */

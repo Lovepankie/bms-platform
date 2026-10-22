@@ -31,8 +31,8 @@ export default defineConfig({
       workbox: {
         // The push and notification-click handlers (ADR-050) live in public/push-sw.js and run inside the generated worker.
         importScripts: ['push-sw.js'],
-        // Staff data is never cached for offline use; API calls always go to the network
-        // (ADR-009). Member read caches arrive with the member area.
+        // API calls always go to the network; the service worker caches no staff data (ADR-009). Retail sales offline
+        // keep their own copy in IndexedDB (ADR-067, frontend/src/offline/). Member read caches arrive with the member area.
         // The manifest and icons of the business (ADR-066) are under /api/ too, so they always come from the network.
         navigateFallbackDenylist: [/^\/api\//, /^\/healthz/, /^\/readyz/, /^\/version/],
       },
