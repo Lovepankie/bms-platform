@@ -1047,6 +1047,37 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isEqualTo("open");
     }
 
+    /** A refusal is reported only for a branch that may sell, as the sale path checks: never for a store (ADR-033). */
+    @Test
+    void aReportForAStoreIsRefusedAsTheSaleWouldBe() {
+        String settings = "core.settings.manage";
+        String etag = api.get("/settings/capabilities", settings).getHeaders().getETag();
+        assertThat(api.call(
+                                HttpMethod.PUT,
+                                "/settings/capabilities",
+                                Map.of("branch_roles", true),
+                                settings,
+                                "*",
+                                etag == null ? Map.of() : Map.of("If-Match", etag))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        TestDatabase.owner()
+                .sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'store')")
+                .params(t.tenantId(), t.headOffice())
+                .update();
+        UUID client = UUID.randomUUID();
+        ResponseEntity<JsonNode> reported = api.post(
+                "/offline-failures", failureReport(client, offlineSale(client, Instant.now(), "1", 2_000)), SALES);
+        assertThat(reported.getStatusCode()).as("%s", reported.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(reported.getBody().get("code").asString()).isEqualTo("branch_role_forbids_sales");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_offline_failures WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     /** How many backends wait for the transaction with this id, polled for up to 30 seconds until one does. */
     long waitersOn(String txid) throws InterruptedException {
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
