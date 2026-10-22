@@ -23,6 +23,7 @@ import java.util.function.Predicate;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
@@ -61,7 +62,9 @@ class SmtpEmailChannel implements OutboxChannel {
             PlatformHost hosts,
             TenantJobs tenantJobs,
             CurrentTenant tenant,
-            Letterheads letterheads) {
+            Letterheads letterheads,
+            @Value("${bms.environment:}") String environment) {
+        properties.smtp().requireInProduction(environment);
         this.smtp = properties.smtp();
         this.supportContact = properties.supportContact();
         this.templates = templates;

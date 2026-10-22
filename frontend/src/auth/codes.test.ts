@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_BRANCHES, branchFilter, initialBranch } from './branch';
-import { invitationToken, normaliseSecondFactor, passwordProblem, recoveryCodesText } from './codes';
+import { invitationToken, normaliseSecondFactor, passwordProblem, plainProblem, recoveryCodesText } from './codes';
 
 describe('normaliseSecondFactor', () => {
   it('recognises a TOTP code', () => {
@@ -65,5 +65,17 @@ describe('branch selection (FR-BR-03, FR-BR-04)', () => {
   it('sends no branch filter for all branches', () => {
     expect(branchFilter(ALL_BRANCHES)).toBeUndefined();
     expect(branchFilter('b2')).toEqual(['b2']);
+  });
+});
+
+describe('plainProblem for the sign-in limits (ADR-059)', () => {
+  it('says the same words for a locked account and an address that matches nobody', () => {
+    const locked = { code: 'account_locked', detail: 'Too many failed attempts. Try again in 15 minutes.' };
+    expect(plainProblem(locked, 'x')).toBe('Too many tries. Your account is locked for 15 minutes. Try again later.');
+  });
+
+  it('explains a limit and a busy sign-in in plain words', () => {
+    expect(plainProblem({ code: 'rate_limited' }, 'x')).toBe('Too many tries. Wait a few minutes and try again.');
+    expect(plainProblem({ code: 'sign_in_busy' }, 'x')).toBe('Sign-in is busy right now. Wait a moment and try again.');
   });
 });

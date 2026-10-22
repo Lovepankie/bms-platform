@@ -409,7 +409,7 @@ class EmailLayoutTest {
             }
         };
         SmtpEmailChannel channel = new SmtpEmailChannel(
-                new NotificationProperties(null, null, ""), templates, HOSTS, jobs, tenant, letterheads);
+                new NotificationProperties(null, null, ""), templates, HOSTS, jobs, tenant, letterheads, "");
         OutboxChannel.RowContext row = new OutboxChannel.RowContext(
                 UUID.randomUUID(), UUID.randomUUID(), "transactional", null, null, null, Map.of(), 1, null, null);
 

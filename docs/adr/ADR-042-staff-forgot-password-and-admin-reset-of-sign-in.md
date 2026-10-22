@@ -62,7 +62,8 @@ inbox.
    administrator or the operator **issues** a link the user is told by email at once too ("a reset was issued", no
    link), so a reset made behind their back is known before it is used.
 7. **A reset never touches the second factor or the lock, and a link by email never lets in someone who has not set one
-   up.** It does not read, clear or replace the TOTP secret, the recovery codes or `mfa_enabled`, and it does not
+   up.** *Amended by ADR-059: a completed reset now lifts the failed-attempt lock (audited), because anyone could
+   otherwise keep the owner locked out for good; ADR-059 counts the extra guesses at the code this allows.* It does not read, clear or replace the TOTP secret, the recovery codes or `mfa_enabled`, and it does not
    reset `failed_login_count` or `locked_until`. After it the user is signed in by the same rules as a sign-in
    (`AuthFlow.afterReset`, like `afterInvitation`): a user with TOTP gets `mfa_required` and must type the code (or a
    recovery code), a user without one whose role (or the tenant) requires one is sent to enrolment, a user without

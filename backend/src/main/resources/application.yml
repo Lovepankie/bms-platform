@@ -132,6 +132,11 @@ bms:
     data-key-id: ${BMS_DATA_KEY_ID:k1}
     # Retired data keys (id:base64, comma separated), kept only until every row sealed with them is re-sealed (docs/runbooks/payments.md).
     previous-data-keys: ${BMS_DATA_KEY_PREVIOUS:}
+    # FAILED sign-in requests from one client IP in 10 minutes, on every public sign-in, two-step, invitation and setup
+    # route (ADR-059); a success costs nothing. The lock per address and per account is in the database, fixed in code.
+    sign-in-failures-per-ip: ${BMS_AUTH_SIGN_IN_FAILURES_PER_IP:300}
+    # argon2id hashes at once (64 MiB each at the production cost); a caller that waits 2 s gets 503 sign_in_busy.
+    argon2-max-concurrent: ${BMS_AUTH_ARGON2_MAX_CONCURRENT:4}
   database:
     role-guard: true
   # Documents (chapter 12 section 12.5). r2 on servers; fake (in memory, self-signed URLs) only in
@@ -259,8 +264,11 @@ spring:
   config:
     activate:
       on-profile: server
-# Staging and production: JSON logs with request_id in every line (NFR-OBS-01).
+# Staging and production: JSON logs with request_id in every line (NFR-OBS-01). Every string of every line (message,
+# exception, stack trace, MDC) passes through the redaction filter first (NFR-SEC-08, ADR-059, issue #426).
 logging:
   structured:
     format:
       console: ecs
+    json:
+      customizer: com.rincoltech.bms.kernel.LogRedaction

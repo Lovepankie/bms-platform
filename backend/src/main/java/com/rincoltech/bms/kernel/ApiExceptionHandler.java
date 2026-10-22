@@ -29,7 +29,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ProblemDetail> handleApi(ApiException e) {
         ResponseEntity.BodyBuilder response = ResponseEntity.status(e.status());
-        if (e.status() == HttpStatus.SERVICE_UNAVAILABLE || e.status() == HttpStatus.TOO_MANY_REQUESTS) {
+        if (e.retryAfter().isPresent()) {
+            // The thrower knows the wait: the refill time of a limiter's bucket, or a short pause (ADR-059).
+            response.header(
+                    HttpHeaders.RETRY_AFTER,
+                    String.valueOf(ApiException.retryAfterSeconds(e.retryAfter().get())));
+        } else if (e.status() == HttpStatus.SERVICE_UNAVAILABLE || e.status() == HttpStatus.TOO_MANY_REQUESTS) {
             response.header(HttpHeaders.RETRY_AFTER, "2");
         }
         return response.body(Problems.of(e));

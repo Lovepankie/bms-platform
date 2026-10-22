@@ -43,6 +43,13 @@ public interface TenantAdmins {
     void requireTenantAdmin(UUID userId);
 
     /**
+     * Lifts the sign-in lock of one staff user of the tenant, any role, for a business locked out by a stranger's wrong
+     * passwords (ADR-059). Audited in the tenant's log as the operator's act, with the reason; changes no credential. A platform operator is
+     * not a tenant user, so this can never unlock an operator.
+     */
+    void unlockSignIn(UUID userId, UUID platformUserId, String reason);
+
+    /**
      * @param twoStepRequired whether the new admin must turn on two-step sign-in (a role that requires it, or the tenant's
      *     policy, ADR-046); the activation email says so only then (issue #396)
      */

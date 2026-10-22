@@ -113,6 +113,17 @@ class PlatformAccounts implements Accounts {
                 .update();
     }
 
+    // Intentionally unused for now: nothing unlocks an operator from the application (neither a tenant admin nor
+    // another
+    // operator may, ADR-059); an operator's lock lapses after 15 minutes. It is here because the Accounts contract has
+    // it.
+    @Override
+    public void clearLock(UUID id) {
+        jdbc.sql("UPDATE platform_users SET failed_login_count = 0, locked_until = NULL WHERE id = ?")
+                .param(id)
+                .update();
+    }
+
     // Intentionally unused for now: there is no platform password step-up (operators always enrol, so the platform
     // routes use a
     // code). It is here because the Accounts contract has the method; a platform password step-up would call it.

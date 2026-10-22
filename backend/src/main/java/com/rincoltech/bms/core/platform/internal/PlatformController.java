@@ -474,6 +474,24 @@ class PlatformController {
         return new SignInResetLink(link.url(), link.expiresAt());
     }
 
+    /**
+     * No step-up: lifting a lock gives nobody a credential, it only lets the owner try their own password again (ADR-059).
+     * The reason is kept in both audit logs.
+     */
+    @PostMapping("/tenants/{tenant_id}/users/{user_id}/unlock")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Lift the sign-in lock of a tenant's staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059)",
+            operationId = "platformUnlockUserSignIn")
+    ResponseEntity<Void> unlockSignIn(
+            @PathVariable("tenant_id") UUID tenantId,
+            @PathVariable("user_id") UUID userId,
+            @Valid @RequestBody ReasonRequest request) {
+        service.unlockSignIn(tenantId, userId, request.reason());
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/tenants/{tenant_id}/users/{user_id}/mfa/reset")
     @RequiresPermission("platform.tenants.manage")
     @Operation(

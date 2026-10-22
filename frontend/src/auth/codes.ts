@@ -51,7 +51,9 @@ const PLAIN: Record<string, string> = {
   invitation_expired: 'This invitation link has expired. Ask your administrator for a new one.',
   reset_link_invalid: 'This reset link has been used or replaced. Ask for a new one from the sign-in page.',
   reset_link_expired: 'This reset link has expired (it works for one hour). Ask for a new one from the sign-in page.',
-  rate_limited: 'Too many tries from here. Wait a few minutes and try again.',
+  // Per address as well as per connection since ADR-059, so the words do not say "from here".
+  rate_limited: 'Too many tries. Wait a few minutes and try again.',
+  sign_in_busy: 'Sign-in is busy right now. Wait a moment and try again.',
 };
 
 /** A plain sentence for a failed sign-in step; never echoes a token, code or password. */

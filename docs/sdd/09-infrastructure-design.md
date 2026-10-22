@@ -180,14 +180,29 @@ migration) with status only, no details.
 - Host names: `BMS_TENANT_HOST_PATTERN` and `BMS_PLATFORM_HOST` for the API and the web
   container; on the production VM also `BMS_DNS_ZONE` and `BMS_CALLBACK_HOST` for the proxy; on
   the staging host `CLOUDFLARE_TUNNEL_TOKEN` and `CLOUDFLARED_IMAGE` for cloudflared.
+- Sign-in limits (ADR-059, issue #426), optional: `BMS_AUTH_SIGN_IN_FAILURES_PER_IP` (FAILED requests from one client
+  IP in 10 minutes on the public sign-in, two-step, invitation and setup routes; 300; a success costs nothing, so a
+  mobile carrier's NAT address shared by many users is not used up by their sign-ins) and
+  `BMS_AUTH_ARGON2_MAX_CONCURRENT` (argon2id hashes at once; 4 in production, 2 on the staging host's small heap). The
+  five-failure lock per address is in the database and is not a setting.
+- `BMS_ENVIRONMENT`: `deploy/compose.yml` (production only) passes `${BMS_ENVIRONMENT:-production}`, so an unset value
+  keeps every production guard on there (SMTP required, ADR-059); the staging and local files leave it unset.
+- Container logs (ADR-059, issue #426): every service of `deploy/compose.yml` uses Docker's `local` driver capped at
+  five files of 20 MB (about 100 MB a container at most, compressed), the local `docker-compose.yml` three of 10 MB,
+  and the staging file keeps two of 5 MB. The API's JSON lines are redacted of personal data before Docker sees them
+  (chapter 8 section 8.9), and PostgreSQL runs with `log_error_verbosity=terse` in all three files, so its log never
+  prints a refused duplicate's key value.
 - Web Push (ADR-050), optional on every host: `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_VAPID_PRIVATE_KEY`, `BMS_PUSH_SUBJECT` and
   `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`; both compose files pass them; unset means push is off (`docs/runbooks/push-notifications.md`).
-- Outbox senders (ADR-024, spec section 11), optional on every host: `BMS_SMTP_HOST`,
+- Outbox senders (ADR-024, spec section 11), optional on every host except that email is required in production:
+  `BMS_SMTP_HOST`,
   `BMS_SMTP_PORT` (465, implicit TLS; port 587 is blocked on the staging host), `BMS_SMTP_USER`,
   `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` for email (with `BMS_SUPPORT_CONTACT`, the optional support line in
   the footer of every email, empty by default; issue #396, ADR-054), `BMS_TELEGRAM_BOT_TOKEN` and
   `BMS_TELEGRAM_OPERATOR_CHAT_ID` for operator alerts. Both compose files pass them to the API
-  only. With a sender's values unset it is off: its messages wait as `pending` and nothing fails.
+  only. With a sender's values unset it is off: its messages wait as `pending` and nothing fails, except email in
+  production: with `BMS_ENVIRONMENT=production` the API refuses to start unless `BMS_SMTP_HOST`, `BMS_SMTP_USER`,
+  `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` (an address) are set, naming the unset ones (ADR-059, issue #426).
   The staging host's `/opt/bms/.env` holds them since 2026-10-06 (issue #89). Outbound traffic is
   SMTPS to the mail provider and HTTPS to `api.telegram.org`; nothing is opened inbound.
   `BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR` (default 30) and

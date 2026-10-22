@@ -25,7 +25,7 @@ branches, 100 staff users, 50,000 members and 100,000 loans over its lifetime, a
 | NFR-SEC-05 | No secret is committed to the repository. | Secret scanning in CI; `.env.example` holds placeholders only. |
 | NFR-SEC-06 | Dependencies are scanned for known vulnerabilities on every pull request and weekly; a critical finding fails the build. | CI job. |
 | NFR-SEC-07 | Money-moving endpoints require an idempotency key and are maker-checker where chapter 8 section 8.4 says so. | Endpoint tests. |
-| NFR-SEC-08 | Application logs contain no NIN, phone number, password, PIN, token or member request body. | Redaction filter unit test; log sample review before each production release. |
+| NFR-SEC-08 | Application logs contain no NIN, phone number, password, PIN, token or member request body. | Redaction filter unit test (`LogRedactionTest`, through the ECS encoder of the `server` profile; built in issue #426, ADR-059); log sample review before each production release. |
 
 ## 4.3 Tenant isolation (ISO)
 

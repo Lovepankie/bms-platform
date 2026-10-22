@@ -32,6 +32,34 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
   parallelism 1, tuned so one hash takes about 100 ms on the production host). Passwords are
   10 to 128 characters and are refused when they are on the common password list
   (`backend/src/main/resources/common-passwords.txt`) or equal the sign-in name (ADR-014).
+  Hashing is bounded (ADR-059, issue #426): at most `BMS_AUTH_ARGON2_MAX_CONCURRENT` hashes run at once (4 by default, 256
+  MiB), and a caller that waits two seconds for a slot is answered 503 `sign_in_busy` with a Retry-After of 2 to 5
+  seconds, so a flood of sign-ins slows sign-in down instead of filling the heap. No hash runs, or waits for its slot,
+  inside a transaction: every caller reads in one short transaction, hashes with no database connection held, and
+  writes in another, so the flood cannot take the connection pool from other tenants either.
+- **Sign-in limits** (ADR-059, issue #426, revised after the review of #433).
+  - **The lock is the limit.** Five wrong passwords in a row lock a sign-in address for 15 minutes (FR-IAM-05). An
+    account keeps its count and lock in its own row; any other address typed (the email in lower case or the phone in
+    E.164, within one tenant and one kind of account) keeps them in `sign_in_address_failures` (V78), keyed by the
+    SHA-256 of the address, with the same statement. **What is true:** after five failures an address of nobody answers
+    exactly as an account (the same 423 `account_locked` and words, for the same time, before any hash), across
+    restarts and floods; both paths do the same database work. **What is not hidden:** an address of nobody forgets its
+    count after seven days without a failure, an account only at a right password, so failures spread over more than a
+    week can tell them apart; and the work is the same, not timed to the microsecond.
+  - **Only failures count per client IP** (an IPv6 /64): staff and operator sign-in, two-step (verify, enrol, confirm),
+    invitation and first-password routes, `BMS_AUTH_SIGN_IN_FAILURES_PER_IP` failures in 10 minutes (300 by default),
+    429 `rate_limited` with Retry-After (the refill time) while the budget is spent. A success costs nothing, which is
+    what carrier-grade NAT on MTN and Airtel needs (many subscribers behind one public IPv4). The reset routes keep 20
+    requests an hour and 30 link uses in 10 minutes per IP, and 10 requests an hour per sign-in address; the second
+    factor 30 attempts in 15 minutes per account. These buckets are in memory, per instance; a bucket that remembers
+    anything is never evicted.
+  - **Lifting a lock**, audited as `core.auth.unlocked`: a completed password reset; a tenant admin
+    (`POST /users/{user_id}/unlock`) and the platform operator, each with a reason. Once a lock is in force every sign-in
+    answer is 423, the right password included, even for guesses already past the first look. None lifts an operator's lock.
+  - **The lock is a denial of service by design**: anyone who knows a sign-in name can keep it locked with five wrong
+    passwords every 15 minutes. It is accepted because without it the same person could guess the password; the owner
+    gets back in through the reset, an admin or the operator (ADR-059, Consequences).
+  Member sign-in (FR-IAM-09, P2) is not built; it will use the same lock and per-IP budget.
 - One-time codes, invitation and setup tokens, recovery codes and refresh tokens are stored as
   SHA-256 hashes only.
 - TOTP secrets are encrypted at rest with the application data key (8.7). TOTP is RFC 6238
@@ -126,7 +154,7 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 | Guessing a link | 256 random bits; looked up by SHA-256, so no secret comparison and no partial match; 30 attempts per 10 minutes per address; single use; one hour |
 | Reading a link from the database, a backup or a log | The token is stored as a hash. The outbox row of an emailed link holds it in plain text until the email is sent or the link expires; a job every 5 minutes then clears the parameters, so the window is the hour plus 5 minutes at most, or until sent (ADR-042 decision 11); a backup taken in that window holds it, one hour old and single use. No log line, audit row or error holds a token |
 | A link sent to the wrong place or a phishing host | Sent only to the email on file (never to the address typed on the form); the host is the tenant's own, from configuration, never a request header; the token travels in the fragment, so it reaches no server log or Referer |
-| Account takeover by whoever reads the mailbox | An account with TOTP still needs the code, and the reset neither disables it nor clears the failed-attempt lock. Two-step sign-in is optional by default on every database (migration `V67`, ADR-046): where no role flag or tenant policy requires a factor, a user with none resets by mailbox as before. **V67 changes no existing tenant's policy.** **Whoever reads a no-factor tenant admin's mailbox can take the account over, for as long as the tenant has not required two-step sign-in (the owner's decision of 20 October 2026, now true of every tenant, not only staging); the mitigations are the recommendation to turn the policy on, the first run's offer, the notice email when a password changes and every device signed out. A tenant that requires it closes the gap once the grace period has ended, and not before: inside the grace period a covered user with no factor is as exposed as an optional one.** Where `roles.mfa_required` or the tenant's policy (`require_mfa_all_staff`, `require_mfa_roles`) requires, now, a factor the user has not set up, no link is sent by email (the request is answered like any other and refused inside, decided by that data and not by a role name), because the reader of the mailbox could otherwise choose the password and enrol their own authenticator; that user is helped by an administrator or the operator. What is left is an account with no second factor and no requirement, which is as safe as its mailbox; the owner of the mailbox is emailed when a password is changed and every device is signed out |
+| Account takeover by whoever reads the mailbox | An account with TOTP still needs the code, and the reset does not disable it. The reset lifts the failed-attempt lock (ADR-059, amending ADR-042 decision 7), so a mailbox reader gets up to five more guesses at the code per reset, at most three resets an hour (35 guesses an hour instead of 20), each reset changing the owner's password, ending their sessions and emailing them. Two-step sign-in is optional by default on every database (migration `V67`, ADR-046): where no role flag or tenant policy requires a factor, a user with none resets by mailbox as before. **V67 changes no existing tenant's policy.** **Whoever reads a no-factor tenant admin's mailbox can take the account over, for as long as the tenant has not required two-step sign-in (the owner's decision of 20 October 2026, now true of every tenant, not only staging); the mitigations are the recommendation to turn the policy on, the first run's offer, the notice email when a password changes and every device signed out. A tenant that requires it closes the gap once the grace period has ended, and not before: inside the grace period a covered user with no factor is as exposed as an optional one.** Where `roles.mfa_required` or the tenant's policy (`require_mfa_all_staff`, `require_mfa_roles`) requires, now, a factor the user has not set up, no link is sent by email (the request is answered like any other and refused inside, decided by that data and not by a role name), because the reader of the mailbox could otherwise choose the password and enrol their own authenticator; that user is helped by an administrator or the operator. What is left is an account with no second factor and no requirement, which is as safe as its mailbox; the owner of the mailbox is emailed when a password is changed and every device is signed out |
 | A stale or stolen session surviving a reset | Every session and refresh token of the user ends in the transaction that sets the password |
 | A reset for an account that should not get back in | Only active users; a deactivated user's open links are revoked and refused; an invited user keeps the invitation path |
 | One tenant's link or admin reaching another's user | The table has forced row-level security with the tenant policy; the lookup runs inside the tenant of the host, so a link of tenant A used on tenant B's host is not found, and an admin of B cannot issue a link for A's user (`PasswordResetIT`, `RlsIsolationIT`) |
@@ -859,7 +887,18 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
   can hold personal data about the member or third parties. It is staff-only: the member area
   never returns it.
 - Application logs never contain request bodies of member endpoints, NINs, phone numbers,
-  tokens or passwords; the logger has a redaction filter with a unit test.
+  tokens or passwords. On staging and production (the `server` profile) every string of every JSON log line (message,
+  exception text and stack trace, MDC values) passes through `kernel.LogRedaction`, named as
+  `logging.structured.json.customizer` (NFR-SEC-08, ADR-059, issue #426): the value after a secret key, alone or ending
+  a longer name (`token=`, `resetToken=`, `"newPassword":`, `client_secret=`, `x-api-key:`, `pin=`), a quoted value to
+  its closing quote, the credential after `Authorization:`, `Bearer` or `Basic`, signed tokens, emails, NINs in any
+  case, Uganda mobile and landline numbers (spaced, dashed, `+`, `%2B` or 0) and any standalone run of 9 to 15 digits
+  that is not a labelled amount, time, count or id (`amount=`, `_minor=`, `id=`) or an epoch or compact timestamp, and
+  the value after a name key (`name=`, `full_name=`, `customerName=`, a record's `Customer[name=...]`) become
+  `[redacted]`, `[email]`, `[nin]`, `[phone]` or `[name]`. Every pattern is linear in the line's length.
+  `LogRedactionTest` runs Spring Boot's ECS encoder with it. A name in free text has no key to find, so code still never
+  logs one. PostgreSQL logs tersely (`log_error_verbosity=terse`), so a refused duplicate's `DETAIL` with its key value
+  never reaches its log. Container logs are capped and rotated by Docker (chapter 9).
 - Test and development environments never hold production data. Fixtures are fabricated
   (chapter 15 section 15.8).
 
@@ -870,8 +909,10 @@ Detailed requirements are NFR-DP-01 to NFR-DP-08 in chapter 4. Design consequenc
 | A bug omits the tenant filter | RLS fails the query; isolation tests |
 | A staff user moves money alone | Maker-checker, thresholds, audit |
 | A staff user edits history to hide theft | Append-only tables, reversal-only corrections, audit |
-| Credential stuffing on staff sign-in | Lockout, rate limits, MFA for admins |
-| The forgotten-password form used to learn which staff have accounts, to flood a mailbox, or to take an account over | One generic answer with a time floor, limits per address and per account, a hashed single-use one hour token sent only to the email on file, every session ended on use, the second factor and the lock untouched; the threat model is section 8.2a and ADR-042 |
+| Credential stuffing on staff sign-in | The five-failure lock in the database for every address (an address of nobody exactly as an account, across restarts), failed requests limited per IP, second-factor attempts per account, MFA for admins (ADR-059) |
+| A stranger keeping an owner locked out | Accepted by design (the lock is what stops guessing); the owner's way back is a password reset, which lifts the lock, a tenant admin's or the operator's audited unlock (ADR-059) |
+| A flood of sign-ins exhausting the API's memory or the database pool | At most four argon2id hashes at once, 503 `sign_in_busy` with Retry-After beyond, and no connection held while a request waits for or runs a hash (ADR-059) |
+| The forgotten-password form used to learn which staff have accounts, to flood a mailbox, or to take an account over | One generic answer with a time floor, limits per address and per account, a hashed single-use one hour token sent only to the email on file, every session ended on use, the second factor untouched and the failed-attempt lock lifted (ADR-059); the threat model is section 8.2a and ADR-042 |
 | SIM swap used to take over a member portal | PIN plus OTP only at activation and reset; SMS notice to the member on PIN reset; staff can revoke portal access |
 | Forged payment callback | Signature verification plus status query before booking (FR-PAY-02) |
 | Replayed payment callback | Idempotency on the provider reference (FR-PAY-03) |

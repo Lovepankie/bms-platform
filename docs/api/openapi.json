@@ -19908,6 +19908,17 @@
         },
         "required" : [ "status" ]
       },
+      "UnlockSignInRequest" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why; kept in the tenant's audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "UpdateAdvisorSettingsRequest" : {
         "description" : "Omitted fields are unchanged",
         "properties" : {
@@ -27974,6 +27985,45 @@
           }
         },
         "summary" : "Issue a one-time password reset link for a tenant admin, with a reason; shown once, valid one hour; needs a current code from the operator's own authenticator (FR-IAM-15)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/unlock" : {
+      "post" : {
+        "operationId" : "platformUnlockUserSignIn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformReasonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift the sign-in lock of a tenant's staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059)",
         "tags" : [ "platform" ]
       }
     },
@@ -38006,6 +38056,44 @@
           }
         },
         "summary" : "Replace a user's roles and branch scopes (FR-IAM-01)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/unlock" : {
+      "post" : {
+        "operationId" : "unlockUserSignIn",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UnlockSignInRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lift the sign-in lock of a staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059)",
         "tags" : [ "users" ]
       }
     },

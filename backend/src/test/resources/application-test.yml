@@ -17,6 +17,11 @@ bms:
     allow-tenant-header: true
   auth:
     mode: dev
+    # The whole suite signs in from one address, and AuthConcurrencyIT races twenty sign-ins at once: neither the
+    # per-IP failure limit nor the bound on parallel hashes (ADR-059) may refuse them. AuthThrottleTest and
+    # PasswordsBoundTest prove both limits; SignInLimitsIT lowers the per-IP limit for a moment.
+    sign-in-failures-per-ip: 1000000
+    argon2-max-concurrent: 64
   storage:
     provider: fake
     # Fixed so a test can sign an expired URL itself (FR-DOC-03).

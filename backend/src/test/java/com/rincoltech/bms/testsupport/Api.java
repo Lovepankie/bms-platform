@@ -19,6 +19,9 @@ import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.commons.codec.binary.Base32;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.springframework.boot.restclient.RestTemplateBuilder;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -26,6 +29,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 
@@ -49,6 +53,27 @@ public final class Api {
         this.http = http;
         this.tenantSlug = tenantSlug;
         this.host = host;
+    }
+
+    /**
+     * The same server through a client that never retries on its own. Apache HttpClient's default retries a 429 or a 503 once,
+     * after sleeping for the Retry-After the answer names, and the sign-in limits name the real refill time (ADR-059), which
+     * can be hours: a test of a limit must see the refusal it asserts on, not hang behind it. Cookies and redirects stay off,
+     * as in the shared client.
+     */
+    public static TestRestTemplate withoutRetries(TestRestTemplate http) {
+        return new TestRestTemplate(new RestTemplateBuilder()
+                .rootUri(http.getRootUri())
+                .requestFactory(() -> new HttpComponentsClientHttpRequestFactory(HttpClients.custom()
+                        // Bursts of parallel sign-ins: the default pool sends only five at a time to one host.
+                        .setConnectionManager(PoolingHttpClientConnectionManagerBuilder.create()
+                                .setMaxConnPerRoute(64)
+                                .setMaxConnTotal(64)
+                                .build())
+                        .disableAutomaticRetries()
+                        .disableCookieManagement()
+                        .disableRedirectHandling()
+                        .build())));
     }
 
     /** Calls a tenant's API, resolving the tenant from X-Tenant as the test profile allows. */

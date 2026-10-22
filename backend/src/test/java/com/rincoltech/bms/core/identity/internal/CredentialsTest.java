@@ -88,7 +88,7 @@ class CredentialsTest {
 
     @Test
     void passwordsAreArgon2idAndWeakOnesAreRefused() {
-        Passwords passwords = new Passwords(new AuthProperties("none", null, null, null, null, 4096, 2));
+        Passwords passwords = new Passwords(new AuthProperties("none", null, null, null, null, 4096, 2), 4);
         String hash = passwords.hash("Fabricated-Pass-2026");
         assertThat(hash).startsWith("$argon2id$v=19$m=4096,t=2,p=1$");
         assertThat(passwords.matches("Fabricated-Pass-2026", hash)).isTrue();

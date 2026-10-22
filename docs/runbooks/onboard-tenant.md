@@ -60,7 +60,9 @@ Set these in `/opt/bms/.env` (never in git; `.env.example` lists them empty), th
 | `BMS_TELEGRAM_BOT_TOKEN` | The bot's token from BotFather |
 | `BMS_TELEGRAM_OPERATOR_CHAT_ID` | The chat that receives operator alerts |
 
-With a sender's values unset it is off: its messages wait as `pending` and nothing fails; the
+On production (`BMS_ENVIRONMENT=production`) the four email values are required: without any of them, or with a
+`BMS_MAIL_FROM` that is not an address, the API refuses to start and its log names the unset variables (ADR-059).
+Elsewhere, with a sender's values unset it is off: its messages wait as `pending` and nothing fails; the
 portal's "Messages not sent" page says which sender is off. A message that fails three times
 stays `failed` there with its error class; fix the cause and press "Send again". After 7 days an
 unsent message loses its link and cannot be sent again (`outbox_too_old`): issue a new one (for an

@@ -53,6 +53,13 @@ interface Accounts {
     void clearFailedLogins(UUID id);
 
     /**
+     * Lifts the sign-in lock and starts the failure count again (ADR-059): a completed password reset (the link from the
+     * owner's own mailbox), or an audited unlock by a tenant admin or a platform operator. The step-up counter is left
+     * alone. Read the account under {@link #byIdForUpdate} first to know whether a lock was in force.
+     */
+    void clearLock(UUID id);
+
+    /**
      * The same atomic count-and-lock as {@link #recordFailure}, on the separate step-up counter (issue #309): wrong codes
      * entered by a signed-in session. Never touches the password counter.
      */

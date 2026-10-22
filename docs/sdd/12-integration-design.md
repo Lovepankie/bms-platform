@@ -27,7 +27,7 @@
 | USSD | Inbound session callbacks | Pending ADR-013, later phase | `UssdProvider` |
 | Payment gateway (mobile money, cards) | Outbound collection requests, inbound callbacks, status queries, settlement reports | ADR-035 (proposed): Pesapal v3 | `PaymentGateway` |
 | Object storage | Outbound | Cloudflare R2 over the S3 API (product plan) | `ObjectStorage` |
-| Transactional email | Outbound | Provider chosen with the infrastructure work; no ADR yet | `EmailProvider` |
+| Transactional email | Outbound | Provider chosen with the infrastructure work; no ADR yet. Required in production: the API refuses to start there without SMTP (ADR-059) | `EmailProvider` |
 
 ## 12.3 SMS aggregator
 

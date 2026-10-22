@@ -535,6 +535,18 @@ who issued an `admin` link or the platform operator who issued an `operator` lin
 days after they were made by `user_password_resets_purge(timestamptz)` (a definer function the nightly job `core.identity.password-reset-purge` calls; there is no
 DELETE grant, and the function itself never deletes a row younger than 30 days, whatever cutoff it is given). `origin` `operator` rows are the platform operator's. The token itself is never stored.
 
+### `sign_in_address_failures` (platform, no RLS)
+
+(ADR-059, the review of PR #433; migration `V78`) The failed-sign-in count and lock of every address typed at sign-in that
+matches no account, so it locks exactly as an account's `failed_login_count` and `locked_until` do, across restarts.
+`address_hash text PRIMARY KEY` (64 hex digits, the SHA-256 of `<kind>:<tenant id>:<address>`, the email in lower case or the phone
+in E.164; no address and no tenant id is stored), `failed_login_count integer NOT NULL`, `locked_until timestamptz`,
+`last_failed_at timestamptz NOT NULL` (indexed). No tenant owns a row, so no row policy, as for the other platform
+tables. Grants `SELECT, INSERT, UPDATE`; one `INSERT ... ON CONFLICT DO UPDATE` counts a failure with the same rules as
+an account's row. A row with no failure for 7 days and no lock in force is deleted by
+`sign_in_address_failures_purge(timestamptz)` (a definer function the nightly job `core.identity.sign-in-failure-purge`
+calls; it never deletes a younger or a locked row, whatever cutoff it is given).
+
 ### `push_subscriptions` (RLS)
 
 (std without `updated_at` and `version`; ADR-050; migration `V68`) One row per

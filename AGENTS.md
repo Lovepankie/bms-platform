@@ -402,6 +402,26 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `BACKUP_RETENTION_ON_HOST=false` once the R2 lock and lifecycle rules are on (provider steps left for Hillary). Tests:
   `bash deploy/tests/monitor-test.sh` (CI, with shellcheck). Runbooks `docs/runbooks/monitoring-and-alerts.md`,
   `restore-from-backup.md` sections 5 to 7, `security-incident.md` and `support-and-on-call.md` (owner placeholders to fill).
+- **Built (launch hardening A, issue #426, ADR-059, revised after the review of #433):** migration `V78` (V77 is #421's):
+  `sign_in_address_failures`, the five-failure count and lock of every sign-in address that matches no account, keyed by
+  its SHA-256, so it locks exactly as an account across restarts (`SignInAddressFailures`, nightly purge
+  `core.identity.sign-in-failure-purge`). `core.identity`: `AuthThrottle` (was `ResetThrottle`) counts only FAILED
+  requests per client IP on every public staff and operator sign-in, two-step, invitation and setup route
+  (`BMS_AUTH_SIGN_IN_FAILURES_PER_IP`, 300 in 10 minutes; carrier NAT), keeps the reset buckets (20 an hour per IP, 10 an
+  hour per address, 30 link uses in 10 minutes) and the second factor per account (30 in 15 minutes), never evicts a
+  bucket that remembers anything, and sends Retry-After with every 429; there is no in-memory per-address sign-in
+  budget. A completed reset, `POST /users/{user_id}/unlock` (tenant admin) and
+  `POST /platform/tenants/{tenant_id}/users/{user_id}/unlock` (operator, with a reason) lift a lock, audited
+  `core.auth.unlocked`; nothing unlocks an operator. `Passwords` runs at most `BMS_AUTH_ARGON2_MAX_CONCURRENT` (4)
+  argon2id hashes, answers 503 `sign_in_busy` with Retry-After 2 to 5 seconds after two seconds, and refuses to hash
+  inside a transaction: sign-in, the step-up password, invitation acceptance, the reset and the operator's first password
+  read, hash with no connection held, then write. `core.notifications`: with `BMS_ENVIRONMENT=production` (read as SMS
+  and Pesapal read it; `deploy/compose.yml` defaults it to production) the API refuses to start without SMTP.
+  `kernel.LogRedaction` redacts secrets (keys inside longer names too, whole quoted values), Basic and Bearer
+  credentials, emails, NINs in any case, Uganda numbers (`%2B`, spaced landlines) but not labelled amounts, times or
+  ids, and name keys including `name=`, in linear time; PostgreSQL logs tersely; both compose files cap container logs.
+  Tests: `AuthThrottleTest`, `PasswordsBoundTest`, `SignInLimitsIT`, `PasswordResetIT`, `SmtpProductionGuardTest`,
+  `LogRedactionTest`, `ApiExceptionRetryAfterTest`.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -563,7 +583,8 @@ These are not style preferences. A pull request that breaks one is not merged.
 8. **Every route declares a permission** from the chapter 8 matrix, or is explicitly
    public.
 9. **No personal data in logs.** NIN, phone numbers, tokens, passwords, PINs and member
-   request bodies never appear in logs.
+   request bodies never appear in logs. On staging and production `kernel.LogRedaction` also masks what it
+   recognises (ADR-059), but it is a safety net: names in free text have no pattern, so never log them.
 10. **Fabricated data only** in fixtures, tests, seeds, staging and examples.
 11. **Import never guesses silently** and never drops a row (chapter 13 section 13.2).
 
@@ -710,6 +731,9 @@ Accepted (this list is the ADR index):
   turn-on card, and a low-stock minimum per item and branch beside the pace rule, whichever trips first (proposed, #412; renumbered at merge if needed)
 - ADR-058 Host checks post to the Telegram operator chat on a systemd timer, an external uptime monitor and heartbeat watch the host, the
   restore drill is timed and scheduled, and R2 lock and lifecycle rules make backups undeletable from the host (proposed, #425; renumbered at merge if needed)
+- ADR-059 Sign-in locks in the database for every address (an unknown one locked like an account), failures-only limits per
+  client IP, audited unlock, at most four password hashes at once and never inside a transaction, SMTP required in production, server logs redacted and container logs capped
+  (proposed, #426; launch readiness M8 to M10; renumbered at merge if needed)
 - ADR-060 The Retail home follows one chosen range against the period before (as many days before, This year against last
   year, All against nothing), from the dashboard's own dated queries; the choice kept per person per device (proposed, #428;
   FR-RET-65; renumbered at merge if needed)

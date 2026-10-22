@@ -16,6 +16,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PublicEndpoint;
+import com.rincoltech.bms.kernel.RequestContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,7 +30,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,6 +56,8 @@ class PlatformAuthController {
     private final JdbcClient jdbc;
     private final PlatformAuditLog audit;
     private final BusinessClock clock;
+    private final AuthThrottle throttle;
+    private final TransactionTemplate transactions;
 
     PlatformAuthController(
             AuthFlow flow,
@@ -60,27 +65,50 @@ class PlatformAuthController {
             Passwords passwords,
             JdbcClient jdbc,
             PlatformAuditLog audit,
-            BusinessClock clock) {
+            BusinessClock clock,
+            AuthThrottle throttle,
+            PlatformTransactionManager transactionManager) {
         this.flow = flow;
         this.accounts = accounts;
         this.passwords = passwords;
         this.jdbc = jdbc;
         this.audit = audit;
         this.clock = clock;
+        this.throttle = throttle;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     @PostMapping("/auth/setup")
     @PublicEndpoint
     @Operation(summary = "Set the first password with the one-time setup token", operationId = "platformSetup")
-    @Transactional
     public ResponseEntity<Void> setup(@Valid @RequestBody AcceptInvitationRequest request) {
+        return throttle.countingFailures(throttle.signInPerIp, RequestContext.clientIp(), () -> {
+            // The token is checked, the password hashed with no transaction open (ADR-059), then the token is checked
+            // again under a row lock and used.
+            Setup seen = transactions.execute(status -> setupOf(request.token(), false));
+            passwords.checkStrength(request.password(), seen.email());
+            String hash = passwords.hash(request.password());
+            transactions.executeWithoutResult(status -> {
+                Setup setup = setupOf(request.token(), true);
+                Instant now = clock.now();
+                jdbc.sql("""
+                                UPDATE platform_users SET password_hash = ?, setup_token_hash = NULL, setup_token_expires_at = NULL,
+                                       updated_at = ? WHERE id = ?
+                                """).params(hash, Timestamp.from(now), setup.id()).update();
+                audit.record("platform.user.password_set", setup.id(), null, Map.of());
+            });
+            return ResponseEntity.noContent().<Void>build();
+        });
+    }
+
+    private record Setup(UUID id, String email, Instant expiresAt) {}
+
+    private Setup setupOf(String token, boolean forUpdate) {
         Instant now = clock.now();
-        record Setup(UUID id, String email, Instant expiresAt) {}
-        Setup setup = jdbc.sql("""
+        return jdbc.sql("""
                         SELECT id, email, setup_token_expires_at FROM platform_users
-                         WHERE setup_token_hash = ? AND password_hash IS NULL AND is_active FOR UPDATE
-                        """)
-                .param(Secrets.sha256(request.token()))
+                         WHERE setup_token_hash = ? AND password_hash IS NULL AND is_active""" + (forUpdate ? " FOR UPDATE" : ""))
+                .param(Secrets.sha256(token == null ? "" : token))
                 .query((rs, n) -> new Setup(
                         rs.getObject("id", UUID.class),
                         rs.getString("email"),
@@ -89,48 +117,57 @@ class PlatformAuthController {
                 .filter(s -> s.expiresAt() != null && now.isBefore(s.expiresAt()))
                 .orElseThrow(() ->
                         ApiException.rule("invitation_invalid", "The setup link is not valid; ask for a new one."));
-        passwords.checkStrength(request.password(), setup.email());
-        jdbc.sql("""
-                        UPDATE platform_users SET password_hash = ?, setup_token_hash = NULL, setup_token_expires_at = NULL,
-                               updated_at = ? WHERE id = ?
-                        """)
-                .params(passwords.hash(request.password()), Timestamp.from(now), setup.id())
-                .update();
-        audit.record("platform.user.password_set", setup.id(), null, Map.of());
-        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/auth/login")
     @PublicEndpoint
     @Operation(summary = "Platform sign-in, first factor", operationId = "platformLogin")
     ResponseEntity<SignInResponse> login(@Valid @RequestBody SignInRequest request, HttpServletRequest http) {
-        return respond(flow.login(
-                accounts, request.login(), request.password(), http.getServerName(), StaffAuthController.agent(http)));
+        return respond(throttle.countingFailures(
+                throttle.signInPerIp,
+                RequestContext.clientIp(),
+                () -> flow.login(
+                        accounts,
+                        request.login(),
+                        request.password(),
+                        http.getServerName(),
+                        StaffAuthController.agent(http))));
     }
 
     @PostMapping("/auth/mfa/verify")
     @PublicEndpoint
     @Operation(summary = "Platform sign-in, second factor", operationId = "platformMfaVerify")
     ResponseEntity<SignInResponse> verify(@Valid @RequestBody MfaVerifyRequest request, HttpServletRequest http) {
-        return respond(flow.verifyMfa(
-                accounts, request.mfaToken(), request.code(), http.getServerName(), StaffAuthController.agent(http)));
+        return respond(throttle.countingFailures(
+                throttle.signInPerIp,
+                RequestContext.clientIp(),
+                () -> flow.verifyMfa(
+                        accounts,
+                        request.mfaToken(),
+                        request.code(),
+                        http.getServerName(),
+                        StaffAuthController.agent(http))));
     }
 
     @PostMapping("/auth/mfa/enrol")
     @PublicEndpoint
     @Operation(summary = "Start the mandatory TOTP enrolment with the MFA token", operationId = "platformMfaEnrol")
     MfaEnrolmentResponse enrol(@RequestBody MfaEnrolRequest request) {
-        Enrolment e = flow.startEnrolment(accounts, flow.userOfMfaToken(accounts, request.mfaToken()));
-        return new MfaEnrolmentResponse(e.secret(), e.otpauthUri());
+        return throttle.countingFailures(throttle.signInPerIp, RequestContext.clientIp(), () -> {
+            Enrolment e = flow.startEnrolment(accounts, flow.userOfMfaToken(accounts, request.mfaToken()));
+            return new MfaEnrolmentResponse(e.secret(), e.otpauthUri());
+        });
     }
 
     @PostMapping("/auth/mfa/confirm")
     @PublicEndpoint
     @Operation(summary = "Confirm TOTP enrolment and sign in", operationId = "platformMfaConfirm")
     ResponseEntity<SignInResponse> confirm(@Valid @RequestBody MfaConfirmRequest request, HttpServletRequest http) {
-        UUID userId = flow.userOfMfaToken(accounts, request.mfaToken());
-        return respond(flow.confirmEnrolment(
-                accounts, userId, request.code(), true, http.getServerName(), StaffAuthController.agent(http)));
+        return respond(throttle.countingFailures(throttle.signInPerIp, RequestContext.clientIp(), () -> {
+            UUID userId = flow.userOfMfaToken(accounts, request.mfaToken());
+            return flow.confirmEnrolment(
+                    accounts, userId, request.code(), true, http.getServerName(), StaffAuthController.agent(http));
+        }));
     }
 
     @PostMapping("/auth/refresh")

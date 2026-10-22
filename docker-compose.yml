@@ -12,9 +12,21 @@
 
 name: bms-local
 
+# Container logs capped and rotated, as on the servers (issue #426): a long-running laptop stack
+# keeps at most three files of 10 MB per container.
+x-logging: &logging
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "3"
+
 services:
   postgres:
+    <<: *logging
     image: postgres:16.15-alpine
+    # Terse error lines, as on the servers: no DETAIL with a refused key value in the log (ADR-059).
+    command: ["postgres", "-c", "log_error_verbosity=terse"]
     environment:
       POSTGRES_DB: bms
       POSTGRES_USER: postgres
@@ -33,6 +45,7 @@ services:
       retries: 30
 
   migrate:
+    <<: *logging
     build:
       context: ./backend
       args:
@@ -49,6 +62,7 @@ services:
         condition: service_healthy
 
   api:
+    <<: *logging
     image: bms-platform-api:local
     environment:
       # dev profile: X-Tenant header and the X-Dev-* authentication stub are accepted.
@@ -75,11 +89,13 @@ services:
       start_period: 90s
 
   web:
+    <<: *logging
     build:
       context: ./frontend
     image: bms-platform-web:local
 
   proxy:
+    <<: *logging
     image: caddy:2.11.4-alpine
     ports:
       - "${PROXY_PORT:-8000}:80"

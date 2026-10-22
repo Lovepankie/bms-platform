@@ -2945,6 +2945,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_id}/users/{user_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lift the sign-in lock of a tenant's staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059) */
+        post: operations["platformUnlockUserSignIn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/report-runs": {
         parameters: {
             query?: never;
@@ -6231,6 +6248,23 @@ export interface paths {
         /** Replace a user's roles and branch scopes (FR-IAM-01) */
         put: operations["setUserRoles"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Lift the sign-in lock of a staff user after too many wrong passwords, with a reason; audited, changes no password (ADR-059) */
+        post: operations["unlockUserSignIn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15855,6 +15889,10 @@ export interface components {
              */
             version?: number;
         };
+        UnlockSignInRequest: {
+            /** @description Why; kept in the tenant's audit log */
+            reason: string;
+        };
         /** @description Omitted fields are unchanged */
         UpdateAdvisorSettingsRequest: {
             /** @description The version of the acknowledgement text that was shown; required when switching on */
@@ -21209,6 +21247,31 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlatformSignInResetLink"];
                 };
+            };
+        };
+    };
+    platformUnlockUserSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -27183,6 +27246,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RoleAssignmentRequest"][];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    unlockUserSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnlockSignInRequest"];
             };
         };
         responses: {

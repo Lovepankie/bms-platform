@@ -32,8 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  * (the link goes to the email on file), issued by a tenant admin for an ordinary user, or issued by the platform operator for
  * a tenant admin (the link is shown once to whoever issued it). The token is 256 random bits, stored as a SHA-256 hash,
  * single use, valid for one hour; a newer link revokes the older ones. Using it sets the password under the same rules and
- * hashing as an invitation and ends every session of the user. It never touches the second factor, the failed-attempt lock or
- * the user's status: only an active user can reset, and a user still invited keeps the invitation path.
+ * hashing as an invitation, ends every session of the user and lifts the failed-attempt lock (ADR-059). It never touches the
+ * second factor or the user's status: only an active user can reset, and a user still invited keeps the invitation path.
  *
  * <p>The request for a link answers the same whether or not an account matched; everything that differs (no account, not
  * active, no email, a role that needs a second factor the user has not set up, too many links this hour) happens inside and is
@@ -286,12 +286,44 @@ class PasswordResets {
         return new ResetLink(issued.url(), issued.expiresAt());
     }
 
+    /** Who a link would set the password of, for the strength check before the hash: the sign-in names it may not equal. */
+    record LinkHolder(String email, String phone) {}
+
     /**
-     * The link sets a new password. Returns the user, whom the caller signs in through {@link AuthFlow#afterReset}. A failure
-     * before the password is written (bad link, weak password) changes nothing, so the link still works for a second try.
+     * Everything {@link #complete} refuses about the link, read without a lock, so the new password is hashed only for a link
+     * that works and outside any transaction (ADR-059): {@link #complete} checks it all again under its locks.
+     */
+    @Transactional(readOnly = true)
+    LinkHolder precheck(String token) {
+        Instant now = clock.now();
+        String hash = Secrets.sha256(token == null ? "" : token);
+        Pending link = pending(hash, false).orElseThrow(PasswordResets::linkInvalid);
+        Target user = find(link.userId(), false);
+        checkLink(link, user, now);
+        boolean enrolled = jdbc.sql("SELECT mfa_enabled FROM users WHERE id = ?")
+                .param(user.id())
+                .query(Boolean.class)
+                .single();
+        if ("self".equals(link.origin()) && !enrolled && accounts.mfaRequired(user.id())) {
+            throw linkInvalid();
+        }
+        return new LinkHolder(user.email(), user.phone());
+    }
+
+    /**
+     * The link sets a new password, hashed by the caller outside any transaction ({@code passwordHash}, of {@code password}).
+     * Returns the user, whom the caller signs in through {@link AuthFlow#afterReset}. A failure before the password is
+     * written (bad link, weak password) changes nothing, so the link still works for a second try.
+     *
+     * <p>A completed reset lifts the failed-attempt lock and starts the count again (ADR-059, amending ADR-042 decision 7):
+     * the link came from the owner's own mailbox, so a stranger's wrong passwords cannot keep the owner out. The second
+     * factor is untouched and still asked for at once. What it costs: whoever reads the mailbox can reset to lift a lock
+     * between guesses at the code, at most {@link #MAX_SELF_REQUESTS_PER_HOUR} times an hour, so five guesses each time on
+     * top of the five every 15 minutes the lock allows anyway (35 an hour instead of 20), and every reset changes the
+     * owner's password, ends their sessions and emails them. The lift is audited.
      */
     @Transactional(noRollbackFor = ApiException.class)
-    UUID complete(String token, String password) {
+    UUID complete(String token, String password, String passwordHash) {
         Instant now = clock.now();
         String hash = Secrets.sha256(token == null ? "" : token);
         // The user's row is locked before the link's, the order request() and issueForAdmin() use, so two of them
@@ -299,16 +331,8 @@ class PasswordResets {
         Pending seen = pending(hash, false).orElseThrow(PasswordResets::linkInvalid);
         Account account = accounts.byIdForUpdate(seen.userId()).orElseThrow(PasswordResets::linkInvalid);
         Pending link = pending(hash, true).orElseThrow(PasswordResets::linkInvalid);
-        if (link.usedAt() != null || link.revokedAt() != null) {
-            throw linkInvalid();
-        }
-        if (!now.isBefore(link.expiresAt())) {
-            throw ApiException.rule("reset_link_expired", "The reset link has expired; ask for a new one.");
-        }
         Target user = lock(link.userId());
-        if (user == null || !"active".equals(user.status())) {
-            throw linkInvalid();
-        }
+        checkLink(link, user, now);
         if ("self".equals(link.origin()) && needsSecondFactorFirst(account)) {
             // Asked for before the role gained its second factor requirement: the same refusal as at the request.
             throw linkInvalid();
@@ -316,8 +340,23 @@ class PasswordResets {
         passwords.checkStrength(password, user.email(), user.phone());
         jdbc.sql(
                         "UPDATE user_credentials SET password_hash = ?, password_changed_at = ?, updated_at = ? WHERE user_id = ?")
-                .params(passwords.hash(password), Timestamp.from(now), Timestamp.from(now), account.id())
+                .params(passwordHash, Timestamp.from(now), Timestamp.from(now), account.id())
                 .update();
+        if (account.lockedAt(now) || account.failedLoginCount() > 0) {
+            accounts.clearLock(account.id());
+            if (account.lockedAt(now)) {
+                audit.record(
+                        new AuditLog.Entry(
+                                "core.auth.unlocked",
+                                "core.user",
+                                user.id(),
+                                null,
+                                Map.of("locked_until", account.lockedUntil().toString()),
+                                data("by", "password_reset")),
+                        null,
+                        "staff");
+            }
+        }
         jdbc.sql("UPDATE user_password_resets SET used_at = ? WHERE id = ?")
                 .params(Timestamp.from(now), link.id())
                 .update();
@@ -412,6 +451,19 @@ class PasswordResets {
                 ISSUED_TEMPLATE + ":" + issued.id(),
                 "password-reset:" + user.id(),
                 now.plus(Duration.ofDays(1))));
+    }
+
+    /** The refusals of a link itself: unknown, used, replaced, expired, or for a user who is no longer active. */
+    private static void checkLink(Pending link, Target user, Instant now) {
+        if (link.usedAt() != null || link.revokedAt() != null) {
+            throw linkInvalid();
+        }
+        if (!now.isBefore(link.expiresAt())) {
+            throw ApiException.rule("reset_link_expired", "The reset link has expired; ask for a new one.");
+        }
+        if (user == null || !"active".equals(user.status())) {
+            throw linkInvalid();
+        }
     }
 
     /**

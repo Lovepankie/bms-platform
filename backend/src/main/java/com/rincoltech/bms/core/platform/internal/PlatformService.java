@@ -375,6 +375,26 @@ class PlatformService implements TenantProvisioning {
                 }));
     }
 
+    /**
+     * Lifts the sign-in lock of one staff user of the tenant (ADR-059), with a reason: audited in the tenant's log and in the
+     * platform log. A platform operator is not a tenant user, so this never unlocks an operator.
+     */
+    void unlockSignIn(UUID tenantId, UUID userId, String reason) {
+        UUID operator = CurrentPrincipal.require().userId();
+        transactions.execute(status -> tenant(tenantId));
+        TenantContext.callAs(
+                tenantId,
+                () -> transactions.execute(status -> {
+                    tenantAdmins.unlockSignIn(userId, operator, reason.trim());
+                    platformAudit.record(
+                            "platform.tenant_user.sign_in_unlocked",
+                            operator,
+                            tenantId,
+                            Map.of("user_id", userId, "reason", reason.trim()));
+                    return null;
+                }));
+    }
+
     /** Read-only: what {@link #resetAdminMfa} would refuse, checked before the operator's authenticator code is spent. */
     void requireTenantAdmin(UUID tenantId, UUID userId) {
         transactions.execute(status -> tenant(tenantId));

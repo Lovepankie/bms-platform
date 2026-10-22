@@ -153,6 +153,13 @@ class StaffAccounts implements Accounts {
     }
 
     @Override
+    public void clearLock(UUID id) {
+        jdbc.sql("UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE id = ?")
+                .param(id)
+                .update();
+    }
+
+    @Override
     public void clearFailedLogins(UUID id) {
         jdbc.sql("UPDATE users SET failed_login_count = 0 WHERE id = ? AND failed_login_count <> 0")
                 .param(id)

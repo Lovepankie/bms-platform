@@ -77,6 +77,11 @@ final class UserApi {
             @Schema(description = "The admin's own current password, for an admin with no two-step sign-in")
             String password) {}
 
+    @Schema(name = "UnlockSignInRequest")
+    record UnlockSignInRequest(
+            @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the tenant's audit log")
+            String reason) {}
+
     @Schema(name = "InvitedUser")
     record InvitedUserResponse(UserResponse user, InvitationLink invitation) {}
 

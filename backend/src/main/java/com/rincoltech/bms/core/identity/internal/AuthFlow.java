@@ -12,9 +12,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Sign-in, second factor, sessions (FR-IAM-04 to FR-IAM-08, FR-IAM-11; chapter 8 section 8.2).
@@ -23,6 +26,18 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Failures that must be remembered (the failed attempt counter, the lock, the audit row, a
  * family revoked for refresh token reuse) are written before the method throws; the methods do
  * not roll back on {@link ApiException}, so the answer is an error and the record commits.
+ *
+ * <p>Sign-in answers do not say whether an account exists (ADR-059): an address that matches no account is counted and
+ * locked in the database ({@link SignInAddressFailures}) after the same five failures, for the same 15 minutes, with the
+ * same 423 and words as a real account, and the lock survives a restart. Both paths read the same rows before the hash;
+ * after it both lock their row and read the lock again before looking at the hash's result (so once locked, right and
+ * wrong answer alike), then write one counter row and the same audit rows; neither lock pays for a hash. What is left, and is
+ * not hidden: an address of nobody forgets its count after a week without a failure, a real account only at a right
+ * password; and a few database round trips more or less are not timed away.
+ *
+ * <p>No password is hashed inside a transaction (ADR-059, review of #433 finding 3): {@link #login} and
+ * {@link #confirmPassword} read in one short transaction, hash with no connection held, and record the result in a second
+ * one, so a flood of sign-ins waiting for a hashing slot cannot take the database pool from every other tenant.
  */
 @Service
 class AuthFlow {
@@ -34,12 +49,25 @@ class AuthFlow {
     private final AccessTokens tokens;
     private final SecretBox box;
     private final BusinessClock clock;
+    private final AuthThrottle throttle;
+    private final SignInAddressFailures addresses;
+    private final TransactionTemplate transactions;
 
-    AuthFlow(Passwords passwords, AccessTokens tokens, SecretBox box, BusinessClock clock) {
+    AuthFlow(
+            Passwords passwords,
+            AccessTokens tokens,
+            SecretBox box,
+            BusinessClock clock,
+            AuthThrottle throttle,
+            SignInAddressFailures addresses,
+            PlatformTransactionManager transactionManager) {
         this.passwords = passwords;
         this.tokens = tokens;
         this.box = box;
         this.clock = clock;
+        this.throttle = throttle;
+        this.addresses = addresses;
+        this.transactions = new TransactionTemplate(transactionManager);
     }
 
     enum Step {
@@ -60,31 +88,83 @@ class AuthFlow {
 
     record Enrolment(String secret, String otpauthUri) {}
 
-    @Transactional(noRollbackFor = ApiException.class)
+    /**
+     * What the first look of a sign-in found, before the hash: the key of the address typed and the account it names, or
+     * {@code null} when it names none.
+     */
+    record Attempt(String login, String addressKey, Account account) {}
+
+    /**
+     * The password step of sign-in (FR-IAM-04, FR-IAM-05). Not one transaction but two, with the hash between them and no
+     * connection held while it waits for a slot or runs (ADR-059): {@link #firstLook} refuses a locked address or account
+     * with no hash, then the password is checked, then {@link #settle} counts a failure or signs in.
+     */
     Outcome login(Accounts accounts, String login, String password, String issuer, String userAgent) {
+        Attempt attempt = inTransaction(() -> firstLook(accounts, login));
+        Account seen = attempt.account();
+        boolean ok = passwords.matches(password == null ? "" : password, seen == null ? null : seen.passwordHash());
+        return inTransaction(() -> settle(accounts, attempt, ok, issuer, userAgent));
+    }
+
+    /**
+     * Reads, for every address alike, the lock row of the address and the account; refuses with 423 when the one that
+     * applies is locked (the address's own row for an address of nobody, the account's for an account).
+     */
+    private Attempt firstLook(Accounts accounts, String login) {
         Instant now = clock.now();
+        String key = SignInAddressFailures.key(AuthThrottle.address(accounts, login));
+        boolean addressLocked = addresses.lockedAt(key, now);
         Account account = accounts.byLogin(login).orElse(null);
-        if (account == null) {
-            passwords.matches(password == null ? "" : password, null);
-            accounts.audit("core.auth.sign_in_failed", null, Map.of("login", login == null ? "" : login));
+        if (account == null ? addressLocked : account.lockedAt(now)) {
+            accounts.audit(
+                    "core.auth.sign_in_refused_locked",
+                    account == null ? null : account.id(),
+                    account == null ? Map.of("login", typed(login)) : Map.of());
+            throw locked();
+        }
+        return new Attempt(login, key, account);
+    }
+
+    /**
+     * After the hash: the row of what was typed (the account, or the address of nobody) is locked and its lock read again
+     * BEFORE the result of the hash is looked at, so once a lock is in force every answer is 423, right password or
+     * wrong (review of #433): a burst of guesses that all passed {@link #firstLook} before the lock cannot learn which
+     * one was right from a 423 among 401s. Otherwise one failure is counted, or the sign-in goes on.
+     */
+    private Outcome settle(Accounts accounts, Attempt attempt, boolean ok, String issuer, String userAgent) {
+        Instant now = clock.now();
+        Account seen = attempt.account();
+        if (seen == null) {
+            if (addresses.lockedForUpdate(attempt.addressKey(), now)) {
+                accounts.audit("core.auth.sign_in_refused_locked", null, Map.of("login", typed(attempt.login())));
+                throw locked();
+            }
+            Accounts.Failures failures =
+                    addresses.recordFailure(attempt.addressKey(), now, MAX_FAILURES, now.plus(LOCK));
+            accounts.audit(
+                    "core.auth.sign_in_failed",
+                    null,
+                    Map.of("login", typed(attempt.login()), "consecutive_failures", failures.consecutive()));
+            if (failures.consecutive() == MAX_FAILURES) {
+                accounts.audit(
+                        "core.auth.account_locked",
+                        null,
+                        Map.of("login", typed(attempt.login()), "locked_minutes", LOCK.toMinutes()));
+            }
             throw invalidCredentials();
         }
+        // The first read took no lock: parallel failures may have locked the account since, or the password changed.
+        Account account = accounts.byIdForUpdate(seen.id()).orElseThrow(AuthFlow::invalidCredentials);
         if (account.lockedAt(now)) {
             accounts.audit("core.auth.sign_in_refused_locked", account.id(), Map.of());
             throw locked();
         }
-        boolean ok = passwords.matches(password == null ? "" : password, account.passwordHash());
         if (!ok || !account.active()) {
             fail(accounts, account, now, "core.auth.sign_in_failed");
             throw invalidCredentials();
         }
-        // The read above took no lock: parallel failures may have locked the account since.
-        account = accounts.byIdForUpdate(account.id()).orElseThrow(AuthFlow::invalidCredentials);
-        if (account.lockedAt(now)) {
-            accounts.audit("core.auth.sign_in_refused_locked", account.id(), Map.of());
-            throw locked();
-        }
-        if (!account.active()) {
+        if (!Objects.equals(account.passwordHash(), seen.passwordHash())) {
+            // A password set while this one was checked: what matched is no longer the password.
             throw invalidCredentials();
         }
         if (account.mfaEnabled()) {
@@ -98,6 +178,33 @@ class AuthFlow {
         }
         return signIn(accounts, account.id(), now, issuer, userAgent, List.of(), "password");
     }
+
+    private static String typed(String login) {
+        return login == null ? "" : login;
+    }
+
+    /**
+     * Runs {@code work} in a transaction of its own that commits even when the work refuses with an {@link ApiException}
+     * (the failure counter, the lock and the audit rows are written before the refusal, as {@code noRollbackFor} does on
+     * the annotated methods), then rethrows the refusal.
+     */
+    private <T> T inTransaction(Supplier<T> work) {
+        Object result = transactions.execute(status -> {
+            try {
+                return work.get();
+            } catch (ApiException e) {
+                return new Refusal(e);
+            }
+        });
+        if (result instanceof Refusal refusal) {
+            throw refusal.exception();
+        }
+        @SuppressWarnings("unchecked")
+        T value = (T) result;
+        return value;
+    }
+
+    private record Refusal(ApiException exception) {}
 
     /**
      * The first sign-in, right after the invitee set a password with the one-time token (issue
@@ -126,9 +233,10 @@ class AuthFlow {
 
     /**
      * The sign-in right after a password reset (FR-IAM-15, ADR-042): the link and the new password have just proved who the
-     * user is, as for {@link #afterInvitation}, and a second factor is still asked for exactly as {@link #login} would. A reset
-     * does not clear the failed-attempt lock (it would let a mailbox thief keep guessing the code between resets), so a
-     * locked account is told to sign in later and gets no session.
+     * user is, as for {@link #afterInvitation}, and a second factor is still asked for exactly as {@link #login} would. The
+     * reset itself lifted the failed-attempt lock ({@link PasswordResets#complete}, ADR-059), so the owner of the mailbox is
+     * never left locked out by a stranger's guesses; an account locked again in the moment between the two (a race) is told
+     * to sign in later and gets no session.
      */
     @Transactional(noRollbackFor = ApiException.class)
     Outcome afterReset(Accounts accounts, UUID userId, String issuer, String userAgent) {
@@ -157,6 +265,7 @@ class AuthFlow {
     Outcome verifyMfa(Accounts accounts, String mfaToken, String code, String issuer, String userAgent) {
         Instant now = clock.now();
         Account account = accountOf(accounts, mfaToken, now);
+        throttle.acquireFor(AuthThrottle.MFA_PER_ACCOUNT, accounts.kind() + ":" + account.id());
         if (!account.mfaEnabled() || account.totpSecret() == null) {
             throw new ApiException(
                     HttpStatus.CONFLICT, "mfa_not_enrolled", "MFA not enrolled", "Enrol a second factor first.");
@@ -292,10 +401,29 @@ class AuthFlow {
      *
      * @param sessionId the calling session, whose family a fifth wrong password ends; {@code null} for a caller with no session
      */
-    @Transactional(noRollbackFor = ApiException.class)
     void confirmPassword(Accounts accounts, UUID userId, UUID sessionId, String password) {
-        Instant now = clock.now();
-        Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+        Account seen = inTransaction(() -> {
+            Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+            refuseStepUp(accounts, account, clock.now());
+            return account;
+        });
+        // The hash runs between the two transactions, with no connection held (ADR-059).
+        boolean ok = passwords.matches(password == null ? "" : password, seen.passwordHash());
+        inTransaction(() -> {
+            Instant now = clock.now();
+            Account account = accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::invalidCredentials);
+            refuseStepUp(accounts, account, now);
+            if (!ok || !Objects.equals(account.passwordHash(), seen.passwordHash())) {
+                wrongStepUpPassword(accounts, account, sessionId, now);
+            }
+            accounts.clearFailedLogins(account.id());
+            accounts.clearStepUpFailures(account.id());
+            return null;
+        });
+    }
+
+    /** What {@link #confirmPassword} refuses before and after the hash: an account not active, or locked either way. */
+    private static void refuseStepUp(Accounts accounts, Account account, Instant now) {
         if (!account.active()) {
             throw invalidCredentials();
         }
@@ -303,29 +431,28 @@ class AuthFlow {
             accounts.audit("core.auth.step_up_refused_locked", account.id(), Map.of());
             throw locked();
         }
-        if (!passwords.matches(password == null ? "" : password, account.passwordHash())) {
-            fail(accounts, account, now, "core.auth.step_up_password_failed");
-            Accounts.Failures stepUp = accounts.recordStepUpFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
-            if (stepUp.consecutive() == MAX_FAILURES) {
-                int ended = sessionId == null
-                        ? 0
-                        : accounts.sessions()
-                                .byId(sessionId)
-                                .map(row -> accounts.sessions().revokeFamily(row.familyId(), "admin", now))
-                                .orElse(0);
-                accounts.audit(
-                        "core.auth.step_up_session_ended",
-                        account.id(),
-                        Map.of("locked_minutes", LOCK.toMinutes(), "sessions_ended", ended));
-            }
-            throw new ApiException(
-                    HttpStatus.UNPROCESSABLE_CONTENT,
-                    "invalid_password",
-                    "Invalid password",
-                    "The password is not correct.");
+    }
+
+    private void wrongStepUpPassword(Accounts accounts, Account account, UUID sessionId, Instant now) {
+        fail(accounts, account, now, "core.auth.step_up_password_failed");
+        Accounts.Failures stepUp = accounts.recordStepUpFailure(account.id(), now, MAX_FAILURES, now.plus(LOCK));
+        if (stepUp.consecutive() == MAX_FAILURES) {
+            int ended = sessionId == null
+                    ? 0
+                    : accounts.sessions()
+                            .byId(sessionId)
+                            .map(row -> accounts.sessions().revokeFamily(row.familyId(), "admin", now))
+                            .orElse(0);
+            accounts.audit(
+                    "core.auth.step_up_session_ended",
+                    account.id(),
+                    Map.of("locked_minutes", LOCK.toMinutes(), "sessions_ended", ended));
         }
-        accounts.clearFailedLogins(account.id());
-        accounts.clearStepUpFailures(account.id());
+        throw new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "invalid_password",
+                "Invalid password",
+                "The password is not correct.");
     }
 
     /** New recovery codes replace every old one; needs a current TOTP code (FR-IAM-11). */

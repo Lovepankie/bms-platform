@@ -1,7 +1,9 @@
 package com.rincoltech.bms.kernel;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -15,6 +17,8 @@ public class ApiException extends RuntimeException {
     private final String title;
     private final List<FieldProblem> errors;
     private final Map<String, Object> extensions;
+    /** How long the caller should wait before trying again, sent as {@code Retry-After}; null when the thrower does not know. */
+    private final Duration retryAfter;
 
     public ApiException(HttpStatus status, String code, String title, String detail) {
         this(status, code, title, detail, List.of());
@@ -32,12 +36,32 @@ public class ApiException extends RuntimeException {
             String detail,
             List<FieldProblem> errors,
             Map<String, Object> extensions) {
+        this(status, code, title, detail, errors, extensions, null);
+    }
+
+    private ApiException(
+            HttpStatus status,
+            String code,
+            String title,
+            String detail,
+            List<FieldProblem> errors,
+            Map<String, Object> extensions,
+            Duration retryAfter) {
         super(detail);
         this.status = status;
         this.code = code;
         this.title = title;
         this.errors = List.copyOf(errors);
         this.extensions = Map.copyOf(extensions);
+        this.retryAfter = retryAfter;
+    }
+
+    /**
+     * The same problem with a {@code Retry-After} the handler sends (chapter 7 section 7.7): for a 429 the time until the
+     * limiter lets the caller in again, for a 503 a short pause. Whole seconds, rounded up, at least one.
+     */
+    public ApiException withRetryAfter(Duration wait) {
+        return new ApiException(status, code, title, getMessage(), errors, extensions, wait);
     }
 
     public static ApiException notFound() {
@@ -75,6 +99,16 @@ public class ApiException extends RuntimeException {
 
     public Map<String, Object> extensions() {
         return extensions;
+    }
+
+    public Optional<Duration> retryAfter() {
+        return Optional.ofNullable(retryAfter);
+    }
+
+    /** {@code Retry-After} in whole seconds: {@code wait} rounded up, at least one. */
+    public static long retryAfterSeconds(Duration wait) {
+        long millis = Math.max(0, wait.toMillis());
+        return Math.max(1, (millis + 999) / 1000);
     }
 
     /** One entry of the {@code errors} array. */

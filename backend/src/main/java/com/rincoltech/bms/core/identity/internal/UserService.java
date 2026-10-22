@@ -135,33 +135,34 @@ class UserService implements TenantAdmins {
         return issueInvitation(userId, admin.userId(), user.email(), user.phoneE164());
     }
 
+    /** Who an invitation would set the password of, for the strength check before the hash. */
+    record Invitee(String email, String phone) {}
+
+    private record PendingInvitation(UUID id, UUID userId, Instant expiresAt, Instant acceptedAt, Instant revokedAt) {}
+
     /**
-     * FR-IAM-01: the invitee sets a password with the one-time token and becomes active. Returns
-     * the user, whom the caller then signs in through {@link AuthFlow#afterInvitation}.
+     * Everything {@link #acceptInvitation} refuses about the token, read without a lock, so the password is hashed only for an
+     * invitation that works and outside any transaction (ADR-059); {@link #acceptInvitation} checks it all again under locks.
      */
-    @Transactional(noRollbackFor = ApiException.class)
-    UUID acceptInvitation(String token, String password) {
-        Instant now = clock.now();
-        record Pending(UUID id, UUID userId, Instant expiresAt, Instant acceptedAt, Instant revokedAt) {}
-        Pending invitation = jdbc.sql("""
-                        SELECT id, user_id, expires_at, accepted_at, revoked_at FROM user_invitations
-                         WHERE token_hash = ? FOR UPDATE
-                        """)
-                .param(Secrets.sha256(token))
-                .query((rs, n) -> new Pending(
-                        rs.getObject("id", UUID.class),
-                        rs.getObject("user_id", UUID.class),
-                        SessionStore.instant(rs.getTimestamp("expires_at")),
-                        SessionStore.instant(rs.getTimestamp("accepted_at")),
-                        SessionStore.instant(rs.getTimestamp("revoked_at"))))
-                .optional()
-                .orElseThrow(UserService::invitationInvalid);
-        if (invitation.acceptedAt() != null || invitation.revokedAt() != null) {
+    @Transactional(readOnly = true)
+    Invitee precheckInvitation(String token) {
+        PendingInvitation invitation = pendingInvitation(token, false);
+        UserResponse user = find(invitation.userId()).orElseThrow(UserService::invitationInvalid);
+        if (!"invited".equals(user.status())) {
             throw invitationInvalid();
         }
-        if (!now.isBefore(invitation.expiresAt())) {
-            throw ApiException.rule("invitation_expired", "The invitation has expired; ask an admin for a new one.");
-        }
+        return new Invitee(user.email(), user.phoneE164());
+    }
+
+    /**
+     * FR-IAM-01: the invitee sets a password with the one-time token and becomes active. {@code passwordHash} is the hash of
+     * {@code password}, made by the caller outside any transaction (ADR-059). Returns the user, whom the caller then signs in
+     * through {@link AuthFlow#afterInvitation}.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    UUID acceptInvitation(String token, String password, String passwordHash) {
+        Instant now = clock.now();
+        PendingInvitation invitation = pendingInvitation(token, true);
         UserResponse user = lockUser(invitation.userId());
         if (!"invited".equals(user.status())) {
             throw invitationInvalid();
@@ -170,7 +171,7 @@ class UserService implements TenantAdmins {
         accounts.ensureCredentials(user.id());
         jdbc.sql(
                         "UPDATE user_credentials SET password_hash = ?, password_changed_at = ?, updated_at = ? WHERE user_id = ?")
-                .params(passwords.hash(password), Timestamp.from(now), Timestamp.from(now), user.id())
+                .params(passwordHash, Timestamp.from(now), Timestamp.from(now), user.id())
                 .update();
         jdbc.sql("UPDATE users SET status = 'active', updated_at = ?, version = version + 1 WHERE id = ?")
                 .params(Timestamp.from(now), user.id())
@@ -422,7 +423,65 @@ class UserService implements TenantAdmins {
                 "platform");
     }
 
+    /**
+     * ADR-059: a tenant admin lifts the sign-in lock of a staff user of the tenant (the fifth wrong password in a row locks
+     * an account for 15 minutes, and anyone who knows the sign-in name can keep it locked). Audited with what the lock was;
+     * it changes no password, no second factor and no session; the admin gives a reason, kept in the audit row. The tenant's row policy keeps it to the tenant's own staff,
+     * and a platform operator is never a tenant user, so no tenant admin can unlock an operator.
+     */
+    @Transactional
+    UserResponse unlockSignIn(UUID userId, String reason) {
+        unlock(userId, CurrentPrincipal.require().userId(), "staff", "tenant_admin", reason);
+        return find(userId).orElseThrow();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void unlockSignIn(UUID userId, UUID platformUserId, String reason) {
+        unlock(userId, platformUserId, "platform", "platform", reason);
+    }
+
+    private void unlock(UUID userId, UUID actorId, String actorKind, String by, String reason) {
+        lockUser(userId);
+        Instant now = clock.now();
+        Accounts.Account account = accounts.byIdForUpdate(userId).orElseThrow(ApiException::notFound);
+        accounts.clearLock(userId);
+        audit.record(
+                new AuditLog.Entry(
+                        "core.auth.unlocked",
+                        "core.user",
+                        userId,
+                        null,
+                        Map.of("locked", account.lockedAt(now), "failed_login_count", account.failedLoginCount()),
+                        Map.of("locked", false, "failed_login_count", 0, "by", by, "reason", reason.strip())),
+                actorId,
+                actorKind);
+    }
+
     // ---- Helpers --------------------------------------------------------------------------
+
+    /** The invitation of a token, refused when unknown, used, revoked or expired; locked with {@code forUpdate}. */
+    private PendingInvitation pendingInvitation(String token, boolean forUpdate) {
+        PendingInvitation invitation = jdbc.sql("""
+                        SELECT id, user_id, expires_at, accepted_at, revoked_at FROM user_invitations
+                         WHERE token_hash = ?""" + (forUpdate ? " FOR UPDATE" : ""))
+                .param(Secrets.sha256(token == null ? "" : token))
+                .query((rs, n) -> new PendingInvitation(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("user_id", UUID.class),
+                        SessionStore.instant(rs.getTimestamp("expires_at")),
+                        SessionStore.instant(rs.getTimestamp("accepted_at")),
+                        SessionStore.instant(rs.getTimestamp("revoked_at"))))
+                .optional()
+                .orElseThrow(UserService::invitationInvalid);
+        if (invitation.acceptedAt() != null || invitation.revokedAt() != null) {
+            throw invitationInvalid();
+        }
+        if (!clock.now().isBefore(invitation.expiresAt())) {
+            throw ApiException.rule("invitation_expired", "The invitation has expired; ask an admin for a new one.");
+        }
+        return invitation;
+    }
 
     private void clearMfa(UserResponse user) {
         accounts.resetMfa(user.id());

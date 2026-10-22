@@ -13,8 +13,20 @@ name: bms
 
 x-app-image: &api-image ${API_IMAGE:?API_IMAGE is set by deploy.sh}
 
+# Container logs are capped and rotated (launch readiness M8, issue #426): Docker's local driver keeps
+# at most five files of 20 MB per container, compressed, so the 40 GB disk cannot fill with logs
+# (about 100 MB a container at worst). `docker compose logs` still reads them. The API's lines are
+# already redacted of personal data before they reach Docker (ADR-059).
+x-logging: &logging
+  logging:
+    driver: local
+    options:
+      max-size: 20m
+      max-file: "5"
+
 services:
   postgres:
+    <<: *logging
     image: ${POSTGRES_IMAGE:?pin it in .env}
     restart: unless-stopped
     environment:
@@ -36,6 +48,11 @@ services:
       - maintenance_work_mem=128MB
       - -c
       - max_connections=60
+      # Terse error lines: no DETAIL, so a refused duplicate never prints its key value (a phone number) into
+      # the container log the local driver keeps (ADR-059). Bound parameters are not logged either
+      # (log_parameter_max_length_on_error stays 0).
+      - -c
+      - log_error_verbosity=terse
     mem_limit: 1280m
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -48,6 +65,7 @@ services:
 
   # One-shot: `docker compose run --rm migrate`, run by deploy.sh before the app switches.
   migrate:
+    <<: *logging
     image: *api-image
     profiles: ["migrate"]
     command: ["migrate"]
@@ -61,6 +79,7 @@ services:
         condition: service_healthy
 
   api:
+    <<: *logging
     image: *api-image
     restart: unless-stopped
     environment:
@@ -81,13 +100,18 @@ services:
       BMS_DATA_KEY: ${BMS_DATA_KEY:?}
       BMS_DATA_KEY_ID: ${BMS_DATA_KEY_ID:-k1}
       BMS_DATA_KEY_PREVIOUS: ${BMS_DATA_KEY_PREVIOUS:-}
+      # Sign-in limits (ADR-059): failed sign-ins per client IP in 10 minutes, and argon2id hashes at once.
+      BMS_AUTH_SIGN_IN_FAILURES_PER_IP: ${BMS_AUTH_SIGN_IN_FAILURES_PER_IP:-300}
+      BMS_AUTH_ARGON2_MAX_CONCURRENT: ${BMS_AUTH_ARGON2_MAX_CONCURRENT:-4}
       R2_ENDPOINT: ${R2_ENDPOINT:?}
       R2_DOCUMENTS_ACCESS_KEY_ID: ${R2_DOCUMENTS_ACCESS_KEY_ID:?}
       R2_DOCUMENTS_SECRET_ACCESS_KEY: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:?}
       R2_DOCUMENTS_BUCKET: ${R2_DOCUMENTS_BUCKET:?}
-      # Outbox senders (spec section 11, chapter 9 section 9.8). Optional: a sender whose values
-      # are empty stays off and its messages wait in the outbox. SMTP is implicit TLS on 465 (587 is
-      # blocked on the staging host).
+      # Outbox senders (spec section 11, chapter 9 section 9.8). A sender whose values are empty
+      # stays off and its messages wait in the outbox, except SMTP in production: with
+      # BMS_ENVIRONMENT=production the API refuses to start unless BMS_SMTP_HOST, BMS_SMTP_USER,
+      # BMS_SMTP_PASSWORD and BMS_MAIL_FROM are set (ADR-059, issue #426). SMTP is implicit TLS on
+      # 465 (587 is blocked on the staging host).
       BMS_SMTP_HOST: ${BMS_SMTP_HOST:-}
       BMS_SMTP_PORT: ${BMS_SMTP_PORT:-465}
       BMS_SMTP_USER: ${BMS_SMTP_USER:-}
@@ -99,8 +123,11 @@ services:
       BMS_TELEGRAM_OPERATOR_CHAT_ID: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:-}
       # SMS (ADR-036, docs/runbooks/sms-setup.md). Off unless a mode and a provider are set; staging
       # defaults to the sink, which texts nobody. BMS_ENVIRONMENT decides what the startup guard allows:
-      # production sets it in /opt/bms/.env; an unset value is treated as not production, which refuses live.
-      BMS_ENVIRONMENT: ${BMS_ENVIRONMENT:-}
+      # production sets it in /opt/bms/.env. This file runs production only, so an unset value means
+      # production here: every production guard (SMTP required, SMS live only, the Pesapal live API) stays on
+      # and a start without SMTP stops (ADR-059). A plain `:?` would also stop the CI check that parses
+      # this file, whose placeholder values do not set it.
+      BMS_ENVIRONMENT: ${BMS_ENVIRONMENT:-production}
       BMS_SMS_PROVIDER: ${BMS_SMS_PROVIDER:-}
       BMS_SMS_MODE: ${BMS_SMS_MODE:-}
       BMS_SMS_ALLOWLIST: ${BMS_SMS_ALLOWLIST:-}
@@ -167,6 +194,7 @@ services:
       start_period: 90s
 
   web:
+    <<: *logging
     image: ${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}
     restart: unless-stopped
     environment:
@@ -175,6 +203,7 @@ services:
     mem_limit: 64m
 
   proxy:
+    <<: *logging
     image: ${PROXY_IMAGE:?PROXY_IMAGE is set by deploy.sh}
     restart: unless-stopped
     environment:

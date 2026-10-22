@@ -1,5 +1,10 @@
 package com.rincoltech.bms.core.notifications.internal;
 
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -31,6 +36,42 @@ record NotificationProperties(Smtp smtp, Telegram telegram, String supportContac
 
         boolean configured() {
             return present(host) && present(user) && present(password) && present(from);
+        }
+
+        /**
+         * The production startup guard (launch readiness M10, ADR-059, issue #426): password resets, invitations and
+         * activation links are email only, so production refuses to start with email off instead of letting them wait
+         * unseen in the outbox. Names the unset variables, never a value. Elsewhere unset SMTP stays a quiet off.
+         */
+        void requireInProduction(String environment) {
+            // The same reading of BMS_ENVIRONMENT as SmsSettings and PesapalSettings: trimmed, lower case, then exact,
+            // so one
+            // value turns every production guard on or none of them.
+            if (!(environment == null ? "" : environment.trim().toLowerCase(Locale.ROOT)).equals("production")) {
+                return;
+            }
+            List<String> missing = new ArrayList<>();
+            if (!present(host)) {
+                missing.add("BMS_SMTP_HOST");
+            }
+            if (!present(user)) {
+                missing.add("BMS_SMTP_USER");
+            }
+            if (!present(password)) {
+                missing.add("BMS_SMTP_PASSWORD");
+            }
+            if (!present(from)) {
+                missing.add("BMS_MAIL_FROM");
+            }
+            if (!missing.isEmpty()) {
+                throw new IllegalStateException(
+                        "BMS_ENVIRONMENT=production needs email: set " + String.join(", ", missing));
+            }
+            try {
+                new InternetAddress(from, true);
+            } catch (AddressException e) {
+                throw new IllegalStateException("BMS_MAIL_FROM is not an email address (BMS_ENVIRONMENT=production)");
+            }
         }
 
         @Override
