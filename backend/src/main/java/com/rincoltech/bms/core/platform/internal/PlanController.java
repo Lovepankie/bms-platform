@@ -75,7 +75,7 @@ class PlanController {
             Instant createdAt,
             Instant appliedAt) {}
 
-    @Schema(name = "Plan")
+    @Schema(name = "BusinessPlan")
     record PlanResponse(
             String planCode,
             String planName,
@@ -117,7 +117,9 @@ class PlanController {
             @Schema(description = "Changes still to come, soonest first, then the latest done or undone")
             List<ChangeResponse> changes) {}
 
-    @Schema(name = "PlanStatus", description = "For the banner and the read-only notice every member of staff sees")
+    @Schema(
+            name = "BusinessPlanStatus",
+            description = "For the banner and the read-only notice every member of staff sees")
     record PlanStatusResponse(
             @Schema(description = "While a cancellation is scheduled: the first day the business is read only")
             LocalDate endsOn,

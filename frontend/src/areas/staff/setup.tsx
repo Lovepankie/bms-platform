@@ -6,6 +6,7 @@ import { BRANDING_QUERY, appTitle, brandOf, useShellBrand } from '../../app/bran
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
 import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
+import { PlanCard } from './plan';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
 // tenant admin lands on until it is dismissed. The logo is checked and re-encoded by the API; the
@@ -289,6 +290,8 @@ export function Setup() {
             Let staff run reports (portfolio at risk and others), prepared in the background and kept for 30 days
           </label>
         </fieldset>
+
+        {permissions.includes('core.settings.manage') && <PlanCard mfaEnabled={me.mfa_enabled === true} />}
 
         {permissions.includes('core.branches.read') && (
           <fieldset>

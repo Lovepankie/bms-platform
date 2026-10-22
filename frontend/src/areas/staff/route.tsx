@@ -15,6 +15,7 @@ import { type MenuLink, SideMenu, SideNav, useIsPhone } from '../../components/s
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, useActiveBranch } from './branch-picker';
 import { StaffContext } from './context';
+import { PlanNotice } from './plan';
 import { canConfigureAdvisor, showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
 import { showCollateral, showMembers } from './lending/member-permissions';
@@ -116,6 +117,7 @@ function StaffLayout() {
                 </p>
               )}
               <TwoStepNotices me={profile} pathname={pathname} />
+              {!mock && <PlanNotice />}
               <StaffBreadcrumbs />
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
             </div>
