@@ -1,4 +1,4 @@
-import { applyOutcome, classify, expired, inOrder, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
+import { applyOutcome, classify, expired, inOrder, markDiscarded, nextToSend, requeue, type OutboxItem, type SendOutcome } from './outbox';
 import type { OfflineStore } from './store';
 
 // Sends the outbox (issue #458, ADR-067 decisions 4, 5 and 8): one sale at a time, oldest first, never two requests in
@@ -150,7 +150,7 @@ export class SyncEngine {
         }
         const next = applyOutcome(item, outcome, this.deps.now());
         await this.save(next);
-        if (outcome.kind === 'refused') await this.reportFailure(next);
+        if (next.state === 'failed') await this.reportFailure(next);
         if (outcome.kind === 'retry') break;
       }
     } while (this.again);
@@ -184,7 +184,7 @@ export class SyncEngine {
 
   /**
    * Reports failed items not yet reported, then reads what managers decided: a retry sends the item again, a discard
-   * removes it from the device, and a sale recorded meanwhile ends it too.
+   * marks it discarded (shown for a day, never sent again), and a sale recorded meanwhile removes it.
    */
   private async followDecisions(): Promise<void> {
     const failed = this.items.filter((i) => i.state === 'failed');
@@ -200,7 +200,8 @@ export class SyncEngine {
     for (const d of decided) {
       const item = this.items.find((i) => i.id === d.client_sale_id);
       if (!item || item.state !== 'failed') continue;
-      if (d.status === 'discarded' || d.status === 'recorded') await this.drop(item.id);
+      if (d.status === 'discarded') await this.save(markDiscarded(item, this.deps.now()));
+      else if (d.status === 'recorded') await this.drop(item.id);
       else if (d.status === 'retry') await this.save(requeue({ ...item, decision: 'retry' }, this.deps.now()));
       else if (d.status !== item.decision) await this.save({ ...item, decision: d.status });
     }

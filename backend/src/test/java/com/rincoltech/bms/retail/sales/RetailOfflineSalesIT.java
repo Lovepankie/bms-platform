@@ -410,6 +410,42 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isEqualTo(sold.getBody().get("id").asString());
     }
 
+    /** Review fix 1: a sale sent after a manager discarded it is refused and never recorded, whatever key it carries. */
+    @Test
+    void aSaleSentAfterItWasDiscardedIsRefused() {
+        api.stockUp(t.headOffice(), product, "5");
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(3)), "1", 2_000);
+        String id = api.post("/offline-failures", failureReport(client, request), SALES)
+                .getBody()
+                .get("id")
+                .asString();
+        assertThat(api.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        for (int i = 0; i < 2; i++) {
+            ResponseEntity<JsonNode> sent = send(request, UUID.randomUUID().toString());
+            assertThat(sent.getStatusCode()).as("%s", sent.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(sent.getBody().get("code").asString()).isEqualTo("offline_sale_discarded");
+        }
+        assertThat(sales()).isZero();
+        assertThat(balance()).isEqualTo("5.000");
+    }
+
+    Map<String, Object> failureReport(UUID client, Map<String, Object> request) {
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("client_sale_id", client);
+        report.put("branch_id", t.headOffice());
+        report.put("occurred_at", request.get("occurred_at"));
+        report.put("payment_method", "cash");
+        report.put("total_minor", 2_000);
+        report.put("request", request);
+        report.put("code", "period_closed");
+        report.put("message", "The period is closed.");
+        return report;
+    }
+
     /** ADR-003: another business sees none of these rows and may use the same client sale id for its own sale. */
     @Test
     void anotherTenantSeesNothingAndKeepsItsOwnClientIds() {

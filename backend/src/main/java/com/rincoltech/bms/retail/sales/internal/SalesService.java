@@ -212,6 +212,12 @@ class SalesService {
      * which the Controls page does not count again. Every other rule of a sale holds.
      */
     Sale record(SaleRequest r, Long creditDelta, List<Agreement> agreements) {
+        if (r.clientSaleId() != null && repo.failureDiscarded(r.clientSaleId())) {
+            // ADR-067 decision 8: a manager discarded this refused offline sale; it is never recorded afterwards.
+            throw ApiException.rule(
+                    "offline_sale_discarded",
+                    "A manager discarded this sale, so it is not recorded. It is removed from the phone.");
+        }
         boolean agreed = agreements != null;
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
         // ADR-033: a store never sells; with branch_roles off every branch acts as both.

@@ -95,7 +95,11 @@ export function ProvisionalReceipt({ item, onNew }: { item: OutboxItem; onNew: (
         </table>
       </div>
       <p className="rt-total">Total {money(now.totalMinor)}</p>
-      {now.state === 'failed' ? (
+      {now.state === 'discarded' ? (
+        <p role="alert" className="alert alert-danger">
+          A manager discarded this sale, so it is not recorded and is not sent again.
+        </p>
+      ) : now.state === 'failed' ? (
         <p role="alert" className="alert alert-danger">
           The server did not record this sale: {now.error?.message} A manager can have it sent again or discard it.
         </p>

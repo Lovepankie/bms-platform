@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { provisionalNumber, type OutboxItem } from './outbox';
+import { KEEP_SENT_MS, provisionalNumber, type OutboxItem } from './outbox';
 import { memoryStore } from './store';
 import { SyncEngine, type Answer, type Decision, type SyncDeps } from './sync-engine';
 
@@ -177,15 +177,31 @@ describe('the sync engine', () => {
     expect(engine.snapshot().items.find((i) => i.id === 'a')?.state).toBe('sent');
   });
 
-  it('removes a sale from the phone once a manager discarded it', async () => {
+  it('marks a sale discarded once a manager discarded it, never sends it again, and drops it after a day', async () => {
     const decided: Decision[] = [];
-    const { engine, store } = setup(async () => ({ status: 422, body: { detail: 'Refused.' } }), { decisions: async () => decided });
+    const { engine, store, sent, tick } = setup(async () => ({ status: 422, body: { detail: 'Refused.' } }), { decisions: async () => decided });
     await engine.queue(item('a', 1));
     await engine.sync();
     decided.push({ id: 'f-a', client_sale_id: 'a', status: 'discarded' });
     await engine.sync();
-    expect(engine.snapshot().items).toEqual([]);
+    expect(engine.snapshot().items.map((i) => i.state)).toEqual(['discarded']);
+    await engine.sendAgain('a');
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a']);
+    tick(KEEP_SENT_MS + 1);
+    await engine.load();
     expect(await store.outbox(SCOPE)).toEqual([]);
+  });
+
+  it('stops sending a sale the server says a manager discarded, without reporting it', async () => {
+    const { engine, sent, deps } = setup(async () => ({ status: 422, body: { code: 'offline_sale_discarded', detail: 'A manager discarded this sale.' } }));
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.sync();
+    expect(engine.snapshot().items.map((i) => i.state)).toEqual(['discarded', 'discarded']);
+    expect(deps.report).not.toHaveBeenCalled();
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a', 'b:key-b']);
   });
 
   it('lets the seller send a failed sale again with the same key', async () => {

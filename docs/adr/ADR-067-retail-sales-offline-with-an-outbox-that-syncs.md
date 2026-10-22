@@ -72,7 +72,9 @@ left, the branch, the period, the person's roles.
    `retail.offline.resolve` at the branch, in the sync sheet, either asks for it to be sent again after fixing the cause
    (`.../retry`: the seller's device sends it on its next sync, with the same client sale id and a new key) or discards it
    with a reason of at least 5 characters after a confirmation (`.../discard`, audited `retail.offline_sale.discarded`). A
-   discarded failure is removed from the seller's device on its next sync. A failure later recorded as a sale is closed by
+   discarded failure is marked discarded on the seller's device on its next sync, shown for a day and never sent again. The
+   server refuses a sale whose client sale id belongs to a discarded failure, before any other check of the sale, with 422
+   `offline_sale_discarded`, whatever key it carries; the device marks it discarded on that answer too. A failure later recorded as a sale is closed by
    that sale in the same transaction. The seller may send their own failed sale again at any time; they cannot discard it.
 9. **Sign-out safety.** Signing out while anything is queued or failed asks first ("3 sales are waiting to sync. Sync now,
    or keep them on this phone and sign out?"). The waiting sales stay in the person's own outbox on this device and are sent

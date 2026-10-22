@@ -294,6 +294,16 @@ class SalesRepository {
                 .optional();
     }
 
+    /** A refused offline sale with this client sale id was discarded by a manager (ADR-067 decision 8). */
+    boolean failureDiscarded(UUID clientSaleId) {
+        return jdbc.sql(
+                                "SELECT count(*) FROM retail_offline_failures WHERE client_sale_id = ? AND status = 'discarded'")
+                        .param(clientSaleId)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
     /** A refused offline sale reported with this client sale id is closed by the sale it became (ADR-067). */
     void closeFailure(UUID clientSaleId, UUID saleId) {
         jdbc.sql("""

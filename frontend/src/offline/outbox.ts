@@ -3,8 +3,11 @@ import type { SalePayment, SaleRequest } from '../api/retail';
 // The outbox of sales made offline (issue #458, ADR-067): what one queued sale holds, the order they go in, the backoff
 // between tries, and how an answer from the server changes an item. Pure, so the sync engine and the tests share it.
 
-/** queued: waiting its turn; sending: on its way (sent again with the same key after a reload); failed: refused; sent: done. */
-export type OutboxState = 'queued' | 'sending' | 'failed' | 'sent';
+/**
+ * queued: waiting its turn; sending: on its way (sent again with the same key after a reload); failed: refused; sent: done;
+ * discarded: a manager discarded it, so it is never sent again and goes after a day.
+ */
+export type OutboxState = 'queued' | 'sending' | 'failed' | 'sent' | 'discarded';
 
 /** A line as the provisional receipt shows it. */
 export interface OutboxLine {
@@ -43,6 +46,8 @@ export interface OutboxItem {
   /** The server's sale, once sent. */
   sale?: { id: string; saleNo: string };
   sentAt?: number;
+  /** When the phone learnt that a manager discarded it (epoch ms). */
+  discardedAt?: number;
 }
 
 /** 5 s, 15 s, 1 min, 5 min, then every 15 min (ADR-067 decision 4). */
@@ -75,8 +80,16 @@ export function nextToSend(items: OutboxItem[], now: number): OutboxItem | undef
 
 /** What waits to sync: queued and failed items (a failed one waits for a manager or another try). */
 export function waiting(items: OutboxItem[]): OutboxItem[] {
-  return inOrder(items).filter((i) => i.state !== 'sent');
+  return inOrder(items).filter((i) => i.state !== 'sent' && i.state !== 'discarded');
 }
+
+/** The items a manager discarded, shown as such until they go after a day. */
+export function discarded(items: OutboxItem[]): OutboxItem[] {
+  return inOrder(items).filter((i) => i.state === 'discarded');
+}
+
+/** The refusal of a sale a manager discarded (ADR-067 decision 8): the phone stops sending it. */
+export const DISCARDED_CODE = 'offline_sale_discarded';
 
 export function failedCount(items: OutboxItem[]): number {
   return items.filter((i) => i.state === 'failed').length;
@@ -121,6 +134,7 @@ export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number
     case 'auth':
       return { ...item, state: 'queued' };
     case 'refused':
+      if (outcome.code === DISCARDED_CODE) return markDiscarded(item, now, outcome.message);
       return { ...item, state: 'failed', attempts: item.attempts + 1, error: { code: outcome.code, message: outcome.message }, decision: undefined, failureId: undefined };
   }
 }
@@ -130,7 +144,20 @@ export function requeue(item: OutboxItem, now: number): OutboxItem {
   return { ...item, state: 'queued', attempts: 0, nextAttemptAt: now };
 }
 
-/** Sent items past {@link KEEP_SENT_MS} are dropped. */
+/** An item a manager discarded: kept to show for a day, never sent again. */
+export function markDiscarded(item: OutboxItem, now: number, message?: string): OutboxItem {
+  return {
+    ...item,
+    state: 'discarded',
+    decision: 'discarded',
+    discardedAt: now,
+    error: { code: DISCARDED_CODE, message: message ?? 'A manager discarded this sale, so it is not recorded.' },
+  };
+}
+
+/** Sent and discarded items past {@link KEEP_SENT_MS} are dropped. */
 export function expired(item: OutboxItem, now: number): boolean {
-  return item.state === 'sent' && (item.sentAt ?? 0) + KEEP_SENT_MS < now;
+  if (item.state === 'sent') return (item.sentAt ?? 0) + KEEP_SENT_MS < now;
+  if (item.state === 'discarded') return (item.discardedAt ?? 0) + KEEP_SENT_MS < now;
+  return false;
 }

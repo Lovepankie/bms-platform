@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api, problemOf } from '../api/client';
 import { money } from '../areas/staff/retail/ui';
-import { failedCount, waiting, waitingWords, type OutboxItem } from './outbox';
+import { discarded, failedCount, waiting, waitingWords, type OutboxItem } from './outbox';
 import { useOffline, useOnline, useOutbox } from './offline-context';
 
 // The status in the staff bar (issue #458, ADR-067 decision 10): a dot, green online, grey offline, amber while sending,
@@ -70,6 +70,7 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
   const offline = useOffline();
   const outbox = useOutbox();
   const list = waiting(outbox.items);
+  const gone = discarded(outbox.items);
   if (!offline) return null;
   return (
     <div className="stack">
@@ -90,6 +91,18 @@ function SyncSheet({ online, onClose }: { online: boolean; onClose: () => void }
         <ul className="sync-list" aria-label="Waiting to sync">
           {list.map((item) => (
             <SyncRow key={item.id} item={item} onAgain={() => void offline.engine.sendAgain(item.id)} />
+          ))}
+        </ul>
+      )}
+      {gone.length > 0 && (
+        <ul className="sync-list" aria-label="Discarded by a manager">
+          {gone.map((item) => (
+            <li key={item.id} className="sync-row sync-row-failed">
+              <div>
+                <strong>{item.provisionalNo}</strong> {when(item.occurredAt)}, {item.branchName}, {METHOD_WORDS[item.method] ?? item.method} {money(item.totalMinor)}
+              </div>
+              <p className="sync-reason">Discarded by a manager. It is not recorded and is not sent again.</p>
+            </li>
           ))}
         </ul>
       )}
