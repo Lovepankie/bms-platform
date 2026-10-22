@@ -54,7 +54,8 @@ fit every lending business, not one register.
    its repayments too: a repayment on or after go-live is a normal repayment in the app's own books, recorded after
    approval. So the route cannot be used to backdate new lending. The go-live date is a tenant setting
    (`go_live_date`, today or earlier) that only the Owner of the business sets in the settings (ADR-062) or the platform
-   operator sets for a business with a reason, both audited; until set, it is the business date of the first sign-in of
+   operator sets for a business with a reason, both audited. A business with no Owner has no administrator who sets it:
+   403 `owner_only` for all of them, unlike the other Owner-only acts of ADR-062, and the operator sets it; until set, it is the business date of the first sign-in of
    an administrator. A go-live date moved after a loan was recorded makes its pending request stale (409
    `go_live_changed`); asking again checks the loan against the new date.
 6. **No penalties for the time before the bring-in** (Hillary's default, the borrower-friendly one; it may be changed

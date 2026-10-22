@@ -82,16 +82,31 @@ class ExistingLoansIT extends LoanFixtures {
         return member("Test Borrower %02d".formatted(n), "07000000%02d".formatted(n), t.headOffice(), true);
     }
 
-    /** The go-live date set by an administrator of a business with no Owner yet (ADR-062 then lets any administrator). */
+    UUID owner;
+
+    /** The Owner of the business, made on first use: only the Owner sets the go-live date (ADR-062, ADR-071). */
+    UUID owner() {
+        if (owner == null) {
+            owner = Api.staff(t, Api.email("exl-owner"), new Api.Role("tenant_admin", null));
+            TestDatabase.owner()
+                    .sql("UPDATE users SET is_owner = true WHERE id = ?")
+                    .param(owner)
+                    .update();
+        }
+        return owner;
+    }
+
+    /** The go-live date set by the Owner in the settings. */
     ResponseEntity<JsonNode> setGoLive(LocalDate date) {
-        HttpHeaders h = as(admin, adminPerms, "*", null);
+        return setGoLive(owner(), date);
+    }
+
+    ResponseEntity<JsonNode> setGoLive(UUID by, LocalDate date) {
+        HttpHeaders h = as(by, adminPerms, "*", null);
         String version =
                 send(HttpMethod.GET, "/api/v1/settings", h, null).getHeaders().getETag();
         return send(
-                HttpMethod.PATCH,
-                "/api/v1/settings",
-                as(admin, adminPerms, "*", version),
-                Map.of("go_live_date", date));
+                HttpMethod.PATCH, "/api/v1/settings", as(by, adminPerms, "*", version), Map.of("go_live_date", date));
     }
 
     static Map<String, Object> repayment(LocalDate date, long amount, String method, String note) {
@@ -554,8 +569,8 @@ class ExistingLoansIT extends LoanFixtures {
     // ---- The go-live guard (FR-EXL-03) ----------------------------------------------------
 
     /**
-     * Without a go-live date nothing comes in. The first administrator sign-in sets the default; the Owner (here any
-     * administrator, the business having none) sets it in the settings, never in the future, and the operator sets it
+     * Without a go-live date nothing comes in. The first administrator sign-in sets the default; the Owner sets it in
+     * the settings, never in the future, and the operator sets it
      * for a business. A disbursement or a repayment on or after it is refused, so the route cannot backdate new lending.
      */
     @Test
@@ -637,14 +652,27 @@ class ExistingLoansIT extends LoanFixtures {
                         t.tenantId()))
                 .isEqualTo(1);
 
-        // Once the business has an Owner, nobody else moves the date (ADR-062).
-        TestDatabase.owner()
-                .sql("UPDATE users SET is_owner = true WHERE id = ?")
-                .param(firstAdmin)
-                .update();
-        ResponseEntity<JsonNode> notOwner = setGoLive(today.minusDays(60));
+        // Nobody but the Owner moves the date (ADR-062).
+        ResponseEntity<JsonNode> notOwner = setGoLive(firstAdmin, today.minusDays(60));
         assertThat(notOwner.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(code(notOwner)).isEqualTo("owner_only");
+    }
+
+    /**
+     * A business with no Owner: no administrator sets the go-live date, not even the only one; the platform operator
+     * does, with a reason (ADR-071).
+     */
+    @Test
+    void frExl03_withNoOwnerOnlyTheOperatorSetsTheGoLiveDate() {
+        String email = Api.email("exl-lone-admin");
+        UUID lone = Api.staff(t, email, new Api.Role("tenant_admin", null));
+        ResponseEntity<JsonNode> refused = setGoLive(lone, today.minusDays(5));
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(code(refused)).isEqualTo("owner_only");
+        assertThat(count(
+                        "SELECT count(*) FROM tenant_settings WHERE tenant_id = ? AND settings->>'go_live_date' IS NOT NULL",
+                        t.tenantId()))
+                .isZero();
     }
 
     // ---- The CSV import (FR-EXL-06) -------------------------------------------------------

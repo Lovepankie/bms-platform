@@ -268,6 +268,22 @@ class Owners {
         }
     }
 
+    /**
+     * A setting only the Owner of the business changes, with no fallback (the go-live date, ADR-071): 403 {@code owner_only}
+     * for anyone else, and for everyone while the business has no Owner, when only the platform operator changes it.
+     */
+    void requireOwnerStrictly(Principal actor, String what) {
+        lockShared();
+        if (!current().map(actor.userId()::equals).orElse(false)) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "owner_only",
+                    "Only the owner",
+                    "Only the owner of the business can " + what
+                            + "; while the business has no owner, ask the platform operator.");
+        }
+    }
+
     private static void warnOwnerless(String what) {
         log.warn(
                 "The business has no owner, so the owner-only rule is not applied to: {}. A platform operator assigns one.",

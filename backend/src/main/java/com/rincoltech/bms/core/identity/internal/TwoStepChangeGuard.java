@@ -61,7 +61,7 @@ class TwoStepChangeGuard implements PolicyChangeGuard {
 
     @Override
     public void requireOwner(String what) {
-        owners.requireOwner(CurrentPrincipal.require(), what);
+        owners.requireOwnerStrictly(CurrentPrincipal.require(), what);
     }
 
     @Override

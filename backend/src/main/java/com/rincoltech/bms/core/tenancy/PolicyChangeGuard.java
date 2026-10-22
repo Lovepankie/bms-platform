@@ -18,7 +18,8 @@ public interface PolicyChangeGuard {
 
     /**
      * A setting only the Owner of the business changes (ADR-062), such as the go-live date (ADR-071): 403 {@code owner_only}
-     * for anyone else, allowed to the caller while the business has no Owner. In the caller's transaction.
+     * for anyone else, and for everyone while the business has no Owner (then only the platform operator changes it). In the
+     * caller's transaction.
      */
     void requireOwner(String what);
 }
