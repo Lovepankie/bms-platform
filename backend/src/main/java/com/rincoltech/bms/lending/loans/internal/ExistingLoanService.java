@@ -4,7 +4,6 @@ import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
 import com.rincoltech.bms.core.approvals.RequestSupersededException;
 import com.rincoltech.bms.core.audit.AuditLog;
-import com.rincoltech.bms.core.identity.StaffDirectory;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
@@ -35,7 +34,6 @@ import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ProductCatalog.ProductTerms;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,7 +71,6 @@ class ExistingLoanService {
     private final AuditLog audit;
     private final Approvals approvals;
     private final GoLiveDate goLiveDate;
-    private final StaffDirectory staff;
     private final LoanBooks books;
     private final Idempotency idempotency;
 
@@ -89,7 +86,6 @@ class ExistingLoanService {
             AuditLog audit,
             Approvals approvals,
             GoLiveDate goLiveDate,
-            StaffDirectory staff,
             LoanBooks books,
             Idempotency idempotency) {
         this.loans = loans;
@@ -103,7 +99,6 @@ class ExistingLoanService {
         this.audit = audit;
         this.approvals = approvals;
         this.goLiveDate = goLiveDate;
-        this.staff = staff;
         this.books = books;
         this.idempotency = idempotency;
     }
@@ -131,16 +126,9 @@ class ExistingLoanService {
         return goLiveNow();
     }
 
-    /** The date the Owner or the operator set, else the business date of the first administrator sign-in, else none. */
+    /** The date the Owner or the operator set, else the one stored at the first administrator sign-in, else none. */
     GoLive goLiveNow() {
-        var set = goLiveDate.set();
-        if (set.isPresent()) {
-            return new GoLive(set.get(), "set");
-        }
-        ZoneId zone = currentTenant.profile().timezone();
-        return staff.firstAdminSignIn()
-                .map(at -> new GoLive(at.atZone(zone).toLocalDate(), "first_admin_sign_in"))
-                .orElse(new GoLive(null, "none"));
+        return goLiveDate.get().map(l -> new GoLive(l.date(), l.source())).orElse(new GoLive(null, "none"));
     }
 
     // ---- Record (FR-EXL-01, FR-EXL-02) -------------------------------------------------------

@@ -6,7 +6,6 @@ import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.loans.internal.ArrearsTestRun;
 import com.rincoltech.bms.testsupport.Api;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -587,23 +586,32 @@ class ExistingLoansIT extends LoanFixtures {
                         .asString())
                 .isEqualTo("none");
 
-        // The first sign-in of an administrator is the default.
+        // The first sign-in of an administrator stores the default; a later sign-in does not move it.
         String email = Api.email("exl-admin");
         UUID firstAdmin = Api.staff(t, email, new Api.Role("tenant_admin", null));
         Api.tenant(http, t.slug()).signIn(firstAdmin, email, Api.PASSWORD, null);
-        TestDatabase.owner()
-                .sql("UPDATE auth_sessions SET created_at = created_at - interval '30 days' WHERE user_id = ?")
-                .param(firstAdmin)
-                .update();
         JsonNode byDefault = send(HttpMethod.GET, EXISTING + "/go-live", as(admin, adminPerms, "*", null), null)
                 .getBody();
         assertThat(byDefault.get("source").asString()).isEqualTo("first_admin_sign_in");
         LocalDate firstDay = LocalDate.parse(byDefault.get("go_live_date").asString());
-        assertThat(firstDay)
-                .isEqualTo(Instant.now()
-                        .minus(30, ChronoUnit.DAYS)
-                        .atZone(BusinessClock.DEFAULT_ZONE)
-                        .toLocalDate());
+        assertThat(firstDay).isEqualTo(today);
+        TestDatabase.owner()
+                .sql("UPDATE tenant_settings SET settings = jsonb_set(settings, '{go_live_date}', to_jsonb(?::text))"
+                        + " WHERE tenant_id = ?")
+                .params(today.minusDays(30).toString(), t.tenantId())
+                .update();
+        firstDay = today.minusDays(30);
+        Api.tenant(http, t.slug()).signIn(firstAdmin, email, Api.PASSWORD, null);
+        assertThat(send(HttpMethod.GET, EXISTING + "/go-live", as(admin, adminPerms, "*", null), null)
+                        .getBody()
+                        .get("go_live_date")
+                        .asString())
+                .as("stored, not derived from the sessions")
+                .isEqualTo(firstDay.toString());
+        assertThat(count(
+                        "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'core.settings.go_live_defaulted'",
+                        t.tenantId()))
+                .isEqualTo(1);
         assertThat(check(early).getStatusCode()).as("disbursed before it").isEqualTo(HttpStatus.OK);
         ResponseEntity<JsonNode> onGoLive = check(request(member, product, 900_000, firstDay, List.of()));
         assertThat(errorCodes(onGoLive)).containsExactly("disbursement_date:disbursement_not_before_go_live");

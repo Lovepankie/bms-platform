@@ -2,8 +2,6 @@ package com.rincoltech.bms.core.identity.internal;
 
 import com.rincoltech.bms.core.identity.StaffDirectory;
 import com.rincoltech.bms.kernel.Principal.BranchScope;
-import java.time.Instant;
-import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -32,17 +30,5 @@ class StaffDirectoryService implements StaffDirectory {
         }
         BranchScope scope = grants.scopes(userId).get(permission);
         return scope != null && scope.covers(branchId);
-    }
-
-    @Override
-    public Optional<Instant> firstAdminSignIn() {
-        return jdbc.sql("""
-                        SELECT min(s.created_at) FROM auth_sessions s
-                          JOIN users u ON u.id = s.user_id AND u.kind = 'staff'
-                         WHERE EXISTS (SELECT 1 FROM user_role_assignments a
-                                        WHERE a.user_id = s.user_id AND a.role_key = 'tenant_admin')
-                        """)
-                .query((rs, n) -> Optional.ofNullable(rs.getTimestamp(1)).map(java.sql.Timestamp::toInstant))
-                .single();
     }
 }

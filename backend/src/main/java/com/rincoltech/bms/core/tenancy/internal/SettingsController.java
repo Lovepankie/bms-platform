@@ -101,7 +101,7 @@ class SettingsController {
 
             @Schema(
                     description =
-                            "The day the app became the business's register, as the Owner or the operator set it, or null (then the first administrator sign-in counts); an existing loan is brought in only with a disbursement date before it (ADR-071)")
+                            "The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)")
             LocalDate goLiveDate,
 
             int version) {}

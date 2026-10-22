@@ -56,7 +56,9 @@ fit every lending business, not one register.
    (`go_live_date`, today or earlier) that only the Owner of the business sets in the settings (ADR-062) or the platform
    operator sets for a business with a reason, both audited. A business with no Owner has no administrator who sets it:
    403 `owner_only` for all of them, unlike the other Owner-only acts of ADR-062, and the operator sets it; until set, it is the business date of the first sign-in of
-   an administrator. A go-live date moved after a loan was recorded makes its pending request stale (409
+   an administrator, stored at that sign-in (`go_live_source` `first_admin_sign_in`, audited
+   `core.settings.go_live_defaulted`) so that later sign-ins, removed roles or sessions never move it; V91 stores it for a
+   business whose administrators signed in before. A go-live date moved after a loan was recorded makes its pending request stale (409
    `go_live_changed`); asking again checks the loan against the new date.
 6. **No penalties for the time before the bring-in** (Hillary's default, the borrower-friendly one; it may be changed
    later). Each brought-in loan keeps `brought_in_on`, the later of the go-live date and the approval's business date. The

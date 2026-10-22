@@ -1,7 +1,8 @@
 -- V91: existing loans brought in from a paper register with their real dates and past repayments (issue #466,
 -- ADR-071; FR-EXL-01 to FR-EXL-07). Additive only (chapter 6 section 6.9): one status, five nullable columns and their
--- checks on lending_loans, one new table, one permission. No existing row changes: every check holds for a row with
--- the new columns null, and the widened status check accepts every status a row can hold today.
+-- checks on lending_loans, one new table, one permission, and the default go-live date added to the tenant_settings of
+-- a business that has none. No other existing row changes: every check holds for a row with the new columns null, and
+-- the widened status check accepts every status a row can hold today.
 --
 -- Numbering: main holds V80 to V84 (lending V81 to V84, the last the arrears notices of #290). V91 is an ordered claim:
 -- payments (#315 and #318, which hold V84 and V85 on their branches today and renumber to V85 and V86 at merge),
@@ -74,6 +75,34 @@ CREATE INDEX lending_brought_in_repayments_loan ON lending_brought_in_repayments
 SELECT bms_apply_tenant_rls('lending_brought_in_repayments');
 SELECT bms_grant_app('lending_brought_in_repayments', 'SELECT, INSERT');
 SELECT bms_make_append_only('lending_brought_in_repayments');
+
+-- ---------------------------------------------------------------------------------------------
+-- The default go-live date (ADR-071 decision 5), stored rather than derived: the app stores the business date of the
+-- first sign-in of an administrator in tenant_settings (go_live_date, go_live_source first_admin_sign_in) when nobody
+-- has set one. A business whose administrators signed in before this migration gets the same date here, from its
+-- earliest administrator session in its own time zone. Only rows without a go_live_date are touched.
+-- ---------------------------------------------------------------------------------------------
+
+INSERT INTO tenant_settings (id, tenant_id)
+SELECT gen_random_uuid(), s.tenant_id
+  FROM auth_sessions s
+ WHERE EXISTS (SELECT 1 FROM user_role_assignments a
+                WHERE a.user_id = s.user_id AND a.role_key = 'tenant_admin' AND a.revoked_at IS NULL)
+ GROUP BY s.tenant_id
+ON CONFLICT (tenant_id) DO NOTHING;
+
+UPDATE tenant_settings ts
+   SET settings = ts.settings || jsonb_build_object('go_live_date', d.first_day::text,
+                                                    'go_live_source', 'first_admin_sign_in'),
+       updated_at = now()
+  FROM (SELECT s.tenant_id, (min(s.created_at) AT TIME ZONE t.timezone)::date AS first_day
+          FROM auth_sessions s
+          JOIN tenants t ON t.id = s.tenant_id
+         WHERE EXISTS (SELECT 1 FROM user_role_assignments a
+                        WHERE a.user_id = s.user_id AND a.role_key = 'tenant_admin' AND a.revoked_at IS NULL)
+         GROUP BY s.tenant_id, t.timezone) d
+ WHERE ts.tenant_id = d.tenant_id
+   AND NOT (ts.settings ? 'go_live_date');
 
 -- ---------------------------------------------------------------------------------------------
 -- Permission (chapter 8 section 8.3.2): record an existing loan, by the form or the CSV import. Administrators and

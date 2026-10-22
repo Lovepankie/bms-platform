@@ -464,7 +464,8 @@ write. Keys and defaults:
 | `require_mfa_roles` | string array of staff role keys (`member` is refused) | empty; the holders of these roles are required to use two-step sign-in | FR-IAM-16 |
 | `mfa_grace_days` | integer 0 to 90 or null | null (read as 0, at once); the grace period last chosen | FR-IAM-16 |
 | `mfa_enforce_from` | ISO instant or absent | absent (at once); written by the server only, to now plus the grace days when the policy is turned on or widened or a grace period is sent, and cleared when the policy is turned off or the grace is 0; until then a covered user without a factor signs in and is shown the date | FR-IAM-16 |
-| `go_live_date` | ISO date or absent | absent: the business date of the first sign-in of an administrator counts; set only by the Owner (`PATCH /settings`) or the platform operator, today or earlier; existing loans come in only with a disbursement date before it (issue #466, ADR-071) | FR-EXL-03 |
+| `go_live_date` | ISO date or absent | stored at the first sign-in of an administrator (its business date, `go_live_source` `first_admin_sign_in`; V91 backfills it from the earliest administrator session) unless already set; set only by the Owner (`PATCH /settings`) or the platform operator, today or earlier; existing loans come in only with a disbursement date before it (issue #466, ADR-071) | FR-EXL-03 |
+| `go_live_source` | `set` or `first_admin_sign_in`, with `go_live_date` | `set` when the Owner or the operator set the date; `first_admin_sign_in` when it was stored at that sign-in (issue #466, ADR-071) | FR-EXL-03 |
 | `reports_enabled` | boolean | false; the tenant switch of the report runs (ADR-038, issue #214): off, nothing is queued, run or listed | FR-RPT-04 |
 
 `logo_document_id` is set only by the logo upload route, never by a settings patch: it names a

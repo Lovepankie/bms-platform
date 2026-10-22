@@ -154,6 +154,7 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
         }
         if (request.goLiveDate() != null) {
             changes.put("go_live_date", request.goLiveDate().toString());
+            changes.put("go_live_source", "set");
         }
         if (changes.containsKey("require_mfa_roles")) {
             changes.put(
@@ -412,8 +413,39 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
 
     @Override
     @Transactional(readOnly = true)
-    public Optional<LocalDate> set() {
-        return Optional.ofNullable(current().goLiveDate());
+    public Optional<Live> get() {
+        Map<String, Object> values = load(false).values();
+        return Optional.ofNullable((String) values.get("go_live_date"))
+                .map(d -> new Live(LocalDate.parse(d), (String) values.getOrDefault("go_live_source", "set")));
+    }
+
+    @Override
+    @Transactional
+    public void adminSignedIn(UUID userId, Instant at) {
+        if (load(false).values().get("go_live_date") != null) {
+            return;
+        }
+        Stored stored = lock();
+        if (stored.values().get("go_live_date") != null) {
+            return;
+        }
+        LocalDate day = at.atZone(tenant.profile().timezone()).toLocalDate();
+        Map<String, Object> next = new TreeMap<>(stored.values());
+        next.put("go_live_date", day.toString());
+        next.put("go_live_source", "first_admin_sign_in");
+        // The version stays: no administrator's edit of the settings is made stale by a sign-in.
+        jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now()")
+                .param(mapper.writeValueAsString(next))
+                .update();
+        audit.record(
+                AuditLog.Entry.created(
+                        "core.settings.go_live_defaulted",
+                        "core.tenant_settings",
+                        tenant.profile().id(),
+                        null,
+                        Map.of("go_live_date", day.toString(), "source", "first_admin_sign_in")),
+                userId,
+                "staff");
     }
 
     @Override
@@ -427,6 +459,7 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
         Object before = stored.values().get("go_live_date");
         Map<String, Object> next = new TreeMap<>(stored.values());
         next.put("go_live_date", date.toString());
+        next.put("go_live_source", "set");
         jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now(), version = version + 1")
                 .param(mapper.writeValueAsString(next))
                 .update();

@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.identity.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.core.tenancy.TwoStepPolicy;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -36,9 +37,17 @@ class StaffAccounts implements Accounts {
     private final CurrentTenant tenant;
     private final SessionStore sessions;
     private final BusinessClock clock;
+    private final GoLiveDate goLive;
 
-    StaffAccounts(JdbcClient jdbc, AuditLog audit, TenantSettings settings, CurrentTenant tenant, BusinessClock clock) {
+    StaffAccounts(
+            JdbcClient jdbc,
+            AuditLog audit,
+            TenantSettings settings,
+            CurrentTenant tenant,
+            BusinessClock clock,
+            GoLiveDate goLive) {
         this.clock = clock;
+        this.goLive = goLive;
         this.jdbc = jdbc;
         this.audit = audit;
         this.settings = settings;
@@ -150,6 +159,14 @@ class StaffAccounts implements Accounts {
         jdbc.sql("UPDATE users SET failed_login_count = 0, locked_until = NULL, last_login_at = ? WHERE id = ?")
                 .params(Timestamp.from(at), id)
                 .update();
+        // ADR-071: the first sign-in of an administrator stores the business's default go-live date.
+        boolean admin = jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM user_role_assignments
+                                        WHERE user_id = ? AND role_key = 'tenant_admin' AND revoked_at IS NULL)
+                        """).param(id).query(Boolean.class).single();
+        if (admin) {
+            goLive.adminSignedIn(id, at);
+        }
     }
 
     @Override

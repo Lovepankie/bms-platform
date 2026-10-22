@@ -482,8 +482,8 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `lending.disbursements.authorise`, no threshold) writes the schedule from the real date, historic transactions with no
   journal and one opening entry at go-live (debit loans receivable, credit opening balance equity). The arrears run charges
   no penalty period that starts before `brought_in_on` (none on the bring-in day). The go-live date is the tenant setting `go_live_date` (`PATCH /settings`, Owner
-  only; `PUT /platform/tenants/{id}/go-live` for the operator), defaulting to the first administrator sign-in
-  (`StaffDirectory.firstAdminSignIn`). The CSV reader of the retail item import moved to `kernel.CsvTable` so both imports
+  only; `PUT /platform/tenants/{id}/go-live` for the operator), defaulting to the business date of the first administrator
+  sign-in, stored at that sign-in (`GoLiveDate.adminSignedIn`). The CSV reader of the retail item import moved to `kernel.CsvTable` so both imports
   share it. The PWA: `/staff/lending/existing-loans` (the form, its check and the loans waiting) and
   `/staff/lending/existing-loans/import`, linked from Loans, and an Open the loan link on a `loan_bring_in` approval. Tests:
   `ExistingLoansIT`, `BringInTest`, `RlsIsolationIT`, `existing-loans-state.test.ts`, `existing-loans.dom.test.tsx`.
