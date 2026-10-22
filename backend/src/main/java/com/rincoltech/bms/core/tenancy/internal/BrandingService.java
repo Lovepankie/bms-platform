@@ -125,23 +125,19 @@ class BrandingService implements Letterheads {
                         : branches.logoDocumentIdByCode(code).flatMap(this::servable));
     }
 
-    /** The shop's own logo when it has a servable one, else the business logo (issue #461, ADR-068). */
+    /**
+     * The shop's own logo when its bytes can be read, else the business logo (issue #461, ADR-068): a shop logo whose stored file
+     * is gone or unreadable falls back to the business logo rather than leaving the document without one.
+     */
     private Letterhead letterhead(Optional<Logo> branchLogo) {
         SettingsResponse s = settings.current();
         String colour = s.themePrimary() != null
                         && BrandColour.readableText(s.themePrimary()).isPresent()
                 ? s.themePrimary().toUpperCase()
                 : DEFAULT_BRAND;
-        Optional<Letterheads.Logo> logo;
-        try {
-            logo = branchLogo
-                    .or(this::logo)
-                    .flatMap(
-                            l -> bytes(l).map(b -> new Letterheads.Logo(l.meta().contentType(), b)));
-        } catch (ApiException e) {
-            // A document without its logo is better than no document; the header keeps the name.
-            log.warn("the tenant logo is unavailable for a generated document: {}", e.code());
-            logo = Optional.empty();
+        Optional<Letterheads.Logo> logo = branchLogo.flatMap(this::letterheadLogo);
+        if (logo.isEmpty()) {
+            logo = logo().flatMap(this::letterheadLogo);
         }
         return new Letterhead(
                 s.displayName(),
@@ -149,6 +145,16 @@ class BrandingService implements Letterheads {
                 BrandColour.readableText(colour).orElse(BrandColour.LIGHT_TEXT),
                 s.receiptFooter() == null ? "" : s.receiptFooter(),
                 logo);
+    }
+
+    /** A logo's bytes for a document, or empty when they cannot be read: a document without its logo is better than none. */
+    private Optional<Letterheads.Logo> letterheadLogo(Logo l) {
+        try {
+            return bytes(l).map(b -> new Letterheads.Logo(l.meta().contentType(), b));
+        } catch (ApiException e) {
+            log.warn("a logo is unavailable for a generated document: {}", e.code());
+            return Optional.empty();
+        }
     }
 
     @Override

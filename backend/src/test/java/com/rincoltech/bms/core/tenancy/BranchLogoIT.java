@@ -322,6 +322,42 @@ class BranchLogoIT extends IntegrationTest {
         assertThat(near(after.get(0), BUSINESS)).isTrue();
     }
 
+    @Test
+    void aShopLogoWhoseStoredFileIsGoneFallsBackToTheBusinessLogo() throws Exception {
+        RetailTestSupport admin = new RetailTestSupport(http, t);
+        UUID product = admin.product("LOGO-2", 3_000, 5_000);
+        admin.stockUp(t.secondBranch(), product, "10");
+        UUID atShop = RetailTestSupport.id(admin.sell(t.secondBranch(), "cash", product, "1"));
+
+        businessLogo(BUSINESS);
+        String url = upload(t.secondBranch(), ImageFixtures.png(256, 256, SHOP))
+                .getBody()
+                .get("logo_url")
+                .asString();
+        // The shop's logo is still on the branch, but its file is no longer in storage (lost, or unreadable).
+        deleteStored(url.substring(url.indexOf("?v=") + 3));
+
+        List<Color> receipt = images(receipt(admin, atShop));
+        assertThat(receipt).hasSize(1);
+        assertThat(near(receipt.get(0), BUSINESS)).isTrue();
+    }
+
+    @Autowired
+    org.springframework.context.ApplicationContext context;
+
+    /** Removes a document's object from the fake object store (the interface is package-private to core.documents). */
+    void deleteStored(String documentId) throws Exception {
+        String key = TestDatabase.owner()
+                .sql("SELECT object_key FROM documents WHERE id = ?::uuid")
+                .param(documentId)
+                .query(String.class)
+                .single();
+        Class<?> type = Class.forName("com.rincoltech.bms.core.documents.internal.ObjectStorage");
+        var delete = type.getDeclaredMethod("delete", String.class);
+        delete.setAccessible(true);
+        delete.invoke(context.getBean(type), key);
+    }
+
     byte[] receipt(RetailTestSupport admin, UUID sale) {
         ResponseEntity<byte[]> r = http.exchange(
                 RetailTestSupport.BASE + "/sales/" + sale + "/receipt/pdf",
