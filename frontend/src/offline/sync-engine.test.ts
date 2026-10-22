@@ -304,6 +304,36 @@ describe('the sync engine', () => {
     expect(sent).toEqual(['b:key-b']);
   });
 
+  it('makes the backing off due on Sync now only after reading the outbox again, so a sale another tab sent stays sent', async () => {
+    let fail = true;
+    const { engine, store, sent } = setup(
+      async (i) => (fail ? { status: 503, body: {} } : ok(i)),
+      { exclusive: async (fn) => (await fn(), true) },
+    );
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    expect(engine.snapshot().items[0]?.state).toBe('queued');
+    // Another tab sent it meanwhile; this tab still holds it as backing off.
+    await store.putItem({ ...item('a', 1), state: 'sent', sale: { id: 's-a', saleNo: 'RS-a' }, sentAt: 1_000_000 });
+    fail = false;
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a']);
+    expect((await store.outbox(SCOPE))[0]?.state).toBe('sent');
+  });
+
+  it('writes nothing on Sync now while another tab holds the outbox', async () => {
+    const { engine, store, sent } = setup(async () => ({ status: 503, body: {} }));
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    const before = (await store.outbox(SCOPE))[0];
+    const held = setup(async (i) => ok(i), { store, exclusive: async () => false });
+    await held.engine.load();
+    await held.engine.syncNow();
+    expect(held.sent).toEqual([]);
+    expect(sent).toEqual(['a:key-a']);
+    expect((await store.outbox(SCOPE))[0]).toEqual(before);
+  });
+
   it("never sends another person's outbox", async () => {
     const { engine } = setup(async (i) => ok(i));
     await expect(engine.queue(item('a', 1, { scope: 'test.example|someone-else' }))).rejects.toThrow();

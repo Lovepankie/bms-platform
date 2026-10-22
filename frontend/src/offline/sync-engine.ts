@@ -90,6 +90,8 @@ export class SyncEngine {
   private needsSignIn = false;
   private running: Promise<void> | null = null;
   private again = false;
+  /** Sync now was asked: the next run makes what is backing off due first, after it read the outbox again. */
+  private dueNow = false;
   private cancelTimer: (() => void) | null = null;
   private readonly listeners = new Set<() => void>();
   private snap: SyncSnapshot = { items: [], syncing: false, needsSignIn: false };
@@ -184,11 +186,16 @@ export class SyncEngine {
    * Failed items stay failed: they go again only when sent again on purpose.
    */
   async syncNow(): Promise<void> {
+    this.dueNow = true;
+    await this.sync();
+  }
+
+  /** What was backing off is due now. Runs inside the run, after the outbox was read again, so another tab's writes stand. */
+  private async makeDue(): Promise<void> {
     const now = this.deps.now();
     for (const item of this.items.filter((i) => (i.state === 'queued' || i.state === 'sending') && i.nextAttemptAt > now)) {
       await this.save({ ...item, nextAttemptAt: now });
     }
-    await this.sync();
   }
 
   /** A failed item sent again now, by its seller or because a manager asked. */
@@ -202,6 +209,10 @@ export class SyncEngine {
   private async run(): Promise<void> {
     do {
       this.again = false;
+      if (this.dueNow) {
+        this.dueNow = false;
+        await this.makeDue();
+      }
       await this.followDecisions();
       for (;;) {
         if (this.needsSignIn) return;
