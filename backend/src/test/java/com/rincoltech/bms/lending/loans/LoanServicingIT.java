@@ -2496,7 +2496,18 @@ class LoanServicingIT extends LoanFixtures {
         return product(code, penalty, List.of());
     }
 
+    /**
+     * The waiver's maker and checker are foreign keys to users (chapter 6, lending_charge_waivers), so the manager who
+     * requests and the accountant who approves are the business's staff here, as they are in production.
+     */
     ResponseEntity<JsonNode> requestWaiver(String loan, String charge, Long amount) {
+        for (UUID staff : List.of(manager, accountant)) {
+            TestDatabase.owner()
+                    .sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                            + " VALUES (?, ?, 'staff', 'Test Staff', ?, 'active') ON CONFLICT DO NOTHING")
+                    .params(staff, t.tenantId(), staff + "@example.test")
+                    .update();
+        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("amount_minor", amount);
         body.put("reason", "Test goodwill");
@@ -2773,7 +2784,9 @@ class LoanServicingIT extends LoanFixtures {
         ResponseEntity<JsonNode> d =
                 decide(w.getBody().get("approval_request_id").asString(), admin, adminPerms);
         assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
-        assertThat(requestWaiver(loan, charge, null).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        ResponseEntity<JsonNode> writtenOff = requestWaiver(loan, charge, null);
+        assertThat(writtenOff.getStatusCode()).as("%s", writtenOff.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(writtenOff.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
     }
 
     long rechargedMinor(String loan) {
