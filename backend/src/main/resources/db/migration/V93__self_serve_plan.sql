@@ -1,7 +1,7 @@
 -- V93: owners change their own plan (issue #472, ADR-073): ask for a module, stop using one, and cancel the subscription,
 -- each change effective at the end of the paid period, and the business read only after a cancellation's end date.
 --
--- V93 is the number this work claimed: V80 to V83 are merged and V84 to V91 are claimed by open pull requests (AGENTS.md, the migration ledger).
+-- V93 is the number this work claimed: V80 to V84 are merged and V85 to V91 are claimed by open pull requests (AGENTS.md, the migration ledger).
 -- Flyway runs with outOfOrder off, so this file is renamed at merge if those numbers land after it.
 --
 -- Expand only, safe on a populated database. Two new tenant tables, subscription_module_requests (the Owner asks for a
