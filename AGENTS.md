@@ -198,7 +198,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `retail.catalogue.manage` edits and prints). Routes `GET /retail/products/by-barcode/{code}`, `GET` and `POST
   /retail/products/{id}/barcodes`, `DELETE /retail/products/{id}/barcodes/{barcode_id}`, `POST /retail/products/barcodes/generate`
   (Code 128 `IN` plus eight digits from `tenant_sequences`); `barcodes` on the product responses; `barcode` and `pack barcode` import
-  columns. The PWA: a scan bar on the sale, restock, move stock and stock count forms (`scan.tsx`: a keyboard-wedge scanner anywhere on
+  columns. The PWA: a scan bar on the sale, restock, goods received without an order, move stock and stock count forms (`scan.tsx`: a keyboard-wedge scanner anywhere on
   the screen, a typed code, the camera through BarcodeDetector or the lazy Quagga2 fallback in `camera-scan.tsx`), the barcodes on the
   item form (`catalogue-barcodes.tsx`), the Barcode labels page (`labels.tsx`, an A4 sheet of 3 by 8). Tours `retail-sales` v13 and
   `page-labels` v1. Tests: `BarcodesTest`, `RetailBarcodesIT`, `barcode-state.test.ts`, `scan.dom.test.tsx`, `camera-scan.test.ts`.
