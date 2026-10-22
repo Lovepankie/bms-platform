@@ -498,26 +498,27 @@ class RetailDataExport implements DataExportSection {
 
     /** Every entry of the cash book, in one table as the cash book page lists them. */
     private static final String CASH_BOOK = """
-            SELECT business_date AS d, created_at AS at, branch_id, 'Savings set aside' AS entry, NULL AS detail,
+            SELECT tenant_id, business_date AS d, created_at AS at, branch_id, 'Savings set aside' AS entry, NULL AS detail,
                    amount_minor, voided_at, recorded_by FROM retail_daily_savings
             UNION ALL
-            SELECT business_date, banked_at, branch_id, 'Banked', reference, amount_minor, voided_at, recorded_by
+            SELECT tenant_id, business_date, banked_at, branch_id, 'Banked', reference, amount_minor, voided_at, recorded_by
               FROM retail_cash_bankings
             UNION ALL
-            SELECT business_date, withdrawn_at, branch_id, 'Withdrawal', purpose, amount_minor, voided_at, recorded_by
+            SELECT tenant_id, business_date, withdrawn_at, branch_id, 'Withdrawal', purpose, amount_minor, voided_at,
+                   recorded_by
               FROM retail_cash_withdrawals
             UNION ALL
-            SELECT business_date, occurred_at, branch_id, 'Expense',
+            SELECT tenant_id, business_date, occurred_at, branch_id, 'Expense',
                    concat_ws(': ', category_name, item_name, explanation), amount_minor, voided_at, recorded_by
               FROM retail_expenses
             UNION ALL
-            SELECT a.business_date, a.occurred_at, a.branch_id, 'Owner advance', concat_ws(': ', cp.name, a.purpose),
-                   a.principal_minor, a.voided_at, a.recorded_by
+            SELECT a.tenant_id, a.business_date, a.occurred_at, a.branch_id, 'Owner advance',
+                   concat_ws(': ', cp.name, a.purpose), a.principal_minor, a.voided_at, a.recorded_by
               FROM retail_advances a
               LEFT JOIN retail_cash_parties cp ON cp.tenant_id = a.tenant_id AND cp.id = a.party_id
             UNION ALL
-            SELECT r.paid_on, r.created_at, r.branch_id, 'Advance repaid', r.method, r.amount_minor, r.voided_at,
-                   r.recorded_by
+            SELECT r.tenant_id, r.paid_on, r.created_at, r.branch_id, 'Advance repaid', r.method, r.amount_minor,
+                   r.voided_at, r.recorded_by
               FROM retail_advance_repayments r
             """;
 
@@ -538,8 +539,8 @@ class RetailDataExport implements DataExportSection {
         each(
                 "SELECT x.d, x.at, b.name AS branch, x.entry, x.detail, x.amount_minor, x.voided_at, u.full_name"
                         + " FROM (" + CASH_BOOK + ") x"
-                        + " JOIN branches b ON b.id = x.branch_id"
-                        + " LEFT JOIN users u ON u.id = x.recorded_by"
+                        + " JOIN branches b ON b.tenant_id = x.tenant_id AND b.id = x.branch_id"
+                        + " LEFT JOIN users u ON u.tenant_id = x.tenant_id AND u.id = x.recorded_by"
                         + " ORDER BY x.d, x.at, x.entry",
                 rs -> rows.row(
                         day(rs, "d"),
