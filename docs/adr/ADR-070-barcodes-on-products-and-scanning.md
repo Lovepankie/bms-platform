@@ -69,7 +69,11 @@ or Bluetooth scanner at the till, many have only phones.
 an item with no manufacturer code gets a label; codes are checked, so a misread digit is caught at entry.
 
 **Worse:** one more table and one more lazy dependency (Quagga2, about 45 kB gzipped, loaded only on Scan). Quagga2 reads stills,
-so the iPhone camera is slower than the native detector. A code holding `% ; ? # / \` cannot be stored.
+so the iPhone camera is slower than the native detector. Quagga2's Node-only optional dependencies (`sharp`, and `ndarray-pixels`
+with its own `sharp`, native libvips binaries) add about 72 MB to `node_modules` and about 2 s to `npm ci` (measured 22 Oct 2026:
+203 MB and 5 s on main, 280 MB and 7 s here); the web image is unchanged, since it carries only `dist`, and the bundle never loads
+them. They are not removed: npm `overrides` cannot drop a dependency, a `file:` stub in `overrides` makes npm 10's `npm ci` refuse
+the lockfile, and `--omit=optional` would also drop the native binaries Rollup and esbuild need to build. A code holding `% ; ? # / \` cannot be stored.
 
 **Watch for:** a scanner configured to send Tab instead of Enter (the scan box and the wedge both need Enter); scanners that type
 faster than the browser fires key events still fit the 35 ms window; a slow Bluetooth scanner needs the device's Scanner speed in Notifications and app raised (up to 80 ms, kept in this browser only), and on the sale screen the cursor waits in the scan box (on a device with a mouse or trackpad, unless turned off there) so a scan too slow to be told from typing still lands in the box and its Enter never submits the sale; label printers with other
