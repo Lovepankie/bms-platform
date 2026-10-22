@@ -856,6 +856,11 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   the documents module offers a separate `publicAssetMeta` and `publicAssetBytes` that return a
   document only when its subject type is `core.tenant` and its subject is the current tenant, and an
   architecture test allows only `core.tenancy` to call them.
+- A shop's own logo (FR-BR-09, ADR-068) is set and removed with `core.branches.manage` (the owner and the administrators, in
+  their branch scope) and stored like the business logo, as a `core.tenant` document of the tenant, so the public route reads it
+  through the same `publicAssetMeta` and `publicAssetBytes`. `GET /branches/{branch_id}/logo` is public for the reason the business
+  logo is (an image tag sends no token) and answers with exactly the headers of `GET /branding/logo` below; the branch is read under
+  row-level security for the tenant of the host, so a branch of another business is a 404.
 - Public endpoints for branding (`GET /branding`, `GET /branding/logo`) serve data that is public
   by design, resolved from the host only (never a parameter or a header in production; an unknown
   host is 404 `unknown_tenant`, so no tenant is revealed or confused). The logo route never

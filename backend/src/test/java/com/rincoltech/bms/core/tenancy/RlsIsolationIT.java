@@ -126,6 +126,10 @@ class RlsIsolationIT {
                         """)
                 .params(logo, t.tenantId(), t.tenantId(), "tenants/" + t.tenantId() + "/upload/rls/" + logo + ".png")
                 .update();
+        // A shop's own logo (migration V88, #461): the second branch points at the tenant's logo document.
+        owner.sql("UPDATE branches SET logo_document_id = ? WHERE id = ?")
+                .params(logo, t.secondBranch())
+                .update();
         owner.sql("""
                         INSERT INTO lending_member_documents (id, tenant_id, member_id, doc_kind, document_id, uploaded_by)
                         VALUES (?, ?, ?, 'other', ?, ?)
@@ -950,6 +954,38 @@ class RlsIsolationIT {
                         INSERT INTO feedback_items (id, tenant_id, sender_user_id, kind, message, app_version)
                         VALUES (?, ?, ?, 'idea', 'Test feedback message', 'test (abc123)')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+    }
+
+    /**
+     * Shop logos (V88, #461): bound to A, no branch of B and its logo is read, and A cannot point one of its branches at a
+     * document of B (the key is on the tenant and the document).
+     */
+    @Test
+    void shopLogosAreIsolatedPerTenant() throws SQLException {
+        long ofB = asApp(
+                a.tenantId(),
+                c -> count(
+                        c,
+                        "SELECT count(*) FROM branches WHERE logo_document_id IS NOT NULL AND tenant_id = ?",
+                        b.tenantId()));
+        long ofA =
+                asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM branches WHERE logo_document_id IS NOT NULL"));
+        assertThat(ofB).isZero();
+        assertThat(ofA).isOne();
+        UUID logoOfB = TestDatabase.owner()
+                .sql("SELECT logo_document_id FROM branches WHERE id = ?")
+                .param(b.secondBranch())
+                .query(UUID.class)
+                .single();
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps =
+                            c.prepareStatement("UPDATE branches SET logo_document_id = ? WHERE id = ?")) {
+                        ps.setObject(1, logoOfB);
+                        ps.setObject(2, a.secondBranch());
+                        return ps.executeUpdate();
+                    }
+                }))
+                .hasStackTraceContaining("branches_logo_fk");
     }
 
     /**

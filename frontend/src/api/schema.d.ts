@@ -346,6 +346,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/branches/{branch_id}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A shop's own logo image (public, cacheable) */
+        get: operations["getBranchLogo"];
+        /** Upload or replace a shop's own logo: the rules of the business logo, PNG, JPEG or WebP, 1 MB, 128 px or more (issue #461, ADR-068) */
+        put: operations["uploadBranchLogo"];
+        post?: never;
+        /** Remove a shop's own logo; it shows the business logo again and the file is kept (issue #461) */
+        delete: operations["removeBranchLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/branches/{branch_id}/reopen": {
         parameters: {
             query?: never;
@@ -6819,6 +6838,8 @@ export interface components {
             id?: string;
             is_head_office?: boolean;
             location?: string;
+            /** @description Same-origin URL of the shop's own logo, versioned by its document id, or null: the shop shows the business logo (issue #461, ADR-068) */
+            logo_url?: string;
             name?: string;
             /** @description false for a Store: it holds stock and takes transfers but does not sell (ADR-048) */
             sells_goods?: boolean;
@@ -8545,6 +8566,8 @@ export interface components {
             /** Format: uuid */
             id?: string;
             is_head_office?: boolean;
+            /** @description Same-origin URL of the shop's own logo, or null: show the business logo (#461, ADR-068) */
+            logo_url?: string;
             name?: string;
             /** @description false for a Store, a branch that holds stock but does not sell: the sale form, the default selling branch and the till skip it; restock, goods receipt, transfer and stock-take forms include it (#366) */
             sells_goods?: boolean;
@@ -16965,6 +16988,128 @@ export interface operations {
                 "application/json": components["schemas"]["CloseBranchRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
+    getBranchLogo: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ETag still matches */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description No such branch, no logo of its own, or an unknown host */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description Storage cannot be read (logo_unavailable) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    uploadBranchLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description No such branch in the caller's scope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+            /** @description Over 1 MB (file_too_large) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+            /** @description Not PNG, JPEG or WebP, or not decodable (unsupported_file_type) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+            /** @description svg_not_allowed, image_too_small, image_too_large (over 4 megapixels) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+        };
+    };
+    removeBranchLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                branch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
