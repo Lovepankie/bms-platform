@@ -9,7 +9,6 @@ import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
-import com.rincoltech.bms.kernel.TenantContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -411,45 +410,51 @@ class ReferralService implements Referrals {
 
     record AddedLine(UUID lineId) {}
 
+    @Override
+    @Transactional(readOnly = true)
+    public UUID referrerOf(UUID referralId) {
+        return referral(referralId).orElseThrow(ApiException::notFound).referrerTenantId();
+    }
+
     /**
-     * Not {@code @Transactional}: the line is written in a transaction bound to the referrer, so its Idempotency-Key row is that
-     * business's (as a payment's is the paying business's); the reads around it run with no tenant bound.
+     * Not {@code @Transactional}: it runs bound to the referrer (the platform console binds it), so its Idempotency-Key row is
+     * that business's, as a payment's is the paying business's.
      */
     @Override
     public LineAdded addLine(
-            UUID referralId, String idempotencyKey, long amountMinor, String currency, String reason, UUID operatorId) {
+            UUID referralId,
+            UUID referrer,
+            String idempotencyKey,
+            long amountMinor,
+            String currency,
+            String reason,
+            UUID operatorId) {
         if (amountMinor < 1 || amountMinor > 1_000_000_000L) {
             throw ApiException.validation(List.of(new FieldProblem(
                     "amount_minor", "out_of_range", "The amount is from 1 to 1,000,000,000 minor units.")));
         }
         String cur = transactions.execute(status -> currency(currency, "currency"));
-        UUID referrer = transactions
-                .execute(status -> referral(referralId))
-                .orElseThrow(ApiException::notFound)
-                .referrerTenantId();
         String path = "/api/v1/platform/referrals/" + referralId + "/commissions";
         ManualLine request = new ManualLine(amountMinor, cur, reason.trim());
-        Idempotency.Outcome<AddedLine> outcome = TenantContext.callAs(
-                referrer,
-                () -> transactions.execute(status ->
-                        idempotency.once(idempotencyKey, "POST", path, request, AddedLine.class, () -> {
-                            UUID id = UUID.randomUUID();
-                            jdbc.sql("SELECT platform_referral_add_manual_line(?, ?, ?, ?, ?, ?)")
-                                    .params(id, referralId, amountMinor, cur, request.reason(), operatorId)
-                                    .query()
-                                    .singleRow();
-                            Map<String, Object> data = new LinkedHashMap<>();
-                            data.put("line_id", id);
-                            data.put("referral_id", referralId);
-                            data.put("kind", "manual");
-                            data.put("amount_minor", amountMinor);
-                            data.put("currency", cur);
-                            data.put("referrer_tenant_id", referrer);
-                            data.put("reason", request.reason());
-                            audit.record("platform.referral.commission_added", operatorId, referrer, data);
-                            return new AddedLine(id);
-                        })));
-        return new LineAdded(transactions.execute(status -> detail(referralId)), outcome.replayed());
+        Idempotency.Outcome<AddedLine> outcome = transactions.execute(status ->
+                idempotency.once(idempotencyKey, "POST", path, request, AddedLine.class, () -> {
+                    UUID id = UUID.randomUUID();
+                    jdbc.sql("SELECT platform_referral_add_manual_line(?, ?, ?, ?, ?, ?)")
+                            .params(id, referralId, amountMinor, cur, request.reason(), operatorId)
+                            .query()
+                            .singleRow();
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("line_id", id);
+                    data.put("referral_id", referralId);
+                    data.put("kind", "manual");
+                    data.put("amount_minor", amountMinor);
+                    data.put("currency", cur);
+                    data.put("referrer_tenant_id", referrer);
+                    data.put("reason", request.reason());
+                    audit.record("platform.referral.commission_added", operatorId, referrer, data);
+                    return new AddedLine(id);
+                }));
+        return new LineAdded(outcome.body().lineId(), outcome.replayed());
     }
 
     @Override

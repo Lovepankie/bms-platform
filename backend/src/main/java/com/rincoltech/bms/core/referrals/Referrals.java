@@ -67,12 +67,22 @@ public interface Referrals {
     /** Sets (or clears, with null: the default applies) the rule of one current referral, with a reason. */
     ReferralDetail setRule(UUID referralId, RuleInput rule, String reason, UUID operatorId);
 
+    /** The business that owns a referral (its referrer), read with no tenant bound; 404 when there is none. */
+    UUID referrerOf(UUID referralId);
+
     /**
-     * A line with an amount the operator typed, with a reason, behind the Idempotency-Key protocol (its key row is the
-     * referrer's): a repeat adds nothing and says it was replayed.
+     * A line with an amount the operator typed, with a reason, behind the Idempotency-Key protocol. The caller binds the
+     * referrer ({@code TenantContext.callAs}, as the platform console binds the paying business for a payment), so the key row
+     * is that business's: a repeat adds nothing and says it was replayed.
      */
     LineAdded addLine(
-            UUID referralId, String idempotencyKey, long amountMinor, String currency, String reason, UUID operatorId);
+            UUID referralId,
+            UUID referrerTenantId,
+            String idempotencyKey,
+            long amountMinor,
+            String currency,
+            String reason,
+            UUID operatorId);
 
     /** The exact opposite of one line, with a reason; a line is reversed once and a reversal never. */
     ReferralDetail reverseLine(UUID lineId, String reason, UUID operatorId);
@@ -211,5 +221,5 @@ public interface Referrals {
 
     record Payout(LocalDate paidOn, String method, String reference, String note, String reason) {}
 
-    record LineAdded(ReferralDetail detail, boolean replayed) {}
+    record LineAdded(UUID lineId, boolean replayed) {}
 }

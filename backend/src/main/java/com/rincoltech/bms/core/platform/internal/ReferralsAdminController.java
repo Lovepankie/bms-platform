@@ -9,6 +9,7 @@ import com.rincoltech.bms.core.referrals.Referrals.Rule;
 import com.rincoltech.bms.core.referrals.Referrals.RuleInput;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.RequiresPermission;
+import com.rincoltech.bms.kernel.TenantContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -263,15 +264,22 @@ class ReferralsAdminController {
             @PathVariable("referral_id") UUID referralId,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody LineRequest request) {
-        Referrals.LineAdded added = referrals.addLine(
-                referralId,
-                idempotencyKey,
-                request.amountMinor(),
-                request.currency(),
-                request.reason(),
-                CurrentPrincipal.require().userId());
+        UUID operator = CurrentPrincipal.require().userId();
+        UUID referrer = referrals.referrerOf(referralId);
+        // The line's Idempotency-Key row is the referrer's: written bound to that business, as a payment is to the
+        // payer.
+        Referrals.LineAdded added = TenantContext.callAs(
+                referrer,
+                () -> referrals.addLine(
+                        referralId,
+                        referrer,
+                        idempotencyKey,
+                        request.amountMinor(),
+                        request.currency(),
+                        request.reason(),
+                        operator));
         return ResponseEntity.status(added.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
-                .body(added.detail());
+                .body(referrals.detail(referralId));
     }
 
     @PostMapping("/referrals/commissions/{line_id}/reverse")
