@@ -86,6 +86,16 @@ class OfflineSalesRepository {
                 .optional();
     }
 
+    /** The sale recorded with this client sale id and who recorded it, if one is (ADR-067 decision 5). */
+    record Recorded(UUID saleId, UUID createdBy) {}
+
+    Optional<Recorded> saleByClient(UUID clientSaleId) {
+        return jdbc.sql("SELECT id, created_by FROM retail_sales WHERE client_sale_id = ?")
+                .param(clientSaleId)
+                .query((rs, n) -> new Recorded(rs.getObject("id", UUID.class), rs.getObject("created_by", UUID.class)))
+                .optional();
+    }
+
     boolean branchExists(UUID branchId) {
         return jdbc.sql("SELECT count(*) FROM branches WHERE id = ?")
                         .param(branchId)
@@ -99,12 +109,15 @@ class OfflineSalesRepository {
         return mapper.writeValueAsString(request);
     }
 
-    /** Inserts the report unless one with this client sale id exists; true when written. */
-    boolean insertFailure(SalesApi.FailureRequest r, UUID madeBy) {
+    /**
+     * Inserts the report unless one with this client sale id exists; true when written. With {@code saleId} the sale is
+     * already recorded, so the report is written closed by it.
+     */
+    boolean insertFailure(SalesApi.FailureRequest r, UUID madeBy, UUID saleId) {
         return jdbc.sql("""
                         INSERT INTO retail_offline_failures (id, tenant_id, client_sale_id, branch_id, made_by, occurred_at,
-                            payment_method, total_minor, request, code, message)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?)
+                            payment_method, total_minor, request, code, message, status, sale_id)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?, ?, ?, ?)
                         ON CONFLICT (tenant_id, client_sale_id) DO NOTHING
                         """)
                         .params(
@@ -117,9 +130,19 @@ class OfflineSalesRepository {
                                 r.totalMinor(),
                                 mapper.writeValueAsString(r.request()),
                                 r.code(),
-                                r.message())
+                                r.message(),
+                                saleId == null ? "open" : "recorded",
+                                saleId)
                         .update()
                 == 1;
+    }
+
+    /** A report whose sale turned out to be recorded is closed by it. */
+    void closeAsRecorded(UUID id, UUID saleId) {
+        jdbc.sql("""
+                        UPDATE retail_offline_failures SET status = 'recorded', sale_id = ?, updated_at = now()
+                         WHERE id = ? AND status IN ('open', 'retry')
+                        """).params(saleId, id).update();
     }
 
     /**

@@ -17,6 +17,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingSale;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -103,13 +104,23 @@ class OfflineSalesService {
                     List.of(new ApiException.FieldProblem("branch_id", "unknown_branch", "No such branch.")));
         }
         repo.dropWaiting(r.clientSaleId());
-        if (!repo.insertFailure(r, by)) {
+        // A sale already recorded under this id (its answer was lost, then a later send was refused) is the sale: the
+        // report is kept closed by it, never open for a manager to discard.
+        Optional<OfflineSalesRepository.Recorded> sale = repo.saleByClient(r.clientSaleId());
+        if (sale.isPresent() && !sale.get().createdBy().equals(by)) {
+            throw ApiException.rule(
+                    "client_sale_id_reused", "This client sale id belongs to a sale someone else recorded.");
+        }
+        UUID saleId = sale.map(OfflineSalesRepository.Recorded::saleId).orElse(null);
+        if (!repo.insertFailure(r, by, saleId)) {
             Failure existing = repo.failureByClient(r.clientSaleId(), true).orElseThrow();
             if (!existing.madeBy().equals(by)) {
                 throw ApiException.rule(
                         "client_sale_id_reused", "This client sale id belongs to a sale someone else reported.");
             }
-            if (existing.status().equals("retry")) {
+            if (saleId != null) {
+                repo.closeAsRecorded(existing.id(), saleId);
+            } else if (existing.status().equals("retry")) {
                 repo.reopen(existing.id(), r.code(), r.message());
             }
         }
@@ -165,7 +176,7 @@ class OfflineSalesService {
     }
 
     /** Asks the device that reported it to send the sale again, once the cause is fixed. */
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     Failure retry(UUID id) {
         Failure f = decidable(id);
         if (f.status().equals("retry")) {
@@ -184,7 +195,7 @@ class OfflineSalesService {
     }
 
     /** Discards the refused sale with a reason: it is never recorded, and the decision is audited. */
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     Failure discard(UUID id, String reason) {
         Failure f = decidable(id);
         String trimmed = reason.trim();
@@ -219,6 +230,18 @@ class OfflineSalesService {
                     "own_offline_sale",
                     "Your own sale",
                     "Another manager decides a sale you made. You can send it again from your phone.");
+        }
+        Optional<OfflineSalesRepository.Recorded> sale = repo.saleByClient(f.clientSaleId());
+        if (sale.isPresent()) {
+            // The sale was recorded after all (a report that crossed its send): closed by it, never discarded. The
+            // close
+            // is kept although the request is refused.
+            repo.closeAsRecorded(f.id(), sale.get().saleId());
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "offline_failure_decided",
+                    "Already decided",
+                    "This sale was already recorded.");
         }
         if (f.status().equals("discarded") || f.status().equals("recorded")) {
             throw new ApiException(

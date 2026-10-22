@@ -838,6 +838,63 @@ class RetailOfflineSalesIT extends IntegrationTest {
         }
     }
 
+    /**
+     * Review round 2, fix 2: a refusal reported for a sale that is already recorded (its answer was lost, a later send was
+     * refused) is kept closed by the sale; a report that crossed the send and is still open cannot be discarded.
+     */
+    @Test
+    void aReportForASaleAlreadyRecordedIsClosedByItAndNeverDiscarded() {
+        api.stockUp(t.headOffice(), product, "5");
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = offlineSale(client, Instant.now().minus(Duration.ofHours(2)), "1", 2_000);
+        ResponseEntity<JsonNode> sold = send(request, UUID.randomUUID().toString());
+        assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
+        String saleId = sold.getBody().get("id").asString();
+
+        ResponseEntity<JsonNode> reported = api.post("/offline-failures", failureReport(client, request), SALES);
+        assertThat(reported.getStatusCode()).as("%s", reported.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(reported.getBody().get("status").asString()).isEqualTo("recorded");
+        assertThat(reported.getBody().get("sale_id").asString()).isEqualTo(saleId);
+        RetailTestSupport other = new RetailTestSupport(http, t);
+        assertThat(other.post("/offline-failures", failureReport(client, request), SALES)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("client_sale_id_reused");
+
+        // A report that crossed the send of another sale: written open just before that sale committed.
+        UUID crossed = UUID.randomUUID();
+        Map<String, Object> second = offlineSale(crossed, Instant.now().minus(Duration.ofHours(1)), "1", 2_000);
+        ResponseEntity<JsonNode> soldToo = send(second, UUID.randomUUID().toString());
+        assertThat(soldToo.getStatusCode()).as("%s", soldToo.getBody()).isEqualTo(HttpStatus.CREATED);
+        TestDatabase.owner().sql("""
+                        INSERT INTO retail_offline_failures (id, tenant_id, client_sale_id, branch_id, made_by, occurred_at,
+                            payment_method, total_minor, request, code, message)
+                        SELECT gen_random_uuid(), tenant_id, client_sale_id, branch_id, created_by, occurred_at, 'cash',
+                               2000, '{}'::jsonb, 'period_closed', 'The period is closed.'
+                          FROM retail_sales WHERE client_sale_id = ?
+                        """).param(crossed).update();
+        client = crossed;
+        saleId = soldToo.getBody().get("id").asString();
+        String id = TestDatabase.owner()
+                .sql("SELECT id::text FROM retail_offline_failures WHERE client_sale_id = ?")
+                .param(client)
+                .query(String.class)
+                .single();
+        RetailTestSupport boss = new RetailTestSupport(http, t);
+        ResponseEntity<JsonNode> discard =
+                boss.post("/offline-failures/" + id + "/discard", Map.of("reason", "Entered again by hand"), MANAGER);
+        assertThat(discard.getStatusCode()).as("%s", discard.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(discard.getBody().get("code").asString()).isEqualTo("offline_failure_decided");
+        JsonNode mine = api.get("/offline-failures/mine?client_sale_id=" + client, SALES)
+                .getBody()
+                .get("items")
+                .get(0);
+        assertThat(mine.get("status").asString()).isEqualTo("recorded");
+        assertThat(mine.get("sale_id").asString()).isEqualTo(saleId);
+        assertThat(sales()).isEqualTo(2);
+    }
+
     /** How many backends wait for the transaction with this id, polled for up to 30 seconds until one does. */
     long waitersOn(String txid) throws InterruptedException {
         long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
