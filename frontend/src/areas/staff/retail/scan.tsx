@@ -104,7 +104,8 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
         if (code !== null) handler.current(code);
       } else if (e.key.length === 1) {
         const t = e.target;
-        // The snapshot is taken only after the field was idle, so a mid-code pause cannot replace it with half a code.
+        // The snapshot is taken when a new run of keys starts outside a burst (a scan right after typing keeps what was
+        // typed), never inside one, so a mid-code pause cannot replace it with half a code.
         if (wedge.key(e.key, e.timeStamp || performance.now())) before = editable(t) ? { field: t, value: t.value, start: t.selectionStart, end: t.selectionEnd } : null;
       }
     };

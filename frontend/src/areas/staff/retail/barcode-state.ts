@@ -138,16 +138,19 @@ export function createWedge(gap = WEDGE_GAP_MS, min = WEDGE_MIN) {
   let started = false;
   let burst = false;
   return {
-    /** True when this key starts something new: the first key, or one after the field was idle for WEDGE_IDLE_MS. */
+    /**
+     * True when this key starts a new run of keys while no burst is going: the first key, one after the field was idle
+     * for WEDGE_IDLE_MS, or one slower than the gap after a person's keys. A key in a burst, even after a stall, is not.
+     */
     key(ch: string, at: number): boolean {
-      const idle = !started || at - last >= WEDGE_IDLE_MS;
-      if (idle) burst = false;
+      if (!started || at - last >= WEDGE_IDLE_MS) burst = false;
       // A stall longer than the gap inside a burst is the same scanner pausing: its keys join the code, not replace it.
-      buffer = buffer === '' || (at - last > gap && !burst) ? ch : buffer + ch;
+      const fresh = buffer === '' || (at - last > gap && !burst);
+      buffer = fresh ? ch : buffer + ch;
       if (buffer.length >= min) burst = true;
       started = true;
       last = at;
-      return idle;
+      return fresh;
     },
     /**
      * True when Enter at `at` closes a scanner burst that stalled part way: a run of scanner keys came since the field

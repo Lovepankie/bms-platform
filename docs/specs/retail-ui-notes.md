@@ -1272,7 +1272,8 @@ ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability s
   camera (`navigator.mediaDevices.getUserMedia`). A USB or Bluetooth scanner works anywhere on the screen: a burst of keys within
   35 ms of each other (this device's **Scanner speed** in Notifications and app, up to 80 ms for a slow Bluetooth scanner, kept in
   this browser), at least four, closed by Enter (`createWedge` in `barcode-state.ts`); with the cursor in a text field the field gets
-  back the value and selection it had before the burst. A scanner that stalls part way through a code is still one burst until the
+  back the value and selection it had before the burst, taken when the burst's first key starts a new run (so a scan right after
+  typing a quantity keeps the quantity typed). A scanner that stalls part way through a code is still one burst until the
   field has had no key for 500 ms: the keys after the stall join the code, so the whole code is looked up, the field keeps the
   value from before the first key, and an Enter at scanner speed after a run of scanner keys never reaches the form, even when the
   keys after the stall are too few to be a code. On the sale screen the cursor waits in the scan box (on a device with a

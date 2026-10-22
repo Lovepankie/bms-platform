@@ -181,6 +181,26 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect(submitted).not.toHaveBeenCalled();
   });
 
+  it('keeps a quantity typed just before a scan, even within the idle time', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    await retail.addBarcode(BULB15, { code: 'TEST-BULB15' });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge(EAN);
+    await waitFor(() => expect(qtyOf(0)).toBe('1'));
+    const qty = document.getElementById('qty-0') as HTMLInputElement;
+    qty.focus();
+    qty.select();
+    let at = (clock += 10000);
+    press('5', at);
+    expect(qtyOf(0)).toBe('5');
+    // The scan starts 200 ms after the 5, inside the 500 ms idle time.
+    at += 200;
+    for (const ch of 'TEST-BULB15') press(ch, (at += 8));
+    press('Enter', (clock = at + 8));
+    await waitFor(() => expect(qtyOf(1)).toBe('1'));
+    expect(qtyOf(0)).toBe('5');
+  });
+
   it('waits in the scan box, so a scanner too slow to be told from typing still adds the item', async () => {
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP' });
     screenOf(<SaleForm branchId={BRANCH} />);
