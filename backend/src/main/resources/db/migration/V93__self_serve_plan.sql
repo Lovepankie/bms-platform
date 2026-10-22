@@ -156,15 +156,49 @@ END
 $$;
 
 -- V2's resolver: a business whose Owner's cancellation took effect answers 'ended' instead of 'suspended', so the read
--- only refusal names the end of the subscription rather than a suspension by the operator.
+-- only refusal names the end of the subscription rather than a suspension by the operator. A scheduled cancellation whose
+-- day has come in the business's own time zone answers 'ended' too, so read only never waits for the quarter-hour job.
 CREATE OR REPLACE FUNCTION app_resolve_tenant_status(p_slug text) RETURNS TABLE (id uuid, status text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     SELECT t.id,
            CASE WHEN t.status = 'suspended' AND s.status = 'cancelled' AND s.ended_on IS NOT NULL THEN 'ended'
+                WHEN EXISTS (SELECT 1 FROM subscription_scheduled_changes c
+                              WHERE c.tenant_id = t.id AND c.kind = 'cancel' AND c.status = 'scheduled'
+                                AND c.effective_on <= (now() AT TIME ZONE t.timezone)::date) THEN 'ended'
                 ELSE t.status END
       FROM tenants t
       LEFT JOIN subscriptions s ON s.tenant_id = t.id
      WHERE t.slug = p_slug AND t.status IN ('active', 'suspended')
+$$;
+
+-- V49's report runner lists, now also taking a business whose Owner's cancellation took effect: the exports still work
+-- after the end (ADR-073), so a run asked for then, or one running when the job ended the business, must finish. A business
+-- suspended by the operator is still left out.
+CREATE OR REPLACE FUNCTION app_count_running_report_runs() RETURNS integer
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT count(*)::integer FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+      LEFT JOIN subscriptions s ON s.tenant_id = t.id
+     WHERE r.status = 'running'
+       AND (t.status = 'active' OR (t.status = 'suspended' AND s.status = 'cancelled' AND s.ended_on IS NOT NULL))
+$$;
+
+CREATE OR REPLACE FUNCTION app_tenants_with_queued_report_runs() RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT r.tenant_id FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+      LEFT JOIN subscriptions s ON s.tenant_id = t.id
+     WHERE r.status = 'queued'
+       AND (t.status = 'active' OR (t.status = 'suspended' AND s.status = 'cancelled' AND s.ended_on IS NOT NULL))
+       AND NOT EXISTS (SELECT 1 FROM report_runs x WHERE x.tenant_id = r.tenant_id AND x.status = 'running')
+     GROUP BY r.tenant_id
+     ORDER BY min(r.created_at), r.tenant_id
+$$;
+
+CREATE OR REPLACE FUNCTION app_tenants_with_stale_report_runs(p_cutoff timestamptz) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT DISTINCT r.tenant_id FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+      LEFT JOIN subscriptions s ON s.tenant_id = t.id
+     WHERE r.status = 'running' AND coalesce(r.heartbeat_at, r.started_at) < p_cutoff
+       AND (t.status = 'active' OR (t.status = 'suspended' AND s.status = 'cancelled' AND s.ended_on IS NOT NULL))
 $$;
 
 -- ---------------------------------------------------------------------------------------------

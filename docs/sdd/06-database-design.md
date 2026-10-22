@@ -621,7 +621,10 @@ the scheduled rows across businesses through `platform_scheduled_changes()`; the
 `platform_tenants_with_due_changes(through)`. `subscriptions.ended_on date` (V93) is the day an Owner's cancellation took effect;
 `platform_end_subscription(tenant_id, on)` (bound to that tenant only) sets it with the status `cancelled` and the tenant
 `suspended`; `platform_set_subscription_status` clears it when the subscription leaves `cancelled`; `app_resolve_tenant_status`
-answers `ended` for such a business, so its writes are refused with `subscription_ended`.
+answers `ended` for such a business, and for one whose scheduled cancellation's day has come in its own time zone before the job
+applied it, so its writes are refused with `subscription_ended` from that day. V93 also replaces V49's report runner lists
+(`app_count_running_report_runs`, `app_tenants_with_queued_report_runs`, `app_tenants_with_stale_report_runs`) so they take an
+ended business as well as an active one: its report runs still finish and a dead run is still failed.
 
 ### `auth_sessions` (RLS)
 
