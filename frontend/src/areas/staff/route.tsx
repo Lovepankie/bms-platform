@@ -13,8 +13,8 @@ import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
 import { type MenuLink, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
-import { BranchPicker, useActiveBranch } from './branch-picker';
-import { StaffContext } from './context';
+import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
+import { StaffContext, useOptionalStaff } from './context';
 import { canConfigureAdvisor, showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
 import { showCollateral, showMembers } from './lending/member-permissions';
@@ -162,12 +162,16 @@ export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
   return areas.filter((a): a is MenuLink => a !== false);
 }
 
-/** The sidebar at the left from 720px (issue #455); nothing on a phone, where the staff bar's menu button opens the same list. */
+/**
+ * The sidebar at the left from 720px (issue #455), the shop in use above it (issue #461); nothing on a phone, where the staff bar's
+ * menu button opens the same list.
+ */
 export function StaffSideNav({ me }: { me: Me }) {
   const phone = useIsPhone();
   const sells = useSells(me);
+  const branch = useOptionalStaff()?.branch ?? null;
   if (phone) return null;
-  return <SideNav label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} />;
+  return <SideNav label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} head={<CurrentShop me={me} branch={branch} />} />;
 }
 
 /**
@@ -181,7 +185,17 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
   return (
     <header className="staff-bar">
       <div className="staff-bar-top">
-        {phone && <SideMenu label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} name={me.full_name} onSignOut={onSignOut} />}
+        {phone && (
+          <SideMenu
+            label="Staff areas"
+            tour="nav-areas"
+            links={staffAreas(me, { sells })}
+            tours={['retail-nav']}
+            name={me.full_name}
+            onSignOut={onSignOut}
+            head={<CurrentShop me={me} branch={branch} />}
+          />
+        )}
         {phone && sells && (
           <Link to="/staff/retail/sale" className="btn btn-primary btn-sm staff-sell">
             {icons.sale}

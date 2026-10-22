@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import type { Me } from '../../api/client';
-import { useLogoSrc } from '../../app/branding';
+import { PLATFORM_BRAND, useLogoSrc, useShellBrand } from '../../app/branding';
+import { useFolded } from '../../components/side-menu';
 import { retail } from '../../api/retail';
 import { ALL_BRANCHES, branchLabel, initialBranch, loadBranch, saveBranch } from '../../auth/branch';
 
@@ -47,6 +48,27 @@ export function useActiveBranch(me: Me | undefined): { branch: string | null; ch
 export function ShopLogo({ url, name }: { url?: string | null; name: string }) {
   const src = useLogoSrc(url ?? null);
   return src ? <img className="shop-logo" src={src} alt={`Logo of ${name}`} /> : null;
+}
+
+/**
+ * The shop in use at the top of the side menu and the phone drawer (issue #461, ADR-068): its own logo, small and rounded, beside
+ * its name; a shop without one, or whose logo cannot be read, shows the business logo, and without that no image. The folded
+ * sidebar keeps only the image, the name as its tooltip.
+ */
+export function CurrentShop({ me, branch }: { me: Me; branch: string | null }) {
+  const folded = useFolded();
+  const active = (me.branches ?? []).find((b) => b.id === branch);
+  const shopSrc = useLogoSrc(active?.logo_url ?? null);
+  const brand = useShellBrand();
+  if (!active && branch !== ALL_BRANCHES) return null;
+  const name = active ? branchLabel(active) : 'All branches';
+  const src = shopSrc ?? (brand === PLATFORM_BRAND ? null : brand.logoSrc);
+  return (
+    <div className="current-shop" title={folded ? name : undefined}>
+      {src && <img className="current-shop-logo" src={src} alt={`Logo of ${name}`} />}
+      <span className={folded ? 'visually-hidden' : 'current-shop-name'}>{name}</span>
+    </div>
+  );
 }
 
 export function BranchPicker({ me, branch, onChoose }: { me: Me; branch: string | null; onChoose: (selection: string) => void }) {
