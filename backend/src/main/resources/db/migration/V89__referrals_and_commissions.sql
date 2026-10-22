@@ -430,7 +430,8 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
      ORDER BY x.sort_at DESC, x.referral_id
 $$;
 
--- The lines of one referral, oldest first, for the operator.
+-- The lines of one referral, oldest first, for the operator. The payment's amount is added to the snapshot here: the row the
+-- referrer can read never carries the referred business's payment.
 CREATE FUNCTION platform_referral_lines(p_referral_id uuid) RETURNS TABLE (
     id uuid, kind text, payment_id uuid, reverses_line_id uuid, reversed_by_line_id uuid, amount_minor bigint,
     currency text, months_counted integer, rule_snapshot jsonb, referrer_inactive boolean, note text, paid_on date,
@@ -445,9 +446,13 @@ BEGIN
     RETURN QUERY
     SELECT l.id, l.kind, l.payment_id, l.reverses_line_id, (SELECT x.id FROM referral_commission_lines x
                                                               WHERE x.reverses_line_id = l.id),
-           l.amount_minor, l.currency::text, l.months_counted, l.rule_snapshot, l.referrer_inactive, l.note::text, l.paid_on,
-           l.paid_method, l.paid_reference::text, l.paid_note::text, l.paid_at, pu.full_name, cu.full_name, l.created_at
+           l.amount_minor, l.currency::text, l.months_counted,
+           CASE WHEN sp.id IS NULL THEN l.rule_snapshot
+                ELSE l.rule_snapshot || jsonb_build_object('payment_amount_minor', sp.amount_minor) END,
+           l.referrer_inactive, l.note::text, l.paid_on, l.paid_method, l.paid_reference::text, l.paid_note::text, l.paid_at,
+           pu.full_name, cu.full_name, l.created_at
       FROM referral_commission_lines l
+      LEFT JOIN subscription_payments sp ON sp.id = l.payment_id
       LEFT JOIN platform_users pu ON pu.id = l.paid_by_platform_user_id
       LEFT JOIN platform_users cu ON cu.id = l.created_by_platform_user_id
      WHERE l.referral_id = p_referral_id
@@ -712,14 +717,14 @@ BEGIN
                OR EXISTS (SELECT 1 FROM subscriptions s
                            WHERE s.tenant_id = v_ref.tenant_id AND s.status IN ('suspended', 'cancelled'));
     line_id := gen_random_uuid();
+    -- The snapshot is on a row the referrer reads: it names the rule, never the referred business's payment amount.
     INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, payment_id, amount_minor, currency,
                                            months_counted, rule_snapshot, referrer_inactive, created_by_platform_user_id)
     VALUES (line_id, v_ref.tenant_id, v_ref.id, 'payment', v_pay.id, v_amount, v_pay.currency, v_eligible,
             jsonb_build_object(
                 'rule_id', v_rule.id, 'source', v_source, 'kind', v_rule.kind, 'percent_bp', v_rule.percent_bp,
                 'amount_minor', v_rule.amount_minor, 'currency', v_rule.currency, 'months', v_rule.months,
-                'cap_minor', v_rule.cap_minor, 'payment_amount_minor', v_pay.amount_minor,
-                'payment_months', v_pay.months, 'paid_months_before', v_before),
+                'cap_minor', v_rule.cap_minor, 'payment_months', v_pay.months, 'paid_months_before', v_before),
             v_inactive, p_platform_user_id);
     amount_minor := v_amount;
     currency := v_pay.currency;

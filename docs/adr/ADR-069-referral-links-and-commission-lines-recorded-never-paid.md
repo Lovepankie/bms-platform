@@ -48,7 +48,9 @@ data, and a business must not be able to refer itself.
    `POST /platform/tenants/{id}/payments` (and behind its Idempotency-Key, so a repeat adds nothing), the definer function
    `platform_referral_commission_for_payment` finds the paying business's current referral and the rule in force (its override,
    else the default), counts the paid months already used (decision 9), and adds one
-   line (referral, payment, amount, the months counted, and a snapshot of the rule and the payment) when the rule gives an amount.
+   line (referral, payment, amount, the months counted, and a snapshot of the rule and the payment's months) when the rule gives
+   an amount. The line is a row the referrer can read, so its snapshot never carries the referred business's payment amount;
+   the operator's read of the lines adds it.
    A percent is worked out in whole minor units rounded half up (amounts are positive, so 10% of 333 is 33 and of 335 is 34;
    rounding down would short the referrer on every payment), pro rata on the months still inside N; a rule with an amount
    applies only to payments in its currency. A change of rule applies to payments recorded from then on; lines already worked out
@@ -113,7 +115,8 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
 terms change by deal and over time without a deploy, and each line keeps the rule it used; the record of what was earned and
 paid is auditable end to end and cannot be edited away; a referrer sees only its own referrals.
 
-**Worse:** the referrer can infer a referred business's subscription amount from a percent commission line; the operator list and
+**Worse:** the referrer can still infer a referred business's subscription amount from a percent commission line (the amount
+is not stored on the line it reads); the operator list and
 the CSV read across every business through definer functions, outside RLS by design; codes are not secret, so anyone can type a valid code at the sign-up
 (the operator still verifies every application before Activate).
 

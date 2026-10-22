@@ -939,6 +939,22 @@ class ReferralsIT extends IntegrationTest {
         assertThat(pay(x.id(), 10000, 1, key).getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(pay(x.id(), 10000, 1, key).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(amounts(detail(rx))).containsExactly(1000L);
+        // The operator's read adds the payment's amount to the snapshot; the row the referrer can read never carries
+        // it.
+        assertThat(detail(rx)
+                        .get("lines")
+                        .get(0)
+                        .get("rule_snapshot")
+                        .get("payment_amount_minor")
+                        .asLong())
+                .isEqualTo(10000L);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT rule_snapshot -> 'payment_amount_minor' IS NOT NULL FROM referral_commission_lines"
+                                + " WHERE referral_id = ?")
+                        .param(rx)
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
     }
 
     /**
