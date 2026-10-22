@@ -301,11 +301,16 @@ class SelfServePlanIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isEqualTo(1);
+        Api.allowTotpReuse(op.id());
         assertRefused(
                 op.api()
                         .post(
                                 "/api/v1/platform/module-requests/" + requestId + "/decline",
-                                Map.of("reason", "Test: too late"),
+                                Map.of(
+                                        "reason",
+                                        "Test: too late",
+                                        "totp_code",
+                                        Api.totp(op.session().totpSecret(), Instant.now())),
                                 op.session().accessToken()),
                 HttpStatus.CONFLICT,
                 "request_already_decided");
@@ -319,10 +324,23 @@ class SelfServePlanIT extends IntegrationTest {
                 .getBody()
                 .get("id")
                 .asString();
+        assertThat(op.api()
+                        .post(
+                                "/api/v1/platform/module-requests/" + otherId + "/decline",
+                                Map.of("reason", "Test: not offered in this area yet"),
+                                op.session().accessToken())
+                        .getStatusCode()
+                        .is4xxClientError())
+                .isTrue();
+        Api.allowTotpReuse(op.id());
         ResponseEntity<JsonNode> declined = op.api()
                 .post(
                         "/api/v1/platform/module-requests/" + otherId + "/decline",
-                        Map.of("reason", "Test: not offered in this area yet"),
+                        Map.of(
+                                "reason",
+                                "Test: not offered in this area yet",
+                                "totp_code",
+                                Api.totp(op.session().totpSecret(), Instant.now())),
                         op.session().accessToken());
         assertThat(declined.getStatusCode()).as("%s", declined.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(modules(other.t().tenantId())).containsExactly("lending");
@@ -375,6 +393,16 @@ class SelfServePlanIT extends IntegrationTest {
         assertThat(applyDue(b.t().tenantId(), paidUntil.plusDays(2))).isZero();
         assertThat(platformAudits("platform.tenant.plan_change_applied", b.t().tenantId()))
                 .isEqualTo(1);
+        assertThat(TestDatabase.owner()
+                        .sql("""
+                                SELECT DISTINCT data ->> 'owner_user_id' FROM platform_audit_log
+                                 WHERE tenant_id = ? AND action IN ('platform.tenant.plan_change_scheduled',
+                                                                    'platform.tenant.plan_change_applied')
+                                """)
+                        .param(b.t().tenantId())
+                        .query(String.class)
+                        .list())
+                .containsExactly(b.owner().toString());
         // The records stay: switching retail on again finds the chart of accounts it had.
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM gl_accounts WHERE tenant_id = ? AND system_key = 'cash_on_hand'")

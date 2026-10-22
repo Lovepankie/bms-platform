@@ -29,7 +29,7 @@ month does. It is generic for every business and the Owner's alone: administrato
    is read: the operator agreed to it when they put the module in the plan. Otherwise the request waits; the operator lists
    the pending ones (`GET /platform/module-requests`) and approves with a reason and their own authenticator code, optionally
    moving the business to another plan first (the plan or the price changes; the plan move keeps every check of FR-TEN-11),
-   or declines with a reason the Owner sees. The Owner is emailed the decision and the card shows it. One pending request per
+   or declines with a reason the Owner sees and the same authenticator code. The Owner is emailed the decision and the card shows it. One pending request per
    module. The request row is a record only: approving it switches nothing on by itself, so a row written by hand grants
    nothing.
 3. **Stopping a module and cancelling take effect the day after the last day paid for.** The change is a
@@ -59,6 +59,12 @@ month does. It is generic for every business and the Owner's alone: administrato
    never deleted automatically: deletion is a separate explicit request of the Owner that the operator processes (FR-TEN-09,
    later). The operator brings a business back with the existing resume, which clears `ended_on` and restores the status it
    had before (ADR-056 decision 5).
+   Two things still reach an ended business, on purpose. Money that arrives after the end posts: a payment gateway's callback
+   (`/api/v1/payments/callbacks/...`) and a payment the poller confirms find the business by the merchant reference, not the
+   host, so they never meet the read-only interceptor, and a borrower or buyer who paid gets the payment recorded and a receipt
+   rather than money with no record. And member portal sign-in (FR-IAM-09, not built yet) stays allowed after the end, read
+   only: a member can still sign in and see their balances and statements, while every member write is refused with
+   `subscription_ended`. This differs from a suspension by the operator, where member sign-in is refused (FR-TEN-06).
 6. **The operator is told and sees what is coming.** Every request, stop, cancellation and undo emails every active platform
    operator through the outbox (in a savepoint: a mail failure never refuses the Owner's change), and the operator console API
    lists the pending module requests and the scheduled changes across businesses (`GET /platform/scheduled-changes`), read
@@ -68,7 +74,8 @@ month does. It is generic for every business and the Owner's alone: administrato
    `platform_audit_log` (`platform.tenant.module_requested`, `platform.tenant.plan_change_scheduled`,
    `platform.tenant.plan_change_undone`, `platform.tenant.plan_change_applied`, `platform.tenant.module_request_decided`,
    `platform.tenant.subscription_ended`, and the existing `platform.tenant.modules_changed` with no operator when the Owner or
-   the job switched them).
+   the job switched them). The Owner is not a platform user, so the platform rows of the Owner's acts carry no
+   `platform_user_id`; their data names the Owner as `owner_user_id` (for an applied change, the Owner who asked for it).
 
 ## Consequences
 

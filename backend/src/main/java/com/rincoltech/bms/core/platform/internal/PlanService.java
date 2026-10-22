@@ -171,6 +171,7 @@ class PlanService {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("module", module);
             data.put("plan", sub.planCode());
+            data.put("owner_user_id", actor);
             tenantAudit.record(AuditLog.Entry.created("core.plan.module_requested", "core.plan", id, null, data));
             audit.record(
                     "platform.tenant.module_requested", null, tenant.profile().id(), data);
@@ -273,6 +274,7 @@ class PlanService {
                     .params(actor, changeId)
                     .update();
             Map<String, Object> data = changeData(change);
+            data.put("owner_user_id", actor);
             tenantAudit.record(AuditLog.Entry.created("core.plan.change_undone", "core.plan", changeId, null, data));
             audit.record(
                     "platform.tenant.plan_change_undone", null, tenant.profile().id(), data);
@@ -322,6 +324,7 @@ class PlanService {
             data.put(
                     "paid_until",
                     sub.paidUntil() == null ? null : sub.paidUntil().toString());
+            data.put("owner_user_id", actor);
             tenantAudit.record(AuditLog.Entry.created("core.plan.change_scheduled", "core.plan", id, null, data));
             audit.record(
                     "platform.tenant.plan_change_scheduled",
@@ -638,10 +641,10 @@ class PlanService {
                 .list();
     }
 
-    record Change(UUID id, String kind, String moduleKey, LocalDate effectiveOn, String status) {}
+    record Change(UUID id, String kind, String moduleKey, LocalDate effectiveOn, String status, UUID requestedBy) {}
 
     private static final String CHANGE_SELECT =
-            "SELECT id, kind, module_key, effective_on, status FROM subscription_scheduled_changes";
+            "SELECT id, kind, module_key, effective_on, status, requested_by FROM subscription_scheduled_changes";
 
     private static Change change(ResultSet rs, int n) throws SQLException {
         return new Change(
@@ -649,7 +652,8 @@ class PlanService {
                 rs.getString("kind"),
                 rs.getString("module_key"),
                 rs.getObject("effective_on", LocalDate.class),
-                rs.getString("status"));
+                rs.getString("status"),
+                rs.getObject("requested_by", UUID.class));
     }
 
     private static final String CHANGE_RESPONSE_SELECT = """
@@ -696,6 +700,7 @@ class PlanService {
         data.put("kind", change.kind());
         data.put("module", change.moduleKey());
         data.put("effective_on", change.effectiveOn().toString());
+        data.put("owner_user_id", change.requestedBy());
         return data;
     }
 

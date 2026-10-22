@@ -6696,9 +6696,15 @@
             "maxLength" : 300,
             "minLength" : 5,
             "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "A current 6 digit code from the operator's own authenticator app",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
-        "required" : [ "reason" ]
+        "required" : [ "reason", "totp_code" ]
       },
       "PlatformModuleRequest" : {
         "properties" : {
@@ -29013,7 +29019,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Decline a module request with a reason the Owner sees (ADR-073)",
+        "summary" : "Decline a module request with a reason the Owner sees; needs a current code from the operator's own authenticator (ADR-073)",
         "tags" : [ "platform" ]
       }
     },

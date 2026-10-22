@@ -2901,7 +2901,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Decline a module request with a reason the Owner sees (ADR-073) */
+        /** Decline a module request with a reason the Owner sees; needs a current code from the operator's own authenticator (ADR-073) */
         post: operations["platformDeclineModuleRequest"];
         delete?: never;
         options?: never;
@@ -9608,6 +9608,8 @@ export interface components {
         PlatformModuleDecline: {
             /** @description Why; shown to the Owner and kept in the audit log */
             reason: string;
+            /** @description A current 6 digit code from the operator's own authenticator app */
+            totp_code: string;
         };
         PlatformModuleRequest: {
             /** Format: date-time */

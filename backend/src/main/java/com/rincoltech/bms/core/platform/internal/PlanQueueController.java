@@ -27,8 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The operator's side of the Owners' plan changes (issue #472, ADR-073): the module requests of every business, the
- * approval (with the operator's own authenticator code, a reason and optionally a plan move) or the decline with a reason,
- * and the module stops and cancellations still to come.
+ * approval (with the operator's own authenticator code, a reason and optionally a plan move) or the decline (with the
+ * code and a reason), and the module stops and cancellations still to come.
  */
 @RestController
 @RequestMapping(path = "/api/v1/platform", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -66,6 +66,11 @@ class PlanQueueController {
     @Schema(name = "PlatformModuleDecline")
     record DeclineRequest(
             @NotBlank
+            @Size(max = 20)
+            @Schema(description = "A current 6 digit code from the operator's own authenticator app")
+            String totpCode,
+
+            @NotBlank
             @Size(min = 5, max = 300)
             @Schema(description = "Why; shown to the Owner and kept in the audit log")
             String reason) {}
@@ -98,10 +103,12 @@ class PlanQueueController {
     @PostMapping(path = "/module-requests/{request_id}/decline", consumes = MediaType.APPLICATION_JSON_VALUE)
     @RequiresPermission("platform.tenants.manage")
     @Operation(
-            summary = "Decline a module request with a reason the Owner sees (ADR-073)",
+            summary =
+                    "Decline a module request with a reason the Owner sees; needs a current code from the operator's own authenticator (ADR-073)",
             operationId = "platformDeclineModuleRequest")
     ModuleRequestResponse decline(
             @PathVariable("request_id") UUID requestId, @Valid @RequestBody DeclineRequest request) {
+        security.requireTotp(request.totpCode());
         return plans.decideRequest(requestId, false, null, request.reason());
     }
 
