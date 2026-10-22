@@ -1,5 +1,5 @@
--- V81: lending increment 6 T2 (#265, part of #109): the waivers of penalty charges, directly after
--- V80 (the charges of T1, #264). Additive only.
+-- V82: lending increment 6 T2 (#265, part of #109): the waivers of penalty charges, directly after
+-- V81 (the charges of T1, #264). Additive only.
 
 -- ---------------------------------------------------------------------------------------------
 -- lending_charge_waivers (chapter 6 section 6.7; FR-ARR-04). One row per approved waiver of all or

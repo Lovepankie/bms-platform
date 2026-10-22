@@ -1353,7 +1353,7 @@ when a back-dated repayment shows a period was not owed, or owed less on a small
 effect), `reason text NOT NULL`, `approval_request_id uuid`, `requested_by uuid NOT NULL`,
 `approved_by uuid`. One row per approved waiver of all or part of a charge (FR-ARR-04); the
 charge's `waived_minor` is the sum of its rows. The statement dates a waiver by its row (ADR-034)
-and a reversal's replay keeps it (ADR-026). Nothing is posted. Built in V81 (#265), with the maker and checker as composite foreign keys to `users`. A waiver nets against its own charge: a
+and a reversal's replay keeps it (ADR-026). Nothing is posted. Built in V82 (#265), with the maker and checker as composite foreign keys to `users`. A waiver nets against its own charge: a
 payment never sees a later charge's waiver, and a back-dated repayment still cancels the unwaived rest
 of a partly waived charge.
 
