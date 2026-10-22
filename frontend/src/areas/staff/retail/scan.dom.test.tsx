@@ -54,17 +54,18 @@ function screenOf(node: ReactElement, role = 'admin', branch = BRANCH, capabilit
  * A key as a browser handles it, at time `at`: keydown, then, unless prevented, the character typed into the focused field
  * over its selection with a real input event, so React's onChange runs as it would for a scanner.
  */
-function press(key: string, at: number) {
+function press(key: string, at: number): Event {
   const target = document.activeElement ?? document.body;
   const down = createEvent.keyDown(target, { key });
   Object.defineProperty(down, 'timeStamp', { value: at });
   fireEvent(target, down);
-  if (down.defaultPrevented || key.length !== 1 || !(target instanceof HTMLInputElement)) return;
+  if (down.defaultPrevented || key.length !== 1 || !(target instanceof HTMLInputElement)) return down;
   const start = target.selectionStart ?? target.value.length;
   const end = target.selectionEnd ?? start;
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(target, target.value.slice(0, start) + key + target.value.slice(end));
   target.setSelectionRange(start + 1, start + 1);
   target.dispatchEvent(new Event('input', { bubbles: true }));
+  return down;
 }
 
 let clock = 0;
@@ -74,6 +75,16 @@ function typed(code: string, gapMs: number) {
   let at = (clock += 10000);
   for (const ch of code) press(ch, (at += gapMs));
   press('Enter', (clock = at + gapMs));
+}
+
+/**
+ * A scanner that stalls once: the first `split` keys of `code` 8 ms apart, a pause of `stallMs`, the rest, then Enter.
+ * Returns the Enter key event, so a test can see whether the form would have been submitted.
+ */
+function stalled(code: string, split: number, stallMs: number): Event {
+  let at = (clock += 10000);
+  [...code].forEach((ch, i) => press(ch, (at += i === split ? stallMs : 8)));
+  return press('Enter', (clock = at + 8));
 }
 
 /** A scanner: the code's keys in a fast burst on whatever has focus (the sale's scan box, or a field), then Enter. */
@@ -141,6 +152,28 @@ describe('FR-RET-68 scanning on the sale form', () => {
     await waitFor(() => expect(qtyOf(1)).toBe('1'));
     expect(price.value).toBe('5500');
     expect(price.selectionStart).toBe(2);
+  });
+
+  it('keeps the quantity it had before a scan that stalls part way, and never lets the stalled scan submit the sale', async () => {
+    await retail.addBarcode(LAMP, { code: EAN });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge(EAN);
+    await waitFor(() => expect(qtyOf(0)).toBe('1'));
+    const qty = document.getElementById('qty-0') as HTMLInputElement;
+    const submitted = vi.fn((e: Event) => e.preventDefault());
+    qty.form?.addEventListener('submit', submitted);
+    fireEvent.change(qty, { target: { value: '12' } });
+    qty.focus();
+    qty.setSelectionRange(2, 2);
+    // A pause longer than the gap in the middle of the code, leaving a tail long enough to look like a code of its own.
+    expect(stalled(EAN, 6, 120).defaultPrevented).toBe(true);
+    await waitFor(() => expect(screen.getByTestId('scan-unknown')).toBeTruthy());
+    expect(qtyOf(0)).toBe('12');
+    // A pause just before the end, leaving a trailing fragment too short to be a code: still nothing typed, no submit.
+    expect(stalled(EAN, 11, 120).defaultPrevented).toBe(true);
+    expect(qtyOf(0)).toBe('12');
+    expect(qty.selectionStart).toBe(2);
+    expect(submitted).not.toHaveBeenCalled();
   });
 
   it('waits in the scan box, so a scanner too slow to be told from typing still adds the item', async () => {

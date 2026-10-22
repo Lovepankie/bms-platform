@@ -89,17 +89,22 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
     const down = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Enter') {
-        const code = wedge.enter(e.timeStamp || performance.now());
-        if (code === null) return;
+        const at = e.timeStamp || performance.now();
+        const scanner = wedge.scanner(at);
+        const code = wedge.enter(at);
+        if (code === null && !scanner) return;
         // The scan box handles its own Enter.
         if (e.target instanceof HTMLElement && e.target.dataset.scanBox !== undefined) return;
+        // A scanner burst, even one that stalled part way and ended in a fragment too short to be a code: the field gets
+        // back what it had before the burst's first key and the Enter never reaches the form.
         e.preventDefault();
         e.stopPropagation();
         if (before && before.field === e.target) restore(before);
         before = null;
-        handler.current(code);
+        if (code !== null) handler.current(code);
       } else if (e.key.length === 1) {
         const t = e.target;
+        // The snapshot is taken only after the field was idle, so a mid-code pause cannot replace it with half a code.
         if (wedge.key(e.key, e.timeStamp || performance.now())) before = editable(t) ? { field: t, value: t.value, start: t.selectionStart, end: t.selectionEnd } : null;
       }
     };

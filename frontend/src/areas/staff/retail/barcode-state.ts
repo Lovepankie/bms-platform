@@ -115,23 +115,43 @@ export function saveSaleScanFocus(on: boolean): void {
 export const WEDGE_MIN = 4;
 
 /**
+ * How long a field must go without a key before the next key starts something new. A scanner can stall for longer
+ * than the gap in the middle of a code; until the field has been this quiet, the keys belong to the same burst.
+ */
+export const WEDGE_IDLE_MS = 500;
+
+/**
  * Collects the keys of one scanner burst: `key` with a printable character and its time, `enter` at the end. Returns
  * the code when Enter closes a burst of at least WEDGE_MIN characters that each came within WEDGE_GAP_MS of the last.
  */
 export function createWedge(gap = WEDGE_GAP_MS, min = WEDGE_MIN) {
   let buffer = '';
   let last = 0;
+  let started = false;
+  let burst = false;
   return {
-    /** True when this key starts a new burst (the first key, or one after a pause). */
+    /** True when this key starts something new: the first key, or one after the field was idle for WEDGE_IDLE_MS. */
     key(ch: string, at: number): boolean {
-      const fresh = buffer === '' || at - last > gap;
-      buffer = fresh ? ch : buffer + ch;
+      const idle = !started || at - last >= WEDGE_IDLE_MS;
+      if (idle) burst = false;
+      buffer = buffer === '' || at - last > gap ? ch : buffer + ch;
+      if (buffer.length >= min) burst = true;
+      started = true;
       last = at;
-      return fresh;
+      return idle;
+    },
+    /**
+     * True when Enter at `at` closes a scanner burst that stalled part way: a run of scanner keys came since the field
+     * was last idle and Enter follows at scanner speed, so the keys before Enter are a scanner's, not a person's.
+     */
+    scanner(at: number): boolean {
+      return burst && at - last <= gap * 3;
     },
     enter(at: number): string | null {
       const code = at - last <= gap * 3 && buffer.length >= min ? buffer : null;
       buffer = '';
+      started = false;
+      burst = false;
       return code;
     },
     reset() {
