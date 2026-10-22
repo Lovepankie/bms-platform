@@ -431,6 +431,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own feedback, newest first, with its status and the reply */
+        get: operations["listMyFeedback"];
+        put?: never;
+        /** Send an idea, a problem or a question to the platform operator, with an optional PNG or JPEG screenshot of at most 2 MB; at most 10 an hour per person (429 feedback_rate_limited) */
+        post: operations["sendFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feedback/{feedback_id}/screenshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The screenshot of one of the caller's own feedback items */
+        get: operations["getMyFeedbackScreenshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/payment-methods": {
         parameters: {
             query?: never;
@@ -2442,6 +2477,74 @@ export interface paths {
         put?: never;
         /** Set the first password with the one-time setup token */
         post: operations["platformSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Feedback from every business, newest first, optionally one status (new, seen, done) and only what was sent after since */
+        get: operations["platformListFeedback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/feedback/{feedback_id}/linked-issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear the number of the issue opened for one feedback item */
+        put: operations["platformSetFeedbackLinkedIssue"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/feedback/{feedback_id}/screenshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The screenshot sent with one feedback item */
+        get: operations["platformGetFeedbackScreenshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/feedback/{feedback_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Move one feedback item forward (new, seen, done) with an optional reply the sender sees; 422 feedback_status_backwards for a move back */
+        put: operations["platformSetFeedbackStatus"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7041,6 +7144,29 @@ export interface components {
         DuplicateCheckResponse: {
             candidates?: components["schemas"]["DuplicateCandidate"][];
         };
+        FeedbackItem: {
+            /** @description The version of BMS that was running (version and git SHA) */
+            app_version?: string;
+            /** Format: date-time */
+            created_at?: string;
+            has_screenshot?: boolean;
+            /** Format: uuid */
+            id?: string;
+            /** @description idea, problem or question */
+            kind?: string;
+            message?: string;
+            /** @description The path of the page it was sent from, or null */
+            page_path?: string;
+            /** @description The platform operator's reply, or null */
+            reply_note?: string;
+            /** @description new, seen or done */
+            status?: string;
+            /** Format: date-time */
+            status_changed_at?: string;
+        };
+        FeedbackList: {
+            items?: components["schemas"]["FeedbackItem"][];
+        };
         /** @description The same words whether or not the address matched */
         FindSignInAccepted: {
             message?: string;
@@ -8772,6 +8898,44 @@ export interface components {
              */
             monthly_minor?: number;
             reason?: string;
+        };
+        PlatformFeedbackItem: {
+            app_version?: string;
+            /** Format: date-time */
+            created_at?: string;
+            has_screenshot?: boolean;
+            /** Format: uuid */
+            id?: string;
+            kind?: string;
+            /** Format: int32 */
+            linked_issue_number?: number;
+            message?: string;
+            page_path?: string;
+            reply_note?: string;
+            sender_name?: string;
+            status?: string;
+            /** Format: date-time */
+            status_changed_at?: string;
+            /** Format: uuid */
+            tenant_id?: string;
+            tenant_name?: string;
+            tenant_slug?: string;
+            user_agent?: string;
+        };
+        PlatformFeedbackLinkedIssueRequest: {
+            /**
+             * Format: int32
+             * @description The number of the issue opened for this feedback; null clears it
+             */
+            linked_issue_number?: number;
+        };
+        PlatformFeedbackList: {
+            items?: components["schemas"]["PlatformFeedbackItem"][];
+        };
+        PlatformFeedbackStatusRequest: {
+            /** @description A reply the sender sees; null keeps the one there, an empty string clears it */
+            reply_note?: string;
+            status: string;
         };
         PlatformMe: {
             email?: string;
@@ -16885,6 +17049,81 @@ export interface operations {
             };
         };
     };
+    listMyFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackList"];
+                };
+            };
+        };
+    };
+    sendFeedback: {
+        parameters: {
+            query: {
+                kind: string;
+                message: string;
+                page_path?: string;
+            };
+            header?: {
+                "User-Agent"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    screenshot?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackItem"];
+                };
+            };
+        };
+    };
+    getMyFeedbackScreenshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
     listPaymentMethods: {
         parameters: {
             query?: never;
@@ -20523,6 +20762,105 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    platformListFeedback: {
+        parameters: {
+            query?: {
+                status?: string;
+                since?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackList"];
+                };
+            };
+        };
+    };
+    platformSetFeedbackLinkedIssue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformFeedbackLinkedIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackItem"];
+                };
+            };
+        };
+    };
+    platformGetFeedbackScreenshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    platformSetFeedbackStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformFeedbackStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformFeedbackItem"];
+                };
             };
         };
     };

@@ -190,6 +190,10 @@ const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path:
 const staffNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/notifications', staticData: { crumb: 'Notifications and app' } }).lazy(() =>
   import('../areas/staff/notifications/page').then((m) => m.Route),
 );
+// Feedback (issue #447, ADR-065): any member of staff sends an idea, a problem or a question to the BMS team.
+const staffFeedbackRoute = createRoute({ getParentRoute: () => staffRoute, path: '/feedback', staticData: { crumb: 'Feedback' } }).lazy(() =>
+  import('../areas/staff/feedback/page').then((m) => m.Route),
+);
 
 // Staff users: who works in the business, invite and roles (issue #319).
 const staffUsersRoute = createRoute({ getParentRoute: () => staffRoute, path: '/users', staticData: { crumb: 'Staff users' } }).lazy(() =>
@@ -293,6 +297,10 @@ const platformBusinessRoute = createRoute({ getParentRoute: () => platformRoute,
 );
 const platformPlansRoute = createRoute({ getParentRoute: () => platformRoute, path: '/plans' }).lazy(() =>
   import('../areas/platform/plans').then((m) => m.Route),
+);
+// Feedback from every business (issue #447, ADR-065).
+const platformFeedbackRoute = createRoute({ getParentRoute: () => platformRoute, path: '/feedback' }).lazy(() =>
+  import('../areas/platform/feedback').then((m) => m.Route),
 );
 
 const memberRoute = createRoute({ getParentRoute: () => rootRoute, path: '/member' }).lazy(() =>
@@ -407,7 +415,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,
@@ -423,6 +431,7 @@ export const router = createRouter({
       platformBusinessesRoute,
       platformBusinessRoute,
       platformPlansRoute,
+      platformFeedbackRoute,
     ]),
   ]),
 });

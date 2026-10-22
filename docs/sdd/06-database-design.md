@@ -574,6 +574,29 @@ the endpoint is the device, so it is one row in the tenant, and a second person 
 they are never logged or audited, and they are not copied into the outbox. The same migration widens the CHECK on `notification_outbox.channel` to
 `email`, `telegram`, `sms` and `push`.
 
+### `feedback_items` (RLS)
+
+(std without `updated_at` and `version`; ADR-065; migration `V80`, issue #447) One row per idea, problem or question a member of staff
+sent from inside the app. `sender_user_id uuid NOT NULL` (FK `(tenant_id, sender_user_id)` to `users`), `kind text NOT NULL` (`idea`,
+`problem`, `question`), `message text NOT NULL` (1 to 2000 characters once trimmed), `page_path varchar(300)` (the path of the page the
+sender came from, starting with `/`; the service drops any query and fragment), `app_version varchar(100) NOT NULL` (the running version
+and git SHA, from the server's own build), `user_agent varchar(400)`, `screenshot_document_id uuid` (FK `(tenant_id,
+screenshot_document_id)` to `documents`; a core document of subject type `core.feedback`), `status text NOT NULL DEFAULT 'new'` (`new`,
+`seen`, `done`), `reply_note text` (1 to 2000 characters, the operator's reply the sender sees), `status_changed_at timestamptz`,
+`status_changed_by uuid` (FK to `platform_users`; the date and the operator change only when the status does, not for a
+reply alone), `linked_issue_number integer` (`CHECK (linked_issue_number > 0)`, the issue the operator opened for the item, null
+when none), `created_at timestamptz`. `UNIQUE (tenant_id, id)`. Indexes `(tenant_id,
+sender_user_id, created_at DESC)` (the sender's list and the hourly limit) and `(status, created_at DESC)` (the operator's list). Grants
+`SELECT, INSERT` only: the status and the reply change only through `platform_feedback_set_status`. Four SECURITY DEFINER functions,
+each refusing a transaction bound to a tenant (ADR-016): `platform_feedback_list(status, id, since, limit, offset)` (newest first across
+every business, only what was sent after `since` when it is given, at most 200 a page, with the business's slug and name, the sender's
+name and the linked issue), `platform_feedback_tenant(id)` (the business of
+one item, so the operator's screenshot read can bind it) and `platform_feedback_set_status(id, status, reply, platform_user_id, now)`
+(forward only; answers `not_found`, `backwards` or the tenant id; a null reply keeps the one there, an empty one or one of only spaces, tabs and line breaks clears it) and
+`platform_feedback_set_linked_issue(id, issue)` (sets the linked issue or clears it with a null; answers `not_found` or the tenant id).
+The status and the reply change only through `platform_feedback_set_status`, the linked issue only through
+`platform_feedback_set_linked_issue`.
+
 ### `auth_sessions` (RLS)
 
 (std, no `version`) `user_id uuid NOT NULL`, `family_id uuid NOT NULL`,

@@ -428,6 +428,16 @@ The refresh token never appears in a response body: it is the `__Host-bms_rt` co
 | PUT | `/platform/tenants/{tenant_id}/sms/sender-ids/{sender_id}` | `platform.tenants.manage` | Approves a sender id (3 to 11 letters and digits with at least one letter, else 422) for the tenant, which can then choose it; 409 `sender_id_taken` when another tenant holds it (an id belongs to one tenant at a time, compared without case); idempotent for the same tenant; audited as `platform.sms.sender_id_approved`. Registration with the provider and the networks is done first (runbook `sms-setup`) |
 | DELETE | `/platform/tenants/{tenant_id}/sms/sender-ids/{sender_id}` | `platform.tenants.manage` | Withdraws the approval (404 when there is none); the tenant's messages go from the shared sender at once, its settings keep the name and show it as withdrawn; audited as `platform.sms.sender_id_withdrawn` |
 
+Feedback from every business (issue #447, ADR-065, FR-FBK-03), served by `core.platform` through the `FeedbackInbox` port of
+`core.feedback`:
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/platform/feedback` | `platform.tenants.read` | `?status=` (new, seen or done), `since` (an ISO 8601 instant: only what was sent after it), `limit` (1 to 200, default 50) and `offset`. `{items: [PlatformFeedbackItem]}` newest first across every business: the business's id, slug and name, the sender's name, kind, message, page path, app version, user agent, `has_screenshot`, status, reply, `linked_issue_number` and dates. Read through `platform_feedback_list` (V80) |
+| PUT | `/platform/feedback/{feedback_id}/status` | `platform.tenants.manage` | `{status, reply_note?}`: forward only (new, seen, done); 422 `feedback_status_backwards`; the same status keeps it and its date and may change the reply (null keeps it, empty or white space only clears it); audited `platform.feedback.status_changed` with before and after |
+| PUT | `/platform/feedback/{feedback_id}/linked-issue` | `platform.tenants.manage` | `{linked_issue_number}`: the number of the issue opened for the item (a whole number above zero, else 422), or null to clear it; 404 when there is no such item; audited `platform.feedback.issue_linked` with before and after. Through `platform_feedback_set_linked_issue` (V80) |
+| GET | `/platform/feedback/{feedback_id}/screenshot` | `platform.tenants.read` | The picture (PNG or JPEG), read with the item's business bound (`TenantContext.callAs`); 404 when there is none |
+
 The sign-up endpoints sit under `/platform` so they are served only on the platform host and
 resolve no tenant; they need no token. Their link token travels in the body: the emailed link
 carries it in the URL fragment, which no server receives.
@@ -1355,6 +1365,17 @@ Nothing is read for a 204 (no figures of the caller), and the card is not drawn.
 
 The daily job `lending.advisor-daily-brief` is not a route: every 15 minutes it makes, for each active lending tenant with the
 assistant on and on the platform list, the brief of the Africa/Kampala business date its run was due on (not before 06:00), once per tenant and date.
+
+### 7.11.25 Feedback (`/feedback`, ADR-065, issue #447)
+
+Open to every signed-in member of staff (`@AuthenticatedEndpoint(kind = "staff")`, like `/me`): no matrix permission. The operator's
+side is in section 7.11.3.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| POST | `/feedback` | authenticated staff | `multipart/form-data`: `kind` (`idea`, `problem`, `question`), `message` (1 to 2000 characters), `page_path` (optional; only the path is kept), `screenshot` (optional PNG or JPEG, at most 2 MB). The user agent is read from the request and the version from the server's own build. 201 with the `FeedbackItem`. 422 `validation_failed`, `screenshot_not_an_image`, `screenshot_too_large`; 429 `feedback_rate_limited` with `Retry-After` after 10 in an hour (FR-FBK-01, FR-FBK-05). Queues the operator email in a savepoint (FR-FBK-04) |
+| GET | `/feedback` | authenticated staff | `{items: [FeedbackItem]}`: the caller's own, newest first, at most 100, with status, reply and `has_screenshot` (FR-FBK-02) |
+| GET | `/feedback/{feedback_id}/screenshot` | authenticated staff | The picture of one of the caller's own items; 404 for anyone else's or none |
 
 ## 7.12 Example: record a repayment
 

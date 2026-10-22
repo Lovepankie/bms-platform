@@ -54,6 +54,14 @@ const notifications: TourStep = {
   body: 'Tap Notifications to install BMS on your phone. There you can also turn on a notice for when something needs you, such as an approval.',
 };
 
+// Feedback (issue #447): every member of staff can tell the BMS team an idea, a problem or a question.
+const feedback: TourStep = {
+  id: 'feedback',
+  target: 'nav-feedback',
+  title: 'Tell us what you think',
+  body: 'Tap Feedback to send the BMS team an idea, a problem or a question. Add a picture of the screen if it helps. You see our reply there too. On a phone it is also under Help.',
+};
+
 // The theme selector in the header (issue #429): System, Light or Dark, kept on this device. Every area has it.
 const theme: TourStep = {
   id: 'theme',
@@ -126,7 +134,8 @@ export const adminWelcome: Tour = {
   // Version 15 adds the Notifications step: install the app and turn on notifications (ADR-050).
   // Version 16 adds the Light or dark step (issue #429): the theme selector at the top right.
   // Version 17 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
-  version: 17,
+  // Version 18 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
+  version: 18,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -357,6 +366,7 @@ export const adminWelcome: Tour = {
     },
     insights,
     notifications,
+    feedback,
     refresh,
     theme,
     help,
@@ -374,7 +384,8 @@ export const retailSales: Tour = {
   // Version 9 adds the Light or dark step (issue #429): the theme selector at the top right.
   // Version 10 words the Save step for Share receipt and WhatsApp customer (issue #439): send the receipt from your phone.
   // Version 11 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
-  version: 11,
+  // Version 12 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
+  version: 12,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -517,6 +528,7 @@ export const retailSales: Tour = {
       body: 'On a phone, your most used pages are always at the bottom of the screen.',
     },
     notifications,
+    feedback,
     refresh,
     theme,
     help,
@@ -528,7 +540,8 @@ export const staffWelcome: Tour = {
   // Version 3 adds the Notifications step: install the app and turn on notifications (ADR-050).
   // Version 4 adds the Light or dark step (issue #429): the theme selector at the top right.
   // Version 5 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
-  version: 5,
+  // Version 6 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
+  version: 6,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -568,6 +581,7 @@ export const staffWelcome: Tour = {
       body: 'Sales and stock live here.',
     },
     notifications,
+    feedback,
     refresh,
     theme,
     help,
@@ -969,6 +983,48 @@ export const notificationsPage: Tour = {
       id: 'turn-on-card',
       title: 'Asked once, with one tap',
       body: 'When you open the installed app, a card asks "Get told when something needs you?". Tap Turn on and your phone asks once. Not now asks again in a few days, at most three times.',
+    },
+  ],
+};
+
+// Feedback (issue #447, ADR-065): the form and what the person sent before, with the BMS team's reply.
+export const feedbackPage: Tour = {
+  id: 'page-feedback',
+  version: 1,
+  title: 'This page: feedback',
+  audience: () => true,
+  autoStart: false,
+  page: '/staff/feedback',
+  steps: [
+    {
+      id: 'kind',
+      target: 'feedback-kind',
+      title: 'What is it?',
+      body: 'Choose an idea, a problem or a question.',
+    },
+    {
+      id: 'message',
+      target: 'feedback-message',
+      title: 'Your message',
+      body: 'Say it in your own words, up to 2000 characters. For a problem, say what you did and what happened.',
+    },
+    {
+      id: 'screenshot',
+      target: 'feedback-screenshot',
+      title: 'A picture of the screen',
+      body: 'If it helps, add a PNG or JPEG picture of up to 2 MB. The page you came from, the version of BMS and your browser go with it on their own.',
+    },
+    {
+      id: 'send',
+      target: 'feedback-send',
+      title: 'Send it',
+      body: 'Tap Send feedback. It goes to the BMS team, and you can send up to 10 in an hour.',
+    },
+    {
+      id: 'history',
+      target: 'feedback-history',
+      title: 'What you sent',
+      body: 'Everything you sent is here, with whether the team has read it or finished with it, and their reply. Only you see your own.',
     },
   ],
 };
@@ -1607,7 +1663,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, notificationsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, notificationsPage, feedbackPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

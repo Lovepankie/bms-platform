@@ -143,4 +143,42 @@ export const plansPage: Tour = {
   ],
 };
 
-export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage];
+// Feedback from every business (issue #447, ADR-065).
+export const feedbackInboxPage: Tour = {
+  id: 'page-operator-feedback',
+  version: 1,
+  title: 'This page: feedback',
+  audience: forOperator,
+  autoStart: false,
+  page: '/platform/feedback',
+  steps: [
+    {
+      id: 'filter',
+      target: 'feedback-filter',
+      title: 'Show by status',
+      body: 'New is what nobody has read yet. Seen is read and still open. Done is finished. All shows everything, newest first.',
+    },
+    {
+      id: 'list',
+      target: 'feedback-list',
+      title: 'One card per message',
+      body: 'Each card shows the business, who sent it, the page, the version and the browser. Show the screenshot opens the picture they added.',
+    },
+    {
+      id: 'reply',
+      target: 'feedback-reply',
+      title: 'Reply',
+      body: 'Write a reply here. The sender sees it on their own Feedback page.',
+      optional: true,
+    },
+    {
+      id: 'actions',
+      target: 'feedback-actions',
+      title: 'Mark it seen or done',
+      body: 'A message moves forward only: new, then seen, then done. Save the reply keeps the status as it is.',
+      optional: true,
+    },
+  ],
+};
+
+export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, feedbackInboxPage];

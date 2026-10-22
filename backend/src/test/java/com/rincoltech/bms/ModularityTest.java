@@ -44,6 +44,7 @@ class ModularityTest {
                         "core.platform",
                         "core.onboarding",
                         "core.reporting",
+                        "core.feedback",
                         "lending.advisor",
                         "lending.collateral",
                         "lending.insights",

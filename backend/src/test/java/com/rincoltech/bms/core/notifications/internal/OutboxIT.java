@@ -536,6 +536,10 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("change", "saved"),
                 Map.entry("who", "Test Administrator"),
                 Map.entry("when", "18 Oct 2026 10:00 UTC"),
+                Map.entry("sender_name", "Test Staff 01"),
+                Map.entry("kind", "idea"),
+                Map.entry("page", "/staff/retail/sale"),
+                Map.entry("message", "Test feedback message."),
                 Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {

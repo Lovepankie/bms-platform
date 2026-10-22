@@ -1,4 +1,4 @@
-import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { type KeyboardEvent, type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, type Me } from '../api/client';
@@ -290,7 +290,8 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
  * dialog (a bottom sheet on a phone) sits in the top layer, so the staff bar's clipping cannot hide
  * it, and the browser keeps focus inside it and closes it on Escape.
  */
-export function HelpMenu() {
+/** The Help sheet: the tours, and in the staff area (`feedback`) a way to send feedback, which a phone reaches from here. */
+export function HelpMenu({ feedback = false }: { feedback?: boolean } = {}) {
   const { mainTour, pageTour, start } = useTour();
   const dialog = useRef<HTMLDialogElement>(null);
 
@@ -318,6 +319,11 @@ export function HelpMenu() {
             </button>
           )}
           {!mainTour && !pageTour && <p className="muted">There is no tour for this page yet.</p>}
+          {feedback && (
+            <Link to="/staff/feedback" className="btn" onClick={() => dialog.current?.close()}>
+              Send feedback
+            </Link>
+          )}
           <button type="button" className="btn-ghost" onClick={() => dialog.current?.close()}>
             Close
           </button>

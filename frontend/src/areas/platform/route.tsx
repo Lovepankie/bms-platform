@@ -69,6 +69,7 @@ function PortalLayout() {
             <Link to="/platform/businesses">Businesses</Link>
             <Link to="/platform/plans">Plans and prices</Link>
             <Link to="/platform/outbox">Messages not sent</Link>
+            <Link to="/platform/feedback">Feedback</Link>
           </nav>
         </header>
         <Outlet />

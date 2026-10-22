@@ -54,6 +54,11 @@ class EmailLayoutTest {
         p.put("change", "saved");
         p.put("who", "Test Administrator");
         p.put("when", "18 Oct 2026 10:00 UTC");
+        // In-app feedback (issue #447): the sender's words are a value a user typed.
+        p.put("sender_name", "Test Staff 01");
+        p.put("kind", "problem");
+        p.put("page", "/staff/retail/sale");
+        p.put("message", "Test message <b>with</b> markup & an ampersand.");
         return p;
     }
 

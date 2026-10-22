@@ -317,6 +317,25 @@ class OutboxTemplates {
                     null,
                     "You got this email because someone asked for the BMS sign-in page of this address."));
 
+    // In-app feedback (issue #447, ADR-065): one email per active platform operator for each item a business sends. The
+    // message is the sender's own words, shown as text (every value is escaped in the HTML part); the link is the
+    // operator's Feedback page on the platform host.
+    private static final Map<String, Template> EMAIL_FEEDBACK = Map.of(
+            "feedback.new",
+            new Template(
+                    "New feedback from {business_name}: {kind}",
+                    """
+                    {sender_name} at {business_name} sent feedback ({kind}) from the page {page}:
+
+                    {message}
+
+                    Open the Feedback page of the operator portal to mark it seen or done and to reply:
+
+                    {portal_url}
+                    """,
+                    "Open the Feedback page",
+                    "You got this email because you are a BMS platform operator."));
+
     private static final Map<String, Template> EMAIL = emailTemplates();
 
     private static Map<String, Template> emailTemplates() {
@@ -325,6 +344,7 @@ class OutboxTemplates {
         all.putAll(EMAIL_RETAIL);
         all.putAll(EMAIL_POLICY);
         all.putAll(EMAIL_FIND_SIGN_IN);
+        all.putAll(EMAIL_FEEDBACK);
         return Map.copyOf(all);
     }
 

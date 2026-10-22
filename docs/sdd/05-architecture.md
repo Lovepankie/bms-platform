@@ -108,7 +108,8 @@ core.* (non-kernel)   -> core.tenancy, core.identity, core.audit
 core.identity         -> core.tenancy, core.audit, core.notifications
 core.approvals        -> core.tenancy, core.audit, core.jobs
                          (executes through a registry the verticals register into; never imports them, ADR-015)
-core.platform         -> core.tenancy, core.identity, core.audit, core.operations (the platform console, ADR-016; the Idempotency-Key of a payment, ADR-056)
+core.platform         -> core.tenancy, core.identity, core.audit, core.operations, core.feedback (the platform console, ADR-016; the Idempotency-Key of a payment, ADR-056; the operator's feedback list through FeedbackInbox, ADR-065)
+core.feedback         -> core.tenancy, core.audit, core.documents, core.notifications (in-app feedback, ADR-065: the screenshot is a core document, the operator email goes through the outbox)
 core.onboarding       -> core.tenancy, core.platform, core.audit, core.notifications
                          (Activate creates the tenant through core.platform's TenantProvisioning, ADR-024)
 core.notifications    -> core.audit (the operator's "send again" is audited)
@@ -214,6 +215,7 @@ to other modules.
 | `core.approvals` | `...core.approvals` | `Approvals.request`, the `ApprovalAction` registry, the queue and decisions, nightly expiry (ADR-015) |
 | `core.notifications` | `...core.notifications` | The `Notifier` port and a recording fake adapter; no provider yet |
 | `core.platform` | `...core.platform` | The platform console API: tenants, modules, subscriptions, admin MFA reset (ADR-016); the price book, payments entered by the operator and the Business page overview (ADR-056) |
+| `core.feedback` | `...core.feedback` | In-app feedback (issue #447, ADR-065): the staff send with an optional screenshot, the sender's own list, the ten-an-hour limit, the operator email through the outbox, and the public port `FeedbackInbox` the platform console serves the operator's list, status change and screenshot through |
 | `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |
 | `core.documents` | `...core.documents` | `Documents` (upload, find), the `DocumentAccess` registry, the object storage port with the R2 adapter and the dev and test fake, signed download URLs (#12) |
 | `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |

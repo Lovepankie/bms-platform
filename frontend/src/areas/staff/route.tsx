@@ -24,6 +24,7 @@ import { canSeeProfit, showRetail } from './retail/permissions';
 import { showReceivePayments } from './payments/state';
 import { showSms } from './sms/state';
 import { showUsers } from './users/state';
+import { rememberPage } from './feedback/feedback-state';
 import { TwoStepNotices } from './two-step/notices';
 import { OwnTwoStep } from './two-step/own';
 import { mustSetUp } from './two-step/state';
@@ -67,6 +68,8 @@ function StaffLayout() {
     if (signedIn && !mock) void push.sync();
   }, [signedIn, mock]);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // Feedback sends the page the person came from (issue #447).
+  useEffect(() => rememberPage(pathname), [pathname]);
   const managesSettings = (me.data?.permissions ?? []).includes('core.settings.manage');
   const settings = useQuery({ queryKey: ['settings'], queryFn: fetchSettings, enabled: managesSettings && !mock });
 
@@ -129,7 +132,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
           <span className="avatar">{icons.user}</span>
           <span className="staff-user-name">{me.full_name}</span>
         </span>
-        <HelpMenu />
+        <HelpMenu feedback />
         <BranchPicker me={me} branch={branch} onChoose={onBranch} />
         <button className="btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>
       </div>
@@ -149,6 +152,7 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         {showReceivePayments(me) && <Link to="/staff/payments">Receive payments</Link>}
         {showUsers(me) && <Link to="/staff/users" data-tour="nav-users">Users</Link>}
         <Link to="/staff/notifications" data-tour="nav-notifications">Notifications</Link>
+        <Link to="/staff/feedback" data-tour="nav-feedback">Feedback</Link>
         {permissions.includes('core.settings.manage') && <Link to="/staff/setup">Business set-up</Link>}
       </nav>
     </header>

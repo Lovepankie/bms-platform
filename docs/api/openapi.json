@@ -1778,6 +1778,58 @@
           }
         }
       },
+      "FeedbackItem" : {
+        "properties" : {
+          "app_version" : {
+            "description" : "The version of BMS that was running (version and git SHA)",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "has_screenshot" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "idea, problem or question",
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "page_path" : {
+            "description" : "The path of the page it was sent from, or null",
+            "type" : "string"
+          },
+          "reply_note" : {
+            "description" : "The platform operator's reply, or null",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "new, seen or done",
+            "type" : "string"
+          },
+          "status_changed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "FeedbackList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FeedbackItem"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "FindSignInAccepted" : {
         "description" : "The same words whether or not the address matched",
         "properties" : {
@@ -5851,6 +5903,98 @@
             "type" : "string"
           }
         }
+      },
+      "PlatformFeedbackItem" : {
+        "properties" : {
+          "app_version" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "has_screenshot" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "linked_issue_number" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "page_path" : {
+            "type" : "string"
+          },
+          "reply_note" : {
+            "type" : "string"
+          },
+          "sender_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "status_changed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant_name" : {
+            "type" : "string"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          },
+          "user_agent" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformFeedbackLinkedIssueRequest" : {
+        "properties" : {
+          "linked_issue_number" : {
+            "description" : "The number of the issue opened for this feedback; null clears it",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        }
+      },
+      "PlatformFeedbackList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformFeedbackItem"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "PlatformFeedbackStatusRequest" : {
+        "properties" : {
+          "reply_note" : {
+            "description" : "A reply the sender sees; null keeps the one there, an empty string clears it",
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "status" : {
+            "pattern" : "new|seen|done",
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ]
       },
       "PlatformMe" : {
         "properties" : {
@@ -21528,6 +21672,115 @@
         "tags" : [ "documents" ]
       }
     },
+    "/api/v1/feedback" : {
+      "get" : {
+        "operationId" : "listMyFeedback",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FeedbackList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own feedback, newest first, with its status and the reply",
+        "tags" : [ "feedback" ]
+      },
+      "post" : {
+        "operationId" : "sendFeedback",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "kind",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "message",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "page_path",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "User-Agent",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "screenshot" : {
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/FeedbackItem"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send an idea, a problem or a question to the platform operator, with an optional PNG or JPEG screenshot of at most 2 MB; at most 10 an hour per person (429 feedback_rate_limited)",
+        "tags" : [ "feedback" ]
+      }
+    },
+    "/api/v1/feedback/{feedback_id}/screenshot" : {
+      "get" : {
+        "operationId" : "getMyFeedbackScreenshot",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "feedback_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The screenshot of one of the caller's own feedback items",
+        "tags" : [ "feedback" ]
+      }
+    },
     "/api/v1/ledger/payment-methods" : {
       "get" : {
         "operationId" : "listPaymentMethods",
@@ -26954,6 +27207,162 @@
         },
         "summary" : "Set the first password with the one-time setup token",
         "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/feedback" : {
+      "get" : {
+        "operationId" : "platformListFeedback",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "since",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformFeedbackList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Feedback from every business, newest first, optionally one status (new, seen, done) and only what was sent after since",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/feedback/{feedback_id}/linked-issue" : {
+      "put" : {
+        "operationId" : "platformSetFeedbackLinkedIssue",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "feedback_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformFeedbackLinkedIssueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformFeedbackItem"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set or clear the number of the issue opened for one feedback item",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/feedback/{feedback_id}/screenshot" : {
+      "get" : {
+        "operationId" : "platformGetFeedbackScreenshot",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "feedback_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The screenshot sent with one feedback item",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/feedback/{feedback_id}/status" : {
+      "put" : {
+        "operationId" : "platformSetFeedbackStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "feedback_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformFeedbackStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformFeedbackItem"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Move one feedback item forward (new, seen, done) with an optional reply the sender sees; 422 feedback_status_backwards for a move back",
+        "tags" : [ "platform" ]
       }
     },
     "/api/v1/platform/find-sign-in" : {

@@ -945,6 +945,11 @@ class RlsIsolationIT {
                         "INSERT INTO retail_notice_runs (tenant_id, kind, run_on) VALUES (?, 'daily_summary', DATE '2026-01-15')")
                 .param(t.tenantId())
                 .update();
+        // A feedback item a member of staff sent from inside the app (migration V80, #447).
+        owner.sql("""
+                        INSERT INTO feedback_items (id, tenant_id, sender_user_id, kind, message, app_version)
+                        VALUES (?, ?, ?, 'idea', 'Test feedback message', 'test (abc123)')
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
     }
 
     /**

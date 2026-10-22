@@ -11,6 +11,7 @@ const TEMPLATE_LABEL: Record<string, string> = {
   'onboarding.rejected': 'Application not accepted',
   'onboarding.activation': 'Activation link',
   'onboarding.operator_alert': 'Operator alert',
+  'feedback.new': 'New feedback',
 };
 
 export function OutboxView({ status, busyId, onRetry }: { status: OutboxStatus; busyId: string | null; onRetry: (id: string) => void }) {
