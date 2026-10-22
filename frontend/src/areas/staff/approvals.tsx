@@ -64,6 +64,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
     <tr>
       <td data-label="Action">
         <What item={item} />
+        {item.checker_notice && <p className="hint" role="note"><strong>{item.checker_notice}</strong></p>}
         {item.action_type === 'collateral_release' && item.subject_id && (
           <>
             {' '}

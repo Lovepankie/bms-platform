@@ -232,7 +232,11 @@ class ApprovalService implements Approvals {
         events.publishEvent(new PushNotice(
                 "core.approval_waiting",
                 id.toString(),
-                new PushNotice.Holders(action.checkerPermission(), request.branchId(), makerId),
+                new PushNotice.Holders(
+                        action.checkerPermission(),
+                        request.branchId(),
+                        makerId,
+                        action.extraCheckerPermissions(request.payload())),
                 Map.of("action_label", label(action.actionType()), "path", "/staff/approvals")));
         return id;
     }
@@ -554,6 +558,9 @@ class ApprovalService implements Approvals {
                 r.decisionNote(),
                 r.executionError(),
                 withPayload ? r.payload() : null,
+                r.payload() != null && r.payload().get(ApprovalAction.CHECKER_NOTICE) instanceof String notice
+                        ? notice
+                        : null,
                 canDecide,
                 canCancel);
     }

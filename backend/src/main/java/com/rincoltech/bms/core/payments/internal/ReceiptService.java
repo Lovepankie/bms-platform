@@ -1,7 +1,9 @@
 package com.rincoltech.bms.core.payments.internal;
 
+import com.rincoltech.bms.core.approvals.ApprovalAction;
 import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
+import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.PaymentMethods;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
@@ -51,6 +53,9 @@ class ReceiptService {
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 200;
     private static final Set<String> STATUSES = Set.of("open", "allocated", "refunded", "reversed");
+    /** The payload key of the credit balance an allocation above the loan's payoff creates (ADR-035 decision 64). */
+    static final String CREDIT_BALANCE = "credit_balance_minor";
+
     private static final Pattern REFERENCE = Pattern.compile("^[\\x20-\\x7E]{1,100}$");
 
     private final ReceiptStore receipts;
@@ -60,6 +65,7 @@ class ReceiptService {
     private final Approvals approvals;
     private final Idempotency idempotency;
     private final BusinessClock clock;
+    private final AuditLog audit;
 
     ReceiptService(
             ReceiptStore receipts,
@@ -68,7 +74,9 @@ class ReceiptService {
             PaymentMethods methods,
             Approvals approvals,
             Idempotency idempotency,
-            BusinessClock clock) {
+            BusinessClock clock,
+            AuditLog audit) {
+        this.audit = audit;
         this.receipts = receipts;
         this.intents = intents;
         this.registry = registry;
@@ -181,19 +189,53 @@ class ReceiptService {
             if (!principal.may(ALLOCATE, targetBranch)) {
                 throw denied();
             }
+            long excess = 0;
             try {
                 handler.describe(r.subjectId(), receipt.amountMinor(), receipt.currency());
             } catch (PurposeRefusal refusal) {
-                // A payment above the payoff is not wrong here: the excess is the loan's credit balance (spec 3.7).
+                // A payment above the payoff is not refused here: spec 3.7 governs, and the excess becomes the loan's
+                // credit
+                // balance, as an overpayment at the counter does (ADR-035 decision 64). The checker is told so plainly,
+                // and
+                // the request and its audit row carry the excess.
                 if (!"exceeds_payoff".equals(refusal.code())) {
                     throw ApiException.rule(refusal.code(), "That loan or account cannot take this money now.");
                 }
+                excess = receipt.amountMinor()
+                        - handler.payoffMinor(r.subjectId()).orElse(receipt.amountMinor());
             }
             Map<String, Object> payload = snapshot(receipt, r.reason());
             payload.put(ReceiptSettler.PURPOSE, r.purpose());
             payload.put(ReceiptSettler.SUBJECT_ID, r.subjectId().toString());
             payload.put(ReceiptSettler.SUBJECT_BRANCH_ID, targetBranch.toString());
-            return outcome(receipt, ReceiptAllocationAction.TYPE, payload);
+            if (excess > 0) {
+                String subject = handler.label(r.subjectId()).orElse("the loan");
+                payload.put(CREDIT_BALANCE, excess);
+                payload.put(
+                        ApprovalAction.CHECKER_NOTICE,
+                        "This creates a credit balance of " + receipt.currency() + " "
+                                + whole(excess, receipt.currency())
+                                + " on " + subject + ": the payment is more than the " + receipt.currency() + " "
+                                + whole(receipt.amountMinor() - excess, receipt.currency())
+                                + " it takes to pay it off today.");
+            }
+            ActionOutcome result = outcome(receipt, ReceiptAllocationAction.TYPE, payload);
+            if (excess > 0) {
+                Map<String, Object> after = new LinkedHashMap<>();
+                after.put("approval_request_id", result.approvalRequestId());
+                after.put("subject_id", r.subjectId());
+                after.put("amount_minor", receipt.amountMinor());
+                after.put(CREDIT_BALANCE, excess);
+                after.put("currency", receipt.currency());
+                audit.record(new AuditLog.Entry(
+                        "core.payments.receipt.allocation_creates_credit",
+                        "unallocated_receipt",
+                        receipt.id(),
+                        receipt.branchId(),
+                        Map.of(),
+                        after));
+            }
+            return result;
         });
     }
 
@@ -277,5 +319,20 @@ class ReceiptService {
                 "permission_denied",
                 "Permission denied",
                 "You do not have permission to allocate payments for this branch.");
+    }
+
+    /** An amount in minor units as a person reads it, with thousands separators ("UGX 450,000"). */
+    static String whole(long minor, String currency) {
+        int digits;
+        try {
+            digits = Math.max(0, java.util.Currency.getInstance(currency).getDefaultFractionDigits());
+        } catch (IllegalArgumentException e) {
+            digits = 0;
+        }
+        java.math.BigDecimal value = java.math.BigDecimal.valueOf(minor, digits);
+        java.text.DecimalFormat format = new java.text.DecimalFormat(
+                digits == 0 ? "#,##0" : "#,##0." + "0".repeat(digits),
+                java.text.DecimalFormatSymbols.getInstance(java.util.Locale.ROOT));
+        return format.format(value);
     }
 }

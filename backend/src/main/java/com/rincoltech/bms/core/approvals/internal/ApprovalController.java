@@ -60,6 +60,11 @@ class ApprovalController {
             @Schema(description = "The snapshot executed on approval; detail only (FR-APR-08)")
             Map<String, Object> payload,
 
+            @Schema(
+                    description =
+                            "A sentence the checker must read before deciding, when the request carries one (for example the credit balance an allocation creates); in the list and the detail")
+            String checkerNotice,
+
             boolean canDecide,
             boolean canCancel) {}
 

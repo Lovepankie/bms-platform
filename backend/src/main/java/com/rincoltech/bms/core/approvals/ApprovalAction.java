@@ -12,6 +12,12 @@ import java.util.UUID;
  */
 public interface ApprovalAction {
 
+    /**
+     * The payload key of a sentence the checker must read before deciding (for example "This creates a credit balance of UGX
+     * 450,000 on loan LN-0001."). The approval list and detail return it as {@code checker_notice}.
+     */
+    String CHECKER_NOTICE = "checker_notice";
+
     /** Lower snake case, for example {@code loan_disbursement}; stored in {@code approval_requests}. */
     String actionType();
 

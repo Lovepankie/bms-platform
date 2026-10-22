@@ -44,9 +44,21 @@ public record PushNotice(String template, String eventRef, Audience audience, Ma
 
     /**
      * Every active staff user who holds the permission through a role, in the branch when one is given (a role with no
-     * branch holds it everywhere), without the user who caused the event when one is given.
+     * branch holds it everywhere), without the user who caused the event when one is given. When {@code alsoHeld} names more
+     * permissions, only users who hold every one of them as well (in the branch, or everywhere) are reached: a request that needs
+     * two permissions to decide is announced only to those who can decide it.
      */
-    public record Holders(String permission, UUID branchId, UUID exceptUserId) implements Audience {}
+    public record Holders(String permission, UUID branchId, UUID exceptUserId, Set<String> alsoHeld)
+            implements Audience {
+
+        public Holders {
+            alsoHeld = alsoHeld == null ? Set.of() : Set.copyOf(alsoHeld);
+        }
+
+        public Holders(String permission, UUID branchId, UUID exceptUserId) {
+            this(permission, branchId, exceptUserId, Set.of());
+        }
+    }
 
     /**
      * The staff of one branch: every active staff user who holds the permission through a role given for that branch

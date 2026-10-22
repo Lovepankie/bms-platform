@@ -536,7 +536,7 @@ version 2).
 
 | Method | Path | Permission | Notes |
 |---|---|---|---|
-| GET | `/approvals` | `core.approvals.read` | `?status=pending&action_type=...`; returns only requests the principal may decide or made. FR-APR-05 |
+| GET | `/approvals` | `core.approvals.read` | `?status=pending&action_type=...`; returns only requests the principal may decide or made; each item carries `checker_notice` when the request has a sentence the checker must read (an allocation that creates a credit balance, ADR-035 decision 51). FR-APR-05 |
 | GET | `/approvals/{approval_id}` | `core.approvals.read` | Includes payload snapshot and subject summary |
 | POST | `/approvals/{approval_id}/approve` | `core.approvals.read`, then the action type's checker permission in the request's branch (chapter 8 section 8.4) | Executes the action in the same transaction. FR-APR-06 |
 | POST | `/approvals/{approval_id}/reject` | same | `{note}` required |

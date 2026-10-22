@@ -1429,7 +1429,7 @@ class MigrationOrderIT {
 
     /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
     static void verifyUnallocatedReceiptsMigration(String url) {
-        // The version just before V84 on this branch (V79 today, V83 once the lending migrations V80 to V83 are on
+        // The version just before V84 on this branch (V79 today, V82 once the lending migrations V80 to V82 are on
         // main).
         String before = VERSIONS.get(VERSIONS.indexOf("84") - 1);
         assertThat(flyway(url, before).migrate().targetSchemaVersion).isEqualTo(before);

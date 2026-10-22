@@ -94,6 +94,19 @@ public interface PurposeHandler {
     }
 
     /** @param subjectType a word such as {@code loan} or {@code savings_account} */
+    /**
+     * What it takes to settle the subject in full today (a loan's payoff), when the purpose has such a ceiling; money above it
+     * becomes the subject's credit balance (spec 3.7). Empty for a purpose without one (a savings deposit).
+     */
+    default java.util.OptionalLong payoffMinor(UUID subjectId) {
+        return java.util.OptionalLong.empty();
+    }
+
+    /** How a person names the subject (a loan's number), for a sentence shown to a checker. */
+    default java.util.Optional<String> label(UUID subjectId) {
+        return java.util.Optional.empty();
+    }
+
     record Subject(String subjectType, UUID branchId) {}
 
     /**

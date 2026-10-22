@@ -85,6 +85,21 @@ class LoanRepaymentPurpose implements PurposeHandler {
     }
 
     @Override
+    public java.util.OptionalLong payoffMinor(UUID subjectId) {
+        return loans.find(subjectId)
+                .filter(loan -> "active".equals(loan.status()))
+                .map(loan -> java.util.OptionalLong.of(
+                        servicer.quote(loan, clock.today(tenant.profile().timezone()))
+                                .totalMinor()))
+                .orElse(java.util.OptionalLong.empty());
+    }
+
+    @Override
+    public java.util.Optional<String> label(UUID subjectId) {
+        return loans.find(subjectId).map(loan -> "loan " + loan.loanNo());
+    }
+
+    @Override
     public java.util.Optional<Integer> subjectVersionOfTransaction(UUID transactionId) {
         return repo.txn(transactionId).flatMap(t -> loans.find(t.loanId())).map(Loan::version);
     }

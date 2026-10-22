@@ -319,6 +319,24 @@ class PushPublishersIT extends IntegrationTest {
         assertThat(told("core.approval_waiting")).contains("user:" + alice).doesNotContain("user:" + scoped);
     }
 
+    /** A request that needs two permissions to decide is announced only to those who hold both (a gateway reversal). */
+    @Test
+    void aNoticeForARequestThatNeedsTwoPermissionsReachesOnlyThoseWhoHoldBoth() {
+        UUID both = Api.staff(t, Api.email("pub-both"), new Role("cashier", t.headOffice()));
+        UUID oneOnly = Api.staff(t, Api.email("pub-one"), new Role("auditor", t.headOffice()));
+        device(both);
+        device(oneOnly);
+        publish(new PushNotice(
+                "core.approval_waiting",
+                UUID.randomUUID().toString(),
+                new PushNotice.Holders(
+                        "core.payments.read", t.headOffice(), makerId, java.util.Set.of("core.payments.collect")),
+                Map.of("action_label", "Test action", "path", "/staff/approvals")));
+        assertThat(told("core.approval_waiting"))
+                .contains("user:" + both, "user:" + alice)
+                .doesNotContain("user:" + oneOnly);
+    }
+
     // ---- Deactivation ------------------------------------------------------------------------------
 
     @Test

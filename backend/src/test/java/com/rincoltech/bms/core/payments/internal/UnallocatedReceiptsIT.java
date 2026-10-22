@@ -617,6 +617,82 @@ class UnallocatedReceiptsIT extends LoanFixtures {
                 .forEach(i -> assertThat(i.get("id").asString()).isNotEqualTo(receipt.toString()));
     }
 
+    /**
+     * Spec 3.7 governs an allocation above the payoff (ADR-035 decision 64): the excess becomes the loan's credit balance, and the
+     * checker is told so in words before deciding, on the list and the detail; the request carries it and an audit row records it.
+     */
+    @Test
+    void anAllocationAboveThePayoffTellsTheCheckerTheCreditBalanceItCreatesAndAuditsTheExcess() {
+        UUID receipt = openReceipt(500_000, "CONF-224-0030");
+        String target = activeLoan();
+        long payoff = get(target, "/payoff-quote").get("total_minor").asLong();
+        cashRepayment(target, payoff - 50_000);
+        assertThat(get(target, "/payoff-quote").get("total_minor").asLong()).isEqualTo(50_000L);
+        String loanNo = get(target, "").get("loan_no").asString();
+
+        String approval = requested(askAllocate(receipt, PURPOSE, target));
+        String notice = "This creates a credit balance of UGX 450,000 on loan " + loanNo
+                + ": the payment is more than the UGX 50,000 it takes to pay it off today.";
+        JsonNode detail = send(
+                        HttpMethod.GET,
+                        "/api/v1/approvals/" + approval,
+                        as(accountant, accountantPerms, "*", null),
+                        null)
+                .getBody();
+        assertThat(detail.get("checker_notice").asString()).isEqualTo(notice);
+        assertThat(detail.get("payload").get("credit_balance_minor").asLong()).isEqualTo(450_000L);
+        JsonNode listed = send(HttpMethod.GET, "/api/v1/approvals", as(accountant, accountantPerms, "*", null), null)
+                .getBody();
+        boolean shown = false;
+        for (JsonNode item : listed.get("items")) {
+            if (item.get("id").asString().equals(approval)) {
+                assertThat(item.get("checker_notice").asString()).isEqualTo(notice);
+                shown = true;
+            }
+        }
+        assertThat(shown)
+                .as("the request is in the checker's list with its notice")
+                .isTrue();
+        assertThat(TestDatabase.owner()
+                        .sql("""
+                                SELECT (data -> 'after' ->> 'credit_balance_minor')::bigint FROM audit_log
+                                 WHERE entity_id = ? AND action = 'core.payments.receipt.allocation_creates_credit'
+                                   AND actor_user_id = ?
+                                """)
+                        .params(receipt, cashier)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(450_000L);
+
+        ResponseEntity<JsonNode> done = decide(approval, "approve");
+        assertThat(done.getStatusCode().value()).as("%s", done.getBody()).isEqualTo(200);
+        assertThat(receiptRow(receipt).get("status")).isEqualTo("allocated");
+        Map<String, Object> loan = TestDatabase.owner()
+                .sql("SELECT status, credit_balance_minor FROM lending_loans WHERE id = ?")
+                .param(UUID.fromString(target))
+                .query()
+                .singleRow();
+        assertThat(loan.get("status")).isEqualTo("closed");
+        assertThat(loan.get("credit_balance_minor")).isEqualTo(450_000L);
+    }
+
+    @Test
+    void anAllocationWithinThePayoffCarriesNoNotice() {
+        UUID receipt = openReceipt(100_000, "CONF-224-0031");
+        String target = activeLoan();
+        String approval = requested(askAllocate(receipt, PURPOSE, target));
+        JsonNode detail = send(
+                        HttpMethod.GET,
+                        "/api/v1/approvals/" + approval,
+                        as(accountant, accountantPerms, "*", null),
+                        null)
+                .getBody();
+        assertThat(detail.get("checker_notice") == null
+                        || detail.get("checker_notice").isNull())
+                .isTrue();
+        assertThat(detail.get("payload").has("credit_balance_minor")).isFalse();
+    }
+
     @Test
     void allocatingToASavingsAccountBooksAGatewayDepositAndRaisesTheBalanceOnce() {
         UUID receipt = openReceipt(520_000, "CONF-224-0011");

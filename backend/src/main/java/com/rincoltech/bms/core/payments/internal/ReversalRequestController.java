@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -59,11 +60,7 @@ class ReversalRequestController {
         this.checker = checker;
         this.clock = clock;
         this.tx = new TransactionTemplate(transactions);
-        this.read = new TransactionTemplate(transactions);
-        this.read.setReadOnly(true);
     }
-
-    private final TransactionTemplate read;
 
     @PostMapping("/{intent_id}/reversal-request")
     @RequiresPermission("core.payments.allocate_approve")
@@ -79,20 +76,41 @@ class ReversalRequestController {
     ResponseEntity<Outcome> ask(@PathVariable("intent_id") UUID intentId, HttpServletResponse response) {
         NoStore.apply(response);
         Principal principal = CurrentPrincipal.require();
-        Intent first = read.execute(status -> store.find(intentId)
-                .filter(i -> principal.may("core.payments.allocate_approve", i.branchId()))
-                .orElseThrow(ApiException::notFound));
-        // Only an order waiting for a reversal decision is asked about, before anything else is done to it.
-        requireInReview(first);
-        // The provider is asked first, outside any transaction: a payment it now reports completed is not reversed, and
+        // Under the order's row lock: only an order waiting for a reversal decision is asked about, and the provider is
+        // asked
+        // at most once in ten seconds (CheckSchedule.THROTTLE) whoever asks. The asker who finds no recent answer
+        // claims the
+        // slot by stamping last_checked_at in the same locked transaction, so two asks at the same moment cannot both
+        // call the
+        // provider; the second uses the first's slot, as any answer of a moment ago is used, so a caller in a loop
+        // cannot
+        // spend the shared account's allowance. Only a reversed payment is ever in review, so a person may still raise
         // a
-        // handed over order is not polled, so its answer may be old. An answer from the last few seconds is used as it
-        // is, so
-        // a caller in a loop cannot spend the shared account's allowance. If it cannot be asked, nothing is raised.
+        // request while the claimed answer is on its way; the provider's answer, when it comes, moves the order as
+        // usual.
         Instant now = clock.now();
-        boolean recent = first.lastCheckedAt() != null
-                && first.checkFailures() == 0
-                && first.lastCheckedAt().plus(CheckSchedule.THROTTLE).isAfter(now);
+        boolean recent = Boolean.TRUE.equals(tx.execute(status -> {
+            Intent locked = store.lock(intentId)
+                    .filter(i -> principal.may("core.payments.allocate_approve", i.branchId()))
+                    .orElseThrow(ApiException::notFound);
+            requireInReview(locked);
+            if (locked.lastCheckedAt() != null
+                    && locked.lastCheckedAt().plus(CheckSchedule.THROTTLE).isAfter(now)) {
+                if (locked.checkFailures() > 0) {
+                    throw new ApiException(
+                            HttpStatus.CONFLICT,
+                            "try_again",
+                            "Try again",
+                            "The payment provider could not be asked just now, so nothing was raised. Try again in a moment.");
+                }
+                return true;
+            }
+            store.update(intentId, "reversed_pending_review", null, now, Map.of("last_checked_at", now));
+            return false;
+        }));
+        // The provider is asked outside any transaction: a payment it now reports completed is not reversed, and a
+        // handed
+        // over order is not polled, so its answer may be old. If it cannot be asked, nothing is raised.
         StatusChecker.Asked answer = recent ? StatusChecker.Asked.REVERSED : checker.verifyInReview(intentId);
         if (answer == StatusChecker.Asked.UNREACHABLE) {
             throw new ApiException(

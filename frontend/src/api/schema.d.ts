@@ -6666,6 +6666,8 @@ export interface components {
             branch_id?: string;
             can_cancel?: boolean;
             can_decide?: boolean;
+            /** @description A sentence the checker must read before deciding, when the request carries one (for example the credit balance an allocation creates); in the list and the detail */
+            checker_notice?: string;
             currency?: string;
             /** Format: date-time */
             decided_at?: string;
