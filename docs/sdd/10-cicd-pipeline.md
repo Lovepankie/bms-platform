@@ -57,6 +57,8 @@ that blocks the LAN and overlay network. Tools the host lacks run as containers
 (`rhysd/actionlint`, `koalaman/shellcheck`); JSON handling uses `python3`. One job runs at a time
 across both repositories, so a job may queue.
 
+`deploy.yml` can also be run by hand from `main` (`gh workflow run Deploy --ref main`, issue #476): it builds and points staging exactly as a push does, and a manual run from any other branch does nothing. It exists because on 22 Oct 2026 two pushes to main (#460, #469) fired no workflow at all.
+
 `deploy.yml` runs on a separate runner, `bms-deploy-laptop` (ADR-040 and its amendment of 2026-10-18, which supersede the
 hosted-runner rule of ADR-018 finding H1 for these jobs): a runner on Jerome's laptop (WSL Ubuntu) under its own user
 `bmsdeploy` (uid 1006), beside the other runner users of that machine and none of them, in the organisation runner group `bms-deploy`, which is visible to

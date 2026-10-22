@@ -40,6 +40,9 @@ on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
+  # A push to main that GitHub never turned into a run (22 Oct 2026: #460 and #469 fired no workflow at all) can be
+  # deployed by hand from main with `gh workflow run Deploy --ref main`; it builds and points staging exactly as a push does.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,7 +53,7 @@ env:
 jobs:
   meta:
     name: Resolve tags
-    if: github.repository == 'RincolTech-Solutions-ltd/bms-platform'
+    if: github.repository == 'RincolTech-Solutions-ltd/bms-platform' && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: ${{ fromJSON(vars.DEPLOY_RUNS_ON || '["self-hosted","bms-deploy"]') }}
     outputs:
       sha_tag: ${{ steps.tags.outputs.sha_tag }}
