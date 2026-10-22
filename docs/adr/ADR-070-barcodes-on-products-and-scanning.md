@@ -45,7 +45,7 @@ or Bluetooth scanner at the till, many have only phones.
    over the WebAssembly decoders because the production CSP is `script-src 'self'` without `wasm-unsafe-eval`; pure JavaScript needs no
    CSP change. Both the camera view and Quagga2 are loaded only when Scan is tapped (separate chunks), so the first load does not grow.
    A code counts only once two frames in a row read the same code, so one misread frame never adds the wrong item.
-   The Scan button shows only where the browser has `getUserMedia`; a blocked, missing or busy camera is explained in plain words. The
+   The Scan button shows only where the browser has `getUserMedia`; on a plain http address the scan bar says the camera works only on the secure (https) address instead; a blocked, missing or busy camera is explained in plain words. The
    `Permissions-Policy` already allows `camera=(self)`.
 7. **Labels for items without a code.** `POST /retail/products/barcodes/generate` makes a Code 128 code `IN` plus eight digits from the
    business's sequence (`tenant_sequences`, key `retail_barcode`) for each item that has no made code; an item keeps the one it has.

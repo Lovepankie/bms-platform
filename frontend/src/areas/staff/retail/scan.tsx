@@ -18,6 +18,11 @@ export function cameraSupported(): boolean {
   return typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function';
 }
 
+/** The page is on a plain http address, where a browser never offers the camera. */
+export function insecureAddress(): boolean {
+  return typeof window !== 'undefined' && window.isSecureContext === false;
+}
+
 /** A short beep and a buzz on a phone that can, so a scan is noticed without looking; silent where it cannot. */
 function feedback(ok: boolean) {
   try {
@@ -185,6 +190,7 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
           </button>
         )}
       </div>
+      {!cameraSupported() && insecureAddress() && <p className="hint">The camera works only on the secure (https) address.</p>}
       <p aria-live="polite" className="hint">
         {busy ? 'Looking up' : outcome?.kind === 'added' ? `Added ${outcome.name}.` : ''}
       </p>

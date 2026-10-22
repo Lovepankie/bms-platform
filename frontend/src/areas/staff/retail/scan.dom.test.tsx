@@ -188,13 +188,27 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect(screen.queryByRole('button', { name: 'Add this barcode to a product' })).toBeNull();
   });
 
+  it('says the camera needs the secure address on a plain http page', () => {
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false });
+    try {
+      screenOf(<SaleForm branchId={BRANCH} />);
+      expect(screen.getByText('The camera works only on the secure (https) address.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Scan' })).toBeNull();
+    } finally {
+      Reflect.deleteProperty(window, 'isSecureContext');
+    }
+  });
+
   it('hides the camera Scan button where the browser cannot open a camera, and shows it where it can', () => {
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
     const first = screenOf(<SaleForm branchId={BRANCH} />);
     expect(screen.queryByRole('button', { name: 'Scan' })).toBeNull();
     first.unmount();
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn() } });
     screenOf(<SaleForm branchId={BRANCH} />);
     expect(screen.getByRole('button', { name: 'Scan' })).toBeTruthy();
+    expect(screen.queryByText('The camera works only on the secure (https) address.')).toBeNull();
+    Reflect.deleteProperty(window, 'isSecureContext');
   });
 });
 
