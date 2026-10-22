@@ -1142,4 +1142,48 @@ class ReferralsIT extends IntegrationTest {
                 .params(status, tenantId)
                 .update();
     }
+
+    /**
+     * A returning applicant's code goes on the open application while it has no referrer and is still submitted; a later code
+     * never replaces it, and an application in review keeps none (decision 13).
+     */
+    @Test
+    void aReturningApplicantsCodeGoesOnTheOpenApplication() {
+        TestDatabase.Fixture first = TestDatabase.tenant("refback-a", false);
+        TestDatabase.Fixture second = TestDatabase.tenant("refback-b", false);
+        String email = Api.email("ref-back");
+        assertThat(apply(signUpForm(email, "Test Returning Shop", null)).getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        UUID id = application(email);
+        assertThat(apply(signUpForm(email, "Test Returning Shop", code(first.tenantId())))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(referrerOf(id)).isEqualTo(first.tenantId());
+        assertThat(apply(signUpForm(email, "Test Returning Shop", code(second.tenantId())))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(referrerOf(id)).isEqualTo(first.tenantId());
+
+        String reviewed = Api.email("ref-back-review");
+        apply(signUpForm(reviewed, "Test Reviewed Shop", null));
+        UUID inReview = application(reviewed);
+        confirmEmail(inReview);
+        assertThat(platform.post(
+                                "/api/v1/platform/applications/" + inReview + "/verify",
+                                Map.of(),
+                                operator.accessToken())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        apply(signUpForm(reviewed, "Test Reviewed Shop", code(first.tenantId())));
+        assertThat(referrerOf(inReview)).isNull();
+    }
+
+    static UUID referrerOf(UUID applicationId) {
+        return (UUID) TestDatabase.owner()
+                .sql("SELECT referrer_tenant_id FROM onboarding_applications WHERE id = ?")
+                .param(applicationId)
+                .query()
+                .singleRow()
+                .get("referrer_tenant_id");
+    }
 }

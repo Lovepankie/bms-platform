@@ -215,14 +215,21 @@ class ApplicationService {
                                 ? Map.of("application_id", id)
                                 : Map.of("application_id", id, "referrer_tenant_id", referral.tenantId()));
             } else {
-                Optional<String> open = jdbc.sql("SELECT reference FROM onboarding_application_relink(?, ?, ?, ?)")
+                record Open(UUID id, String reference) {}
+                Optional<Open> open = jdbc.sql("SELECT id, reference FROM onboarding_application_relink(?, ?, ?, ?)")
                         .params(email, hash, Timestamp.from(now.plus(LINK_TTL)), Timestamp.from(now))
-                        .query(String.class)
+                        .query((rs, n) -> new Open(rs.getObject("id", UUID.class), rs.getString("reference")))
                         .optional();
                 if (open.isEmpty()) {
                     return;
                 }
-                reference = open.get();
+                reference = open.get().reference();
+                // ADR-069 decision 13: a returning applicant's code goes on the open application while it has no
+                // referrer
+                // and is still submitted; the database leaves an earlier code, or one in review, as it is.
+                if (referral != null) {
+                    referrals.attachToApplication(open.get().id(), referral);
+                }
             }
             // No text the applicant typed: the address is not confirmed yet (review B1).
             Map<String, String> params = new LinkedHashMap<>();

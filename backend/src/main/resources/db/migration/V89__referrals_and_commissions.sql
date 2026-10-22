@@ -126,11 +126,13 @@ ALTER TABLE onboarding_applications
     ADD COLUMN referral_code      varchar(10),
     ADD COLUMN referrer_tenant_id uuid REFERENCES tenants (id);
 
--- Sets the referrer of an application just created (the caller resolved the code to the business).
+-- Sets the referrer of an application (the caller resolved the code to the business): one just created, or the open one a
+-- returning applicant brings a code to (ADR-069 decision 13). Only while it has no referrer and is still submitted (not yet
+-- in review), so a code typed later never replaces the first one.
 CREATE FUNCTION onboarding_application_set_referrer(p_id uuid, p_tenant_id uuid, p_code text) RETURNS void
 LANGUAGE sql SECURITY DEFINER SET search_path = public, pg_temp AS $$
     UPDATE onboarding_applications SET referral_code = upper(btrim(p_code)), referrer_tenant_id = p_tenant_id
-     WHERE id = p_id
+     WHERE id = p_id AND referrer_tenant_id IS NULL AND status = 'submitted'
 $$;
 
 -- True when the email or the phone is that of the Owner or an administrator (not deactivated) of the business: a business is

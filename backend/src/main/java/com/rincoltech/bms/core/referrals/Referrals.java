@@ -25,7 +25,10 @@ public interface Referrals {
      */
     void refuseSelf(Code code, String email, String phoneE164);
 
-    /** Records the referrer on an application just created. */
+    /**
+     * Records the referrer on an application just created, or on the open one a returning applicant brings a code to; only
+     * while it has no referrer and is still submitted, otherwise nothing changes.
+     */
     void attachToApplication(UUID applicationId, Code code);
 
     /** The referrer an application carries, for the operator's application page. */

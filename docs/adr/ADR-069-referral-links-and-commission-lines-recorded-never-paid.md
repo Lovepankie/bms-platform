@@ -102,6 +102,10 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
     `cancelled`, from the referred business's subscription (or `suspended` for a suspended business). A referrer business that
     is suspended or cancelled still has its lines worked out, but each such line carries `referrer_inactive`, so the operator
     decides before paying it.
+13. **A returning applicant's code goes on the open application.** When someone with an open application signs up again (the
+    same mailbox) and brings a code, the code is attached to that application if it has no referrer yet and is still
+    `submitted`; a code never replaces an earlier one, and an application already in review keeps what it has
+    (`onboarding_application_set_referrer` holds both conditions).
 
 ## Consequences
 
