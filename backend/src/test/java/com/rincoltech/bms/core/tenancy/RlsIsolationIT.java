@@ -709,6 +709,12 @@ class RlsIsolationIT {
                                                           business_date)
                         VALUES (?, ?, ?, ?, 'loan.overdue_1', DATE '2026-02-17')
                         """).params(UUID.randomUUID(), t.tenantId(), loan, item).update();
+        // A repayment brought in from a paper register (ADR-071, #466).
+        owner.sql("""
+                        INSERT INTO lending_brought_in_repayments (id, tenant_id, loan_id, line_no, value_date,
+                                                                   amount_minor, payment_method_key, note)
+                        VALUES (?, ?, ?, 1, DATE '2026-02-10', 5000, 'cash', 'Test receipt 01')
+                        """).params(UUID.randomUUID(), t.tenantId(), loan).update();
         owner.sql("""
                         INSERT INTO lending_arrears_runs (tenant_id, business_date, started_at, lease_until, finished_at)
                         VALUES (?, DATE '2026-02-17', now(), now(), now())
