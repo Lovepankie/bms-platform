@@ -72,9 +72,12 @@ export function createWedge(gap = WEDGE_GAP_MS, min = WEDGE_MIN) {
   let buffer = '';
   let last = 0;
   return {
-    key(ch: string, at: number) {
-      buffer = at - last <= gap ? buffer + ch : ch;
+    /** True when this key starts a new burst (the first key, or one after a pause). */
+    key(ch: string, at: number): boolean {
+      const fresh = buffer === '' || at - last > gap;
+      buffer = fresh ? ch : buffer + ch;
       last = at;
+      return fresh;
     },
     enter(at: number): string | null {
       const code = at - last <= gap * 3 && buffer.length >= min ? buffer : null;

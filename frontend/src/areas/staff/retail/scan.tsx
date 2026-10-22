@@ -48,9 +48,22 @@ function setFieldValue(field: HTMLInputElement | HTMLTextAreaElement, value: str
   field.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+/** A text field as it was before a burst's first key: its value and selection, put back when the burst is a scan. */
+type FieldSnapshot = { field: HTMLInputElement | HTMLTextAreaElement; value: string; start: number | null; end: number | null };
+
+function restore(snap: FieldSnapshot) {
+  if (snap.field.value !== snap.value) setFieldValue(snap.field, snap.value);
+  try {
+    if (snap.start !== null && snap.end !== null) snap.field.setSelectionRange(snap.start, snap.end);
+  } catch {
+    // A field type without a selection (number, email) keeps just its value.
+  }
+}
+
 /**
  * A keyboard-wedge scanner anywhere on the screen: a burst of keys faster than a person types, closed by Enter. In a
- * text field the burst is taken back out of it, so a scan with the cursor in a quantity box never changes the quantity.
+ * text field the value and selection from before the burst's first key are put back, so a scan with the cursor in a
+ * quantity box never changes the quantity, wherever the cursor was, whatever was selected and whatever its onChange did.
  */
 export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
   const handler = useRef(onScan);
@@ -58,6 +71,7 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
   useEffect(() => {
     if (!enabled) return undefined;
     const wedge = createWedge();
+    let before: FieldSnapshot | null = null;
     const down = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'Enter') {
@@ -67,10 +81,12 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
         if (e.target instanceof HTMLElement && e.target.dataset.scanBox !== undefined) return;
         e.preventDefault();
         e.stopPropagation();
-        if (editable(e.target) && e.target.value.endsWith(code)) setFieldValue(e.target, e.target.value.slice(0, -code.length));
+        if (before && before.field === e.target) restore(before);
+        before = null;
         handler.current(code);
       } else if (e.key.length === 1) {
-        wedge.key(e.key, e.timeStamp || performance.now());
+        const t = e.target;
+        if (wedge.key(e.key, e.timeStamp || performance.now())) before = editable(t) ? { field: t, value: t.value, start: t.selectionStart, end: t.selectionEnd } : null;
       }
     };
     document.addEventListener('keydown', down, true);
