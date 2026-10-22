@@ -106,6 +106,30 @@ describe('Record a sale offline', () => {
     expect(screen.getByTestId('receipt-number').textContent).toBe('Receipt RS00000042');
   });
 
+  it('does not let a seller without retail.price.override type a price offline', async () => {
+    const plain = { ...seller, permissions: (seller.permissions ?? []).filter((p) => p !== 'retail.price.override') };
+    const offline = testOffline(plain, { online: false, catalogue });
+    if (!offline) throw new Error('a seller sells offline');
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me: plain, branch }}>
+          <OfflineProvider value={offline}>
+            <RecordSale />
+          </OfflineProvider>
+        </StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText('Find an item by name, code or category'), { target: { value: 'bulb' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Test Bulb 9W' }));
+    const price = screen.getByLabelText('Unit price') as HTMLInputElement;
+    expect(price.readOnly).toBe(true);
+    expect(screen.getByText('Offline, the price saved on this phone is used. You do not have permission to change it.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save on this phone' }));
+    expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
+    expect(offline.engine.snapshot().items[0]?.request.lines).toEqual([{ product_id: 'p2', qty: '1.000', unit_price_minor: 5000 }]);
+  });
+
   it('keeps a sale whose answer was lost with the same client sale id and a new key', async () => {
     createSale.mockRejectedValue(new TypeError('Failed to fetch'));
     listProducts.mockResolvedValue([bulb]);

@@ -11,7 +11,7 @@ import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
-import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
+import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
 import { EmptyState } from '../../../components/states';
@@ -101,12 +101,17 @@ export function Receipt({ sale, onNew, received }: { sale: Sale; onNew?: () => v
  * One line of the sale being made. The unit choice is drawn only while the tenant has the units capability
  * (`unitsOn`) and the item has active pack sizes; otherwise the line is exactly what it was before packs.
  */
-export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
   line: DraftLine;
   index: number;
   unitsOn: boolean;
   /** Present while price lists are on: how the line was priced, and what the seller may do about it. */
   price?: { resolved?: ResolvedLine; listName?: string; canOverride: boolean };
+  /**
+   * Present while selling offline (ADR-067 decision 11): the price is the one saved on this phone, and only a holder of
+   * retail.price.override may type another, with a reason, as online.
+   */
+  offlinePrice?: { canType: boolean };
   onQty: (v: string) => void;
   onPrice: (v: string) => void;
   onUnit: (unitId: string) => void;
@@ -121,6 +126,7 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
   const pack = unitsOn ? chosenPack(line.product, line.unitId) : undefined;
   const override = price ? isOverride(line, price.resolved) : false;
   const noPrice = price ? hasNoPrice(price.resolved) : false;
+  const changedOffline = offlinePrice !== undefined && f !== null && f.priceMinor !== defaultPrice(line.product, line.unitId);
   return (
     <div className="rt-card">
       <strong>{line.product.description}</strong>
@@ -140,7 +146,7 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
         </div>
         <div>
           <label htmlFor={`price-${i}`}>{pack ? `Price per ${pack.unit}` : 'Unit price'}</label>
-          <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : false} />
+          <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : offlinePrice ? !offlinePrice.canType : false} />
         </div>
       </div>
       {price && price.resolved && (
@@ -151,7 +157,9 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
       )}
       {noPrice && <p role="alert" className="rt-flag">This item has no price in the list.</p>}
       {price && !price.canOverride && <p className="hint">The price comes from the price list. You do not have permission to change it.</p>}
-      {override && onReason && (
+      {offlinePrice && !offlinePrice.canType && <p className="hint">Offline, the price saved on this phone is used. You do not have permission to change it.</p>}
+      {changedOffline && !offlinePrice?.canType && onReset && <p><button type="button" className="btn-sm" onClick={onReset}>Use the price saved on this phone</button></p>}
+      {(override || (changedOffline && offlinePrice?.canType)) && onReason && (
         <div>
           <label htmlFor={`reason-${i}`}>Why is the price changed? (at least {MIN_REASON} characters)</label>
           <input id={`reason-${i}`} value={line.reason ?? ''} maxLength={300} onChange={(e) => onReason(e.target.value)} aria-invalid={!reasonOk(line.reason)} />
@@ -250,7 +258,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
 
   const total = draftTotal(shown.lines);
-  const problem = (offlineMode ? offlineProblem(draft) : draftProblem(shown, pricing, accounts)) ?? receivedProblem(draft.method, total, received);
+  const problem = (offlineMode ? offlineProblem(draft, holdsAt(me, PRICE_OVERRIDE, branchId)) : draftProblem(shown, pricing, accounts)) ?? receivedProblem(draft.method, total, received);
   // A sale whose request got no answer may or may not be recorded: the form is locked, and kept to send later or sent again,
   // it is the same request under the same client sale id, recorded once either way (ADR-067 decision 5).
   const locked = offline !== null && draft.sent !== undefined;
@@ -317,10 +325,11 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           index={i}
           unitsOn={unitsOn}
           price={pricesOn ? { resolved: resolved?.[i], listName: resolution.data?.price_list, canOverride: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
+          offlinePrice={offlineMode ? { canType: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
           onQty={(v) => setLine(i, { qty: v })}
           onPrice={(v) => setLine(i, { price: v, typed: true })}
           onReason={(v) => setLine(i, { reason: v })}
-          onReset={() => setLine(i, { typed: false, reason: '' })}
+          onReset={() => (offlineMode ? setLine(i, { price: String(defaultPrice(l.product, l.unitId)), typed: false, reason: '' }) : setLine(i, { typed: false, reason: '' }))}
           onUnit={(unitId) => setUnit(i, unitId)}
           onRemove={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))}
         />

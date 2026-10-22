@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (owner decision, issue #458, 22 Oct 2026). Amends ADR-009 (staff data "never cached for offline use beyond drafts")
+Accepted (owner decision, issue #458, 22 Oct 2026; the offline price rules of decision 11 decided by the product owner,
+Hillary, 22 Oct 2026). Amends ADR-009 (staff data "never cached for offline use beyond drafts")
 and NFR-OFF-04 and NFR-OFF-05 for retail sales only. Every other money action, and every lending action, stays online only.
 Migration `V87` (`V81` to `V86` are claimed by the open lending and payments pull requests; renumbered at merge if needed).
 
@@ -29,7 +30,7 @@ left, the branch, the period, the person's roles.
    person's selling branches, the customers list, the four sale payment methods, the person's profile, and `prices_as_of`,
    the time of the last full refresh. It refreshes when the app comes online, on sign-in and every 15 minutes while online.
    Price lists are not cached: a seller may not read them (`retail.pricelist.manage`), so an offline sale is priced at the
-   retail price or the pack price on the device, or a typed price.
+   retail price or the pack price on the device, or a price typed under the rules of decision 11.
 3. **The outbox.** A sale saved offline, or whose answer was lost, goes into the outbox store with its whole request, a
    `client_sale_id` (a UUID made when the draft starts), an `Idempotency-Key`, `occurred_at` (the device time of Save),
    `prices_as_of`, the person, the branch and a provisional receipt number (`OFF-` and the first 8 characters of the client
@@ -63,8 +64,9 @@ left, the branch, the period, the person's roles.
    and `occurred_at`) is a sale whose money was already taken. For it, four checks that refuse an online sale record the sale
    and write a row in `retail_sale_clashes` instead: `stock_short` (the sale takes the balance below zero, or into stock kept
    for orders; the movement is written and the balance may go negative), `item_inactive` (switched off since), `price_changed`
-   (with price lists on, the resolved price differs from the device's; the line keeps the device price as an override whose
-   reason names the offline sale and `prices_as_of`, without the `retail.price.override` check, or a strict list has no price)
+   (the device charged the price it had saved, and today's price, or with price lists on the resolved price, differs; the line
+   keeps the device price as an override whose reason names the offline sale and `prices_as_of`, or a strict list has no
+   price), `price_typed` (decision 11: a typed price the online rules would not have taken)
    and `below_cost` (the price is not above cost without `retail.price.below_cost`; the clash words never carry the cost).
    `clock_ahead` is the fifth kind. A push notice `retail.sale_clash` goes to every holder of `retail.offline.resolve` at the
    branch (the administrators, the owner among them, and the branch's Supervisors), once per sale. The sale page shows its
@@ -93,8 +95,14 @@ left, the branch, the period, the person's roles.
     listing queued and failed sales (time, branch, total, the reason of a failure), a Sync now button and, for a holder of
     `retail.offline.resolve`, the failures other people reported. It is mounted in `frontend/src/areas/staff/route.tsx`, not in
     the shell, and is drawn only for a person who holds `retail.sale.create`.
-11. **Product owner decisions for review.** (a) A price changed while the phone was offline: the sale keeps the price the
-    customer paid and is flagged `price_changed`; it is never repriced. (b) An offline sale is never a credit sale. (c) A sale
+11. **Product owner decisions.** (a) Offline sales follow the same price rules as online (decided 22 Oct 2026). On the phone, a
+    person without `retail.price.override` cannot type a price offline: only the catalogue or pack price saved on the phone is
+    used; a holder types another with a reason of at least 5 characters, as online. On the server, a device price stands when
+    it equals the catalogue or pack price in force at `prices_as_of` (from `retail_price_history`) or today's, or when the
+    seller holds `retail.price.override` at the branch and gave a reason (an override with that reason, as online). Any other
+    device price is recorded as charged with a `price_typed` clash for a manager to review, never silently. A saved price that
+    changed since is kept and flagged `price_changed`; a sale is never repriced. A price not above cost stays a `below_cost`
+    clash. (b) An offline sale is never a credit sale. (c) A sale
     refused for a closed branch or a closed month is kept on the device and decided by a manager, never recorded against the
     rule. (d) A seller cannot discard their own failed sale. (e) Waiting sales survive a sign-out on that device.
 

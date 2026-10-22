@@ -3,7 +3,7 @@ import type { Customer, Product, SaleRequest } from '../api/retail';
 import { qtyString } from '../areas/staff/retail/maths';
 import { branchesWhere, sellingBranches } from '../areas/staff/retail/permissions';
 import { baseQtyMilli, chosenPack } from '../areas/staff/retail/units-state';
-import { lineFigures, type Draft } from '../areas/staff/retail/sale-state';
+import { defaultPrice, lineFigures, type Draft } from '../areas/staff/retail/sale-state';
 import { provisionalNumber, type OutboxItem } from './outbox';
 import type { Catalogue, OfflineStore } from './store';
 
@@ -74,9 +74,11 @@ export function pricesAsOfWords(pricesAsOf: string | undefined): string {
 
 /**
  * What stops an offline sale, or null. Stock on the phone is only as fresh as the copy, so too little stock does not stop
- * it: the server records the sale and flags the stock. A credit sale needs the server.
+ * it: the server records the sale and flags the stock. A credit sale needs the server. The price rules are those of an
+ * online sale (ADR-067 decision 11): the price saved on this phone, or another typed by a holder of retail.price.override
+ * (`canType`) with a reason.
  */
-export function offlineProblem(draft: Draft): string | null {
+export function offlineProblem(draft: Draft, canType = false): string | null {
   if (draft.lines.length === 0) return 'Add at least one item.';
   if (draft.method === 'credit') return 'A credit sale needs the internet. Choose cash, mobile money or bank.';
   for (const l of draft.lines) {
@@ -84,6 +86,10 @@ export function offlineProblem(draft: Draft): string | null {
     if (f === null) return 'Check the quantity and price on each item.';
     const pack = chosenPack(l.product, l.unitId);
     if (pack && baseQtyMilli(f.qtyMilli, pack.factor) === null) return 'A quantity does not convert exactly to single items. Change it.';
+    if (f.priceMinor !== defaultPrice(l.product, l.unitId)) {
+      if (!canType) return `Use the price saved on this phone for ${l.product.description ?? 'each item'}: you may not change prices.`;
+      if ((l.reason ?? '').trim().length < 5) return `Say why the price of ${l.product.description ?? 'an item'} is changed (at least 5 characters).`;
+    }
   }
   return null;
 }
@@ -107,12 +113,14 @@ export function offlineSale(args: {
     const f = lineFigures(l);
     if (!f) throw new Error('invalid line');
     const pack = chosenPack(l.product, l.unitId);
+    const typed = f.priceMinor !== defaultPrice(l.product, l.unitId) && (l.reason ?? '').trim() !== '';
     return {
       request: {
         product_id: l.product.id ?? '',
         qty: qtyString(f.qtyMilli),
         unit_price_minor: f.priceMinor,
         ...(pack ? { unit_id: pack.unit_id } : {}),
+        ...(typed ? { price_override_reason: (l.reason ?? '').trim() } : {}),
       },
       shown: { description: `${l.product.description ?? ''}${pack ? ` (${pack.unit ?? ''})` : ''}`, qty: qtyString(f.qtyMilli), unitPriceMinor: f.priceMinor, totalMinor: f.totalMinor },
     };

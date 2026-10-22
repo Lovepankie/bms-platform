@@ -68,7 +68,7 @@ CREATE TABLE retail_sale_clashes (
     line_no          integer      CHECK (line_no > 0),
     product_id       uuid,
     kind             text         NOT NULL
-                                  CHECK (kind IN ('stock_short', 'item_inactive', 'price_changed', 'below_cost', 'clock_ahead')),
+                                  CHECK (kind IN ('stock_short', 'item_inactive', 'price_changed', 'price_typed', 'below_cost', 'clock_ahead')),
     words            varchar(400) NOT NULL CHECK (btrim(words) <> ''),
     resolved_at      timestamptz,
     resolved_by      uuid,

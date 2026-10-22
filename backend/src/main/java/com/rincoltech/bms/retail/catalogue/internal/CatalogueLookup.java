@@ -33,6 +33,12 @@ class CatalogueLookup implements RetailCatalogue {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public long sellMinorAt(UUID productId, java.time.Instant at) {
+        return repo.sellMinorAt(productId, at);
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<ProductSnapshot> lock(UUID productId) {
         return repo.lock(productId).map(CatalogueLookup::snapshot);

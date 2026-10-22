@@ -634,7 +634,15 @@ class SalesService {
             PackUnit pack = unit.pack();
             long defaultPrice = pack == null ? p.sellMinor() : Quantities.packPrice(p.sellMinor(), pack.factor());
             long price = l.unitPriceMinor() == null ? defaultPrice : l.unitPriceMinor();
-            if (!priced && offline && l.unitPriceMinor() != null && l.unitPriceMinor() != defaultPrice) {
+            // ADR-067 decision 11: offline, the price rules of an online sale. A device price stands when it is the
+            // catalogue or pack price in force when the phone saved its prices (or today's), or when the seller may
+            // change prices and gave a reason; any other is recorded as charged with a price_typed clash.
+            OfflinePrice offlinePrice = offline && l.unitPriceMinor() != null
+                    ? offlinePrice(p, pack, l, defaultPrice, pricesAsOf, branch, principal)
+                    : null;
+            if (!priced && offlinePrice == OfflinePrice.TYPED) {
+                clashes.add(typedClash(i + 1, p));
+            } else if (!priced && offlinePrice == OfflinePrice.PHONE && l.unitPriceMinor() != defaultPrice) {
                 clashes.add(priceClash(i + 1, p, "its price is different now"));
             }
             LinePricing linePricing = null;
@@ -666,20 +674,27 @@ class SalesService {
                     source = "order_agreed";
                     reason = blankToNull(l.priceOverrideReason());
                 } else if (devicePrice && (d.refused() || l.unitPriceMinor() != d.priceMinor())) {
-                    // ADR-067 decision 11a: the price the customer paid on the phone stands, as an override that names
-                    // the
-                    // offline sale; it is never repriced.
-                    clashes.add(priceClash(
-                            i + 1,
-                            p,
-                            d.refused()
-                                    ? "the price list " + list.name() + " has no price for it now"
-                                    : "its price is" + " different now"));
+                    // ADR-067 decision 11: the price the customer paid on the phone stands, as an override that names
+                    // the offline sale; it is never repriced. A price typed as online allows is an override with its
+                    // reason and no clash; the saved price that the list prices otherwise is price_changed; any other
+                    // typed price is price_typed.
+                    if (offlinePrice == OfflinePrice.TYPED) {
+                        clashes.add(typedClash(i + 1, p));
+                    } else if (offlinePrice == OfflinePrice.PHONE || d.refused()) {
+                        clashes.add(priceClash(
+                                i + 1,
+                                p,
+                                d.refused()
+                                        ? "the price list " + list.name() + " has no price for it now"
+                                        : "its price is" + " different now"));
+                    }
                     price = l.unitPriceMinor();
                     source = "override";
-                    reason = blankToNull(l.priceOverrideReason()) == null
-                            ? offlineReason
-                            : clip(l.priceOverrideReason().trim() + " (" + offlineReason + ")");
+                    reason = offlinePrice == OfflinePrice.ALLOWED
+                            ? clip(l.priceOverrideReason().trim())
+                            : blankToNull(l.priceOverrideReason()) == null
+                                    ? offlineReason
+                                    : clip(l.priceOverrideReason().trim() + " (" + offlineReason + ")");
                 } else if (l.unitPriceMinor() != null && l.unitPriceMinor() != d.priceMinor()) {
                     if (!principal.may(SalesPricing.OVERRIDE, branch)) {
                         throw new ApiException(
@@ -773,6 +788,52 @@ class SalesService {
             }
         }
         return new Priced(list, lines);
+    }
+
+    /**
+     * How the device price of an offline line stands against the online price rules (ADR-067 decision 11): PHONE, the
+     * catalogue or pack price in force at prices_as_of or today's; ALLOWED, another price typed by a holder of
+     * retail.price.override with a reason; TYPED, any other.
+     */
+    enum OfflinePrice {
+        PHONE,
+        ALLOWED,
+        TYPED
+    }
+
+    private OfflinePrice offlinePrice(
+            ProductSnapshot p,
+            PackUnit pack,
+            SaleLineRequest l,
+            long defaultPrice,
+            Instant pricesAsOf,
+            UUID branch,
+            Principal principal) {
+        long device = l.unitPriceMinor();
+        if (device == defaultPrice) {
+            return OfflinePrice.PHONE;
+        }
+        long saved = catalogue.sellMinorAt(p.id(), pricesAsOf == null ? clock.now() : pricesAsOf);
+        if (device == (pack == null ? saved : Quantities.packPrice(saved, pack.factor()))) {
+            return OfflinePrice.PHONE;
+        }
+        String reason = blankToNull(l.priceOverrideReason());
+        return principal.may(SalesPricing.OVERRIDE, branch)
+                        && reason != null
+                        && reason.length() >= SalesPricing.MIN_REASON
+                ? OfflinePrice.ALLOWED
+                : OfflinePrice.TYPED;
+    }
+
+    private static PendingClash typedClash(int lineNo, ProductSnapshot p) {
+        return new PendingClash(
+                lineNo,
+                p.id(),
+                "price_typed",
+                "The price of " + p.description() + " on line " + lineNo
+                        + " was typed on the phone while offline, and is not the price the phone had saved, by someone who"
+                        + " may not change prices or without a reason. The sale keeps the price the customer paid; check"
+                        + " it.");
     }
 
     /** The override reason of a line whose price the device charged (ADR-067). */

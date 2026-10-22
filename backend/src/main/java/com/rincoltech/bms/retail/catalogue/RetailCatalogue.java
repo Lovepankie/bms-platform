@@ -49,6 +49,13 @@ public interface RetailCatalogue {
     Optional<PackUnit> packUnit(UUID productId, UUID unitId);
 
     /**
+     * ADR-067 decision 11: the product's sell price in force at {@code at}, from its price history (the last change at or
+     * before it; before the first change, the price that change replaced), or the current price when the history says
+     * nothing. Read in the caller's transaction.
+     */
+    long sellMinorAt(UUID productId, java.time.Instant at);
+
+    /**
      * Takes the product's row lock for the rest of the caller's transaction. A caller that changes
      * several products locks them in id order first, so concurrent events cannot deadlock.
      */

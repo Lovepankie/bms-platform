@@ -87,10 +87,19 @@ describe('an offline sale', () => {
     expect(offlineProblem(draft({ lines: [{ product: bulb, qty: 'two', price: '5000' }] }))).toMatch(/quantity and price/);
   });
 
+  it('follows the online price rules: the price on the phone, or a typed one only with the override and a reason', () => {
+    const typed = (reason?: string) => draft({ lines: [{ product: bulb, qty: '1', price: '4000', typed: true, reason }] });
+    expect(offlineProblem(typed(), false)).toMatch(/Use the price saved on this phone for Test Bulb 9W/);
+    expect(offlineProblem(typed('Old stock, agreed'), false)).toMatch(/you may not change prices/);
+    expect(offlineProblem(typed(), true)).toMatch(/Say why the price of Test Bulb 9W is changed/);
+    expect(offlineProblem(typed('Old stock, agreed'), true)).toBeNull();
+    expect(offlineProblem(draft(), false)).toBeNull();
+  });
+
   it('queues every line at the price charged, with the client id, the time and the offline flag', () => {
     const now = new Date('2026-10-22T10:00:00Z');
     const item = offlineSale({
-      draft: draft({ lines: [{ product: bulb, qty: '2', price: '4500', typed: true }] }),
+      draft: draft({ lines: [{ product: bulb, qty: '2', price: '4500', typed: true, reason: 'Old stock, agreed' }] }),
       clientSaleId: '0a1b2c3d-4e5f-4000-8000-000000000001',
       key: 'k-1',
       scope: 'test.example|u1',
@@ -101,7 +110,7 @@ describe('an offline sale', () => {
     expect(item.request).toEqual({
       branch_id: 'b1',
       payment_method: 'cash',
-      lines: [{ product_id: 'p2', qty: '2.000', unit_price_minor: 4500 }],
+      lines: [{ product_id: 'p2', qty: '2.000', unit_price_minor: 4500, price_override_reason: 'Old stock, agreed' }],
       client_sale_id: '0a1b2c3d-4e5f-4000-8000-000000000001',
       occurred_at: '2026-10-22T10:00:00.000Z',
       recorded_offline: true,

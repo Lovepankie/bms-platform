@@ -1271,12 +1271,19 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
 
 - **Offline**, the form shows "You are offline. This sale is kept on this phone and sent when the phone is back online." with
   "Prices as of 22 Oct, 09:14". The item search reads the copy ("in stock when saved"); Credit (pay later) is greyed with "A credit
-  sale needs the internet."; price lists are not applied, so a line is priced at the item's price, its pack price or a typed one;
+  sale needs the internet."; price lists are not applied, so a line is priced at the item's price or its pack price saved on the phone; only a holder of
+  `retail.price.override` may type another, with a reason (at least 5 characters), as online; for anyone else the price field is
+  read only with "Offline, the price saved on this phone is used. You do not have permission to change it." and a **Use the price
+  saved on this phone** button on a line typed before the phone went offline;
   too little stock on the copy does not stop the sale. The button reads **Save on this phone**.
 - After saving, **Sale saved on this phone** with receipt **OFF-0A1B2C3D (provisional)**, the lines and the total, and "Not yet sent."
   Once sent, the same receipt reads **Sale sent**, **Receipt RS00000042**. A refused sale says why and that a manager decides.
 - **Online**, a save whose answer never came ("The server did not answer. The sale may or may not be saved.") offers **Keep it on
-  this phone**: it goes to the outbox with the same client sale id, so it is recorded once.
+  this phone** and **Try again**: the form is locked ("The items and the payment cannot be changed now, so the same sale is
+  sent."), and either sends the same request with the same client sale id, so it is recorded once. **Clear this sale** starts a
+  new one.
+- A sale a manager **discarded** shows in the sheet as "Discarded by a manager. It is not recorded and is not sent again." for a
+  day, and on its receipt.
 - **The dot** in the staff bar: green online, grey offline, amber sending, with "3 waiting to sync". Its sheet lists the waiting and
   failed sales, **Sync now** and, for a failed one, **Send again**. A manager (`retail.offline.resolve`: administrators and
   Supervisors) also sees the sales other phones could not record, with **Send it again** and **Discard** (a reason of at least 5

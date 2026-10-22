@@ -510,8 +510,10 @@ Notes:
   (`/retail/sale-clashes`, `/retail/offline-failures`); a discard needs a reason and is audited (`retail.offline_sale.discarded`).
   Recording a sale offline adds no permission: it is `retail.sale.create`, and the device reports its own refused sales under it
   (`/retail/offline-failures/mine` shows only the caller's). A sale sent with `recorded_offline` is not refused for short stock, an
-  item switched off, a changed price (no `retail.price.override` check) or a price not above cost (no `retail.price.below_cost`
-  check): each is recorded as a clash and told to the holders of `retail.offline.resolve` at the branch, which is the control on a
+  item switched off, a saved price that changed since, or a price not above cost (no `retail.price.below_cost` check): each is
+  recorded as a clash. The price rules are those of an online sale (ADR-067 decision 11): a price other than the one saved on
+  the phone stands without a clash only for a holder of `retail.price.override` at the branch with a reason; any other is
+  recorded as charged with a `price_typed` clash and told to the holders of `retail.offline.resolve` at the branch, which is the control on a
   seller who sets the flag by hand. A clash's words never carry a cost. The device keeps the catalogue and the outbox per business
   host and per person in IndexedDB and clears the catalogue on sign-out; lending data is never cached. Tests: `RetailOfflineSalesIT`.
 - Retail cash book (ADR-022, FR-RET-32, migration V34): the ten `retail.cashbook.*`,

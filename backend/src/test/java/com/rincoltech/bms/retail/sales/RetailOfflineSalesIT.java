@@ -252,7 +252,7 @@ class RetailOfflineSalesIT extends IntegrationTest {
     }
 
     /**
-     * ADR-067 decision 7: short stock, an item switched off, a changed price and a price not above cost record the sale and
+     * ADR-067 decision 7: short stock, an item switched off, a typed price and a price not above cost record the sale and
      * a clash each; the stock goes negative; the same sale online is refused; a manager resolves a clash once, audited.
      */
     @Test
@@ -283,7 +283,7 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(sale.get("total_minor").asLong()).isEqualTo(3_000);
         assertThat(sale.get("lines").get(0).get("unit_price_minor").asLong()).isEqualTo(1_000);
         assertThat(clashKinds(sale))
-                .containsExactlyInAnyOrder("item_inactive", "price_changed", "below_cost", "stock_short");
+                .containsExactlyInAnyOrder("item_inactive", "price_typed", "below_cost", "stock_short");
         sale.get("device")
                 .get("clashes")
                 .forEach(c -> assertThat(c.get("words").asString())
@@ -486,6 +486,65 @@ class RetailOfflineSalesIT extends IntegrationTest {
         }
         assertThat(sales()).isEqualTo(1);
         assertThat(balance()).isEqualTo("19.000");
+    }
+
+    /**
+     * Review fix 3, ADR-067 decision 11: offline sales follow the online price rules. The price the phone saved (in force at
+     * prices_as_of) stands, flagged price_changed when it changed since; a price typed by a holder of retail.price.override
+     * with a reason stands with no clash; any other typed price is recorded as charged with a price_typed clash.
+     */
+    @Test
+    void offlinePricesFollowTheOnlineRules() {
+        api.stockUp(t.headOffice(), product, "20");
+        Instant saved = Instant.now();
+        assertThat(api.editPrices(product, Map.of("sell_minor", 2_500, "reason", "Test price rise"), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        Instant at = Instant.now().plus(Duration.ofSeconds(1));
+
+        Map<String, Object> phonePrice = offlineSale(UUID.randomUUID(), at, "1", 2_000);
+        phonePrice.put("prices_as_of", saved.toString());
+        ResponseEntity<JsonNode> old = send(phonePrice, UUID.randomUUID().toString());
+        assertThat(old.getStatusCode()).as("%s", old.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(old.getBody())).containsExactly("price_changed");
+        assertThat(old.getBody().get("total_minor").asLong()).isEqualTo(2_000);
+
+        Map<String, Object> today = offlineSale(UUID.randomUUID(), at, "1", 2_500);
+        today.put("prices_as_of", saved.toString());
+        assertThat(clashKinds(send(today, UUID.randomUUID().toString()).getBody()))
+                .isEmpty();
+
+        Map<String, Object> typed = offlineSale(UUID.randomUUID(), at, "1", 2_200);
+        ResponseEntity<JsonNode> seller = send(typed, UUID.randomUUID().toString());
+        assertThat(seller.getStatusCode()).as("%s", seller.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(seller.getBody())).containsExactly("price_typed");
+        assertThat(seller.getBody().get("total_minor").asLong()).isEqualTo(2_200);
+
+        String mayChange = SALES + ",retail.price.override";
+        Map<String, Object> withReason = offlineSale(UUID.randomUUID(), at, "1", 2_200);
+        withReason.put(
+                "lines",
+                List.of(Map.of(
+                        "product_id",
+                        product,
+                        "qty",
+                        "1",
+                        "unit_price_minor",
+                        2_200,
+                        "price_override_reason",
+                        "Regular buyer, agreed")));
+        ResponseEntity<JsonNode> allowed = api.postKeyed(
+                "/sales", withReason, mayChange, "*", UUID.randomUUID().toString());
+        assertThat(allowed.getStatusCode()).as("%s", allowed.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(clashKinds(allowed.getBody())).isEmpty();
+
+        ResponseEntity<JsonNode> noReason = api.postKeyed(
+                "/sales",
+                offlineSale(UUID.randomUUID(), at, "1", 2_200),
+                mayChange,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(clashKinds(noReason.getBody())).containsExactly("price_typed");
     }
 
     /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
