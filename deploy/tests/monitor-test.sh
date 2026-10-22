@@ -136,6 +136,26 @@ fresh; printf '%s OK f seconds=900\n' "$(stamp $(( NOW - 86400 )))" > "$MONITOR_
 printf '%s FAILED seconds=40 decryption failed\n' "$(stamp $(( NOW - 60 )))" > "$MONITOR_STATE_DIR/last_restore_drill_error"
 check_drill; check "failed drill" 'the last restore drill failed: .*decryption failed'
 
+# The newest backup name ignores future timestamps and names backup.sh never writes (ADR-063 review).
+NOW=1800000000   # 2027-01-15T08:00:00Z
+names() { printf '%s\n' "$@"; }
+picked="$(names bms-production-20270114T011500Z.dump.enc bms-production-20270115T011500Z.dump.enc | pick_newest_backup "$NOW")"
+assert "newest of two real backups" test "$picked" = bms-production-20270115T011500Z.dump.enc
+picked="$(names bms-production-20270115T011500Z.dump.enc bms-production-20991231T235959Z.dump.enc | pick_newest_backup "$NOW")"
+assert "far-future name is ignored" test "$picked" = bms-production-20270115T011500Z.dump.enc
+picked="$(names bms-production-20270115T011500Z.dump.enc bms-production-20270115T083000Z.dump.enc | pick_newest_backup "$NOW")"
+assert "half an hour of clock skew is allowed" test "$picked" = bms-production-20270115T083000Z.dump.enc
+picked="$(names bms-production-20270115T011500Z.dump.enc 0-lock-test-20270115T020000Z.txt zz-planted.dump.enc | pick_newest_backup "$NOW")"
+assert "names that are not backups are ignored" test "$picked" = bms-production-20270115T011500Z.dump.enc
+picked="$(names bms-production-20991231T235959Z.dump.enc | pick_newest_backup "$NOW")"
+assert "only a future name means no backup" test -z "$picked"
+same_picker() {
+    diff <(sed -n '/^pick_newest_backup() {/,/^}/p' "$HERE/../monitor.sh") \
+         <(sed -n '/^pick_newest_backup() {/,/^}/p' "$HERE/../restore-drill.sh") > /dev/null \
+        && [[ -n "$(sed -n '/^pick_newest_backup() {/,/^}/p' "$HERE/../restore-drill.sh")" ]]
+}
+assert "restore-drill.sh picks backups the same way" same_picker
+
 if (( FAILURES > 0 )); then
     echo "${FAILURES} test(s) failed"
     exit 1

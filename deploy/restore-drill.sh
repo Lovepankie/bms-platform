@@ -91,7 +91,27 @@ rclone() {
         "$RCLONE_IMAGE" "$@"
 }
 
-NAME="$(rclone lsf --files-only "${PREFIX}/daily/" 2> /dev/null | sort | tail -n 1)"
+# The newest backup name whose timestamp is not in the future (one hour of clock skew allowed). An object
+# under daily/ with a far-future name, planted or mistaken, would otherwise sort last forever and keep the
+# freshness check green and the drill restoring the same file; names that are not backup.sh's are skipped too.
+# Reads names on stdin, takes the current time in epoch seconds. Kept identical in monitor.sh and
+# restore-drill.sh (deploy/tests/monitor-test.sh checks that).
+pick_newest_backup() {
+    local limit name stamp best="" best_stamp=""
+    limit="$(date -u -d "@$(( $1 + 3600 ))" +%Y%m%dT%H%M%SZ)"
+    while IFS= read -r name; do
+        [[ "$name" =~ ^bms-[a-z0-9-]+-([0-9]{8}T[0-9]{6}Z)\.dump\.enc$ ]] || continue
+        stamp="${BASH_REMATCH[1]}"
+        [[ "$stamp" > "$limit" ]] && continue
+        if [[ -z "$best_stamp" || "$stamp" > "$best_stamp" ]]; then
+            best="$name"
+            best_stamp="$stamp"
+        fi
+    done
+    printf '%s\n' "$best"
+}
+
+NAME="$(rclone lsf --files-only "${PREFIX}/daily/" 2> /dev/null | pick_newest_backup "$(date -u +%s)")"
 [[ -n "$NAME" ]] || fail "no backup found under ${PREFIX}/daily/"
 log "newest backup: ${NAME}"
 rclone copyto "${PREFIX}/daily/${NAME}" "/backups/$(basename "$ENC")" > /dev/null 2>&1 || fail "download of ${NAME} failed"

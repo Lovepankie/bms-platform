@@ -42,7 +42,8 @@ The files arrive with each release: on staging the puller refreshes `/opt/bms/mo
 cd /opt/bms
 install -m 644 systemd/bms-monitor.service systemd/bms-monitor.timer \
   systemd/bms-restore-drill.service systemd/bms-restore-drill.timer /etc/systemd/system/
-# Production only: the deploy user is `deploy`, not `bms`.
+# Production built by hand (provision-host.md) only: the deploy user is `deploy`, not `bms`. A host built by
+# infra/production already has these units from cloud-init, running as bms (terraform-production.md step 11).
 for u in bms-monitor bms-restore-drill; do
   mkdir -p /etc/systemd/system/$u.service.d
   printf '[Service]\nUser=deploy\nGroup=deploy\n' > /etc/systemd/system/$u.service.d/user.conf

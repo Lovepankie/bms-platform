@@ -16,7 +16,7 @@ puts releases on these hosts is chapter 10 and ADR-006. The step-by-step procedu
 | Local | A developer's machine, `docker-compose.yml` at the repository root (`make dev`) | The developer | Fabricated; the `demo` tenant from `make seed` |
 | CI | Self-hosted runners (Jerome's laptop first, the staging Pi as overflow; ADR-018 amendment 2026-10-16) and, for the deploy jobs only, the dedicated deploy runner on the staging host (ADR-040); PostgreSQL 16 in Testcontainers | Every pull request and push to `main` | Fabricated, per test |
 | Staging | A shared ARM64 host at a Rincol home site (Raspberry Pi 4, Debian 13), `/opt/bms`, behind a Cloudflare Tunnel (section 9.13, ADR-018) | Every green build of `main`: the host pulls the `staging` pointer | Fabricated tenants only (chapter 15 section 15.8) |
-| Production | One cloud VM (Hetzner Cloud, Ubuntu LTS), `/opt/bms` | A `vX.Y.Z` tag, after the dev lead approves | Real tenants |
+| Production | One cloud VM (Ubuntu 24.04 LTS), `/opt/bms`, created by Terraform in `infra/production/` on Hetzner Cloud or AWS EC2, the owner's choice (section 9.3.1, ADR-063); not created yet | Today's pipeline: a `vX.Y.Z` tag, after the dev lead approves (ADR-006); proposed: the host pulls a signed `production` pointer the owner moves (ADR-063) | Real tenants |
 
 Staging and production are separate hosts with separate databases, separate `.env` files,
 separate R2 prefixes and separate host names. Nothing is shared between them. Sections 9.3 to 9.5
@@ -53,10 +53,31 @@ skips with a notice. Staging differs as section 9.13 describes (ADR-018).
 Only the proxy publishes ports. The API, web and database are reachable only on the Compose
 network. There is no Redis (ADR-008).
 
+### 9.3.1 Provisioning with Terraform (ADR-063)
+
+The VM and everything it needs outside itself are code in `infra/production/`, reviewed and not applied
+until production day (runbook `docs/runbooks/terraform-production.md`). Two roots create the same host on
+two providers, and the owner applies only the one chosen: `hetzner/` (a server with delete and rebuild
+protection, Hetzner backups only if the owner chooses them, a Hetzner firewall) and `aws/` (EC2 with termination protection, IMDSv2 only,
+an encrypted gp3 disk, an Elastic IP, a security group). Both use two shared modules:
+
+| Module | Creates |
+|---|---|
+| `modules/cloud-init` | The first-boot configuration: the `ops` user for people (SSH keys only, sudo), sshd with no passwords and no root, Docker from Docker's apt repository, unattended upgrades, fail2ban, the `bms` service user in the docker group, `/opt/bms`, and the units in `deploy/systemd` (`bms-pull`, `bms-monitor`, `bms-restore-drill`), installed but not enabled until the host has its `.env` |
+| `modules/cloudflare` | In the existing Cloudflare account: A (and on Hetzner AAAA) records for `bms`, `bms-callbacks` and each `<slug>-bms`, DNS only; the R2 backup bucket with the lock rules (`production/daily/` 30 days, `production/monthly/` 365 days) and lifecycle rules (a day later) of ADR-058; the R2 documents bucket; and three account tokens for the host, each limited to the VM's addresses if Cloudflare enforces the IP condition: object read and write on the backup bucket, the same on the documents bucket, and DNS edit plus zone read on the whole zone for Caddy's DNS-01 challenge (an accepted risk: a host compromise could change mail records; ADR-063 decision 4) |
+
+Firewall on both: inbound 22 from the admin address list only (the whole internet is refused by
+validation), 80 and 443 TCP and 443 UDP from anywhere, nothing else; outbound open. The provider
+location or region, the server size and the R2 location have no default: they are the owner's decisions,
+and the region is the data protection decision of NFR-DP-07. No secret goes into cloud-init (user data
+is readable from the provider's metadata service). The three host tokens are created by Terraform, so
+their values are in Terraform state, which lives in its own private R2 bucket and never in git; the host
+receives them once through `terraform output -raw host_env`.
+
 ## 9.4 Sizing: a 4 GB VM (production)
 
 The starting size is a 2 vCPU, 4 GB, 40 GB disk VM per environment (for example Hetzner
-CX22). Memory is budgeted with container limits so one runaway process cannot starve the rest:
+CX23 or an AWS t3.medium). Memory is budgeted with container limits so one runaway process cannot starve the rest:
 
 | Container | Limit | Notes |
 |---|---|---|
@@ -298,7 +319,10 @@ deletion 90 days after closing), all Africa/Kampala (ADR-024).
    alerts on a failed drill, no good drill in 9 days, or a drill over the RTO. The quarterly timed
    restore onto a fresh VM stays a human drill recorded in `docs/meetings/<date>/`.
 
-The R2 token is scoped to the backup bucket. The encryption key has an offline copy held by
+The R2 token is scoped to the backup bucket; on a host built by `infra/production/` it is an account token
+with object read and write on that bucket only, limited to the VM's addresses if Cloudflare enforces the IP condition, and the lock and
+lifecycle rules are created by the same Terraform (section 9.3.1), so the host's token cannot remove them; an account
+administrator or the Terraform token still can, and both are guarded as root credentials. The encryption key has an offline copy held by
 the dev lead (chapter 8 section 8.7). The restore procedure and the quarterly drill
 (NFR-BAK-04) are `docs/runbooks/restore-from-backup.md`.
 
@@ -344,7 +368,8 @@ logs JSON (ECS format) with the request id on every line in the `server` profile
   current                staging only: symlink to the live releases/<tag>/, updated only on success
   cosign.pub             the signing public key (ADR-018 finding H2): committed at deploy/cosign.pub,
                           provisioned once by hand, never replaced by a release
-  systemd/               the unit files, for reference; installed by hand
+  systemd/               the unit files, for reference; installed by hand, or by cloud-init on a host
+                          built by infra/production (section 9.3.1)
   postgres/initdb/       copied from deploy/ on every deploy. Production: the restore drill reads its init scripts here.
                           Staging: the drill reads releases/<tag>/postgres/initdb (the staged release it matches)
   sql/                   onboarding scripts (docs/runbooks/onboard-tenant.md)
@@ -422,7 +447,7 @@ Staging runs on an ARM64 host that already exists at a Rincol home site: a Raspb
 
 - Confirm the hosting region against the data protection requirement for processing outside
   Uganda before production data arrives (NFR-DP-07); record the outcome in an ADR.
-- Create the production Cloudflare token scoped to the `rincoltech.com` zone when the production
-  VM is provisioned.
+- Choose the production provider (Hetzner Cloud or AWS), its location or region, the server size and
+  the R2 location, then apply `infra/production/` (ADR-063, `docs/runbooks/terraform-production.md`).
 - Registry retention for old `sha-*` images.
 - Off-host log shipping and an error tracker (NFR-OBS-03).

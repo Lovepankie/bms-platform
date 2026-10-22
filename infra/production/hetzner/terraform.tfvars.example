@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (git-ignored) on the day. Placeholders only: nothing here is a real value.
+# Tokens and the Cloudflare account id are NOT set here: export HCLOUD_TOKEN, CLOUDFLARE_API_TOKEN and
+# TF_VAR_cloudflare_account_id in the shell (docs/runbooks/terraform-production.md).
+location        = "DECIDE_IN_THE_REGION_ADR" # NFR-DP-07, Uganda PDPO
+server_type     = "DECIDE"                   # 2 vCPU / 4 GB / 40 GB, for example cx23 where it is sold
+r2_location     = "DECIDE"                   # weur, eeur, apac, enam, wnam or oc
+ssh_public_keys = ["ssh-ed25519 AAAA... name"]
+admin_cidrs     = ["203.0.113.7/32"] # documentation address, replace
+backups         = false              # DECIDE: runbook step 1 (unencrypted disk images at Hetzner)
+tenant_slugs    = []

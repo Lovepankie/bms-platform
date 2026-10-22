@@ -1,0 +1,104 @@
+#cloud-config
+# First boot of the BMS production server (ADR-063), the same on every provider. It prepares the host and
+# nothing else. No secret is written here (user data is readable from the provider's metadata service):
+# /opt/bms/.env, cosign.pub, the read:packages registry login and the first files are put on the host by hand
+# afterwards (docs/runbooks/terraform-production.md).
+#
+# Two users: ops, for the people (SSH keys only, sudo), and bms, the service user that runs the puller, the
+# host checks, the restore drill and the backup (no password, no SSH key, no login shell).
+
+package_update: true
+package_upgrade: true
+
+apt:
+  sources:
+    docker.list:
+      source: "deb [signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+packages:
+  - ca-certificates
+  - curl
+  - jq
+  - util-linux
+  - fail2ban
+  - unattended-upgrades
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-compose-plugin
+
+users:
+  - name: ops
+    gecos: operations
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    lock_passwd: true
+    ssh_authorized_keys:
+%{ for key in ops_ssh_keys ~}
+      - ${key}
+%{ endfor ~}
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-bms.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers ops
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  - path: /etc/systemd/system/bms-pull.service
+    permissions: "0644"
+    encoding: b64
+    content: ${base64encode(pull_service)}
+  - path: /etc/systemd/system/bms-pull.timer
+    permissions: "0644"
+    encoding: b64
+    content: ${base64encode(pull_timer)}
+  # The host checks and the weekly restore drill of ADR-058 (#427), as shipped in deploy/systemd. They run as
+  # bms, which is also the deploy user on this host, so no User= drop-in is needed.
+  - path: /etc/systemd/system/bms-monitor.service
+    permissions: "0644"
+    encoding: b64
+    content: ${base64encode(monitor_service)}
+  - path: /etc/systemd/system/bms-monitor.timer
+    permissions: "0644"
+    encoding: b64
+    content: ${base64encode(monitor_timer)}
+  - path: /etc/systemd/system/bms-restore-drill.service
+    permissions: "0644"
+    encoding: b64
+    content: ${base64encode(drill_service)}
+  - path: /etc/systemd/system/bms-restore-drill.timer
+    permissions: "0644"
+    encoding: b64
+    content: ${base64encode(drill_timer)}
+  # The staging puller, pointed at the production pointer and the VM's own compose file. Not enabled: pull-staging.sh
+  # needs the three changes of ADR-063 decision 6 before it can deploy production.
+  - path: /etc/systemd/system/bms-pull.service.d/10-production.conf
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=BMS production: deploy the release the production pointer names
+      [Service]
+      Environment=BMS_POINTER_TAG=production
+      Environment=BMS_COMPOSE_SOURCE=compose.yml
+
+runcmd:
+  - systemctl restart ssh
+  # The dedicated service user of the puller: no password, no SSH key, no login shell. It is in the docker
+  # group, which makes it root-equivalent on this host: it is used for the timer only (ADR-018).
+  - adduser --system --group --home /opt/bms --shell /usr/sbin/nologin bms
+  - usermod -aG docker bms
+  - install -d -o bms -g bms -m 750 /opt/bms /opt/bms/state
+  - systemctl daemon-reload
+  - systemctl enable --now fail2ban
+  # Deliberately NOT enabled: bms-pull.timer, bms-monitor.timer and bms-restore-drill.timer. They start only
+  # after .env, cosign.pub, the registry login and the first files exist (the puller refuses every release
+  # without cosign.pub, by design; the checks would only report a host that is not set up yet).

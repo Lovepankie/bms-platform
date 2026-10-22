@@ -53,6 +53,25 @@ cert_end() {
 }
 disk_percent() { df -P "$1" 2> /dev/null | awk 'NR == 2 { sub("%", "", $5); print $5 }'; }
 sql() { timeout 30 docker exec "$MONITOR_POSTGRES_CONTAINER" psql -U bms_owner -d bms -tAF ' ' -c "$1"; }
+# The newest backup name whose timestamp is not in the future (one hour of clock skew allowed). An object
+# under daily/ with a far-future name, planted or mistaken, would otherwise sort last forever and keep the
+# freshness check green and the drill restoring the same file; names that are not backup.sh's are skipped too.
+# Reads names on stdin, takes the current time in epoch seconds. Kept identical in monitor.sh and
+# restore-drill.sh (deploy/tests/monitor-test.sh checks that).
+pick_newest_backup() {
+    local limit name stamp best="" best_stamp=""
+    limit="$(date -u -d "@$(( $1 + 3600 ))" +%Y%m%dT%H%M%SZ)"
+    while IFS= read -r name; do
+        [[ "$name" =~ ^bms-[a-z0-9-]+-([0-9]{8}T[0-9]{6}Z)\.dump\.enc$ ]] || continue
+        stamp="${BASH_REMATCH[1]}"
+        [[ "$stamp" > "$limit" ]] && continue
+        if [[ -z "$best_stamp" || "$stamp" > "$best_stamp" ]]; then
+            best="$name"
+            best_stamp="$stamp"
+        fi
+    done
+    printf '%s\n' "$best"
+}
 newest_r2_backup() {
     local cgroup=()
     [[ "$BMS_ENVIRONMENT" == "staging" ]] && cgroup=(--cgroup-parent bms.slice)
@@ -63,7 +82,7 @@ newest_r2_backup() {
         --env RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
         --env RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
         --env RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true \
-        "$RCLONE_IMAGE" lsf --files-only "r2:${R2_BACKUP_BUCKET}/${BMS_ENVIRONMENT}/daily/" 2> /dev/null | sort | tail -n 1
+        "$RCLONE_IMAGE" lsf --files-only "r2:${R2_BACKUP_BUCKET}/${BMS_ENVIRONMENT}/daily/" 2> /dev/null | pick_newest_backup "$(now)"
 }
 # The token goes to curl on stdin, never on its command line, where any user of the host could read it.
 telegram_send() {

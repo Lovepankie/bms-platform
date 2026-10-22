@@ -387,14 +387,18 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         }
 
         production = deploymentEnvironment "Production" {
-            cloudflare = deploymentNode "Cloudflare" "DNS for the BMS hosts under rincoltech.com and object storage" {
-                deploymentNode "R2 production buckets" "Documents and nightly encrypted backups, private; backups kept 30 days (monthly 365) by bucket lock and lifecycle rules the host token cannot change (ADR-058)" "Cloudflare R2" {
-                    containerInstance bms.storage
+            cloudflare = deploymentNode "Cloudflare" "The existing Cloudflare account: DNS for the BMS hosts under rincoltech.com and object storage; every resource here is created by infra/production/modules/cloudflare (ADR-063), nothing applied yet" {
+                r2 = deploymentNode "R2 production buckets" "A backup bucket and a documents bucket, private, in the R2 location the owner chooses; backups kept 30 days (monthly 365) by bucket lock rules and removed a day later by lifecycle rules, both created by Terraform and out of reach of the host token (ADR-058)" "Cloudflare R2" {
+                    storage = containerInstance bms.storage
                 }
-                dns = infrastructureNode "DNS" "A records for bms, bms-callbacks and each <slug>-bms under rincoltech.com; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
+                dns = infrastructureNode "DNS" "A records (and AAAA on Hetzner) for bms, bms-callbacks and each <slug>-bms under rincoltech.com, DNS only, created by Terraform; TXT records created by Caddy for the DNS-01 wildcard challenge" "Cloudflare DNS"
+                hostTokens = infrastructureNode "Host tokens" "Three account tokens created by Terraform, each limited to the VM's addresses if Cloudflare enforces the IP condition: object read and write on the backup bucket (cannot change the lock or lifecycle rules), the same on the documents bucket, DNS edit and zone read on the whole rincoltech.com zone (an accepted risk, ADR-063 decision 4)" "Cloudflare account API tokens"
             }
-            github = deploymentNode "GitHub" "Tag vX.Y.Z retags the sha-<short> images; no rebuild (ADR-006)" "GitHub Actions" {
+            github = deploymentNode "GitHub" "Today: tag vX.Y.Z retags the sha-<short> images, no rebuild (ADR-006). Proposed: the host pulls a signed production pointer the owner moves (ADR-063)" "GitHub Actions" {
                 registry = infrastructureNode "Container registry" "The images proven on staging, tagged vX.Y.Z" "GHCR"
+            }
+            maintainerMac = deploymentNode "Maintainer's Mac" "Runs Terraform by hand with the provider and Cloudflare tokens from the Keychain; state in a private R2 state bucket, never in git (ADR-063)" "macOS" {
+                terraform = infrastructureNode "Terraform" "infra/production/hetzner or infra/production/aws, the one root the owner chose; plan read, then applied once on production day" "Terraform"
             }
             alertsNode = deploymentNode "Telegram" "Hosted by Telegram; the operator chat the team reads on their phones" "Telegram Bot API" {
                 alertsChat = infrastructureNode "Operator chat" "Receives PROBLEM, STILL FAILING and RESOLVED messages carrying check names, hosts and numbers only, never personal data (ADR-058)" "sendMessage"
@@ -402,21 +406,34 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             uptimeNode = deploymentNode "Uptime monitor" "Hosted uptime service outside our hosts; alerts when the heartbeat pings stop (ADR-058)" "External service" {
                 heartbeat = infrastructureNode "Heartbeat check" "Expects a ping every five minutes with a 15 minute grace" "HTTPS heartbeat"
             }
-            vm = deploymentNode "Production VM" "Single cloud VM, 4 GB; deployed from a version tag after the dev lead approves" "Hetzner Cloud, Ubuntu LTS" {
-                hostChecks = infrastructureNode "Host checks" "bms-monitor.timer every five minutes: site, jobs, disk, certificates, backups and the restore drill, posted to the Telegram operator chat, then a heartbeat to the uptime monitor; bms-restore-drill.timer weekly (ADR-058)" "systemd timers, monitor.sh, restore-drill.sh"
-                compose = deploymentNode "Docker Compose" "Migrations run as a one-shot container before the app containers switch; failed health check rolls back" "Docker" {
-                    proxy = containerInstance bms.proxy
-                    containerInstance bms.web
-                    containerInstance bms.api
-                    containerInstance bms.migrate
-                    containerInstance bms.db
+            cloud = deploymentNode "Cloud provider" "Hetzner Cloud or AWS, the owner's choice, in the location or region the data protection decision names (NFR-DP-07); one Terraform root per provider (ADR-063)" "Hetzner Cloud or AWS" {
+                firewall = infrastructureNode "Firewall" "Inbound 22 from the admin address list only, 80 and 443 TCP and 443 UDP from anywhere, nothing else; a Hetzner firewall or an AWS security group, created by Terraform" "Cloud firewall"
+                vm = deploymentNode "Production VM" "Single cloud VM, 2 vCPU, 4 GB, 40 GB, created by Terraform with delete protection; cloud-init makes the ops user (SSH keys, no passwords, no root), the bms service user, Docker and the systemd units" "Hetzner Cloud server or AWS EC2 instance (the owner's choice), Ubuntu 24.04 LTS" {
+                    puller = infrastructureNode "Puller" "bms-pull.timer with the production pointer and compose.yml; installed by cloud-init, off until pull-staging.sh handles production and the production pointer exists (proposed, ADR-063 decision 6)" "systemd timer, pull-staging.sh"
+                    backupJob = infrastructureNode "Nightly backup" "backup.sh at 01:15 as bms: pg_dump, encrypted on the host, uploaded to the backup bucket; BACKUP_RETENTION_ON_HOST=false, so the host deletes nothing" "cron, rclone"
+                    hostChecks = infrastructureNode "Host checks" "bms-monitor.timer every five minutes: site, jobs, disk, certificates, backups and the restore drill, posted to the Telegram operator chat, then a heartbeat to the uptime monitor; bms-restore-drill.timer weekly (ADR-058); installed by cloud-init" "systemd timers, monitor.sh, restore-drill.sh"
+                    compose = deploymentNode "Docker Compose" "Migrations run as a one-shot container before the app containers switch; failed health check rolls back" "Docker" {
+                        proxy = containerInstance bms.proxy
+                        containerInstance bms.web
+                        containerInstance bms.api
+                        containerInstance bms.migrate
+                        containerInstance bms.db
+                    }
                 }
             }
-            production.vm.compose.proxy -> production.cloudflare.dns "Creates DNS-01 challenge records for *.rincoltech.com" "Cloudflare API"
-            production.vm.hostChecks -> production.vm.compose.proxy "Checks /healthz and the certificate through the public host" "HTTPS"
-            production.vm.hostChecks -> production.alertsNode.alertsChat "Posts PROBLEM, STILL FAILING and RESOLVED alerts; the bot token goes on stdin, never the command line" "HTTPS"
-            production.vm.hostChecks -> production.uptimeNode.heartbeat "Pings the heartbeat after every run that sent all its alerts" "HTTPS"
-            production.github.registry -> production.vm.compose.proxy "Images pulled by deploy.sh with a short-lived token" "HTTPS"
+            production.maintainerMac.terraform -> production.cloud.vm "Creates the VM with its cloud-init" "Provider API"
+            production.maintainerMac.terraform -> production.cloud.firewall "Creates" "Provider API"
+            production.maintainerMac.terraform -> production.cloudflare.dns "Creates the host records" "Cloudflare API"
+            production.maintainerMac.terraform -> production.cloudflare.r2 "Creates the buckets, lock and lifecycle rules" "Cloudflare API"
+            production.maintainerMac.terraform -> production.cloudflare.hostTokens "Creates the host tokens" "Cloudflare API"
+            production.cloud.firewall -> production.cloud.vm.compose.proxy "Lets in 80 and 443 only" "TCP, UDP"
+            production.cloud.vm.compose.proxy -> production.cloudflare.dns "Creates DNS-01 challenge records for *.rincoltech.com with the DNS host token" "Cloudflare API"
+            production.cloud.vm.backupJob -> production.cloudflare.r2.storage "Uploads the encrypted dump with the backup host token; deletes refused by the lock" "S3 API"
+            production.cloud.vm.hostChecks -> production.cloud.vm.compose.proxy "Checks /healthz and the certificate through the public host" "HTTPS"
+            production.cloud.vm.hostChecks -> production.alertsNode.alertsChat "Posts PROBLEM, STILL FAILING and RESOLVED alerts; the bot token goes on stdin, never the command line" "HTTPS"
+            production.cloud.vm.hostChecks -> production.uptimeNode.heartbeat "Pings the heartbeat after every run that sent all its alerts" "HTTPS"
+            production.cloud.vm.puller -> production.github.registry "Reads the production pointer and verifies the cosign signatures (proposed, ADR-063)" "HTTPS"
+            production.github.registry -> production.cloud.vm.compose.proxy "Images pulled by deploy.sh with the bms user's read:packages login, verified against the host's cosign.pub" "HTTPS"
         }
     }
 
@@ -442,7 +459,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             autoLayout
         }
 
-        deployment bms "Production" "ProductionDeployment" "One VM, Docker Compose; a version tag deploys the images already proven on staging." {
+        deployment bms "Production" "ProductionDeployment" "One VM created by Terraform on Hetzner or AWS, Docker Compose; the images already proven on staging (ADR-006 today, ADR-063 proposed)." {
             include *
             autoLayout
         }

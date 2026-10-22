@@ -1,0 +1,13 @@
+# Terraform state, plans and the backend file can hold secrets, addresses and the account id: they never go in
+# git (docs/runbooks/terraform-production.md). Applies to both roots.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+*.tfvars
+!terraform.tfvars.example
+backend.tf
+# Encrypted state copies belong in the offline store, never here (runbook step 3.4).
+tfstate-*.enc
+*.enc

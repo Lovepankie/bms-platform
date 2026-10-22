@@ -8,7 +8,13 @@ production VM. Nothing is shared between the two environments.
 
 ## 1. Create the VM
 
-- 2 vCPU, 4 GB RAM, 40 GB disk, Ubuntu LTS (for example Hetzner Cloud CX22), in the region
+The production server, its firewall, the DNS records, the R2 buckets with the backup lock and the host's tokens are created
+by Terraform (`infra/production/`, Hetzner or AWS, ADR-063 proposed; runbook `docs/runbooks/terraform-production.md`) on
+production day, and cloud-init does section 2 with `bms` as the service user instead of `deploy`. Follow that runbook for a
+new production host; the sections below still say what the host needs. The deploy SSH key and GitHub Environment of sections
+2 and 5 belong to ADR-006's tag deploy, which ADR-063 proposes to replace.
+
+- 2 vCPU, 4 GB RAM, 40 GB disk, Ubuntu LTS (for example Hetzner Cloud CX23), in the region
   confirmed for NFR-DP-07.
 - Firewall: inbound 22 from the team's addresses only; 80 and 443 (TCP) and 443 (UDP) from
   anywhere. Nothing else.
