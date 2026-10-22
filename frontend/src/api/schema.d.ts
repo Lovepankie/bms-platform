@@ -7223,6 +7223,8 @@ export interface components {
             tenant?: components["schemas"]["PlatformTenant"];
         };
         BusinessPlan: {
+            /** @description Whether a change asked for now takes effect at once, as nothing is paid ahead */
+            applies_at_once?: boolean;
             /** @description Whether the signed-in user is the Owner, who alone may change the plan */
             can_change?: boolean;
             /** @description Changes still to come, soonest first, then the latest done or undone */
@@ -7259,6 +7261,11 @@ export interface components {
             requests?: components["schemas"]["PlanModuleRequest"][];
             /** @description trial, active, past_due, suspended or cancelled; null when the business has none yet */
             subscription_status?: string;
+            /**
+             * Format: date
+             * @description Today in the business's own time zone
+             */
+            today?: string;
             /** Format: date */
             trial_ends_on?: string;
         };

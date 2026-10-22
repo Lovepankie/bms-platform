@@ -1057,6 +1057,10 @@
       },
       "BusinessPlan" : {
         "properties" : {
+          "applies_at_once" : {
+            "description" : "Whether a change asked for now takes effect at once, as nothing is paid ahead",
+            "type" : "boolean"
+          },
           "can_change" : {
             "description" : "Whether the signed-in user is the Owner, who alone may change the plan",
             "type" : "boolean"
@@ -1128,6 +1132,11 @@
           },
           "subscription_status" : {
             "description" : "trial, active, past_due, suspended or cancelled; null when the business has none yet",
+            "type" : "string"
+          },
+          "today" : {
+            "description" : "Today in the business's own time zone",
+            "format" : "date",
             "type" : "string"
           },
           "trial_ends_on" : {

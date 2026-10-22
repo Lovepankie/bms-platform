@@ -34,26 +34,28 @@ export function dayBefore(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** What the server says about when a change asked for now takes effect, by the business's own date. */
+type When = Pick<Plan, 'changes_take_effect_on' | 'applies_at_once' | 'paid_until'>;
+
 /** When a change asked for now takes effect, in words. */
-export function whenWords(plan: Pick<Plan, 'changes_take_effect_on' | 'paid_until'>, today: string): string {
-  const on = plan.changes_take_effect_on ?? today;
-  if (on <= today) return 'at once, because nothing is paid ahead';
-  return `on ${dayWords(on)}, after the last day paid for (${dayWords(plan.paid_until)})`;
+export function whenWords(plan: When): string {
+  if (plan.applies_at_once || !plan.changes_take_effect_on) return 'at once, because nothing is paid ahead';
+  return `on ${dayWords(plan.changes_take_effect_on)}, after the last day paid for (${dayWords(plan.paid_until)})`;
 }
 
 /** The plain sentence of the confirm for stopping a module. */
-export function stopSentence(module: string, plan: Pick<Plan, 'changes_take_effect_on' | 'paid_until'>, today: string): string {
+export function stopSentence(module: string, plan: When): string {
   const name = moduleName(module);
   return (
-    `${name} stops ${whenWords(plan, today)}. Its records are kept but hidden: nobody can open them while it is off, and they all come back ` +
+    `${name} stops ${whenWords(plan)}. Its records are kept but hidden: nobody can open them while it is off, and they all come back ` +
     `if ${name} is switched on again. Until then everything works as now.`
   );
 }
 
 /** The plain sentence of the confirm for cancelling. */
-export function cancelSentence(plan: Pick<Plan, 'changes_take_effect_on' | 'paid_until'>, today: string): string {
+export function cancelSentence(plan: When): string {
   return (
-    `The subscription ends ${whenWords(plan, today)}. Until then everything works. After it the business is read only: everyone can still ` +
+    `The subscription ends ${whenWords(plan)}. Until then everything works. After it the business is read only: everyone can still ` +
     'sign in, look at everything and download the data, but nobody can add or change anything, and nothing more is billed. Nothing is ' +
     'deleted. You can undo the cancellation until that day.'
   );
@@ -137,7 +139,7 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
     );
   }
   const p = plan.data;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = p.today ?? '';
   const scheduled = (p.changes ?? []).filter((c) => c.status === 'scheduled');
   const stopping = new Set(scheduled.filter((c) => c.kind === 'stop_module').map((c) => c.module_key));
   const pending = new Set((p.requests ?? []).filter((r) => r.status === 'pending').map((r) => r.module_key));
@@ -261,7 +263,7 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
             send();
           }}
         >
-          <p>{confirm.kind === 'cancel' ? cancelSentence(p, today) : stopSentence(confirm.module, p, today)}</p>
+          <p>{confirm.kind === 'cancel' ? cancelSentence(p) : stopSentence(confirm.module, p)}</p>
           {mfaEnabled ? (
             <>
               <label htmlFor="plan-proof">Code from your authenticator app</label>

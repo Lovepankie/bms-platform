@@ -125,6 +125,8 @@ class PlanService {
                             .toList(),
                     sub.allowed(),
                     effectiveOn(sub, today),
+                    !effectiveOn(sub, today).isAfter(today),
+                    today,
                     cancellationOn(),
                     sub.endedOn(),
                     owner,

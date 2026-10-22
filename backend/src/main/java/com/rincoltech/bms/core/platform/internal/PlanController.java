@@ -102,6 +102,12 @@ class PlanController {
             @Schema(description = "The day a change asked for now would take effect")
             LocalDate changesTakeEffectOn,
 
+            @Schema(description = "Whether a change asked for now takes effect at once, as nothing is paid ahead")
+            boolean appliesAtOnce,
+
+            @Schema(description = "Today in the business's own time zone")
+            LocalDate today,
+
             @Schema(description = "While a cancellation is scheduled: the first day the business is read only")
             LocalDate endsOn,
 

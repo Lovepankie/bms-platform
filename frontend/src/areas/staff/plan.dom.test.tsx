@@ -36,6 +36,8 @@ function base(canChange: boolean) {
     modules_available: [],
     modules_in_plan: ['lending', 'retail'],
     changes_take_effect_on: '2099-12-01',
+    applies_at_once: false,
+    today: '2099-11-15',
     can_change: canChange,
     requests: [],
     changes: [],
@@ -108,8 +110,21 @@ describe('the end of the subscription', () => {
 
   it('says nothing while the subscription goes on, and at once when nothing is paid ahead', () => {
     expect(endNotice({})).toBeNull();
-    const now = { changes_take_effect_on: '2099-01-01' };
-    expect(stopSentence('retail', now, '2099-01-01')).toMatch(/^Shop stops at once, because nothing is paid ahead/);
-    expect(cancelSentence(now, '2099-01-01')).toMatch(/Nothing is deleted/);
+    const now = { changes_take_effect_on: '2099-01-01', applies_at_once: true };
+    expect(stopSentence('retail', now)).toMatch(/^Shop stops at once, because nothing is paid ahead/);
+    expect(cancelSentence(now)).toMatch(/Nothing is deleted/);
+    const later = { changes_take_effect_on: '2099-01-01', applies_at_once: false, paid_until: '2098-12-31' };
+    expect(stopSentence('retail', later)).toMatch(/^Shop stops on 1 January 2099, after the last day paid for/);
+  });
+
+  it('offers the undo by the business date the server sends, not the browser clock', async () => {
+    base(true);
+    plan.today = '2099-12-01';
+    plan.changes = [
+      { id: 'c1', kind: 'cancel', effective_on: '2099-12-01', status: 'scheduled' },
+      { id: 'c2', kind: 'stop_module', module_key: 'retail', effective_on: '2099-12-02', status: 'scheduled' },
+    ];
+    show(<PlanCard mfaEnabled={false} />);
+    expect(await screen.findAllByRole('button', { name: 'Undo' })).toHaveLength(1);
   });
 });
