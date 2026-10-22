@@ -157,6 +157,29 @@ class DataExportIT extends LendingBookSupport {
                 EVIL,
                 LocalDate.of(2026, 10, 8),
                 Instant.parse("2026-10-07T22:30:00Z"));
+        // A restock of two into the head office.
+        ResponseEntity<JsonNode> restocked = s.api()
+                .postKeyed(
+                        "/purchases",
+                        Map.of(
+                                "purchased_on",
+                                "2026-10-08",
+                                "payment_method",
+                                "cash",
+                                "lines",
+                                List.of(Map.of(
+                                        "product_id",
+                                        s.product(),
+                                        "cost_minor",
+                                        600,
+                                        "qty_by_branch",
+                                        List.of(Map.of("branch_id", s.t().headOffice(), "qty", "2"))))),
+                        RetailTestSupport.ADMIN,
+                        "*",
+                        "restock-dx1-0001");
+        assertThat(restocked.getStatusCode().is2xxSuccessful())
+                .as("%s", restocked.getBody())
+                .isTrue();
         XlsxReader x = workbook(s.t(), s.api().userId(), export(s.t(), s.api().userId()));
 
         assertThat(names(x))
@@ -223,7 +246,7 @@ class DataExportIT extends LendingBookSupport {
         Sheet stock = x.sheet("Stock balances");
         assertThat(header(stock)).containsExactly("Branch", "Product code", "Product", "Quantity", "Kept for orders");
         assertThat(stock.text("B2")).isEqualTo("DX1");
-        assertThat(stock.cell("D2").value()).isEqualTo("12");
+        assertThat(stock.cell("D2").value()).as("12 counted, 2 restocked").isEqualTo("14");
 
         assertThat(header(x.sheet("Credit buyers")))
                 .containsExactly(
@@ -233,6 +256,11 @@ class DataExportIT extends LendingBookSupport {
                         "Owed (UGX)",
                         "Oldest due date",
                         "Credit limit (UGX)");
+        Sheet restocks = x.sheet("Restocks");
+        assertThat(header(restocks)).startsWith("Date", "Restock no", "Branch", "Supplier");
+        assertThat(restocks.text("C2"))
+                .as("the branch the line was stocked into")
+                .isEqualTo("Head Office");
         assertThat(header(x.sheet("Cash book"))).startsWith("Date", "Time");
         assertThat(header(x.sheet("Branches")))
                 .containsExactly("Code", "Name", "Location", "Head office", "Status", "Opened on");

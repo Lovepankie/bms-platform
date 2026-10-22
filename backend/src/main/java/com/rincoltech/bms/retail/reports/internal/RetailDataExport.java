@@ -20,7 +20,8 @@ import org.springframework.stereotype.Component;
 /**
  * The retail sheets of "Download my data" (issue #334 step 1, ADR-074), laid out like the spreadsheet a shop kept before
  * BMS: Products, Suppliers, Customers, Credit buyers with what each owes, Stock balances, then the dated tables in date
- * order: Sales and Sale lines, Sale payments, Account payments, Restocks, Goods receipts and the Cash book. Every branch;
+ * order: Sales and Sale lines, Sale payments, Account payments, Restocks (with the branch or branches each line was stocked
+ * into, and the quantity of each when it was split), Goods receipts and the Cash book. Every branch;
  * a row a person voided or reversed stays, with its status. Read in the run's snapshot, so the sheets agree with each
  * other.
  */
@@ -403,6 +404,7 @@ class RetailDataExport implements DataExportSection {
                 List.of(
                         new Column("date", "Date", Kind.DATE),
                         new Column("restock_no", "Restock no", Kind.TEXT),
+                        BRANCH,
                         new Column("supplier", "Supplier", Kind.TEXT),
                         new Column("payment", "Payment", Kind.TEXT),
                         new Column("line", "Line", Kind.COUNT),
@@ -415,7 +417,17 @@ class RetailDataExport implements DataExportSection {
                 count("SELECT count(*) FROM retail_purchase_lines"));
         each(
                 """
-                SELECT pu.purchased_on, pu.purchase_no, sup.name AS supplier, pu.payment_method, l.line_no, p.code,
+                SELECT pu.purchased_on, pu.purchase_no,
+                       (SELECT string_agg(CASE WHEN x.branches = 1 THEN x.name
+                                               ELSE x.name || ' (' || trim_scale(x.qty)::text || ')' END,
+                                          ', ' ORDER BY x.code)
+                          FROM (SELECT b.name, b.code, sum(m.qty) AS qty, count(*) OVER () AS branches
+                                  FROM retail_stock_movements m
+                                  JOIN branches b ON b.tenant_id = m.tenant_id AND b.id = m.branch_id
+                                 WHERE m.tenant_id = l.tenant_id AND m.source_type = 'retail.purchase'
+                                   AND m.kind = 'purchase' AND m.source_line_id = l.id
+                                 GROUP BY b.name, b.code) x) AS branch,
+                       sup.name AS supplier, pu.payment_method, l.line_no, p.code,
                        p.description, coalesce(l.unit_qty_total, l.qty_total) AS qty,
                        coalesce(l.unit_cost_minor, l.cost_minor) AS cost, l.sell_minor, l.line_total_minor
                   FROM retail_purchase_lines l
@@ -428,6 +440,7 @@ class RetailDataExport implements DataExportSection {
                         day(rs, "purchased_on"),
                         day(rs, "purchased_on"),
                         rs.getString("purchase_no"),
+                        rs.getString("branch"),
                         rs.getString("supplier"),
                         rs.getString("payment_method"),
                         rs.getInt("line_no"),

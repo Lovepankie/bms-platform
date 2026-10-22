@@ -32,7 +32,7 @@ never change data, never show one business another's rows, and never hold a larg
 3. **A sheet per table, laid out like the old spreadsheet.** The core writes the Branches sheet; each vertical exposes a
    `DataExportSection` bean (the core never names a vertical, chapter 5 section 5.4.3) that writes its tables when the business
    has its module on. Retail: Products, Suppliers, Customers, Credit buyers (with what each owes), Stock balances, Sales, Sale
-   lines, Sale payments, Account payments, Restocks, Goods receipts and the Cash book. Lending: Members, Loans, Repayments (with
+   lines, Sale payments, Account payments, Restocks (with the branch each line was stocked into), Goods receipts and the Cash book. Lending: Members, Loans, Repayments (with
    their reversals) and Arrears. Columns have plain names; a date is a real date and a moment is written as the business's own
    date and time (`HH:mm`) in its time zone, never UTC; money is a numeric cell in whole currency units (integer minor units,
    whole shillings for UGX) with the currency in the heading; a quantity keeps its fraction (`QUANTITY` column kind, exact).
