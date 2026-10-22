@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api, problemOf } from '../api/client';
+import { BusyButton } from '../app/ui/BusyButton';
 import { money } from '../areas/staff/retail/ui';
 import { discarded, failedCount, waiting, waitingWords, type OutboxItem } from './outbox';
 import { useOffline, useOnline, useOutbox } from './offline-context';
@@ -284,9 +285,9 @@ function ManagerQueue() {
                   <p className="muted">The sale is never recorded. Your name and the reason are kept.</p>
                   {decide.error && <p role="alert">{decide.error.message}</p>}
                   <div className="cluster">
-                    <button type="button" className="btn-danger btn-sm" disabled={!discardReady(reason, who === 'admin' ? selfReason : null) || decide.isPending} onClick={() => decide.mutate({ id: f.id ?? '', action: 'discard', own: who === 'admin' })}>
+                    <BusyButton type="button" className="btn-danger btn-sm" busy={decide.isPending && decide.variables?.id === f.id} disabled={!discardReady(reason, who === 'admin' ? selfReason : null)} onClick={() => decide.mutate({ id: f.id ?? '', action: 'discard', own: who === 'admin' })}>
                       Discard for good
-                    </button>
+                    </BusyButton>
                     <button type="button" className="btn-ghost btn-sm" onClick={() => setDiscarding(null)}>
                       Keep it
                     </button>
@@ -295,9 +296,9 @@ function ManagerQueue() {
               ) : (
                 <div className="cluster">
                   {who === 'decide' ? (
-                    <button type="button" className="btn-sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: f.id ?? '', action: 'retry' })}>
+                    <BusyButton type="button" className="btn-sm" busy={decide.isPending && decide.variables?.id === f.id} onClick={() => decide.mutate({ id: f.id ?? '', action: 'retry' })}>
                       Send it again
-                    </button>
+                    </BusyButton>
                   ) : (
                     <p className="muted">Your own sale: you can send it again from your phone, or discard it as an administrator.</p>
                   )}
@@ -334,9 +335,9 @@ function ManagerQueue() {
               </div>
               <label htmlFor={`clash-${c.id}`}>What did you do about it?</label>
               <input id={`clash-${c.id}`} value={note[c.id ?? ''] ?? ''} maxLength={300} onChange={(e) => setNote((n) => ({ ...n, [c.id ?? '']: e.target.value }))} />
-              <button type="button" className="btn-sm" disabled={(note[c.id ?? ''] ?? '').trim().length < 5 || resolve.isPending} onClick={() => resolve.mutate(c.id ?? '')}>
+              <BusyButton type="button" className="btn-sm" busy={resolve.isPending && resolve.variables === c.id} disabled={(note[c.id ?? ''] ?? '').trim().length < 5} onClick={() => resolve.mutate(c.id ?? '')}>
                 Mark resolved
-              </button>
+              </BusyButton>
             </li>
           ))}
         </ul>
