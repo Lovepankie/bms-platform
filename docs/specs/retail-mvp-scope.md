@@ -63,8 +63,11 @@ These are adopted into chapter 3 section 3.28 by R1; FR-RET-16 by issue #84.
 
 Cash book (expenses, banking, withdrawals, advances to the owner or company, a daily savings
 target), wider financial and sales reports, receipt photos and location capture, offline use,
-barcode scanning, weighted average cost, supplier statements beyond
-trade creditors, SMS receipts, returns other than a void. The cash book is designed in ADR-022
+weighted average cost, supplier statements beyond
+trade creditors, SMS receipts, returns other than a void. Barcode scanning was out of the first
+release and is now built (issue #345, ADR-070, FR-RET-68, migration `V90`): barcodes on items and
+their pack sizes, scanning with a USB or Bluetooth scanner, a typed code or the phone camera on the
+sale, restock, move stock and stock count forms, and printed labels for items without a code. The cash book is designed in ADR-022
 (proposed): a retail sub-domain, not core, with its requirements in FR-RET-17 to FR-RET-32
 and the comparison with the pilot app in `docs/specs/retail-cash-book.md`.
 

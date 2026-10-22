@@ -848,7 +848,7 @@ An item that is no longer sold is switched off, never deleted.
 
 - Analytics: export to PDF and Excel and the daily WhatsApp summary (#149 items 8), and the cash view per shop per day (item 5), which need the cash book.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
-- Offline use, barcode scanning and receipts to SMS are out of the first release.
+- Offline use and receipts to SMS are out of the first release; barcode scanning is built (issue #345, below).
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).
 
 ## Sales grouped by a chain of levels (issue #341)
@@ -1263,3 +1263,32 @@ changes, so after a payment on the same screen the next share sends the new rece
 - Nothing is written to the server except the optional number; the typed number is never logged. The tour `retail-sales` is
   version 10: its Save step names Share receipt and WhatsApp customer.
 
+## Barcodes, scanning and labels (issue #345)
+
+ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability switch.
+
+- **Scan bar** (`scan.tsx`, data-tour `scan-bar`) under the item search of the sale, restock, move stock and stock count forms:
+  "Scan or type a barcode, then press Enter", and a **Scan** button (data-tour `scan-camera`) shown only where the browser can open a
+  camera (`navigator.mediaDevices.getUserMedia`). A USB or Bluetooth scanner works anywhere on the screen: a burst of keys within
+  35 ms of each other, at least four, closed by Enter (`createWedge` in `barcode-state.ts`); with the cursor in a text field the burst
+  is taken back out of it. A found item is added at 1 or its line gains one, in the pack the barcode is on (the sale and the restock,
+  with pack sizes on); on the stock count it adds one to the count, or the pack factor. "Added <item>." is read out politely, with a
+  short beep and buzz where the device allows. On the restock the quantity goes to the branch chosen at the top.
+- **Unknown code:** "No item has the barcode <code>." An administrator gets **Add this barcode to a product**: the item search
+  opens, Choose puts the barcode on that item and adds it to the form. Anyone else reads "Ask an administrator to add it to the
+  item, or find the item by name above."
+- **Camera** (`camera-scan.tsx`, loaded on Scan): the back camera full screen, "Hold the barcode inside the frame, about a hand
+  away.", Close the camera. The browser's BarcodeDetector reads the frames; on an iPhone Quagga2 (loaded only then) reads a still
+  four times a second. A blocked camera says how to allow it (on an iPhone: Settings, Safari, Camera); a missing or busy camera and
+  an insecure address each have their own sentence.
+- **Offline:** when the lookup cannot reach the server, the items the screen has already read (with their `barcodes`) are searched.
+  The offline catalogue of the offline sales work (#458) carries `barcodes` too, since it caches the product responses.
+- **Item form** (edit an item, `catalogue-barcodes.tsx`, data-tour `item-barcodes`): the barcodes with their format and pack, Remove,
+  Add a barcode (the format and check digit are judged as you type, in the server's words), "This barcode is on" one unit or one
+  pack, and **Make a barcode for labels** for an item with no made code. Administrators only.
+- **Barcode labels** (`/staff/retail/catalogue/labels`, `labels.tsx`, a Catalogue tile, tour `page-labels`): find items and Add, how
+  many labels of each, **Make the labels** (a Code 128 code is made for an item without one), **Print**: an A4 sheet of 3 by 8
+  labels of 70 by 37 mm with the name, the price and the barcode, black on white whatever the theme; print hides everything else.
+- **Import:** the item file takes `barcode` and `pack barcode` columns (several codes separated by spaces or `|`).
+- Tours: `retail-sales` version 13 adds the Scan step; `page-labels` version 1.
+- Tests: `barcode-state.test.ts`, `scan.dom.test.tsx`, `camera-scan.test.ts`; backend `BarcodesTest`, `RetailBarcodesIT`.

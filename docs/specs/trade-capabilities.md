@@ -983,9 +983,10 @@ Weighted average cost (pending ADR-021); spending an unapplied supplier credit o
 promotions and coupons; tax and VAT handling on documents (the module has no tax model today);
 unallocated customer deposits; server-side PDFs (documents
 follow-up, issue #120); sending documents by message or email; serial or batch tracking and expiry;
-multi-currency lists; barcode scanning for pack units; reorder points and automatic purchase orders;
+multi-currency lists; reorder points and automatic purchase orders;
 bank reconciliation of supplier payments; role-specific mobile layouts for store clerks beyond
-hiding the sales screen.
+hiding the sales screen. Barcode scanning, including a barcode on a pack size, is built by issue #345
+(ADR-070, FR-RET-68).
 
 ## 17. Build plan
 
