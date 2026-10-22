@@ -904,6 +904,174 @@
           }
         }
       },
+      "BillingNotice" : {
+        "properties" : {
+          "overdue_since" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "pay_by" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "state" : {
+            "description" : "none, in_grace or overdue",
+            "type" : "string"
+          }
+        }
+      },
+      "BillingPayment" : {
+        "description" : "Newest first",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "method" : {
+            "description" : "mtn_momo, airtel_money, bank_transfer or other",
+            "type" : "string"
+          },
+          "months" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "paid_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_end" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "period_start" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "receipt_no" : {
+            "description" : "RT-<year>-<number>; null only if the receipt could not be issued",
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BillingSettings" : {
+        "properties" : {
+          "grace_days" : {
+            "description" : "Days an overdue business keeps working before it is listed for suspension",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "how_to_pay" : {
+            "description" : "How to pay, in the operator's words, shown in reminders and on the Owner's page",
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "updated_by_name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BillingSettingsRequest" : {
+        "properties" : {
+          "grace_days" : {
+            "format" : "int32",
+            "maximum" : 60,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "how_to_pay" : {
+            "maxLength" : 1000,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "grace_days", "reason" ]
+      },
+      "BillingView" : {
+        "properties" : {
+          "annual_minor" : {
+            "description" : "The yearly price, or null",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "annual_months" : {
+            "description" : "Months charged for a year, or null",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "grace_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "how_to_pay" : {
+            "description" : "The operator's words on how to pay, or null",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "description" : "The plan's monthly price today, in minor units, or null when none was entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "overdue_since" : {
+            "description" : "While overdue: the first day not paid for",
+            "format" : "date",
+            "type" : "string"
+          },
+          "paid_until" : {
+            "description" : "The last day paid for, or null",
+            "format" : "date",
+            "type" : "string"
+          },
+          "pay_by" : {
+            "description" : "While overdue: the last day of the grace period",
+            "format" : "date",
+            "type" : "string"
+          },
+          "payments" : {
+            "description" : "Newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/BillingPayment"
+            },
+            "type" : "array"
+          },
+          "plan_code" : {
+            "type" : "string"
+          },
+          "plan_name" : {
+            "type" : "string"
+          },
+          "state" : {
+            "description" : "trial, active, in_grace, overdue, suspended, cancelled or pilot",
+            "type" : "string"
+          },
+          "trial_ends_on" : {
+            "description" : "The last day of the free month, or null",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "BlacklistRequest" : {
         "properties" : {
           "is_blacklisted" : {
@@ -1972,6 +2140,75 @@
             "type" : "string"
           },
           "url" : {
+            "type" : "string"
+          }
+        }
+      },
+      "DueForSuspension" : {
+        "properties" : {
+          "grace_days" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "items" : {
+            "description" : "Most overdue first",
+            "items" : {
+              "$ref" : "#/components/schemas/DueForSuspensionItem"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "DueForSuspensionItem" : {
+        "description" : "Most overdue first",
+        "properties" : {
+          "amount_due_minor" : {
+            "description" : "The plan's monthly price today, or null when none was entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "days_overdue" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "due_on" : {
+            "description" : "The last day paid for, or of the free month",
+            "format" : "date",
+            "type" : "string"
+          },
+          "grace_ended_on" : {
+            "description" : "The last day of the grace period, passed",
+            "format" : "date",
+            "type" : "string"
+          },
+          "last_sign_in_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "overdue_since" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "owner_email" : {
+            "type" : "string"
+          },
+          "owner_name" : {
+            "type" : "string"
+          },
+          "plan_name" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }
@@ -21884,6 +22121,73 @@
         "tags" : [ "auth" ]
       }
     },
+    "/api/v1/billing" : {
+      "get" : {
+        "operationId" : "billingView",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BillingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The plan, its price, the subscription's state and dates, how to pay and the payments with their receipts (FR-SUB-12)",
+        "tags" : [ "billing" ]
+      }
+    },
+    "/api/v1/billing/notice" : {
+      "get" : {
+        "operationId" : "billingNotice",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BillingNotice"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the business is overdue, since when and the last day of its grace period (FR-SUB-09)",
+        "tags" : [ "billing" ]
+      }
+    },
+    "/api/v1/billing/payments/{payment_id}/receipt" : {
+      "get" : {
+        "operationId" : "billingReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "payment_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/pdf" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The receipt of a payment as a PDF (FR-SUB-11)",
+        "tags" : [ "billing" ]
+      }
+    },
     "/api/v1/branches" : {
       "get" : {
         "operationId" : "listBranches",
@@ -28275,6 +28579,71 @@
         },
         "summary" : "Set the first password with the one-time setup token",
         "tags" : [ "platform-auth" ]
+      }
+    },
+    "/api/v1/platform/billing/due-for-suspension" : {
+      "get" : {
+        "operationId" : "platformDueForSuspension",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DueForSuspension"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Overdue businesses past the grace period, with days overdue and the amount; nothing is suspended automatically (FR-SUB-10)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/billing/settings" : {
+      "get" : {
+        "operationId" : "platformBillingSettings",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BillingSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The grace period and how to pay (FR-SUB-09)",
+        "tags" : [ "platform" ]
+      },
+      "put" : {
+        "operationId" : "platformSaveBillingSettings",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BillingSettingsRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BillingSettings"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the grace period or how to pay, with a reason; unchanged values change nothing (FR-SUB-09)",
+        "tags" : [ "platform" ]
       }
     },
     "/api/v1/platform/feedback" : {
