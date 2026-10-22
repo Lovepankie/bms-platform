@@ -444,7 +444,8 @@ class BranchService implements BranchProvisioning {
      * Stores the logo as a core document of the tenant (the subject of the business logo, so the public route reads it the
      * same way) and points the branch at it; the file was checked and re-encoded before the transaction opened
      * ({@link BrandingService#uploadBranchLogo}). A branch outside the caller's {@code core.branches.manage} scope is a 404
-     * and a closed branch a 409, both before anything is stored. No If-Match: the version still goes up, so a form holding the
+     * and a closed branch a 409, both before anything is stored, and the status is checked again on the locked row so a close
+     * that lands while the file is stored is still a 409. No If-Match: the version still goes up, so a form holding the
      * old one refetches.
      */
     @Transactional
@@ -453,6 +454,20 @@ class BranchService implements BranchProvisioning {
         BranchResponse branch = find(branchId)
                 .filter(b -> principal.may("core.branches.manage", b.id()))
                 .orElseThrow(ApiException::notFound);
+        requireOpenForLogo(branch);
+        // Stored first: the object write does not wait inside the branch row lock.
+        UUID id = documents
+                .store(prepared, TenantDocumentAccess.SUBJECT, tenant.profile().id(), branchId)
+                .id();
+        // Checked again on the locked row: a close that committed while the file was stored refuses here, and the
+        // rollback
+        // removes the stored object (DocumentService.store).
+        BranchResponse locked = lockForUpdate(branchId);
+        requireOpenForLogo(locked);
+        return setLogo(locked, id);
+    }
+
+    private static void requireOpenForLogo(BranchResponse branch) {
         if (!"active".equals(branch.status())) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
@@ -460,11 +475,6 @@ class BranchService implements BranchProvisioning {
                     "Invalid status transition",
                     "The branch is closed. Reopen it to give it a logo.");
         }
-        // Stored first: the object write does not wait inside the branch row lock.
-        UUID id = documents
-                .store(prepared, TenantDocumentAccess.SUBJECT, tenant.profile().id(), branchId)
-                .id();
-        return setLogo(lockForUpdate(branchId), id);
     }
 
     /** The previous logo's document stays (documents are never deleted); only the branch's pointer is cleared. Idempotent. */
