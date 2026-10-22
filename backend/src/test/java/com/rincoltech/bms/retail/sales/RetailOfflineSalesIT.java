@@ -677,6 +677,23 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 .isZero();
     }
 
+    /** A refused sale is reported with its request up to 64 KB; a larger one is 413 and nothing is kept. */
+    @Test
+    void aReportedRequestIsCappedAt64Kb() {
+        UUID client = UUID.randomUUID();
+        Map<String, Object> request = new LinkedHashMap<>(offlineSale(client, Instant.now(), "1", 2_000));
+        request.put("buyer_name", "x".repeat(70_000));
+        ResponseEntity<JsonNode> big = api.post("/offline-failures", failureReport(client, request), SALES);
+        assertThat(big.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+        assertThat(big.getBody().get("code").asString()).isEqualTo("offline_failure_too_large");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_offline_failures WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     /** Review fix 4: a Supervisor who made the refused sale can neither discard it nor ask for it again; another can. */
     @Test
     void aManagerCannotDecideTheirOwnRefusedSale() {

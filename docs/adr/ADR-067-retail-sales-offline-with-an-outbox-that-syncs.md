@@ -88,7 +88,9 @@ left, the branch, the period, the person's roles.
    server's message in plain words. The device reports it with `POST /retail/offline-failures` (the request, the code and the
    message; `retail.sale.create`; idempotent on the client sale id), so a manager sees it on their own phone. A holder of
    `retail.offline.resolve` at the branch, in the sync sheet, either asks for it to be sent again after fixing the cause
-   (`.../retry`: the seller's device sends it on its next sync, with the same client sale id and a new key) or discards it
+   (`.../retry`: the seller's device sends it on its next sync, with the same client sale id and the same
+   `Idempotency-Key`: a refused request leaves no key row, since the key row and the sale commit or roll back together, so
+   the key is free to send again) or discards it
    with a reason of at least 5 characters after a confirmation (`.../discard`, audited `retail.offline_sale.discarded`). A
    discarded failure is marked discarded on the seller's device on its next sync, shown for a day and never sent again. The
    server refuses a sale whose client sale id belongs to a discarded failure, before any other check of the sale, with 422
@@ -135,7 +137,11 @@ left, the branch, the period, the person's roles.
 - Stock can go negative for a short time, which ADR-020 decision 4 refused without exception; it is flagged, not silent.
 - A seller who sets `recorded_offline` by hand bypasses the price floor and the stock check; each such sale is flagged,
   noticed and audited, which is the control.
-- The device holds the catalogue with retail prices and the customers list of a business. It is cleared at sign-out.
+- The device holds the catalogue with retail prices and the customers list of a business. It is cleared at sign-out, with
+  the person's saved profile.
+- Opening the app with no network uses the last person's saved profile without authenticating them on the device: anyone
+  holding the unlocked phone can ring up sales as that person until it is online again (the server then needs a valid
+  session to take them). A device PIN is a later option.
 
 **Watch for:**
 

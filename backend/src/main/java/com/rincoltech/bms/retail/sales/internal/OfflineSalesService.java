@@ -34,6 +34,9 @@ class OfflineSalesService {
     static final String CLASH = "retail.sale_clash";
     static final String FAILURE = "retail.offline_failure";
 
+    /** The largest sale request a device may report with a refusal, as JSON (ADR-067 decision 8). */
+    static final int MAX_REQUEST_BYTES = 64 * 1024;
+
     private final OfflineSalesRepository repo;
     private final AuditLog audit;
 
@@ -87,6 +90,13 @@ class OfflineSalesService {
      */
     @Transactional
     Failure report(FailureRequest r) {
+        if (repo.json(r.request()).getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_REQUEST_BYTES) {
+            throw new ApiException(
+                    HttpStatus.CONTENT_TOO_LARGE,
+                    "offline_failure_too_large",
+                    "Request too large",
+                    "The sale request is larger than 64 KB.");
+        }
         UUID by = CurrentPrincipal.require().userId();
         if (!repo.branchExists(r.branchId())) {
             throw ApiException.validation(

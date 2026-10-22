@@ -94,6 +94,11 @@ class OfflineSalesRepository {
                 > 0;
     }
 
+    /** A reported sale request as the JSON it is stored as. */
+    String json(Map<String, Object> request) {
+        return mapper.writeValueAsString(request);
+    }
+
     /** Inserts the report unless one with this client sale id exists; true when written. */
     boolean insertFailure(SalesApi.FailureRequest r, UUID madeBy) {
         return jdbc.sql("""
