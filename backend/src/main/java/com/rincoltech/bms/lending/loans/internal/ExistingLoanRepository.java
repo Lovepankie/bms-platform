@@ -1,5 +1,6 @@
 package com.rincoltech.bms.lending.loans.internal;
 
+import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -9,12 +10,21 @@ import org.springframework.stereotype.Repository;
 
 /** SQL of the loans brought in from a paper register (ADR-071, migration V91). Row-level security supplies the tenant. */
 @Repository
-class ExistingLoanRepository {
+class ExistingLoanRepository implements GoLiveDate.Dependent {
 
     private final JdbcClient jdbc;
 
     ExistingLoanRepository(JdbcClient jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /** ADR-071: the business has a lending journal entry of its own or an approved bring-in. */
+    @Override
+    public boolean dependsOnGoLive() {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM journal_entries WHERE source_module = 'lending')
+                            OR EXISTS (SELECT 1 FROM lending_loans WHERE brought_in_on IS NOT NULL)
+                        """).query(Boolean.class).single();
     }
 
     /** What a loan keeps of its bring-in; every field is null on a loan that was not brought in. */

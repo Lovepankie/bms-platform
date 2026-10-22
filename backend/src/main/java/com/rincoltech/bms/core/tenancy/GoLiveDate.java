@@ -28,4 +28,13 @@ public interface GoLiveDate {
      * so the date never moves with later sign-ins or role changes. Nothing otherwise.
      */
     void adminSignedIn(UUID userId, Instant at);
+
+    /**
+     * A module whose figures rest on the go-live date, implemented by the module (lending: any journal entry of its own, or
+     * an approved bring-in). While any says so, the Owner moves the date only earlier, never later: 422
+     * {@code go_live_locked}; the platform operator still moves it either way, with a reason.
+     */
+    interface Dependent {
+        boolean dependsOnGoLive();
+    }
 }

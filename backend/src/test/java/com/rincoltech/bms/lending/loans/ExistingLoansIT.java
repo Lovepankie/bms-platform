@@ -667,6 +667,53 @@ class ExistingLoansIT extends LoanFixtures {
     }
 
     /**
+     * Once the business has lending in the app's books (here an approved bring-in), the Owner moves the go-live date only
+     * earlier: a later date would let a loan disbursed after go-live come in as if from paper. The platform operator
+     * moves it later, with a reason, audited. Before that the Owner moves it either way.
+     */
+    @Test
+    void frExl03_onceLendingIsInTheBooksTheOwnerMovesTheGoLiveDateOnlyEarlier() {
+        String product = product("EXL8", Map.of());
+        String member = borrower(12);
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(setGoLive(today.minusDays(8)).getStatusCode())
+                .as("nothing in the books yet")
+                .isEqualTo(HttpStatus.OK);
+        approve(recorded(request(member, product, 900_000, today.minusDays(40), List.of())));
+
+        ResponseEntity<JsonNode> later = setGoLive(today.minusDays(3));
+        assertThat(later.getStatusCode()).as("%s", later.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(later)).isEqualTo("go_live_locked");
+        assertThat(setGoLive(today.minusDays(20)).getStatusCode())
+                .as("earlier is allowed")
+                .isEqualTo(HttpStatus.OK);
+        assertThat(setGoLive(today.minusDays(20)).getStatusCode())
+                .as("the same date is not later")
+                .isEqualTo(HttpStatus.OK);
+
+        Api platform = Api.platform(http);
+        String operatorEmail = Api.email("exl-operator-later");
+        UUID operatorId = Api.platformUser(operatorEmail);
+        Api.Session operator = platform.signIn(operatorId, operatorEmail, Api.PASSWORD, null);
+        ResponseEntity<JsonNode> byOperator = platform.call(
+                HttpMethod.PUT,
+                "/api/v1/platform/tenants/" + t.tenantId() + "/go-live",
+                Map.of("go_live_date", today.minusDays(3).toString(), "reason", "Register closed later than entered"),
+                operator.accessToken());
+        assertThat(byOperator.getStatusCode()).as("%s", byOperator.getBody()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(send(HttpMethod.GET, EXISTING + "/go-live", as(admin, adminPerms, "*", null), null)
+                        .getBody()
+                        .get("go_live_date")
+                        .asString())
+                .isEqualTo(today.minusDays(3).toString());
+        assertThat(count(
+                        "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'core.settings.go_live_set'"
+                                + " AND data -> 'after' ->> 'reason' = 'Register closed later than entered'",
+                        t.tenantId()))
+                .isEqualTo(1);
+    }
+
+    /**
      * A business with no Owner: no administrator sets the go-live date, not even the only one; the platform operator
      * does, with a reason (ADR-071).
      */
