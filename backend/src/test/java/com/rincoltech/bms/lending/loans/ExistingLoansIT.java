@@ -24,7 +24,7 @@ import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Existing loans brought in from a paper register on real PostgreSQL (issue #466, ADR-071; FR-EXL-01 to FR-EXL-07): the
+ * Existing loans brought in from a paper register on real PostgreSQL (issue #466, ADR-071; FR-EXL-01 to FR-EXL-08): the
  * schedule from the real past date, the past repayments applied in date order by the product's allocation order, the
  * position (balance, next due date, days overdue from the real due dates), the checker's approval before it counts,
  * historic transactions and one opening entry at go-live, no penalty for the time before the bring-in, the go-live
@@ -563,6 +563,126 @@ class ExistingLoansIT extends LoanFixtures {
         assertThat(charged).containsExactly(today.minusDays(2), today.minusDays(1), today);
         assertThat(loan(id).get("balances").get("penalties_outstanding_minor").asLong())
                 .isEqualTo(3 * 3 * 2_000);
+        ResponseEntity<JsonNode> refused = askReversal(id);
+        assertThat(refused.getStatusCode()).as("a penalty was charged").isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("bring_in_has_activity");
+    }
+
+    // ---- Reversing a bring-in (FR-EXL-08) -----------------------------------------------------
+
+    ResponseEntity<JsonNode> askReversal(String loanId) {
+        return send(
+                HttpMethod.POST,
+                EXISTING + "/" + loanId + "/reversal",
+                as(admin, adminPerms, "*", null),
+                Map.of("reason", "Entered twice from the register"));
+    }
+
+    /**
+     * An approved bring-in entered by mistake is reversed by a second person: the opening entry is mirrored today, each
+     * historic row is marked reversed on its own date with its allocations netted to nothing, the loan is cancelled with
+     * no balance and its register number is free again. The maker does not decide it.
+     */
+    @Test
+    void frExl08_aSecondPersonReversesABringInAndItsRegisterNumberIsFreeAgain() {
+        String product = product("EXL9", Map.of());
+        String member = borrower(13);
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        LocalDate disbursed = today.minusMonths(2).minusDays(5);
+        Map<String, Object> body = request(
+                member,
+                product,
+                1_200_000,
+                disbursed,
+                List.of(repayment(disbursed.plusMonths(1), 520_000, "cash", "Test receipt 31")));
+        body.put("register_ref", "REG-REV-1");
+        JsonNode recorded = recorded(body);
+        approve(recorded);
+        String id = recorded.get("loan_id").asString();
+        String opening = TestDatabase.owner()
+                .sql("SELECT opening_entry_id::text FROM lending_loans WHERE id = ?::uuid")
+                .param(id)
+                .query(String.class)
+                .single();
+        assertThat(receivableOf(id)).isEqualTo(800_000);
+        ResponseEntity<JsonNode> taken = check(body);
+        assertThat(errorCodes(taken)).containsExactly("register_ref:register_ref_taken");
+
+        ResponseEntity<JsonNode> asked = askReversal(id);
+        assertThat(asked.getStatusCode()).as("%s", asked.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String request = asked.getBody().get("approval_request_id").asString();
+        assertThat(asked.getBody().get("status").asString())
+                .as("nothing moves before the decision")
+                .isEqualTo("active");
+        ResponseEntity<JsonNode> own = decide(request, admin, adminPerms);
+        assertThat(own.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(own)).isEqualTo("self_approval_forbidden");
+        ResponseEntity<JsonNode> decided = decide(request, manager, managerPerms);
+        assertThat(decided.getStatusCode()).as("%s", decided.getBody()).isEqualTo(HttpStatus.OK);
+
+        JsonNode after = loan(id);
+        assertThat(after.get("status").asString()).isEqualTo("cancelled");
+        assertThat(after.get("balances").get("principal_outstanding_minor").asLong())
+                .isZero();
+        assertThat(receivableOf(id)).as("the opening entry is mirrored").isZero();
+        String mirror = TestDatabase.owner()
+                .sql("SELECT id::text FROM journal_entries WHERE reverses_entry_id = ?::uuid")
+                .param(opening)
+                .query(String.class)
+                .single();
+        assertThat(systemLines(mirror)).containsExactly("loans_receivable:0:800000", "opening_balance_equity:800000:0");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT entry_date FROM journal_entries WHERE id = ?::uuid")
+                        .param(mirror)
+                        .query(LocalDate.class)
+                        .single())
+                .isEqualTo(today);
+        assertThat(TestDatabase.owner().sql("""
+                                SELECT o.txn_type || ':' || r.amount_minor || ':' || (r.value_date = o.value_date)
+                                       || ':' || r.is_historic || ':' || (r.journal_entry_id IS NULL)
+                                  FROM lending_loan_transactions r
+                                  JOIN lending_loan_transactions o ON o.id = r.reverses_txn_id
+                                 WHERE r.loan_id = ?::uuid ORDER BY o.created_at
+                                """).param(id).query(String.class).list())
+                .as("each historic row reversed on its own date, outside the books")
+                .containsExactly("disbursement:1200000:true:true:true", "repayment:520000:true:true:true");
+        assertThat(count(
+                        "SELECT coalesce(sum(a.amount_minor), 0) FROM lending_repayment_allocations a"
+                                + " JOIN lending_loan_transactions t ON t.id = a.applies_to_txn_id"
+                                + " WHERE t.loan_id = ?::uuid",
+                        id))
+                .as("the repayment's allocations net to nothing")
+                .isZero();
+        assertThat(count(
+                        "SELECT count(*) FROM audit_log WHERE entity_id = ?::uuid AND action = 'lending.loan.bring_in_reversed'",
+                        id))
+                .isEqualTo(1);
+        assertThat(check(body).getStatusCode())
+                .as("the register number is free")
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> again = askReversal(id);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    /** Once the loan has a transaction made in the app, its bring-in is no longer reversed. */
+    @Test
+    void frExl08_aBringInWithATransactionInTheAppIsNotReversed() {
+        String product = product("EXL10", Map.of());
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        JsonNode recorded = recorded(request(borrower(14), product, 900_000, today.minusDays(40), List.of()));
+        approve(recorded);
+        String id = recorded.get("loan_id").asString();
+        HttpHeaders h = as(admin, adminPerms, "*", null);
+        h.add("Idempotency-Key", "test-" + UUID.randomUUID());
+        ResponseEntity<JsonNode> paid = send(
+                HttpMethod.POST,
+                LOANS + "/" + id + "/repayments",
+                h,
+                Map.of("amount_minor", 50_000, "value_date", today.toString(), "payment_method_key", "cash"));
+        assertThat(paid.getStatusCode()).as("%s", paid.getBody()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> refused = askReversal(id);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("bring_in_has_activity");
     }
 
     // ---- The go-live guard (FR-EXL-03) ----------------------------------------------------

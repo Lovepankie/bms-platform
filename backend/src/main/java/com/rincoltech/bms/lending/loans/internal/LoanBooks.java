@@ -116,7 +116,11 @@ class LoanBooks {
 
     /** The mirror of a posted entry (ADR-004: corrections are reversals). */
     PostedEntry reverse(UUID entryId, LocalDate date, String reference, String idempotencyKey) {
-        return ledger.reverse(new ReversalRequest(entryId, date, reference, "Repayment reversal", idempotencyKey));
+        return reverse(entryId, date, reference, "Repayment reversal", idempotencyKey);
+    }
+
+    PostedEntry reverse(UUID entryId, LocalDate date, String reference, String memo, String idempotencyKey) {
+        return ledger.reverse(new ReversalRequest(entryId, date, reference, memo, idempotencyKey));
     }
 
     private Line resolve(Leg leg) {

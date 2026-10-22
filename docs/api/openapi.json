@@ -2134,7 +2134,7 @@
             "type" : "integer"
           },
           "approval_request_id" : {
-            "description" : "The pending request a second person approves, while the loan is brought_in",
+            "description" : "The pending request a second person decides: the bring-in while the loan is brought_in, the reversal of the bring-in (loan_bring_in_reversal) once it is active or closed",
             "format" : "uuid",
             "type" : "string"
           },
@@ -20835,7 +20835,7 @@
             "type" : "boolean"
           },
           "go_live_date" : {
-            "description" : "The day the app became the business's register, as the Owner or the operator set it, or null (then the first administrator sign-in counts); an existing loan is brought in only with a disbursement date before it (ADR-071)",
+            "description" : "The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)",
             "format" : "date",
             "type" : "string"
           },
@@ -23801,6 +23801,44 @@
           }
         },
         "summary" : "Withdraw an existing loan still waiting for its checker, with a reason; it ends cancelled",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/{loan_id}/reversal" : {
+      "post" : {
+        "operationId" : "requestExistingLoanReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CancelExistingLoanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask a second person to reverse an approved bring-in, with a reason: the opening entry is mirrored, the historic transactions are marked reversed and the loan is cancelled; refused once the loan has a transaction in the app or a penalty charge (FR-EXL-08)",
         "tags" : [ "lending-loans" ]
       }
     },

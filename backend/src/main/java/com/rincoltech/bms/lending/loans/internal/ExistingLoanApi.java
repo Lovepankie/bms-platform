@@ -113,7 +113,9 @@ final class ExistingLoanApi {
             @Schema(description = "Set on approval: the first business date the app charges penalties for")
             LocalDate broughtInOn,
 
-            @Schema(description = "The pending request a second person approves, while the loan is brought_in")
+            @Schema(
+                    description =
+                            "The pending request a second person decides: the bring-in while the loan is brought_in, the reversal of the bring-in (loan_bring_in_reversal) once it is active or closed")
             UUID approvalRequestId,
 
             List<Repayment> repayments,

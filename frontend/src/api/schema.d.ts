@@ -846,6 +846,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/existing-loans/{loan_id}/reversal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask a second person to reverse an approved bring-in, with a reason: the opening entry is mirrored, the historic transactions are marked reversed and the loan is cancelled; refused once the loan has a transaction in the app or a penalty charge (FR-EXL-08) */
+        post: operations["requestExistingLoanReversal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/insights/brief": {
         parameters: {
             query?: never;
@@ -7594,7 +7611,7 @@ export interface components {
             agreed_total_minor?: number;
             /**
              * Format: uuid
-             * @description The pending request a second person approves, while the loan is brought_in
+             * @description The pending request a second person decides: the bring-in while the loan is brought_in, the reversal of the bring-in (loan_bring_in_reversal) once it is active or closed
              */
             approval_request_id?: string;
             /** Format: uuid */
@@ -16747,7 +16764,7 @@ export interface components {
             display_name_set?: boolean;
             /**
              * Format: date
-             * @description The day the app became the business's register, as the Owner or the operator set it, or null (then the first administrator sign-in counts); an existing loan is brought in only with a disbursement date before it (ADR-071)
+             * @description The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)
              */
             go_live_date?: string;
             /**
@@ -18583,6 +18600,32 @@ export interface operations {
         };
     };
     cancelExistingLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelExistingLoanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoan"];
+                };
+            };
+        };
+    };
+    requestExistingLoanReversal: {
         parameters: {
             query?: never;
             header?: never;

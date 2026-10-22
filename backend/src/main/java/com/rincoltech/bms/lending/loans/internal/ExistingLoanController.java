@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * {@code /api/v1/lending/existing-loans}: loans brought in from a paper register with their real dates and past
- * repayments (chapter 7 section 7.11.13; FR-EXL-01 to FR-EXL-07, ADR-071). Recording needs an {@code Idempotency-Key};
+ * repayments (chapter 7 section 7.11.13; FR-EXL-01 to FR-EXL-08, ADR-071). Recording needs an {@code Idempotency-Key};
  * a check ({@code dry_run=true}) saves nothing.
  */
 @RestController
@@ -114,6 +114,19 @@ class ExistingLoanController {
             operationId = "requestExistingLoanApproval")
     ResponseEntity<ExistingLoan> askAgain(@PathVariable("loan_id") UUID id) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(service.askAgain(id));
+    }
+
+    @PostMapping("/{loan_id}/reversal")
+    @RequiresPermission(ExistingLoanService.PERMISSION)
+    @Operation(
+            summary =
+                    "Ask a second person to reverse an approved bring-in, with a reason: the opening entry is mirrored,"
+                            + " the historic transactions are marked reversed and the loan is cancelled; refused once the loan"
+                            + " has a transaction in the app or a penalty charge (FR-EXL-08)",
+            operationId = "requestExistingLoanReversal")
+    ResponseEntity<ExistingLoan> requestReversal(
+            @PathVariable("loan_id") UUID id, @Valid @RequestBody CancelRequest request) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(service.requestReversal(id, request.reason()));
     }
 
     @PostMapping(path = "/import", consumes = MediaType.APPLICATION_JSON_VALUE)

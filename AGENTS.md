@@ -473,19 +473,21 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (`/platform/feedback`), the tours `page-feedback` and `page-operator-feedback`, and a Feedback step in `admin-welcome` v18,
   `retail-sales` v12 and `staff-welcome` v6. Tests: `FeedbackIT`, `RlsIsolationIT`, `ModularityTest`, `feedback-state.test.ts`,
   `feedback.dom.test.tsx`, `tours-operator.test.tsx`.
-- **Built (existing loans from a paper register, issue #466, FR-EXL-01 to FR-EXL-07, ADR-071):** migration `V91` (an ordered
+- **Built (existing loans from a paper register, issue #466, FR-EXL-01 to FR-EXL-08, ADR-071):** migration `V91` (an ordered
   claim after the claims `V85` to `V90`): the loan status `brought_in`, the columns `go_live_on`, `brought_in_on`,
   `register_ref`, `agreed_total_minor` and `opening_entry_id` on `lending_loans`, the append-only
   `lending_brought_in_repayments`, and the permission `lending.loans.bring_in` (tenant admin, branch manager). Routes under
   `/lending/existing-loans`: the go-live date, record with a check (`dry_run`) and an `Idempotency-Key`, list, get, cancel,
-  ask again, and the CSV import (check, then commit). The maker-checker action `loan_bring_in` (checker
+  ask again, the reversal of an approved bring-in, and the CSV import (check, then commit). The maker-checker action `loan_bring_in` (checker
   `lending.disbursements.authorise`, no threshold) writes the schedule from the real date, historic transactions with no
   journal and one opening entry at go-live (debit loans receivable, credit opening balance equity). The arrears run charges
-  no penalty period that starts before `brought_in_on` (none on the bring-in day). The go-live date is the tenant setting `go_live_date` (`PATCH /settings`, Owner
+  no penalty period that starts before `brought_in_on` (none on the bring-in day). `loan_bring_in_reversal` (same
+  maker and checker) takes back an approved bring-in while the loan has no transaction in the app and no penalty: the
+  opening entry mirrored, the historic rows marked reversed on their own dates, the loan cancelled. The go-live date is the tenant setting `go_live_date` (`PATCH /settings`, Owner
   only; `PUT /platform/tenants/{id}/go-live` for the operator), defaulting to the business date of the first administrator
   sign-in, stored at that sign-in (`GoLiveDate.adminSignedIn`). The CSV reader of the retail item import moved to `kernel.CsvTable` so both imports
   share it. The PWA: `/staff/lending/existing-loans` (the form, its check and the loans waiting) and
-  `/staff/lending/existing-loans/import`, linked from Loans, and an Open the loan link on a `loan_bring_in` approval. Tests:
+  `/staff/lending/existing-loans/import`, linked from Loans, and an Open the loan link on a `loan_bring_in` or `loan_bring_in_reversal` approval. Tests:
   `ExistingLoansIT`, `BringInTest`, `RlsIsolationIT`, `existing-loans-state.test.ts`, `existing-loans.dom.test.tsx`.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
@@ -820,7 +822,7 @@ Accepted (this list is the ADR index):
   #446; FR-TEN-08; amends ADR-050 decision 1; renumbered at merge if needed)
 - ADR-071 Existing loans are brought in with their real dates, past repayments as history (no journal) and one opening entry at
   go-live, after a second person approves; only before the go-live date (a tenant setting the Owner or the operator sets);
-  no penalty for the time before the bring-in (accepted, #466; FR-EXL-01 to FR-EXL-07; migration `V91`)
+  no penalty for the time before the bring-in (accepted, #466; FR-EXL-01 to FR-EXL-08; migration `V91`)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared

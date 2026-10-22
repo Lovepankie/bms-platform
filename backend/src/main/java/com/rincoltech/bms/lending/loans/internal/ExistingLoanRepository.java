@@ -143,6 +143,31 @@ class ExistingLoanRepository implements GoLiveDate.Dependent {
                         """).params(broughtInOn, openingEntryId, checkerId, loanId).update();
     }
 
+    /**
+     * What stops the reversal of a bring-in (ADR-071 decision 9): a transaction made in the app (not historic) or a penalty
+     * charge on the loan. Null when there is none.
+     */
+    String activitySince(UUID loanId) {
+        return jdbc.sql("""
+                        SELECT CASE
+                                 WHEN EXISTS (SELECT 1 FROM lending_loan_transactions
+                                               WHERE loan_id = :id AND NOT is_historic) THEN 'transaction'
+                                 WHEN EXISTS (SELECT 1 FROM lending_loan_charges WHERE loan_id = :id) THEN 'penalty'
+                               END
+                        """).param("id", loanId).query(String.class).optional().orElse(null);
+    }
+
+    /** A reversed bring-in owes nothing: the loan's figures go to zero with its status cancelled (ADR-071 decision 9). */
+    void cleared(UUID loanId) {
+        jdbc.sql("""
+                        UPDATE lending_loans SET principal_outstanding_minor = 0, interest_outstanding_minor = 0,
+                            fees_outstanding_minor = 0, penalties_outstanding_minor = 0, arrears_minor = 0,
+                            days_past_due = 0, next_due_date = NULL, total_paid_minor = 0, last_repayment_on = NULL,
+                            updated_at = now(), version = version + 1
+                         WHERE id = ?
+                        """).param(loanId).update();
+    }
+
     /** A request asked again checks against today's go-live date, which the loan then keeps. */
     void goLiveOn(UUID loanId, LocalDate goLiveOn) {
         jdbc.sql("UPDATE lending_loans SET go_live_on = ?, updated_at = now(), version = version + 1 WHERE id = ?")
@@ -158,15 +183,12 @@ class ExistingLoanRepository implements GoLiveDate.Dependent {
                         """).param(registerRef).query(Long.class).single() > 0;
     }
 
-    /** The pending {@code loan_bring_in} request of the loan, if one waits. */
-    Optional<UUID> pendingApproval(UUID loanId) {
+    /** The pending request of the loan of this type ({@code loan_bring_in} or its reversal), if one waits. */
+    Optional<UUID> pendingApproval(UUID loanId, String actionType) {
         return jdbc.sql("""
                         SELECT id FROM approval_requests
                          WHERE subject_id = ? AND action_type = ? AND status = 'pending' AND expires_at > now()
-                        """)
-                .params(loanId, BringInAction.TYPE)
-                .query(UUID.class)
-                .optional();
+                        """).params(loanId, actionType).query(UUID.class).optional();
     }
 
     /** The loans brought in from the register in the given branches (null: all), newest first, at most {@code limit}. */

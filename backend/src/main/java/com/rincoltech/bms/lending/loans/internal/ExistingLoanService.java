@@ -25,6 +25,7 @@ import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.ScheduleRow;
 import com.rincoltech.bms.lending.loans.internal.ExistingLoanRepository.Facts;
 import com.rincoltech.bms.lending.loans.internal.LoanBooks.Leg;
 import com.rincoltech.bms.lending.loans.internal.LoanRepository.Loan;
+import com.rincoltech.bms.lending.loans.internal.Servicing.Allocation;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Item;
 import com.rincoltech.bms.lending.loans.internal.Servicing.Position;
 import com.rincoltech.bms.lending.loans.internal.ServicingRepository.Txn;
@@ -46,7 +47,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Existing loans brought in from a paper register (ADR-071; FR-EXL-01 to FR-EXL-07). A tenant administrator or branch
+ * Existing loans brought in from a paper register (ADR-071; FR-EXL-01 to FR-EXL-08). A tenant administrator or branch
  * manager records the loan with its real disbursement date, terms and past repayments; the app builds the schedule from
  * that date, applies the repayments by the product's allocation order and shows the true position. The loan waits as
  * {@code brought_in}, counting nowhere, until a second person approves {@code loan_bring_in}; the approval writes the
@@ -487,6 +488,121 @@ class ExistingLoanService {
                 null);
     }
 
+    // ---- Reverse a bring-in (FR-EXL-08, ADR-071 decision 9) ---------------------------------------
+
+    /**
+     * Asks for the reversal of an approved bring-in, with a reason; a second person decides it. Refused once the loan has
+     * a transaction made in the app or a penalty charge: then it is a loan of the app's own books and is corrected the
+     * usual way.
+     */
+    @Transactional
+    ExistingLoan requestReversal(UUID loanId, String reason) {
+        Loan loan = lockInScope(loanId, PERMISSION);
+        Facts f = requireReversible(loan);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put(BringInReversalAction.REASON, reason.trim());
+        payload.put("disbursement_date", f.disbursementDate().toString());
+        payload.put("register_ref", f.registerRef());
+        payload.put("opening_entry_id", f.openingEntryId());
+        approvals.request(new ActionRequest(
+                BringInReversalAction.TYPE,
+                loan.branchId(),
+                loanId,
+                loan.version(),
+                loan.approvedPrincipalMinor(),
+                loan.currency(),
+                payload));
+        return detail(loanId);
+    }
+
+    private Facts requireReversible(Loan loan) {
+        LoanServicer.requireStatus(loan, Set.of("active", "closed"));
+        Facts f = repo.facts(loan.id()).orElseThrow();
+        if (f.broughtInOn() == null) {
+            throw ApiException.rule(
+                    "not_brought_in", "Only a loan brought in from the paper register is reversed here.");
+        }
+        String activity = repo.activitySince(loan.id());
+        if (activity != null) {
+            throw ApiException.rule(
+                    "bring_in_has_activity",
+                    activity.equals("penalty")
+                            ? "A penalty was charged on the loan in the app, so its bring-in is no longer reversed."
+                            : "A transaction was recorded on the loan in the app, so its bring-in is no longer reversed;"
+                                    + " correct it the usual way.");
+        }
+        return f;
+    }
+
+    /**
+     * The checker's approval of the reversal, in the approval's transaction: the opening entry mirrored today (ADR-004),
+     * each historic disbursement and repayment marked reversed by a historic reversal row on its own value date with the
+     * negatives of its allocation rows (so no period of the app's books moves), the loan's figures cleared and the loan
+     * cancelled, which frees its register number.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    void reverse(UUID loanId, String reason, UUID approvalId, UUID makerId, UUID checkerId) {
+        Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
+        Facts f = requireReversible(loan);
+        LocalDate today = today();
+        UUID mirrorId = null;
+        if (f.openingEntryId() != null) {
+            mirrorId = books.reverse(
+                            f.openingEntryId(),
+                            today,
+                            loan.loanNo(),
+                            "Opening balance reversal " + loan.loanNo(),
+                            "lending.opening_reversal:" + loanId)
+                    .entryId();
+        }
+        Map<UUID, List<Allocation>> allocations = servicing.allocationsByRepayment(loanId);
+        int reversed = 0;
+        for (Txn t : servicing.historicNotReversed(loanId)) {
+            UUID id = UUID.randomUUID();
+            servicing.insertHistoricTxn(new Txn(
+                    id,
+                    loan.branchId(),
+                    loanId,
+                    "reversal",
+                    t.amountMinor(),
+                    t.currency(),
+                    t.valueDate(),
+                    t.paymentMethodKey(),
+                    null,
+                    null,
+                    reason,
+                    t.id(),
+                    null,
+                    approvalId,
+                    null,
+                    "staff",
+                    makerId,
+                    null));
+            List<Allocation> rows = allocations.getOrDefault(t.id(), List.of());
+            if (!rows.isEmpty()) {
+                servicing.insertAllocations(id, t.id(), Servicing.difference(rows, List.of()));
+            }
+            reversed++;
+        }
+        repo.cleared(loanId);
+        loans.move(loanId, loan.status(), "cancelled", checkerId, reason, Map.of("cancelled_reason", reason));
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("status", "cancelled");
+        after.put("reason", reason);
+        after.put("reversed_transactions", reversed);
+        after.put("opening_entry_id", f.openingEntryId());
+        after.put("opening_reversal_entry_id", mirrorId);
+        after.put("register_ref_freed", f.registerRef());
+        after.put("approval_request_id", approvalId);
+        audit.record(new AuditLog.Entry(
+                "lending.loan.bring_in_reversed",
+                LoanServicer.SUBJECT,
+                loanId,
+                loan.branchId(),
+                Map.of("status", loan.status()),
+                after));
+    }
+
     // ---- Withdraw and ask again (FR-EXL-04) -----------------------------------------------------
 
     /** The maker (or anyone holding the permission in the branch) withdraws a loan still waiting; it ends cancelled. */
@@ -615,9 +731,7 @@ class ExistingLoanService {
                 f.registerRef(),
                 f.goLiveOn(),
                 f.broughtInOn(),
-                "brought_in".equals(loan.status())
-                        ? repo.pendingApproval(loanId).orElse(null)
-                        : null,
+                pendingRequest(loan),
                 repayments(lines),
                 rows(items, today),
                 position(position, paid, last));
@@ -648,6 +762,17 @@ class ExistingLoanService {
                 rows(c.plan().items(), today()),
                 position(
                         c.plan().position(), c.plan().totalPaidMinor(), c.plan().lastRepaymentOn()));
+    }
+
+    /** The request waiting on the loan: its bring-in while {@code brought_in}, its reversal once approved. */
+    private UUID pendingRequest(Loan loan) {
+        return switch (loan.status()) {
+            case "brought_in" ->
+                repo.pendingApproval(loan.id(), BringInAction.TYPE).orElse(null);
+            case "active", "closed" ->
+                repo.pendingApproval(loan.id(), BringInReversalAction.TYPE).orElse(null);
+            default -> null;
+        };
     }
 
     private static List<Repayment> repayments(List<BringIn.Line> lines) {

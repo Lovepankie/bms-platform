@@ -507,7 +507,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             branchManager -> bms.web "Approves as checker; never the maker"
             bms.web -> bms.api.approvals "POST /approvals/{id}/approve"
             bms.api.approvals -> bms.api.loans "Executes: schedule from the real date, historic transactions, loan active"
-            bms.api.loans -> bms.api.ledger "Posts one opening entry at go-live; no old cash is posted again"
+            bms.api.loans -> bms.api.ledger "Posts one opening entry at go-live; no old cash is posted again; a loan_bring_in_reversal mirrors it"
             autoLayout lr
         }
 

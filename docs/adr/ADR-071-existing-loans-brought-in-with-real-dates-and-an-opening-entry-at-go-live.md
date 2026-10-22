@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (Hillary Arinda, Dev Lead, 22 Oct 2026, issue #466; the penalty default of decision 6 is his to change later).
-Migration `V91`. FR-EXL-01 to FR-EXL-07. Builds on ADR-004 (integer money and the double-entry ledger), ADR-015
+Migration `V91`. FR-EXL-01 to FR-EXL-08. Builds on ADR-004 (integer money and the double-entry ledger), ADR-015
 (maker-checker actions registered by their modules), ADR-026 (loan servicing: allocation rows by repayment), ADR-062
 (the Owner of a business) and the arrears run of #270 (penalties start at the business's first run).
 
@@ -79,6 +79,15 @@ fit every lending business, not one register.
 8. **Audit every step:** `lending.loan.brought_in_recorded`, `core.approval.*`, `lending.loan.brought_in`,
    `lending.loan.brought_in_cancelled`, `lending.loan.existing_imported`, and for the go-live date
    `core.settings.updated` or `core.settings.go_live_set` with `platform.tenant.go_live_set`.
+9. **A bring-in is reversed by a second person, while nothing else happened.** An approved bring-in entered by mistake
+   (a loan entered twice, the wrong member) is taken back through the maker-checker action `loan_bring_in_reversal`
+   (maker `lending.loans.bring_in`, checker `lending.disbursements.authorise`, never the maker, no threshold). The
+   approval mirrors the opening entry dated today (ADR-004: corrections are reversals, nothing is deleted), marks each
+   historic disbursement and repayment reversed with a historic reversal row on that row's own value date and the
+   negatives of its allocation rows (so no period of the app's books and no collection report moves), clears the loan's
+   figures and cancels it, which frees its register number for the correct entry. It is refused (422
+   `bring_in_has_activity`) once the loan has any transaction made in the app or a penalty charge: from then it is a loan
+   of the app's own books and is corrected the usual way. Audited `lending.loan.bring_in_reversed`.
 
 ### How an accountant reconciles it
 
