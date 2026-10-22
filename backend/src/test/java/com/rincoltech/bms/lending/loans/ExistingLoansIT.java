@@ -332,6 +332,21 @@ class ExistingLoansIT extends LoanFixtures {
                 Map.of("reason", "Test reversal"));
         assertThat(reversal.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(code(reversal)).isEqualTo("historic_not_reversible");
+
+        // Its receipt is the paper one; the loan statement shows the whole history.
+        ResponseEntity<JsonNode> receipt = send(
+                HttpMethod.POST,
+                LOANS + "/" + id + "/transactions/" + historic + "/document",
+                as(admin, adminPerms, "*", null),
+                null);
+        assertThat(code(receipt)).isEqualTo("no_document");
+        ResponseEntity<byte[]> statement = http.exchange(
+                LOANS + "/" + id + "/documents/loan_statement",
+                HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(as(admin, adminPerms, "*", null)),
+                byte[].class);
+        assertThat(statement.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(statement.getBody()).isNotEmpty();
     }
 
     /** The register gives the total to repay instead of a rate: the difference is spread as flat interest, no fee. */

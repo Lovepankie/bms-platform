@@ -184,6 +184,15 @@ class LoanDocuments {
                     "No document",
                     "A " + txn.txnType() + " has no receipt or voucher; it shows on the loan statement.");
         }
+        if (txn.receiptNo() == null) {
+            // ADR-071: brought in from the paper register, its receipt is the paper one.
+            throw new ApiException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "no_document",
+                    "No document",
+                    "A transaction brought in from the paper register has no receipt or voucher here; it shows on the"
+                            + " loan statement.");
+        }
         String docType = voucher ? "voucher" : "receipt";
         Optional<StoredDocument> stored = documents.findGenerated(SUBJECT, loanId, docType, txn.receiptNo());
         if (stored.isPresent()) {

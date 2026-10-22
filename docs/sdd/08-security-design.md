@@ -287,6 +287,7 @@ platform API and holds no tenant permissions.
 | `lending.loans.appraise` | Y | Y | Y | | | | | | | | | |
 | `lending.loans.approve` | Y | Y | | | | | | | | | | |
 | `lending.loans.cancel` | Y | Y | Y | | | | | | | | | |
+| `lending.loans.bring_in` | Y | Y | | | | | | | | | | |
 | `lending.disbursements.request` | Y | Y | | Y | | | | | | | | |
 | `lending.disbursements.authorise` | Y | Y | | | Y | | | | | | | |
 | `lending.repayments.create` | Y | Y | | Y | | | | | | | | |
@@ -377,6 +378,14 @@ The staff member and collateral screens (issue #280) offer an action only when t
 
 Notes:
 
+- Existing loans (issue #466, ADR-071, migration `V91`): `lending.loans.bring_in` records a loan from a paper register with
+  its real disbursement date and past repayments, by the form or the CSV import, checks one without saving (`dry_run`),
+  withdraws one still waiting and asks for its approval again. Administrators and branch managers hold it, in the
+  member's branch. The checker of `loan_bring_in` holds `lending.disbursements.authorise`, as for a disbursement, and is
+  never the maker (the approval CHECK, and the loan's own approver CHECK of V8, since the maker is stored as the
+  submitter). The existing loans are read with `lending.loans.read`. The go-live date that bounds them is set by the
+  Owner of the business alone (`PATCH /settings`, 403 `owner_only` for another administrator; ADR-062) or by the
+  platform operator with a reason (`platform.tenants.manage`), both audited.
 - A loan officer running `lending.reports.collections` sees only loans where they are
   the responsible officer; branch managers and above see their branch scope.
 - Insights (#153, ADR-030): `lending.insights.read` opens the page in the user's branch scope.
@@ -698,6 +707,7 @@ CHECK constraint as well as the service.
 | Action type | Maker permission | Checker permission | Threshold applies |
 |---|---|---|---|
 | `loan_disbursement` | `lending.disbursements.request` | `lending.disbursements.authorise` | Yes |
+| `loan_bring_in` | `lending.loans.bring_in` | `lending.disbursements.authorise` | No (always checked) |
 | `repayment_reversal` | `lending.repayments.reverse_request` | `lending.repayments.reverse_approve` | No (always checked) |
 | `charge_waiver` | `lending.charges.waive_request` | `lending.charges.waive_approve` | Yes |
 | `loan_write_off` | `lending.loans.write_off_request` | `lending.loans.write_off_approve` | No |

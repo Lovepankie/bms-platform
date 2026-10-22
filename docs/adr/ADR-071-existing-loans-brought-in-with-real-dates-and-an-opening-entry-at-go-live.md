@@ -1,0 +1,107 @@
+# ADR-071: Existing loans are brought in with their real dates, past repayments as history, and one opening entry at go-live
+
+## Status
+
+Accepted (Hillary Arinda, Dev Lead, 22 Oct 2026, issue #466; the penalty default of decision 6 is his to change later).
+Migration `V91`. FR-EXL-01 to FR-EXL-07. Builds on ADR-004 (integer money and the double-entry ledger), ADR-015
+(maker-checker actions registered by their modules), ADR-026 (loan servicing: allocation rows by repayment), ADR-062
+(the Owner of a business) and the arrears run of #270 (penalties start at the business's first run).
+
+## Context
+
+A lending business that moves to the app from a paper or spreadsheet register already has loans out: given on real
+dates, partly repaid, some of them late. Until now the only way in was the normal origination, which refuses a past
+proposed disbursement date, so an existing loan looked new: its due dates, its days overdue, the arrears lists and the
+reminders all ran from the wrong day. The business needs each loan as it really stands.
+
+Three things make this delicate. The money already moved before the app existed, so the books must not show it as
+today's cash. A long overdue loan would, under the arrears run, earn penalties for months nobody charged at the time.
+And a route that accepts a past disbursement date is a way to backdate new lending, unless it is bounded. The rules must
+fit every lending business, not one register.
+
+## Decision
+
+1. **Record, then approve.** A tenant administrator or branch manager (`lending.loans.bring_in`) records an existing
+   loan: member, product, principal, the real disbursement date, the term, either the product's terms or the total the
+   borrower agreed to repay, an optional register number, and the repayments already received (date, amount, method,
+   note). The loan is stored as `brought_in` with its repayment lines (`lending_brought_in_repayments`, append-only) and
+   counts nowhere (no schedule, transaction, journal, balance, arrears run or list) until a second person approves the
+   `loan_bring_in` action with `lending.disbursements.authorise`, the checker of a disbursement. No threshold applies:
+   what it brings into the books was never seen by the app. The maker may withdraw it (`cancelled`) or ask again after
+   a rejection, an expiry or a stale request. A check (`dry_run`) shows the outcome without saving anything.
+2. **The real schedule.** The schedule is built from the real disbursement date with the loan's terms, exactly as a
+   disbursement on that date builds it (R-TERM with R-FLAT or R-DECL, fees added to the loan included). When the
+   register records an agreed total instead of a rate, the principal and the difference are each spread as R-FLAT
+   spreads them, with no fee. Fees deducted from the proceeds or paid upfront were settled in cash before go-live and
+   are not recorded. The past repayments are applied in value date order (then the order entered), each by the
+   product's allocation order (R-ALLOC), as if the app had recorded them on the day; the position on today's business
+   date (balances, arrears, next due date, days past due from the real due dates, R-DPD) follows. Repayments that come
+   to more than the loan owed are refused, never turned into a credit: the register is checked again.
+3. **History, not cash.** On approval, in one transaction, the disbursement and every repayment become
+   `lending_loan_transactions` rows with `is_historic` true, no journal and no receipt or voucher number (the V29 check
+   already allows a historic row without a journal; receipt numbers stay gap-free for the app's own receipts), with their
+   allocation rows. The loan becomes `active`, or `closed` on its last repayment's date when the register shows it repaid
+   in full. A historic repayment cannot be reversed (422 `historic_not_reversible`): it moved no cash in the books, so a
+   mistake in it is corrected by withdrawing or recording the loan again before approval.
+4. **One opening entry at go-live.** For the principal still owed, one journal entry dated at the business's go-live
+   date: debit `loans_receivable` with the loan as subledger, credit `opening_balance_equity` (3030, already in the
+   lending chart). Nothing is posted for the old disbursement or the old repayments, and no cash, bank or mobile money
+   account moves. Interest, fees and penalties still owed are not posted, as for every loan: the app recognises them
+   when they are paid (ADR-004, chapter 6 section 6.6.3), so the receivable always equals the principal outstanding and
+   the subledger check holds for brought-in loans as for any other. A repaid loan has no opening entry. The entry's
+   source is the loan (`loan_opening`), keyed `lending.opening:<loan id>`, so it can never post twice.
+5. **The go-live date bounds it.** A loan comes in only with a disbursement date before the business's go-live date, and
+   its repayments too: a repayment on or after go-live is a normal repayment in the app's own books, recorded after
+   approval. So the route cannot be used to backdate new lending. The go-live date is a tenant setting
+   (`go_live_date`, today or earlier) that only the Owner of the business sets in the settings (ADR-062) or the platform
+   operator sets for a business with a reason, both audited; until set, it is the business date of the first sign-in of
+   an administrator. A go-live date moved after a loan was recorded makes its pending request stale (409
+   `go_live_changed`); asking again checks the loan against the new date.
+6. **No penalties for the time before the bring-in** (the default; Hillary may change it later). Each brought-in loan
+   keeps `brought_in_on`, the later of the go-live date and the approval's business date. The nightly arrears run charges
+   no penalty period dated before it (it already starts at the later of the business's first run and the loan's own
+   start; the bring-in date joins that rule), and charges the periods after it as for any loan. Days past due, the
+   arrears, the collection lists and the reminders count from the real due dates.
+7. **The CSV import** reuses the check-then-commit pattern of the retail item import (#146), with its CSV reader moved
+   into the kernel (`CsvTable`) so both share one: rows of kind `loan` and `repayment` tied by `ref`, the register
+   number; a check reports every row; a commit with any error records nothing; a loan whose `ref` is already in the app
+   is skipped, so a file committed twice records each loan once. Every loan passes exactly the checks of the form and
+   waits for its own checker.
+8. **Audit every step:** `lending.loan.brought_in_recorded`, `core.approval.*`, `lending.loan.brought_in`,
+   `lending.loan.brought_in_cancelled`, `lending.loan.existing_imported`, and for the go-live date
+   `core.settings.updated` or `core.settings.go_live_set` with `platform.tenant.go_live_set`.
+
+### How an accountant reconciles it
+
+At go-live the ledger holds, for the existing book, one debit to loans receivable per open brought-in loan, each equal to
+that loan's principal outstanding on the register, and the matching credit to opening balance equity. So:
+
+- Loans receivable at go-live equals the sum of the principal outstanding of the brought-in loans, and loan by loan it
+  equals the subledger (the app's own check, `booksAgree` in the tests, holds).
+- Opening balance equity carries the same total. When the business also brings in its opening cash and bank balances
+  (a manual journal, maker-checker), the equity account nets the opening position of the business; any amount left
+  there after all openings are in is a difference between the register and the cash counts, investigated before the
+  first period close.
+- The old disbursements and repayments are visible on each loan (its transactions and statement show them as history,
+  without a journal) and in the register; they are not in the cash book, so the cash book starts at go-live with the
+  counted cash, never with years of old receipts.
+- Interest received before go-live is income of the years before; it is in the register's books, not the app's. From
+  go-live every repayment posts as usual: principal to the receivable, interest, fees and penalties to income.
+
+## Consequences
+
+**Better:** a business moves off paper with each loan's true dates, so due dates, days overdue, arrears lists and
+reminders are right from the first day. The books open with a clean, reconcilable figure and no fake cash. Nobody is
+charged a penalty for months the app did not know the loan, and the route cannot be used to backdate new lending. Both
+the form and the file pass one set of checks, and nothing counts before a second person agrees.
+
+**Worse:** brought-in loans carry no guarantors or pledged collateral in this change; they are added later through the
+member's register when needed. Fees deducted or paid upfront before go-live are not recorded, so a fee income report
+covers only the app's own period. The member limit of active loans (FR-ORG-07) does not refuse a brought-in loan: it
+already exists. Insights figures by disbursement month include brought-in loans at their real months, which is the
+business's true history but was never in the app's cash.
+
+**Watch for:** an opening entry dated in a closed period is refused (`period_closed`) and the request stays pending
+with the error, so bring the book in before closing the go-live month. A go-live date moved later reopens the window
+for bringing loans in; that is why only the Owner and the operator move it, and why each move is audited. If Hillary
+changes the penalty default (decision 6), the change is the start date the arrears run reads, nothing else.
