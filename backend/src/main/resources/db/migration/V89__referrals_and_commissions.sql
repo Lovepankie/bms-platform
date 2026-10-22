@@ -307,6 +307,22 @@ $$;
 CREATE TRIGGER commission_line_guard BEFORE UPDATE OR DELETE ON referral_commission_lines
     FOR EACH ROW EXECUTE FUNCTION bms_commission_line_guard();
 
+-- What each payment of a referred business gave under its referral (ADR-069 decision 9): kept so that a payment that earned
+-- nothing because its currency differed from the rule's never uses up the rule's months later, whatever the rule is then.
+-- Platform table, closed to bms_app, append-only.
+CREATE TABLE referral_payment_outcomes (
+    payment_id  uuid        NOT NULL PRIMARY KEY REFERENCES subscription_payments (id),
+    referral_id uuid        NOT NULL REFERENCES tenant_referrals (id),
+    outcome     text        NOT NULL CHECK (outcome IN ('added', 'no_rule', 'not_first_payment', 'months_used',
+                                                        'currency_differs', 'cap_reached', 'zero')),
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX referral_payment_outcomes_by_referral ON referral_payment_outcomes (referral_id);
+ALTER TABLE referral_payment_outcomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE referral_payment_outcomes FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON referral_payment_outcomes FROM PUBLIC;
+SELECT bms_make_append_only('referral_payment_outcomes');
+
 -- ---------------------------------------------------------------------------------------------
 -- 6. Referral reads. Each returns the totals per currency as a JSON array of {currency, earned_minor, paid_minor, due_minor}:
 --    earned is every line (reversals count against it), paid the lines marked paid, due the difference.
@@ -576,8 +592,8 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 8. The commission of one payment (ADR-069 decision 5). Runs in the transaction that records the payment, bound to the paying
 --    business; the payment must be that business's own. Paid months are counted over every other confirmed payment of the
---    referred business recorded since this referral started (ADR-069 decision 9), leaving out payments in a currency other
---    than the rule's; recording a payment locks the business's subscription first (V75), so two payments recorded at once
+--    referred business recorded since this referral started (ADR-069 decision 9), leaving out the payments whose outcome was
+--    currency_differs (each outcome is kept in referral_payment_outcomes); recording a payment locks the business's subscription first (V75), so two payments recorded at once
 --    are counted one after the other and never both as the first. Amounts are whole minor units, rounded half up. Outcomes:
 --    added, no_referral, no_rule, not_first_payment, months_used, currency_differs, cap_reached, zero.
 -- ---------------------------------------------------------------------------------------------
@@ -618,14 +634,17 @@ BEGIN
     END IF;
     IF v_rule.id IS NULL THEN
         outcome := 'no_rule';
+        INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
         RETURN NEXT;
         RETURN;
     END IF;
     SELECT coalesce(sum(sp.months), 0) INTO v_before FROM subscription_payments sp
      WHERE sp.tenant_id = v_tenant AND sp.status = 'confirmed' AND sp.id <> v_pay.id AND sp.created_at >= v_ref.started_at
-       AND (v_rule.currency IS NULL OR sp.currency = v_rule.currency);
+       AND NOT EXISTS (SELECT 1 FROM referral_payment_outcomes o
+                        WHERE o.payment_id = sp.id AND o.outcome = 'currency_differs');
     IF v_rule.kind <> 'percent_of_payment' AND v_rule.currency <> v_pay.currency THEN
         outcome := 'currency_differs';
+        INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
         RETURN NEXT;
         RETURN;
     END IF;
@@ -634,6 +653,7 @@ BEGIN
     IF v_rule.kind = 'fixed_first_payment' THEN
         IF v_before > 0 THEN
             outcome := 'not_first_payment';
+            INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
             RETURN NEXT;
             RETURN;
         END IF;
@@ -641,6 +661,7 @@ BEGIN
         v_amount := v_rule.amount_minor;
     ELSIF v_eligible = 0 THEN
         outcome := 'months_used';
+        INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
         RETURN NEXT;
         RETURN;
     ELSIF v_rule.kind = 'fixed_per_month' THEN
@@ -650,6 +671,7 @@ BEGIN
         IF v_rule.cap_minor IS NOT NULL THEN
             IF v_rule.currency <> v_pay.currency THEN
                 outcome := 'currency_differs';
+                INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
                 RETURN NEXT;
                 RETURN;
             END IF;
@@ -658,6 +680,7 @@ BEGIN
             v_amount := least(v_amount, v_rule.cap_minor - v_earned);
             IF v_amount <= 0 THEN
                 outcome := 'cap_reached';
+                INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
                 RETURN NEXT;
                 RETURN;
             END IF;
@@ -665,6 +688,7 @@ BEGIN
     END IF;
     IF v_amount <= 0 THEN
         outcome := 'zero';
+        INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
         RETURN NEXT;
         RETURN;
     END IF;
@@ -681,6 +705,7 @@ BEGIN
     amount_minor := v_amount;
     currency := v_pay.currency;
     outcome := 'added';
+    INSERT INTO referral_payment_outcomes (payment_id, referral_id, outcome) VALUES (v_pay.id, v_ref.id, outcome);
     RETURN NEXT;
 END
 $$;

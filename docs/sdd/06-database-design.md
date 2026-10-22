@@ -306,6 +306,12 @@ is granted to `bms_app`: the definer functions `platform_referral_add_rule`, `pl
 `platform_referral_set_rule` and `platform_referral_rule` are the only way in, each refusing a transaction bound to a tenant. No rate
 or amount is seeded.
 
+`referral_payment_outcomes` (same protection, append-only): what each payment of a referred business gave under its referral,
+`payment_id uuid PK` (FK `subscription_payments`), `referral_id` (FK `tenant_referrals`), `outcome text` [`added`, `no_rule`,
+`not_first_payment`, `months_used`, `currency_differs`, `cap_reached`, `zero`], `created_at`. Written only by
+`platform_referral_commission_for_payment`; a payment whose outcome was `currency_differs` never uses up a rule's first N months
+(ADR-069 decision 9).
+
 ### `notification_outbox` (platform; no privilege for `bms_app`, definer functions only, ADR-024)
 
 One row per message to send (spec section 11, FR-NTF-09): `id uuid PK`, `channel` [`email`,

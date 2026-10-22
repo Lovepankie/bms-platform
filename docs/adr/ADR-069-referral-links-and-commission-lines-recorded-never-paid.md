@@ -83,7 +83,9 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
 9. **The months used count only payments made under this referral, in the rule's currency, one payment at a time.** The first
     N paid months of a rule count every other confirmed payment of the referred business recorded on or after the day this
     referral started (`tenant_referrals.started_at`); payments recorded before the referral existed, under an earlier referrer
-    or none, do not use N up, and neither do payments in a currency other than the rule's (those give `currency_differs`). The
+    or none, do not use N up, and neither does a payment that earned nothing because its currency differed from the rule's
+    (outcome `currency_differs`, kept per payment in `referral_payment_outcomes`, so a later rule in that currency still starts
+    at its first month). The
     count does not compare creation times: recording a payment locks the business's subscription row first (`V75`), so two
     payments recorded at the same moment are counted one after the other and never both as the first. The cap stays per
     referral row.

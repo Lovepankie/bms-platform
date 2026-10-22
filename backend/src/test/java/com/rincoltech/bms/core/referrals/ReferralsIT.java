@@ -991,7 +991,10 @@ class ReferralsIT extends IntegrationTest {
                 .isNotEqualTo(lines.get(0).get("rule_snapshot").get("rule_id"));
     }
 
-    /** A fixed rule in another currency than the payment's gives no line (currency_differs). */
+    /**
+     * A fixed rule in another currency than the payment's gives no line (currency_differs), and that payment never uses up a
+     * later rule's months: under a first payment rule in the payment's currency, the next payment is the first (decision 9).
+     */
     @Test
     void aFixedRuleInAnotherCurrencyGivesNoLine() {
         TestDatabase.Fixture a = TestDatabase.tenant("refcur", false);
@@ -1006,6 +1009,19 @@ class ReferralsIT extends IntegrationTest {
         pay(x.id(), 10000, 1);
         assertThat(detail(rx).get("lines")).isEmpty();
         assertThat(audits("platform.referral.commission_added")).isZero();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT outcome FROM referral_payment_outcomes WHERE referral_id = ?")
+                        .param(rx)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("currency_differs");
+
+        Map<String, Object> ugx = new LinkedHashMap<>(usd);
+        ugx.put("currency", "UGX");
+        rule("/api/v1/platform/referrals/" + rx + "/rule", ugx, "Test: the deal in shillings");
+        pay(x.id(), 10000, 1);
+        pay(x.id(), 10000, 1);
+        assertThat(amounts(detail(rx))).containsExactly(500L);
     }
 
     /**

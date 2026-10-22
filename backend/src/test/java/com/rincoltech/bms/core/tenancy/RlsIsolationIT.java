@@ -1047,7 +1047,7 @@ class RlsIsolationIT {
                                 "SELECT count(*) FROM platform_referral_set_referrer(?, NULL, NULL, now())",
                                 a.tenantId())))
                 .hasStackTraceContaining("platform operator only");
-        for (String table : List.of("referral_commission_rules", "referral_settings")) {
+        for (String table : List.of("referral_commission_rules", "referral_settings", "referral_payment_outcomes")) {
             assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
                     .as("SELECT on %s", table)
                     .hasStackTraceContaining("permission denied");
