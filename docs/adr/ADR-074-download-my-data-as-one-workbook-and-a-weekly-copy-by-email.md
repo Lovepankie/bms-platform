@@ -60,7 +60,7 @@ never change data, never show one business another's rows, and never hold a larg
    it), for the person it was made for, for 30 days. So the default email carries the minimum, and the full copy stays behind
    the sign-in. Once the run is ready the email goes through the outbox, keyed by the week's row so it is queued once: the
    workbook attached when it is at most `bms.data-export.attach-max-bytes` (5 MiB), otherwise the email has no file and a link
-   to Business set-up on the business's own sign-in page. The attachment is named in the outbox row as a
+   to Business set-up on the business's own sign-in page (decision 9). The attachment is named in the outbox row as a
    reference, never as bytes; the sender reads it through the `EmailAttachments` port of `core.notifications`, for the row's
    tenant, only while the run is ready and unexpired. A week with no active Owner who has an email address is recorded as
    skipped; a run that failed ends the week as failed with its code. Turning the switch off stops the next week; turning it on
@@ -74,6 +74,13 @@ never change data, never show one business another's rows, and never hold a larg
 8. **The card.** Business set-up shows "Download my data" to holders of the permission: when the business's data was last
    exported (by anyone) and last emailed, the caller's newest full workbook (preparing, ready to save until its expiry, or why it
    failed) and the weekly switch. The welcome tour has a step for it.
+9. **Too large to attach: the sign-in link, not a public link.** When the workbook is over the attachment limit, the email
+   carries no file and no address of one: only the business's own Business set-up (`/staff/setup` on the tenant's host), where
+   the Owner signs in (with two-step sign-in where the business requires it) and makes and saves the full copy, which is bound
+   to them as the requester. An unguessable link that works without signing in was considered and refused: whoever holds the
+   email (a forwarded message, a shared inbox, a phone left unlocked) would hold the whole business, personal data included,
+   for as long as the link lives, and a link cannot tell the Owner from anyone they forwarded it to. Costs: the Owner signs in
+   for a large copy, and the week's own emailed copy, made before its size was known, is left to expire unused.
 
 ## Consequences
 
@@ -90,4 +97,6 @@ business's file is deleted after its 30 days, the weekly
 job queues once and emails once and stops when switched off, the emailed copy leaves out the personal columns that the full
 copy keeps, a week with no Owner is skipped once) and `DataExportSheetsTest`
 (the year split and its numbered parts, the business date and time of a moment, the personal columns left out of the emailed
-copy); `EmailLayoutTest` (both weekly emails say where the contact details and ID numbers are).
+copy); `DataExportLinkIT` (over the attachment limit the email is the sign-in link with no file, and the documents module
+refuses to read a report object larger than asked); `EmailLayoutTest` (a missing attachment fails the send as
+`attachment_unavailable`; both weekly emails say where the contact details and ID numbers are).

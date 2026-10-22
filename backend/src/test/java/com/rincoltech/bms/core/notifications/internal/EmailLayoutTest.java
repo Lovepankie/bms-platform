@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.core.tenancy.PlatformHost;
 import jakarta.mail.Session;
@@ -132,6 +133,70 @@ class EmailLayoutTest {
 
     static EmailLayout.Brand platform() {
         return EmailLayout.Brand.platform(PLATFORM);
+    }
+
+    @Test
+    void aRowWhoseAttachmentIsGoneFailsAsAttachmentUnavailableAndIsNeverSentWithoutIt() throws Exception {
+        // ADR-074: the weekly workbook is read when the email is sent; an expired or deleted file fails the send
+        // cleanly.
+        com.rincoltech.bms.core.notifications.EmailAttachments gone =
+                new com.rincoltech.bms.core.notifications.EmailAttachments() {
+                    @Override
+                    public String kind() {
+                        return "core.data_export";
+                    }
+
+                    @Override
+                    public java.util.Optional<Attachment> read(UUID tenantId, String id) {
+                        return java.util.Optional.empty();
+                    }
+                };
+        var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        beans.addBean("gone", gone);
+        SmtpEmailChannel channel = new SmtpEmailChannel(
+                new NotificationProperties(null, null, ""),
+                templates,
+                HOSTS,
+                null,
+                null,
+                null,
+                beans.getBeanProvider(com.rincoltech.bms.core.notifications.EmailAttachments.class),
+                "");
+        UUID tenantId = UUID.randomUUID();
+        for (String ref : List.of("core.data_export:" + UUID.randomUUID(), "unknown.kind:" + UUID.randomUUID())) {
+            OutboxChannel.RowContext row = new OutboxChannel.RowContext(
+                    UUID.randomUUID(),
+                    tenantId,
+                    "transactional",
+                    null,
+                    null,
+                    "core.data_export_weekly",
+                    Map.of(com.rincoltech.bms.core.notifications.EmailAttachments.PARAM, ref),
+                    1,
+                    null,
+                    null);
+            assertThatThrownBy(() -> channel.attachment(row))
+                    .as(ref)
+                    .isInstanceOf(OutboxChannel.SendFailure.class)
+                    .hasMessage("attachment_unavailable");
+        }
+        // A row with no tenant cannot name a tenant's file.
+        OutboxChannel.RowContext platform = new OutboxChannel.RowContext(
+                UUID.randomUUID(),
+                null,
+                "transactional",
+                null,
+                null,
+                "core.data_export_weekly",
+                Map.of(
+                        com.rincoltech.bms.core.notifications.EmailAttachments.PARAM,
+                        "core.data_export:" + UUID.randomUUID()),
+                1,
+                null,
+                null);
+        assertThatThrownBy(() -> channel.attachment(platform)).hasMessage("attachment_unavailable");
+        // A row that names no file sends as before.
+        assertThat(channel.attachment(OutboxChannel.RowContext.NONE)).isNull();
     }
 
     @Test
