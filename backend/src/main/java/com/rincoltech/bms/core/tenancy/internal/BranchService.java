@@ -444,14 +444,22 @@ class BranchService implements BranchProvisioning {
      * Stores the logo as a core document of the tenant (the subject of the business logo, so the public route reads it the
      * same way) and points the branch at it; the file was checked and re-encoded before the transaction opened
      * ({@link BrandingService#uploadBranchLogo}). A branch outside the caller's {@code core.branches.manage} scope is a 404
-     * before anything is stored. No If-Match: the version still goes up, so a form holding the old one refetches.
+     * and a closed branch a 409, both before anything is stored. No If-Match: the version still goes up, so a form holding the
+     * old one refetches.
      */
     @Transactional
     BranchResponse replaceLogo(UUID branchId, Documents.Prepared prepared) {
         Principal principal = CurrentPrincipal.require();
-        find(branchId)
+        BranchResponse branch = find(branchId)
                 .filter(b -> principal.may("core.branches.manage", b.id()))
                 .orElseThrow(ApiException::notFound);
+        if (!"active".equals(branch.status())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "invalid_status_transition",
+                    "Invalid status transition",
+                    "The branch is closed. Reopen it to give it a logo.");
+        }
         // Stored first: the object write does not wait inside the branch row lock.
         UUID id = documents
                 .store(prepared, TenantDocumentAccess.SUBJECT, tenant.profile().id(), branchId)

@@ -21700,6 +21700,16 @@
             },
             "description" : "No such branch in the caller's scope"
           },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "The branch is closed (invalid_status_transition)"
+          },
           "413" : {
             "content" : {
               "application/json" : {

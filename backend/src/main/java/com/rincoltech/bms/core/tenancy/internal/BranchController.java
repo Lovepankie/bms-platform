@@ -194,6 +194,7 @@ class BranchController {
                     + "128 px or more (issue #461, ADR-068)",
             operationId = "uploadBranchLogo")
     @ApiResponse(responseCode = "404", description = "No such branch in the caller's scope")
+    @ApiResponse(responseCode = "409", description = "The branch is closed (invalid_status_transition)")
     @ApiResponse(responseCode = "413", description = "Over 1 MB (file_too_large)")
     @ApiResponse(responseCode = "415", description = "Not PNG, JPEG or WebP, or not decodable (unsupported_file_type)")
     @ApiResponse(

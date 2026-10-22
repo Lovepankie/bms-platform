@@ -24,7 +24,7 @@ while the business itself stays one business with one installed app.
    `PUT /settings/logo` does (one image policy, `BrandingService.LOGO`, for both). `DELETE` clears it and keeps the file (documents are
    never deleted). Both bump the branch `version` and are audited as `core.branch.logo_changed` with was and now.
 3. **Who sets it.** The owner and the administrators: permission `core.branches.manage`, in the caller's branch scope (a branch out of
-   scope is a 404 before anything is stored). There is no new permission.
+   scope is a 404, and a closed branch a 409 `invalid_status_transition`, before anything is stored). There is no new permission.
 4. **Served like the business logo.** `GET /api/v1/branches/{branch_id}/logo?v=<document id>` is public and answers exactly as
    `/api/v1/branding/logo` does: the stored re-encoded type only (PNG or JPEG), the checksum as the ETag and a 304 on a match,
    `nosniff`, a sandboxing CSP, one hour of public caching with `Vary: Host`. It is public for the reason the business logo is: an image

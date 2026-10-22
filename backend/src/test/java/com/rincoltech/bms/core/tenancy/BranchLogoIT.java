@@ -267,6 +267,38 @@ class BranchLogoIT extends IntegrationTest {
         assertThat(upload(shop, png).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    @Test
+    void aClosedBranchIsRefusedALogo() {
+        UUID shop = t.secondBranch();
+        HttpHeaders h = staff(t, ADMIN, "*");
+        h.setIfMatch(http.exchange(
+                        "/api/v1/branches/" + shop,
+                        HttpMethod.GET,
+                        new HttpEntity<>(staff(t, ADMIN, "*")),
+                        JsonNode.class)
+                .getHeaders()
+                .getETag());
+        h.setContentType(MediaType.APPLICATION_JSON);
+        assertThat(http.exchange(
+                                "/api/v1/branches/" + shop + "/close",
+                                HttpMethod.POST,
+                                new HttpEntity<>(Map.of("reason", "Test closing"), h),
+                                JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<JsonNode> refused = upload(shop, ImageFixtures.png(200, 200, SHOP));
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+        assertThat(branch(shop).get("logo_url").isNull()).isTrue();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM documents WHERE tenant_id = ? AND subject_type = 'core.tenant'")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
     // ---- Between businesses ----------------------------------------------------------------------------
 
     @Test

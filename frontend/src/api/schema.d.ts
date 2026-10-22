@@ -17071,6 +17071,15 @@ export interface operations {
                     "application/json": components["schemas"]["Branch"];
                 };
             };
+            /** @description The branch is closed (invalid_status_transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
             /** @description Over 1 MB (file_too_large) */
             413: {
                 headers: {
