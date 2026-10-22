@@ -23,6 +23,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,14 +55,30 @@ class ReferralsIT extends IntegrationTest {
     UUID operatorId;
     String ip;
 
+    /** The platform default rule before the test; restored after it, so no test leaks its default into another. */
+    UUID defaultRuleBefore;
+
     @BeforeEach
     void setUp() {
+        defaultRuleBefore = (UUID) TestDatabase.owner()
+                .sql("SELECT default_rule_id FROM referral_settings")
+                .query()
+                .singleRow()
+                .get("default_rule_id");
         platform = Api.platform(http);
         String email = Api.email("ref-operator");
         operatorId = Api.platformUser(email);
         operator = platform.signIn(operatorId, email, Api.PASSWORD, null);
         int n = ADDRESS.getAndIncrement();
         ip = "203.0." + (n / 250) + "." + (n % 250 + 1);
+    }
+
+    @AfterEach
+    void restoreTheDefaultRule() {
+        TestDatabase.owner()
+                .sql("UPDATE referral_settings SET default_rule_id = ?")
+                .param(defaultRuleBefore)
+                .update();
     }
 
     // ---- Helpers ----------------------------------------------------------------------------
@@ -702,9 +719,6 @@ class ReferralsIT extends IntegrationTest {
                         .query(String.class)
                         .single())
                 .isEqualTo("Test: sent by mobile money");
-
-        // Back to no default, so later tests start from an empty rule.
-        rule("/api/v1/platform/referrals/default-rule", null, "Test: clean up");
     }
 
     /** A first payment rule pays once, on the referred business's first payment only; a cap stops a percent rule. */

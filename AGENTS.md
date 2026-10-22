@@ -206,8 +206,14 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   a referral's rule, manual lines, reversals and paid marks, each with a reason and audited; the app never pays. Tenant route
   `GET /referrals`. The PWA: Referrals under Business set-up (`/staff/setup/referrals`: the link, Copy, Share on WhatsApp, the list
   with status and money; tour `page-referrals`), and Referred by on the sign-up, filled from `?ref=`. The operator portal has no
-  referrals screen yet (the API is complete). Tests: `ReferralsIT`, `RlsIsolationIT`, `MigrationOrderIT`, `PermissionMatrixIT`,
-  `referrals.dom.test.tsx`, `referral-code.dom.test.tsx`.
+  referrals screen yet (the API is complete). After the review (ADR-069 decisions 9 to 13): the months used count only payments
+  since the referral started, one at a time under the subscription lock, leaving out `currency_differs` ones (kept in the closed
+  `referral_payment_outcomes`); a percent is rounded half up; 422 `referral_self` also when the applicant is an Owner or
+  administrator of the referrer (checked again at Activate, audited `platform.referral.refused_self`); a typed line needs an
+  Idempotency-Key; the referrer and rule PUTs need the operator's `totp_code`; a reversed unpaid line is not paid (409
+  `commission_line_reversed`); statuses `suspended` and `cancelled`, and `referrer_inactive` on lines; a returning applicant's code
+  goes on the open, still submitted application without a referrer. Tests: `ReferralsIT`, `ReferralServiceTest`,
+  `RlsIsolationIT`, `MigrationOrderIT`, `PermissionMatrixIT`, `referrals.dom.test.tsx`, `referral-code.dom.test.tsx`.
 - **Built (light and dark theme selector, issue #429):** PWA only, no migration, no API change, nothing stored on the server. A System, Light, Dark selector at the top right of the shell's header (every area), kept per device in `localStorage` (`bms.theme`), following the system setting by default, set before first paint by the blocking `frontend/public/theme-init.js` (the CSP is `script-src 'self'`), applied afterwards by `frontend/src/app/theme-mode.ts`; one `:root[data-theme='dark']` token set in `theme.css`, stylesheets draw with colour roles only (`design-guard.test.ts`), the tenant brand pair is untouched and its link and focus colours are derived again for dark, the `theme-color` meta follows the choice (the manifest stays light); the three welcome tours gain a "Light or dark" step (`admin-welcome` v16, `retail-sales` v9, `staff-welcome` v4). Token pairs in `docs/ui/design-system.md`; tests `theme-mode.dom.test.tsx`, `tokens.test.ts`.
 - **Built (theme button and Appearance, issue #452):** PWA only, no migration, no API change. The header `<select>` of #429 becomes an icon button (sun, moon, or a phone for the device choice, `aria-label` "Theme: <choice>") opening an accessible three item menu (`ThemeMenu` in `frontend/src/app/shell.tsx`); the Notifications and app page gains an Appearance radio group on the same `useThemeChoice`. The label of `system` is "Same as my phone" everywhere; `theme-mode.ts` is unchanged. Tour `page-notifications` v3. Tests `theme-mode.dom.test.tsx`, `notifications.dom.test.tsx`, `shell.test.tsx`.
 - **Built (slow movers on Stock health, issue #414, FR-RET-64):** reports only, no migration, no permission: `slow_movers` in
