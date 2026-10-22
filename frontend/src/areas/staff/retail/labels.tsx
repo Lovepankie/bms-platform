@@ -32,6 +32,7 @@ export function LabelsPage() {
   const [rows, setRows] = useState<LabelRow[]>([]);
   const [made, setMade] = useState<Barcode[]>([]);
   const [ready, setReady] = useState(false);
+  const [safe, setSafe] = useState(false);
   const missing = rows.filter((r) => !labelCode(r.product, made)).map((r) => r.product.id ?? '');
   const make = useMutation({
     mutationFn: () => (missing.length > 0 ? retail.generateBarcodes(missing) : Promise.resolve([])),
@@ -61,6 +62,14 @@ export function LabelsPage() {
         </div>
       ))}
       <Problem error={make.error} />
+      <p className="hint label-hint" data-testid="label-stock">
+        Print on A4 label sheets of 3 by 8 labels, each 70 by 37 mm, with no margin around the sheet. In the print dialog choose no
+        margins (zero margin) and actual size (100%).
+      </p>
+      <label className="label-hint">
+        <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={safe} onChange={(e) => setSafe(e.target.checked)} />
+        My printer cannot print to the edge: keep 4 mm clear inside each label
+      </label>
       <p>
         <button type="button" className="rt-primary" data-tour="labels-make" disabled={rows.length === 0 || make.isPending} onClick={() => make.mutate()}>
           {make.isPending ? 'Making' : 'Make the labels'}
@@ -70,7 +79,7 @@ export function LabelsPage() {
         </button>
       </p>
       {sheet.length > 0 && (
-        <div className="label-sheet" data-testid="label-sheet" aria-label="Label sheet">
+        <div className={safe ? 'label-sheet label-safe' : 'label-sheet'} data-testid="label-sheet" aria-label="Label sheet">
           {sheet.map((l, i) => (
             <div key={`${l.product.id}-${i}`} className="label">
               <span className="label-name">{l.product.description}</span>

@@ -51,7 +51,7 @@ or Bluetooth scanner at the till, many have only phones.
 7. **Labels for items without a code.** `POST /retail/products/barcodes/generate` makes a Code 128 code `IN` plus eight digits from the
    business's sequence (`tenant_sequences`, key `retail_barcode`) for each item that has no made code; an item keeps the one it has.
    The Barcode labels page prints an A4 sheet of 3 by 8 labels of 70 by 37 mm with the name, the price and the barcode, drawn in the
-   browser as SVG (Code 128 set B) and printed with the browser's print dialog; no PDF is stored.
+   browser as SVG (Code 128 set B) and printed with the browser's print dialog at zero margin (the page states the stock, and a 4 mm safe margin inside each label is an option for a printer that cannot print to the edge); no PDF is stored.
 8. **Who may do what.** Reading and scanning need `retail.stock.read` (every seller, storekeeper and administrator holds it). Adding,
    removing and making barcodes, and the labels page, need `retail.catalogue.manage` (administrators). No new permission.
 9. **The import file** takes the optional columns `barcode` (synonyms `barcodes`, `ean`, `upc`) and `pack barcode`, several codes in a

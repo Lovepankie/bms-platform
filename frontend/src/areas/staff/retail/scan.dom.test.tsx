@@ -358,5 +358,9 @@ describe('FR-RET-68 the label sheet', () => {
     expect(labels[0]?.querySelector('svg rect')).not.toBeNull();
     expect(screen.getAllByRole('img', { name: /^Barcode IN\d{8}$/ })).toHaveLength(3);
     expect((screen.getByRole('button', { name: 'Print' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('label-stock').textContent).toContain('70 by 37 mm');
+    expect(screen.getByTestId('label-stock').textContent).toContain('zero margin');
+    fireEvent.click(screen.getByRole('checkbox', { name: /keep 4 mm clear inside each label/ }));
+    expect(screen.getByTestId('label-sheet').classList.contains('label-safe')).toBe(true);
   });
 });

@@ -901,21 +901,41 @@ th[scope='rowgroup'] .cat-head {
   text-align: center;
 }
 
+/* For a printer that cannot print to the edge of the paper: 4 mm kept clear inside every label. */
+.label-sheet.label-safe .label {
+  padding: 4mm;
+}
+
 @media print {
-  body:has(.label-sheet) * {
-    visibility: hidden;
+  /* Only the label sheet prints. Everything that neither is the sheet, holds it nor sits in it leaves the layout
+     (display none, not visibility hidden, which keeps its space), and the elements that hold it lose their own margins,
+     padding and position, so the shell's menu and header can never push the 70 by 37 mm grid off the label stock. */
+  body:has(.label-sheet) *:not(.label-sheet, .label-sheet *, :has(.label-sheet)) {
+    display: none !important;
   }
 
-  body:has(.label-sheet) .label-sheet,
-  body:has(.label-sheet) .label-sheet * {
-    visibility: visible;
+  body:has(.label-sheet),
+  body:has(.label-sheet) *:has(.label-sheet) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+    overflow: visible !important;
   }
 
   .label-sheet {
-    position: absolute;
-    top: 0;
-    left: 0;
+    max-width: none;
     overflow: visible;
+  }
+
+  .label-hint {
+    display: none;
   }
 
   .label {
