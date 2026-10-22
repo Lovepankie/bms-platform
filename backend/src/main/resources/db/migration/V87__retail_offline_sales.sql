@@ -4,8 +4,9 @@
 -- and flagged in retail_sale_clashes; a sale the server refused is reported by the device into retail_offline_failures, where a
 -- manager has it sent again or discards it. One permission, retail.offline.resolve, for the administrators and the Supervisor.
 --
--- Numbered V87: main is at V80, and V81 to V86 are claimed by the open lending (#270, #271, #272, #290) and payments (#315,
--- #318) pull requests. Flyway runs with outOfOrder off; renumbered at merge if needed.
+-- Numbered V87: main is at V83 (V80 feedback, V81 to V83 lending arrears, waivers and collections); V84 is claimed by the
+-- lending reminders (#227) and V85 and V86 by payments (#315, #318). Flyway runs with outOfOrder off; renumbered at merge if
+-- needed.
 --
 -- Expand only, safe on a populated database. Four nullable or constant-default columns on retail_sales, a partial unique
 -- index, a small trigger that keeps the four columns as written, three new tables and one permission. No existing row changes.
