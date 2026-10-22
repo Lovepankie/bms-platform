@@ -285,6 +285,10 @@ class ExistingLoanImport {
         if (p.disbursed == null) {
             return "The disbursement date must be year-month-day, for example 2026-03-31.";
         }
+        // The product's terms in force on the disbursement date (ADR-071 decision 2), as the form takes them.
+        p.product = products.inForceOn(
+                        p.product.productId(), p.disbursed, tenant.profile().timezone())
+                .orElse(p.product);
         String term = cell(cells, columns, "term").strip();
         if (!term.isEmpty()) {
             if (!term.matches("\\d{1,4}") || Integer.parseInt(term) < 1) {

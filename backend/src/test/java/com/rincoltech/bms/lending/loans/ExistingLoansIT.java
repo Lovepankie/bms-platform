@@ -384,6 +384,71 @@ class ExistingLoansIT extends LoanFixtures {
         assertThat(errorCodes(below)).containsExactly("agreed_total_minor:agreed_total_below_principal");
     }
 
+    /**
+     * The product's terms in force on the disbursement date: version 1 (1000 bp a month) dated 100 days ago, version 2
+     * (500 bp) 50 days ago. A loan disbursed 60 days ago takes version 1, one disbursed 45 days ago version 2, and one
+     * disbursed before the product existed its first version.
+     */
+    @Test
+    void frExl02_theProductVersionInForceOnTheDisbursementDateApplies() {
+        String product = product("EXL11", Map.of());
+        String v1 = TestDatabase.owner()
+                .sql("SELECT current_version_id::text FROM lending_loan_products WHERE id = ?::uuid")
+                .param(product)
+                .query(String.class)
+                .single();
+        HttpHeaders h = as(UUID.randomUUID(), adminPerms, "*", null);
+        String etag = send(HttpMethod.GET, "/api/v1/lending/loan-products/" + product, h, null)
+                .getHeaders()
+                .getETag();
+        Map<String, Object> terms = new LinkedHashMap<>(Map.of(
+                "interest_method", "flat", "interest_rate_bp", 500, "rate_unit", "per_month", "term_unit", "month"));
+        terms.put("min_term_count", 1);
+        terms.put("max_term_count", 6);
+        terms.put("default_term_count", 3);
+        terms.put("repayment_pattern", "instalments");
+        terms.put("instalment_frequency", "monthly");
+        terms.put("min_principal_minor", 100_000);
+        terms.put("max_principal_minor", 5_000_000);
+        terms.put("allocation_order", List.of("principal", "interest", "fee", "penalty"));
+        ResponseEntity<JsonNode> v2 = send(
+                HttpMethod.POST,
+                "/api/v1/lending/loan-products/" + product + "/versions",
+                as(UUID.randomUUID(), adminPerms, "*", etag),
+                terms);
+        assertThat(v2.getStatusCode().is2xxSuccessful()).as("%s", v2.getBody()).isTrue();
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE lending_loan_product_versions SET created_at = now() - interval '100 days' WHERE id = ?::uuid")
+                .param(v1)
+                .update();
+        TestDatabase.owner()
+                .sql("UPDATE lending_loan_product_versions SET created_at = now() - interval '50 days'"
+                        + " WHERE product_id = ?::uuid AND id <> ?::uuid")
+                .params(product, v1)
+                .update();
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        String member = borrower(16);
+        assertThat(interestOfItem1(check(request(member, product, 1_200_000, today.minusDays(60), List.of()))))
+                .as("version 1 was in force")
+                .isEqualTo(120_000);
+        assertThat(interestOfItem1(check(request(member, product, 1_200_000, today.minusDays(45), List.of()))))
+                .as("version 2 was in force")
+                .isEqualTo(60_000);
+        assertThat(interestOfItem1(check(request(member, product, 1_200_000, today.minusDays(200), List.of()))))
+                .as("before the product existed: its first version")
+                .isEqualTo(120_000);
+    }
+
+    static long interestOfItem1(ResponseEntity<JsonNode> checked) {
+        assertThat(checked.getStatusCode()).as("%s", checked.getBody()).isEqualTo(HttpStatus.OK);
+        return checked.getBody()
+                .get("schedule")
+                .get(0)
+                .get("interest_due_minor")
+                .asLong();
+    }
+
     /** Repaid in full on the register: closed on approval, on the day of its last repayment, with no opening entry. */
     @Test
     void frExl05_aLoanRepaidInFullComesInClosedWithNoOpeningEntry() {

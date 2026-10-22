@@ -30,7 +30,9 @@ fit every lending business, not one register.
    what it brings into the books was never seen by the app. The maker may withdraw it (`cancelled`) or ask again after
    a rejection, an expiry or a stale request. A check (`dry_run`) shows the outcome without saving anything.
 2. **The real schedule.** The schedule is built from the real disbursement date with the loan's terms, exactly as a
-   disbursement on that date builds it (R-TERM with R-FLAT or R-DECL, fees added to the loan included). When the
+   disbursement on that date builds it (R-TERM with R-FLAT or R-DECL, fees added to the loan included), with the
+   product version in force on that date: the latest version created by its end, or the product's first version when
+   the product was set up in the app after it. When the
    register records an agreed total instead of a rate, the principal and the difference are each spread as R-FLAT
    spreads them, with no fee. Fees deducted from the proceeds or paid upfront were settled in cash before go-live and
    are not recorded. The past repayments are applied in value date order (then the order entered), each by the

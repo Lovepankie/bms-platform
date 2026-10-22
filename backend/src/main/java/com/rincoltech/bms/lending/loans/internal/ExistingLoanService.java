@@ -153,7 +153,11 @@ class ExistingLoanService {
                 .filter(m -> principal.may(PERMISSION, m.branchId()))
                 .orElseThrow(() -> ApiException.validation(
                         List.of(new FieldProblem("member_id", "unknown_member", "No such member in your scope."))));
-        ProductTerms product = products.current(r.productId())
+        // The terms in force on the disbursement date (ADR-071 decision 2), not today's.
+        ProductTerms product = products.inForceOn(
+                        r.productId(),
+                        r.disbursementDate(),
+                        currentTenant.profile().timezone())
                 .orElseThrow(() -> ApiException.validation(
                         List.of(new FieldProblem("product_id", "unknown_product", "No such loan product."))));
         List<BringIn.Line> lines = new ArrayList<>();

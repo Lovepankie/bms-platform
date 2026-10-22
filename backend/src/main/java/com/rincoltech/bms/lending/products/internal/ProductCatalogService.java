@@ -4,6 +4,10 @@ import com.rincoltech.bms.lending.products.ProductCatalog;
 import com.rincoltech.bms.lending.products.ScheduleCalculator;
 import com.rincoltech.bms.lending.products.internal.ProductApi.Version;
 import com.rincoltech.bms.lending.products.internal.ProductRepository.Row;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +37,21 @@ class ProductCatalogService implements ProductCatalog {
     @Transactional(readOnly = true)
     public Optional<ProductTerms> currentByCode(String code) {
         return repo.findByCode(code).flatMap(row -> terms(row, row.currentVersionId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ProductTerms> inForceOn(UUID productId, LocalDate date, ZoneId zone) {
+        Instant end = date.plusDays(1).atStartOfDay(zone).toInstant();
+        return jdbc.sql("""
+                        SELECT id FROM lending_loan_product_versions WHERE product_id = ?
+                         ORDER BY CASE WHEN created_at < ? THEN version_no END DESC NULLS LAST, version_no
+                         LIMIT 1
+                        """)
+                .params(productId, Timestamp.from(end))
+                .query(UUID.class)
+                .optional()
+                .flatMap(versionId -> repo.find(productId).flatMap(row -> terms(row, versionId)));
     }
 
     @Override
