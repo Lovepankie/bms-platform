@@ -53,7 +53,9 @@ never change data, never show one business another's rows, and never hold a larg
    ends the week as failed with its code. Turning the switch off stops the next week; turning it on mid-week sends that week's.
 7. **Read only, and served to a business whose subscription has ended.** Making the workbook writes only the run's own rows and
    file. A suspended tenant answers 423 to every write except two reads that are a `POST`: asking for the workbook and the signed
-   address of a file; the runner's three definer functions (V49) now include suspended tenants. The weekly email follows the
+   address of a file; the runner's three definer functions (V49) now include suspended tenants. The nightly expiry of report
+   files no longer walks the active tenants only: `app_tenants_with_expired_report_files` lists every tenant with a file past
+   its 30 days, whatever its status, so a suspended or ended business's workbook is deleted on time like any other. The weekly email follows the
    platform's active tenants only: an ended business keeps "Download my data" but no longer gets the Monday email.
 8. **The card.** Business set-up shows "Download my data" to holders of the permission: when the business's data was last
    exported (by anyone) and last emailed, the caller's newest workbook (preparing, ready to save until its expiry, or why it
@@ -69,6 +71,7 @@ the 30 day expiry, the RLS and the memory bound are the ones already tested.
 attachment of up to 5 MiB goes through the mail server every week for each business with the switch on.
 
 **Tests:** `DataExportIT` (the shop and lender sheets and columns, business time and whole shillings, formula injection, one
-business never sees another's rows or file, the permission, a suspended business still downloads and changes nothing, the weekly
+business never sees another's rows or file, the permission, a suspended business still downloads and changes nothing, an ended
+business's file is deleted after its 30 days, the weekly
 job queues once and emails once and stops when switched off, a week with no Owner is skipped once) and `DataExportSheetsTest`
 (the year split and its numbered parts, the business date and time of a moment).

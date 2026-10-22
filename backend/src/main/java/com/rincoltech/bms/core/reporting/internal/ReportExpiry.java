@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.reporting.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
+import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.core.reporting.internal.RunStore.Expired;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.time.Instant;
@@ -12,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -43,18 +45,50 @@ class ReportExpiry {
     private final AuditLog audit;
     private final BusinessClock clock;
     private final TransactionTemplate transaction;
+    private final TenantJobs tenantJobs;
+    private final JdbcClient jdbc;
 
     ReportExpiry(
             RunStore store,
             Documents documents,
             AuditLog audit,
             BusinessClock clock,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions,
+            TenantJobs tenantJobs,
+            JdbcClient jdbc) {
         this.store = store;
         this.documents = documents;
         this.audit = audit;
         this.clock = clock;
         this.transaction = new TransactionTemplate(transactions);
+        this.tenantJobs = tenantJobs;
+        this.jdbc = jdbc;
+    }
+
+    /**
+     * The nightly pass: every business with a file past its 30 days, whatever its status. A business that was suspended or
+     * whose subscription ended keeps its data, but not its report files past their time (ADR-038 decision 7, ADR-074), so
+     * the list comes from {@code app_tenants_with_expired_report_files} and not from the active tenants. Not
+     * {@code forEachActiveTenant}: that wraps each tenant in one transaction, and the expiry calls storage.
+     */
+    int expireEveryTenant() {
+        int expired = 0;
+        int failures = 0;
+        for (UUID tenantId : jdbc.sql("SELECT app_tenants_with_expired_report_files(?)")
+                .param(java.sql.Timestamp.from(clock.now()))
+                .query(UUID.class)
+                .list()) {
+            try {
+                expired += tenantJobs.callAs(tenantId, this::expireDue);
+            } catch (RuntimeException e) {
+                failures++;
+                log.error("report file expiry failed for tenant {}", tenantId, e);
+            }
+        }
+        if (failures > 0) {
+            throw new IllegalStateException("report file expiry failed for " + failures + " tenant(s)");
+        }
+        return expired;
     }
 
     /** Deletes the files due now for the bound tenant, outside any transaction; returns how many runs were expired. */

@@ -362,6 +362,40 @@ class DataExportIT extends LendingBookSupport {
                 .isEqualTo(423);
     }
 
+    @Test
+    void anEndedBusinessesFileIsStillDeletedWhenItsThirtyDaysArePast() throws Exception {
+        Shop s = shop("DXE");
+        UUID user = s.api().userId();
+        JsonNode run = export(s.t(), user);
+        assertReady(run, "the data export");
+        // The subscription ends: the business is read only (FR-TEN-06) and drops out of the active tenants.
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                .param(s.t().tenantId())
+                .update();
+        String documentId = run.get("document_id").asString();
+
+        clock.set(TestReports.START.plus(java.time.Duration.ofDays(29)));
+        expiry.expireEveryTenant();
+        assertThat(count("SELECT count(*) FROM report_runs WHERE id = ? AND files_deleted_at IS NULL", uuid(run)))
+                .as("day 29: kept")
+                .isEqualTo(1);
+
+        clock.set(TestReports.START.plus(java.time.Duration.ofDays(31)));
+        expiry.expireEveryTenant();
+        assertThat(count("SELECT count(*) FROM report_runs WHERE id = ? AND files_deleted_at IS NOT NULL", uuid(run)))
+                .as("day 31: the ended business's file is deleted like any other")
+                .isEqualTo(1);
+        ResponseEntity<JsonNode> gone =
+                call(HttpMethod.POST, "/api/v1/documents/" + documentId + "/download-url", s.t(), user, PERM);
+        assertThat(gone.getStatusCode().value()).isEqualTo(410);
+        assertThat(gone.getBody().get("code").asString()).isEqualTo("report_expired");
+    }
+
+    static UUID uuid(JsonNode run) {
+        return UUID.fromString(run.get("id").asString());
+    }
+
     // ---- the weekly email --------------------------------------------------------------------------
 
     long count(String sql, Object... params) {

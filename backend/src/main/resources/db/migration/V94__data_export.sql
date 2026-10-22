@@ -1,9 +1,9 @@
 -- V94: download my data (issue #334 step 1, ADR-074). V80 to V83 are on main and V84 to V93 are claimed by open pull
 -- requests; Flyway runs with outOfOrder off, so this number is kept only while it stays above every merged one.
 --
--- Expand only, safe on a populated database. One permission, two new tenant tables, and the three runner functions of V49
+-- Expand only, safe on a populated database. One permission, two new tenant tables, the three runner functions of V49
 -- replaced so that a business whose subscription has ended (a suspended tenant, read only under FR-TEN-06) still gets its
--- own workbook made. No existing table, column, constraint or row changes.
+-- own workbook made, and a new function so that its files still expire. No existing table, column, constraint or row changes.
 --
 -- Locks, said plainly. Flyway runs this file in one transaction. CREATE TABLE with foreign keys takes SHARE ROW EXCLUSIVE
 -- on tenants, users and report_runs until the commit (reads go on; the new tables are empty, so the cost is the wait for the
@@ -89,6 +89,18 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
      WHERE r.status = 'running' AND t.status IN ('active', 'suspended')
        AND coalesce(r.heartbeat_at, r.started_at) < p_cutoff
 $$;
+
+-- The nightly expiry of report files (ADR-038 decision 7) used to walk the active tenants only, so the files of a suspended
+-- business, or of one whose subscription has ended, were never deleted. Now it walks the tenants that have a file due,
+-- whatever their status. Ids only, executable by bms_app only.
+CREATE FUNCTION app_tenants_with_expired_report_files(p_now timestamptz) RETURNS SETOF uuid
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+    SELECT DISTINCT r.tenant_id FROM report_runs r
+     WHERE r.status = 'ready' AND r.files_deleted_at IS NULL AND r.expires_at <= p_now
+     ORDER BY r.tenant_id
+$$;
+REVOKE ALL ON FUNCTION app_tenants_with_expired_report_files(timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_tenants_with_expired_report_files(timestamptz) TO bms_app;
 
 -- ---------------------------------------------------------------------------------------------
 -- Permission (chapter 8 section 8.3.2, ADR-074). A read of the whole business across every branch, so the administrators

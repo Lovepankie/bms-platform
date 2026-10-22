@@ -3,7 +3,6 @@ package com.rincoltech.bms.core.reporting.internal;
 import com.github.kagkarlsson.scheduler.task.helper.RecurringTask;
 import com.github.kagkarlsson.scheduler.task.helper.Tasks;
 import com.github.kagkarlsson.scheduler.task.schedule.Schedules;
-import com.rincoltech.bms.core.jobs.TenantJobs;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -15,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
  * The report jobs (ADR-008, ADR-038): the runner every 15 seconds and the nightly expiry of finished files. The
@@ -51,27 +49,11 @@ class ReportJobs {
                 .execute((instance, context) -> weekly.tick());
     }
 
-    /** After the runner's own job: the files that passed their 30 days go, tenant by tenant. */
+    /** After the runner's own job: the files that passed their 30 days go, tenant by tenant, whatever the tenant's status. */
     @Bean
-    RecurringTask<Void> reportExpiryTask(TenantJobs tenantJobs, ReportExpiry expiry, JdbcClient jdbc) {
+    RecurringTask<Void> reportExpiryTask(ReportExpiry expiry) {
         return Tasks.recurring(EXPIRY, Schedules.daily(BusinessClock.DEFAULT_ZONE, LocalTime.of(3, 30)))
-                .execute((instance, context) -> {
-                    // Not forEachActiveTenant: that wraps each tenant in one transaction, and the expiry calls storage.
-                    int failures = 0;
-                    for (java.util.UUID tenantId : jdbc.sql("SELECT app_list_active_tenants()")
-                            .query(java.util.UUID.class)
-                            .list()) {
-                        try {
-                            tenantJobs.callAs(tenantId, expiry::expireDue);
-                        } catch (RuntimeException e) {
-                            failures++;
-                            log.error("report file expiry failed for tenant {}", tenantId, e);
-                        }
-                    }
-                    if (failures > 0) {
-                        throw new IllegalStateException("report file expiry failed for " + failures + " tenant(s)");
-                    }
-                });
+                .execute((instance, context) -> expiry.expireEveryTenant());
     }
 
     /**

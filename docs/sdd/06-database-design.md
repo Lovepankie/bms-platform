@@ -765,7 +765,9 @@ beat) is older than the cutoff. The migration sets `lock_timeout` to five second
 `documents`.
 
 Migration V94 (issue #334, ADR-074) replaces the three definer functions so that they also count and name suspended tenants:
-a business whose subscription has ended still gets the workbook it asks for. Signatures, owners and grants are unchanged.
+a business whose subscription has ended still gets the workbook it asks for. Signatures, owners and grants are unchanged. It
+adds `app_tenants_with_expired_report_files(now)`, the tenants with a ready run whose file is past its expiry and not yet
+deleted, whatever the tenant's status: the nightly expiry walks it, so a suspended or ended business's files go on time too.
 
 ### `data_export_settings` (RLS)
 
