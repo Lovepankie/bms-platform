@@ -3,8 +3,10 @@
 -- checks on lending_loans, one new table, one permission. No existing row changes: every check holds for a row with
 -- the new columns null, and the widened status check accepts every status a row can hold today.
 --
--- V81 to V90 are claimed by open branches (lending V81 to V84, payments V85 and V86, offline sales V87, shop logos V88,
--- referrals V89, barcodes V90), so this takes V91.
+-- Numbering: main holds V80 to V84 (lending V81 to V84, the last the arrears notices of #290). V91 is an ordered claim:
+-- payments (#315 and #318, which hold V84 and V85 on their branches today and renumber to V85 and V86 at merge),
+-- offline sales V87, shop logos V88, referrals V89 and barcodes V90 come first, so this keeps V91 and is renumbered
+-- only if one of them merges under another number.
 
 -- ---------------------------------------------------------------------------------------------
 -- lending_loans: the brought_in status (recorded, waiting for its checker; it counts nowhere until approved) and what
