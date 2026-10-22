@@ -199,6 +199,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
   const [addingBuyer, setAddingBuyer] = useState(draft.newBuyerName !== '');
   // What the customer handed over (cash only): kept in this form's state, never in the draft, so it goes with the form (#346).
   const [received, setReceived] = useState('');
+  // Clearing a sale whose answer was lost is asked first: it may already be recorded (ADR-067 decision 5).
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS) && !offlineMode;
   const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: !offlineMode && (draft.method === 'credit' || pricesOn) });
@@ -287,6 +289,13 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       onQueued?.(item);
     },
   });
+  const clear = () => {
+    discard();
+    setAddingBuyer(false);
+    setReceived('');
+    setConfirmClear(false);
+    save.reset();
+  };
   // A credit sale refused for the buyer's limit: say by how much, and offer the override to whoever holds it.
   const overBy = accountsOn && draft.method === 'credit' ? exceededBy(save.error) : null;
   const canOverride = holdsAt(me, CREDIT_OVERRIDE, branchId);
@@ -483,10 +492,23 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       <button type="submit" className="rt-primary" disabled={(problem !== null && !locked) || save.isPending || keep.isPending} data-tour="sale-save">
         {save.isPending || keep.isPending ? 'Saving' : offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : 'Save sale'}
       </button>
-      {draft.lines.length > 0 && !save.isPending && (
-        <button type="button" onClick={() => { discard(); setAddingBuyer(false); setReceived(''); save.reset(); }}>
+      {draft.lines.length > 0 && !save.isPending && !confirmClear && (
+        <button type="button" onClick={() => (draft.sent ? setConfirmClear(true) : clear())}>
           Clear this sale
         </button>
+      )}
+      {confirmClear && (
+        <div role="alert" className="alert alert-warning" data-testid="confirm-clear">
+          <p>This sale may already be saved on the server. If you clear it and sell again, the customer may be charged twice. Clear it?</p>
+          <div className="cluster">
+            <button type="button" className="btn-danger" onClick={clear}>
+              Clear it
+            </button>
+            <button type="button" onClick={() => setConfirmClear(false)}>
+              Keep it
+            </button>
+          </div>
+        </div>
       )}
     </form>
   );

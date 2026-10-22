@@ -184,5 +184,15 @@ describe('Record a sale offline', () => {
     await screen.findByTestId('lost-answer');
     expect(screen.queryByRole('button', { name: 'Keep it on this phone' })).toBeNull();
     expect(offline.engine.snapshot().items).toHaveLength(0);
+
+    // Clearing it is asked first: it may already be recorded.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear this sale' }));
+    expect((await screen.findByTestId('confirm-clear')).textContent).toContain('may already be saved');
+    fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+    expect(screen.queryByTestId('confirm-clear')).toBeNull();
+    expect(screen.getByTestId('lost-answer')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear this sale' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear it' }));
+    await waitFor(() => expect(screen.queryByTestId('lost-answer')).toBeNull());
   });
 });
