@@ -391,6 +391,10 @@ class SalesService {
             repo.insert(header, r.clientSaleId() == null ? null : requestHash(r));
         } catch (DuplicateKeyException e) {
             // ADR-067: another send of the same client sale id is being recorded right now; its retry finds the sale.
+            // Any other unique violation is not that race and keeps its own error.
+            if (r.clientSaleId() == null || !String.valueOf(e.getMessage()).contains("retail_sales_client_sale_id")) {
+                throw e;
+            }
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "client_sale_in_progress",
