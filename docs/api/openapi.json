@@ -948,6 +948,22 @@
           }
         }
       },
+      "ChargeWaiverRequest" : {
+        "description" : "FR-ARR-04: amount_minor left out waives all that is waivable",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "CloseBranchRequest" : {
         "description" : "The reason is required only when the branch still holds stock or has transfers on their way (422 branch_close_needs_reason says which).",
         "properties" : {
@@ -4147,6 +4163,55 @@
           "written_off_on" : {
             "format" : "date",
             "type" : "string"
+          }
+        }
+      },
+      "LoanCharge" : {
+        "description" : "R-PEN: one charge on a schedule item, and what can still be waived",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "business_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "charge_type" : {
+            "description" : "penalty or fee",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "item_no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "period_no" : {
+            "description" : "The penalty period; null for a fee",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "waivable_minor" : {
+            "description" : "What a waiver may still take: unwaived and not yet paid",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "waived_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "LoanChargeList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanCharge"
+            },
+            "type" : "array"
           }
         }
       },
@@ -24392,6 +24457,87 @@
           }
         },
         "summary" : "Cancel an application with a reason",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/charges" : {
+      "get" : {
+        "operationId" : "listLoanCharges",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanChargeList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The loan's penalty charges with what each still allows a waiver to take (R-PEN)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/charges/{charge_id}/waive" : {
+      "post" : {
+        "operationId" : "requestLoanChargeWaiver",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "charge_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChargeWaiverRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request a waiver of all or part of a penalty, with a reason (FR-ARR-04)",
         "tags" : [ "lending-loans" ]
       }
     },
