@@ -8,6 +8,10 @@
  * (issue #447, ADR-065, through the public port of {@code core.feedback}). Only platform operators reach it. It changes tenants through
  * the SECURITY DEFINER platform functions of migration V2 (ADR-016), and acts inside one tenant
  * only through {@code TenantContext.callAs}, so the transaction manager still binds that tenant.
+ * Subscription billing (issue #480, ADR-075): the reminders to the Owner and the overdue move of a nightly job, the operator's
+ * grace period and list of businesses due for suspension (nothing is suspended automatically), the receipt of every payment,
+ * mailed through the outbox of {@code core.notifications} and rendered by {@code core.documents}, and the Owner's Plan and
+ * billing page on the business's own host ({@code /api/v1/billing}).
  * Public API: {@link com.rincoltech.bms.core.platform.TenantProvisioning}, the one tenant creation
  * path, which onboarding's Activate uses (ADR-024).
  */
@@ -20,7 +24,10 @@
             "core.identity",
             "core.audit",
             "core.operations",
-            "core.feedback"
+            "core.feedback",
+            "core.notifications",
+            "core.documents",
+            "core.jobs"
         })
 package com.rincoltech.bms.core.platform;
 

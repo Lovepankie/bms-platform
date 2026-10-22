@@ -48,6 +48,7 @@ class BusinessService {
     private final Idempotency idempotency;
     private final BusinessClock clock;
     private final TransactionTemplate transactions;
+    private final BillingService billing;
 
     BusinessService(
             JdbcClient jdbc,
@@ -56,7 +57,8 @@ class BusinessService {
             PlatformAuditLog audit,
             Idempotency idempotency,
             BusinessClock clock,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            BillingService billing) {
         this.jdbc = jdbc;
         this.platform = platform;
         this.priceBook = priceBook;
@@ -64,6 +66,7 @@ class BusinessService {
         this.idempotency = idempotency;
         this.clock = clock;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.billing = billing;
     }
 
     record Recorded(PaymentResponse payment, boolean replayed) {}
@@ -357,6 +360,8 @@ class BusinessService {
                             data.put("period_end", payment.periodEnd().toString());
                             data.put("before", tenant.subscriptionStatus());
                             data.put("reason", request.reason().trim());
+                            // Issue #480: the receipt is numbered and its email queued in the payment's transaction.
+                            data.put("receipt_no", billing.issueReceipt(tenant, payment, today));
                             audit.record("platform.tenant.payment_recorded", operator, tenantId, data);
                             return payment;
                         })));

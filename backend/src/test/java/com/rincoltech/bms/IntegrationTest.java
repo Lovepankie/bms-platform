@@ -22,10 +22,19 @@ import org.springframework.test.context.TestPropertySource;
  * <p>Nor does any schedule the nightly arrears run ({@code lending.loan-arrears}): a tick at a quarter hour would claim
  * a business date, write {@code lending_arrears_runs} rows and charge penalties on the loans of whatever test was
  * running. The lending tests that need a run call {@code ArrearsRun} themselves.
+ *
+ * <p>Nor the subscription billing run ({@code core.platform.subscription-billing}, issue #480): a tick would move the
+ * subscriptions of other tests' businesses to past_due and queue reminders. {@code BillingAutomationIT} calls the run
+ * itself.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@TestPropertySource(properties = {"bms.reports.runner-enabled=false", "bms.lending.arrears-job-enabled=false"})
+@TestPropertySource(
+        properties = {
+            "bms.reports.runner-enabled=false",
+            "bms.lending.arrears-job-enabled=false",
+            "bms.platform.billing-job-enabled=false"
+        })
 @AutoConfigureTestRestTemplate
 public abstract class IntegrationTest {
 
