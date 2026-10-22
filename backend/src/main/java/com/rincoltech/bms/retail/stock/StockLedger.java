@@ -30,6 +30,22 @@ public interface StockLedger {
     List<UUID> record(LocalDate businessDate, List<Movement> movements);
 
     /**
+     * As {@link #record}, for a sale recorded offline (ADR-067): its money was taken while the phone had no network, so a
+     * guarded movement that would take a balance below zero, or below what customer orders keep, is written anyway and
+     * returned as a shortfall for the caller to flag. Nothing else differs.
+     */
+    List<Shortfall> recordAllowingShortfall(LocalDate businessDate, List<Movement> movements);
+
+    /**
+     * A guarded movement written although the balance did not cover it (ADR-067).
+     *
+     * @param index the movement's position in the list given
+     * @param before the balance before the movement
+     * @param reserved what customer orders kept of it
+     */
+    record Shortfall(int index, UUID branchId, UUID productId, BigDecimal before, BigDecimal reserved) {}
+
+    /**
      * Keeps stock aside for a customer order (issue #385, ADR-052): each hold raises the balance row's {@code reserved_qty} under
      * the row's lock, rows locked in branch and product order like {@link #record}. A hold larger than what is free (the balance
      * less what other orders keep) is refused with 422 {@code insufficient_stock}, so two orders for the last unit are serialised

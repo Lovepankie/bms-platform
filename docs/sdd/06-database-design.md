@@ -1914,6 +1914,25 @@ Credit buyers: `name varchar(200)`, `contact varchar(100)` kept as entered, `cre
 | `status` | text | `completed` or `voided`; `voided_at`, `voided_by`, `void_reason` |
 | `sale_entry_id`, `cost_entry_id` | uuid | The two journal entries |
 | `historical` | boolean | Imported history posts no journal (FR-RET-12) |
+| `client_sale_id` | uuid | ADR-067, V87: the id the device made for the sale; unique per tenant (`retail_sales_client_sale_id`, partial on not null), so a send after the key expired is the same sale |
+| `occurred_at` | timestamptz | ADR-067: when the sale happened on the device, as recorded (a clock more than five minutes ahead is recorded as the server's now) |
+| `recorded_offline` | boolean | ADR-067: the sale was taken with no network; needs `client_sale_id` and `occurred_at` (CHECK). The three columns never change (trigger `retail_sales_offline_guard`) |
+
+Built: retail sales offline (issue #458, ADR-067, migration `V87`; renumbered at merge if needed). Besides the three columns
+above, two tables, each with forced row-level security, composite foreign keys on the tenant and no delete grant.
+`retail_sale_clashes` holds what changed while an offline sale was away: `sale_id`, `branch_id`, `line_no` and `product_id`
+(null together for `clock_ahead`), `kind` (`stock_short`, `item_inactive`, `price_changed`, `below_cost`, `clock_ahead`),
+`words` (the plain sentence, never a cost), and `resolved_at`, `resolved_by`, `resolution_note` (at least five characters),
+set together once (the application role may update only those three; a guard trigger refuses a second resolve); indexes by
+sale and on the open ones by branch. `retail_offline_failures` is a sale the server refused, reported by the device of the
+person who made it: `client_sale_id` (unique per tenant), `branch_id`, `made_by`, `occurred_at`, `payment_method`,
+`total_minor`, `request` (the sale request as the device holds it, jsonb), `code`, `message`, `status` (`open`, `retry`,
+`discarded`, `recorded`; a guard trigger allows open to retry, discarded or recorded, and retry to open, discarded or
+recorded, and nothing from the last two), `decided_by`, `decided_at`, `discard_reason` (exactly when discarded) and `sale_id`
+(exactly when recorded). A sale recorded with a client sale id closes its open or retry report in the same transaction. The
+permission `retail.offline.resolve` is seeded for `tenant_admin` and `retail_supervisor`. `ADD COLUMN` with a constant
+default takes an access exclusive lock on `retail_sales` to the commit (no rewrite); the unique index is partial and empty;
+`lock_timeout` is five seconds.
 
 The sales summary (issue #328, `GET /retail/sales/summary`) reads this table only, with no migration: one grouped query per
 level (`date_trunc` of `sale_date` to year, month or day, counts and sums by status and payment method, and the sale's

@@ -222,6 +222,40 @@ class PushPublishersIT extends IntegrationTest {
         assertThat(told("retail.sale_voided")).containsExactlyInAnyOrder("user:" + makerId, "user:" + alice);
     }
 
+    /**
+     * ADR-067: a sale recorded offline with a clash tells the administrators and the Supervisors of that branch with a device,
+     * once per sale; a Supervisor of another branch is not told, and a sale without a clash tells nobody.
+     */
+    @Test
+    void anOfflineSaleWithAClashTellsTheManagersOfItsBranch() {
+        UUID here = Api.staff(t, Api.email("pub-sv-here"), new Role("retail_supervisor", t.headOffice()));
+        UUID there = Api.staff(t, Api.email("pub-sv-there"), new Role("retail_supervisor", t.secondBranch()));
+        device(here);
+        device(there);
+        UUID product = retail.product("PUB-OFF", 600, 1_000);
+        retail.importedBalance(t.headOffice(), product, "1");
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", t.headOffice());
+        body.put("payment_method", "cash");
+        body.put("lines", List.of(Map.of("product_id", product, "qty", "1", "unit_price_minor", 1_000)));
+        body.put("client_sale_id", UUID.randomUUID());
+        body.put("occurred_at", java.time.Instant.now().minusSeconds(600).toString());
+        body.put("recorded_offline", true);
+        ResponseEntity<JsonNode> covered =
+                retail.postKeyed("/sales", body, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(covered.getStatusCode()).as("%s", covered.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(told("retail.sale_clash")).isEmpty();
+
+        body.put("client_sale_id", UUID.randomUUID());
+        body.put("lines", List.of(Map.of("product_id", product, "qty", "4", "unit_price_minor", 1_000)));
+        String key = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> short1 = retail.postKeyed("/sales", body, ADMIN, "*", key);
+        assertThat(short1.getStatusCode()).as("%s", short1.getBody()).isEqualTo(HttpStatus.CREATED);
+        retail.postKeyed("/sales", body, ADMIN, "*", key);
+        assertThat(told("retail.sale_clash"))
+                .containsExactlyInAnyOrder("user:" + makerId, "user:" + alice, "user:" + here);
+    }
+
     @Test
     void aWriteOffDoneAloneTellsTheOtherAdministratorsWithADevice() {
         // Only one active administrator counts as "the others": the second-person rule needs two or more.

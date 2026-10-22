@@ -11246,6 +11246,141 @@
           }
         }
       },
+      "RetailOfflineFailure" : {
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "client_sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "discard_reason" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "made_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "made_by_name" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "payment_method" : {
+            "type" : "string"
+          },
+          "request" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "open, retry, discarded or recorded",
+            "type" : "string"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailOfflineFailureDiscard" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
+      "RetailOfflineFailurePage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailOfflineFailure"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailOfflineFailureRequest" : {
+        "description" : "A sale made offline that the server refused (ADR-067)",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "client_sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "message" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "payment_method" : {
+            "pattern" : "cash|mobile_money|bank|credit",
+            "type" : "string"
+          },
+          "request" : {
+            "additionalProperties" : {
+              "description" : "The sale request exactly as the device holds it",
+              "type" : "object"
+            },
+            "description" : "The sale request exactly as the device holds it",
+            "type" : "object"
+          },
+          "total_minor" : {
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "branch_id", "client_sale_id", "code", "message", "occurred_at", "payment_method", "request", "total_minor" ]
+      },
       "RetailOpenSale" : {
         "properties" : {
           "balance_minor" : {
@@ -14134,6 +14269,9 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "device" : {
+            "$ref" : "#/components/schemas/RetailSaleDevice"
+          },
           "due_date" : {
             "format" : "date",
             "type" : "string"
@@ -14202,6 +14340,101 @@
           },
           "write_off" : {
             "$ref" : "#/components/schemas/RetailSaleWriteOffInfo"
+          }
+        }
+      },
+      "RetailSaleClash" : {
+        "description" : "Something that changed while a sale was offline (ADR-067)",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "stock_short, item_inactive, price_changed, below_cost or clock_ahead",
+            "type" : "string"
+          },
+          "line_no" : {
+            "description" : "The sale line; absent for clock_ahead",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "resolution_note" : {
+            "type" : "string"
+          },
+          "resolved_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "resolved_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          },
+          "words" : {
+            "description" : "What happened, in plain words; never a cost",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSaleClashPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSaleClash"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailSaleClashResolve" : {
+        "properties" : {
+          "note" : {
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "note" ]
+      },
+      "RetailSaleDevice" : {
+        "description" : "How a sale came from a device (ADR-067)",
+        "properties" : {
+          "clashes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSaleClash"
+            },
+            "type" : "array"
+          },
+          "client_sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "description" : "When the sale happened on the device, as recorded",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "recorded_offline" : {
+            "type" : "boolean"
           }
         }
       },
@@ -14442,6 +14675,11 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "client_sale_id" : {
+            "description" : "ADR-067: the id the device made for this sale, unique per business. A second request with it, by the same person, answers the sale already recorded (Idempotent-Replayed), after the Idempotency-Key has expired too; by another person it is 422 client_sale_id_reused",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "credit_override_reason" : {
             "description" : "Why a credit sale above the buyer's credit limit goes ahead; needed (at least five characters) from a user who holds retail.credit.override, ignored when the sale is within the limit or the customer_accounts capability is off",
             "maxLength" : 300,
@@ -14465,6 +14703,11 @@
             "minItems" : 0,
             "type" : "array"
           },
+          "occurred_at" : {
+            "description" : "ADR-067: when the sale happened on the device; the sale is dated that day in the business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422 occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash",
+            "format" : "date-time",
+            "type" : "string"
+          },
           "payment_method" : {
             "pattern" : "cash|mobile_money|bank|credit",
             "type" : "string"
@@ -14473,6 +14716,15 @@
             "description" : "Price the sale from this list instead of the customer's own or the customer group's; needs retail.pricelist.use unless it is one of those (price_lists capability)",
             "format" : "uuid",
             "type" : "string"
+          },
+          "prices_as_of" : {
+            "description" : "ADR-067: when the device last refreshed its prices, for the words of a price clash",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "recorded_offline" : {
+            "description" : "ADR-067: the sale was taken with no network and its money is already in hand. Needs client_sale_id and occurred_at; never a credit sale. A short stock, an item switched off, a changed price or a price not above cost then records the sale with a clash instead of refusing it",
+            "type" : "boolean"
           },
           "sale_date" : {
             "description" : "Defaults to today; not in the future",
@@ -31516,6 +31768,171 @@
         "tags" : [ "retail-payables" ]
       }
     },
+    "/api/v1/retail/offline-failures" : {
+      "get" : {
+        "operationId" : "listRetailOfflineFailures",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineFailurePage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Reported offline sales in the caller's branch scope, open and retry by default (ADR-067)",
+        "tags" : [ "retail-sales" ]
+      },
+      "post" : {
+        "operationId" : "reportRetailOfflineFailure",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOfflineFailureRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineFailure"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Report a sale made offline that the server refused, for a manager to decide (ADR-067); idempotent on the client sale id",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/offline-failures/mine" : {
+      "get" : {
+        "operationId" : "listMyRetailOfflineFailures",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "client_sale_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineFailurePage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own reported offline sales: these client sale ids, or every one open or waiting to be sent again (ADR-067)",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/offline-failures/{failure_id}/discard" : {
+      "post" : {
+        "operationId" : "discardRetailOfflineFailure",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "failure_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailOfflineFailureDiscard"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineFailure"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067)",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/offline-failures/{failure_id}/retry" : {
+      "post" : {
+        "operationId" : "retryRetailOfflineFailure",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "failure_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailOfflineFailure"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask the device that reported it to send the sale again (ADR-067); audited",
+        "tags" : [ "retail-sales" ]
+      }
+    },
     "/api/v1/retail/orders" : {
       "get" : {
         "operationId" : "listRetailOrders",
@@ -35262,6 +35679,82 @@
         },
         "summary" : "Void a return as a whole by reversal (issue #201); M. 200 when voided, 202 when it waits for a checker",
         "tags" : [ "retail-returns" ]
+      }
+    },
+    "/api/v1/retail/sale-clashes" : {
+      "get" : {
+        "operationId" : "listRetailSaleClashes",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSaleClashPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Clashes of sales recorded offline in the caller's branch scope, newest first (ADR-067)",
+        "tags" : [ "retail-sales" ]
+      }
+    },
+    "/api/v1/retail/sale-clashes/{clash_id}/resolve" : {
+      "post" : {
+        "operationId" : "resolveRetailSaleClash",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "clash_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailSaleClashResolve"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSaleClash"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Resolve a clash with a note, once; audited (ADR-067). Nothing else changes",
+        "tags" : [ "retail-sales" ]
       }
     },
     "/api/v1/retail/sales" : {

@@ -49,7 +49,13 @@ class MigrationOrderIT {
      * Columns a later migration adds to a table these cases watch, left out of the "keeps its shape" comparisons: each case
      * answers for its own migration. V70 (customer orders, #385) adds retail_sale_lines.price_overridden_by.
      */
-    static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'";
+    static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'"
+            // V87 (offline sales, #458) adds three columns to retail_sales, which are not the earlier migrations' to
+            // answer
+            // for; named with their table, so a column of that name elsewhere (stock movements' occurred_at) still
+            // counts.
+            + " AND NOT (table_name = 'retail_sales'"
+            + " AND column_name IN ('client_sale_id', 'occurred_at', 'recorded_offline'))";
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -1476,11 +1482,12 @@ class MigrationOrderIT {
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones and V57 (#233) the payment
         // account
-        // one, which are not V48's to answer for.
+        // one, and V87 (offline sales, #458) retail.offline.resolve, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
-                                        + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close')")
+                                        + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
+                                        + " 'retail.offline.resolve')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")

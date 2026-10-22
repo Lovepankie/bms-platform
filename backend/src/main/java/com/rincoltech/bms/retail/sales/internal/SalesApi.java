@@ -17,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -84,7 +85,64 @@ final class SalesApi {
                             + " within the limit or the customer_accounts capability is off")
             String creditOverrideReason,
 
-            @NotEmpty @Size(max = 200) List<@Valid @NotNull SaleLineRequest> lines) {}
+            @NotEmpty @Size(max = 200) List<@Valid @NotNull SaleLineRequest> lines,
+
+            @Schema(
+                    description = "ADR-067: the id the device made for this sale, unique per business. A second request"
+                            + " with it, by the same person, answers the sale already recorded (Idempotent-Replayed),"
+                            + " after the Idempotency-Key has expired too; by another person it is 422"
+                            + " client_sale_id_reused")
+            UUID clientSaleId,
+
+            @Schema(
+                    description = "ADR-067: when the sale happened on the device; the sale is dated that day in the"
+                            + " business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422"
+                            + " occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash")
+            Instant occurredAt,
+
+            @Schema(
+                    description = "ADR-067: the sale was taken with no network and its money is already in hand. Needs"
+                            + " client_sale_id and occurred_at; never a credit sale. A short stock, an item switched off,"
+                            + " a changed price or a price not above cost then records the sale with a clash instead of"
+                            + " refusing it")
+            Boolean recordedOffline,
+
+            @Schema(description = "ADR-067: when the device last refreshed its prices, for the words of a price clash")
+            Instant pricesAsOf) {
+
+        /** A sale request of the server's own (a quotation or an order becoming a sale): no device fields. */
+        SaleRequest(
+                UUID branchId,
+                LocalDate saleDate,
+                String paymentMethod,
+                UUID customerId,
+                String buyerName,
+                String buyerContact,
+                LocalDate dueDate,
+                UUID priceListId,
+                String creditOverrideReason,
+                List<SaleLineRequest> lines) {
+            this(
+                    branchId,
+                    saleDate,
+                    paymentMethod,
+                    customerId,
+                    buyerName,
+                    buyerContact,
+                    dueDate,
+                    priceListId,
+                    creditOverrideReason,
+                    lines,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        boolean offline() {
+            return Boolean.TRUE.equals(recordedOffline);
+        }
+    }
 
     @Schema(
             name = "RetailSaleLinePrice",
@@ -203,7 +261,134 @@ final class SalesApi {
                     description =
                             "Issue #385: the delivery fee of the customer order this credit sale came from, left on the"
                                     + " buyer's account and not yet paid: owed besides balance_minor, and written off with the sale")
-            Long deliveryFeeOwedMinor) {}
+            Long deliveryFeeOwedMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "ADR-067: present when the sale carried a client sale id")
+            Device device) {
+
+        Sale withDevice(Device d) {
+            return new Sale(
+                    id,
+                    saleNo,
+                    branchId,
+                    saleDate,
+                    paymentMethod,
+                    customerId,
+                    buyerName,
+                    buyerContact,
+                    dueDate,
+                    status,
+                    currency,
+                    totalMinor,
+                    paidMinor,
+                    balanceMinor,
+                    costTotalMinor,
+                    profitMinor,
+                    priceListId,
+                    priceList,
+                    lines,
+                    historical,
+                    createdAt,
+                    createdBy,
+                    voidedAt,
+                    voidedBy,
+                    voidReason,
+                    version,
+                    writeOff,
+                    countedWhenPaid,
+                    deliveryFeeOwedMinor,
+                    d);
+        }
+    }
+
+    @Schema(name = "RetailSaleDevice", description = "How a sale came from a device (ADR-067)")
+    record Device(
+            UUID clientSaleId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "When the sale happened on the device, as recorded")
+            Instant occurredAt,
+
+            boolean recordedOffline,
+            List<Clash> clashes) {}
+
+    @Schema(name = "RetailSaleClash", description = "Something that changed while a sale was offline (ADR-067)")
+    record Clash(
+            UUID id,
+            UUID saleId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String saleNo,
+            UUID branchId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "The sale line; absent for clock_ahead")
+            Integer lineNo,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID productId,
+
+            @Schema(description = "stock_short, item_inactive, price_changed, below_cost or clock_ahead")
+            String kind,
+
+            @Schema(description = "What happened, in plain words; never a cost")
+            String words,
+
+            Instant createdAt,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Instant resolvedAt,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID resolvedBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String resolutionNote) {}
+
+    @Schema(name = "RetailSaleClashPage")
+    record ClashPage(List<Clash> items) {}
+
+    @Schema(name = "RetailSaleClashResolve")
+    record ClashResolveRequest(
+            @NotBlank @Size(min = 5, max = 300) String note) {}
+
+    @Schema(name = "RetailOfflineFailureRequest", description = "A sale made offline that the server refused (ADR-067)")
+    record FailureRequest(
+            @NotNull UUID clientSaleId,
+            @NotNull UUID branchId,
+            @NotNull Instant occurredAt,
+            @NotNull @Pattern(regexp = SALE_METHODS) String paymentMethod,
+
+            @NotNull @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            Long totalMinor,
+
+            @NotNull @Schema(description = "The sale request exactly as the device holds it")
+            Map<String, Object> request,
+
+            @NotBlank @Size(max = 60) String code,
+            @NotBlank @Size(max = 500) String message) {}
+
+    @Schema(name = "RetailOfflineFailure")
+    record Failure(
+            UUID id,
+            UUID clientSaleId,
+            UUID branchId,
+            UUID madeBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String madeByName,
+            Instant occurredAt,
+            String paymentMethod,
+            long totalMinor,
+            Map<String, Object> request,
+            String code,
+            String message,
+
+            @Schema(description = "open, retry, discarded or recorded")
+            String status,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID decidedBy,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Instant decidedAt,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String discardReason,
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID saleId,
+            Instant createdAt) {}
+
+    @Schema(name = "RetailOfflineFailurePage")
+    record FailurePage(List<Failure> items) {}
+
+    @Schema(name = "RetailOfflineFailureDiscard")
+    record DiscardRequest(
+            @NotBlank @Size(min = 5, max = 300) String reason) {}
 
     @Schema(name = "RetailSaleWriteOffInfo", description = "A credit sale whose unpaid part was written off as a loss")
     record WriteOffInfo(
