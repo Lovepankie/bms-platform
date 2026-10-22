@@ -83,16 +83,19 @@ NFR-CAP-01 loaded, at 50 concurrent users.
 ## 4.8 Offline tolerance of the PWA (OFF)
 
 Connectivity in the field is intermittent. The rule is: **reads degrade gracefully,
-drafts survive, money never moves offline.**
+drafts survive, money never moves offline.** The one exception is a retail cash, mobile money or bank sale, whose
+money the shop has already taken: it is queued on the device and sent once when back online (ADR-067).
 
 | ID | Requirement | Verification |
 |---|---|---|
 | NFR-OFF-01 | The app shell (HTML, JavaScript, CSS, icons, fonts) is cached by the service worker, so the app opens with no network. | Playwright test with the network disabled. |
 | NFR-OFF-02 | Member area: the last successfully fetched loans, schedules, savings and investment views are cached in IndexedDB and shown offline with a visible "last updated" time and an offline banner. | Test with network disabled after one sync (FR-MSS-06). |
 | NFR-OFF-03 | Staff area: member registration and loan application forms autosave drafts locally every few seconds; a draft survives closing the app and is submitted when the user presses submit while online. Each draft carries a client-generated idempotency key so a retried submission cannot create duplicates. | Test: fill form, go offline, reload, go online, submit twice, one record. |
-| NFR-OFF-04 | Repayments, disbursements, deposits, withdrawals, approvals and any other money-moving or approving action are refused offline, with a clear message. They are never queued for later sending. | Test with the network disabled. |
-| NFR-OFF-05 | Cached member data is cleared on sign-out and when the session's refresh token expires. Staff data other than own drafts is not cached for offline use. | Test inspects IndexedDB after sign-out. |
+| NFR-OFF-04 | Repayments, disbursements, deposits, withdrawals, approvals and any other money-moving or approving action are refused offline, with a clear message. They are never queued for later sending. The one exception is a retail cash, mobile money or bank sale (ADR-067, NFR-OFF-07); a credit sale and every lending action stay refused. | Test with the network disabled. |
+| NFR-OFF-05 | Cached member data is cleared on sign-out and when the session's refresh token expires. Staff data other than own drafts is not cached for offline use, apart from the retail sale catalogue and the outbox of ADR-067, which are kept per business and per person: the catalogue is cleared on sign-out, and sign-out with sales waiting asks first and keeps them for the same person on that device. | Test inspects IndexedDB after sign-out; `offline-signout.dom.test.tsx`. |
 | NFR-OFF-06 | A new frontend version activates on the next navigation after download, and never while a form has unsaved input. | Manual test script per release. |
+| NFR-OFF-07 | Retail sales offline (ADR-067): with no network, Record a sale searches the items cached for the person's selling branches (with a "prices as of" time), saves a cash, mobile money or bank sale to an outbox on the device with a `client_sale_id`, an `Idempotency-Key` and the time it happened, and shows a provisional receipt. When online the outbox sends one sale at a time, oldest first, with backoff, stops and asks to sign in when the session has expired, and never records a sale twice: the server answers a second send with the same client sale id as a replay, after the key has expired too. A sale the server refuses stays on the device with the reason until a manager has it sent again or discards it (audited). | `RetailOfflineSalesIT`; `outbox.test.ts`, `sync-engine.test.ts`, `offline-sale.dom.test.tsx`. |
+| NFR-OFF-08 | Every staff screen of a person who may sell shows whether the app is online (a green dot), offline (grey) or sending (amber), with the number of sales waiting to sync; tapping it opens a sheet of the queued and failed sales with Sync now. Online is the browser's online state confirmed by a health ping. | `sync-status.dom.test.tsx`. |
 
 ## 4.9 Data protection (DP)
 

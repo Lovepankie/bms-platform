@@ -800,6 +800,11 @@ Accepted (this list is the ADR index):
 - ADR-066 The installed app uses the business's own logo and name as its icon: a per-host manifest and icons drawn from the logo by the
   API under `/api/v1/branding/app/`, the BMS icons as the fallback; an iPhone takes the icon only when the app is added again (proposed,
   #446; FR-TEN-08; amends ADR-050 decision 1; renumbered at merge if needed)
+- ADR-067 Retail sales work offline: the sale catalogue and an outbox per business and person on the device, synced one at a
+  time oldest first, sent once by the Idempotency-Key and a client sale id stored on the sale; dated when they happened; stock,
+  price and item clashes recorded and flagged, other refusals kept on the device for a manager to resend or discard; a dot in
+  the staff bar with the count waiting (proposed, #458; FR-RET-67, NFR-OFF-07, NFR-OFF-08; amends ADR-009 and NFR-OFF-04;
+  migration `V87`; renumbered at merge if needed)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared
