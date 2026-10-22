@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The referral code on the public sign-up (issue #464, ADR-069): a link with ?ref= fills in the Referred by box, the applicant can
@@ -89,6 +89,11 @@ describe('the sign-up page', () => {
       ]),
     );
     fireEvent.change(screen.getByLabelText('Referred by (optional)'), { target: { value: 'NOPE99ZZ' } });
+    // The refused press holds the busy button for two timer ticks (#456); a person never presses again that fast.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve));
+      await new Promise((resolve) => setTimeout(resolve));
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Send application' }));
     expect(await screen.findByText('No business has that referral code. Check it, or leave it empty.')).toBeTruthy();
     expect(screen.getByLabelText('Referred by (optional)').getAttribute('aria-invalid')).toBe('true');
