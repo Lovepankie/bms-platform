@@ -61,8 +61,9 @@ left, the branch, the period, the person's roles.
    new key after a lost answer, is therefore still the same sale. Two concurrent sends that both miss the lookup are settled
    by the unique index: the loser answers 409 `client_sale_in_progress` and its retry finds the sale. The online sale screen
    sends a `client_sale_id` too, so a sale whose answer was lost and that moves to the outbox can never be recorded twice.
-   The sale stores `request_hash`, the SHA-256 of the request without how it was delivered (`occurred_at`,
-   `recorded_offline`, `prices_as_of`): a later send under the same client sale id with a different request is 422
+   The sale stores `request_hash`, the SHA-256 of a fixed canonical text of what the sale is (the branch, the payment
+   method, the credit buyer's `customer_id`, and per line the item, the pack, the quantity and the price), never of how it
+   was delivered (`occurred_at`, `recorded_offline`, `prices_as_of`) or of a field added later: a later send under the same client sale id with a different request is 422
    `client_sale_conflict` and records nothing. Once an answer is lost the sale form is locked: Try again sends the same
    request with the same key, and Keep it on this phone queues that same request (dated when it was first sent, marked
    offline) with a new key, except a credit sale, which is only tried again (decision 1: the server refuses a credit sale

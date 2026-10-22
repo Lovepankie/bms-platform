@@ -431,6 +431,8 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
 
         Map<String, Object> fromOutbox = new LinkedHashMap<>(online);
+        // Round 2 minor: the hash is of a canonical subset, so the same quantity written another way is the same sale.
+        fromOutbox.put("lines", List.of(Map.of("product_id", product, "qty", "1.000")));
         fromOutbox.put("occurred_at", Instant.now().minus(Duration.ofMinutes(1)).toString());
         fromOutbox.put("recorded_offline", true);
         fromOutbox.put("prices_as_of", Instant.now().minus(Duration.ofHours(1)).toString());

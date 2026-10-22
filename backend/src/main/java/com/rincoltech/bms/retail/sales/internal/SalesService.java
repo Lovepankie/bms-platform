@@ -75,7 +75,6 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Sales and credit buyers (FR-RET-04, FR-RET-05, FR-RET-11, FR-RET-14). A sale and everything it
@@ -108,7 +107,6 @@ class SalesService {
     private final AccountsService accounts;
     private final ReturnsRepository returns;
     private final ApplicationEventPublisher events;
-    private final ObjectMapper mapper;
 
     SalesService(
             SalesRepository repo,
@@ -127,10 +125,8 @@ class SalesService {
             RetailPricing priceLists,
             AccountsService accounts,
             ReturnsRepository returns,
-            ApplicationEventPublisher events,
-            ObjectMapper mapper) {
+            ApplicationEventPublisher events) {
         this.events = events;
-        this.mapper = mapper;
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -210,30 +206,36 @@ class SalesService {
     }
 
     /**
-     * The fingerprint of a request with a client sale id (ADR-067 decision 5): the SHA-256 of the request without how it was
-     * delivered (occurred_at, recorded_offline, prices_as_of), so a sale whose answer was lost and that is sent again from the
-     * outbox is the same request, and a changed one is not.
+     * The fingerprint of a request with a client sale id (ADR-067 decision 5): the SHA-256 of a fixed canonical text of what
+     * the sale is (the branch, the payment method, the credit buyer, and per line the item, the pack, the quantity and the
+     * price), never of how it was delivered or worded, so a sale whose answer was lost and that is sent again from the outbox
+     * is the same request, a new field on the request changes nothing, and a changed sale is not the same.
      */
-    String requestHash(SaleRequest r) {
-        SaleRequest what = new SaleRequest(
-                r.branchId(),
-                r.saleDate(),
-                r.paymentMethod(),
-                r.customerId(),
-                r.buyerName(),
-                r.buyerContact(),
-                r.dueDate(),
-                r.priceListId(),
-                r.creditOverrideReason(),
-                r.lines(),
-                r.clientSaleId(),
-                null,
-                null,
-                null);
+    static String requestHash(SaleRequest r) {
+        StringBuilder text = new StringBuilder("v1")
+                .append('|')
+                .append(r.branchId())
+                .append('|')
+                .append(r.paymentMethod())
+                .append('|')
+                .append(r.customerId());
+        for (SaleLineRequest l : r.lines()) {
+            text.append("|line:")
+                    .append(l.productId())
+                    .append(',')
+                    .append(l.unitId())
+                    .append(',')
+                    .append(
+                            l.qty() == null
+                                    ? null
+                                    : l.qty().stripTrailingZeros().toPlainString())
+                    .append(',')
+                    .append(l.unitPriceMinor());
+        }
         try {
             return HexFormat.of()
                     .formatHex(MessageDigest.getInstance("SHA-256")
-                            .digest(mapper.writeValueAsString(what).getBytes(StandardCharsets.UTF_8)));
+                            .digest(text.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
