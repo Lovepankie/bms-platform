@@ -29,7 +29,8 @@ export function IosSteps() {
         show. If you still do not see Share, tap <strong>⋯</strong> and Share is there.
       </li>
       <li>
-        Scroll down and tap <strong>Add to Home Screen</strong>.
+        Tap <strong>Add to Home Screen</strong>. If it is not in the list, scroll down, or tap <strong>View More</strong> and it is
+        there.
       </li>
       <li>
         Tap <strong>Add</strong>. Then open BMS from its new icon.

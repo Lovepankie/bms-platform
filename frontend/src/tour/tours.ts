@@ -949,7 +949,7 @@ export const notificationsPage: Tour = {
       id: 'install',
       target: 'install-app',
       title: 'Install the app',
-      body: 'Add BMS to your home screen or app list. On an iPhone or iPad use Safari: tap Share (if you do not see it, tap ⋯), then Add to Home Screen.',
+      body: 'Add BMS to your home screen or app list. On an iPhone or iPad use Safari: tap Share, then Add to Home Screen. If you cannot see them, try ⋯ or View More.',
     },
     {
       id: 'toggle',

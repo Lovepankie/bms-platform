@@ -123,6 +123,8 @@ describe('the install offer', () => {
     // A pilot owner could not find Share: the steps say Safari, not a Private tab, and where Share hides.
     expect(screen.getByTestId('ios-install-steps').textContent).toContain('Private');
     expect(screen.getByTestId('ios-install-steps').textContent).toContain('⋯');
+    // A pilot owner found Share but not Add to Home Screen: newer iPhones keep it behind View More.
+    expect(screen.getByTestId('ios-install-steps').textContent).toContain('View More');
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('ios-install-steps')).toBeNull();
