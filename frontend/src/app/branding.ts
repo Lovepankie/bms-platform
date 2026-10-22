@@ -72,13 +72,21 @@ export function appTitle(brand: ShellBrand): string {
   return brand === PLATFORM_BRAND ? 'BMS' : shortAppName(brand.name);
 }
 
+// The object URL made for each logo (the path without its ?v=), so a replaced logo's image is let go.
+const logoBlobs = new Map<string, string>();
+
 /** The logo image. In local development the tenant travels as a header, which an <img> cannot send. */
-async function loadLogo(url: string): Promise<string> {
+export async function loadLogo(url: string): Promise<string> {
   const headers = tenantHeaders();
   if (Object.keys(headers).length === 0) return url;
   const response = await fetch(url, { headers });
   if (!response.ok) throw new Error('no logo');
-  return URL.createObjectURL(await response.blob());
+  const blob = URL.createObjectURL(await response.blob());
+  const path = url.split('?')[0] ?? url;
+  const replaced = logoBlobs.get(path);
+  if (replaced) URL.revokeObjectURL(replaced);
+  logoBlobs.set(path, blob);
+  return blob;
 }
 
 /** The public branding of the host's tenant; one cached query shared by the shell and the landing page. */
