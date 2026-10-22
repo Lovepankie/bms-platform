@@ -102,15 +102,21 @@ export function useTenantHost(): boolean | null {
   return Boolean(import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT) || classifyHost(window.location.hostname, hosts.data).kind === 'tenant';
 }
 
-/** The address an <img> can show for a public logo URL (the business's or a shop's, issue #461), or null while none. */
-export function useLogoSrc(logoUrl: string | null): string | null {
+/** A public logo URL (the business's or a shop's, issue #461): the address an <img> can show, or null, and whether it is still loading. */
+export function useLogo(logoUrl: string | null): { src: string | null; loading: boolean } {
   const logo = useQuery({
     queryKey: ['branding-logo', logoUrl],
     enabled: logoUrl !== null,
     staleTime: Infinity,
     queryFn: () => loadLogo(logoUrl as string),
   });
-  return logoUrl === null ? null : (logo.data ?? null);
+  if (logoUrl === null) return { src: null, loading: false };
+  return { src: logo.data ?? null, loading: logo.isPending };
+}
+
+/** The address an <img> can show for a public logo URL, or null while none. */
+export function useLogoSrc(logoUrl: string | null): string | null {
+  return useLogo(logoUrl).src;
 }
 
 export function useShellBrand(): ShellBrand {

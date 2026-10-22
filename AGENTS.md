@@ -190,7 +190,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   the branch and on each branch of `/me`. `Letterheads.forBranch` and `forBranchCode` put the shop's logo on that shop's retail
   documents and loan documents, else the business logo (also when the shop logo's file cannot be read). The Branches set-up has an
   upload and remove control per shop; the shop's logo shows beside the branch picker in the staff bar and on the sale screen header, and
-  the shop in use is shown with its logo (else the business logo, else no image) beside its name at the top of the side menu and the
+  the shop in use is shown with its logo (else the business logo, else no image; an empty space of its size while it loads) beside its name at the top of the side menu and the
   phone drawer (`CurrentShop` in `frontend/src/areas/staff/branch-picker.tsx`). The app icon, the tab icon and the manifest keep the
   business logo (ADR-066). Tests: `BranchLogoIT`, `LoanServicingIT`, `RlsIsolationIT`, `frontend/src/areas/staff/branches/branches.dom.test.tsx`,
   `branch-picker.dom.test.tsx`, `side-menu-shop.dom.test.tsx`, `frontend/src/app/branding.test.ts`.

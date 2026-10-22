@@ -37,7 +37,8 @@ while the business itself stays one business with one installed app.
    document is rendered, as the business logo already is; a shop logo whose file cannot be read falls back to the business logo. A
    customer statement spans branches and keeps the business logo. In the staff app the shop's logo shows beside the branch picker in the
    staff bar and on the sale screen header for the shop the seller is selling in, and the side menu and the phone drawer show the shop in
-   use with its logo beside its name, falling back to the business logo and then to no image (Hillary's decision on issue #461).
+   use with its logo beside its name, falling back to the business logo and then to no image (Hillary's decision on issue #461). While
+   the shop's logo loads, an empty space the size of the logo holds its place, so the business logo never shows for a moment first.
 6. **What stays the business's.** The installed app's icon and name, the manifest, the browser tab icon, the sign-in page and the email
    header keep the business logo (ADR-066): one business, one installed app.
 

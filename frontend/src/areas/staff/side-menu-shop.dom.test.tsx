@@ -90,6 +90,18 @@ describe('the shop in use in the sidebar (issue #461)', () => {
     expect(within(sidebarShop()).getByText('Test Shop Two (KLA)').className).toBe('current-shop-name');
   });
 
+  it('holds an empty space the size of the logo while the shop logo loads, never the business logo', async () => {
+    brand = { name: 'Test Traders', logoSrc: BUSINESS, themePrimary: null, themeText: null };
+    show('b-two');
+    const space = sidebarShop().querySelector('.current-shop-logo') as HTMLElement;
+    expect(space.tagName).toBe('SPAN');
+    expect(space.getAttribute('aria-hidden')).toBe('true');
+    expect(within(sidebarShop()).queryByRole('img')).toBeNull();
+    const image = (await within(sidebarShop()).findByAltText('Logo of Test Shop Two (KLA)')) as HTMLImageElement;
+    expect(image.getAttribute('src')).toBe(LOGO);
+    expect(sidebarShop().querySelectorAll('.current-shop-logo')).toHaveLength(1);
+  });
+
   it('falls back to the business logo for a shop without its own', async () => {
     brand = { name: 'Test Traders', logoSrc: BUSINESS, themePrimary: null, themeText: null };
     show('b-one');
