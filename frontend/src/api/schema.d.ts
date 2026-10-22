@@ -473,7 +473,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Switch the weekly email of the workbook to the Owner on or off, audited */
+        /** Switch the weekly email of the workbook to the Owner on or off, audited; the Owner only (403 owner_only) */
         put: operations["updateDataExportSettings"];
         post?: never;
         delete?: never;
@@ -7456,6 +7456,8 @@ export interface components {
              */
             last_export_at?: string;
             latest?: components["schemas"]["ReportRun"];
+            /** @description Whether the caller is the Owner, who alone may switch the weekly email; others see it only */
+            owner?: boolean;
             /** @description Whether the Owner is emailed a copy every week (on until switched off) */
             weekly_email?: boolean;
         };

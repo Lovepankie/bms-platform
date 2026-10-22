@@ -14,6 +14,11 @@ final class DataExportApi {
             @Schema(description = "Whether the Owner is emailed a copy every week (on until switched off)")
             boolean weeklyEmail,
 
+            @Schema(
+                    description =
+                            "Whether the caller is the Owner, who alone may switch the weekly email; others see it only")
+            boolean owner,
+
             @Schema(description = "When a workbook of the business's data was last made, by anyone; null when never")
             Instant lastExportAt,
 

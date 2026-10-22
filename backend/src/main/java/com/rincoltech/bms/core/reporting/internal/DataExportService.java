@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.reporting.ReportDefinition;
 import com.rincoltech.bms.core.reporting.internal.RunService.Requested;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import java.sql.Timestamp;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +66,7 @@ class DataExportService {
                 .orElse(null);
         return new DataExportApi.Status(
                 weeklyEmail(),
+                isOwner(principal.userId()),
                 store.lastReadyAt(DataExportReport.KEY),
                 emailed,
                 store.latestOf(principal.userId(), DataExportReport.KEY)
@@ -93,10 +96,20 @@ class DataExportService {
         return runs.insert(report, "xlsx", prepared, requester, true);
     }
 
-    /** Turns the weekly email on or off; audited with before and after. */
+    /**
+     * Turns the weekly email on or off; audited with before and after. Only the Owner may (ADR-074 decision 2): the email is
+     * theirs, so another administrator sees the switch but cannot change it (403 {@code owner_only}).
+     */
     @Transactional
     DataExportApi.Status setWeeklyEmail(boolean on) {
         Principal principal = CurrentPrincipal.require();
+        if (!isOwner(principal.userId())) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "owner_only",
+                    "Only the owner",
+                    "Only the owner of the business can switch the weekly email on or off.");
+        }
         boolean before = weeklyEmail();
         if (before != on) {
             jdbc.sql("""
@@ -123,6 +136,13 @@ class DataExportService {
                 .query(Boolean.class)
                 .optional()
                 .orElse(true);
+    }
+
+    private boolean isOwner(UUID userId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM users WHERE id = ? AND is_owner AND status = 'active')")
+                .param(userId)
+                .query(Boolean.class)
+                .single();
     }
 
     private static Instant instant(Timestamp t) {

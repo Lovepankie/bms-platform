@@ -1966,6 +1966,10 @@
           "latest" : {
             "$ref" : "#/components/schemas/ReportRun"
           },
+          "owner" : {
+            "description" : "Whether the caller is the Owner, who alone may switch the weekly email; others see it only",
+            "type" : "boolean"
+          },
           "weekly_email" : {
             "description" : "Whether the Owner is emailed a copy every week (on until switched off)",
             "type" : "boolean"
@@ -22339,7 +22343,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Switch the weekly email of the workbook to the Owner on or off, audited",
+        "summary" : "Switch the weekly email of the workbook to the Owner on or off, audited; the Owner only (403 owner_only)",
         "tags" : [ "reports" ]
       }
     },

@@ -104,11 +104,13 @@ export function DataExportCard({ modules, zone }: { modules?: string[] | null; z
             <input
               type="checkbox"
               checked={data.weekly_email}
-              disabled={weekly.isPending}
+              disabled={weekly.isPending || !data.owner}
               onChange={(e) => weekly.mutate(e.target.checked)}
             />{' '}
-            Email the Owner a copy every week (attached, or a link when it is too large for email)
+            Email the Owner a copy every week (attached without contact details and ID numbers, or a link when it is too large for
+            email)
           </label>
+          {!data.owner && <p>Only the Owner of the business can switch the weekly email on or off.</p>}
         </>
       )}
       {message && <p role="status">{message}</p>}

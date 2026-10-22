@@ -540,6 +540,15 @@ class DataExportIT extends LendingBookSupport {
         assertThat(card.get("last_emailed_at").isNull()).isFalse();
         assertThat(card.get("last_export_at").isNull()).isFalse();
 
+        assertThat(card.get("owner").asBoolean()).isTrue();
+
+        // Another administrator sees the switch but cannot change it: the Owner's alone.
+        UUID admin = UUID.randomUUID();
+        assertThat(card(s.t(), admin, PERM).getBody().get("owner").asBoolean()).isFalse();
+        ResponseEntity<JsonNode> refused = weeklyEmail(s.t(), admin, false);
+        assertThat(refused.getStatusCode().value()).isEqualTo(403);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("owner_only");
+
         // Switched off (audited): the next week gets nothing. Before 02:00 on Monday nothing is queued either.
         ResponseEntity<JsonNode> off = weeklyEmail(s.t(), owner, false);
         assertThat(off.getStatusCode().value()).as("%s", off.getBody()).isEqualTo(200);

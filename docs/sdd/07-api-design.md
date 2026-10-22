@@ -630,7 +630,7 @@ generic `POST /documents`. Built (#12): these two routes and the member document
 
 | GET | `/data-export` | `core.data_export.run` | "Download my data" card (issue #334, ADR-074): `{weekly_email, last_export_at, last_emailed_at, latest}`, `latest` the caller's newest `core.data_export` run in any state or null. Works with reports off. **Built (#334)** |
 | POST | `/data-export/runs` | `core.data_export.run` | Queues a workbook of the whole business (xlsx, every branch, no parameters); 202 new, 200 when an identical one of the caller's is still queued or running; optional `Idempotency-Key`. Allowed while the tenant is suspended. The file is fetched with `POST /documents/{id}/download-url`. **Built (#334)** |
-| PUT | `/data-export/settings` | `core.data_export.run` | `{weekly_email}`: the weekly email of the workbook to the Owner, on by default; audited; returns the card. **Built (#334)** |
+| PUT | `/data-export/settings` | `core.data_export.run` | `{weekly_email}`: the weekly email of the workbook to the Owner, on by default; the Owner only (anyone else 403 `owner_only`); audited; returns the card. **Built (#334)** |
 
 Responses of these routes are `Cache-Control: no-store`. The switch is the tenant setting `reports_enabled` (`PATCH /settings`,
 `core.settings.manage`; also `GET /me` `reports_enabled`, which the PWA reads to show the Reports tab), off by default. No new permission exists: a report is run under its own `lending.reports.*`

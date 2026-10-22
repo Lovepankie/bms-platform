@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const DOC = '00000000-0000-4000-8000-0000000000d1';
 const status = {
   weekly_email: true,
+  owner: true,
   last_export_at: '2026-10-05T03:10:00Z',
   last_emailed_at: null as string | null,
   latest: null as Record<string, unknown> | null,
@@ -47,6 +48,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   status.weekly_email = true;
+  status.owner = true;
   status.latest = null;
 });
 
@@ -96,6 +98,17 @@ describe('the Download my data card', () => {
     fireEvent.click(box);
     await waitFor(() => expect(client.PUT).toHaveBeenCalledWith('/api/v1/data-export/settings', { body: { weekly_email: false } }));
     expect(await screen.findByText('The weekly email is off.')).toBeTruthy();
+  });
+});
+
+describe('the weekly switch', () => {
+  it('is the Owner\'s alone: another administrator sees it but cannot change it', async () => {
+    status.owner = false;
+    show();
+    const box = (await screen.findByRole('checkbox')) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(box.disabled).toBe(true);
+    expect(screen.getByText(/Only the Owner of the business can switch the weekly email/)).toBeTruthy();
   });
 });
 

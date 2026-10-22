@@ -65,7 +65,8 @@ class DataExportController {
     @PutMapping(path = "/settings", consumes = MediaType.APPLICATION_JSON_VALUE)
     @RequiresPermission(DataExportReport.PERMISSION)
     @Operation(
-            summary = "Switch the weekly email of the workbook to the Owner on or off, audited",
+            summary =
+                    "Switch the weekly email of the workbook to the Owner on or off, audited; the Owner only (403 owner_only)",
             operationId = "updateDataExportSettings")
     DataExportApi.Status settings(
             @Valid @RequestBody DataExportApi.SettingsRequest request, HttpServletResponse response) {

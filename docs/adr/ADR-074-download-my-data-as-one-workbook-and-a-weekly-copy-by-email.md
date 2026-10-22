@@ -25,8 +25,9 @@ never change data, never show one business another's rows, and never hold a larg
    `reports_enabled` switch says (`ReportDefinition.everyBusiness`), it has no parameters and no branch scope (it is the whole
    business, every branch), and it has its own routes under `/api/v1/data-export` so the card works with reports off.
 2. **Only the administrators may ask for it.** One permission, `core.data_export.run`, held by `tenant_admin` (the Owner is an
-   administrator, ADR-062) and nobody else: the workbook is every branch's sales, credit and cash. The same permission turns the
-   weekly email on or off (audited, `core.data_export.settings_changed`). A file made for one administrator is fetched only by
+   administrator, ADR-062) and nobody else: the workbook is every branch's sales, credit and cash. Only the Owner turns the
+   weekly email on or off (audited, `core.data_export.settings_changed`): the email is theirs, so another administrator sees the
+   switch (`owner` on the card) and is refused a change with 403 `owner_only`. A file made for one administrator is fetched only by
    them, like any run.
 3. **A sheet per table, laid out like the old spreadsheet.** The core writes the Branches sheet; each vertical exposes a
    `DataExportSection` bean (the core never names a vertical, chapter 5 section 5.4.3) that writes its tables when the business

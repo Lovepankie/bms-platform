@@ -417,8 +417,9 @@ Notes:
   insights endpoints, and needs `lending.insights.read` as well. Report runs are off until a tenant administrator sets
   `reports_enabled` in the tenant settings (`core.settings.manage`).
   Built (issue #334 step 1, ADR-074, migration V94): `core.data_export.run`, the tenant admin's alone (the Owner is one,
-  ADR-062), asks for "Download my data", the whole business as one workbook across every branch, and turns the weekly email to
-  the Owner on or off (audited, `core.data_export.settings_changed`). It is offered whatever `reports_enabled` says; the file
+  ADR-062), asks for "Download my data", the whole business as one workbook across every branch, and sees the weekly email switch;
+  only the Owner (`users.is_owner`) turns it on or off (audited, `core.data_export.settings_changed`; anyone else 403
+  `owner_only`). It is offered whatever `reports_enabled` says; the file
   is fetched by the person it was made for while they hold the permission, every refusal 404. A suspended tenant (FR-TEN-06)
   may still ask for it and fetch the signed address of a file, the two reads that are a `POST`; every other write stays 423.
   The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth

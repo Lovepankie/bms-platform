@@ -147,9 +147,11 @@ export const reports = {
 /** The "Download my data" card of Business set-up (issue #334 step 1, ADR-074). */
 export interface DataExportStatus {
   weekly_email: boolean;
+  /** Whether the caller is the Owner, who alone may switch the weekly email; other administrators see it only. */
+  owner: boolean;
   last_export_at: string | null;
   last_emailed_at: string | null;
-  /** The caller's newest workbook, in any state; null when they never asked for one. */
+  /** The caller's newest full workbook, in any state (never the weekly copy made for the email); null when none. */
   latest: ReportRun | null;
 }
 
