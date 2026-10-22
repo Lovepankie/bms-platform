@@ -7207,9 +7207,15 @@
           },
           "rule" : {
             "$ref" : "#/components/schemas/ReferralRuleBody"
+          },
+          "totp_code" : {
+            "description" : "A current 6 digit code from the operator's own authenticator app (step-up), used once",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
-        "required" : [ "reason" ]
+        "required" : [ "reason", "totp_code" ]
       },
       "ReferralTotal" : {
         "description" : "One currency: everything earned, what was marked paid, and the rest",
@@ -20850,9 +20856,15 @@
             "maxLength" : 20,
             "minLength" : 0,
             "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "A current 6 digit code from the operator's own authenticator app (step-up), used once",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
           }
         },
-        "required" : [ "reason" ]
+        "required" : [ "reason", "totp_code" ]
       },
       "TenantSettings" : {
         "properties" : {
@@ -29219,7 +29231,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Set or clear the platform default commission rule, with a reason; it applies to payments recorded from now on",
+        "summary" : "Set or clear the platform default commission rule, with a reason; it applies to payments recorded from now on; needs a current code from the operator's own authenticator",
         "tags" : [ "platform" ]
       }
     },
@@ -29372,7 +29384,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended",
+        "summary" : "Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended; needs a current code from the operator's own authenticator",
         "tags" : [ "platform" ]
       }
     },
@@ -29878,7 +29890,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Set, correct or clear the business that referred this one, with a reason; 422 referral_self and referral_code_unknown; lines already earned stay with their referrer; the same referrer again changes nothing",
+        "summary" : "Set, correct or clear the business that referred this one, with a reason; 422 referral_self and referral_code_unknown; lines already earned stay with their referrer; the same referrer again changes nothing; needs a current code from the operator's own authenticator",
         "tags" : [ "platform" ]
       }
     },

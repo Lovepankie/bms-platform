@@ -59,9 +59,11 @@ data, and a business must not be able to refer itself.
    payment's is the paying business's, so a double submit adds one line), reverse a line once with a reason (kind `reversal`, the exact opposite
    amount; a reversal is not reversed), and mark a line paid once (date, method `mtn_momo`, `airtel_money`, `bank_transfer`,
    `cash` or `other`, reference, note, reason). A trigger refuses any delete and any update other than setting the paid columns
-   once. Every write is audited in `platform_audit_log` with the operator and the reason. These writes take a reason and no
-   authenticator code, as recording a subscription payment does: they record money moved elsewhere and grant no access; the
-   step-up stays on the routes that hand over a credential (ADR-042, ADR-062).
+   once. Every write is audited in `platform_audit_log` with the operator and the reason. These line writes take a reason and
+   no authenticator code, as recording a subscription payment does: they record money moved elsewhere. Setting or correcting
+   the referrer, the default rule and a referral's rule decide who is owed money on every later payment, so those three
+   routes also take a current code from the operator's own authenticator (`totp_code`, the step-up of ADR-042, used once and
+   checked before the change).
 7. **Who sees what.** Referrals and lines are rows of the **referrer** (`tenant_id` is the referrer) under forced row-level
    security, with SELECT only for the application role. The owner and the administrators of a business (`core.referrals.read`,
    tenant admin only, so the Owner of ADR-062 holds it) see `GET /referrals`: their code, their link, and for each business they

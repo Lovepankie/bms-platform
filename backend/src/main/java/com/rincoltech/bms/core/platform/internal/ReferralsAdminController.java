@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.platform.internal;
 
+import com.rincoltech.bms.core.identity.OperatorSecurity;
 import com.rincoltech.bms.core.referrals.Referrals;
 import com.rincoltech.bms.core.referrals.Referrals.Payout;
 import com.rincoltech.bms.core.referrals.Referrals.Referral;
@@ -39,7 +40,8 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code /api/v1/platform/referrals} and the referrer of a tenant (chapter 7 section 7.11.3, issue #464, ADR-069): who referred
  * whom, the commission rule (the platform default and an override per referral) and the commission lines, for platform
  * operators only, through the public port of {@code core.referrals}. Every change takes a reason and is audited; the app
- * records commissions and never pays them.
+ * records commissions and never pays them. Setting the referrer or a rule decides who is owed money from now on, so those
+ * three routes also take a current code from the operator's own authenticator (step-up, ADR-042), checked before the change.
  */
 @RestController
 @RequestMapping(path = "/api/v1/platform", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -47,9 +49,11 @@ import org.springframework.web.bind.annotation.RestController;
 class ReferralsAdminController {
 
     private final Referrals referrals;
+    private final OperatorSecurity security;
 
-    ReferralsAdminController(Referrals referrals) {
+    ReferralsAdminController(Referrals referrals, OperatorSecurity security) {
         this.referrals = referrals;
+        this.security = security;
     }
 
     @Schema(name = "PlatformReferralList")
@@ -62,7 +66,14 @@ class ReferralsAdminController {
             String referrerCode,
 
             @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the platform audit log")
-            String reason) {}
+            String reason,
+
+            @NotBlank
+            @Size(max = 20)
+            @Schema(
+                    description =
+                            "A current 6 digit code from the operator's own authenticator app (step-up), used once")
+            String totpCode) {}
 
     @Schema(name = "TenantReferrer")
     record ReferrerResponse(
@@ -84,7 +95,14 @@ class ReferralsAdminController {
             @Valid
             RuleBody rule,
 
-            @NotBlank @Size(min = 5, max = 300) String reason) {}
+            @NotBlank @Size(min = 5, max = 300) String reason,
+
+            @NotBlank
+            @Size(max = 20)
+            @Schema(
+                    description =
+                            "A current 6 digit code from the operator's own authenticator app (step-up), used once")
+            String totpCode) {}
 
     @Schema(name = "ReferralRuleBody")
     record RuleBody(
@@ -177,10 +195,11 @@ class ReferralsAdminController {
     @Operation(
             summary = "Set, correct or clear the business that referred this one, with a reason; 422 referral_self and"
                     + " referral_code_unknown; lines already earned stay with their referrer; the same referrer again"
-                    + " changes nothing",
+                    + " changes nothing; needs a current code from the operator's own authenticator",
             operationId = "platformSetTenantReferrer")
     ReferrerResponse setReferrer(
             @PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody ReferrerRequest request) {
+        security.requireTotp(request.totpCode());
         return new ReferrerResponse(
                 tenantId,
                 referrals
@@ -206,9 +225,10 @@ class ReferralsAdminController {
     @Operation(
             summary =
                     "Set or clear the platform default commission rule, with a reason; it applies to payments recorded"
-                            + " from now on",
+                            + " from now on; needs a current code from the operator's own authenticator",
             operationId = "platformSetReferralDefaultRule")
     DefaultRuleResponse setDefaultRule(@Valid @RequestBody RuleRequest request) {
+        security.requireTotp(request.totpCode());
         return new DefaultRuleResponse(referrals
                 .setDefaultRule(
                         input(request.rule()),
@@ -221,9 +241,10 @@ class ReferralsAdminController {
     @RequiresPermission("platform.tenants.manage")
     @Operation(
             summary = "Set this referral's own commission rule, or clear it so the default applies, with a reason;"
-                    + " 422 referral_ended",
+                    + " 422 referral_ended; needs a current code from the operator's own authenticator",
             operationId = "platformSetReferralRule")
     ReferralDetail setRule(@PathVariable("referral_id") UUID referralId, @Valid @RequestBody RuleRequest request) {
+        security.requireTotp(request.totpCode());
         return referrals.setRule(
                 referralId,
                 input(request.rule()),

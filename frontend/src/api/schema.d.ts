@@ -2902,7 +2902,7 @@ export interface paths {
         };
         /** The platform default commission rule, or null */
         get: operations["platformGetReferralDefaultRule"];
-        /** Set or clear the platform default commission rule, with a reason; it applies to payments recorded from now on */
+        /** Set or clear the platform default commission rule, with a reason; it applies to payments recorded from now on; needs a current code from the operator's own authenticator */
         put: operations["platformSetReferralDefaultRule"];
         post?: never;
         delete?: never;
@@ -2970,7 +2970,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended */
+        /** Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended; needs a current code from the operator's own authenticator */
         put: operations["platformSetReferralRule"];
         post?: never;
         delete?: never;
@@ -3209,7 +3209,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set, correct or clear the business that referred this one, with a reason; 422 referral_self and referral_code_unknown; lines already earned stay with their referrer; the same referrer again changes nothing */
+        /** Set, correct or clear the business that referred this one, with a reason; 422 referral_self and referral_code_unknown; lines already earned stay with their referrer; the same referrer again changes nothing; needs a current code from the operator's own authenticator */
         put: operations["platformSetTenantReferrer"];
         post?: never;
         delete?: never;
@@ -9837,6 +9837,8 @@ export interface components {
         ReferralRuleRequest: {
             reason: string;
             rule?: components["schemas"]["ReferralRuleBody"];
+            /** @description A current 6 digit code from the operator's own authenticator app (step-up), used once */
+            totp_code: string;
         };
         /** @description One currency: everything earned, what was marked paid, and the rest */
         ReferralTotal: {
@@ -16807,6 +16809,8 @@ export interface components {
             reason: string;
             /** @description The referral code of the business that referred this one; null or empty clears it */
             referrer_code?: string;
+            /** @description A current 6 digit code from the operator's own authenticator app (step-up), used once */
+            totp_code: string;
         };
         TenantSettings: {
             allow_loans_before_kyc_verified?: boolean;

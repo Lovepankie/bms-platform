@@ -6,6 +6,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -115,6 +116,7 @@ class ReferralsIT extends IntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("referrer_code", code);
         body.put("reason", reason);
+        body.put("totp_code", totp());
         return platform.call(
                 HttpMethod.PUT, "/api/v1/platform/tenants/" + tenantId + "/referrer", body, operator.accessToken());
     }
@@ -146,7 +148,14 @@ class ReferralsIT extends IntegrationTest {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("rule", rule);
         body.put("reason", reason);
+        body.put("totp_code", totp());
         return platform.call(HttpMethod.PUT, path, body, operator.accessToken());
+    }
+
+    /** A fresh code from the operator's authenticator; the same time step may be used again in a test. */
+    String totp() {
+        Api.allowTotpReuse(operatorId);
+        return Api.totp(operator.totpSecret(), Instant.now());
     }
 
     ResponseEntity<JsonNode> addLine(UUID referralId, long amount, String reason, String idempotencyKey) {
@@ -997,5 +1006,48 @@ class ReferralsIT extends IntegrationTest {
         pay(x.id(), 10000, 1);
         assertThat(detail(rx).get("lines")).isEmpty();
         assertThat(audits("platform.referral.commission_added")).isZero();
+    }
+
+    /**
+     * Setting the referrer, the default rule or a referral's rule needs a current code from the operator's own authenticator:
+     * none or a wrong one is refused and nothing changes.
+     */
+    @Test
+    void theReferrerAndTheRulesNeedTheOperatorsCode() {
+        TestDatabase.Fixture a = TestDatabase.tenant("reftotp", false);
+        Business x = business("ref-totp");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        TestDatabase.Fixture b = TestDatabase.tenant("reftotp-b", false);
+
+        Map<String, Object> referrer = new LinkedHashMap<>();
+        referrer.put("referrer_code", code(b.tenantId()));
+        referrer.put("reason", "Test: without a code");
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("rule", percent(1000, null));
+        rule.put("reason", "Test: without a code");
+        Map<String, Map<String, Object>> routes = new LinkedHashMap<>();
+        routes.put("/api/v1/platform/tenants/" + x.id() + "/referrer", referrer);
+        routes.put("/api/v1/platform/referrals/default-rule", rule);
+        routes.put("/api/v1/platform/referrals/" + rx + "/rule", rule);
+        for (Map.Entry<String, Map<String, Object>> route : routes.entrySet()) {
+            ResponseEntity<JsonNode> none =
+                    platform.call(HttpMethod.PUT, route.getKey(), route.getValue(), operator.accessToken());
+            assertThat(none.getStatusCode().value())
+                    .as("%s without a code", route.getKey())
+                    .isEqualTo(422);
+            Map<String, Object> wrong = new LinkedHashMap<>(route.getValue());
+            wrong.put("totp_code", "000000".equals(totp()) ? "111111" : "000000");
+            ResponseEntity<JsonNode> refused =
+                    platform.call(HttpMethod.PUT, route.getKey(), wrong, operator.accessToken());
+            assertThat(refused.getStatusCode().value())
+                    .as("%s with a wrong code", route.getKey())
+                    .isEqualTo(422);
+            assertThat(refused.getBody().get("code").asString()).isEqualTo("invalid_mfa_code");
+        }
+        assertThat(currentReferral(x.id())).isEqualTo(rx);
+        assertThat(detail(rx).get("referral").get("rule_override").asBoolean()).isFalse();
+        assertThat(audits("platform.referral.default_rule_changed")).isZero();
+        assertThat(audits("platform.referral.rule_changed")).isZero();
     }
 }
