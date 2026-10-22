@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { retail, type Product } from '../../../api/retail';
 import { useStaff } from '../context';
-import { WEDGE_GAP_CHOICES, WEDGE_GAP_MS, createWedge, findByBarcodeIn, saleScanFocus, saveSaleScanFocus, saveWedgeGap, wedgeGap } from './barcode-state';
+import { WEDGE_GAP_CHOICES, WEDGE_GAP_MS, createWedge, findByBarcodeIn, saleScanFocus, saveSaleScanFocus, saveWedgeGap, spreadsheetDamaged, wedgeGap } from './barcode-state';
 import { holds } from './permissions';
 import { Problem, ProductPicker } from './ui';
 
@@ -129,6 +129,8 @@ export function ScanBar({ id, branchId, onFound, keepFocus = false }: { id: stri
   const [camera, setCamera] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState<unknown>(null);
+  // As on the item form: a code that looks spreadsheet-damaged (a GTIN-14, a UPC-E) is added only as printed (Code 128).
+  const [asPrinted, setAsPrinted] = useState(false);
   const canAssign = holds(me, 'retail.catalogue.manage');
   // With keepFocus (the sale screen, unless this device turned it off) the cursor waits in the scan box, so a scanner too
   // slow to be told from typing still lands there and its Enter looks the code up instead of submitting the sale. Only
@@ -154,6 +156,7 @@ export function ScanBar({ id, branchId, onFound, keepFocus = false }: { id: stri
     if (code === '') return;
     setBusy(true);
     setAssigning(false);
+    setAsPrinted(false);
     try {
       const match = await retail.findByBarcode(code, branchId);
       if (match?.product) found(match.product, match.unit_id);
@@ -183,7 +186,7 @@ export function ScanBar({ id, branchId, onFound, keepFocus = false }: { id: stri
     if (outcome?.kind !== 'unknown') return;
     setAssignError(null);
     try {
-      await retail.addBarcode(product.id ?? '', { code: outcome.code });
+      await retail.addBarcode(product.id ?? '', { code: outcome.code, ...(asPrinted ? { format: 'code128' } : {}) });
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
       setAssigning(false);
       await lookUp(outcome.code);
@@ -232,6 +235,11 @@ export function ScanBar({ id, branchId, onFound, keepFocus = false }: { id: stri
           )}
           {canAssign && assigning && (
             <>
+              {spreadsheetDamaged(outcome.code) && (
+                <label>
+                  <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={asPrinted} onChange={(e) => setAsPrinted(e.target.checked)} /> This code is exactly as printed (Code 128)
+                </label>
+              )}
               <ProductPicker id={`${id}-assign`} branchId={branchId} addLabel="Choose" onAdd={(p) => void assign(p)} />
               <Problem error={assignError} />
             </>

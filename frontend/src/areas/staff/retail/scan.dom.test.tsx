@@ -227,6 +227,27 @@ describe('FR-RET-68 scanning on the sale form', () => {
     expect((await retail.findByBarcode('TEST-UNKNOWN'))?.product?.id).toBe(LAMP);
   });
 
+  it('lets an administrator add a GTIN-14 as printed (Code 128), as the item form does', async () => {
+    const GTIN = '10012345678902';
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge(GTIN);
+    await waitFor(() => expect(screen.getByTestId('scan-unknown').textContent).toContain(`No item has the barcode ${GTIN}.`));
+    fireEvent.click(screen.getByRole('button', { name: 'Add this barcode to a product' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /This code is exactly as printed \(Code 128\)/ }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' }).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' })[0] as HTMLElement);
+    await waitFor(() => expect(qtyOf(0)).toBe('1'));
+    expect((await retail.findByBarcode(GTIN))?.barcode?.format).toBe('code128');
+  });
+
+  it('offers no as-printed choice for a code that cannot be spreadsheet damage', async () => {
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge('TEST-UNKNOWN');
+    fireEvent.click(await screen.findByRole('button', { name: 'Add this barcode to a product' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' }).length).toBeGreaterThan(0));
+    expect(screen.queryByRole('checkbox', { name: /exactly as printed/ })).toBeNull();
+  });
+
   it('gives a seller the unknown code message without the button', async () => {
     screenOf(<SaleForm branchId={BRANCH} />, 'sales');
     wedge('TEST-UNKNOWN');

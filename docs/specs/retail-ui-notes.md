@@ -1280,7 +1280,9 @@ ADR-070, FR-RET-68, migration `V90`. Generic for every business; no capability s
   with pack sizes on); on the stock count it adds one to the count, or the pack factor, and clears the search so the counted line shows; an item not on the branch's count sheet is refused with "<item> is not on the count sheet of this branch." "Added <item>." is read out politely, with a
   short beep and buzz where the device allows. On the restock the quantity goes to the branch chosen at the top; with none chosen a scan says "Choose the branch at the top of the page first".
 - **Unknown code:** "No item has the barcode <code>." An administrator gets **Add this barcode to a product**: the item search
-  opens, Choose puts the barcode on that item and adds it to the form. Anyone else reads "Ask an administrator to add it to the
+  opens, Choose puts the barcode on that item and adds it to the form. For a code that looks like spreadsheet damage (all digits of
+  6, 7, 9, 10, 11 or 14, such as a GTIN-14 or a UPC-E) the search shows "This code is exactly as printed (Code 128)", as the item
+  form does, and with it ticked the code is added as Code 128. Anyone else reads "Ask an administrator to add it to the
   item, or find the item by name above."
 - **Camera** (`camera-scan.tsx`, loaded on Scan): the back camera full screen, "Hold the barcode inside the frame, about a hand
   away.", Close the camera. The browser's BarcodeDetector reads the frames; on an iPhone Quagga2 (loaded only then) reads a still
