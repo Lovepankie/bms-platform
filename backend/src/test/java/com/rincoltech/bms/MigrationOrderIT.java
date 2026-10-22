@@ -50,7 +50,7 @@ class MigrationOrderIT {
      * answers for its own migration. V70 (customer orders, #385) adds retail_sale_lines.price_overridden_by.
      */
     static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'"
-            // V87 (offline sales, #458) adds four columns to retail_sales, which are not the earlier migrations' to
+            // V86 (offline sales, #458) adds four columns to retail_sales, which are not the earlier migrations' to
             // answer
             // for; named with their table, so a column of that name elsewhere (stock movements' occurred_at) still
             // counts.
@@ -1481,7 +1481,7 @@ class MigrationOrderIT {
                 .as("the existing tables keep their shape")
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
-        // account one, V83 (collections, #266) the two collection list ones and V87 (offline sales, #458)
+        // account one, V83 (collections, #266) the two collection list ones and V86 (offline sales, #458)
         // retail.offline.resolve, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"

@@ -1,12 +1,12 @@
--- V87: retail sales made offline (issue #458, ADR-067). A sale carries the client sale id the device made for it, unique per
+-- V86: retail sales made offline (issue #458, ADR-067). A sale carries the client sale id the device made for it, unique per
 -- tenant, so a sale sent again after its Idempotency-Key expired (7 days) is still the same sale; the time it happened on the
 -- device; and whether it was recorded offline. A sale recorded offline whose stock, item or price changed meanwhile is recorded
 -- and flagged in retail_sale_clashes; a sale the server refused is reported by the device into retail_offline_failures, where a
 -- manager has it sent again or discards it. One permission, retail.offline.resolve, for the administrators and the Supervisor.
 --
--- Numbered V87: main is at V83 (V80 feedback, V81 to V83 lending arrears, waivers and collections); V84 is claimed by the
--- lending reminders (#227) and V85 and V86 by payments (#315, #318). Flyway runs with outOfOrder off; renumbered at merge if
--- needed.
+-- Numbered V86: main ends at V84 (V80 feedback, V81 to V84 lending arrears, waivers, collections and reminders); the agreed
+-- merge order gives V85 to shop logos (#465), V86 to this pull request (#463) and V87 to V91 to #470, #467, #475, #474 and
+-- #478, with payments (#315, #318) after V91. Flyway runs with outOfOrder off.
 --
 -- Expand only, safe on a populated database. Four nullable or constant-default columns on retail_sales, a partial unique
 -- index, a small trigger that keeps the four columns as written, three new tables and one permission. No existing row changes.

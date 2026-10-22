@@ -510,7 +510,7 @@ Notes:
   the printed receipt is signed "Issued by" the seller who made the sale, read as stored, though ADR-055 hides the maker from a
   caller without `retail.profit.read`. The name appears only in that printed signature of a receipt the caller may already fetch,
   never in any API field; the owner may reverse it. Tests: `SaleReceiptPdfIT`.
-- Retail sales offline (issue #458, ADR-067, migration `V87`): `retail.offline.resolve` (administrators and the Supervisor, scoped
+- Retail sales offline (issue #458, ADR-067, migration `V86`): `retail.offline.resolve` (administrators and the Supervisor, scoped
   by branch) lists and resolves the clashes of sales recorded offline and lists, resends or discards the sales the server refused
   (`/retail/sale-clashes`, `/retail/offline-failures`); a discard needs a reason and is audited (`retail.offline_sale.discarded`). Nobody decides a refused
   sale they made themselves (403 `own_offline_sale`), except that a `tenant_admin` may discard their own with a second written

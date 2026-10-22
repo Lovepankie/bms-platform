@@ -5,8 +5,9 @@
 Accepted (owner decision, issue #458, 22 Oct 2026; the offline price rules of decision 11 decided by the product owner,
 Hillary, 22 Oct 2026). Amends ADR-009 (staff data "never cached for offline use beyond drafts")
 and NFR-OFF-04 and NFR-OFF-05 for retail sales only. Every other money action, and every lending action, stays online only.
-Migration `V87` (main has `V80` to `V84` merged; `V85` and `V86` are claimed by payments; then `V88` shop logos,
-`V89` referrals, `V90` barcodes, `V91` existing loans, `V93` the self-serve plan; renumbered at merge if needed).
+Migration `V86` (main has `V80` to `V84` merged; agreed merge order: `V85` shop logos #465, `V86` this, `V87` barcodes
+#470, `V88` referrals #467, `V89` existing loans #475, `V90` modules #474, `V91` the data download #478; payments #315
+and #318 after `V91`).
 
 ## Context
 
