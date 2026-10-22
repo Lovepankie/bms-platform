@@ -37,6 +37,12 @@ function firePrompt() {
   return { prompt, event };
 }
 
+/** The words of the iPhone steps, without the labels drawn inside their pictures. */
+function stepWords() {
+  const spans = screen.getByTestId('ios-install-steps').querySelectorAll('.ios-step-text');
+  return Array.from(spans, (span) => span.textContent ?? '').join(' ');
+}
+
 beforeEach(() => {
   localStorage.clear();
 });
@@ -118,13 +124,17 @@ describe('the install offer', () => {
     render(<ui.InstallPrompt />);
     expect(screen.queryByTestId('ios-install-steps')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
-    expect(screen.getByTestId('ios-install-steps').textContent).toContain('Add to Home Screen');
-    expect(screen.getByTestId('ios-install-steps').textContent).toContain('Share');
+    // The step words only: the drawings beside them (ios-pictures.tsx) have words of their own, which must not count here.
+    const words = stepWords();
+    expect(words).toContain('Add to Home Screen');
+    expect(words).toContain('Share');
     // A pilot owner could not find Share: the steps say Safari, not a Private tab, and where Share hides.
-    expect(screen.getByTestId('ios-install-steps').textContent).toContain('Private');
-    expect(screen.getByTestId('ios-install-steps').textContent).toContain('⋯');
+    expect(words).toContain('Private');
+    expect(words).toContain('⋯');
     // A pilot owner found Share but not Add to Home Screen: newer iPhones keep it behind View More.
-    expect(screen.getByTestId('ios-install-steps').textContent).toContain('View More');
+    expect(words).toContain('View More');
+    // On an iPad Share is at the top right, not in the bottom toolbar the drawing shows.
+    expect(words).toContain('On an iPad, Share is at the top right.');
     expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('ios-install-steps')).toBeNull();

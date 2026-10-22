@@ -229,3 +229,52 @@
     transform: scale(0.82);
   }
 }
+
+/* The pictures beside the iPhone install steps (issue #448, src/install/ios-pictures.tsx): what to tap is ringed in the accent. */
+.ill-accent-ring {
+  fill: var(--color-accent-tint);
+  stroke: var(--color-accent);
+  stroke-width: 2.5;
+}
+
+.ill-text {
+  fill: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.ill-thin {
+  stroke-width: 2;
+}
+
+.ill-dashed {
+  stroke-dasharray: 4 3;
+}
+
+.ill-text-strong {
+  fill: var(--color-text);
+  font-weight: var(--weight-bold);
+}
+
+.ill-text-accent {
+  fill: var(--color-accent);
+  font-weight: var(--weight-bold);
+}
+
+/* The words first and the picture beside them; on a narrow phone the picture moves under the words, which keep their width. */
+.ios-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.ios-step-text {
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+
+.ios-step-pic {
+  flex: 0 0 auto;
+  width: 104px;
+}

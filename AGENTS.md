@@ -378,7 +378,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (one row per user per device, RLS; the endpoint is unique in the tenant so a shared device moves to the next person) and the outbox channel CHECK
   widened to `push`. The PWA manifest is `BMS`, id and start page `/staff`, standalone, PNG icons 192 and 512 and maskable (`frontend/public/icons/`);
   `frontend/src/install/` captures `beforeinstallprompt` and offers the install after sign-in, on the sign-in, invitation, forgot and reset password
-  pages (iPhone: the three steps), waved away for 30 days per device; the page `/staff/notifications` (Notifications and app) has the permanent install
+  pages (iPhone: the Safari steps, each with a small drawing beside its words since issue #448), waved away for 30 days per device; the page `/staff/notifications` (Notifications and app) has the permanent install
   control, the switch Notifications on this device (permission asked only on the tap) and the person's devices, with a page tour and a step in the
   welcome tours. `public/push-sw.js` (loaded into the generated worker) shows the notification and opens the route on a tap. Backend, in
   `core.notifications`: VAPID keys from `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_VAPID_PRIVATE_KEY`, `BMS_PUSH_SUBJECT` (off when unset; ephemeral in dev and

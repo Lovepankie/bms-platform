@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from 'react';
 import { dismiss, getServerState, getState, isIosDevice, requestInstall, subscribe } from './install';
+import { addButton, addToHomeScreen, safariTab, shareButton } from './ios-pictures';
 
 // "Install the app" (ADR-050). Two pieces share one store (install.ts):
 //   InstallPrompt: the offer. It shows after sign-in, on the sign-in page, on the invitation and first password page and on the
@@ -16,24 +17,47 @@ function useInstall() {
  * (other iOS browsers can add to the Home Screen too, from menus that differ). The Share button is often out of sight: Safari
  * folds its toolbar away when the page scrolls, and in some layouts Share sits behind the ⋯ button. A first pilot owner stopped
  * at "tap Share" because she could not see it, so the steps say what to do when it is not there, rather than which phone or
- * which iOS layout she has, which she cannot be expected to know.
+ * which iOS layout she has, which she cannot be expected to know. On an iPad Share is at the top right, not in a bottom
+ * toolbar. Newer iPhones keep Add to Home Screen behind View More. Each step has a small drawing beside its words (issue #448,
+ * ios-pictures.tsx), since a picture of what to look for is followed more easily than words alone.
  */
 export function IosSteps() {
   return (
     <ol className="stack" data-testid="ios-install-steps">
       <li>
-        Use <strong>Safari</strong>, in a normal tab, not a Private one (a Private tab forgets your sign-in).
+        <div className="ios-step">
+          <span className="ios-step-text">
+            Use <strong>Safari</strong>, in a normal tab, not a Private one (a Private tab forgets your sign-in).
+          </span>
+          {safariTab}
+        </div>
       </li>
       <li>
-        Tap <strong>Share</strong>: the square with an arrow. If the buttons are hidden, tap the address bar once so they
-        show. If you still do not see Share, tap <strong>⋯</strong> and Share is there.
+        <div className="ios-step">
+          <span className="ios-step-text">
+            Tap <strong>Share</strong>: the square with an arrow. If the buttons are hidden, tap the address bar once so they
+            show. If you still do not see Share, tap <strong>⋯</strong> and Share is there. On an iPad, Share is at the top
+            right.
+          </span>
+          {shareButton}
+        </div>
       </li>
       <li>
-        Tap <strong>Add to Home Screen</strong>. If it is not in the list, scroll down, or tap <strong>View More</strong> and it is
-        there.
+        <div className="ios-step">
+          <span className="ios-step-text">
+            Tap <strong>Add to Home Screen</strong>. If it is not in the list, scroll down, or tap <strong>View More</strong> and it is
+            there.
+          </span>
+          {addToHomeScreen}
+        </div>
       </li>
       <li>
-        Tap <strong>Add</strong>. Then open BMS from its new icon.
+        <div className="ios-step">
+          <span className="ios-step-text">
+            Tap <strong>Add</strong>. Then open BMS from its new icon.
+          </span>
+          {addButton}
+        </div>
       </li>
     </ol>
   );
