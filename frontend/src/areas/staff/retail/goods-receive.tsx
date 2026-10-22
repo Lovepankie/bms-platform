@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type GoodsReceiptRequest, type Product, type PurchaseOrder } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { SkeletonList } from '../../../components/states';
@@ -124,7 +125,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
       <p className="rt-total" aria-live="polite" data-testid="receive-total">Worth {money(receiveTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="receive-save">{busy ? 'Saving' : 'Save goods received'}</button>
+      <BusyButton busy={busy ?? false} type="submit" className="rt-primary" disabled={problem !== null} data-tour="receive-save">Save goods received</BusyButton>
     </form>
   );
 }

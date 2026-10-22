@@ -414,6 +414,20 @@ delivery log, the opt-out and the cost record.
 | FR-NTF-24 | The system shall push the everyday notices of retail, each to its own people and never with a customer's name, a phone number or an amount: a new order from outside the shop to the staff of its shop (not the person who took it, not the administrators); an order out for delivery and delivered to the person who took it, unless they did it; an item low at a branch (FR-RET-63) to that branch's stock readers and the administrators, at most once per item, branch and day; credit sales due today or overdue since yesterday, each morning between 08:00 and 12:00, to the administrators once and to the supervisors of each shop; and the number of sales at each shop at the business's closing time to the administrators, or the next morning as yesterday's when the server was down at that time (issue #412, ADR-057). | `PushEverydayNoticesIT`: each publisher through its route or the job at chosen times; branch scope, role, the taker, the dedupe of low stock, the morning hour, the summary time and once a day. | MVP |
 | FR-NTF-25 | A tenant administrator shall switch each everyday notice off and on, and set the time of the daily summary (a quarter hour up to 23:30 on the business's clock, 20:00 unless changed), in the tenant settings group `notifications`, versioned and audited; the safeguard notices of ADR-050 have no switch (issue #412). | `PushEverydayNoticesIT`: the defaults, a bad time refused, `If-Match` required, a non-administrator refused, a switched-off notice queues nothing. | MVP |
 
+Built in extras B5 (#227): the reminders and arrears notices of FR-NTF-02, queued by the nightly arrears run of FR-ARR-01
+after each active loan's recompute, through `SmsEvents` (FR-NTF-22). `loan.due_in_3_days` from three days before an unpaid
+instalment's due date and `loan.due_today` on it (category `reminder`); `loan.overdue_1`, `loan.overdue_7` and
+`loan.overdue_30` once the loan's DPD reaches the step, on its oldest unpaid instalment with the loan's arrears and DPD
+(category `arrears`). The event reference is the schedule item, so the outbox key holds (schedule item, reminder type) and a
+rerun queues nothing new (FR-NTF-06). The window, the expiry at the end of the window day, the opt-out and the caps are the
+channel's (FR-NTF-04, FR-NTF-14, FR-NTF-17, FR-NTF-18). Texts in chapter 11 section 11.3.1. After the review of
+#290: an arrears step goes only on the night the loan reaches it (DPD 1, 7 or 30) or the night after, never as a backlog,
+so switching the run or SMS on texts nobody already far in arrears; a loan gets at most one arrears notice about another
+instalment in seven days (`lending_loan_notices`, migration V84; the steps of one instalment always go); a due reminder
+expires at the end of its due date and an arrears notice at the end of the day it was queued, so neither arrives late;
+`loan.due_today` names its date; and a repayment withdraws the not-yet-sent reminders of the instalments it reached, as
+closing or writing off a loan withdraws all of them.
+
 ## 3.12 Document generation (DOC)
 
 | ID | Requirement | Acceptance criteria | Phase |
@@ -691,6 +705,25 @@ made, and a receipt counts only the penalties recorded before its payment (ADR-0
 insights snapshot (FR-ARR-02, 00:45) computes each date's positions itself and does not wait for
 this run. FR-ARR-04 is T2 (#265).
 
+Built in increment 6 T2 (#265): FR-ARR-04 for penalties. A user with
+`lending.charges.waive_request` requests a waiver of all or part of one penalty charge with a
+reason (`charge_waiver`; the tenant threshold is weighed against everything already waived on the
+loan plus this request, so a waiver split into small requests still reaches a checker); the checker holds
+`lending.charges.waive_approve`. At most the charge's unwaived amount, and never more than the
+item's unpaid penalties, can be waived (`waiver_exceeds_charge`, `nothing_to_waive`). The approved
+waiver is a dated `lending_charge_waivers` row, taken off the item's penalties as `waived`, posted
+nowhere, shown on the statement on its date, kept by a reversal's replay (ADR-026), and closes the
+loan when nothing else is owed. Waivers of fees and of interest by the accountant are not built:
+the route of chapter 7 names a charge, and fees and interest on the schedule are not charges, so
+they need a route of their own (an open question on #265). The loan is locked before the charge is read; a
+charge cancelled by a back-dated repayment is not listed and cannot be waived; the charges list reads
+the loan's items once (migration V82). After the second review: a waiver is netted against its own
+charge (a waiver of a later penalty never hides an earlier one from a payment); a back-dated repayment
+cancels the unwaived rest of a partly waived charge; the approval request shows the waiver's own amount
+while the threshold weighs the loan's running total; the loan's own officer may not decide its waiver
+(`approver_conflict`); and one waiver at a time waits on a loan: a second request while one is pending
+is refused as `approval_already_pending` (409), the checker decides the first.
+
 ## 3.22 Closure, write-off and restructure (LCL)
 
 | ID | Requirement | Acceptance criteria | Phase |
@@ -834,6 +867,30 @@ expense credited 20,000, cash 1,020,000.
 | FR-CLN-04 | An officer shall log a collection action on a loan: `call`, `visit`, `sms`, `letter`, `promise_to_pay` (with promised date and amount), `other`, with a note. | Actions are append only and shown as a timeline on the loan. | MVP |
 | FR-CLN-05 | A promise to pay shall be marked `kept` when repayments between the promise and the promised date reach the promised amount, else `broken` the day after the promised date. | Nightly job tested. | MVP |
 | FR-CLN-06 | Officer performance shall be reported: portfolio, disbursements, collections due versus collected, PAR by officer. | Chapter 14. | MVP |
+
+Built in increment 6 T3 (#266): FR-CLN-01 to FR-CLN-05. A holder of `lending.collections.assign`
+moves one loan or up to 500 to an officer, all or none, audited per loan; the officer must be an
+active staff user who can create loans in each loan's branch (`officer_not_eligible`, checked
+through `core.identity`'s `StaffDirectory`), and a reassignment is not a new loan version, so a
+pending money approval stays current. Loans that are finished (closed, rejected, cancelled,
+restructured) keep their officer. Collection actions are logged on an active or written-off loan;
+every action but a promise needs a note, and a promise needs a date (today or later) and an amount.
+The due list, the arrears list (all four buckets, or one) and the promise list follow chapter 14
+section 14.4 in the caller's `lending.collections.read` scope, each at most `limit` lines (200 by
+default, 500 at most) with `truncated` when more matched (the arrears bucket totals still count every
+loan), and a member's phone is shown whole only to a caller holding `lending.members.contact` in the
+loan's branch (administrators, branch managers and loan officers), masked (`+256*****0001`) otherwise;
+without `lending.collections.all_officers` (the loan officer) every list covers only the caller's own
+portfolio (ADR-064, migration V83). The nightly arrears run settles promises
+last, in a transaction of its own: kept when repayments and recoveries not reversed, valued from the
+day the promise was made to its date and recorded after the promise was made, reach its amount;
+broken the day after its date otherwise; each payment counts toward one promise only (a loan's
+promises, due soonest first, take the payments in their own window); a promise is for a date at most
+60 days ahead (`promised_date_too_far`); a reassignment needs a reason of 5 to 300 characters, kept in
+the audit row, and every open promise and every promise due in the last 31 days is settled again
+each night from the payments that stand, so a back-dated payment can keep a broken promise and a
+reversal can break or reopen a kept one. A reassignment asks `StaffDirectory` once per branch.
+FR-CLN-06 is a report (extras D3, #222).
 
 ## 3.27 Member self-service (MSS)
 

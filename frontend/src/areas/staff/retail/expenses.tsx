@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, retail, type Expense, type ExpenseGroup } from '../../../api/retail';
 import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
@@ -79,9 +80,9 @@ export function ExpenseForm({ branchId, onSaved }: { branchId: string; onSaved?:
 
       {plan.problem && draft.categoryId !== '' && draft.amount.trim() !== '' && <p role="alert" className="rt-flag">{plan.problem}</p>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={blocked}>
-        {save.isPending ? 'Saving' : 'Save expense'}
-      </button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+        Save expense
+      </BusyButton>
     </form>
   );
 }

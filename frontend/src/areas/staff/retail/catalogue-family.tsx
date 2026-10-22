@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, getRouteApi } from '@tanstack/react-router';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Family, type Product } from '../../../api/retail';
 import { planVariants, splitOptions, variantKey, variantLabel } from '../../../api/retail-variants';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
@@ -173,7 +174,7 @@ function AddVariants({ family, onDone }: { family: Family; onDone: (text: string
       <VariantPreview rows={preview.rows} profit={profit} onEdit={preview.edit} />
       {problem && preview.rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
       <Problem error={save.error} />
-      <button type="submit" disabled={problem !== null || save.isPending}>{save.isPending ? 'Saving' : preview.rows.length > 0 ? `Add these ${preview.rows.length}` : 'Add'}</button>
+      <BusyButton busy={save.isPending} type="submit" disabled={problem !== null}>{preview.rows.length > 0 ? `Add these ${preview.rows.length}` : 'Add'}</BusyButton>
     </form>
   );
 }
@@ -208,7 +209,7 @@ function RenameFamily({ family, onDone }: { family: Family; onDone: (text: strin
       </select>
       <p className="hint">Every size and colour takes the new name and category. Past sales stay as they were.</p>
       <Problem error={save.error} />
-      <button type="button" className="rt-primary" disabled={!changed || save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Save'}</button>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!changed} onClick={() => save.mutate()}>Save</BusyButton>
       <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
     </section>
   );
@@ -252,7 +253,7 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
       />
       <p className="hint">A photo here is for this size alone. Without one, it shows the item's photo.</p>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={!ready}>{save.isPending ? 'Saving' : 'Save changes'}</button>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!ready}>Save changes</BusyButton>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
     </form>
   );

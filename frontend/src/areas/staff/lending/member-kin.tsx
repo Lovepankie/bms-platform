@@ -8,6 +8,7 @@ import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fi
 import { blankKin, kinBody, kinProblems, RELATIONSHIPS, relationshipWords, type KinDraft } from './member-state';
 import { normaliseUganda, showPhone } from './member-state';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Next of kin on a member's page (FR-MEM-06, FR-MEM-07): add, change, remove, and say yes or no to a suggested link to
 // another member. A change or a removal carries the person's version as If-Match, so two officers cannot overwrite each other.
@@ -63,7 +64,7 @@ function KinForm({ kin, memberId, onDone }: { kin?: NextOfKin; memberId: string;
       </Group>
       <SaveGuardNotice guard={guard} what="next of kin" found={() => <button type="button" className="btn-sm" onClick={onDone}>Close</button>} />
       <Problem error={failure ? new Error(failure) : null} />
-      <SaveBar label="Save" busyLabel="Saving" busy={save.isPending} blocked={guard.blocked ? 'Wait for the check above before saving again.' : undefined} cancel={<button type="button" className="btn btn-ghost" onClick={onDone}>Cancel</button>} />
+      <SaveBar label="Save" busy={save.isPending} blocked={guard.blocked ? 'Wait for the check above before saving again.' : undefined} cancel={<button type="button" className="btn btn-ghost" onClick={onDone}>Cancel</button>} />
     </form>
   );
 }
@@ -92,8 +93,8 @@ function KinRow({ kin, memberId, canChange, onEdit }: { kin: NextOfKin; memberId
           <p>A member has this phone number. Is this person the same as that member?</p>
           {canChange && (
             <p className="cluster">
-              <button type="button" className="btn-sm" disabled={decide.isPending} onClick={() => decide.mutate('confirm')}>Yes, the same person</button>
-              <button type="button" className="btn-sm btn-ghost" disabled={decide.isPending} onClick={() => decide.mutate('reject')}>No</button>
+              <BusyButton busy={decide.isPending && decide.variables === 'confirm'} type="button" className="btn-sm" disabled={decide.isPending} onClick={() => decide.mutate('confirm')}>Yes, the same person</BusyButton>
+              <BusyButton busy={decide.isPending && decide.variables === 'reject'} type="button" className="btn-sm btn-ghost" disabled={decide.isPending} onClick={() => decide.mutate('reject')}>No</BusyButton>
             </p>
           )}
         </div>
@@ -108,7 +109,7 @@ function KinRow({ kin, memberId, canChange, onEdit }: { kin: NextOfKin; memberId
       {asking && (
         <div role="group" aria-label="Remove next of kin" className="cluster">
           <span>Remove {kin.full_name}?</span>
-          <button type="button" className="btn-sm" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? 'Removing' : 'Yes, remove'}</button>
+          <BusyButton busy={remove.isPending} type="button" className="btn-sm" onClick={() => remove.mutate()}>Yes, remove</BusyButton>
           <button type="button" className="btn-sm btn-ghost" onClick={() => setAsking(false)}>Keep</button>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type CustomerGroup, type PriceList } from '../../../api/retail';
 import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
@@ -43,14 +44,14 @@ export function GroupCard({ group, lists, busy, onSave, extra }: {
             {lists.filter((l) => l.active || l.id === group.price_list_id).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
           <p className="cluster">
-            <button type="button" disabled={busy || name.trim() === ''} onClick={() => { save(group.active !== false, name.trim(), listId); setEditing(false); }}>Save</button>
+            <BusyButton busy={busy ?? false} type="button" disabled={name.trim() === ''} onClick={() => { save(group.active !== false, name.trim(), listId); setEditing(false); }}>Save</BusyButton>
             <button type="button" className="btn-ghost" onClick={() => { setName(group.name ?? ''); setListId(group.price_list_id ?? ''); setEditing(false); }}>Cancel</button>
           </p>
         </div>
       ) : (
         <p className="cluster">
           <button type="button" className="btn-sm" onClick={() => setEditing(true)} aria-label={`Edit ${group.name}`}>Edit</button>
-          <button type="button" className="btn-sm" disabled={busy} onClick={() => save(off)} aria-label={`${off ? 'Switch on' : 'Switch off'} ${group.name}`}>{off ? 'Switch on' : 'Switch off'}</button>
+          <BusyButton busy={busy ?? false} type="button" className="btn-sm" onClick={() => save(off)} aria-label={`${off ? 'Switch on' : 'Switch off'} ${group.name}`}>{off ? 'Switch on' : 'Switch off'}</BusyButton>
         </p>
       )}
     </li>
@@ -87,7 +88,7 @@ export function CustomerGroups() {
             <option value="">No price list</option>
             {(lists.data ?? []).filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
-          <button type="submit" className="rt-primary" disabled={create.isPending || name.trim() === ''}>{create.isPending ? 'Adding' : 'Add group'}</button>
+          <BusyButton busy={create.isPending} type="submit" className="rt-primary" disabled={name.trim() === ''}>Add group</BusyButton>
           <Problem error={create.error} />
         </form>
       </AddPanel></div>

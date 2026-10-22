@@ -1,8 +1,8 @@
 import type { Me } from '../../../api/client';
 import { icons } from '../../../components/icons';
 import { MenuItemLink } from '../../../components/side-menu';
-import { SCREENS, canUse, showRetail, type RetailScreen } from './permissions';
-import { useCanSellAnywhere } from './ui';
+import { SCREENS, branchesWhere, canUse, sellingBranches, showRetail, type RetailScreen } from './permissions';
+import { useBranchRolesRead } from './ui';
 
 // The retail shortcuts (#95): the first retail screens the session may use, with short names. The pilot's order comes first (Sales,
 // Banked, Savings, Expenses, Advances, FR-RET-31), with customer orders right after Sale (issue #385), then the stock shortcuts.
@@ -24,12 +24,13 @@ export function shortcutsFor(me: Pick<Me, 'permissions' | 'module_capabilities'>
 
 /**
  * True when the session may record a sale somewhere: retail is on, the sale screen is allowed and, with branch roles, some branch it
- * sells at is not a store. The branch roles are read only when the first two hold.
+ * sells at is not a store. The branch roles are read only when the first two hold, and until they are read it is false, so Sell
+ * never shows and then goes for a session whose every branch is a store.
  */
 export function useSells(me: Me): boolean {
   const may = showRetail(me) && canUse(me, 'sale');
-  const anywhere = useCanSellAnywhere(me, may);
-  return may && anywhere;
+  const { roles, loading } = useBranchRolesRead(me, may);
+  return may && !loading && sellingBranches(branchesWhere(me, 'retail.sale.create'), roles).length > 0;
 }
 
 /** The shortcuts as a group under Retail in the side menu, the sidebar and the phone drawer alike (issue #455). */

@@ -104,8 +104,8 @@ class ApprovalService implements Approvals {
             throw new IllegalArgumentException("amount and currency go together");
         }
         if (action.thresholdApplies()
-                && request.amountMinor() != null
-                && request.amountMinor() < settings.approvalThresholdMinor(action.actionType())) {
+                && request.thresholdMinor() != null
+                && request.thresholdMinor() < settings.approvalThresholdMinor(action.actionType())) {
             action.execute(new ApprovalAction.Execution(
                     null, request.branchId(), request.subjectId(), request.payload(), maker.userId(), null));
             audit.record(new AuditLog.Entry(

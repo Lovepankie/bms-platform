@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { AdminCredential } from '../../../api/sign-in-reset';
 import type { StaffUser } from '../../../api/users';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { resetProofProblem } from './state';
 
 // Reset someone's sign-in (issue #339; FR-IAM-15, ADR-042). The administrator proves it is still them, as the other sensitive actions
@@ -81,8 +82,8 @@ export function ResetPanel({ user, mfaEnabled, onSend, onCancel }: {
       {problem && <p role="alert" className="field-error">{problem}</p>}
       {error && <p role="alert" className="alert alert-danger">{error}</p>}
       <p className="cluster">
-        <button type="submit" className="rt-primary" disabled={!ready || busy}>{busy ? 'Making a link' : 'Make the link'}</button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
+        <BusyButton type="submit" className="rt-primary" busy={busy} disabled={!ready}>Make the link</BusyButton>
+        <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </p>
     </form>
   );

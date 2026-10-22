@@ -7,6 +7,7 @@ import { icons } from '../../components/icons';
 import { SideMenu } from '../../components/side-menu';
 import { illustrations, type IllustrationName } from '../../components/illustrations';
 import { BrandLoader, EmptyState, SkeletonList, StatusPanel } from '../../components/states';
+import { BusyButton } from '../../app/ui/BusyButton';
 
 // The living style page (#106, docs/ui/design-system.md): every shared component and illustration
 // on one page, drawn by the same classes the screens use, so a change to the design layer can be
@@ -120,6 +121,12 @@ function StylePage() {
             Disabled
           </button>
           <button className="btn-sm">Small</button>
+          <BusyButton type="button" className="btn-primary" busy>
+            Busy
+          </BusyButton>
+          <BusyButton type="button" className="btn-sm" busy>
+            Small busy
+          </BusyButton>
           <button className="btn-icon">
             {icons.arrow}
             With icon

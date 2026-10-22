@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { businessToday, retail, type GoodsReceipt, type LandedCostPreview } from '../../../api/retail';
@@ -41,7 +42,7 @@ export function GoodsPicker({ onAdd, chosen }: { onAdd: (receipt: GoodsReceipt) 
                 <strong>{r.receipt_no}</strong> from {r.supplier_name}, {showDate(r.received_on)}, {money(r.total_minor ?? 0)}
                 {r.held_for_costing ? <span className="hint"> Held until the landed cost is in.</span> : null}
               </p>
-              <button type="button" className="btn-sm" disabled={add.isPending} onClick={() => add.mutate(r.id ?? '')} aria-label={`Add ${r.receipt_no}`}>Add this delivery</button>
+              <BusyButton busy={add.isPending && add.variables === (r.id ?? '')} type="button" className="btn-sm" disabled={add.isPending} onClick={() => add.mutate(r.id ?? '')} aria-label={`Add ${r.receipt_no}`}>Add this delivery</BusyButton>
             </li>
           ))}
         </ul>
@@ -206,8 +207,8 @@ export function ReviewPanel({ form, payee, preview, busy, error, onBack, onSave 
       {preview && <AllocationTable lines={lines} total={preview.total_minor} />}
       <Problem error={error} />
       <p className="cluster">
-        <button type="button" className="rt-primary" disabled={!preview || preview.total_mismatch === true || busy} onClick={onSave}>{busy ? 'Saving' : 'Save landed cost'}</button>
-        <button type="button" className="btn-ghost" onClick={onBack} disabled={busy}>Change something</button>
+        <BusyButton busy={busy ?? false} type="button" className="rt-primary" disabled={!preview || preview.total_mismatch === true} onClick={onSave}>Save landed cost</BusyButton>
+        <button type="button" /* busy-exempt: going back waits for the save */ className="btn-ghost" onClick={onBack} disabled={busy}>Change something</button>
       </p>
     </section>
   );

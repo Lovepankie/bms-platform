@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState, type ReactNode } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
@@ -270,7 +271,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
         />
       )}
       {!exists && <Problem error={save.error ?? check.error} />}
-      <button type="submit" className="rt-primary" disabled={!complete || busy || exists !== null || similar !== null}>{busy ? 'Saving' : product ? 'Save changes' : 'Add item'}</button>
+      <BusyButton busy={busy} type="submit" className="rt-primary" disabled={!complete || exists !== null || similar !== null}>{product ? 'Save changes' : 'Add item'}</BusyButton>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
     </form>
   );
@@ -326,7 +327,7 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
         <label htmlFor="price-reason">Why is the price changing?</label>
         <input id="price-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} autoComplete="off" />
         <Problem error={save.error} />
-        <button type="submit" className="rt-primary" disabled={!valid || save.isPending}>{save.isPending ? 'Saving' : 'Save the new price'}</button>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!valid}>Save the new price</BusyButton>
         <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
       </form>
       <h2>Price history</h2>

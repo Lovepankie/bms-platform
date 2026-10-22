@@ -51,7 +51,7 @@ describe('a member saved while the answer is lost', () => {
     type(/^Phone number/, '0700000099');
     type(/^Kind of ID/, 'none');
   };
-  const saveButton = () => screen.getByRole('button', { name: /Save member|Saving/ }) as HTMLButtonElement;
+  const saveButton = () => screen.getByRole('button', { name: /Save member/ }) as HTMLButtonElement;
 
   it('takes the raw failure of a dropped connection as a lost answer, finds the member and blocks a second save', async () => {
     const mock = createMembersMock();
@@ -113,7 +113,7 @@ describe('collateral saved while the answer is lost', () => {
     mount(<CollateralForm memberId={holder.id} />, createMembersMock([holder]).api, api);
     await screen.findByText('Test Holder 01');
     type(/^Describe the item/, 'Test television set');
-    const save = () => screen.getByRole('button', { name: /Register collateral|Saving/ }) as HTMLButtonElement;
+    const save = () => screen.getByRole('button', { name: /Register collateral/ }) as HTMLButtonElement;
     fireEvent.click(save());
     expect(await screen.findByText(/item is already saved\. It was not saved a second time/)).toBeTruthy();
     expect(save().disabled).toBe(true);
@@ -133,7 +133,7 @@ describe('the shared phone box', () => {
     type(/^Full name/, 'Test Borrower 99');
     type(/^Phone number/, '0700000001');
     type(/^Kind of ID/, 'none');
-    const save = () => screen.getByRole('button', { name: /Save member|Saving/ }) as HTMLButtonElement;
+    const save = () => screen.getByRole('button', { name: /Save member/ }) as HTMLButtonElement;
     fireEvent.click(save());
     const tick = await screen.findByLabelText(/different person who shares the phone/i);
     expect(save().disabled).toBe(true);

@@ -46,7 +46,7 @@ function mount(node: ReactElement, api: MembersApi) {
 }
 
 const type = (label: RegExp | string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
-const save = () => screen.getByRole('button', { name: /Save member|Save changes|Saving/ }) as HTMLButtonElement;
+const save = () => screen.getByRole('button', { name: /Save member|Save changes/ }) as HTMLButtonElement;
 const fill = (nin = 'CM000000000099', phone = '0700000099') => {
   type(/^Full name/, 'Test Borrower 99');
   type(/^Phone number/, phone);

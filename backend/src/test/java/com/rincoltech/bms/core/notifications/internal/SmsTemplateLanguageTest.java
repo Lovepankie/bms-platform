@@ -53,7 +53,12 @@ class SmsTemplateLanguageTest {
                         "loan.closed",
                         "investment.funded",
                         "investment.maturing",
-                        "investment.paid_out");
+                        "investment.paid_out",
+                        "loan.due_in_3_days",
+                        "loan.due_today",
+                        "loan.overdue_1",
+                        "loan.overdue_7",
+                        "loan.overdue_30");
         for (Event event : SmsTemplateEvents.ALL) {
             Set<String> used = SmsTemplateLanguage.validate(event, event.defaultText());
             // The language reads exactly the placeholders the default template of OutboxTemplates uses.

@@ -10,6 +10,7 @@ import { AccountRows, SavingsGate } from './savings';
 import { MemberSmsControl } from './member-sms';
 import { showInvestments } from './investment-state';
 import { mayOpenAccounts } from './savings-permissions';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // A member's savings tab (FR-SAV-02): every account the member holds (a member may hold several),
 // the total, and opening another one on an active product. Opening moves no money: the first
@@ -47,9 +48,9 @@ function OpenAccount({ memberId }: { memberId: string }) {
         <p className="field-hint">The first deposit must be at least {money(chosen.min_opening_balance_minor, chosen.currency)}.</p>
       )}
       <Problem error={open.error} />
-      <button type="submit" className="rt-primary btn-block" disabled={!productId || open.isPending}>
-        {open.isPending ? 'Opening' : 'Open account'}
-      </button>
+      <BusyButton busy={open.isPending} type="submit" className="rt-primary btn-block" disabled={!productId}>
+        Open account
+      </BusyButton>
     </form>
   );
 }

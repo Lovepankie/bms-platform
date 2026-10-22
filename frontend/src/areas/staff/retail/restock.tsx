@@ -15,6 +15,7 @@ import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { UNITS, capabilityOn } from './permissions';
 import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, packPriceMinor } from './units-state';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -289,7 +290,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
 
       <p className="rt-total" aria-live="polite">Total cost {money(restockTotal(lines))}</p>
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" data-tour="restock-save" disabled={blocked || save.isPending}>{save.isPending ? 'Saving' : 'Save restock'}</button>
+      <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} disabled={blocked}>Save restock</BusyButton>
+
       {lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this restock</button>
       )}

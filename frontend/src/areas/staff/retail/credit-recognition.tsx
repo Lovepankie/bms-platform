@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, daysBefore, retail, type CapabilitiesRead } from '../../../api/retail';
 import { Problem, changeFailureText } from './ui';
 
@@ -113,8 +114,8 @@ export function CreditRecognitionSetting({ read, onSaved }: { read: Capabilities
           </ul>
           <p className="hint">It is recorded with your name. Nothing already recorded is deleted or changed.</p>
           <p className="cluster">
-            <button type="button" className="rt-primary" disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Confirm'}</button>
-            <button type="button" className="btn-ghost" disabled={save.isPending} onClick={() => setReviewing(false)}>Back</button>
+            <BusyButton busy={save.isPending} type="button" className="rt-primary" onClick={() => save.mutate()}>Confirm</BusyButton>
+            <button type="button" /* busy-exempt: back waits for the save */ className="btn-ghost" disabled={save.isPending} onClick={() => setReviewing(false)}>Back</button>
           </p>
         </section>
       ) : (

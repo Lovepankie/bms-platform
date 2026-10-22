@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { encode } from 'uqr';
 import type { MfaEnrolment } from '../../api/client';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { groupSecret, passwordChecks, recoveryCodesText, sixDigits } from '../../auth/codes';
 
 // The pieces of the first-run and sign-in screens (issue #86): a progress line, the password
@@ -225,9 +226,9 @@ export function TwoStepSetup(props: {
           required
         />
       </div>
-      <button className="btn-primary btn-lg" disabled={props.busy || props.code.length !== 6}>
-        {props.busy ? 'Checking' : 'Turn on two-step sign-in'}
-      </button>
+      <BusyButton className="btn-primary btn-lg" busy={props.busy} disabled={props.code.length !== 6}>
+        Turn on two-step sign-in
+      </BusyButton>
       {props.children}
     </form>
   );

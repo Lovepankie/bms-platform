@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { RETAIL_CURRENCY, businessToday, retail, type Product, type VariantLine } from '../../../api/retail';
 import { MAX_VARIANTS, planVariants, repeatedCodes, splitOptions, variantKey, variantLabel, type PlannedVariant } from '../../../api/retail-variants';
 import { parseMinor } from '../../../components/money';
@@ -73,7 +74,7 @@ export function NameTaken({ error, busy, onAnyway }: { error: unknown; busy: boo
         <>
           <label htmlFor="item-name-reason">Why both are needed</label>
           <input id="item-name-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} autoComplete="off" />
-          <button type="button" disabled={why === null || busy} onClick={() => why && onAnyway(why)}>Use this name anyway</button>
+          <BusyButton busy={busy} type="button" disabled={why === null} onClick={() => why && onAnyway(why)}>Use this name anyway</BusyButton>
         </>
       )}
     </div>
@@ -250,9 +251,9 @@ export function NewFamilyPage() {
         </section>
         {problem && preview.rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
         {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}
-        <button type="submit" className="rt-primary" data-tour="sizes-save" disabled={!complete || save.isPending}>
-          {save.isPending ? 'Saving' : preview.rows.length > 0 ? `Make these ${preview.rows.length}` : 'Make them'}
-        </button>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" data-tour="sizes-save" disabled={!complete}>
+          {preview.rows.length > 0 ? `Make these ${preview.rows.length}` : 'Make them'}
+        </BusyButton>
       </form>
     </Gate>
   );
@@ -298,7 +299,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
       <OptionBoxes prefix="make" sizes={sizes} colours={colours} onSizes={setSizes} onColours={setColours} />
       <p>{plan.length === 0 ? 'Nothing else will be made yet.' : `Also made, at ${money(product.sell_minor ?? 0)}: ${plan.map((p) => `${variantLabel(p.size, p.colour)} (${p.code})`).join(', ')}.`}</p>
       <Problem error={save.error} />
-      <button type="button" className="rt-primary" disabled={!ready} onClick={() => save.mutate()}>{save.isPending ? 'Saving' : 'Give it sizes and colours'}</button>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!ready} onClick={() => save.mutate()}>Give it sizes and colours</BusyButton>
       <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
     </section>
   );
@@ -426,9 +427,9 @@ export function JoinPage() {
       </section>
       {problem && rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
       {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}
-      <button type="button" className="rt-primary" data-tour="join-save" disabled={problem !== null || save.isPending} onClick={() => save.mutate(undefined)}>
-        {save.isPending ? 'Saving' : 'Join them as one item'}
-      </button>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" data-tour="join-save" disabled={problem !== null} onClick={() => save.mutate(undefined)}>
+        Join them as one item
+      </BusyButton>
     </Gate>
   );
 }

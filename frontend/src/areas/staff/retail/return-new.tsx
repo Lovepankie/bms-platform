@@ -15,6 +15,7 @@ import {
 } from './returns-state';
 import { showDate } from './transfers';
 import { Problem, Success, money } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Take goods back against a sale (returns capability, ADR-033, issue #201). Each line of the sale shows what was sold, what has
 // come back already and what can still come back; the person enters a quantity, the reason and where the goods go, then how the
@@ -162,7 +163,8 @@ export function ReturnFormView({ sale, back, form: chosen, branches, usualIsStor
       </section>
       {problem && planned.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || busy} data-tour="return-save">{busy ? 'Saving' : 'Record the return'}</button>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="return-save">Record the return</BusyButton>
+
     </form>
   );
 }

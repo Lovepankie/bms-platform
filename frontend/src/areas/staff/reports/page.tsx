@@ -10,6 +10,7 @@ import {
   type ReportRun,
 } from '../../../api/reports';
 import { branchFilter } from '../../../auth/branch';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { showReports } from './permissions';
@@ -218,7 +219,7 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
           ))}
         </select>
       </label>
-      <button type="submit" className="btn-primary" disabled={queue.isPending}>Run report</button>
+      <BusyButton type="submit" className="btn-primary" busy={queue.isPending}>Run report</BusyButton>
       <Problem error={queue.error} />
     </form>
   );
@@ -303,9 +304,9 @@ export function RunsTable({
                       <button type="button" className="btn-ghost btn-sm" onClick={() => void download(r)}>Download</button>
                     )}
                     {OPEN_STATUSES.includes(r.status) && !r.cancel_requested && (
-                      <button type="button" className="btn-ghost btn-sm" disabled={cancel.isPending} onClick={() => cancel.mutate(r.id)}>
+                      <BusyButton type="button" className="btn-ghost btn-sm" busy={cancel.isPending && cancel.variables === r.id} disabled={cancel.isPending} onClick={() => cancel.mutate(r.id)}>
                         Cancel
-                      </button>
+                      </BusyButton>
                     )}
                   </td>
                 </tr>

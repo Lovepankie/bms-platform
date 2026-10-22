@@ -85,7 +85,7 @@ describe('the sign-up page (FR-ONB-01, FR-ONB-03)', () => {
   });
 
   it('disables the button while sending, so a double tap sends once', () => {
-    expect(view({ busy: true })).toMatch(/<button class="btn-brand" type="submit" disabled="">Sending<\/button>/);
+    expect(view({ busy: true })).toMatch(/<button type="submit" class="btn-brand busy-button" aria-disabled="true" aria-busy="true">Send application<span class="busy-spinner"/);
     expect(view()).toContain('Send application');
   });
 
@@ -149,7 +149,7 @@ describe('the applicant page (FR-ONB-02, FR-ONB-04)', () => {
     const unconfirmed = await page({ view: { ...base, email_verified: false } });
     expect(unconfirmed).toContain('Confirm my email');
     expect(unconfirmed).not.toContain('We are looking at your application');
-    expect(await page({ view: { ...base, email_verified: false }, confirming: true })).toMatch(/disabled="">Confirming/);
+    expect(await page({ view: { ...base, email_verified: false }, confirming: true })).toMatch(/aria-disabled="true" aria-busy="true">Confirm my email<span class="busy-spinner"/);
     expect(await page({})).not.toContain('Confirm my email');
     expect(await page({ view: { ...base, status: 'needs_info', email_verified: false, operator_note: 'Q?' } })).toContain(
       'Confirm my email',

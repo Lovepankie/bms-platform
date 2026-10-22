@@ -5,6 +5,7 @@ import { useStaff } from '../context';
 import { ALL_SELLERS, holdsAt } from './permissions';
 import { normalisePhone, receiptCaption, shownPhone, whatsAppLink } from './receipt-share-state';
 import { Problem } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Share a sale's receipt from the seller's own phone (issue #439, ADR-061). The receipt goes out from the phone in the
 // seller's hand, never from a server: Share receipt hands the PDF to the phone's share sheet (WhatsApp, Gmail, SMS and the
@@ -142,7 +143,7 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
       {f && (
         <>
           <p className="cluster">
-            <button type="button" className="rt-primary" disabled={busy} onClick={() => void share()}>{busy ? 'Getting the receipt' : 'Share receipt'}</button>
+            <BusyButton type="button" className="rt-primary" busy={busy} onClick={() => void share()}>Share receipt</BusyButton>
           </p>
           {note && <p role="status" className="alert alert-info">{note}</p>}
           <Problem error={error} />
@@ -164,7 +165,8 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
             </label>
           )}
           <p className="cluster">
-            <button type="button" className="btn" onClick={whatsApp}>WhatsApp customer</button>
+            <BusyButton type="button" className="btn" busy={save.isPending} onClick={whatsApp}>WhatsApp customer</BusyButton>
+
           </p>
           <p className="field-hint">{WHATSAPP_HINT}</p>
           {save.isSuccess && <p role="status" className="alert alert-success">Number saved for {f.buyer_name ?? 'the buyer'}.</p>}

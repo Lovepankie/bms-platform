@@ -52,6 +52,15 @@ public interface Outbox {
     int cancelUnclaimed(String eventRef);
 
     /**
+     * As {@link #cancelUnclaimed(String)}, labelled with why: {@code cancelled_reversed} (a reversal) or
+     * {@code cancelled_settled} (a reminder the member no longer needs: the instalment was paid, the loan closed or
+     * written off).
+     */
+    default int cancelUnclaimed(String eventRef, String reason) {
+        return cancelUnclaimed(eventRef);
+    }
+
+    /**
      * Rows written since {@code since} with this throttle key, or, with a null key, of this
      * template: the volume bounds of the sign-up endpoints are counted in the database, not in
      * memory. Runs in the caller's transaction.

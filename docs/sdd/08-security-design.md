@@ -320,6 +320,8 @@ platform API and holds no tenant permissions.
 | `lending.collections.read` | Y | Y | Y | Y | Y | Y | | | | | | |
 | `lending.collections.log_action` | Y | Y | Y | Y | | | | | | | | |
 | `lending.collections.assign` | Y | Y | | | | | | | | | | |
+| `lending.collections.all_officers` | Y | Y | | Y | Y | Y | | | | | | |
+| `lending.members.contact` | Y | Y | Y | | | | | | | | | |
 | `lending.reports.portfolio` | Y | Y | | | Y | Y | | | | | | |
 | `lending.reports.collections` | Y | Y | Y | Y | Y | Y | | | | | | |
 | `lending.reports.members` | Y | Y | | | | Y | | | | | | |
@@ -378,6 +380,9 @@ Notes:
 - A loan officer running `lending.reports.collections` sees only loans where they are
   the responsible officer; branch managers and above see their branch scope.
 - Insights (#153, ADR-030): `lending.insights.read` opens the page in the user's branch scope.
+  Without `lending.collections.all_officers` (the loan officer) the due, arrears and promise lists cover only the
+  caller's own portfolio, and a borrower's phone on them is whole only with `lending.members.contact` (administrators,
+  branch managers, loan officers), masked for the cashier, the accountant and the auditor (ADR-064).
   Without `lending.insights.all_officers` (the loan officer) every figure, chart and table covers
   only loans the user is the responsible officer for, and members they are the officer of; the
   server enforces it whatever the request asks. `lending.insights.export` downloads a drill-down
