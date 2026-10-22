@@ -858,4 +858,25 @@ class ReferralsIT extends IntegrationTest {
         }
         assertThat(amounts(detail(rx))).containsExactly(2000L);
     }
+
+    /** A percent is rounded half up to whole minor units: ten percent of 333 is 33, and of 335 is 34 (decision 5). */
+    @Test
+    void aPercentIsRoundedHalfUp() {
+        TestDatabase.Fixture a = TestDatabase.tenant("refround", false);
+        Business x = business("ref-round");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        rule("/api/v1/platform/referrals/" + rx + "/rule", percent(1000, null), "Test: ten percent, no end");
+        pay(x.id(), 333, 1);
+        pay(x.id(), 335, 1);
+        assertThat(amounts(detail(rx))).containsExactly(33L, 34L);
+    }
+
+    static Map<String, Object> percent(int bp, Integer months) {
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("kind", "percent_of_payment");
+        rule.put("percent_bp", bp);
+        rule.put("months", months);
+        return rule;
+    }
 }

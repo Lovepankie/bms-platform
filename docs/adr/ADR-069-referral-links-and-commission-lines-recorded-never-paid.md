@@ -49,7 +49,8 @@ data, and a business must not be able to refer itself.
    `platform_referral_commission_for_payment` finds the paying business's current referral and the rule in force (its override,
    else the default), counts the paid months already used (decision 9), and adds one
    line (referral, payment, amount, the months counted, and a snapshot of the rule and the payment) when the rule gives an amount.
-   A percent is worked out in whole minor units rounded down, pro rata on the months still inside N; a rule with an amount
+   A percent is worked out in whole minor units rounded half up (amounts are positive, so 10% of 333 is 33 and of 335 is 34;
+   rounding down would short the referrer on every payment), pro rata on the months still inside N; a rule with an amount
    applies only to payments in its currency. A change of rule applies to payments recorded from then on; lines already worked out
    never change. The outcome (`added`, `no_referral`, `no_rule`, `not_first_payment`, `months_used`, `currency_differs`,
    `cap_reached`, `zero`) is never an error: the payment is recorded whatever it says.

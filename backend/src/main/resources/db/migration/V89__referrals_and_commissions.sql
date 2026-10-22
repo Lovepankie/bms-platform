@@ -578,7 +578,7 @@ $$;
 --    business; the payment must be that business's own. Paid months are counted over every other confirmed payment of the
 --    referred business recorded since this referral started (ADR-069 decision 9), leaving out payments in a currency other
 --    than the rule's; recording a payment locks the business's subscription first (V75), so two payments recorded at once
---    are counted one after the other and never both as the first. Amounts are whole minor units, rounded down. Outcomes:
+--    are counted one after the other and never both as the first. Amounts are whole minor units, rounded half up. Outcomes:
 --    added, no_referral, no_rule, not_first_payment, months_used, currency_differs, cap_reached, zero.
 -- ---------------------------------------------------------------------------------------------
 
@@ -646,7 +646,7 @@ BEGIN
     ELSIF v_rule.kind = 'fixed_per_month' THEN
         v_amount := v_rule.amount_minor * v_eligible;
     ELSE
-        v_amount := floor(v_pay.amount_minor::numeric * v_rule.percent_bp * v_eligible / (10000::numeric * v_pay.months));
+        v_amount := round(v_pay.amount_minor::numeric * v_rule.percent_bp * v_eligible / (10000::numeric * v_pay.months));
         IF v_rule.cap_minor IS NOT NULL THEN
             IF v_rule.currency <> v_pay.currency THEN
                 outcome := 'currency_differs';
