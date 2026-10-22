@@ -173,9 +173,9 @@ export function BranchesScreen() {
                         </label>
                         {b.logo_url && (
                           <p>
-                            <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => void removeLogo(b)}>
+                            <BusyButton type="button" className="btn-sm" busy={busyId === b.id} disabled={busyId !== null} onClick={() => void removeLogo(b)}>
                               Remove the logo
-                            </button>
+                            </BusyButton>
                           </p>
                         )}
                       </fieldset>
