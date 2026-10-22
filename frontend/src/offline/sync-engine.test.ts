@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { KEEP_SENT_MS, provisionalNumber, type OutboxItem } from './outbox';
+import { GIVE_UP_AFTER_MS, KEEP_SENT_MS, MAX_SERVER_TRIES, provisionalNumber, type OutboxItem } from './outbox';
 import { memoryStore } from './store';
 import { SyncEngine, type Answer, type Decision, type SyncDeps } from './sync-engine';
 
@@ -125,6 +125,49 @@ describe('the sync engine', () => {
     expect(a).toMatchObject({ state: 'failed', error: { code: 'period_closed', message: 'The period 2026-9 is closed.' }, failureId: 'f-a', decision: 'open' });
     expect(b?.state).toBe('sent');
     expect(deps.report).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails a sale the server keeps answering without taking it after 8 tries, reports it, and goes on', async () => {
+    const { engine, sent, deps, tick } = setup(async (i) => (i.id === 'a' ? { status: 503, body: { detail: 'Busy.' } } : ok(i)));
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    for (let n = 0; n < MAX_SERVER_TRIES; n++) {
+      await engine.syncNow();
+      tick(1);
+    }
+    const [a, b] = engine.snapshot().items;
+    expect(sent.filter((x) => x.startsWith('a:'))).toHaveLength(MAX_SERVER_TRIES);
+    expect(a).toMatchObject({ state: 'failed', error: { code: 'not_taken_after_retries' }, failureId: 'f-a' });
+    expect(b?.state).toBe('sent');
+    expect(deps.report).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails a sale the server has not taken for 24 hours, but never for a phone with no network', async () => {
+    let network = false;
+    const { engine, sent, tick } = setup(async () => {
+      if (!network) throw new TypeError('Failed to fetch');
+      return { status: 500, body: {} };
+    });
+    await engine.queue(item('a', 1));
+    for (let n = 0; n < 12; n++) {
+      await engine.syncNow();
+      tick(GIVE_UP_AFTER_MS);
+    }
+    expect(engine.snapshot().items[0]?.state).toBe('queued');
+    network = true;
+    await engine.syncNow();
+    tick(GIVE_UP_AFTER_MS);
+    await engine.syncNow();
+    expect(sent).toHaveLength(14);
+    expect(engine.snapshot().items[0]).toMatchObject({ state: 'failed', serverTries: 2 });
+  });
+
+  it('treats a refresh that got no answer as a try to do again, not a sign-in to ask for', async () => {
+    const { engine } = setup(async () => ({ status: 401, body: {} }), { refreshUnreachable: () => true });
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    expect(engine.snapshot().needsSignIn).toBe(false);
+    expect(engine.snapshot().items[0]).toMatchObject({ state: 'queued', attempts: 1 });
   });
 
   it('stops on an expired session after one refresh, and asks to sign in', async () => {

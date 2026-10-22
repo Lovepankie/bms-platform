@@ -40,8 +40,11 @@ left, the branch, the period, the person's roles.
    it, and the sale is not shown as kept), and the app asks the browser for persistent storage
    (`navigator.storage.persist()`) when offline selling is mounted, so the outbox is not cleared under storage pressure.
 4. **Sync.** One sale at a time, oldest `occurred_at` first, never two requests in flight. A network failure, a 5xx, a 409
-   or a 429 backs off (5 s, 15 s, 1 min, 5 min, then every 15 min) and keeps the order. A 401 tries one session refresh; if
-   that fails the engine stops and the header asks the person to sign in. A 2xx removes the item and keeps the server's sale
+   or a 429 backs off (5 s, 15 s, 1 min, 5 min, then every 15 min) and keeps the order. A sale the server answers without
+   taking it (a 5xx, a 409, a 429) 8 times, or for 24 hours, is marked failed (`not_taken_after_retries`) and reported like a
+   refusal, so it never holds up the sales behind it; a try with no answer at all (no network) does not count. A 401 tries
+   one session refresh; a refresh that got no answer is a try to do again later; a refused refresh stops the engine and the
+   header asks the person to sign in. The engine goes on whenever a new access token arrives (a sign-in or any refresh). A 2xx removes the item and keeps the server's sale
    number for the receipt. Any other 4xx is a refusal: the item is kept, marked failed with the server's words, reported to
    the server (decision 7) and skipped, so the next one goes. Sync starts on the `online` event, on a successful health ping
    (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now.

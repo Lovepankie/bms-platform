@@ -25,6 +25,8 @@ export interface SyncDeps {
   scope: string;
   send(item: OutboxItem): Promise<Answer>;
   refreshSession(): Promise<boolean>;
+  /** The last refresh got no answer at all (no network): a try to do again later, not a sign-in to ask for. */
+  refreshUnreachable?(): boolean;
   report(item: OutboxItem): Promise<Decision>;
   decisions(clientSaleIds: string[]): Promise<Decision[]>;
   now(): number;
@@ -90,11 +92,12 @@ export class SyncEngine {
     await this.save(item);
   }
 
-  /** The person signed in again: sending may go on. */
+  /** A new access token arrived (a sign-in or a refresh): sending may go on, at once. */
   resume(): void {
     if (!this.needsSignIn) return;
     this.needsSignIn = false;
     this.emit();
+    void this.sync();
   }
 
   /** Sends what is due, one at a time; a call while a run is going asks for one more pass instead of a second run. */
@@ -151,16 +154,23 @@ export class SyncEngine {
         const next = applyOutcome(item, outcome, this.deps.now());
         await this.save(next);
         if (next.state === 'failed') await this.reportFailure(next);
-        if (outcome.kind === 'retry') break;
+        // A failed item never holds up the ones behind it; one still backing off keeps the order.
+        if (next.state === 'queued') break;
       }
     } while (this.again);
   }
 
-  /** One send, marked as on its way first, with one refresh of an expired session. */
+  /**
+   * One send, marked as on its way first, with one refresh of an expired session. A refresh that got no answer (no network)
+   * is a try to do again later, not a sign-in to ask for.
+   */
   private async attempt(item: OutboxItem): Promise<SendOutcome> {
     await this.save({ ...item, state: 'sending' });
     let outcome = await this.once(item);
-    if (outcome.kind === 'auth' && (await this.deps.refreshSession())) outcome = await this.once(item);
+    if (outcome.kind === 'auth') {
+      if (await this.deps.refreshSession()) outcome = await this.once(item);
+      else if (this.deps.refreshUnreachable?.()) outcome = { kind: 'retry', message: 'No connection to the server.' };
+    }
     return outcome;
   }
 

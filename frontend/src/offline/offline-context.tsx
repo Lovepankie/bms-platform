@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { api, type Me } from '../api/client';
 import { retail } from '../api/retail';
-import { refreshSession } from '../auth/session';
+import { getAccessToken, refreshFailedOffline, refreshSession, subscribe as onToken } from '../auth/session';
 import { REFRESH_EVERY_MS, refreshCatalogue, type CatalogueSource } from './catalogue';
 import { browserConnectivity, type Connectivity } from './connectivity';
 import { waiting, type OutboxItem } from './outbox';
@@ -131,6 +131,7 @@ export function browserServices(): OfflineServices {
         return () => window.clearTimeout(id);
       },
       refreshSession,
+      refreshUnreachable: refreshFailedOffline,
       send: async (item) => {
         const { data, error, response } = await api.POST('/api/v1/retail/sales', {
           body: bodyOf(item),
@@ -235,6 +236,14 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       svc.connectivity.stop();
     };
   }, [svc, scope, engine, refresh, lookAtOthers]);
+
+  // Whenever a new access token arrives (a sign-in, a refresh by any screen), a stopped engine goes on sending.
+  useEffect(() => {
+    if (!engine) return;
+    return onToken(() => {
+      if (getAccessToken()) engine.resume();
+    });
+  }, [engine]);
 
   useEffect(() => {
     if (!svc || !signedIn) return;

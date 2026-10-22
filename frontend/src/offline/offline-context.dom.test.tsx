@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/client';
 import { mockMe } from '../api/retail-mock';
+import { setAccessToken } from '../auth/session';
 import { othersOnPhone, summaries, useOfflineSupport, type OfflineServices } from './offline-context';
 import { provisionalNumber, type OutboxItem } from './outbox';
 import { memoryStore, scopeOf, type OfflineStore } from './store';
@@ -85,6 +86,24 @@ describe('a shared phone', () => {
     } finally {
       Reflect.deleteProperty(navigator, 'storage');
     }
+  });
+
+  it('goes on sending as soon as a new access token arrives', async () => {
+    const store = memoryStore();
+    const send = vi.fn(async (): Promise<{ status: number; body: unknown }> => ({ status: 401, body: {} }));
+    const base = services(store, async () => {})();
+    const svc: OfflineServices = { ...base, engineDeps: (s, scope) => ({ ...base.engineDeps(s, scope), send }) };
+    const me: Me = { ...mockMe('sales'), user_id: 'u1' };
+    const { result } = renderHook(() => useOfflineSupport(me, false, () => svc));
+    await waitFor(() => expect(result.current).not.toBeNull());
+    const engine = result.current!.engine;
+    await engine.queue(item('a', 'u1'));
+    await engine.sync();
+    expect(engine.snapshot().needsSignIn).toBe(true);
+    send.mockImplementation(async () => ({ status: 201, body: { id: 's1', sale_no: 'RS1' } }));
+    act(() => setAccessToken('fresh-token'));
+    await waitFor(() => expect(engine.snapshot().items[0]?.state).toBe('sent'));
+    act(() => setAccessToken(null));
   });
 
   it('picks only the other people of this business, and only what still waits', () => {
