@@ -280,6 +280,30 @@ describe('the sync engine', () => {
     expect(sent).toEqual(['key-a']);
   });
 
+  it('adds a sale once: a second queue under its client sale id leaves the first as it is', async () => {
+    const { engine, store } = setup(async (i) => ok(i));
+    await engine.queue(item('a', 1, { totalMinor: 1000 }));
+    await engine.queue(item('a', 1, { totalMinor: 9999, key: 'another-key' }));
+    expect((await store.outbox(SCOPE)).map((i) => [i.id, i.key, i.totalMinor])).toEqual([['a', 'key-a', 1000]]);
+    expect(engine.snapshot().items.map((i) => i.key)).toEqual(['key-a']);
+  });
+
+  it('sends nothing while another tab holds the outbox, and shows what that tab did', async () => {
+    const { engine, store, sent } = setup(async (i) => ok(i), { exclusive: async () => false });
+    await engine.queue(item('a', 1));
+    await store.putItem({ ...item('a', 1), state: 'sent', sale: { id: 's-a', saleNo: 'RS-a' }, sentAt: 1_000_000 });
+    await engine.sync();
+    expect(sent).toEqual([]);
+    expect(engine.snapshot().items[0]?.state).toBe('sent');
+  });
+
+  it('reads the outbox again before sending when it holds the tab lock', async () => {
+    const { engine, store, sent } = setup(async (i) => ok(i), { exclusive: async (fn) => (await fn(), true) });
+    await store.putItem(item('b', 2));
+    await engine.sync();
+    expect(sent).toEqual(['b:key-b']);
+  });
+
   it("never sends another person's outbox", async () => {
     const { engine } = setup(async (i) => ok(i));
     await expect(engine.queue(item('a', 1, { scope: 'test.example|someone-else' }))).rejects.toThrow();

@@ -21,12 +21,15 @@ export interface OfflineStore {
   /** Every queued item on this device, whoever made it (to say what other people left waiting on a shared phone). */
   allOutbox(): Promise<OutboxItem[]>;
   putItem(item: OutboxItem): Promise<void>;
+  /** Adds a new item; rejects with a `ConstraintError` when one with its id is there already. */
+  addItem(item: OutboxItem): Promise<void>;
   deleteItem(id: string): Promise<void>;
   catalogue(scope: string): Promise<Catalogue | null>;
   putCatalogue(scope: string, catalogue: Catalogue): Promise<void>;
   deleteCatalogue(scope: string): Promise<void>;
   profile(scope: string): Promise<Me | null>;
   putProfile(scope: string, me: Me): Promise<void>;
+  deleteProfile(scope: string): Promise<void>;
   /** The person last signed in on this host, for opening the app with no network; null after a sign-out. */
   lastPerson(host: string): Promise<string | null>;
   setLastPerson(host: string, userId: string | null): Promise<void>;
@@ -45,12 +48,17 @@ export function memoryStore(): OfflineStore {
     outbox: async (scope) => [...items.values()].filter((i) => i.scope === scope).map(copy),
     allOutbox: async () => [...items.values()].map(copy),
     putItem: async (item) => void items.set(item.id, copy(item)),
+    addItem: async (item) => {
+      if (items.has(item.id)) throw new DOMException('An item with this id is queued already.', 'ConstraintError');
+      items.set(item.id, copy(item));
+    },
     deleteItem: async (id) => void items.delete(id),
     catalogue: async (scope) => copy((kv.get(`catalogue:${scope}`) as Catalogue | undefined) ?? null),
     putCatalogue: async (scope, c) => void kv.set(`catalogue:${scope}`, copy(c)),
     deleteCatalogue: async (scope) => void kv.delete(`catalogue:${scope}`),
     profile: async (scope) => copy((kv.get(`profile:${scope}`) as Me | undefined) ?? null),
     putProfile: async (scope, me) => void kv.set(`profile:${scope}`, copy(me)),
+    deleteProfile: async (scope) => void kv.delete(`profile:${scope}`),
     lastPerson: async (host) => (kv.get(`last:${host}`) as string | undefined) ?? null,
     setLastPerson: async (host, userId) => void (userId ? kv.set(`last:${host}`, userId) : kv.delete(`last:${host}`)),
   };
@@ -107,12 +115,14 @@ export function indexedDbStore(factory: IDBFactory = indexedDB): OfflineStore {
     outbox: async (scope) => (await tx('outbox', 'readonly', (s) => s.index('scope').getAll(scope))) as OutboxItem[],
     allOutbox: async () => (await tx('outbox', 'readonly', (s) => s.getAll())) as OutboxItem[],
     putItem: async (item) => void (await tx('outbox', 'readwrite', (s) => s.put(item))),
+    addItem: async (item) => void (await tx('outbox', 'readwrite', (s) => s.add(item))),
     deleteItem: async (id) => void (await tx('outbox', 'readwrite', (s) => s.delete(id))),
     catalogue: (scope) => get<Catalogue>(`catalogue:${scope}`),
     putCatalogue: (scope, c) => put(`catalogue:${scope}`, c),
     deleteCatalogue: (scope) => del(`catalogue:${scope}`),
     profile: (scope) => get<Me>(`profile:${scope}`),
     putProfile: (scope, me) => put(`profile:${scope}`, me),
+    deleteProfile: (scope) => del(`profile:${scope}`),
     lastPerson: (host) => get<string>(`last:${host}`),
     setLastPerson: (host, userId) => (userId ? put(`last:${host}`, userId) : del(`last:${host}`)),
   };

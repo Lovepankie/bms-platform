@@ -31,7 +31,7 @@ export function summaries(items: OutboxItem[]): WaitingSummary[] {
   }));
 }
 import { deviceStore, scopeOf, type Catalogue, type OfflineStore } from './store';
-import { SyncEngine, type SyncDeps, type SyncSnapshot } from './sync-engine';
+import { SyncEngine, browserTabLock, type SyncDeps, type SyncSnapshot } from './sync-engine';
 
 // Selling offline in the staff area (issue #458, ADR-067): one engine, one connectivity watch and one catalogue copy for the
 // signed-in person on this business, made in the staff layout and given to the sale screen, the status dot and sign-out.
@@ -51,7 +51,7 @@ export interface Offline {
   othersWaiting: number;
   /** Fetches the catalogue copy again (when online). */
   refresh(): Promise<void>;
-  /** At sign-out: the catalogue copy and the profile pointer go; the person's outbox stays for their next sign-in here. */
+  /** At sign-out: the catalogue copy, the saved profile and its pointer go; the outbox stays for their next sign-in here. */
   forget(): Promise<void>;
 }
 
@@ -132,6 +132,8 @@ export function browserServices(): OfflineServices {
       },
       refreshSession,
       refreshUnreachable: refreshFailedOffline,
+      // Two tabs of the app never send the same outbox at once.
+      exclusive: browserTabLock(`bms-offline-sync:${scope}`),
       send: async (item) => {
         const { data, error, response } = await api.POST('/api/v1/retail/sales', {
           body: bodyOf(item),
@@ -268,6 +270,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       refresh,
       forget: async () => {
         await svc.store.deleteCatalogue(scope);
+        await svc.store.deleteProfile(scope);
         await svc.store.setLastPerson(svc.host, null);
       },
     };

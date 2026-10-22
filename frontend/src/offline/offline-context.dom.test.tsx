@@ -81,7 +81,9 @@ describe('a shared phone', () => {
     const persist = vi.fn(async () => true);
     Object.defineProperty(navigator, 'storage', { value: { persist }, configurable: true });
     try {
-      renderHook(() => useOfflineSupport({ ...mockMe('sales'), user_id: 'u1' }, true, services(memoryStore(), async () => {})));
+      const make = services(memoryStore(), async () => {});
+      const me: Me = { ...mockMe('sales'), user_id: 'u1' };
+      renderHook(() => useOfflineSupport(me, true, make));
       await waitFor(() => expect(persist).toHaveBeenCalled());
     } finally {
       Reflect.deleteProperty(navigator, 'storage');
@@ -104,6 +106,23 @@ describe('a shared phone', () => {
     act(() => setAccessToken('fresh-token'));
     await waitFor(() => expect(engine.snapshot().items[0]?.state).toBe('sent'));
     act(() => setAccessToken(null));
+  });
+
+  it('forgets the catalogue and the saved profile at sign-out, and keeps the outbox', async () => {
+    const store = memoryStore();
+    const me: Me = { ...mockMe('sales'), user_id: 'u1' };
+    const scope = scopeOf(HOST, 'u1');
+    await store.putProfile(scope, me);
+    await store.putCatalogue(scope, { pricesAsOf: 'x', products: {}, customers: [] });
+    await store.putItem(item('a', 'u1'));
+    const make = services(store, async () => {});
+    const { result } = renderHook(() => useOfflineSupport(me, false, make));
+    await waitFor(() => expect(result.current).not.toBeNull());
+    await act(() => result.current!.forget());
+    expect(await store.profile(scope)).toBeNull();
+    expect(await store.catalogue(scope)).toBeNull();
+    expect(await store.lastPerson(HOST)).toBeNull();
+    expect(await store.outbox(scope)).toHaveLength(1);
   });
 
   it('picks only the other people of this business, and only what still waits', () => {

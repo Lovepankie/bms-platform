@@ -1275,7 +1275,8 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
   `retail.price.override` may type another, with a reason (at least 5 characters), as online; for anyone else the price field is
   read only with "Offline, the price saved on this phone is used. You do not have permission to change it." and a **Use the price
   saved on this phone** button on a line typed before the phone went offline;
-  too little stock on the copy does not stop the sale. The button reads **Save on this phone**.
+  too little stock on the copy does not stop the sale. **Buyer (optional)** offers the customers saved on the phone or a typed
+  name. The button reads **Save on this phone**.
 - After saving, **Sale saved on this phone** with receipt **OFF-0A1B2C3D (provisional)**, the lines and the total, and "Not yet sent."
   Once sent, the same receipt reads **Sale sent**, **Receipt RS00000042**. A refused sale says why and that a manager decides.
 - **Online**, a save whose answer never came ("The server did not answer. The sale may or may not be saved.") offers **Keep it on

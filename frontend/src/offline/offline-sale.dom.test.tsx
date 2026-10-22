@@ -39,7 +39,7 @@ const { testOffline } = await import('./test-kit');
 const seller = mockMe('sales');
 const branch = seller.branches?.[0]?.id ?? '';
 const bulb = { id: 'p2', code: 'BLB-9', description: 'Test Bulb 9W', category: 'Test Lighting', unit: 'pc', sell_minor: 5000, qty: '1.000', active: true } as Product;
-const catalogue = { pricesAsOf: '2026-10-22T09:14:00.000Z', products: { [branch]: [bulb] }, customers: [] };
+const catalogue = { pricesAsOf: '2026-10-22T09:14:00.000Z', products: { [branch]: [bulb] }, customers: [{ id: 'c1', name: 'Test Customer 05' }] };
 
 function screenWith(offline: ReturnType<typeof testOffline>) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -78,6 +78,8 @@ describe('Record a sale offline', () => {
     // Two on a shelf the copy says holds one: the server flags it, the phone does not stop the sale.
     const qty = screen.getAllByRole('textbox').find((i) => (i as HTMLInputElement).value === '1') as HTMLInputElement;
     fireEvent.change(qty, { target: { value: '2' } });
+    // The buyer's name typed offline goes with the sale.
+    fireEvent.change(screen.getByLabelText("Or the buyer's name"), { target: { value: 'Test Buyer 21' } });
     const save = screen.getByRole('button', { name: 'Save on this phone' }) as HTMLButtonElement;
     await waitFor(() => expect(save.disabled).toBe(false));
     fireEvent.click(save);
@@ -92,6 +94,7 @@ describe('Record a sale offline', () => {
       payment_method: 'cash',
       recorded_offline: true,
       prices_as_of: '2026-10-22T09:14:00.000Z',
+      buyer_name: 'Test Buyer 21',
       lines: [{ product_id: 'p2', qty: '2.000', unit_price_minor: 5000 }],
     });
     expect(items[0]?.request.client_sale_id).toBe(items[0]?.id);

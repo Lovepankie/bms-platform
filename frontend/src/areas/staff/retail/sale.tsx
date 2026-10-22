@@ -275,6 +275,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
         scope: offline.scope,
         branchName,
         pricesAsOf: offline.catalogue?.pricesAsOf,
+        buyerName: draft.newBuyerName,
         now: new Date(),
       });
       await offline.engine.queue(item);
@@ -369,6 +370,25 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
         ))}
         {offlineMode && <p className="hint">A credit sale needs the internet.</p>}
       </fieldset>
+
+      {offlineMode && (
+        <fieldset>
+          <legend>Buyer (optional)</legend>
+          <label htmlFor="offline-customer">Customer saved on this phone</label>
+          <select id="offline-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
+            <option value="">No customer</option>
+            {(offline?.catalogue?.customers ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {!draft.customerId && (
+            <>
+              <label htmlFor="offline-buyer-name">Or the buyer's name</label>
+              <input id="offline-buyer-name" value={draft.newBuyerName} maxLength={120} onChange={(e) => update({ newBuyerName: e.target.value })} />
+            </>
+          )}
+        </fieldset>
+      )}
 
       {draft.method === 'credit' && (
         <fieldset>

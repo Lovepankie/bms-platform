@@ -190,8 +190,10 @@ describe('signing out with sales waiting', () => {
 
     // The catalogue copy goes at sign-out; the outbox stays for the same person.
     await offline.store.putCatalogue(offline.scope, { pricesAsOf: 'x', products: {}, customers: [] });
+    await offline.store.putProfile(offline.scope, seller);
     await offline.forget();
     expect(await offline.store.catalogue(offline.scope)).toBeNull();
+    expect(await offline.store.profile(offline.scope)).toBeNull();
     expect(await offline.store.outbox(offline.scope)).toHaveLength(3);
     expect(waitingSentence(1)).toBe('1 sale is waiting to sync.');
   });

@@ -32,6 +32,49 @@ export interface SyncDeps {
   now(): number;
   /** Runs `fn` after `ms`; returns a cancel. */
   later(fn: () => void, ms: number): () => void;
+  /**
+   * Runs `fn` only while no other tab of this app syncs the same outbox, or resolves false without running it. Absent in
+   * tests: there is one engine.
+   */
+  exclusive?(fn: () => Promise<void>): Promise<boolean>;
+}
+
+/**
+ * The one-tab guard of the browser (ADR-067 decision 4): a Web Lock named for the outbox, taken only if free; where Web Locks
+ * are missing, a BroadcastChannel on which the tab that syncs says so, and the others wait for its word that it is done.
+ */
+export function browserTabLock(name: string): (fn: () => Promise<void>) => Promise<boolean> {
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  if (locks && typeof locks.request === 'function') {
+    return (fn) =>
+      locks
+        .request(name, { ifAvailable: true }, async (lock) => {
+          if (!lock) return false;
+          await fn();
+          return true;
+        })
+        .then((ran) => ran);
+  }
+  if (typeof BroadcastChannel === 'undefined') return async (fn) => (await fn(), true);
+  const channel = new BroadcastChannel(name);
+  let busyUntil = 0;
+  channel.onmessage = (e: MessageEvent<{ busy: boolean; until?: number }>) => {
+    busyUntil = e.data.busy ? (e.data.until ?? 0) : 0;
+  };
+  return async (fn) => {
+    if (Date.now() < busyUntil) return false;
+    // A tab that stops without saying so frees the outbox after this long.
+    const say = () => channel.postMessage({ busy: true, until: Date.now() + 30_000 });
+    say();
+    const id = setInterval(say, 10_000);
+    try {
+      await fn();
+    } finally {
+      clearInterval(id);
+      channel.postMessage({ busy: false });
+    }
+    return true;
+  };
 }
 
 export interface SyncSnapshot {
@@ -86,10 +129,21 @@ export class SyncEngine {
     this.emit();
   }
 
-  /** Puts a sale in the outbox; it is written to the device before this resolves. */
+  /**
+   * Puts a sale in the outbox; it is written to the device before this resolves. It is added, never written over: a sale
+   * already queued under its client sale id (a second tap, another tab) stays as it is.
+   */
   async queue(item: OutboxItem): Promise<void> {
     if (item.scope !== this.deps.scope) throw new Error('an outbox item belongs to its own person');
-    await this.save(item);
+    try {
+      await this.deps.store.addItem(item);
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'ConstraintError')) throw e;
+      await this.load();
+      return;
+    }
+    this.items = [...this.items.filter((i) => i.id !== item.id), item];
+    this.emit();
   }
 
   /** A new access token arrived (a sign-in or a refresh): sending may go on, at once. */
@@ -106,7 +160,17 @@ export class SyncEngine {
       this.again = true;
       return this.running;
     }
-    this.running = this.run().finally(() => {
+    const exclusive = this.deps.exclusive;
+    const go = exclusive
+      ? exclusive(async () => {
+          // Another tab may have sent or queued since this one last read the outbox.
+          await this.load();
+          await this.run();
+        }).then(async (ran) => {
+          if (!ran) await this.load();
+        })
+      : this.run();
+    this.running = go.finally(() => {
       this.running = null;
       this.syncing = false;
       this.emit();

@@ -67,6 +67,7 @@ export function testOffline(
     refresh: async () => {},
     forget: async () => {
       await store.deleteCatalogue(scope);
+      await store.deleteProfile(scope);
     },
   };
 }

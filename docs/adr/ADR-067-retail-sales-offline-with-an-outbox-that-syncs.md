@@ -29,17 +29,22 @@ left, the branch, the period, the person's roles.
    sizes, which are the price rules a seller can read; items with sizes and colours are products and come with them), the
    person's selling branches, the customers list, the four sale payment methods, the person's profile, and `prices_as_of`,
    the time of the last full refresh by the server's clock (the `Date` header of its first answer; the phone's clock only when
-   the server sent none). It refreshes when the app comes online, on sign-in and every 15 minutes while online.
+   the server sent none). It refreshes when the app comes online, on sign-in and every 15 minutes while online. Offline, the
+   sale screen offers the saved customers list and a typed buyer's name for a cash, mobile money or bank sale, sent as
+   `customer_id` or `buyer_name`.
    Price lists are not cached: a seller may not read them (`retail.pricelist.manage`), so an offline sale is priced at the
    retail price or the pack price on the device, or a price typed under the rules of decision 11.
-3. **The outbox.** A sale saved offline, or whose answer was lost, goes into the outbox store with its whole request, a
+3. **The outbox.** A sale saved offline, or whose answer was lost, is added to the outbox store (never written over: a second
+   add under the same client sale id leaves the first as it is) with its whole request, a
    `client_sale_id` (a UUID made when the draft starts), an `Idempotency-Key`, `occurred_at` (the device time of Save),
    `prices_as_of`, the person, the branch and a provisional receipt number (`OFF-` and the first 8 characters of the client
    sale id). The screen shows the provisional receipt marked "Not yet sent"; the server's number replaces it after sync. A write to
    IndexedDB counts as saved only when its transaction completes (an abort or an error after the request succeeded rejects
    it, and the sale is not shown as kept), and the app asks the browser for persistent storage
    (`navigator.storage.persist()`) when offline selling is mounted, so the outbox is not cleared under storage pressure.
-4. **Sync.** One sale at a time, oldest `occurred_at` first, never two requests in flight. A network failure, a 5xx, a 409
+4. **Sync.** One sale at a time, oldest `occurred_at` first, never two requests in flight, and only one tab of the app at a
+   time sends an outbox (a Web Lock named for it, taken only if free; a BroadcastChannel where Web Locks are missing); the
+   tab that holds it reads the outbox again first, and the others show what it did. A network failure, a 5xx, a 409
    or a 429 backs off (5 s, 15 s, 1 min, 5 min, then every 15 min) and keeps the order. A sale the server answers without
    taking it (a 5xx, a 409, a 429) 8 times, or for 24 hours, is marked failed (`not_taken_after_retries`) and reported like a
    refusal, so it never holds up the sales behind it; a try with no answer at all (no network) does not count. A 401 tries
@@ -99,7 +104,7 @@ left, the branch, the period, the person's roles.
    discard) a sale they made themselves, a Supervisor or an administrator included: 403 `own_offline_sale`.
 9. **Sign-out safety.** Signing out while anything is queued or failed asks first ("3 sales are waiting to sync. Sync now,
    or keep them on this phone and sign out?"). The waiting sales stay in the person's own outbox on this device and are sent
-   when the same person signs in here again; the catalogue copy is cleared at sign-out. Another person on the same device
+   when the same person signs in here again; the catalogue copy and the person's saved profile are cleared at sign-out. Another person on the same device
    never sees or sends them, but is told "2 sales from another person are waiting on this phone", and whenever any session
    on that phone is online it sends a short summary of them (client sale id, branch, total, `occurred_at`, the seller) to
    `POST /retail/offline-waiting`; managers see them in the sync sheet as "waiting on a phone" (`GET
