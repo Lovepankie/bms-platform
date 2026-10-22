@@ -29,7 +29,7 @@ or Bluetooth scanner at the till, many have only phones.
    it; otherwise a second item is refused with 409 `barcode_taken`. Two writers of one code meet at the index and the second gets 409.
    Each business has its own codes under forced row-level security; the same code may exist in two businesses.
 4. **One lookup for every way of scanning.** `GET /api/v1/retail/products/by-barcode/{code}` (`retail.stock.read`, optional
-   `branch_id` for that branch's balance) answers the active item, the barcode and the pack it names, or 404 `barcode_not_found`.
+   `branch_id` for that branch's balance) answers the active item, the barcode and the pack it names, or 404 `barcode_not_found`. A code on a pack that is switched off, or on any pack while the units capability is off, is 404 `pack_inactive` with a plain message; the forms never add one base unit in its place.
    Product responses (list, get) carry `barcodes`, so a screen that has read the items can match a scan without the server when it
    is offline; the offline catalogue of the pending offline sales work (issue #458) caches those responses and gets the barcodes with
    them.

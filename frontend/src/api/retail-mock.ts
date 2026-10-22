@@ -658,6 +658,7 @@ export function createMockRetail(): RetailApi {
           const b = list.find((x) => barcodeKey(x.code ?? '') === key);
           const p = b ? products.get(id) : undefined;
           if (b && p && p.active !== false) {
+            if (b.unit_id && !(packs.get(id) ?? []).some((k) => k.unit_id === b.unit_id && k.active)) refuse(404, 'pack_inactive', 'This barcode is on a pack that is switched off. Switch the pack on, or scan the item\'s own barcode.');
             const own = (packs.get(id) ?? []).filter((k) => k.active);
             const product = { ...asProduct(p), ...(own.length > 0 ? { packs: own } : {}) };
             return { product: branchId ? { ...product, qty: fromMilli(bal(branchId, id)) } : product, barcode: b, ...(b.unit_id ? { unit_id: b.unit_id } : {}) };

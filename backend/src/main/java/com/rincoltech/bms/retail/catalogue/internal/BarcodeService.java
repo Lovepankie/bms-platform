@@ -182,7 +182,10 @@ class BarcodeService {
         return new BarcodeList(made);
     }
 
-    /** The active product a scanned code belongs to; with {@code branchId}, with that branch's balance. */
+    /**
+     * The active product a scanned code belongs to; with {@code branchId}, with that branch's balance. A code on a pack
+     * that is switched off, or on any pack while the units capability is off, is 404 {@code pack_inactive}.
+     */
     @Transactional(readOnly = true)
     BarcodeMatch lookup(String code, UUID branchId) {
         if (branchId != null && !CurrentPrincipal.require().may("retail.stock.read", branchId)) {
@@ -198,9 +201,30 @@ class BarcodeService {
         if (held == null) {
             throw new ApiException(HttpStatus.NOT_FOUND, "barcode_not_found", "Not found", "No item has this barcode.");
         }
+        UUID unitId = held.barcode().unitId();
+        if (unitId != null) {
+            // A pack barcode answers only while its pack can be used; never as one base unit in its place.
+            if (!products.unitsOn()) {
+                throw packInactive("This barcode is on a pack size, and pack sizes are switched off for this business."
+                        + " Scan the item's own barcode, or find it by name.");
+            }
+            boolean packOn = catalogue
+                    .pack(held.productId(), unitId)
+                    .map(CatalogueApi.Pack::active)
+                    .orElse(false);
+            if (!packOn) {
+                throw packInactive(
+                        "This barcode is on the " + held.barcode().unit() + " of " + held.productDescription()
+                                + ", which is switched off. Switch the pack on, or scan the item's own barcode.");
+            }
+        }
         Product product = catalogue.findAt(held.productId(), branchId).orElseThrow(ApiException::notFound);
         return new BarcodeMatch(
                 products.detailed(product), held.barcode(), held.barcode().unitId());
+    }
+
+    private static ApiException packInactive(String detail) {
+        return new ApiException(HttpStatus.NOT_FOUND, "pack_inactive", "Not found", detail);
     }
 
     private static ApiException taken() {

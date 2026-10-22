@@ -12,7 +12,7 @@ import { lineTotalMinor, parseQty, qtyString, showDate, showQty } from './maths'
 import { chosenUnitHint, redraftOf } from './restock-correct-state';
 import { CategoryLabel, Gate, Note, Problem, money, useProfitAccess } from './ui';
 import { ScanBar } from './scan';
-import { plusOne, scanInto } from './barcode-state';
+import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { UNITS, capabilityOn } from './permissions';
 import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, packPriceMinor } from './units-state';
 
@@ -168,6 +168,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const here = branch && branches.some((b) => b.id === branch) ? branch : undefined;
   const scanAdd = (p: Product, unitId?: string) => {
     const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
+    if (unitId && !unit) return PACK_UNUSABLE;
     const fresh: RestockLine = { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: '1' } : {} };
     setLines((ls) => scanInto(ls, p, unit, (l) => (here ? { ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } } : l), () => (unit ? withUnit(fresh, unit) : fresh)));
   };

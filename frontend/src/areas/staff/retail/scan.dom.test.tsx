@@ -193,6 +193,29 @@ describe('FR-RET-68 scanning on the move stock form', () => {
   });
 });
 
+describe('FR-RET-68 a pack barcode the sale cannot use', () => {
+  const ROLL = '00000000-0000-4000-8000-0000000d0001';
+
+  it('refuses a pack barcode while pack sizes are off, and adds no single piece in its place', async () => {
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    expect(document.querySelectorAll('[id^="qty-"]')).toHaveLength(0);
+  });
+
+  it('says so when the pack the barcode is on was switched off', async () => {
+    const pack = await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
+    await retail.updatePack(LAMP, ROLL, pack.version ?? 1, { active: false });
+    screenOf(<SaleForm branchId={BRANCH} />);
+    wedge('TEST-LAMP-BOX');
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('switched off'));
+    expect(document.querySelectorAll('[id^="qty-"]')).toHaveLength(0);
+  });
+});
+
 describe('FR-RET-68 scanning a pack on the move stock form', () => {
   it('adds the pack factor in the base unit for a barcode on a pack', async () => {
     const ROLL = '00000000-0000-4000-8000-0000000d0001';

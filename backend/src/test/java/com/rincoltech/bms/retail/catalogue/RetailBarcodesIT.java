@@ -71,6 +71,90 @@ class RetailBarcodesIT extends IntegrationTest {
                 .hasSize(2);
     }
 
+    void switchUnits(boolean on) {
+        String etag = api.get("/settings/capabilities", "core.settings.manage")
+                .getHeaders()
+                .getETag();
+        ResponseEntity<JsonNode> r = api.call(
+                HttpMethod.PUT,
+                "/settings/capabilities",
+                Map.of("units", on),
+                "core.settings.manage",
+                "*",
+                etag == null ? Map.of() : Map.of("If-Match", etag));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
+    /** An item with a carton of 12 switched on, and the carton's ETag. */
+    record Carton(UUID item, UUID unit, String etag) {}
+
+    Carton carton(String code) {
+        switchUnits(true);
+        UUID item = api.product(code, 100, 200);
+        UUID unit = api.unit("carton-" + code.toLowerCase());
+        ResponseEntity<JsonNode> pack =
+                api.post("/products/" + item + "/units", Map.of("unit_id", unit, "factor", "12"), ADMIN);
+        assertThat(pack.getStatusCode()).as("%s", pack.getBody()).isEqualTo(HttpStatus.CREATED);
+        return new Carton(item, unit, pack.getHeaders().getETag());
+    }
+
+    ResponseEntity<JsonNode> addOnPack(Carton c, String code) {
+        return api.post("/products/" + c.item() + "/barcodes", Map.of("code", code, "unit_id", c.unit()), ADMIN);
+    }
+
+    @Test
+    void frRet68APackBarcodeFindsThePackAndStopsAnsweringOnceThePackIsSwitchedOff() {
+        Carton c = carton("BC-PK1");
+        assertThat(add(c.item(), EAN).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> onPack = addOnPack(c, "TEST-BC-CARTON");
+        assertThat(onPack.getStatusCode()).as("%s", onPack.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(onPack.getBody().get("unit_id").asString())
+                .isEqualTo(c.unit().toString());
+
+        ResponseEntity<JsonNode> found = lookup("TEST-BC-CARTON");
+        assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(found.getBody().get("unit_id").asString()).isEqualTo(c.unit().toString());
+        assertThat(lookup(EAN).getBody().has("unit_id")).isFalse();
+
+        ResponseEntity<JsonNode> off = api.call(
+                HttpMethod.PATCH,
+                "/products/" + c.item() + "/units/" + c.unit(),
+                Map.of("active", false),
+                ADMIN,
+                "*",
+                Map.of("If-Match", c.etag()));
+        assertThat(off.getStatusCode()).as("%s", off.getBody()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> again = lookup("TEST-BC-CARTON");
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(again.getBody().get("code").asString()).isEqualTo("pack_inactive");
+        assertThat(again.getBody().get("detail").asString()).contains("switched off");
+        // The item's own barcode still scans.
+        assertThat(lookup(EAN).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void frRet68APackBarcodeDoesNotAnswerWhileTheUnitsCapabilityIsOff() {
+        Carton c = carton("BC-PK2");
+        assertThat(addOnPack(c, "TEST-BC-CARTON2").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        switchUnits(false);
+        ResponseEntity<JsonNode> r = lookup("TEST-BC-CARTON2");
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("pack_inactive");
+        assertThat(r.getBody().get("detail").asString()).contains("pack sizes are switched off");
+    }
+
+    @Test
+    void frRet68TheItemAndItsPackCannotShareACode() {
+        Carton c = carton("BC-PK3");
+        assertThat(add(c.item(), EAN).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> same = addOnPack(c, EAN);
+        assertThat(same.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(same.getBody().get("code").asString()).isEqualTo("duplicate_barcode");
+        assertThat(addOnPack(c, "TEST-BC-CARTON3").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(add(c.item(), "TEST-BC-CARTON3").getBody().get("code").asString())
+                .isEqualTo("duplicate_barcode");
+    }
+
     @Test
     void frRet68AWrongCheckDigitIsRefusedInPlainWords() {
         UUID item = api.product("BC-2", 100, 200);

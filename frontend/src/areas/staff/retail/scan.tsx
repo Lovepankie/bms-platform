@@ -94,13 +94,14 @@ export function useWedgeScan(onScan: (code: string) => void, enabled = true) {
   }, [enabled]);
 }
 
-type Outcome = { kind: 'added'; name: string } | { kind: 'unknown'; code: string } | { kind: 'failed'; error: unknown } | null;
+type Outcome = { kind: 'added'; name: string } | { kind: 'refused'; message: string } | { kind: 'unknown'; code: string } | { kind: 'failed'; error: unknown } | null;
 
 /**
  * The scan box and the camera button over a form's lines. `onFound` gets the item, with its balance at `branchId` when
- * given, and the pack the barcode is on (absent for the item's own unit).
+ * given, and the pack the barcode is on (absent for the item's own unit); it returns a message instead when the form
+ * cannot take the scan (a pack it cannot use, an item not on the sheet), shown in place of Added.
  */
-export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: string; onFound: (product: Product, unitId?: string) => void }) {
+export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: string; onFound: (product: Product, unitId?: string) => string | void }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const [text, setText] = useState('');
@@ -112,9 +113,9 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
   const canAssign = holds(me, 'retail.catalogue.manage');
 
   const found = (product: Product, unitId?: string) => {
-    feedback(true);
-    setOutcome({ kind: 'added', name: product.description ?? product.code ?? '' });
-    onFound(product, unitId);
+    const refused = onFound(product, unitId);
+    feedback(!refused);
+    setOutcome(refused ? { kind: 'refused', message: refused } : { kind: 'added', name: product.description ?? product.code ?? '' });
   };
 
   const lookUp = async (raw: string) => {
@@ -203,6 +204,7 @@ export function ScanBar({ id, branchId, onFound }: { id: string; branchId?: stri
           )}
         </div>
       )}
+      {outcome?.kind === 'refused' && <p role="alert" className="alert alert-warning" data-testid="scan-refused">{outcome.message}</p>}
       {outcome?.kind === 'failed' && <Problem error={outcome.error} />}
       {camera && (
         <Suspense fallback={<p role="status">Opening the camera</p>}>
