@@ -139,7 +139,12 @@ final class UserApi {
                     description = "false for a Store, a branch that holds stock but does not sell: the sale form, the "
                             + "default selling branch and the till skip it; restock, goods receipt, transfer and stock-take "
                             + "forms include it (#366)")
-            boolean sellsGoods) {}
+            boolean sellsGoods,
+
+            @Schema(
+                    description =
+                            "Same-origin URL of the shop's own logo, or null: show the business logo (#461, ADR-068)")
+            String logoUrl) {}
 
     /** Where one permission applies: every branch, or the listed ones (ADR-017). */
     @Schema(name = "MePermissionScope")

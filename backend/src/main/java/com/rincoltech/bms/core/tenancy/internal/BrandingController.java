@@ -61,7 +61,11 @@ class BrandingController {
     ResponseEntity<byte[]> logo(
             @RequestParam(name = "v", required = false) UUID version,
             @RequestHeader(name = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
-        Logo logo = service.logo().orElseThrow(ApiException::notFound);
+        return image(service, service.logo().orElseThrow(ApiException::notFound), ifNoneMatch);
+    }
+
+    /** The response of a public logo route, the business's or a shop's (issue #461): the same headers for both. */
+    static ResponseEntity<byte[]> image(BrandingService service, Logo logo, String ifNoneMatch) {
         String etag = "\"" + logo.meta().sha256() + "\"";
         boolean notModified = matches(ifNoneMatch, etag);
         ResponseEntity.BodyBuilder response = ResponseEntity.status(

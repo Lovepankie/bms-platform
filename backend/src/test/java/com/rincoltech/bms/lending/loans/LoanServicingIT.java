@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.testsupport.ImageFixtures;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -1594,6 +1595,52 @@ class LoanServicingIT extends LoanFixtures {
                         .query(Long.class)
                         .single())
                 .isEqualTo(2);
+    }
+
+    /** Issue #461, ADR-068: a loan document carries the logo of the loan's branch (Letterheads.forBranch), else the business's. */
+    @Test
+    void aLoanDocumentCarriesItsBranchsOwnLogo() throws Exception {
+        String loan = approved(exampleB("LOGO1"), 1_200_000, 3, 91);
+        disburse(loan, today);
+        java.awt.Color business = new java.awt.Color(20, 40, 200);
+        java.awt.Color shop = new java.awt.Color(200, 30, 30);
+        logo("/api/v1/settings/logo", business);
+        assertThat(ImageFixtures.near(scheduleLogo(loan), business)).isTrue();
+
+        logo("/api/v1/branches/" + t.headOffice() + "/logo", shop);
+        assertThat(ImageFixtures.near(scheduleLogo(loan), shop)).isTrue();
+    }
+
+    void logo(String path, java.awt.Color colour) {
+        org.springframework.util.MultiValueMap<String, Object> form =
+                new org.springframework.util.LinkedMultiValueMap<>();
+        form.add("file", new org.springframework.core.io.ByteArrayResource(ImageFixtures.png(256, 256, colour)) {
+            @Override
+            public String getFilename() {
+                return "logo.png";
+            }
+        });
+        HttpHeaders h = as(admin, adminPerms, "*", null);
+        h.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        assertThat(http.exchange(
+                                path,
+                                HttpMethod.PUT,
+                                new org.springframework.http.HttpEntity<>(form, h),
+                                JsonNode.class)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    java.awt.Color scheduleLogo(String loan) throws Exception {
+        ResponseEntity<byte[]> schedule = http.exchange(
+                LOANS + "/" + loan + "/documents/schedule",
+                HttpMethod.POST,
+                new org.springframework.http.HttpEntity<>(as(cashier, cashierPerms, "*", null)),
+                byte[].class);
+        assertThat(schedule.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<java.awt.Color> images = ImageFixtures.pdfImageCentres(schedule.getBody());
+        assertThat(images).hasSize(1);
+        return images.get(0);
     }
 
     /** FR-DOC-01: the schedule and the statement are rendered as at today, never stored. */

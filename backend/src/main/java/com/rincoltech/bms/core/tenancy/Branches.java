@@ -26,6 +26,8 @@ public interface Branches {
      * @param sellsGoods false for a Store, a branch that holds stock and takes transfers and purchases but does not sell: the
      *     retail module refuses a sale, a payment taken and a refund paid there with 422 {@code branch_does_not_sell} (issue
      *     #366, ADR-048)
+     * @param logoUrl the same-origin URL of the shop's own logo, versioned by its document id, or null when it has none and
+     *     shows the business logo (issue #461, ADR-068)
      */
     record Branch(
             UUID id,
@@ -34,5 +36,6 @@ public interface Branches {
             boolean headOffice,
             boolean active,
             boolean stocksGoods,
-            boolean sellsGoods) {}
+            boolean sellsGoods,
+            String logoUrl) {}
 }

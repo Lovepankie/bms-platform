@@ -72,8 +72,11 @@ export function appTitle(brand: ShellBrand): string {
   return brand === PLATFORM_BRAND ? 'BMS' : shortAppName(brand.name);
 }
 
-/** The logo image. In local development the tenant travels as a header, which an <img> cannot send. */
-async function loadLogo(url: string): Promise<string> {
+/**
+ * The logo image. In local development the tenant travels as a header, which an <img> cannot send. The object URL is never
+ * revoked: a cached query or an image still on screen may hold an older version of the same logo, and it must keep showing.
+ */
+export async function loadLogo(url: string): Promise<string> {
   const headers = tenantHeaders();
   if (Object.keys(headers).length === 0) return url;
   const response = await fetch(url, { headers });
@@ -99,16 +102,27 @@ export function useTenantHost(): boolean | null {
   return Boolean(import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT) || classifyHost(window.location.hostname, hosts.data).kind === 'tenant';
 }
 
-export function useShellBrand(): ShellBrand {
-  const tenantHost = useTenantHost() === true;
-  const branding = useQuery({ ...BRANDING_QUERY, enabled: tenantHost });
-  const logoUrl = branding.data?.logo_url ?? null;
+/** A public logo URL (the business's or a shop's, issue #461): the address an <img> can show, or null, and whether it is still loading. */
+export function useLogo(logoUrl: string | null): { src: string | null; loading: boolean } {
   const logo = useQuery({
     queryKey: ['branding-logo', logoUrl],
     enabled: logoUrl !== null,
     staleTime: Infinity,
     queryFn: () => loadLogo(logoUrl as string),
   });
+  if (logoUrl === null) return { src: null, loading: false };
+  return { src: logo.data ?? null, loading: logo.isPending };
+}
+
+/** The address an <img> can show for a public logo URL, or null while none. */
+export function useLogoSrc(logoUrl: string | null): string | null {
+  return useLogo(logoUrl).src;
+}
+
+export function useShellBrand(): ShellBrand {
+  const tenantHost = useTenantHost() === true;
+  const branding = useQuery({ ...BRANDING_QUERY, enabled: tenantHost });
+  const logoSrc = useLogoSrc(branding.data?.logo_url ?? null);
   if (!tenantHost || !branding.data) return PLATFORM_BRAND;
-  return brandOf(branding.data, logoUrl === null ? null : (logo.data ?? null));
+  return brandOf(branding.data, logoSrc);
 }

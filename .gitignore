@@ -19,6 +19,7 @@ node_modules/
 dist/
 target/
 build/
+*.tsbuildinfo
 __pycache__/
 *.pyc
 .venv/

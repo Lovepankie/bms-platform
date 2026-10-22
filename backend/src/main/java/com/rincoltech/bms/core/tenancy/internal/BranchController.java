@@ -1,27 +1,38 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
+import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.PublicEndpoint;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** {@code /api/v1/branches} (chapter 7 section 7.11.4, FR-BR-01). */
 @RestController
@@ -30,9 +41,11 @@ import org.springframework.web.bind.annotation.RestController;
 class BranchController {
 
     private final BranchService service;
+    private final BrandingService branding;
 
-    BranchController(BranchService service) {
+    BranchController(BranchService service, BrandingService branding) {
         this.service = service;
+        this.branding = branding;
     }
 
     @Schema(name = "CreateBranchRequest")
@@ -99,6 +112,11 @@ class BranchController {
 
             @Schema(description = "their value at current cost, in minor units; null for an open branch or when none")
             Long stockValueMinor,
+
+            @Schema(
+                    description = "Same-origin URL of the shop's own logo, versioned by its document id, or null: the "
+                            + "shop shows the business logo (issue #461, ADR-068)")
+            String logoUrl,
 
             Instant createdAt,
             Instant updatedAt,
@@ -167,5 +185,66 @@ class BranchController {
             @RequestHeader(name = "If-Match", required = false) String ifMatch) {
         BranchResponse branch = service.reopen(branchId, ifMatch);
         return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);
+    }
+
+    @PutMapping(path = "/{branch_id}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequiresPermission("core.branches.manage")
+    @Operation(
+            summary = "Upload or replace a shop's own logo: the rules of the business logo, PNG, JPEG or WebP, 1 MB, "
+                    + "128 px or more (issue #461, ADR-068)",
+            operationId = "uploadBranchLogo")
+    @ApiResponse(responseCode = "404", description = "No such branch in the caller's scope")
+    @ApiResponse(responseCode = "409", description = "The branch is closed (invalid_status_transition)")
+    @ApiResponse(responseCode = "413", description = "Over 1 MB (file_too_large)")
+    @ApiResponse(responseCode = "415", description = "Not PNG, JPEG or WebP, or not decodable (unsupported_file_type)")
+    @ApiResponse(
+            responseCode = "422",
+            description = "svg_not_allowed, image_too_small, image_too_large (over 4 megapixels)")
+    ResponseEntity<BranchResponse> uploadLogo(
+            @PathVariable("branch_id") UUID branchId, @RequestPart("file") MultipartFile file) {
+        if (file.getSize() > BrandingService.LOGO.maxBytes()) {
+            throw new ApiException(
+                    HttpStatus.CONTENT_TOO_LARGE, "file_too_large", "File too large", "The file is larger than 1 MB.");
+        }
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST, "malformed_request", "Malformed request", "The upload could not be read.");
+        }
+        BranchResponse branch = branding.uploadBranchLogo(branchId, bytes);
+        return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);
+    }
+
+    @DeleteMapping("/{branch_id}/logo")
+    @RequiresPermission("core.branches.manage")
+    @Operation(
+            summary = "Remove a shop's own logo; it shows the business logo again and the file is kept (issue #461)",
+            operationId = "removeBranchLogo")
+    @ApiResponse(responseCode = "404", description = "No such branch in the caller's scope")
+    @ApiResponse(responseCode = "409", description = "The branch is closed (invalid_status_transition)")
+    ResponseEntity<BranchResponse> removeLogo(@PathVariable("branch_id") UUID branchId) {
+        BranchResponse branch = service.removeLogo(branchId);
+        return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);
+    }
+
+    /**
+     * Served exactly as {@code /api/v1/branding/logo} (issue #461, ADR-068): public, so an image tag in the app shell can
+     * load it, the stored re-encoded type only, the checksum as the ETag. The tenant is the one the host resolves; a branch
+     * of another business is hidden by row-level security and is a 404, as is a branch without a logo.
+     */
+    @GetMapping(path = "/{branch_id}/logo", produces = MediaType.ALL_VALUE)
+    @PublicEndpoint
+    @Operation(summary = "A shop's own logo image (public, cacheable)", operationId = "getBranchLogo")
+    @ApiResponse(responseCode = "304", description = "The ETag still matches")
+    @ApiResponse(responseCode = "404", description = "No such branch, no logo of its own, or an unknown host")
+    @ApiResponse(responseCode = "503", description = "Storage cannot be read (logo_unavailable)")
+    ResponseEntity<byte[]> logo(
+            @PathVariable("branch_id") UUID branchId,
+            @RequestParam(name = "v", required = false) UUID version,
+            @RequestHeader(name = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+        return BrandingController.image(
+                branding, branding.branchLogo(branchId).orElseThrow(ApiException::notFound), ifNoneMatch);
     }
 }

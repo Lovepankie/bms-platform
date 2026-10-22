@@ -387,6 +387,16 @@ class EmailLayoutTest {
             }
 
             @Override
+            public Letterhead forBranch(UUID branchId) {
+                return current();
+            }
+
+            @Override
+            public Letterhead forBranchCode(String code) {
+                return current();
+            }
+
+            @Override
             public java.util.Optional<String> logoPath() {
                 return path.get();
             }
