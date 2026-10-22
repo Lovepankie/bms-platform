@@ -15,6 +15,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -743,5 +748,44 @@ class ReferralsIT extends IntegrationTest {
         assertThat(lines).hasSize(3);
         assertThat(csv.getBody()).contains(y.slug()).contains(",UGX,900,0,900");
         assertThat(audits("platform.referral.exported")).isEqualTo(1);
+    }
+
+    // ---- Money edge cases -----------------------------------------------------------------------
+
+    /**
+     * Two first payments recorded at the same moment are counted one after the other (the subscription lock orders them), so a
+     * first payment rule pays once; a payment recorded before the referral existed does not use up the rule (decision 9).
+     */
+    @Test
+    void paymentsRecordedAtOnceAreCountedInTurnAndEarlierPaymentsDoNotCount() throws Exception {
+        TestDatabase.Fixture a = TestDatabase.tenant("refrace", false);
+        Business x = business("ref-race");
+        pay(x.id(), 10000, 1);
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        Map<String, Object> once = new LinkedHashMap<>();
+        once.put("kind", "fixed_first_payment");
+        once.put("amount_minor", 2000);
+        once.put("currency", "UGX");
+        rule("/api/v1/platform/referrals/" + rx + "/rule", once, "Test: one-off deal");
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<ResponseEntity<JsonNode>>> both = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                both.add(pool.submit(() -> {
+                    start.await();
+                    return pay(x.id(), 10000, 1);
+                }));
+            }
+            start.countDown();
+            for (Future<ResponseEntity<JsonNode>> f : both) {
+                f.get(60, TimeUnit.SECONDS);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(amounts(detail(rx))).containsExactly(2000L);
     }
 }

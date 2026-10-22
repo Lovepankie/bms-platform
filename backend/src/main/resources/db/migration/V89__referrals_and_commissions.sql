@@ -553,8 +553,10 @@ $$;
 
 -- ---------------------------------------------------------------------------------------------
 -- 8. The commission of one payment (ADR-069 decision 5). Runs in the transaction that records the payment, bound to the paying
---    business; the payment must be that business's own. Paid months are counted over every confirmed payment of the referred
---    business recorded before this one, whoever its referrer was. Amounts are whole minor units, rounded down. Outcomes:
+--    business; the payment must be that business's own. Paid months are counted over every other confirmed payment of the
+--    referred business recorded since this referral started (ADR-069 decision 9), leaving out payments in a currency other
+--    than the rule's; recording a payment locks the business's subscription first (V75), so two payments recorded at once
+--    are counted one after the other and never both as the first. Amounts are whole minor units, rounded down. Outcomes:
 --    added, no_referral, no_rule, not_first_payment, months_used, currency_differs, cap_reached, zero.
 -- ---------------------------------------------------------------------------------------------
 
@@ -598,7 +600,8 @@ BEGIN
         RETURN;
     END IF;
     SELECT coalesce(sum(sp.months), 0) INTO v_before FROM subscription_payments sp
-     WHERE sp.tenant_id = v_tenant AND sp.status = 'confirmed' AND sp.id <> v_pay.id AND sp.created_at <= v_pay.created_at;
+     WHERE sp.tenant_id = v_tenant AND sp.status = 'confirmed' AND sp.id <> v_pay.id AND sp.created_at >= v_ref.started_at
+       AND (v_rule.currency IS NULL OR sp.currency = v_rule.currency);
     IF v_rule.kind <> 'percent_of_payment' AND v_rule.currency <> v_pay.currency THEN
         outcome := 'currency_differs';
         RETURN NEXT;

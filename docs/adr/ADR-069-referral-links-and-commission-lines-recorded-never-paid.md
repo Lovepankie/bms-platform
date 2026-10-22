@@ -47,7 +47,7 @@ data, and a business must not be able to refer itself.
 5. **A payment the operator records adds the commission line from the rule in force at that moment.** In the same transaction as
    `POST /platform/tenants/{id}/payments` (and behind its Idempotency-Key, so a repeat adds nothing), the definer function
    `platform_referral_commission_for_payment` finds the paying business's current referral and the rule in force (its override,
-   else the default), counts the paid months of every confirmed payment the business recorded before this one, and adds one
+   else the default), counts the paid months already used (decision 9), and adds one
    line (referral, payment, amount, the months counted, and a snapshot of the rule and the payment) when the rule gives an amount.
    A percent is worked out in whole minor units rounded down, pro rata on the months still inside N; a rule with an amount
    applies only to payments in its currency. A change of rule applies to payments recorded from then on; lines already worked out
@@ -72,6 +72,16 @@ data, and a business must not be able to refer itself.
 8. **A new core module.** `core.referrals` (allowed dependencies `kernel`, `core.tenancy`, `core.audit`) owns the tables and the
    public port `Referrals`; `core.onboarding` uses it at the sign-up and Activate, `core.platform` at the payment and for the
    operator routes, as the feedback inbox does (ADR-065).
+
+The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions below; the platform owner chose the defaults.
+
+9. **The months used count only payments made under this referral, in the rule's currency, one payment at a time.** The first
+    N paid months of a rule count every other confirmed payment of the referred business recorded on or after the day this
+    referral started (`tenant_referrals.started_at`); payments recorded before the referral existed, under an earlier referrer
+    or none, do not use N up, and neither do payments in a currency other than the rule's (those give `currency_differs`). The
+    count does not compare creation times: recording a payment locks the business's subscription row first (`V75`), so two
+    payments recorded at the same moment are counted one after the other and never both as the first. The cap stays per
+    referral row.
 
 ## Consequences
 
