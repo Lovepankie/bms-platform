@@ -69,8 +69,8 @@ afterEach(() => {
   Object.defineProperty(navigator, 'userAgent', { value: REAL_AGENT, configurable: true });
 });
 
-function show({ card = false } = {}) {
-  const me = mockMe('owner');
+function show({ card = false, modules = ['retail'] } = {}) {
+  const me = { ...mockMe('owner'), modules };
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <StaffContext.Provider value={{ me: { ...me, permissions: ['core.settings.manage'] }, branch: null, chooseBranch: () => {} }}>
@@ -135,5 +135,24 @@ describe('the set-up note on the new icon', () => {
     await screen.findByTestId('new-icon-note');
     expect(localStorage.getItem(ICON_VERSION_KEY)).toBe('/api/v1/branding/logo?v=00000000-0000-4000-8000-0000000000a1|');
     expect(screen.queryByTestId('new-logo-card')).toBeNull();
+  });
+});
+
+// ADR-071, issue #466: a lending business sets the day the app became its register; existing loans come in only from before it.
+describe('the go-live date', () => {
+  it('is offered to a lending business and saved as go_live_date', async () => {
+    client.PATCH.mockClear();
+    show({ modules: ['lending'] });
+    const input = (await screen.findByLabelText(/The day the app became your register/)) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '2026-03-01' } });
+    fireEvent.blur(input);
+    await screen.findByText(/The go-live date is 2026-03-01/);
+    expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { go_live_date: '2026-03-01' } }));
+  });
+
+  it('is not offered to a business without lending', async () => {
+    show();
+    await screen.findByRole('heading', { name: 'Business set-up' });
+    expect(screen.queryByLabelText(/The day the app became your register/)).toBeNull();
   });
 });

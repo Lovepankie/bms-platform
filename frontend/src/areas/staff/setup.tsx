@@ -176,6 +176,22 @@ export function Setup() {
     });
   }
 
+  // ADR-071: the day the app became the register; only the Owner moves it (the server answers owner_only for anyone else).
+  function setGoLive(date: string) {
+    void run(async () => {
+      const { error } = await api.PATCH('/api/v1/settings', {
+        params: { header: { 'If-Match': `"${current.version}"` } },
+        body: { go_live_date: date },
+      });
+      if (error) {
+        const problem = problemOf(error);
+        throw new Error(problem.errors?.[0]?.message ?? problem.detail ?? 'Could not save the go-live date.');
+      }
+      await refresh();
+      return `The go-live date is ${date}. Existing loans given out before it can be brought in.`;
+    });
+  }
+
   function dismiss() {
     void run(async () => {
       const { error } = await api.PATCH('/api/v1/settings', {
@@ -289,6 +305,19 @@ export function Setup() {
             Let staff run reports (portfolio at risk and others), prepared in the background and kept for 30 days
           </label>
         </fieldset>
+
+        {(me.modules ?? ['lending']).includes('lending') && (
+          <fieldset>
+            <legend>Go-live date</legend>
+            <label htmlFor="go-live-date">The day the app became your register (only the Owner of the business changes it)</label>
+            <input id="go-live-date" type="date" disabled={busy} defaultValue={current.go_live_date ?? ''}
+              onBlur={(e) => { if (e.target.value && e.target.value !== current.go_live_date) setGoLive(e.target.value); }} />
+            <p className="hint">
+              Loans given out before this day can be brought in from your paper register with their real dates. Until it is set, the day an
+              administrator first signed in counts.
+            </p>
+          </fieldset>
+        )}
 
         {permissions.includes('core.branches.read') && (
           <fieldset>
