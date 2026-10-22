@@ -1,5 +1,7 @@
--- V94: download my data (issue #334 step 1, ADR-074). V80 to V83 are on main and V84 to V93 are claimed by open pull
--- requests; Flyway runs with outOfOrder off, so this number is kept only while it stays above every merged one.
+-- V94: download my data (issue #334 step 1, ADR-074). An ordered claim (AGENTS.md): V80 to V84 are merged, and V85 and V86
+-- (payments), V87 (offline), V88 (shop logos), V89 (referrals), V90 (barcodes), V91 (existing loans) and V93 (the self-serve
+-- plan) are claimed before it. Flyway runs with outOfOrder off, so this file merges after those claims; if it must merge
+-- sooner it is renumbered to the next free number at merge time.
 --
 -- Expand only, safe on a populated database. One permission, two new tenant tables, the three runner functions of V49
 -- replaced so that a business whose subscription has ended (a suspended tenant, read only under FR-TEN-06) still gets its
