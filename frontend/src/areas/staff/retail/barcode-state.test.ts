@@ -33,9 +33,10 @@ describe('FR-RET-68 barcode formats', () => {
     expect(checkBarcode('TEST-E12').ok).toBe(true);
   });
 
-  it('keys a UPC-A as the EAN-13 a scanner may report for it', () => {
-    expect(barcodeKey('036000291452')).toBe(barcodeKey('0036000291452'));
-    expect(barcodeKey('TEST-1')).toBe('TEST-1');
+  it('keys a UPC-A as the EAN-13 a scanner may report for it, and twelve digits in Code 128 as themselves', () => {
+    expect(barcodeKey('036000291452', 'upca')).toBe(barcodeKey('0036000291452', 'ean13'));
+    expect(barcodeKey('036000291452', 'code128')).toBe('036000291452');
+    expect(barcodeKey('TEST-1', 'code128')).toBe('TEST-1');
   });
 });
 
@@ -85,6 +86,10 @@ describe('a scan on a form', () => {
     expect(findByBarcodeIn([lamp, carton], '0036000291452')?.product.id).toBe('p1');
     expect(findByBarcodeIn([lamp, carton], 'TEST-CTN')).toEqual({ product: carton, unitId: 'u-ctn' });
     expect(findByBarcodeIn([lamp, { ...carton, active: false }], 'TEST-CTN')).toBeNull();
+    expect(findByBarcodeIn([lamp], '036000291452')?.product.id).toBe('p1');
+    const printed: Product = { id: 'p3', code: 'P-1', description: 'Test Printed', unit: 'piece', barcodes: [{ id: 'b3', code: '036000291452', format: 'code128', generated: false }] };
+    expect(findByBarcodeIn([printed], '036000291452')?.product.id).toBe('p3');
+    expect(findByBarcodeIn([printed], '0036000291452')).toBeNull();
   });
 });
 

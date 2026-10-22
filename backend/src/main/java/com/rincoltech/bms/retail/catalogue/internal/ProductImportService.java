@@ -260,10 +260,10 @@ class ProductImportService {
             }
             // Only a row that passes holds its codes, so a later row is never refused over a code of an error row.
             for (String c : rowCodes) {
-                codesInFile.putIfAbsent(Barcodes.key(c), line);
+                codesInFile.putIfAbsent(Barcodes.key(c, rowFormat), line);
             }
             for (String c : rowPackCodes) {
-                codesInFile.putIfAbsent(Barcodes.key(c), line);
+                codesInFile.putIfAbsent(Barcodes.key(c, rowFormat), line);
             }
             if (!categories.containsKey(categoryKey)) {
                 newCategories.putIfAbsent(categoryKey, category);
@@ -283,7 +283,9 @@ class ProductImportService {
                     code,
                     description.strip(),
                     "added",
-                    (dryRun ? "Would be added." : "Added.") + packNote + movedNote(rowCodes, rowPackCodes, heldCodes)));
+                    (dryRun ? "Would be added." : "Added.")
+                            + packNote
+                            + movedNote(rowCodes, rowPackCodes, rowFormat, heldCodes)));
             pending.add(new Pending(
                     code,
                     description.strip(),
@@ -447,7 +449,7 @@ class ProductImportService {
     /** One imported barcode; a code an item that is switched off held is released to it first, as the screen does. */
     private void addBarcode(UUID productId, UUID unitId, String raw, String format, UUID by) {
         Barcodes.Checked c = Barcodes.check(raw, format).checked();
-        barcodes.byKey(Barcodes.key(c.code())).ifPresent(h -> {
+        barcodes.byKey(Barcodes.key(c)).ifPresent(h -> {
             if (h.productActive()) {
                 throw new ApiException(
                         HttpStatus.CONFLICT,
@@ -515,7 +517,7 @@ class ProductImportService {
             if (!r.ok()) {
                 return "Barcode " + c + ": " + r.problem();
             }
-            String k = Barcodes.key(c);
+            String k = Barcodes.key(r.checked());
             BarcodeRepository.Held h = held.get(k);
             if (h != null && h.productActive()) {
                 return "Barcode " + c + " is on the item " + h.productDescription() + " (code " + h.productCode()
@@ -534,11 +536,11 @@ class ProductImportService {
 
     /** The codes a row takes from items that are switched off, which lose them for good. */
     private static String movedNote(
-            List<String> rowCodes, List<String> packCodes, Map<String, BarcodeRepository.Held> held) {
+            List<String> rowCodes, List<String> packCodes, String format, Map<String, BarcodeRepository.Held> held) {
         StringBuilder note = new StringBuilder();
         for (List<String> list : List.of(rowCodes, packCodes)) {
             for (String c : list) {
-                BarcodeRepository.Held h = held.get(Barcodes.key(c));
+                BarcodeRepository.Held h = held.get(Barcodes.key(c, format));
                 if (h != null && !h.productActive()) {
                     note.append(" Barcode ")
                             .append(c)

@@ -77,7 +77,7 @@ class BarcodeService {
             }
         }
         Barcodes.Checked checked = result.checked();
-        release(checked.code(), product);
+        release(checked, product);
         UUID id = UUID.randomUUID();
         try {
             repo.insert(
@@ -110,7 +110,7 @@ class BarcodeService {
      * audit row while a product that is switched off holds it. The switched-off product loses it for good: switching it
      * back on does not bring the code back.
      */
-    private void release(String code, Product taker) {
+    private void release(Barcodes.Checked code, Product taker) {
         BarcodeRepository.Held held = repo.byKey(Barcodes.key(code)).orElse(null);
         if (held == null) {
             return;
@@ -199,8 +199,10 @@ class BarcodeService {
         String clean = code == null ? "" : code.strip();
         BarcodeRepository.Held held = clean.isEmpty() || clean.length() > Barcodes.MAX_LENGTH
                 ? null
-                : repo.byKey(Barcodes.key(clean))
+                : Barcodes.scanKeys(clean).stream()
+                        .flatMap(k -> repo.byKey(k).stream())
                         .filter(BarcodeRepository.Held::productActive)
+                        .findFirst()
                         .orElse(null);
         if (held == null) {
             throw new ApiException(HttpStatus.NOT_FOUND, "barcode_not_found", "Not found", "No item has this barcode.");

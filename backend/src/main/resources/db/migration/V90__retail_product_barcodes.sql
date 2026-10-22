@@ -6,16 +6,17 @@
 -- UPC-A, Code 128) before a row is written; the checks below keep the shapes honest. A slash or a
 -- backslash is refused, since the lookup carries the code in its path.
 --
--- A code is unique per tenant: lookup_key folds a twelve digit UPC-A code into the thirteen digit
--- EAN-13 form a scanner may report for it, so the same printed code can never sit on two rows.
+-- A code is unique per tenant: lookup_key folds a code stored as UPC-A (format upca) into the
+-- thirteen digit EAN-13 form a scanner may report for it, so the same printed code can never sit
+-- on two rows. Twelve digits stored as Code 128 are a different code and keep their own key.
 -- "Unique among active products" is the catalogue's rule on top of that index: a code held by a
 -- product that is switched off is released (its row deleted, audited) when an active product
 -- takes it, so the unique index holds at every moment.
 --
 -- generated marks a Code 128 code the system made for a product that had none, for its labels;
 -- its number comes from tenant_sequences ('retail_barcode'). Flyway runs with outOfOrder off, so
--- the number is assigned at merge time above the highest one on main (V81 to V89 are claimed by
--- open pull requests).
+-- the number is assigned at merge time above the highest one on main (V85 to V89, V91 and V93 are
+-- claimed by open pull requests).
 
 CREATE TABLE retail_product_barcodes (
     id          uuid        NOT NULL PRIMARY KEY,
@@ -28,7 +29,7 @@ CREATE TABLE retail_product_barcodes (
     format      text        NOT NULL CHECK (format IN ('ean13', 'ean8', 'upca', 'code128')),
     generated   boolean     NOT NULL DEFAULT false,
     lookup_key  text        GENERATED ALWAYS AS (
-                    CASE WHEN code ~ '^[0-9]{12}$' THEN '0' || code ELSE code END) STORED,
+                    CASE WHEN format = 'upca' THEN '0' || code ELSE code END) STORED,
     UNIQUE (tenant_id, id),
     CHECK ((format = 'ean13' AND code ~ '^[0-9]{13}$')
         OR (format = 'ean8' AND code ~ '^[0-9]{8}$')

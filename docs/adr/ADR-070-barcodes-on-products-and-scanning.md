@@ -24,7 +24,8 @@ or Bluetooth scanner at the till, many have only phones.
    12 or 8 digits is read as EAN-13, UPC-A or EAN-8 unless Code 128 is asked for. The server (`Barcodes.java`) and the PWA
    (`barcode-state.ts`) apply the same rules, so the item form says what is wrong before saving.
 3. **Unique per business among active items.** A unique index on `(tenant_id, lookup_key)`; `lookup_key` is a generated column that
-   folds a twelve digit UPC-A into the thirteen digit EAN-13 a scanner may report, so the same printed code can never sit on two rows.
+   folds a code stored as UPC-A into the thirteen digit EAN-13 a scanner may report, so the same printed code can never sit on two rows;
+   twelve digits stored as Code 128 keep their own key, and a twelve digit scan tries the UPC-A key first, then the Code 128 one.
    A code held by an item that is switched off is released (deleted and audited `retail.barcode.released`) when an active item takes
    it; otherwise a second item is refused with 409 `barcode_taken`. The switched-off item loses the code for good: switching it back on
    does not bring the code back, and the 409 message and the import's dry run both say so. Two writers of one code meet at the index and the second gets 409.

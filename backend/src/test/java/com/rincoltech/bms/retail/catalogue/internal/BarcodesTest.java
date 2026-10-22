@@ -26,7 +26,15 @@ class BarcodesTest {
     void frRet68AUpcAIsCheckedAndKeyedAsTheEan13AScannerMayReport() {
         assertThat(Barcodes.check("036000291452", null).checked().format()).isEqualTo(Barcodes.Format.UPCA);
         assertThat(Barcodes.check("036000291453", null).ok()).isFalse();
-        assertThat(Barcodes.key("036000291452")).isEqualTo(Barcodes.key("0036000291452"));
+        assertThat(Barcodes.key("036000291452", null)).isEqualTo(Barcodes.key("0036000291452", null));
+        assertThat(Barcodes.scanKeys("036000291452")).containsExactly("0036000291452", "036000291452");
+    }
+
+    @Test
+    void frRet68TwelveDigitsInCode128KeepTheirOwnKey() {
+        assertThat(Barcodes.key("036000291452", "code128")).isEqualTo("036000291452");
+        assertThat(Barcodes.key(new Barcodes.Checked("036000291452", Barcodes.Format.CODE128)))
+                .isEqualTo("036000291452");
     }
 
     @Test

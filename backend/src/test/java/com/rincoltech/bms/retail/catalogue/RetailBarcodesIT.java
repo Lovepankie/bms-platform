@@ -194,6 +194,21 @@ class RetailBarcodesIT extends IntegrationTest {
     }
 
     @Test
+    void frRet68TwelveDigitsInCode128AreNotFoldedIntoTheEan13Form() {
+        UUID printed = api.product("BC-12", 100, 200);
+        UUID other = api.product("BC-13", 100, 200);
+        ResponseEntity<JsonNode> asPrinted =
+                api.post("/products/" + printed + "/barcodes", Map.of("code", UPC, "format", "code128"), ADMIN);
+        assertThat(asPrinted.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        // The Code 128 keeps its own key: the thirteen digit EAN-13 is a different code, free for another item.
+        assertThat(lookup("0" + UPC).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(lookup(UPC).getBody().get("product").get("id").asString()).isEqualTo(printed.toString());
+        assertThat(add(other, "0" + UPC).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(lookup("0" + UPC).getBody().get("product").get("id").asString())
+                .isEqualTo(other.toString());
+    }
+
+    @Test
     void frRet68AnUnknownCodeAnswersBarcodeNotFound() {
         ResponseEntity<JsonNode> r = lookup("NO-SUCH-CODE");
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);

@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -147,10 +148,27 @@ final class Barcodes {
         return (10 - sum % 10) % 10 == digits.charAt(n - 1) - '0';
     }
 
-    /** The key a code is unique and looked up under; the database computes the same (V90 lookup_key). */
-    static String key(String code) {
+    /**
+     * The key a code is unique under; the database computes the same (V90 lookup_key). Only a UPC-A is folded into the
+     * thirteen digit EAN-13 a scanner may report for it; twelve digits taken as Code 128 are a different code.
+     */
+    static String key(Checked c) {
+        return c.format() == Format.UPCA ? "0" + c.code() : c.code();
+    }
+
+    /** The key of a code read as {@code format} (null to infer it); a code its format refuses keys as itself. */
+    static String key(String raw, String format) {
+        Result r = check(raw, format);
+        return r.ok() ? key(r.checked()) : raw.strip();
+    }
+
+    /**
+     * The keys a scanned code may be held under, most likely first: twelve digits are a UPC-A (its EAN-13 key), then
+     * the same digits as a Code 128.
+     */
+    static List<String> scanKeys(String code) {
         String c = code.strip();
-        return c.length() == 12 && c.chars().allMatch(Character::isDigit) ? "0" + c : c;
+        return c.length() == 12 && c.chars().allMatch(Character::isDigit) ? List.of("0" + c, c) : List.of(c);
     }
 
     static String generated(long n) {

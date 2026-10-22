@@ -15,7 +15,7 @@ import { createAccountsMock } from './retail-accounts-mock';
 import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
 import { createPurchasingMock } from './retail-purchasing-mock';
-import { barcodeKey, checkBarcode } from '../areas/staff/retail/barcode-state';
+import { barcodeKey, checkBarcode, scanKeys } from '../areas/staff/retail/barcode-state';
 import { MAX_VARIANTS, cleanOption, planVariants, variantDescription, variantKey, variantLabel } from './retail-variants';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
@@ -653,9 +653,8 @@ export function createMockRetail(): RetailApi {
 
     findByBarcode: (code, branchId) =>
       run(() => {
-        const key = barcodeKey(code);
-        for (const [id, list] of barcodes) {
-          const b = list.find((x) => barcodeKey(x.code ?? '') === key);
+        for (const key of scanKeys(code)) for (const [id, list] of barcodes) {
+          const b = list.find((x) => barcodeKey(x.code ?? '', x.format) === key);
           const p = b ? products.get(id) : undefined;
           if (b && p && p.active !== false) {
             if (b.unit_id && !(packs.get(id) ?? []).some((k) => k.unit_id === b.unit_id && k.active)) refuse(404, 'pack_inactive', 'This barcode is on a pack that is switched off. Switch the pack on, or scan the item\'s own barcode.');
@@ -673,8 +672,9 @@ export function createMockRetail(): RetailApi {
         const checked = checkBarcode(body.code, body.format === 'code128' ? 'code128' : undefined);
         if (!checked.ok) refuse(422, 'validation_failed', checked.problem);
         const code = body.code.trim();
-        if ([...barcodes.values()].flat().some((b) => barcodeKey(b.code ?? '') === barcodeKey(code))) refuse(409, 'barcode_taken', 'This barcode is on another item already.');
-        const row: Barcode = { id: nextId('bc'), product_id: p.id, code, format: checked.ok ? checked.format : 'code128', generated: false, ...(body.unit_id ? { unit_id: body.unit_id } : {}) };
+        const format = checked.ok ? checked.format : 'code128';
+        if ([...barcodes.values()].flat().some((b) => barcodeKey(b.code ?? '', b.format) === barcodeKey(code, format))) refuse(409, 'barcode_taken', 'This barcode is on another item already.');
+        const row: Barcode = { id: nextId('bc'), product_id: p.id, code, format, generated: false, ...(body.unit_id ? { unit_id: body.unit_id } : {}) };
         barcodes.set(p.id, [...(barcodes.get(p.id) ?? []), row]);
         return row;
       }),

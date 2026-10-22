@@ -56,10 +56,16 @@ export function formatName(format: string | undefined): string {
   return NAMES[(format ?? 'code128') as BarcodeFormat] ?? format ?? '';
 }
 
-/** The key a code is looked up under: a twelve digit UPC-A is the thirteen digit EAN-13 a scanner may report. */
-export function barcodeKey(code: string): string {
+/** The key a stored code is unique under (V90 lookup_key): only a UPC-A is the thirteen digit EAN-13 a scanner may report. */
+export function barcodeKey(code: string, format: string | undefined): string {
   const c = code.trim();
-  return /^\d{12}$/.test(c) ? `0${c}` : c;
+  return format === 'upca' && /^\d{12}$/.test(c) ? `0${c}` : c;
+}
+
+/** The keys a scanned code may be held under, most likely first: twelve digits are a UPC-A, then a Code 128. */
+export function scanKeys(code: string): string[] {
+  const c = code.trim();
+  return /^\d{12}$/.test(c) ? [`0${c}`, c] : [c];
 }
 
 // ---- Keyboard-wedge scanners ------------------------------------------------------------------------
@@ -183,10 +189,11 @@ export const PACK_UNUSABLE = 'This barcode is on a pack size that is switched of
 
 /** The item among `products` with this barcode, for a scan while the server cannot be reached. */
 export function findByBarcodeIn(products: Product[], code: string): { product: Product; unitId?: string } | null {
-  const key = barcodeKey(code);
-  for (const p of products) {
-    const b = (p.barcodes ?? []).find((x) => barcodeKey(x.code ?? '') === key);
-    if (b && p.active !== false) return { product: p, ...(b.unit_id ? { unitId: b.unit_id } : {}) };
+  for (const key of scanKeys(code)) {
+    for (const p of products) {
+      const b = (p.barcodes ?? []).find((x) => barcodeKey(x.code ?? '', x.format) === key);
+      if (b && p.active !== false) return { product: p, ...(b.unit_id ? { unitId: b.unit_id } : {}) };
+    }
   }
   return null;
 }
