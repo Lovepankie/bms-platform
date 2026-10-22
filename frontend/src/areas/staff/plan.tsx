@@ -128,8 +128,14 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
 
-  if (plan.isError) return <p role="alert">Could not load the plan.</p>;
-  if (!plan.data) return <p>Loading the plan</p>;
+  if (!plan.data) {
+    return (
+      <fieldset data-tour="setup-plan">
+        <legend>Plan and modules</legend>
+        {plan.isError ? <p role="alert">Could not load the plan.</p> : <p>Loading the plan</p>}
+      </fieldset>
+    );
+  }
   const p = plan.data;
   const today = new Date().toISOString().slice(0, 10);
   const scheduled = (p.changes ?? []).filter((c) => c.status === 'scheduled');

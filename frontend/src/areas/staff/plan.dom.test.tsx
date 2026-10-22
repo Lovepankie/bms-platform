@@ -108,7 +108,7 @@ describe('the end of the subscription', () => {
 
   it('says nothing while the subscription goes on, and at once when nothing is paid ahead', () => {
     expect(endNotice({})).toBeNull();
-    const now = { changes_take_effect_on: '2099-01-01', paid_until: null };
+    const now = { changes_take_effect_on: '2099-01-01' };
     expect(stopSentence('retail', now, '2099-01-01')).toMatch(/^Shop stops at once, because nothing is paid ahead/);
     expect(cancelSentence(now, '2099-01-01')).toMatch(/Nothing is deleted/);
   });
