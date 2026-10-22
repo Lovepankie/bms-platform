@@ -59,6 +59,14 @@ class EmailLayoutTest {
         p.put("kind", "problem");
         p.put("page", "/staff/retail/sale");
         p.put("message", "Test message <b>with</b> markup & an ampersand.");
+        // Subscription billing (issue #480): how to pay is the operator's own text.
+        p.put("owner_name", "Test Owner 01");
+        p.put("due_date", "8 Nov 2026");
+        p.put("amount_line", "The price of the next month is UGX 10,000.");
+        p.put("how_to_pay", "Test: pay to the test account <1> & say the business name.");
+        p.put("receipt_no", "RT-2026-000001");
+        p.put("amount", "UGX 10,000");
+        p.put("period", "1 Nov 2026 to 30 Nov 2026");
         return p;
     }
 

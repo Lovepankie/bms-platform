@@ -341,7 +341,7 @@ class BillingService {
                     params.put("due_date", DATE.format(due));
                     params.put("amount_line", amountLine);
                     params.put("how_to_pay", howToPay(settings));
-                    params.put("billing_url", tenant.address() + "/staff/setup/billing");
+                    params.put("link", tenant.address() + "/staff/setup/billing");
                     String template = "billing." + kind;
                     String key = template + ":" + tenant.id() + ":" + due;
                     Instant expires = clock.now().plus(java.time.Duration.ofDays(2));
@@ -413,7 +413,7 @@ class BillingService {
             params.put("receipt_no", receiptNo);
             params.put("amount", BusinessService.money(payment.currency(), payment.amountMinor()));
             params.put("period", DATE.format(payment.periodStart()) + " to " + DATE.format(payment.periodEnd()));
-            params.put("billing_url", tenant.address() + "/staff/setup/billing");
+            params.put("link", tenant.address() + "/staff/setup/billing");
             params.put(EmailAttachments.PARAM, RECEIPT_KIND + ":" + payment.id());
             outbox.enqueue(new Outbox.Message(
                     Outbox.EMAIL,

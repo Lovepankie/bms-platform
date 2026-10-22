@@ -421,6 +421,7 @@ class BillingAutomationIT extends IntegrationTest {
         assertThat(file.get().fileName()).isEqualTo("receipt-" + numbers.getFirst() + ".pdf");
         assertThat(new String(file.get().bytes(), 0, 4, StandardCharsets.US_ASCII))
                 .isEqualTo("%PDF");
+        sample("subscription-receipt", file.get().bytes());
         assertThat(attachments.read(other.id(), paymentId.toString()))
                 .as("another business's receipt")
                 .isEmpty();
@@ -441,6 +442,29 @@ class BillingAutomationIT extends IntegrationTest {
                         .getBody()
                         .get("payments"))
                 .isEmpty();
+    }
+
+    /** With {@code -Dbms.documents.samples}: the PDF and a PNG of each page, for the visual check (ADR-034 item 8). */
+    static void sample(String name, byte[] pdf) {
+        if (System.getProperty("bms.documents.samples") == null) {
+            return;
+        }
+        try {
+            java.nio.file.Path dir = java.nio.file.Path.of("target/document-samples");
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.write(dir.resolve(name + ".pdf"), pdf);
+            try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+                org.apache.pdfbox.rendering.PDFRenderer r = new org.apache.pdfbox.rendering.PDFRenderer(d);
+                for (int i = 0; i < d.getNumberOfPages(); i++) {
+                    javax.imageio.ImageIO.write(
+                            r.renderImageWithDPI(i, 110),
+                            "png",
+                            dir.resolve(name + "-p" + (i + 1) + ".png").toFile());
+                }
+            }
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     ResponseEntity<byte[]> download(Business b, UUID paymentId) {

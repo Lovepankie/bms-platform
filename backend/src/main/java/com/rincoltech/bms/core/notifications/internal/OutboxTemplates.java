@@ -357,7 +357,7 @@ class OutboxTemplates {
 
                     Your plan, what is paid and your receipts are on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
@@ -377,7 +377,7 @@ class OutboxTemplates {
 
                     Your plan, what is paid and your receipts are on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
@@ -397,7 +397,7 @@ class OutboxTemplates {
 
                     Your plan, what is paid and your receipts are on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
@@ -417,7 +417,7 @@ class OutboxTemplates {
 
                     Your plan, what is paid and your receipts are on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
@@ -437,7 +437,7 @@ class OutboxTemplates {
 
                     Your plan, what is paid and your receipts are on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
@@ -457,7 +457,7 @@ class OutboxTemplates {
 
                     Your plan, what is paid and your receipts are on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
@@ -474,7 +474,7 @@ class OutboxTemplates {
 
                     Your receipts are also on the Plan and billing page:
 
-                    {billing_url}
+                    {link}
 
                     Rincol Tech
                     """,
