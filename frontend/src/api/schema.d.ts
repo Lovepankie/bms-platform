@@ -380,6 +380,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/branding/app/manifest.webmanifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The installed app's manifest for this business (public) */
+        get: operations["getAppManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/branding/app/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An installed app icon drawn from the business's logo (public, cacheable) */
+        get: operations["getAppIcon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/branding/logo": {
         parameters: {
             query?: never;
@@ -6581,6 +6615,30 @@ export interface components {
             tokens_used_today?: number;
             /** Format: int32 */
             version?: number;
+        };
+        /** @description A W3C web app manifest */
+        AppManifest: {
+            background_color?: string;
+            description?: string;
+            display?: string;
+            icons?: components["schemas"]["AppManifestIcon"][];
+            id?: string;
+            lang?: string;
+            name?: string;
+            scope?: string;
+            short_name?: string;
+            start_url?: string;
+            /**
+             * @description The business's colour, or this one when it has none
+             * @default #0077B6
+             */
+            theme_color: string;
+        };
+        AppManifestIcon: {
+            purpose?: string;
+            sizes?: string;
+            src?: string;
+            type?: string;
         };
         ApplicantLinkRequest: {
             token: string;
@@ -16959,6 +17017,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Branding"];
+                };
+            };
+        };
+    };
+    getAppManifest: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The manifest of the host's business, or the BMS one */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/manifest+json": components["schemas"]["AppManifest"];
+                };
+            };
+            /** @description The ETag still matches */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/manifest+json": components["schemas"]["AppManifest"];
+                };
+            };
+        };
+    };
+    getAppIcon: {
+        parameters: {
+            query?: {
+                v?: string;
+            };
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                file: "icon-192.png" | "icon-512.png" | "icon-maskable-192.png" | "icon-maskable-512.png" | "apple-touch-icon.png";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The PNG icon drawn from the logo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description No logo here: the BMS icon of the same name */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description The ETag still matches */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Not one of the icon file names */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
                 };
             };
         };

@@ -338,6 +338,65 @@
           }
         }
       },
+      "AppManifest" : {
+        "description" : "A W3C web app manifest",
+        "properties" : {
+          "background_color" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "display" : {
+            "type" : "string"
+          },
+          "icons" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AppManifestIcon"
+            },
+            "type" : "array"
+          },
+          "id" : {
+            "type" : "string"
+          },
+          "lang" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "short_name" : {
+            "type" : "string"
+          },
+          "start_url" : {
+            "type" : "string"
+          },
+          "theme_color" : {
+            "default" : "#0077B6",
+            "description" : "The business's colour, or this one when it has none",
+            "type" : "string"
+          }
+        }
+      },
+      "AppManifestIcon" : {
+        "properties" : {
+          "purpose" : {
+            "type" : "string"
+          },
+          "sizes" : {
+            "type" : "string"
+          },
+          "src" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        }
+      },
       "ApplicantLinkRequest" : {
         "properties" : {
           "token" : {
@@ -21555,6 +21614,119 @@
           }
         },
         "summary" : "The tenant's display name, theme colour, logo URL and enabled modules (public)",
+        "tags" : [ "branding" ]
+      }
+    },
+    "/api/v1/branding/app/manifest.webmanifest" : {
+      "get" : {
+        "operationId" : "getAppManifest",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-None-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/manifest+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AppManifest"
+                }
+              }
+            },
+            "description" : "The manifest of the host's business, or the BMS one"
+          },
+          "304" : {
+            "content" : {
+              "application/manifest+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AppManifest"
+                }
+              }
+            },
+            "description" : "The ETag still matches"
+          }
+        },
+        "summary" : "The installed app's manifest for this business (public)",
+        "tags" : [ "branding" ]
+      }
+    },
+    "/api/v1/branding/app/{file}" : {
+      "get" : {
+        "operationId" : "getAppIcon",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "file",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png", "apple-touch-icon.png" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "v",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-None-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "image/png" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The PNG icon drawn from the logo"
+          },
+          "302" : {
+            "content" : {
+              "image/png" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "No logo here: the BMS icon of the same name"
+          },
+          "304" : {
+            "content" : {
+              "image/png" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The ETag still matches"
+          },
+          "404" : {
+            "content" : {
+              "image/png" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Not one of the icon file names"
+          }
+        },
+        "summary" : "An installed app icon drawn from the business's logo (public, cacheable)",
         "tags" : [ "branding" ]
       }
     },

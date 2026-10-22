@@ -2,13 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <!-- The tab and address bar icon is the business's logo too, the same one the installed app uses (ADR-066); the API
+         sends the BMS icon where there is no logo or no business. -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/api/v1/branding/app/icon-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0077b6" />
     <!-- The saved theme, set before the first paint so the page never flashes the wrong one (issue #429). -->
     <script src="/theme-init.js"></script>
-    <!-- iOS: the icon of the home screen shortcut, and opening it as an app rather than a Safari tab (ADR-050). -->
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <!-- The installed app's manifest and icon are the business's own, from its logo and name (ADR-066); the API
+         answers with the BMS ones where there is no logo or no business. -->
+    <link rel="manifest" href="/api/v1/branding/app/manifest.webmanifest" />
+    <!-- iOS: the icon of the home screen shortcut, and opening it as an app rather than a Safari tab (ADR-050). The
+         home screen name is this tag, which iOS reads instead of the manifest: the shell sets it to the business's
+         short name at runtime, the same cut as the manifest's short_name (ADR-066). -->
+    <link rel="apple-touch-icon" href="/api/v1/branding/app/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BMS" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />

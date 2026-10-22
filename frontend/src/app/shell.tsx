@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from 'react';
 import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from './theme-mode';
-import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_SITE, type ShellBrand, THEME_PROPERTIES, themeVars } from './branding';
+import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_SITE, type ShellBrand, THEME_PROPERTIES, appTitle, themeVars } from './branding';
 
 // The shared shell (FR-TEN-08): the brand bar, the theme colour and the Powered-by footer are
 // drawn here once, around every route, so sign-in, accept-invitation, the staff area, the member
@@ -66,6 +66,13 @@ export function Shell({ brand = PLATFORM_BRAND, actions, children }: { brand?: S
       if (value) root.style.setProperty(name, value);
       else root.style.removeProperty(name);
     });
+    // iOS takes the home screen name from this tag when the page is added, not from the manifest (ADR-066).
+    document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', appTitle(brand));
+    // The tab icon is the logo too; a new address when the logo or colour changes, as Safari keeps favicons a long time.
+    const icon = '/api/v1/branding/app/icon-192.png';
+    document
+      .querySelector('link[rel="icon"]')
+      ?.setAttribute('href', brand.iconVersion ? `${icon}?v=${encodeURIComponent(brand.iconVersion)}` : icon);
   }, [brand]);
 
   return (

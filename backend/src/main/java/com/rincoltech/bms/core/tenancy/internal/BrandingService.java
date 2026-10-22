@@ -82,6 +82,17 @@ class BrandingService implements Letterheads {
                 modules.enabledKeys());
     }
 
+    /** What the installed app's manifest and icons are drawn from (ADR-066): the name, a readable colour or none, the logo. */
+    record AppBrand(String displayName, Optional<String> themeColour, Optional<Logo> logo) {}
+
+    @Transactional(readOnly = true)
+    AppBrand appBrand() {
+        SettingsResponse s = settings.current();
+        Optional<String> colour = BrandColour.readableText(s.themePrimary())
+                .map(t -> s.themePrimary().toUpperCase());
+        return new AppBrand(s.displayName(), colour, logo());
+    }
+
     /** The platform's own colour (the PWA's default {@code --brand}), for a tenant without a readable one. */
     static final String DEFAULT_BRAND = "#0D5C75";
 

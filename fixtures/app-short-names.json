@@ -1,0 +1,37 @@
+{
+  "_comment": "The home screen short name of ADR-066: at most 12 characters as a reader counts them (grapheme clusters), cut at the last word boundary when that keeps at least 6. AppManifestShortNameTest and branding.test.ts read this one file, so the two cuts cannot drift. Fabricated names only.",
+  "cases": [
+    {
+      "name": "BMS",
+      "short": "BMS"
+    },
+    {
+      "name": "Test Shop 012",
+      "short": "Test Shop"
+    },
+    {
+      "name": "Fabricated Trading Company",
+      "short": "Fabricated"
+    },
+    {
+      "name": "Test \"Q\" 👨‍👩‍👧 Shop",
+      "short": "Test \"Q\" 👨‍👩‍👧"
+    },
+    {
+      "name": "Abcdefghijklmnop",
+      "short": "Abcdefghijkl"
+    },
+    {
+      "name": "Ab Cdefghijklmnop",
+      "short": "Ab Cdefghijk"
+    },
+    {
+      "name": "Café Café Café Ltd",
+      "short": "Café Café"
+    },
+    {
+      "name": "Duka la 🍌🍌🍌🍌🍌🍌🍌🍌",
+      "short": "Duka la 🍌🍌🍌🍌"
+    }
+  ]
+}
