@@ -45,6 +45,7 @@ import { BranchesScreen } from '../areas/staff/branches/page';
 import { NotificationsPage } from '../areas/staff/notifications/page';
 import { FeedbackPage } from '../areas/staff/feedback/page';
 import { BusinessNotificationsScreen } from '../areas/staff/notifications/business';
+import { BillingScreen } from '../areas/staff/billing/page';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
@@ -98,6 +99,8 @@ function screen(path: string | undefined): ReactElement {
       return <TwoStepPolicyScreen />;
     case '/staff/setup/notifications':
       return <BusinessNotificationsScreen />;
+    case '/staff/setup/billing':
+      return <BillingScreen />;
     case '/staff/retail':
       return <RetailHome />;
     case '/staff/retail/sale':
@@ -189,6 +192,12 @@ function render(me: Me, path: string | undefined): string {
     daily_summary_time: '20:00', timezone: 'Africa/Kampala', push_available: true, version: 1,
   });
   client.setQueryData(['staff-branches'], []);
+  // What Plan and billing reads (issue #480): a paid business with one payment, fabricated.
+  client.setQueryData(['billing'], {
+    plan_code: 'test', plan_name: 'Test Plan', currency: 'UGX', monthly_minor: 10000, annual_months: 11, annual_minor: 110000,
+    state: 'active', paid_until: '2026-11-30', grace_days: 7, how_to_pay: 'Test: pay to the test account',
+    payments: [{ id: 'p1', amount_minor: 10000, currency: 'UGX', method: 'mtn_momo', paid_on: '2026-11-01', months: 1, period_start: '2026-11-01', period_end: '2026-11-30', receipt_no: 'RT-2026-000001' }],
+  });
   // What the retail settings screens read, so their targets are in the static markup.
   client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
   client.setQueryData(['retail', 'branch-roles'], (me.branches ?? []).map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: 'both', can_sell: true })));
@@ -284,6 +293,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-feedback': [ADMIN, CASHIER],
   'page-two-step': [ADMIN],
   'page-business-notifications': [ADMIN],
+  'page-billing': [ADMIN],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

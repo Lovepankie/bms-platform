@@ -77,6 +77,10 @@ const staffTwoStepPolicyRoute = createRoute({ getParentRoute: () => staffRoute, 
 const staffBusinessNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/notifications', staticData: { crumb: 'Notifications for the business' } }).lazy(() =>
   import('../areas/staff/notifications/business').then((m) => m.Route),
 );
+// Plan and billing (issue #480, ADR-075): the plan, what is paid, how to pay and the receipts. Under Business set-up in the trail.
+const staffBillingRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/billing', staticData: { crumb: 'Plan and billing' } }).lazy(() =>
+  import('../areas/staff/billing/page').then((m) => m.Route),
+);
 const staffOwnTwoStepRoute = createRoute({ getParentRoute: () => staffRoute, path: '/two-step', staticData: { crumb: 'Your two-step sign-in' } }).lazy(() =>
   import('../areas/staff/two-step/own').then((m) => m.Route),
 );
@@ -298,6 +302,10 @@ const platformBusinessRoute = createRoute({ getParentRoute: () => platformRoute,
 const platformPlansRoute = createRoute({ getParentRoute: () => platformRoute, path: '/plans' }).lazy(() =>
   import('../areas/platform/plans').then((m) => m.Route),
 );
+// Businesses due for suspension and the grace period (issue #480, ADR-075).
+const platformBillingRoute = createRoute({ getParentRoute: () => platformRoute, path: '/billing' }).lazy(() =>
+  import('../areas/platform/billing').then((m) => m.Route),
+);
 // Feedback from every business (issue #447, ADR-065).
 const platformFeedbackRoute = createRoute({ getParentRoute: () => platformRoute, path: '/feedback' }).lazy(() =>
   import('../areas/platform/feedback').then((m) => m.Route),
@@ -314,7 +322,7 @@ export const router = createRouter({
     forgotPasswordRoute,
     resetPasswordRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailCreditSalesRoute,
@@ -431,6 +439,7 @@ export const router = createRouter({
       platformBusinessesRoute,
       platformBusinessRoute,
       platformPlansRoute,
+      platformBillingRoute,
       platformFeedbackRoute,
     ]),
   ]),

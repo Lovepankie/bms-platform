@@ -934,7 +934,7 @@ describe('the operator portal side menu (issue #455)', () => {
     );
     return { signOut };
   }
-  const AREAS = ['Applications', 'Businesses', 'Plans and prices', 'Messages not sent', 'Feedback'];
+  const AREAS = ['Applications', 'Businesses', 'Plans and prices', 'Due for suspension', 'Messages not sent', 'Feedback'];
 
   it('shows the sidebar from 720px with the portal areas and Sign out in the bar', () => {
     widthIs(1280);

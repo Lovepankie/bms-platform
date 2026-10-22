@@ -1121,6 +1121,36 @@ export const businessNotificationsPage: Tour = {
   ],
 };
 
+// Business set-up > Plan and billing (issue #480, ADR-075): the plan, what is paid, how to pay and the receipts.
+export const billingPage: Tour = {
+  id: 'page-billing',
+  version: 1,
+  title: 'This page: plan and billing',
+  audience: (me) => held(me, 'core.billing.read'),
+  autoStart: false,
+  page: '/staff/setup/billing',
+  steps: [
+    {
+      id: 'plan',
+      target: 'billing-plan',
+      title: 'Your plan',
+      body: 'Your plan, its price, and whether you are in your free month, paid up or overdue, with the dates that matter.',
+    },
+    {
+      id: 'how',
+      target: 'billing-how',
+      title: 'How to pay',
+      body: 'How to pay Rincol Tech. When a payment is recorded you get a receipt by email.',
+    },
+    {
+      id: 'payments',
+      target: 'billing-payments',
+      title: 'Payments and receipts',
+      body: 'Every payment recorded for your business. Tap a receipt to save it as a PDF.',
+    },
+  ],
+};
+
 export const branchRolesCapability: Tour = {
   id: 'capability-branch-roles',
   version: 1,
@@ -1670,7 +1700,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, notificationsPage, feedbackPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, billingPage, notificationsPage, feedbackPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;
