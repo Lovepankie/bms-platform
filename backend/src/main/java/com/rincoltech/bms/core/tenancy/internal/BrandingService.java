@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.documents.Documents.AssetMeta;
 import com.rincoltech.bms.core.documents.Documents.ImagePolicy;
 import com.rincoltech.bms.core.tenancy.Letterheads;
 import com.rincoltech.bms.core.tenancy.TenantModules;
+import com.rincoltech.bms.core.tenancy.internal.BranchController.BranchResponse;
 import com.rincoltech.bms.core.tenancy.internal.SettingsController.SettingsResponse;
 import com.rincoltech.bms.kernel.ApiException;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -58,16 +59,23 @@ class BrandingService implements Letterheads {
     private final SettingsService settings;
     private final Documents documents;
     private final TenantModules modules;
+    private final BranchService branches;
 
-    BrandingService(SettingsService settings, Documents documents, TenantModules modules) {
+    BrandingService(SettingsService settings, Documents documents, TenantModules modules, BranchService branches) {
         this.settings = settings;
         this.documents = documents;
         this.modules = modules;
+        this.branches = branches;
     }
 
     /** The file is checked and re-encoded before a transaction opens, so no connection waits on it. */
     SettingsResponse uploadLogo(byte[] bytes) {
         return settings.replaceLogo(documents.prepareImage(bytes, LOGO));
+    }
+
+    /** A shop's own logo (issue #461, ADR-068): the rules and the processing of the business logo, checked the same way. */
+    BranchResponse uploadBranchLogo(UUID branchId, byte[] bytes) {
+        return branches.replaceLogo(branchId, documents.prepareImage(bytes, LOGO));
     }
 
     @Transactional(readOnly = true)
@@ -99,6 +107,26 @@ class BrandingService implements Letterheads {
     @Override
     @Transactional(readOnly = true)
     public Letterhead current() {
+        return letterhead(Optional.empty());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Letterhead forBranch(UUID branchId) {
+        return letterhead(branchId == null ? Optional.empty() : branchLogo(branchId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Letterhead forBranchCode(String code) {
+        return letterhead(
+                code == null
+                        ? Optional.empty()
+                        : branches.logoDocumentIdByCode(code).flatMap(this::servable));
+    }
+
+    /** The shop's own logo when it has a servable one, else the business logo (issue #461, ADR-068). */
+    private Letterhead letterhead(Optional<Logo> branchLogo) {
         SettingsResponse s = settings.current();
         String colour = s.themePrimary() != null
                         && BrandColour.readableText(s.themePrimary()).isPresent()
@@ -106,7 +134,9 @@ class BrandingService implements Letterheads {
                 : DEFAULT_BRAND;
         Optional<Letterheads.Logo> logo;
         try {
-            logo = logo().flatMap(
+            logo = branchLogo
+                    .or(this::logo)
+                    .flatMap(
                             l -> bytes(l).map(b -> new Letterheads.Logo(l.meta().contentType(), b)));
         } catch (ApiException e) {
             // A document without its logo is better than no document; the header keeps the name.
@@ -134,14 +164,24 @@ class BrandingService implements Letterheads {
 
     @Transactional(readOnly = true)
     Optional<Logo> logo() {
-        SettingsResponse s = settings.current();
-        if (s.logoDocumentId() == null) {
-            return Optional.empty();
-        }
+        return Optional.ofNullable(settings.current().logoDocumentId()).flatMap(this::servable);
+    }
+
+    /**
+     * A shop's own logo (issue #461, ADR-068), from the database only, like {@link #logo()}. Empty for a branch with none and
+     * for a branch of another business, which row-level security hides.
+     */
+    @Transactional(readOnly = true)
+    Optional<Logo> branchLogo(UUID branchId) {
+        return branches.logoDocumentId(branchId).flatMap(this::servable);
+    }
+
+    /** A core.tenant document of this tenant whose stored type the public routes may send. */
+    private Optional<Logo> servable(UUID documentId) {
         return documents
-                .publicAssetMeta(TenantDocumentAccess.SUBJECT, s.logoDocumentId())
+                .publicAssetMeta(TenantDocumentAccess.SUBJECT, documentId)
                 .filter(m -> SERVABLE.contains(m.contentType()))
-                .map(m -> new Logo(s.logoDocumentId(), m));
+                .map(m -> new Logo(documentId, m));
     }
 
     /**

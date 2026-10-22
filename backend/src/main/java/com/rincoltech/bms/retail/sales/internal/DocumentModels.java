@@ -329,9 +329,12 @@ class DocumentModels {
 
     // ---- Shared ----------------------------------------------------------------------------------------
 
-    /** The letterhead, the branch block and the number and date of the header (layout.html). */
+    /**
+     * The letterhead, the branch block and the number and date of the header (layout.html). A document of one shop carries
+     * that shop's own logo when it has one, else the business logo (issue #461, ADR-068).
+     */
     Map<String, Object> common(DocumentSnapshot.Place branch, String title, String number, LocalDate on) {
-        Letterhead lh = letterheads.current();
+        Letterhead lh = branch.code() == null ? letterheads.current() : letterheads.forBranchCode(branch.code());
         Map<String, Object> letterhead = new LinkedHashMap<>();
         letterhead.put("name", lh.displayName());
         letterhead.put("colour", lh.brandColour());

@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.tenancy.BranchClosingCheck;
 import com.rincoltech.bms.core.tenancy.BranchClosingCheck.Finding;
 import com.rincoltech.bms.core.tenancy.BranchDeactivationGuard;
@@ -40,7 +41,7 @@ class BranchService implements BranchProvisioning {
 
     private static final String COLUMNS =
             "id, code, name, location, is_head_office, status, stocks_goods, sells_goods, closed_at,"
-                    + " closed_reason, created_at, updated_at, version";
+                    + " closed_reason, logo_document_id, created_at, updated_at, version";
     private static final String READ = "core.branches.read";
 
     private final JdbcClient jdbc;
@@ -50,6 +51,7 @@ class BranchService implements BranchProvisioning {
     private final List<BranchClosingCheck> checks;
     private final List<BranchSellingCheck> sellingChecks;
     private final CurrentTenant tenant;
+    private final Documents documents;
 
     BranchService(
             JdbcClient jdbc,
@@ -58,7 +60,8 @@ class BranchService implements BranchProvisioning {
             List<BranchDeactivationGuard> guards,
             List<BranchClosingCheck> checks,
             List<BranchSellingCheck> sellingChecks,
-            CurrentTenant tenant) {
+            CurrentTenant tenant,
+            Documents documents) {
         this.jdbc = jdbc;
         this.planLimits = planLimits;
         this.audit = audit;
@@ -66,6 +69,7 @@ class BranchService implements BranchProvisioning {
         this.checks = List.copyOf(checks);
         this.sellingChecks = List.copyOf(sellingChecks);
         this.tenant = tenant;
+        this.documents = documents;
     }
 
     @Transactional(readOnly = true)
@@ -102,6 +106,7 @@ class BranchService implements BranchProvisioning {
                         b.closedReason(),
                         f.count(),
                         f.valueMinor(),
+                        b.logoUrl(),
                         b.createdAt(),
                         b.updatedAt(),
                         b.version()))
@@ -433,6 +438,76 @@ class BranchService implements BranchProvisioning {
                 + String.format(Locale.ENGLISH, "%,d.%02d", abs / 100, abs % 100);
     }
 
+    // ---- The shop's own logo (issue #461, ADR-068) ------------------------------------------------------
+
+    /**
+     * Stores the logo as a core document of the tenant (the subject of the business logo, so the public route reads it the
+     * same way) and points the branch at it; the file was checked and re-encoded before the transaction opened
+     * ({@link BrandingService#uploadBranchLogo}). A branch outside the caller's {@code core.branches.manage} scope is a 404
+     * before anything is stored. No If-Match: the version still goes up, so a form holding the old one refetches.
+     */
+    @Transactional
+    BranchResponse replaceLogo(UUID branchId, Documents.Prepared prepared) {
+        Principal principal = CurrentPrincipal.require();
+        find(branchId)
+                .filter(b -> principal.may("core.branches.manage", b.id()))
+                .orElseThrow(ApiException::notFound);
+        // Stored first: the object write does not wait inside the branch row lock.
+        UUID id = documents
+                .store(prepared, TenantDocumentAccess.SUBJECT, tenant.profile().id(), branchId)
+                .id();
+        return setLogo(lockForUpdate(branchId), id);
+    }
+
+    /** The previous logo's document stays (documents are never deleted); only the branch's pointer is cleared. Idempotent. */
+    @Transactional
+    BranchResponse removeLogo(UUID branchId) {
+        BranchResponse before = lockForUpdate(branchId);
+        return before.logoUrl() == null ? before : setLogo(before, null);
+    }
+
+    private BranchResponse setLogo(BranchResponse before, UUID documentId) {
+        UUID was = logoDocumentId(before.id()).orElse(null);
+        jdbc.sql("""
+                        UPDATE branches SET logo_document_id = ?, updated_at = now(), version = version + 1
+                         WHERE id = ?
+                        """).params(documentId, before.id()).update();
+        Map<String, Object> wasValues = new LinkedHashMap<>();
+        wasValues.put("logo_document_id", was);
+        Map<String, Object> nowValues = new LinkedHashMap<>();
+        nowValues.put("logo_document_id", documentId);
+        audit.record(new AuditLog.Entry(
+                "core.branch.logo_changed", "core.branch", before.id(), before.id(), wasValues, nowValues));
+        return find(before.id()).orElseThrow();
+    }
+
+    /** The branch's logo document, when it has one; row-level security keeps every other business's branches out. */
+    @Transactional(readOnly = true)
+    Optional<UUID> logoDocumentId(UUID branchId) {
+        return jdbc.sql("SELECT logo_document_id FROM branches WHERE id = ?")
+                .param(branchId)
+                .query((rs, n) -> Optional.ofNullable(rs.getObject(1, UUID.class)))
+                .optional()
+                .flatMap(o -> o);
+    }
+
+    /** As {@link #logoDocumentId} by the branch code, which never changes: what an issued document's snapshot keeps. */
+    @Transactional(readOnly = true)
+    Optional<UUID> logoDocumentIdByCode(String code) {
+        return jdbc.sql("SELECT logo_document_id FROM branches WHERE code = ?")
+                .param(code)
+                .query((rs, n) -> Optional.ofNullable(rs.getObject(1, UUID.class)))
+                .optional()
+                .flatMap(o -> o);
+    }
+
+    static final String LOGO_PATH = "/api/v1/branches/%s/logo?v=%s";
+
+    /** The versioned URL the branch response and {@code /me} give for a shop's logo, or null without one. */
+    static String logoUrl(UUID branchId, UUID logoDocumentId) {
+        return logoDocumentId == null ? null : LOGO_PATH.formatted(branchId, logoDocumentId);
+    }
+
     private BranchResponse lockForUpdate(UUID branchId) {
         Principal principal = CurrentPrincipal.require();
         return jdbc.sql("SELECT " + COLUMNS + " FROM branches WHERE id = ? FOR UPDATE")
@@ -473,6 +548,7 @@ class BranchService implements BranchProvisioning {
                 rs.getString("closed_reason"),
                 null,
                 null,
+                logoUrl(rs.getObject("id", UUID.class), rs.getObject("logo_document_id", UUID.class)),
                 instant(rs.getTimestamp("created_at")),
                 instant(rs.getTimestamp("updated_at")),
                 rs.getInt("version"));

@@ -370,7 +370,8 @@ class LoanDocuments {
     // ---- models ------------------------------------------------------------------------------
 
     private Map<String, Object> common(Loan loan, String title, String number, LocalDate on) {
-        Letterhead lh = letterheads.current();
+        // The branch's own logo when it has one, else the business logo (issue #461, ADR-068).
+        Letterhead lh = letterheads.forBranch(loan.branchId());
         Map<String, Object> letterhead = new LinkedHashMap<>();
         letterhead.put("name", lh.displayName());
         letterhead.put("colour", lh.brandColour());

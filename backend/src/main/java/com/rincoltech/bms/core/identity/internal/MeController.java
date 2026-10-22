@@ -84,7 +84,8 @@ class MeController {
         UserResponse user = users.find(principal.userId()).orElseThrow(AuthFlow::unauthenticated);
         List<MeBranch> workable = branches.all().stream()
                 .filter(b -> b.active() && principal.canSeeBranch(b.id()))
-                .map(b -> new MeBranch(b.id(), b.code(), b.name(), b.headOffice(), b.stocksGoods(), b.sellsGoods()))
+                .map(b -> new MeBranch(
+                        b.id(), b.code(), b.name(), b.headOffice(), b.stocksGoods(), b.sellsGoods(), b.logoUrl()))
                 .toList();
         // A branch that keeps goods and sells is the default; a Store (#366) and a head office that keeps none come
         // later.
