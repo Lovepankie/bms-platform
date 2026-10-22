@@ -484,7 +484,7 @@ issue #329),
 refund paid there with `branch_does_not_sell`), `CHECK (sells_goods OR stocks_goods)` named `branches_store_stocks` (a Store must keep goods; migration
 V65, issue #366, ADR-048).
 `logo_document_id uuid` (the shop's own logo, null for none: the business logo shows; a `core.tenant` document of the tenant with the
-branch id on its row, foreign key `branches_logo_fk` on `(tenant_id, logo_document_id)` to `documents (tenant_id, id)`; migration V88,
+branch id on its row, foreign key `branches_logo_fk` on `(tenant_id, logo_document_id)` to `documents (tenant_id, id)`; migration V85,
 issue #461, ADR-068, FR-BR-09).
 `UNIQUE (tenant_id, code)`; partial unique index
 `ON branches (tenant_id) WHERE is_head_office` (exactly one head office). FR-BR-01.

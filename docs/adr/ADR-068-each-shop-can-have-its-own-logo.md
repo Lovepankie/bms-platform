@@ -16,7 +16,7 @@ while the business itself stays one business with one installed app.
 
 ## Decision
 
-1. **An optional logo per branch.** `branches.logo_document_id` (migration `V88`), null by default, points at a document of the
+1. **An optional logo per branch.** `branches.logo_document_id` (migration `V85`), null by default, points at a document of the
    tenant (the same `core.tenant` subject as the business logo, with the branch id on the document row). A branch without one shows the
    business logo everywhere, so nothing changes for a business that never sets one.
 2. **The rules and processing of the business logo.** `PUT /api/v1/branches/{branch_id}/logo` (multipart `file`) takes PNG, JPEG or

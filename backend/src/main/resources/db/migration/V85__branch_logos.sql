@@ -1,8 +1,7 @@
--- V88: an optional logo for each shop (branch) of a business (issue #461, ADR-068).
+-- V85: an optional logo for each shop (branch) of a business (issue #461, ADR-068).
 --
--- V88 is the first free number above every open branch: V81 to V84 are claimed by lending, V85 and V86 by payments and
--- V87 by offline sales. Flyway runs with outOfOrder off (AGENTS.md), so this file is renamed at merge if the numbers below
--- it land in another order.
+-- V85 is the highest number on main (V84, the lending arrears notices) plus one, and the first of the ordered claims in the
+-- AGENTS.md ledger. Flyway runs with outOfOrder off (AGENTS.md), so this file is renamed at merge if main moves first.
 --
 -- Expand only, safe on a populated database. The logo itself is a row of documents (V4) stored through core.documents with
 -- the same subject as the business logo (core.tenant, the tenant itself), re-encoded at upload so no metadata survives.

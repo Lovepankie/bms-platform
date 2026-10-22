@@ -126,7 +126,7 @@ class RlsIsolationIT {
                         """)
                 .params(logo, t.tenantId(), t.tenantId(), "tenants/" + t.tenantId() + "/upload/rls/" + logo + ".png")
                 .update();
-        // A shop's own logo (migration V88, #461): the second branch points at the tenant's logo document.
+        // A shop's own logo (migration V85, #461): the second branch points at the tenant's logo document.
         owner.sql("UPDATE branches SET logo_document_id = ? WHERE id = ?")
                 .params(logo, t.secondBranch())
                 .update();
@@ -991,7 +991,7 @@ class RlsIsolationIT {
     }
 
     /**
-     * Shop logos (V88, #461): bound to A, no branch of B and its logo is read, and A cannot point one of its branches at a
+     * Shop logos (V85, #461): bound to A, no branch of B and its logo is read, and A cannot point one of its branches at a
      * document of B (the key is on the tenant and the document).
      */
     @Test
