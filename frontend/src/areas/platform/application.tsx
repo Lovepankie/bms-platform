@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute, Link, useParams } from '@tanstack/react-router';
 import { type FormEvent, useEffect, useState } from 'react';
+import { BusyButton } from '../../app/ui/BusyButton';
 import {
   activateApplication,
   type ActivationResult,
@@ -119,14 +120,19 @@ export function DecisionPanel({ status, busy, note, onNote, onDecide }: Decision
   const canVerify = status === 'submitted' || status === 'needs_info';
   const canAsk = status === 'submitted' || status === 'verified';
   const canReject = canVerify || status === 'verified';
+  const [pressed, setPressed] = useState<Decision | null>(null);
+  const press = (decision: Decision) => {
+    setPressed(decision);
+    onDecide(decision);
+  };
   if (!canVerify && !canAsk && !canReject) return null;
   return (
     <section aria-labelledby="decide-heading" className="form-stack">
       <h2 id="decide-heading">Decide</h2>
       {canVerify && (
-        <button className="btn-brand" type="button" disabled={busy} onClick={() => onDecide('verify')}>
+        <BusyButton className="btn-brand" type="button" busy={busy && pressed === 'verify'} disabled={busy} onClick={() => press('verify')}>
           Verify
-        </button>
+        </BusyButton>
       )}
       <div>
         <label htmlFor="decision-note">Note to the applicant (for Needs info or Reject; they see it)</label>
@@ -134,14 +140,14 @@ export function DecisionPanel({ status, busy, note, onNote, onDecide }: Decision
       </div>
       <div className="cluster">
         {canAsk && (
-          <button type="button" disabled={busy || note.trim().length === 0} onClick={() => onDecide('needs-info')}>
+          <BusyButton type="button" busy={busy && pressed === 'needs-info'} disabled={busy || note.trim().length === 0} onClick={() => press('needs-info')}>
             Needs info
-          </button>
+          </BusyButton>
         )}
         {canReject && (
-          <button type="button" disabled={busy || note.trim().length === 0} onClick={() => onDecide('reject')}>
+          <BusyButton type="button" busy={busy && pressed === 'reject'} disabled={busy || note.trim().length === 0} onClick={() => press('reject')}>
             Reject
-          </button>
+          </BusyButton>
         )}
       </div>
     </section>
@@ -229,9 +235,9 @@ export function ActivateFormView({ form, problems, busy, onChange, onSubmit }: A
           </span>
         )}
       </div>
-      <button className="btn-brand" type="submit" disabled={busy}>
-        {busy ? 'Activating' : 'Activate and send the link'}
-      </button>
+      <BusyButton className="btn-brand" type="submit" busy={busy}>
+        Activate and send the link
+      </BusyButton>
     </form>
   );
 }

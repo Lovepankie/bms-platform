@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { SmsError, sms, type MemberSmsOptOut } from '../../../api/sms';
 import { useStaff } from '../context';
 import { LiftConfirm } from '../sms/lift';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The member's text-message choice, on the member's own page (extras slice B3, issue #218; FR-NTF-14; ADR-036 decision 8):
 // staff stop reminders to the member, or every text message, or lift it. A stop recorded here follows the member to any number
@@ -46,6 +47,7 @@ export function MemberSmsView({ state, canChange, isAdministrator = false, busy,
   onLift: (reason: string) => void;
 }) {
   const [panel, setPanel] = useState<'lift' | 'narrow' | null>(null);
+  const [pressed, setPressed] = useState<string | null>(null);
   return (
     <section className="rt-card stack" aria-labelledby="member-sms">
       <h2 id="member-sms">Text messages</h2>
@@ -60,18 +62,23 @@ export function MemberSmsView({ state, canChange, isAdministrator = false, busy,
       {(canChange || (state.opted_out && isAdministrator)) && (
         <p className="cluster">
           {canChange && scopesOffered(state, isAdministrator).map((s) => (
-            <button
+            <BusyButton
               key={s.value}
+              busy={busy && pressed === s.value}
               type="button"
               className="btn-ghost"
               disabled={busy || panel !== null}
-              onClick={() => (isNarrowing(state, s.value) ? setPanel('narrow') : onSet(s.value))}
+              onClick={() => {
+                setPressed(s.value);
+                if (isNarrowing(state, s.value)) setPanel('narrow');
+                else onSet(s.value);
+              }}
             >
               {state.opted_out ? `Change to: ${s.label.toLowerCase()}` : s.label}
-            </button>
+            </BusyButton>
           ))}
           {state.opted_out && isAdministrator && (
-            <button type="button" className="rt-primary" disabled={busy || panel !== null} onClick={() => setPanel('lift')}>
+            <button type="button" className="rt-primary" /* busy-exempt: opens the confirmation, which sends */ disabled={busy || panel !== null} onClick={() => setPanel('lift')}>
               Allow text messages again
             </button>
           )}

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { BusyButton } from '../app/ui/BusyButton';
 import { getServerState, getState, subscribe } from '../install/install';
 import { type PushState, createPush } from './push';
 import { dueToAsk, readAsk, recordDone, recordNotNow } from './turn-on';
@@ -90,10 +91,10 @@ export function TurnOnCard({ push = defaultPush, now = () => Date.now() }: { pus
         sales at closing. A notification never shows a customer's name, a phone number or an amount.
       </p>
       <p className="cluster">
-        <button type="button" className="btn-primary" disabled={busy} onClick={() => void turnOn()}>
-          {busy ? 'Turning on' : 'Turn on'}
-        </button>
-        <button type="button" className="btn-ghost" disabled={busy} onClick={notNow}>
+        <BusyButton type="button" className="btn-primary" busy={busy} onClick={() => void turnOn()}>
+          Turn on
+        </BusyButton>
+        <button type="button" /* busy-exempt: not now is local only and waits for turn on */ className="btn-ghost" disabled={busy} onClick={notNow}>
           Not now
         </button>
       </p>

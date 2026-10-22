@@ -8,6 +8,7 @@ import { Empty, Section, ToStock, moneyOrNone } from './analytics-ui';
 import { showQty } from './maths';
 import { TRANSFER, canUse, holdsAt } from './permissions';
 import { Problem, changeFailureText, money, useIsPhone } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Slow movers on Stock health (issue #414): items that do sell, but so slowly that the stock lasts more than the
 // business's number of months (or sold fewer than its minimum in 90 days). Separate from dead stock, which did not sell
@@ -125,9 +126,10 @@ export function SlowMoverSetting({ read, onSaved }: { read: CapabilitiesRead; on
       {problem && <p className="hint" role="alert">{problem}</p>}
       <Problem error={save.error && new Error(changeFailureText(save.error, queryClient))} />
       <p className="cluster">
-        <button type="button" className="rt-primary" disabled={problem !== null || !changed || save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? 'Saving' : 'Save'}
-        </button>
+        <BusyButton type="button" className="rt-primary" busy={save.isPending} disabled={problem !== null || !changed} onClick={() => save.mutate()}>
+          Save
+        </BusyButton>
+
       </p>
     </fieldset>
   );

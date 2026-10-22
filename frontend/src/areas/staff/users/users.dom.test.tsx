@@ -191,9 +191,30 @@ describe('the invite form', () => {
     fireEvent.click(button);
     fireEvent.submit(screen.getByRole('form', { name: 'Invite a staff user' }));
     expect(api.invite).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole('button', { name: 'Inviting' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Invite' }).getAttribute('aria-busy')).toBe('true');
     finish({ user: { full_name: 'Test Cashier 05' }, invitation: { url: LINK, expires_at: '2026-10-22T10:00:00Z' } });
     await screen.findByRole('heading', { name: 'Test Cashier 05 is invited' });
+  });
+
+  // JUSTIFICATION-A3: the busy-button test case issue #456 asks for.
+  it('shows the Invite button as busy while the invitation is sent, and a double click invites once', async () => {
+    let finish: (v: unknown) => void = () => undefined;
+    api.invite.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    shell(<InviteScreen />);
+    await fillInvite();
+    const button = screen.getByRole('button', { name: 'Invite' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+    const busy = screen.getByRole('button', { name: 'Invite' });
+    expect(busy).toBe(button);
+    expect(busy.getAttribute('aria-disabled')).toBe('true');
+    expect(busy.querySelector('.busy-spinner')).not.toBeNull();
+    fireEvent.click(busy);
+    expect(api.invite).toHaveBeenCalledTimes(1);
+    finish({ user: { full_name: 'Test Cashier 05' }, invitation: { url: LINK, expires_at: '2026-10-22T10:00:00Z' } });
+    await screen.findByRole('heading', { name: 'Test Cashier 05 is invited' });
+    expect(api.invite).toHaveBeenCalledTimes(1);
   });
 
   it('shows the plan\'s refusal in plain words', async () => {
@@ -519,6 +540,7 @@ describe('taking the administrator role off yourself', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Save the roles' }));
     expect(within(card).getByText(/taking the administrator role off/)).toBeTruthy();
     expect(api.setRoles).not.toHaveBeenCalled();
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve)); await new Promise((resolve) => setTimeout(resolve)); });
     fireEvent.click(within(card).getByRole('button', { name: 'Yes, remove my administrator role' }));
     await waitFor(() => expect(api.setRoles).toHaveBeenCalledWith('u-self', [{ role_key: 'cashier' }]));
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['me'] }));

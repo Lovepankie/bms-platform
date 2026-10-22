@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type ResolvedLine, type Sale, type SalePayment } from '../../../api/retail';
 import { useStaff } from '../context';
@@ -330,9 +331,9 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
               <input id="buyer-contact" inputMode="tel" value={draft.newBuyerContact} onChange={(e) => update({ newBuyerContact: e.target.value })} />
               {accountsOn && (
                 <>
-                  <button type="button" className="rt-primary" disabled={draft.newBuyerName.trim() === '' || addBuyer.isPending} onClick={() => addBuyer.mutate()}>
-                    {addBuyer.isPending ? 'Adding' : 'Add this buyer'}
-                  </button>
+                  <BusyButton type="button" className="rt-primary" busy={addBuyer.isPending} disabled={draft.newBuyerName.trim() === ''} onClick={() => addBuyer.mutate()}>
+                    Add this buyer
+                  </BusyButton>
                   <Problem error={addBuyer.error} />
                 </>
               )}
@@ -368,9 +369,9 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         </div>
       )}
       {overBy === null && <Problem error={save.error} />}
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending} data-tour="sale-save">
-        {save.isPending ? 'Saving' : 'Save sale'}
-      </button>
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null} data-tour="sale-save">
+        Save sale
+      </BusyButton>
       {draft.lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); setAddingBuyer(false); setReceived(''); save.reset(); }}>
           Clear this sale

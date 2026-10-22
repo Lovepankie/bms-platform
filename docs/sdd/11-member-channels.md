@@ -150,7 +150,7 @@ and keeps its layout. Details in `docs/ui/design-system.md`, "Navigation".
 ### 11.3.1 Events and default templates
 
 Templates are per tenant and editable (FR-NTF-03; built for the events the application sends today, the two savings
-receipts in #218 and the loan and investment events in #221: the placeholders of each event are a fixed list, an override never carries a balance, and the
+receipts in #218, the loan and investment events in #221 and the reminders and arrears notices in #227: the placeholders of each event are a fixed list, an override never carries a balance, and the
 screen previews the segments and cost). Defaults, all fabricated wording, kept
 within one 160 character GSM-7 segment where possible:
 
@@ -158,9 +158,9 @@ within one 160 character GSM-7 segment where possible:
 |---|---|---|
 | `loan.disbursed` | Disbursement executed by a staff approval (issue #221), unless the request said `notify_member: false` or its date is more than 3 days old; queued in the disbursement's transaction | `{tenant_name}: Loan {loan_no}: {currency} {amount} paid out on {date}. First payment {currency} {next_amount} due {next_due_date}.` (`{amount}` is the principal less the fees deducted at disbursement: what the member receives) |
 | `loan.repayment_received` | Repayment recorded by staff (a recovery on a written-off loan too), in the repayment's transaction; a reversal queues nothing and withdraws the receipt if the sender has not claimed it | `{tenant_name}: Received {currency} {amount} on {date} for loan {loan_no}. Receipt {receipt_no}.` With the tenant setting `include_balance` on it ends ` Balance {currency} {balance}.` (what the loan still owes after it; template `loan.repayment_received.with_balance`; never for a recovery) |
-| `loan.due_in_3_days` | 3 days before a due date, inside the sending window | `{tenant_name}: Reminder, {currency} {amount} for loan {loan_no} is due on {due_date}.` |
-| `loan.due_today` | On the due date | `{tenant_name}: {currency} {amount} for loan {loan_no} is due today.` |
-| `loan.overdue_1`, `loan.overdue_7`, `loan.overdue_30` | At 1, 7 and 30 DPD | `{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}. Please pay to avoid penalties.` |
+| `loan.due_in_3_days` | The nightly arrears run (#227), once per unpaid instalment, from 3 days before its due date (a missed night is caught up the next); a reminder, held for the sending window | `{tenant_name}: Reminder, {currency} {amount} for loan {loan_no} is due on {due_date}.` (`{amount}` is what is left to pay on the instalment) |
+| `loan.due_today` | The nightly arrears run on the due date, once per unpaid instalment; a reminder | `{tenant_name}: {currency} {amount} for loan {loan_no} is due today.` |
+| `loan.overdue_1`, `loan.overdue_7`, `loan.overdue_30` | The nightly arrears run once the loan's DPD reaches 1, 7 and 30 (the highest step reached, so a missed night is caught up), once per step and oldest unpaid instalment; category arrears, held for the window | `loan.overdue_1`: `{tenant_name}: Loan {loan_no} is overdue. Amount in arrears {currency} {arrears}. Please pay or contact us.` 7 and 30: `{tenant_name}: Loan {loan_no} is {dpd} days overdue. Amount in arrears {currency} {arrears}. Please pay or contact us.` The design's "to avoid penalties" is left out: an arrears notice carries no threat (#227) |
 | `loan.closed` | The repayment that settled the loan (once per closing; a loan reopened by a reversal and paid off again is thanked again; a reversal that settles one queues nothing) | `{tenant_name}: Loan {loan_no} is fully paid. Thank you.` |
 | `savings.deposit`, `savings.withdrawal` | Transaction recorded by staff (a closure's payout too); queued in the outbox for a tenant the operator has switched on, sent by the SMS channel (ADR-032, ADR-036); expires an hour after it is queued | `{tenant_name}: Deposit of {currency} {amount} on account {account_no}. Receipt {receipt_no}.` (a withdrawal says Withdrawal and Voucher). With the tenant setting `include_balance` of the settings group `sms` on it ends ` Balance {currency} {balance}.` (template `savings.deposit.with_balance`) |
 | `investment.funded` | Funding executed by a staff approval | `{tenant_name}: Investment {account_no} of {currency} {amount} received on {date}. Matures {maturity_date}. Receipt {receipt_no}.` |

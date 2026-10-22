@@ -227,10 +227,10 @@ export function PhotoQueueControl({ id, label, hint, queue, sender, max = 1, dis
       <p id={`${id}-label`} className="ph-label">{label}</p>
       {hint && <p className="field-hint" id={`${id}-hint`}>{hint}</p>}
       <div className="ph-buttons">
-        <button type="button" className="btn-block" disabled={disabled || busy || full} onClick={() => camera.current?.click()} aria-describedby={hint ? `${id}-hint` : undefined}>
+        <button type="button" className="btn-block" /* busy-exempt: opens the camera; the row shows the upload */ disabled={disabled || busy || full} onClick={() => camera.current?.click()} aria-describedby={hint ? `${id}-hint` : undefined}>
           Take a photo
         </button>
-        <button type="button" className="btn-block btn-ghost" disabled={disabled || busy || full} onClick={() => files.current?.click()}>
+        <button type="button" className="btn-block btn-ghost" /* busy-exempt: opens the file picker; the row shows the upload */ disabled={disabled || busy || full} onClick={() => files.current?.click()}>
           Choose a file
         </button>
       </div>

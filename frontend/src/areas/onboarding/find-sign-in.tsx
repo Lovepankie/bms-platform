@@ -1,6 +1,7 @@
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { type FormEvent, useState } from 'react';
 import { findSignInPage } from '../../api/find-sign-in';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { Breadcrumbs } from '../../components/breadcrumbs';
 import { StatusPanel } from '../../components/states';
 import { TourProvider, useTour } from '../../tour/host';
@@ -86,9 +87,9 @@ export function FindSignIn({ initial = 'form' }: { initial?: 'form' | 'sent' }) 
                   required
                 />
               </div>
-              <button className="btn-primary btn-lg" disabled={busy} data-tour="find-send">
-                {busy ? 'Sending' : 'Email me the link'}
-              </button>
+              <BusyButton className="btn-primary btn-lg" busy={busy} data-tour="find-send">
+                Email me the link
+              </BusyButton>
             </form>
             <p data-tour="find-apply">
               Own a business and want to start? <Link to="/sign-up">Apply to start</Link>

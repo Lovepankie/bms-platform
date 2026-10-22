@@ -14,6 +14,7 @@ import { UNITS, capabilityOn, holdsAt } from './permissions';
 import { draftTotal, newLine, withUnit } from './sale-state';
 import { SaleLineCard } from './sale';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Quotations (documents capability, ADR-033, issue #197): prices offered to a buyer until a date. A quotation reserves no stock and
 // posts nothing; it is numbered and its PDF stored like every document, and it can be made into a sale (and its invoice) once,
@@ -56,9 +57,9 @@ export function ConvertPanel({ form, hasTerms, busy, onChange, onConvert }: { fo
         <input type="checkbox" checked={form.invoice} onChange={(e) => onChange({ ...form, invoice: e.target.checked })} /> Also make the invoice
       </label>
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
-      <button type="button" className="rt-primary" disabled={problem !== null || busy} onClick={onConvert}>
-        {busy ? 'Making the sale' : 'Make the sale'}
-      </button>
+      <BusyButton type="button" className="rt-primary" busy={busy === true} disabled={problem !== null} onClick={onConvert}>
+        Make the sale
+      </BusyButton>
     </fieldset>
   );
 }
@@ -130,9 +131,9 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
           <legend>Cancel this quotation</legend>
           <label htmlFor={`cancel-${q.id}`}>Why? (it stays on record)</label>
           <input id={`cancel-${q.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-          <button type="button" disabled={reason.trim() === '' || cancel.isPending} onClick={() => cancel.mutate()}>
-            {cancel.isPending ? 'Cancelling' : 'Cancel the quotation'}
-          </button>
+          <BusyButton type="button" busy={cancel.isPending} disabled={reason.trim() === ''} onClick={() => cancel.mutate()}>
+            Cancel the quotation
+          </BusyButton>
         </fieldset>
       )}
       <Problem error={convert.error ?? cancel.error} />
@@ -214,9 +215,10 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
       <p className="hint">Stock is not reserved. A price list, if the buyer has one, prices the items as it would on a sale.</p>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       <Problem error={save.error} />
-      <button type="submit" className="rt-primary" disabled={problem !== null || save.isPending} data-tour="quotation-save">
-        {save.isPending ? 'Saving' : 'Save quotation'}
-      </button>
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null} data-tour="quotation-save">
+        Save quotation
+      </BusyButton>
+
       {draft.lines.length > 0 && !save.isPending && <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this quotation</button>}
     </form>
   );

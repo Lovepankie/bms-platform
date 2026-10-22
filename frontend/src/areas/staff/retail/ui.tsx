@@ -107,9 +107,14 @@ export function Gate({ screen, title, children, wide }: { screen: RetailScreen; 
  * stock, or the read is on its way, and then every branch behaves as before roles existed.
  */
 export function useBranchRoles(me: Pick<Me, 'permissions' | 'module_capabilities'>, wanted = true): BranchRole[] | undefined {
+  return useBranchRolesRead(me, wanted).roles;
+}
+
+/** As {@link useBranchRoles}, with `loading` true while roles it wants are still being read (a failed read counts as read). */
+export function useBranchRolesRead(me: Pick<Me, 'permissions' | 'module_capabilities'>, wanted = true): { roles: BranchRole[] | undefined; loading: boolean } {
   const enabled = wanted && capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read');
   const roles = useQuery({ queryKey: ['retail', 'branch-roles'], queryFn: () => retail.branchRoles(), enabled, staleTime: 60_000, retry: 1 });
-  return enabled ? roles.data : undefined;
+  return { roles: enabled ? roles.data : undefined, loading: enabled && roles.isPending };
 }
 
 /** True unless branch roles are on and every branch the session can sell at is a store. `wanted` false skips the branch roles read. */

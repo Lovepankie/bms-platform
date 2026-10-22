@@ -2,6 +2,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState 
 import { icons } from '../components/icons';
 import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from './theme-mode';
 import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_SITE, type ShellBrand, THEME_PROPERTIES, appTitle, themeVars } from './branding';
+import { BusyAnnouncer } from './ui/BusyButton';
 
 // The shared shell (FR-TEN-08): the brand bar, the theme colour and the Powered-by footer are
 // drawn here once, around every route, so sign-in, accept-invitation, the staff area, the member
@@ -161,6 +162,7 @@ export function Shell({ brand = PLATFORM_BRAND, actions, children }: { brand?: S
       <BrandBar brand={brand} actions={actions} />
       <div className="app-content">{children}</div>
       <Footer />
+      <BusyAnnouncer />
     </div>
   );
 }

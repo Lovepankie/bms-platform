@@ -415,9 +415,21 @@ review: the real cashier and auditor roles see masked phones and the loan office
 officer sees only their own portfolio, a reassignment needs a reason and refuses a deactivated officer,
 the Owner moves loans of two branches in one call, and a payment recorded before a promise never keeps
 it while one entered after and dated back into its window does.
+keeps one promise only, and a reversal reopens a kept promise the next night.
+
+Reminders and arrears notices (#227). `LoanRemindersTest` covers the selection without a database: from three days before a
+due date, on it, never for a paid instalment, the arrears steps by DPD on the oldest unpaid instalment. `LoanEventSmsIT` runs
+the nightly job with a fixed clock: a reminder queued at 21:00 Kampala waits for 08:00, a rerun queues nothing, the arrears
+notices step from 1 to 7 days once each, a tenant without SMS gets none. `SmsEventsIT` sends each of the five through the real
+channel with its exact default text in one segment; `SmsTemplateLanguageTest` and `SmsTemplatesIT` list them with their
+placeholders.
 `-Dbms.golden.record=true` rewrites the golden files for review. `make document-samples` writes
 each document as a PDF and a PNG per page to `backend/target/document-samples`, the visual check
-of the quality bar before a template change is merged.
+of the quality bar before a template change is merged. After the review of #290: `LoanRemindersTest` checks that a step goes
+only on its night or the next and that a loan 400 days late gets nothing; `LoanEventSmsIT` runs at the job's real time
+(just after midnight), withdraws an overdue notice when the member pays at 07:30, expires a due-today text with its day,
+sends no backlog on the first run and texts each loan once when a crashed run is resumed; `SmsEventsIT` refuses an
+arrears notice to an opted-out member (`blocked_optout`).
 
 Updating a golden file is allowed only in a pull request that explains why the expected
 output changed.

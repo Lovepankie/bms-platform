@@ -3,6 +3,7 @@ import { Link, Outlet, createLazyRoute, useNavigate, useRouterState } from '@tan
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
+import { BusyButton } from '../../app/ui/BusyButton';
 import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { InstallPrompt } from '../../install/InstallPrompt';
 import { NewLogoCard } from '../../install/NewIcon';
@@ -52,6 +53,7 @@ function StaffLayout() {
   // VITE_RETAIL_MOCK=1: a fake session so the retail screens run without a backend.
   const mock = retailMockEnabled();
   const [restoring, setRestoring] = useState(token === null && !mock);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (token !== null || mock) return;
@@ -89,12 +91,17 @@ function StaffLayout() {
   const profile = me.data;
   if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
   async function signOut() {
-    // This device stops hearing this person's notifications before the session ends (it needs the session to say so).
-    if (!mock) await push.forget();
-    await api.POST('/api/v1/auth/logout');
-    setAccessToken(null);
-    queryClient.clear();
-    await navigate({ to: '/sign-in' });
+    setSigningOut(true);
+    try {
+      // This device stops hearing this person's notifications before the session ends (it needs the session to say so).
+      if (!mock) await push.forget();
+      await api.POST('/api/v1/auth/logout');
+      setAccessToken(null);
+      queryClient.clear();
+      await navigate({ to: '/sign-in' });
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   const recoveryCodesLeft = profile.unused_recovery_codes ?? 0;
@@ -106,7 +113,7 @@ function StaffLayout() {
           <div className="nav-layout">
             <StaffSideNav me={profile} />
             <div className="nav-layout-main">
-              <StaffBar me={profile} branch={branch} onBranch={choose} onSignOut={() => void signOut()} />
+              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} />
               <InstallPrompt />
               {!mock && <NewLogoCard />}
               {!mock && <TurnOnCard push={push} />}
@@ -175,13 +182,26 @@ export function StaffSideNav({ me }: { me: Me }) {
  * Sign out, and a one-tap Sell for anyone who can sell (issue #455). With StaffSideNav it carries the data-tour anchors the
  * first-run tours light up (tour/tours.ts).
  */
-export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: string | null; onBranch: (selection: string) => void; onSignOut: () => void }) {
+export function StaffBar({
+  me,
+  branch,
+  onBranch,
+  onSignOut,
+  busy = false,
+}: {
+  me: Me;
+  branch: string | null;
+  onBranch: (selection: string) => void;
+  onSignOut: () => void;
+  /** True while signing out runs: Sign out shows its spinner and takes no second press. */
+  busy?: boolean;
+}) {
   const phone = useIsPhone();
   const sells = useSells(me);
   return (
     <header className="staff-bar">
       <div className="staff-bar-top">
-        {phone && <SideMenu label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} name={me.full_name} onSignOut={onSignOut} />}
+        {phone && <SideMenu label="Staff areas" tour="nav-areas" links={staffAreas(me, { sells })} tours={['retail-nav']} name={me.full_name} busy={busy} onSignOut={onSignOut} />}
         {phone && sells && (
           <Link to="/staff/retail/sale" className="btn btn-primary btn-sm staff-sell">
             {icons.sale}
@@ -194,7 +214,11 @@ export function StaffBar({ me, branch, onBranch, onSignOut }: { me: Me; branch: 
         </span>
         <HelpMenu feedback />
         <BranchPicker me={me} branch={branch} onChoose={onBranch} />
-        {!phone && <button className="btn-ghost btn-sm" onClick={onSignOut}>Sign out</button>}
+        {!phone && (
+          <BusyButton type="button" className="btn-ghost btn-sm" busy={busy} onClick={onSignOut}>
+            Sign out
+          </BusyButton>
+        )}
       </div>
     </header>
   );

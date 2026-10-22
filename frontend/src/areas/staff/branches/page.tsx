@@ -3,6 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { type AdminBranch, BranchesError, branches } from '../../../api/branches';
 import { branchLabel } from '../../../auth/branch';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { money, useBranchRoles } from '../retail/ui';
 import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, sellsGoods, showBranches, visibleBranches } from './state';
@@ -153,15 +154,16 @@ export function BranchesScreen() {
                     {canManage && !open && (
                       <p className="cluster">
                         {closed ? (
-                          <button type="button" className="btn-sm" disabled={busyId !== null} onClick={() => void reopen(b)}>
-                            {busyId === b.id ? 'Reopening' : 'Reopen this branch'}
-                          </button>
+                          <BusyButton type="button" className="btn-sm" busy={busyId === b.id} disabled={busyId !== null} onClick={() => void reopen(b)}>
+                            Reopen this branch
+                          </BusyButton>
                         ) : (
                           <>
                             {sellsGoods(b) && (
-                            <button
+                            <BusyButton
                               type="button"
                               className="btn-sm"
+                              busy={busyId === b.id && !keepsGoods(b)}
                               disabled={busyId !== null}
                               onClick={() => {
                                 if (keepsGoods(b)) {
@@ -173,12 +175,13 @@ export function BranchesScreen() {
                               }}
                             >
                               {keepsGoods(b) ? 'Mark as keeping no goods' : 'Keeps goods again'}
-                            </button>
+                            </BusyButton>
                             )}
                             {keepsGoods(b) && (
-                              <button
+                              <BusyButton
                                 type="button"
                                 className="btn-sm"
+                                busy={busyId === b.id && !sellsGoods(b)}
                                 disabled={busyId !== null}
                                 onClick={() => {
                                   if (sellsGoods(b)) {
@@ -190,10 +193,10 @@ export function BranchesScreen() {
                                 }}
                               >
                                 {sellsGoods(b) ? 'Mark as a store (does not sell)' : 'Sells again (make it a shop)'}
-                              </button>
+                              </BusyButton>
                             )}
                             {!b.is_head_office && (
-                              <button type="button" className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setPanel({ id: b.id ?? '', kind: 'close', warning: null, reason: '' }); setError(null); }}>
+                              <button type="button" /* busy-exempt: opens the close panel */ className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setPanel({ id: b.id ?? '', kind: 'close', warning: null, reason: '' }); setError(null); }}>
                                 Close this branch
                               </button>
                             )}
@@ -208,10 +211,10 @@ export function BranchesScreen() {
                           Cash records still work, and goods left there can still be moved out. You can switch it back at any time.
                         </p>
                         <p className="cluster">
-                          <button type="button" className="rt-primary" disabled={busyId !== null} onClick={() => void stocking(b, false)}>
-                            {busyId === b.id ? 'Saving' : 'Yes, mark it'}
-                          </button>
-                          <button type="button" className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it as it is</button>
+                          <BusyButton type="button" className="rt-primary" busy={busyId === b.id} disabled={busyId !== null} onClick={() => void stocking(b, false)}>
+                            Yes, mark it
+                          </BusyButton>
+                          <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it as it is</button>
                         </p>
                       </div>
                     )}
@@ -223,10 +226,10 @@ export function BranchesScreen() {
                           leaves the sale screen and the till. You can make it a shop again at any time.
                         </p>
                         <p className="cluster">
-                          <button type="button" className="rt-primary" disabled={busyId !== null} onClick={() => void selling(b, false)}>
-                            {busyId === b.id ? 'Saving' : 'Yes, make it a store'}
-                          </button>
-                          <button type="button" className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it as it is</button>
+                          <BusyButton type="button" className="rt-primary" busy={busyId === b.id} disabled={busyId !== null} onClick={() => void selling(b, false)}>
+                            Yes, make it a store
+                          </BusyButton>
+                          <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it as it is</button>
                         </p>
                       </div>
                     )}
@@ -252,15 +255,16 @@ export function BranchesScreen() {
                           </p>
                         )}
                         <p className="cluster">
-                          <button
+                          <BusyButton
                             type="button"
                             className="btn-danger"
+                            busy={busyId === b.id}
                             disabled={busyId !== null || (panel.warning !== null && panel.reason.trim() === '')}
                             onClick={() => void close(b, panel.reason)}
                           >
-                            {busyId === b.id ? 'Closing' : panel.warning ? 'Close it anyway' : 'Yes, close it'}
-                          </button>
-                          <button type="button" className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it open</button>
+                            {panel.warning ? 'Close it anyway' : 'Yes, close it'}
+                          </BusyButton>
+                          <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busyId !== null} onClick={() => setPanel(null)}>Keep it open</button>
                         </p>
                       </div>
                     )}

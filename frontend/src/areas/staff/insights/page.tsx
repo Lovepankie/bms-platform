@@ -11,6 +11,7 @@ import {
   type InsightsTable,
 } from '../../../api/insights';
 import { branchFilter } from '../../../auth/branch';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { BarList, ColumnChart, LineChart, type BarRow } from './charts';
@@ -618,9 +619,9 @@ function DrillPanel({ target, filter, exportable, onClose }: {
         <h2>{target.title}: the rows</h2>
         <div className="rt-row iv-noprint">
           {exportable && (
-            <button type="button" className="btn-sm" disabled={download.isPending} onClick={() => download.mutate()}>
-              {download.isPending ? 'Exporting' : 'Export CSV'}
-            </button>
+            <BusyButton type="button" className="btn-sm" busy={download.isPending} onClick={() => download.mutate()}>
+              Export CSV
+            </BusyButton>
           )}
           <button type="button" className="btn-ghost btn-sm" onClick={onClose}>
             Close
@@ -701,7 +702,7 @@ function DigestSettings() {
         <Problem error={save.error} />
         {save.isSuccess && !draft && <p role="status" className="alert alert-success">Saved.</p>}
         <div className="rt-row">
-          <button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving' : 'Save'}</button>
+          <BusyButton type="submit" busy={save.isPending}>Save</BusyButton>
           <button type="button" className="btn-ghost" onClick={() => void preview.refetch()}>Preview today&apos;s text</button>
         </div>
       </form>

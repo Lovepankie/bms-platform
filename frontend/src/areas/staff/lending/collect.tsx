@@ -10,6 +10,7 @@ import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { flagWords, isCancellable, isSettled, pollDelay, statusWords, suggestedAmount, type CollectKind } from './collect-state';
 import { money, parseAmount } from './loan-state';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // "Collect by mobile money or card" on a loan (extras slice A3, issue #216; spec 3.2 and 3.10): staff enter the amount and the
 // payer's mobile number, the screen shows the payment link with a QR code and a copy button, and then follows the payment live. The
@@ -149,9 +150,9 @@ export function CollectForm({ target }: { target: CollectTarget }) {
         aria-invalid={draft.phone !== '' && !looksLikeUgandaMobile(draft.phone)}
       />
       <Problem error={start.error} />
-      <button type="submit" className="rt-primary" disabled={!valid || start.isPending}>
-        {start.isPending ? 'Making the link' : 'Make the payment link'}
-      </button>
+      <BusyButton busy={start.isPending} type="submit" className="rt-primary" disabled={!valid}>
+        Make the payment link
+      </BusyButton>
     </form>
   );
 }
@@ -239,9 +240,9 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
       <Problem error={cancel.error ?? live.error} />
       <div className="ln-actions">
         {isCancellable(status) && (
-          <button type="button" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+          <BusyButton busy={cancel.isPending} type="button" onClick={() => cancel.mutate()}>
             Cancel this payment
-          </button>
+          </BusyButton>
         )}
         {(isSettled(status) || status === 'expired') && (
           <button type="button" className="rt-primary" onClick={onNew}>

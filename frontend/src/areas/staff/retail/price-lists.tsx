@@ -9,6 +9,7 @@ import { useStaff } from '../context';
 import { AddPanel } from './catalogue';
 import { STATUS_LABEL, belowCostHint, buildItemRequest, emptyItemForm, fromQty, itemProblem, unitChoices, withProduct, type ItemForm } from './price-list-state';
 import { Gate, Note, ProductPicker, Problem, Success, changeFailureText, requireVersion } from './ui';
+import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Price lists (ADR-033, issue #195; docs/specs/trade-capabilities.md section 3). A list holds the price of an item in a
 // unit (its base unit or a pack) from a quantity and for a date range. The retail price stays the item's own and is
@@ -27,6 +28,7 @@ export function ListCard({ list, selected, busy, onOpen, onChange }: {
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(list.name ?? '');
+  const [pressed, setPressed] = useState<'name' | 'strict' | 'active' | null>(null);
   const off = list.active === false;
   return (
     <li className="rt-card" data-testid="price-list-card">
@@ -41,7 +43,7 @@ export function ListCard({ list, selected, busy, onOpen, onChange }: {
           <label htmlFor={`list-name-${list.id}`}>Name</label>
           <input id={`list-name-${list.id}`} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
           <p className="cluster">
-            <button type="button" disabled={busy || name.trim() === ''} onClick={() => { onChange({ name: name.trim() }); setEditing(false); }}>Save</button>
+            <BusyButton type="button" busy={busy === true && pressed === 'name'} disabled={busy || name.trim() === ''} onClick={() => { setPressed('name'); onChange({ name: name.trim() }); setEditing(false); }}>Save</BusyButton>
             <button type="button" className="btn-ghost" onClick={() => { setName(list.name ?? ''); setEditing(false); }}>Cancel</button>
           </p>
         </div>
@@ -49,17 +51,17 @@ export function ListCard({ list, selected, busy, onOpen, onChange }: {
         <p className="cluster">
           <button type="button" className="btn-sm" aria-pressed={selected} onClick={onOpen} aria-label={`Prices in ${list.name}`}>{selected ? 'Hide prices' : 'Prices'}</button>
           <button type="button" className="btn-sm" onClick={() => setEditing(true)} aria-label={`Rename ${list.name}`}>Rename</button>
-          <button type="button" className="btn-sm" disabled={busy} onClick={() => onChange({ strict: !list.strict })} aria-label={`${list.strict ? 'Stop requiring' : 'Require'} a price for every item in ${list.name}`}>
+          <BusyButton type="button" className="btn-sm" busy={busy === true && pressed === 'strict'} disabled={busy} onClick={() => { setPressed('strict'); onChange({ strict: !list.strict }); }} aria-label={`${list.strict ? 'Stop requiring' : 'Require'} a price for every item in ${list.name}`}>
             {list.strict ? 'Allow retail fallback' : 'Make strict'}
-          </button>
-          <button type="button" className="btn-sm" disabled={busy} onClick={() => onChange({ active: off })} aria-label={`${off ? 'Switch on' : 'Switch off'} ${list.name}`}>{off ? 'Switch on' : 'Switch off'}</button>
+          </BusyButton>
+          <BusyButton type="button" className="btn-sm" busy={busy === true && pressed === 'active'} disabled={busy} onClick={() => { setPressed('active'); onChange({ active: off }); }} aria-label={`${off ? 'Switch on' : 'Switch off'} ${list.name}`}>{off ? 'Switch on' : 'Switch off'}</BusyButton>
         </p>
       )}
     </li>
   );
 }
 
-export function ItemRow({ item, showCost, busy, onEnd }: { item: PriceListItem; showCost: boolean; busy?: boolean; onEnd: (item: PriceListItem) => void }) {
+export function ItemRow({ item, showCost, busy, ending, onEnd }: { item: PriceListItem; showCost: boolean; busy?: boolean; ending?: boolean; onEnd: (item: PriceListItem) => void }) {
   return (
     <tr data-testid="price-item">
       <td>{item.description} <span className="hint">({item.code})</span></td>
@@ -71,7 +73,7 @@ export function ItemRow({ item, showCost, busy, onEnd }: { item: PriceListItem; 
       <td>{STATUS_LABEL[item.status ?? 'current'] ?? item.status}</td>
       <td>
         {!item.valid_to && item.status !== 'ended' && (
-          <button type="button" className="btn-sm" disabled={busy} onClick={() => onEnd(item)} aria-label={`End the price of ${item.description} in ${item.unit}`}>End</button>
+          <BusyButton type="button" className="btn-sm" busy={ending === true} disabled={busy} onClick={() => onEnd(item)} aria-label={`End the price of ${item.description} in ${item.unit}`}>End</BusyButton>
         )}
       </td>
     </tr>
@@ -118,7 +120,7 @@ export function AddPriceForm({ today, busy, error, onSubmit, onCancel }: {
           {problem && form.price !== '' && <Note>{problem}</Note>}
           <Problem error={error} />
           <p className="cluster">
-            <button type="submit" className="rt-primary" disabled={problem !== null || busy}>{busy ? 'Saving' : 'Save price'}</button>
+            <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null}>Save price</BusyButton>
             <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
           </p>
         </form>
@@ -185,7 +187,7 @@ function Items({ list, showCost }: { list: PriceList; showCost: boolean }) {
               <tr><th>Item</th><th>Unit</th><th>Quantity</th><th className="num">Price</th><th>First day</th><th>Last day</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr>
             </thead>
             <tbody>
-              {items.map((i) => <ItemRow key={i.id} item={i} showCost={showCost} busy={end.isPending} onEnd={(x) => end.mutate(x)} />)}
+              {items.map((i) => <ItemRow key={i.id} item={i} showCost={showCost} busy={end.isPending} ending={end.isPending && end.variables?.id === i.id} onEnd={(x) => end.mutate(x)} />)}
             </tbody>
           </table>
         </div>
@@ -224,7 +226,8 @@ export function PriceLists() {
           <label htmlFor="new-list-name">Name</label>
           <input id="new-list-name" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
           <label><input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} /> Strict: an item that is not in this list cannot be sold to its customers</label>
-          <button type="submit" className="rt-primary" disabled={create.isPending || name.trim() === ''}>{create.isPending ? 'Adding' : 'Add price list'}</button>
+          <BusyButton type="submit" className="rt-primary" busy={create.isPending} disabled={name.trim() === ''}>Add price list</BusyButton>
+
           <Problem error={create.error} />
         </form>
       </AddPanel>

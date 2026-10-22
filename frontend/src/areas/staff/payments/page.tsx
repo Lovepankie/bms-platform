@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { type MerchantAccount, payments } from '../../../api/payments';
+import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { STATUS_WORDS, canChangePaymentAccount, codeProblem, credentialProblem, failureWords, nextStep, showReceivePayments } from './state';
 
@@ -110,7 +111,7 @@ export function CredentialsForm({ account, busy, error, onSave }: {
         <CodeField id="receive-code" value={code} onChange={setCode} problem={codeBad} />
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         <p>
-          <button type="submit" className="rt-primary" disabled={!ready || busy}>{busy ? 'Saving' : 'Save the key and secret'}</button>
+          <BusyButton type="submit" className="rt-primary" busy={busy} disabled={!ready}>Save the key and secret</BusyButton>
         </p>
       </form>
     </section>
@@ -126,7 +127,7 @@ export function RemoveAccount({ busy, error, onRemove }: { busy: boolean; error:
       {error && <p role="alert" className="alert alert-danger">{error}</p>}
       {!confirming ? (
         <p>
-          <button type="button" className="btn-ghost" disabled={busy} onClick={() => setConfirming(true)}>Remove the saved key and secret</button>
+          <button type="button" /* busy-exempt: opens the confirmation */ className="btn-ghost" disabled={busy} onClick={() => setConfirming(true)}>Remove the saved key and secret</button>
         </p>
       ) : (
         <form
@@ -145,8 +146,8 @@ export function RemoveAccount({ busy, error, onRemove }: { busy: boolean; error:
           <p className="alert alert-warning">Collecting stops until you connect an account again. Payments already made are not affected.</p>
           <CodeField id="remove-code" value={code} onChange={setCode} problem={code === '' ? null : codeProblem(code)} />
           <p className="cluster">
-            <button type="submit" className="rt-primary" disabled={busy || codeProblem(code) !== null}>Yes, remove it</button>
-            <button type="button" className="btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setCode(''); }}>Keep it</button>
+            <BusyButton type="submit" className="rt-primary" busy={busy} disabled={codeProblem(code) !== null}>Yes, remove it</BusyButton>
+            <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setCode(''); }}>Keep it</button>
           </p>
         </form>
       )}
@@ -219,9 +220,9 @@ export function ReceivePaymentsPage() {
           <p className="hint">We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</p>
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}
           <p>
-            <button type="button" className="rt-primary" disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
-              {test.isPending ? 'Testing' : 'Test connection'}
-            </button>
+            <BusyButton type="button" className="rt-primary" busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
+              Test connection
+            </BusyButton>
           </p>
         </section>
       )}
@@ -229,9 +230,9 @@ export function ReceivePaymentsPage() {
         <div className="stack">
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}
           <p>
-            <button type="button" className="btn-ghost" disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
-              {test.isPending ? 'Testing' : 'Test again'}
-            </button>
+            <BusyButton type="button" className="btn-ghost" busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
+              Test again
+            </BusyButton>
           </p>
         </div>
       )}
