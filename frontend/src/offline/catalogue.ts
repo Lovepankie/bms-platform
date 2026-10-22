@@ -107,6 +107,14 @@ export function offlineProblem(draft: Draft, canType = false): string | null {
   return null;
 }
 
+/**
+ * A request whose answer was lost may be kept on the phone and sent later, except a credit sale: the buyer's limit is checked
+ * only online and the server refuses a credit sale recorded offline, so it is only tried again (ADR-067 decision 1).
+ */
+export function mayKeepOnPhone(sent: { body: SaleRequest } | undefined): boolean {
+  return sent?.body.payment_method !== 'credit';
+}
+
 /** The outbox item of an offline sale: every line priced as charged, the client sale id and the time it happened. */
 export function offlineSale(args: {
   draft: Draft;
@@ -121,6 +129,7 @@ export function offlineSale(args: {
   now: Date;
 }): OutboxItem {
   const { draft, clientSaleId, key, scope, branchName, pricesAsOf, now, sent } = args;
+  if (!mayKeepOnPhone(sent)) throw new Error('A credit sale cannot be kept on this phone. Try again when online.');
   const occurredAt = sent?.at ?? now.toISOString();
   const lines = draft.lines.map((l) => {
     const f = lineFigures(l);

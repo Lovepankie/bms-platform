@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/client';
 import type { Product } from '../api/retail';
 import type { Draft } from '../areas/staff/retail/sale-state';
-import { offlineProblem, offlineSale, refreshCatalogue, searchCatalogue, sellingBranchesOf, serverIso } from './catalogue';
+import { mayKeepOnPhone, offlineProblem, offlineSale, refreshCatalogue, searchCatalogue, sellingBranchesOf, serverIso } from './catalogue';
 import { createConnectivity } from './connectivity';
 import { memoryStore, scopeOf } from './store';
 
@@ -156,5 +156,17 @@ describe('the connection', () => {
     handlers.online?.();
     await vi.waitFor(() => expect(c.online()).toBe(true));
     expect(seen).toEqual([false, true, false, true]);
+  });
+});
+
+describe('a sale whose answer was lost', () => {
+  it('is kept on the phone, except a credit sale, which is only tried again (ADR-067 decision 1)', () => {
+    expect(mayKeepOnPhone(undefined)).toBe(true);
+    expect(mayKeepOnPhone({ body: { payment_method: 'cash' } as never })).toBe(true);
+    expect(mayKeepOnPhone({ body: { payment_method: 'credit' } as never })).toBe(false);
+    const draft = { branchId: 'b1', method: 'credit', customerId: '', newBuyerName: 'Test Buyer 07', newBuyerContact: '', dueDate: '', lines: [{ product: cable, qty: '1', price: '2000' }] } as unknown as Draft;
+    expect(() =>
+      offlineSale({ draft, clientSaleId: 'k1', key: 'k2', scope: 's', branchName: 'Test Branch A', sent: { body: { payment_method: 'credit' } as never, at: '2026-10-22T09:00:00Z' }, now: new Date() }),
+    ).toThrow(/credit sale/);
   });
 });

@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
-import { offlineProblem, offlineSale } from '../../../offline/catalogue';
+import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
 import { useOffline, useOnline } from '../../../offline/offline-context';
 import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../offline/offline-sale';
 import type { OutboxItem } from '../../../offline/outbox';
@@ -296,7 +296,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       onSubmit={(e) => {
         e.preventDefault();
         if (save.isPending || keep.isPending || (problem && !draft.sent)) return;
-        if (offlineMode) {
+        // A credit sale whose answer was lost is never kept on the phone: it is only tried again (ADR-067 decision 1).
+        if (offlineMode && mayKeepOnPhone(draft.sent)) {
           keep.mutate();
           return;
         }
@@ -462,16 +463,25 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       {overBy === null && <Problem error={save.error} />}
       {lost && (
         <div role="alert" className="alert alert-warning" data-testid="lost-answer">
-          <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
-          <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
-          <button type="button" disabled={keep.isPending} onClick={() => keep.mutate()}>
-            Keep it on this phone
-          </button>
+          {mayKeepOnPhone(draft.sent) ? (
+            <>
+              <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
+              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+              <button type="button" disabled={keep.isPending} onClick={() => keep.mutate()}>
+                Keep it on this phone
+              </button>
+            </>
+          ) : (
+            <>
+              <p>The server did not answer. The sale may or may not be saved. A credit sale needs the internet: tap Try again when you are online, and it is saved once.</p>
+              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+            </>
+          )}
         </div>
       )}
       {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
       <button type="submit" className="rt-primary" disabled={(problem !== null && !locked) || save.isPending || keep.isPending} data-tour="sale-save">
-        {save.isPending || keep.isPending ? 'Saving' : offlineMode ? 'Save on this phone' : lost ? 'Try again' : 'Save sale'}
+        {save.isPending || keep.isPending ? 'Saving' : offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : 'Save sale'}
       </button>
       {draft.lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); setAddingBuyer(false); setReceived(''); save.reset(); }}>

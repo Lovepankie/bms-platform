@@ -166,4 +166,23 @@ describe('Record a sale offline', () => {
     expect(item?.request.recorded_offline).toBe(true);
     expect(item?.key).not.toBe(key);
   });
+  it('offers only Try again for a credit sale whose answer was lost, never Keep it on this phone', async () => {
+    createSale.mockRejectedValue(new TypeError('Failed to fetch'));
+    const key = 'c0ffee00-0000-4000-8000-000000000458';
+    const body = { branch_id: branch, payment_method: 'credit', buyer_name: 'Test Buyer 07', lines: [{ product_id: 'p2', qty: '1' }], client_sale_id: key };
+    const draft = { branchId: branch, method: 'credit', customerId: '', newBuyerName: 'Test Buyer 07', newBuyerContact: '', dueDate: '', lines: [{ product: bulb, qty: '1', price: '5000' }], sent: { body, at: '2026-10-22T09:30:00.000Z' } };
+    sessionStorage.setItem(`retail-draft:sale:${seller.user_id ?? ''}:${branch}`, JSON.stringify({ key, draft }));
+    const offline = testOffline(seller, { online: true, catalogue });
+    if (!offline) throw new Error('a seller sells offline');
+    screenWith(offline);
+
+    expect((await screen.findByTestId('lost-answer')).textContent).toContain('A credit sale needs the internet');
+    expect(screen.queryByRole('button', { name: 'Keep it on this phone' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(createSale).toHaveBeenCalledTimes(1));
+    expect(createSale.mock.calls[0]?.[0]).toEqual(body);
+    await screen.findByTestId('lost-answer');
+    expect(screen.queryByRole('button', { name: 'Keep it on this phone' })).toBeNull();
+    expect(offline.engine.snapshot().items).toHaveLength(0);
+  });
 });

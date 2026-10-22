@@ -65,7 +65,8 @@ left, the branch, the period, the person's roles.
    `recorded_offline`, `prices_as_of`): a later send under the same client sale id with a different request is 422
    `client_sale_conflict` and records nothing. Once an answer is lost the sale form is locked: Try again sends the same
    request with the same key, and Keep it on this phone queues that same request (dated when it was first sent, marked
-   offline) with a new key; changing the sale means clearing it, which starts a new client sale id.
+   offline) with a new key, except a credit sale, which is only tried again (decision 1: the server refuses a credit sale
+   recorded offline); changing the sale means clearing it, which starts a new client sale id, after a confirmation.
 6. **When it happened.** `occurred_at` is optional. When given, the sale is dated the day of `occurred_at` in the business's
    time zone (a `sale_date` that disagrees is 422 `sale_date_mismatch`) and `occurred_at` is stored on the sale. Up to 5
    minutes ahead of the server clock is clock skew and is recorded as the server's now. Further ahead, an online request is
