@@ -473,14 +473,18 @@ class BranchService implements BranchProvisioning {
                     HttpStatus.CONFLICT,
                     "invalid_status_transition",
                     "Invalid status transition",
-                    "The branch is closed. Reopen it to give it a logo.");
+                    "The branch is closed. Reopen it to change its logo.");
         }
     }
 
-    /** The previous logo's document stays (documents are never deleted); only the branch's pointer is cleared. Idempotent. */
+    /**
+     * The previous logo's document stays (documents are never deleted); only the branch's pointer is cleared. Idempotent on
+     * an open branch; a closed branch's logo is left as it is (409), as for an upload.
+     */
     @Transactional
     BranchResponse removeLogo(UUID branchId) {
         BranchResponse before = lockForUpdate(branchId);
+        requireOpenForLogo(before);
         return before.logoUrl() == null ? before : setLogo(before, null);
     }
 

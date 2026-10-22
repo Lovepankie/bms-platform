@@ -222,6 +222,8 @@ class BranchController {
     @Operation(
             summary = "Remove a shop's own logo; it shows the business logo again and the file is kept (issue #461)",
             operationId = "removeBranchLogo")
+    @ApiResponse(responseCode = "404", description = "No such branch in the caller's scope")
+    @ApiResponse(responseCode = "409", description = "The branch is closed (invalid_status_transition)")
     ResponseEntity<BranchResponse> removeLogo(@PathVariable("branch_id") UUID branchId) {
         BranchResponse branch = service.removeLogo(branchId);
         return ResponseEntity.ok().eTag(String.valueOf(branch.version())).body(branch);

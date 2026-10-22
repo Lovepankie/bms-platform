@@ -17511,8 +17511,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
-            200: {
+            /** @description No such branch in the caller's scope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branch"];
+                };
+            };
+            /** @description The branch is closed (invalid_status_transition) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

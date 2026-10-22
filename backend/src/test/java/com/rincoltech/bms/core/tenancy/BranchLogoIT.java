@@ -293,9 +293,7 @@ class BranchLogoIT extends IntegrationTest {
                 .isEqualTo(manifest);
     }
 
-    @Test
-    void aClosedBranchIsRefusedALogo() {
-        UUID shop = t.secondBranch();
+    void close(UUID shop) {
         HttpHeaders h = staff(t, ADMIN, "*");
         h.setIfMatch(http.exchange(
                         "/api/v1/branches/" + shop,
@@ -312,6 +310,12 @@ class BranchLogoIT extends IntegrationTest {
                                 JsonNode.class)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void aClosedBranchIsRefusedALogo() {
+        UUID shop = t.secondBranch();
+        close(shop);
 
         ResponseEntity<JsonNode> refused = upload(shop, ImageFixtures.png(200, 200, SHOP));
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
@@ -323,6 +327,21 @@ class BranchLogoIT extends IntegrationTest {
                         .query(Long.class)
                         .single())
                 .isZero();
+    }
+
+    @Test
+    void aClosedBranchKeepsItsLogo() {
+        UUID shop = t.secondBranch();
+        String logo = upload(shop, ImageFixtures.png(200, 200, SHOP))
+                .getBody()
+                .get("logo_url")
+                .asString();
+        close(shop);
+
+        ResponseEntity<JsonNode> refused = remove(t, shop, ADMIN);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+        assertThat(branch(shop).get("logo_url").asString()).isEqualTo(logo);
     }
 
     // ---- Between businesses ----------------------------------------------------------------------------

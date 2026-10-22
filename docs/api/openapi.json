@@ -22066,7 +22066,7 @@
           }
         } ],
         "responses" : {
-          "200" : {
+          "404" : {
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -22074,7 +22074,17 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "No such branch in the caller's scope"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Branch"
+                }
+              }
+            },
+            "description" : "The branch is closed (invalid_status_transition)"
           }
         },
         "summary" : "Remove a shop's own logo; it shows the business logo again and the file is kept (issue #461)",
