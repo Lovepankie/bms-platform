@@ -1050,4 +1050,31 @@ class ReferralsIT extends IntegrationTest {
         assertThat(audits("platform.referral.default_rule_changed")).isZero();
         assertThat(audits("platform.referral.rule_changed")).isZero();
     }
+
+    /** An unpaid line that was reversed is never marked paid (decision 11). */
+    @Test
+    void aReversedLineIsNeverMarkedPaid() {
+        TestDatabase.Fixture a = TestDatabase.tenant("refrev", false);
+        Business x = business("ref-rev");
+        setReferrer(x.id(), code(a.tenantId()), "Test: referred by the shop");
+        UUID rx = currentReferral(x.id());
+        JsonNode added = addLine(rx, 600, "Test: worked out by hand", "ref-line-" + UUID.randomUUID())
+                .getBody();
+        UUID line = UUID.fromString(added.get("lines").get(0).get("id").asString());
+        platform.post(
+                "/api/v1/platform/referrals/commissions/" + line + "/reverse",
+                Map.of("reason", "Test: typed twice"),
+                operator.accessToken());
+
+        Map<String, Object> paid = new LinkedHashMap<>();
+        paid.put("paid_on", LocalDate.now(KAMPALA).toString());
+        paid.put("method", "cash");
+        paid.put("reason", "Test: handed over");
+        ResponseEntity<JsonNode> refused =
+                platform.post("/api/v1/platform/referrals/commissions/" + line + "/paid", paid, operator.accessToken());
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("commission_line_reversed");
+        assertThat(detail(rx).get("lines").get(0).get("paid_on").isNull()).isTrue();
+        assertThat(audits("platform.referral.commission_paid")).isZero();
+    }
 }

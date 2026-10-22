@@ -29147,7 +29147,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Record that one commission line was paid (date, method, reference, note), with a reason; the app never pays; 409 commission_already_paid",
+        "summary" : "Record that one commission line was paid (date, method, reference, note), with a reason; the app never pays; 409 commission_already_paid, 409 commission_line_reversed",
         "tags" : [ "platform" ]
       }
     },

@@ -92,6 +92,9 @@ The review of the pull request (NEEDS_CHANGES, 22 Oct 2026) added the decisions 
     (not deactivated) of the business the code belongs to (`referral_is_self`); a match is 422 `referral_self` on the
     `referral_code` field and nothing is created. Activate compares them again, since the referrer's people may have changed:
     on a match no referral is stored and the refusal is audited `platform.referral.refused_self` with the referrer.
+11. **A reversed line is not paid.** An unpaid line that was reversed nets to nothing with its reversal, so marking it paid is
+    refused with 409 `commission_line_reversed`; a line paid before it was reversed stays paid, and the reversal records what
+    the referrer owes back.
 
 ## Consequences
 

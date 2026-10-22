@@ -289,7 +289,7 @@ class ReferralsAdminController {
     @RequiresPermission("platform.tenants.manage")
     @Operation(
             summary = "Record that one commission line was paid (date, method, reference, note), with a reason; the app"
-                    + " never pays; 409 commission_already_paid",
+                    + " never pays; 409 commission_already_paid, 409 commission_line_reversed",
             operationId = "platformMarkReferralCommissionPaid")
     ReferralDetail paid(@PathVariable("line_id") UUID lineId, @Valid @RequestBody PaidRequest request) {
         return referrals.markPaid(

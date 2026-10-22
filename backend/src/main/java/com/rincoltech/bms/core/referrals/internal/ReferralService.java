@@ -523,6 +523,13 @@ class ReferralService implements Referrals {
                     "Already paid",
                     "This line is already marked paid. A mistake is corrected with a reversal.");
         }
+        if ("reversed".equals(result)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "commission_line_reversed",
+                    "Reversed",
+                    "This line was reversed, so nothing is owed on it. It cannot be marked paid.");
+        }
         UUID referralId = UUID.fromString(result);
         ReferralDetail detail = detail(referralId);
         Map<String, Object> data = new LinkedHashMap<>();

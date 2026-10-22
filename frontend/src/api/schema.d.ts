@@ -2868,7 +2868,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record that one commission line was paid (date, method, reference, note), with a reason; the app never pays; 409 commission_already_paid */
+        /** Record that one commission line was paid (date, method, reference, note), with a reason; the app never pays; 409 commission_already_paid, 409 commission_line_reversed */
         post: operations["platformMarkReferralCommissionPaid"];
         delete?: never;
         options?: never;

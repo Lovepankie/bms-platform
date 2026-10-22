@@ -740,8 +740,8 @@ BEGIN
 END
 $$;
 
--- Marks one line paid (the app records it; the money moves outside it). Returns 'not_found', 'already_paid', or the referral
--- id as text.
+-- Marks one line paid (the app records it; the money moves outside it). Returns 'not_found', 'already_paid', 'reversed' (an
+-- unpaid line that was reversed is never paid, ADR-069 decision 11), or the referral id as text.
 CREATE FUNCTION platform_referral_mark_paid(
     p_line_id uuid, p_paid_on date, p_method text, p_reference text, p_note text, p_platform_user_id uuid,
     p_now timestamptz)
@@ -759,6 +759,9 @@ BEGIN
     END IF;
     IF v_line.paid_on IS NOT NULL THEN
         RETURN 'already_paid';
+    END IF;
+    IF EXISTS (SELECT 1 FROM referral_commission_lines WHERE reverses_line_id = p_line_id) THEN
+        RETURN 'reversed';
     END IF;
     UPDATE referral_commission_lines
        SET paid_on = p_paid_on, paid_method = p_method, paid_reference = p_reference, paid_note = p_note, paid_at = p_now,

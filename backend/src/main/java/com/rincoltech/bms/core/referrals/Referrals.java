@@ -77,7 +77,10 @@ public interface Referrals {
     /** The exact opposite of one line, with a reason; a line is reversed once and a reversal never. */
     ReferralDetail reverseLine(UUID lineId, String reason, UUID operatorId);
 
-    /** Marks one line paid; 409 {@code commission_already_paid} for a line already marked. */
+    /**
+     * Marks one line paid; 409 {@code commission_already_paid} for a line already marked, 409 {@code commission_line_reversed}
+     * for an unpaid line that was reversed.
+     */
     ReferralDetail markPaid(UUID lineId, Payout payout, UUID operatorId);
 
     record Code(String code, UUID tenantId) {}
