@@ -4,7 +4,10 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
 import { BusyButton } from '../../app/ui/BusyButton';
-import { getAccessToken, refreshSession, setAccessToken, subscribe } from '../../auth/session';
+import { endPendingLogout, getAccessToken, logoutPending, markLogoutPending, refreshFailedOffline, refreshSession, setAccessToken, subscribe } from '../../auth/session';
+import { OfflineProvider, lastProfile, useOfflineSupport, waitingNow } from '../../offline/offline-context';
+import { SignOutWarning } from '../../offline/sign-out-warning';
+import { OthersWaitingNote, SyncStatus } from '../../offline/sync-status';
 import { InstallPrompt } from '../../install/InstallPrompt';
 import { NewLogoCard } from '../../install/NewIcon';
 import { createPush } from '../../push/push';
@@ -54,21 +57,45 @@ function StaffLayout() {
   // VITE_RETAIL_MOCK=1: a fake session so the retail screens run without a backend.
   const mock = retailMockEnabled();
   const [restoring, setRestoring] = useState(token === null && !mock);
+  // ADR-067: opened with no network, the last person's saved profile lets them sell; the session is restored when online.
+  const [offlineMe, setOfflineMe] = useState<Me | null>(null);
+  const [askSignOut, setAskSignOut] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (token !== null || mock) return;
-    void refreshSession().then((ok) => {
+    if (logoutPending()) {
+      // ADR-067 decision 9: an offline sign-out ends its server session first; the app stays on sign-in until it has.
+      void endPendingLogout().then(() => navigate({ to: '/sign-in' }));
+      return;
+    }
+    void refreshSession().then(async (ok) => {
+      const saved = !ok && refreshFailedOffline() ? await lastProfile() : null;
+      setOfflineMe(saved);
       setRestoring(false);
-      if (!ok) void navigate({ to: '/sign-in' });
+      if (!ok && !saved) void navigate({ to: '/sign-in' });
     });
   }, [token, navigate, mock]);
 
   const me = useQuery({ queryKey: ['me', token], queryFn: (): Promise<Me> => (mock ? loadRetailMock().then((m) => m.mockMe(import.meta.env.VITE_RETAIL_MOCK_ROLE)) : fetchMe()),
     enabled: token !== null || mock,
   });
-  const { branch, choose, ready } = useActiveBranch(me.data);
+  const profileNow = me.data ?? offlineMe ?? undefined;
+  const { branch, choose, ready } = useActiveBranch(profileNow);
   const signedIn = me.data !== undefined;
+  const offline = useOfflineSupport(mock ? undefined : profileNow, signedIn);
+  useEffect(() => {
+    // Back online after opening offline: restore the session, or ask for a sign-in.
+    if (!offline || !offlineMe || token !== null) return;
+    return offline.connectivity.subscribe(() => {
+      if (!offline.connectivity.online()) return;
+      void refreshSession().then((ok) => {
+        if (ok) setOfflineMe(null);
+        else if (!refreshFailedOffline()) void navigate({ to: '/sign-in' });
+      });
+    });
+  }, [offline, offlineMe, token, navigate]);
   useEffect(() => {
     if (signedIn && !mock) void push.sync();
   }, [signedIn, mock]);
@@ -85,18 +112,38 @@ function StaffLayout() {
     void navigate({ to: '/staff/setup', replace: true });
   }, [pathname, settings.data, navigate]);
 
-  if (restoring || !me.data || !ready) {
+  if (restoring || !profileNow || !ready) {
     return me.isError ? <p role="alert" className="alert alert-danger">Could not load your profile.</p> : <BrandLoader />;
   }
 
-  const profile = me.data;
+  const profile = profileNow;
   if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
-  async function signOut() {
+  async function signOut(confirmed = false) {
+    // ADR-067 decision 9: sales still on this phone are never signed out of without asking.
+    if (!confirmed && waitingNow(offline) > 0) {
+      setAskSignOut((n) => n + 1);
+      return;
+    }
     setSigningOut(true);
+    setSignOutError(null);
     try {
       // This device stops hearing this person's notifications before the session ends (it needs the session to say so).
-      if (!mock) await push.forget();
-      await api.POST('/api/v1/auth/logout');
+      let ended: boolean;
+      try {
+        if (!mock) await push.forget();
+        ended = (await api.POST('/api/v1/auth/logout')).response.ok;
+      } catch {
+        ended = false;
+      }
+      // No answer: the server session (its HttpOnly cookie) is still alive. It is ended on the next start before anything
+      // restores it; without a place to note that, this person stays signed in (ADR-067 decision 9).
+      if (!ended && !mock && !markLogoutPending()) {
+        setSignOutError('Connect to the internet to sign out.');
+        return;
+      }
+      await offline?.forget();
+      offline?.engine.stop();
+      setOfflineMe(null);
       setAccessToken(null);
       queryClient.clear();
       await navigate({ to: '/sign-in' });
@@ -109,6 +156,7 @@ function StaffLayout() {
 
   return (
     <StaffContext.Provider value={{ me: profile, branch, chooseBranch: choose }}>
+      <OfflineProvider value={offline}>
       <TourProvider me={profile} saveProgress={!mock}>
         <CrumbProvider>
           <div className="nav-layout">
@@ -116,6 +164,7 @@ function StaffLayout() {
             <div className="nav-layout-main">
               <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} />
               <InstallPrompt />
+              <OthersWaitingNote />
               {!mock && <NewLogoCard />}
               {!mock && <TurnOnCard push={push} />}
               {profile.mfa_enabled && recoveryCodesLeft <= 2 && (
@@ -123,14 +172,21 @@ function StaffLayout() {
                   You have {recoveryCodesLeft} recovery codes left. Ask an admin to reset your MFA if you run out.
                 </p>
               )}
+              {signOutError && (
+                <p role="alert" className="alert alert-danger">
+                  {signOutError}
+                </p>
+              )}
               <TwoStepNotices me={profile} pathname={pathname} />
               {!mock && <BillingBanner canOpenBilling={(profile.permissions ?? []).includes('core.billing.read')} />}
               <StaffBreadcrumbs />
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
+              <SignOutWarning ask={askSignOut} onSignOut={() => void signOut(true)} />
             </div>
           </div>
         </CrumbProvider>
       </TourProvider>
+      </OfflineProvider>
     </StaffContext.Provider>
   );
 }
@@ -242,6 +298,7 @@ export function StaffBar({
           <span className="avatar">{icons.user}</span>
           <span className="staff-user-name">{me.full_name}</span>
         </span>
+        <SyncStatus />
         <HelpMenu feedback />
         <BranchPicker me={me} branch={branch} onChoose={onBranch} />
         {!phone && (

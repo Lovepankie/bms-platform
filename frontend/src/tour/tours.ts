@@ -385,7 +385,8 @@ export const retailSales: Tour = {
   // Version 10 words the Save step for Share receipt and WhatsApp customer (issue #439): send the receipt from your phone.
   // Version 11 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
   // Version 12 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
-  version: 12,
+  // Version 13 adds the Online or offline step (issue #458, ADR-067): the dot, and selling with no network.
+  version: 13,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -439,6 +440,15 @@ export const retailSales: Tour = {
       optional: true,
       title: 'Save the sale',
       body: 'Check the total, then tap Save sale. You get a receipt to show the customer. Tap Share receipt to send the PDF from your phone, on WhatsApp or any other app. WhatsApp customer sends the details to their number.',
+    },
+    {
+      id: 'sync-status',
+      route: '/staff/retail/sale',
+      target: 'sync-status',
+      module: 'retail',
+      optional: true,
+      title: 'Online or offline',
+      body: 'This dot says if you are online: green is online, grey is offline, amber is sending. With no network you can still save a cash, mobile money or bank sale. It stays on this phone and is sent once you are back online. Tap the dot to see what is waiting.',
     },
     {
       id: 'credit-payments',
@@ -590,7 +600,8 @@ export const staffWelcome: Tour = {
 
 export const salePage: Tour = {
   id: 'page-sale',
-  version: 1,
+  // Version 2 adds the Online or offline step (issue #458, ADR-067).
+  version: 2,
   title: 'This page: record a sale',
   audience: (me) => held(me, SELL),
   autoStart: false,

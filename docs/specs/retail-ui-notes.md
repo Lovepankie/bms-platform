@@ -1263,3 +1263,42 @@ changes, so after a payment on the same screen the next share sends the new rece
 - Nothing is written to the server except the optional number; the typed number is never logged. The tour `retail-sales` is
   version 10: its Save step names Share receipt and WhatsApp customer.
 
+## Sell offline (issue #458, ADR-067, FR-RET-67)
+
+Record a sale works with no network for a cash, mobile money or bank sale. The phone keeps a copy of the active items of each
+branch the person may sell at (with their pack sizes, prices and the stock when saved), the buyers list and the person's
+profile, refreshed when the app comes online, at sign-in and every 15 minutes (`frontend/src/offline/`).
+
+- **Offline**, the form shows "You are offline. This sale is kept on this phone and sent when the phone is back online." with
+  "Prices as of 22 Oct, 09:14". The item search reads the copy ("in stock when saved"); Credit (pay later) is greyed with "A credit
+  sale needs the internet."; price lists are not applied, so a line is priced at the item's price or its pack price saved on the phone; only a holder of
+  `retail.price.override` may type another, with a reason (at least 5 characters), as online; for anyone else the price field is
+  read only with "Offline, the price saved on this phone is used. You do not have permission to change it." and a **Use the price
+  saved on this phone** button on a line typed before the phone went offline;
+  too little stock on the copy does not stop the sale. **Buyer (optional)** offers the customers saved on the phone or a typed
+  name. The button reads **Save on this phone**.
+- After saving, **Sale saved on this phone** with receipt **OFF-0A1B2C3D (provisional)**, the lines and the total, and "Not yet sent."
+  Once sent, the same receipt reads **Sale sent**, **Receipt RS00000042**. A refused sale says why and that a manager decides.
+- **Online**, a save whose answer never came ("The server did not answer. The sale may or may not be saved.") offers **Keep it on
+  this phone** and **Try again**: the form is locked ("The items and the payment cannot be changed now, so the same sale is
+  sent."), and either sends the same request with the same client sale id, so it is recorded once. **Clear this sale** starts a
+  new one.
+- A sale a manager **discarded** shows in the sheet as "Discarded by a manager. It is not recorded and is not sent again." for a
+  day, and on its receipt.
+- **The dot** in the staff bar: green online, grey offline, amber sending, always with the word **Online**, **Offline** or
+  **Syncing** beside it, and "3 waiting to sync" ("3 waiting" at 480 px and below); the button's name says it all. Its sheet lists the waiting and
+  failed sales, **Sync now** and, for a failed one, **Send again**. A manager (`retail.offline.resolve`: administrators and
+  Supervisors) also sees the sales other phones could not record, with **Send it again** and **Discard** (a reason of at least 5
+  characters, never recorded, audited), and the open clashes with **Mark resolved** and a note.
+- **A shared phone**: when someone else signs in on a phone that holds another person's queued sales, a notice says "2 sales
+  from another person are waiting on this phone. They are sent when that person signs in here again." While online the phone
+  tells the server in short, and a manager's sheet lists them under **Waiting on a phone**.
+- **Sign out** with sales waiting asks first: "3 sales are waiting to sync." with Sync now, Keep them and sign out, and Cancel.
+  Kept sales go when the same person signs in on that phone again.
+- **Opened with no network**, the app shows the last person signed in on this phone, with Record a sale and the outbox working;
+  other screens say they cannot load. Back online, the session is restored or the sign-in page shows.
+- The tour `retail-sales` (version 13) and `page-sale` (version 2) gain the step **Online or offline** on the dot.
+
+Tests: `outbox.test.ts`, `sync-engine.test.ts`, `catalogue.test.ts`, `offline-sale.dom.test.tsx`, `sync-status.dom.test.tsx`; backend
+`RetailOfflineSalesIT` and `PushPublishersIT`.
+

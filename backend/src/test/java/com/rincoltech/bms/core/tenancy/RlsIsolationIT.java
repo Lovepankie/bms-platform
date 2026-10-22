@@ -450,6 +450,25 @@ class RlsIsolationIT {
                                'Test write-off', ?, ?
                           FROM retail_sales s WHERE s.tenant_id = ? LIMIT 1
                         """).params(t.tenantId(), entry, user, t.tenantId()).update();
+        // Retail sales offline (ADR-067, #458): a clash of the fixture sale, a refused offline sale reported by a
+        // device and a sale waiting on a phone.
+        // JUSTIFICATION-A3: a fixture row for each new table; the isolation test needs one row per tenant table.
+        owner.sql("""
+                        INSERT INTO retail_sale_clashes (id, tenant_id, sale_id, branch_id, kind, words)
+                        SELECT gen_random_uuid(), ?, s.id, s.branch_id, 'clock_ahead', 'Test clock ahead'
+                          FROM retail_sales s WHERE s.tenant_id = ? LIMIT 1
+                        """).params(t.tenantId(), t.tenantId()).update();
+        owner.sql("""
+                        INSERT INTO retail_offline_failures (id, tenant_id, client_sale_id, branch_id, made_by, occurred_at,
+                                                             payment_method, total_minor, request, code, message)
+                        VALUES (gen_random_uuid(), ?, gen_random_uuid(), ?, ?, now(), 'cash', 100, '{}', 'period_closed',
+                                'Test refusal')
+                        """).params(t.tenantId(), t.headOffice(), user).update();
+        owner.sql("""
+                        INSERT INTO retail_offline_waiting (id, tenant_id, client_sale_id, branch_id, made_by, occurred_at,
+                                                            total_minor, reported_by)
+                        VALUES (gen_random_uuid(), ?, gen_random_uuid(), ?, ?, now(), 100, ?)
+                        """).params(t.tenantId(), t.headOffice(), user, user).update();
         // Optional purchasing (ADR-033, #198): an order and its line, a receipt against it and its line, a supplier
         // invoice
         // with its line and entry, a payment with its allocation, and the tolerances.

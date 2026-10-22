@@ -504,6 +504,13 @@ class OutboxTemplates {
                     "retail.sale_voided",
                     new Template(
                             "A sale was voided", "A sale at {branch_name} was voided. Open it to see the reason.")),
+            // ADR-067: a sale made offline was recorded with something that changed meanwhile. No item, no amount.
+            Map.entry(
+                    "retail.sale_clash",
+                    new Template(
+                            "An offline sale needs a look",
+                            "A sale made offline at {branch_name} was recorded with a stock or price clash. Open it to"
+                                    + " resolve it.")),
             Map.entry(
                     "retail.write_off_alone",
                     new Template(

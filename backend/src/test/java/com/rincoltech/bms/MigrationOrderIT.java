@@ -49,7 +49,13 @@ class MigrationOrderIT {
      * Columns a later migration adds to a table these cases watch, left out of the "keeps its shape" comparisons: each case
      * answers for its own migration. V70 (customer orders, #385) adds retail_sale_lines.price_overridden_by.
      */
-    static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'";
+    static final String LATER_COLUMNS = " AND column_name <> 'price_overridden_by'"
+            // V86 (offline sales, #458) adds four columns to retail_sales, which are not the earlier migrations' to
+            // answer
+            // for; named with their table, so a column of that name elsewhere (stock movements' occurred_at) still
+            // counts.
+            + " AND NOT (table_name = 'retail_sales'"
+            + " AND column_name IN ('client_sale_id', 'occurred_at', 'recorded_offline', 'request_hash'))";
 
     /** Every migration file on the classpath in numeric order: a new migration only adds its file. */
     static final List<String> VERSIONS = discoveredVersions();
@@ -1475,14 +1481,14 @@ class MigrationOrderIT {
                 .as("the existing tables keep their shape")
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
-        // account one, V83 (collections, #266) the two collection list ones and V92 (billing, #480) the billing one,
-        // which are
-        // not V48's to answer for.
+        // account one, V83 (collections, #266) the two collection list ones, V86 (offline sales, #458)
+        // retail.offline.resolve and V92 (billing, #480) core.billing.read, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
-                                        + " 'lending.members.contact', 'lending.collections.all_officers', 'core.billing.read')")
+                                        + " 'retail.offline.resolve', 'lending.members.contact',"
+                                        + " 'lending.collections.all_officers', 'core.billing.read')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")

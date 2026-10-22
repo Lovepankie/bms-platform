@@ -4332,6 +4332,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/offline-failures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reported offline sales in the caller's branch scope, open and retry by default (ADR-067) */
+        get: operations["listRetailOfflineFailures"];
+        put?: never;
+        /** Report a sale made offline that the server refused, for a manager to decide (ADR-067); idempotent on the client sale id */
+        post: operations["reportRetailOfflineFailure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/offline-failures/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own reported offline sales: these client sale ids, or every one open or waiting to be sent again (ADR-067) */
+        get: operations["listMyRetailOfflineFailures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/offline-failures/{failure_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard a refused offline sale with a reason; it is never recorded; audited (ADR-067). The caller's own sale only by an administrator, with self_discard_reason */
+        post: operations["discardRetailOfflineFailure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/offline-failures/{failure_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the device that reported it to send the sale again (ADR-067); audited */
+        post: operations["retryRetailOfflineFailure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/offline-waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sales waiting on a phone in the caller's branch scope, oldest first (ADR-067) */
+        get: operations["listRetailOfflineWaiting"];
+        put?: never;
+        /** A phone tells which sales other people left queued on it, in short, so managers see them waiting (ADR-067); upserted on the client sale id */
+        post: operations["reportRetailOfflineWaiting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/orders": {
         parameters: {
             query?: never;
@@ -5560,6 +5647,40 @@ export interface paths {
         put?: never;
         /** Void a return as a whole by reversal (issue #201); M. 200 when voided, 202 when it waits for a checker */
         post: operations["voidRetailReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sale-clashes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Clashes of sales recorded offline in the caller's branch scope, newest first (ADR-067) */
+        get: operations["listRetailSaleClashes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/sale-clashes/{clash_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a clash with a note, once; audited (ADR-067). Nothing else changes */
+        post: operations["resolveRetailSaleClash"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12350,6 +12471,112 @@ export interface components {
             top?: number;
             totals?: components["schemas"]["RetailMarginTotals"];
         };
+        RetailOfflineFailure: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            client_sale_id?: string;
+            code?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            decided_at?: string;
+            /** Format: uuid */
+            decided_by?: string;
+            discard_reason?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            made_by?: string;
+            made_by_name?: string;
+            message?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            payment_method?: string;
+            request?: {
+                [key: string]: Record<string, never>;
+            };
+            /** Format: uuid */
+            sale_id?: string;
+            /** @description open, retry, discarded or recorded */
+            status?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailOfflineFailureDiscard: {
+            reason: string;
+            /** @description A second written reason, needed when an administrator (or the Owner) discards a sale they made themselves (ADR-067 decision 11 d); audited as self_discard */
+            self_discard_reason?: string;
+        };
+        RetailOfflineFailurePage: {
+            items?: components["schemas"]["RetailOfflineFailure"][];
+        };
+        /** @description A sale made offline that the server refused (ADR-067) */
+        RetailOfflineFailureRequest: {
+            /** Format: uuid */
+            branch_id: string;
+            /** Format: uuid */
+            client_sale_id: string;
+            code: string;
+            message: string;
+            /** Format: date-time */
+            occurred_at: string;
+            payment_method: string;
+            /** @description The sale request exactly as the device holds it; at most 64 KB as JSON (413) */
+            request: {
+                [key: string]: Record<string, never>;
+            };
+            /** Format: int64 */
+            total_minor: number;
+        };
+        /** @description A sale waiting on a phone (ADR-067) */
+        RetailOfflineWaiting: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: uuid */
+            client_sale_id?: string;
+            /** Format: uuid */
+            made_by?: string;
+            made_by_name?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            /** Format: date-time */
+            reported_at?: string;
+            /** Format: uuid */
+            reported_by?: string;
+            reported_by_name?: string;
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailOfflineWaitingAccepted: {
+            /**
+             * Format: int32
+             * @description How many were kept; a sale already recorded or reported as refused is skipped
+             */
+            accepted?: number;
+        };
+        RetailOfflineWaitingPage: {
+            items?: components["schemas"]["RetailOfflineWaiting"][];
+        };
+        RetailOfflineWaitingRequest: {
+            items: components["schemas"]["RetailOfflineWaitingSale"][];
+        };
+        /** @description ADR-067: a sale queued on a phone by a person who is not signed in there now, in short */
+        RetailOfflineWaitingSale: {
+            /** Format: uuid */
+            branch_id: string;
+            /** Format: uuid */
+            client_sale_id: string;
+            /**
+             * Format: uuid
+             * @description The person who made the sale (the seller)
+             */
+            made_by: string;
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: int64 */
+            total_minor: number;
+        };
         RetailOpenSale: {
             /** Format: int64 */
             balance_minor?: number;
@@ -13803,6 +14030,7 @@ export interface components {
              * @description Issue #385: the delivery fee of the customer order this credit sale came from, left on the buyer's account and not yet paid: owed besides balance_minor, and written off with the sale
              */
             delivery_fee_owed_minor?: number;
+            device?: components["schemas"]["RetailSaleDevice"];
             /** Format: date */
             due_date?: string;
             historical?: boolean;
@@ -13837,6 +14065,52 @@ export interface components {
             /** Format: uuid */
             voided_by?: string;
             write_off?: components["schemas"]["RetailSaleWriteOffInfo"];
+        };
+        /** @description Something that changed while a sale was offline (ADR-067) */
+        RetailSaleClash: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description stock_short, item_inactive, pack_inactive, price_changed, price_typed, below_cost, clock_ahead or clock_behind */
+            kind?: string;
+            /**
+             * Format: int32
+             * @description The sale line; absent for clock_ahead and clock_behind
+             */
+            line_no?: number;
+            /** Format: uuid */
+            product_id?: string;
+            resolution_note?: string;
+            /** Format: date-time */
+            resolved_at?: string;
+            /** Format: uuid */
+            resolved_by?: string;
+            /** Format: uuid */
+            sale_id?: string;
+            sale_no?: string;
+            /** @description What happened, in plain words; never a cost */
+            words?: string;
+        };
+        RetailSaleClashPage: {
+            items?: components["schemas"]["RetailSaleClash"][];
+        };
+        RetailSaleClashResolve: {
+            note: string;
+        };
+        /** @description How a sale came from a device (ADR-067) */
+        RetailSaleDevice: {
+            clashes?: components["schemas"]["RetailSaleClash"][];
+            /** Format: uuid */
+            client_sale_id?: string;
+            /**
+             * Format: date-time
+             * @description When the sale happened on the device, as recorded
+             */
+            occurred_at?: string;
+            recorded_offline?: boolean;
         };
         RetailSaleLine: {
             code?: string;
@@ -13980,6 +14254,11 @@ export interface components {
             branch_id?: string;
             buyer_contact?: string;
             buyer_name?: string;
+            /**
+             * Format: uuid
+             * @description ADR-067: the id the device made for this sale, unique per business. A second request with it, by the same person, answers the sale already recorded (Idempotent-Replayed), after the Idempotency-Key has expired too; by another person it is 422 client_sale_id_reused; with a different request (apart from occurred_at, recorded_offline and prices_as_of) 422 client_sale_conflict; the id of a refused offline sale a manager discarded 422 offline_sale_discarded
+             */
+            client_sale_id?: string;
             /** @description Why a credit sale above the buyer's credit limit goes ahead; needed (at least five characters) from a user who holds retail.credit.override, ignored when the sale is within the limit or the customer_accounts capability is off */
             credit_override_reason?: string;
             /** Format: uuid */
@@ -13990,12 +14269,24 @@ export interface components {
              */
             due_date?: string;
             lines: components["schemas"]["RetailSaleLineRequest"][];
+            /**
+             * Format: date-time
+             * @description ADR-067: when the sale happened on the device; the sale is dated that day in the business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422 occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash
+             */
+            occurred_at?: string;
             payment_method: string;
             /**
              * Format: uuid
              * @description Price the sale from this list instead of the customer's own or the customer group's; needs retail.pricelist.use unless it is one of those (price_lists capability)
              */
             price_list_id?: string;
+            /**
+             * Format: date-time
+             * @description ADR-067: the server's time when the device last refreshed its prices. A device price equal to the catalogue or pack price in force then stands; an occurred_at before it means the phone clock was behind (clock_behind)
+             */
+            prices_as_of?: string;
+            /** @description ADR-067: the sale was taken with no network and its money is already in hand. Needs client_sale_id and occurred_at; never a credit sale. A short stock, an item or a pack switched off, a saved price that changed, a typed price the online rules would not take (price_typed), a price not above cost or a phone clock ahead or behind then records the sale with a clash instead of refusing it */
+            recorded_offline?: boolean;
             /**
              * Format: date
              * @description Defaults to today; not in the future
@@ -24671,6 +24962,169 @@ export interface operations {
             };
         };
     };
+    listRetailOfflineFailures: {
+        parameters: {
+            query?: {
+                status?: string[];
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineFailurePage"];
+                };
+            };
+        };
+    };
+    reportRetailOfflineFailure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailOfflineFailureRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineFailure"];
+                };
+            };
+        };
+    };
+    listMyRetailOfflineFailures: {
+        parameters: {
+            query?: {
+                client_sale_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineFailurePage"];
+                };
+            };
+        };
+    };
+    discardRetailOfflineFailure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                failure_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailOfflineFailureDiscard"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineFailure"];
+                };
+            };
+        };
+    };
+    retryRetailOfflineFailure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                failure_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineFailure"];
+                };
+            };
+        };
+    };
+    listRetailOfflineWaiting: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineWaitingPage"];
+                };
+            };
+        };
+    };
+    reportRetailOfflineWaiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailOfflineWaitingRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailOfflineWaitingAccepted"];
+                };
+            };
+        };
+    };
     listRetailOrders: {
         parameters: {
             query?: {
@@ -26868,6 +27322,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailReturnOutcome"];
+                };
+            };
+        };
+    };
+    listRetailSaleClashes: {
+        parameters: {
+            query?: {
+                status?: string;
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSaleClashPage"];
+                };
+            };
+        };
+    };
+    resolveRetailSaleClash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clash_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailSaleClashResolve"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSaleClash"];
                 };
             };
         };

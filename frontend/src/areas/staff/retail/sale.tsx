@@ -3,12 +3,17 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
-import { retail, type Product, type ResolvedLine, type Sale, type SalePayment } from '../../../api/retail';
+import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
+import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
+import { useOffline, useOnline } from '../../../offline/offline-context';
+import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../offline/offline-sale';
+import type { OutboxItem } from '../../../offline/outbox';
+import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
 import { ShopLogo } from '../branch-picker';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
-import { buildSaleRequest, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
+import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
 import { EmptyState } from '../../../components/states';
@@ -98,12 +103,17 @@ export function Receipt({ sale, onNew, received }: { sale: Sale; onNew?: () => v
  * One line of the sale being made. The unit choice is drawn only while the tenant has the units capability
  * (`unitsOn`) and the item has active pack sizes; otherwise the line is exactly what it was before packs.
  */
-export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
   line: DraftLine;
   index: number;
   unitsOn: boolean;
   /** Present while price lists are on: how the line was priced, and what the seller may do about it. */
   price?: { resolved?: ResolvedLine; listName?: string; canOverride: boolean };
+  /**
+   * Present while selling offline (ADR-067 decision 11): the price is the one saved on this phone, and only a holder of
+   * retail.price.override may type another, with a reason, as online.
+   */
+  offlinePrice?: { canType: boolean };
   onQty: (v: string) => void;
   onPrice: (v: string) => void;
   onUnit: (unitId: string) => void;
@@ -118,6 +128,7 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
   const pack = unitsOn ? chosenPack(line.product, line.unitId) : undefined;
   const override = price ? isOverride(line, price.resolved) : false;
   const noPrice = price ? hasNoPrice(price.resolved) : false;
+  const changedOffline = offlinePrice !== undefined && f !== null && f.priceMinor !== defaultPrice(line.product, line.unitId);
   return (
     <div className="rt-card">
       <strong>{line.product.description}</strong>
@@ -137,7 +148,7 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
         </div>
         <div>
           <label htmlFor={`price-${i}`}>{pack ? `Price per ${pack.unit}` : 'Unit price'}</label>
-          <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : false} />
+          <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : offlinePrice ? !offlinePrice.canType : false} />
         </div>
       </div>
       {price && price.resolved && (
@@ -148,7 +159,9 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
       )}
       {noPrice && <p role="alert" className="rt-flag">This item has no price in the list.</p>}
       {price && !price.canOverride && <p className="hint">The price comes from the price list. You do not have permission to change it.</p>}
-      {override && onReason && (
+      {offlinePrice && !offlinePrice.canType && <p className="hint">Offline, the price saved on this phone is used. You do not have permission to change it.</p>}
+      {changedOffline && !offlinePrice?.canType && onReset && <p><button type="button" className="btn-sm" onClick={onReset}>Use the price saved on this phone</button></p>}
+      {(override || (changedOffline && offlinePrice?.canType)) && onReason && (
         <div>
           <label htmlFor={`reason-${i}`}>Why is the price changed? (at least {MIN_REASON} characters)</label>
           <input id={`reason-${i}`} value={line.reason ?? ''} maxLength={300} onChange={(e) => onReason(e.target.value)} aria-invalid={!reasonOk(line.reason)} />
@@ -166,18 +179,33 @@ export function SaleLineCard({ line, index, unitsOn, price, onQty, onPrice, onUn
   );
 }
 
-export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (sale: Sale, received?: number) => void }) {
+/** The sale form's draft: once sent with a client sale id, the request and when it was sent (ADR-067 decision 5). */
+type SaleDraft = Draft & { sent?: { body: SaleRequest; at: string } };
+
+export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
+  branchId: string;
+  branchName?: string;
+  onSaved?: (sale: Sale, received?: number) => void;
+  /** ADR-067: the sale was kept on this phone to send later. */
+  onQueued?: (item: OutboxItem) => void;
+}) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<Draft>(`sale:${me.user_id ?? ''}:${branchId}`, {
+  // ADR-067: with no network a cash, mobile money or bank sale is kept on this phone; online the form is as before.
+  const offline = useOffline();
+  const online = useOnline();
+  const offlineMode = offline !== null && !online;
+  const { key, draft, setDraft, finish, discard } = usePersistedDraft<SaleDraft>(`sale:${me.user_id ?? ''}:${branchId}`, {
     branchId, method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [],
   });
   const [addingBuyer, setAddingBuyer] = useState(draft.newBuyerName !== '');
   // What the customer handed over (cash only): kept in this form's state, never in the draft, so it goes with the form (#346).
   const [received, setReceived] = useState('');
+  // Clearing a sale whose answer was lost is asked first: it may already be recorded (ADR-067 decision 5).
+  const [confirmClear, setConfirmClear] = useState(false);
 
-  const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS);
-  const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: draft.method === 'credit' || pricesOn });
+  const pricesOn = capabilityOn(me, 'retail', PRICE_LISTS) && !offlineMode;
+  const customers = useQuery({ queryKey: ['retail', 'customers'], queryFn: () => retail.listCustomers(), enabled: !offlineMode && (draft.method === 'credit' || pricesOn) });
   // Reading the lists needs retail.pricelist.manage too (a list is a customer's negotiated price); the checks are the server's, per branch.
   const canChooseList = pricesOn && holdsAt(me, PRICELIST_USE, branchId) && holds(me, PRICELIST_MANAGE);
   const lists = useQuery({ queryKey: ['retail', 'price-lists'], queryFn: () => retail.listPriceLists(), enabled: canChooseList });
@@ -199,8 +227,14 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
   const buyerRow = (customers.data ?? []).find((c) => c.id === draft.customerId);
   const accounts: Accounts | undefined = accountsOn ? { termsDays: buyerRow?.terms_days } : undefined;
 
+  // The client sale id is the draft's key, so a sale whose answer was lost and that is kept to send later is never twice.
+  // The request is kept with the draft once sent: until the server answers, the same request is all that can go again.
   const save = useMutation({
-    mutationFn: () => retail.createSale(buildSaleRequest(shown, pricing, accounts), key),
+    mutationFn: (body: SaleRequest) => retail.createSale(body, key),
+    onError: (e) => {
+      // A clear answer means the sale was not recorded, so the form opens again.
+      if (e instanceof RetailError) setDraft((d) => ({ ...d, sent: undefined }));
+    },
     onSuccess: (sale) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
@@ -228,7 +262,42 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
 
   const total = draftTotal(shown.lines);
-  const problem = draftProblem(shown, pricing, accounts) ?? receivedProblem(draft.method, total, received);
+  const problem = (offlineMode ? offlineProblem(draft, holdsAt(me, PRICE_OVERRIDE, branchId)) : draftProblem(shown, pricing, accounts)) ?? receivedProblem(draft.method, total, received);
+  // A sale whose request got no answer may or may not be recorded: the form is locked, and kept to send later or sent again,
+  // it is the same request under the same client sale id, recorded once either way (ADR-067 decision 5).
+  const locked = offline !== null && draft.sent !== undefined;
+  const lost = locked && !save.isPending && !(save.error instanceof RetailError);
+  const keep = useMutation({
+    mutationFn: async () => {
+      if (!offline) throw new Error('Offline sales are not available');
+      const item = offlineSale({
+        draft: shown,
+        clientSaleId: key,
+        sent: draft.sent,
+        // A new key: the first one may already be stored with the online request, which this one is not.
+        key: draft.sent ? newIdempotencyKey() : key,
+        scope: offline.scope,
+        branchName,
+        pricesAsOf: offline.catalogue?.pricesAsOf,
+        buyerName: draft.newBuyerName,
+        now: new Date(),
+      });
+      await offline.engine.queue(item);
+      return item;
+    },
+    onSuccess: (item) => {
+      finish();
+      if (offline?.connectivity.online()) void offline.engine.sync();
+      onQueued?.(item);
+    },
+  });
+  const clear = () => {
+    discard();
+    setAddingBuyer(false);
+    setReceived('');
+    setConfirmClear(false);
+    save.reset();
+  };
   // A credit sale refused for the buyer's limit: say by how much, and offer the override to whoever holds it.
   const overBy = accountsOn && draft.method === 'credit' ? exceededBy(save.error) : null;
   const canOverride = holdsAt(me, CREDIT_OVERRIDE, branchId);
@@ -237,11 +306,21 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (!problem && !save.isPending) save.mutate();
+        if (save.isPending || keep.isPending || (problem && !draft.sent)) return;
+        // A credit sale whose answer was lost is never kept on the phone: it is only tried again (ADR-067 decision 1).
+        if (offlineMode && mayKeepOnPhone(draft.sent)) {
+          keep.mutate();
+          return;
+        }
+        const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) };
+        if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at: new Date().toISOString() } }));
+        save.mutate(body);
       }}
     >
+      {offlineMode && <OfflineNote />}
+      <fieldset disabled={locked} className="sale-lock" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div data-tour="sale-search">
-        <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />
+        {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />}
       </div>
 
       <h2>Items</h2>
@@ -259,10 +338,11 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
           index={i}
           unitsOn={unitsOn}
           price={pricesOn ? { resolved: resolved?.[i], listName: resolution.data?.price_list, canOverride: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
+          offlinePrice={offlineMode ? { canType: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
           onQty={(v) => setLine(i, { qty: v })}
           onPrice={(v) => setLine(i, { price: v, typed: true })}
           onReason={(v) => setLine(i, { reason: v })}
-          onReset={() => setLine(i, { typed: false, reason: '' })}
+          onReset={() => (offlineMode ? setLine(i, { price: String(defaultPrice(l.product, l.unitId)), typed: false, reason: '' }) : setLine(i, { typed: false, reason: '' }))}
           onUnit={(unitId) => setUnit(i, unitId)}
           onRemove={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))}
         />
@@ -296,11 +376,31 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         <legend>How is it paid?</legend>
         {METHODS.map((m) => (
           <label key={m.value} style={{ fontWeight: 400 }}>
-            <input type="radio" name="method" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={draft.method === m.value} onChange={() => update({ method: m.value })} />
+            <input type="radio" name="method" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={draft.method === m.value} disabled={offlineMode && m.value === 'credit'} onChange={() => update({ method: m.value })} />
             {m.label}
           </label>
         ))}
+        {offlineMode && <p className="hint">A credit sale needs the internet.</p>}
       </fieldset>
+
+      {offlineMode && (
+        <fieldset>
+          <legend>Buyer (optional)</legend>
+          <label htmlFor="offline-customer">Customer saved on this phone</label>
+          <select id="offline-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
+            <option value="">No customer</option>
+            {(offline?.catalogue?.customers ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {!draft.customerId && (
+            <>
+              <label htmlFor="offline-buyer-name">Or the buyer's name</label>
+              <input id="offline-buyer-name" value={draft.newBuyerName} maxLength={120} onChange={(e) => update({ newBuyerName: e.target.value })} />
+            </>
+          )}
+        </fieldset>
+      )}
 
       {draft.method === 'credit' && (
         <fieldset>
@@ -348,6 +448,8 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         </fieldset>
       )}
 
+      </fieldset>
+
       <p className="rt-total" aria-live="polite">
         Total {money(total)}
       </p>
@@ -370,13 +472,45 @@ export function SaleForm({ branchId, onSaved }: { branchId: string; onSaved?: (s
         </div>
       )}
       {overBy === null && <Problem error={save.error} />}
-      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null} data-tour="sale-save">
-        Save sale
+      {lost && (
+        <div role="alert" className="alert alert-warning" data-testid="lost-answer">
+          {mayKeepOnPhone(draft.sent) ? (
+            <>
+              <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
+              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+              <BusyButton type="button" busy={keep.isPending} onClick={() => keep.mutate()}>
+                Keep it on this phone
+              </BusyButton>
+            </>
+          ) : (
+            <>
+              <p>The server did not answer. The sale may or may not be saved. A credit sale needs the internet: tap Try again when you are online, and it is saved once.</p>
+              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+            </>
+          )}
+        </div>
+      )}
+      {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending || keep.isPending} disabled={problem !== null && !locked} data-tour="sale-save">
+        {offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : 'Save sale'}
       </BusyButton>
-      {draft.lines.length > 0 && !save.isPending && (
-        <button type="button" onClick={() => { discard(); setAddingBuyer(false); setReceived(''); save.reset(); }}>
+      {draft.lines.length > 0 && !save.isPending && !confirmClear && (
+        <button type="button" onClick={() => (draft.sent ? setConfirmClear(true) : clear())}>
           Clear this sale
         </button>
+      )}
+      {confirmClear && (
+        <div role="alert" className="alert alert-warning" data-testid="confirm-clear">
+          <p>This sale may already be saved on the server. If you clear it and sell again, the customer may be charged twice. Clear it?</p>
+          <div className="cluster">
+            <button type="button" className="btn-danger" onClick={clear}>
+              Clear it
+            </button>
+            <button type="button" onClick={() => setConfirmClear(false)}>
+              Keep it
+            </button>
+          </div>
+        </div>
       )}
     </form>
   );
@@ -416,8 +550,10 @@ export function RecordSale() {
     branchId !== null &&
     ((roles !== undefined && roles.some((r) => r.branch_id === branchId && !r.can_sell)) || (me.branches ?? []).some((b) => b.id === branchId && b.sells_goods === false));
   // With branch roles on, the sale form waits for the roles, so it is never drawn at a store while they load.
-  const waiting = capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
+  const online = useOnline();
+  const waiting = online && capabilityOn(me, 'retail', BRANCH_ROLES) && (me.permissions ?? []).includes('retail.stock.read') && roles === undefined;
   const [sale, setSale] = useState<Sale | null>(null);
+  const [queued, setQueued] = useState<OutboxItem | null>(null);
   const [received, setReceived] = useState<number>();
   const [round, setRound] = useState(0);
   return (
@@ -428,6 +564,8 @@ export function RecordSale() {
         <p role="status">Loading</p>
       ) : store ? (
         <StoreBranch branchName={branchName} roles={roles} />
+      ) : queued ? (
+        <ProvisionalReceipt item={queued} onNew={() => { setQueued(null); setRound((n) => n + 1); }} />
       ) : sale ? (
         <>
           <Receipt sale={sale} received={received} onNew={() => { setSale(null); setReceived(undefined); setRound((n) => n + 1); }} />
@@ -440,7 +578,7 @@ export function RecordSale() {
             <ShopLogo url={(me.branches ?? []).find((b) => b.id === branchId)?.logo_url} name={branchName} /> Branch: <strong>{branchName}</strong>
           </p>
           <NoStockHere branchId={branchId} />
-          <SaleForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s, r) => { setSale(s); setReceived(r); }} />
+          <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued} />
         </>
       )}
     </Gate>

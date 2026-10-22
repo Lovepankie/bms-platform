@@ -4,7 +4,8 @@
 
 Accepted (2026-09-29). Host names refined by ADR-018 (2026-09-29): tenant and platform hosts are
 single labels under the `rincoltech.com` zone, configured at run time, not `<slug>.<base domain>`
-and `app.<base domain>`.
+and `app.<base domain>`. Amended by ADR-067 (2026-10-22): retail sales may be made offline, with the sale catalogue and an
+outbox of sales cached per business and per person; every other staff money action stays online only.
 
 ## Context
 
