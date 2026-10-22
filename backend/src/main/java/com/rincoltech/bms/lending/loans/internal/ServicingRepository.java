@@ -332,6 +332,21 @@ class ServicingRepository {
                         """).paramSource(t).update();
     }
 
+    /**
+     * A disbursement or repayment from before go-live, brought in from the register (ADR-071): {@code is_historic}, with no
+     * journal, receipt or voucher number, because its cash was never this app's.
+     */
+    void insertHistoricTxn(Txn t) {
+        jdbc.sql("""
+                        INSERT INTO lending_loan_transactions (id, tenant_id, created_at, branch_id, loan_id, txn_type,
+                            amount_minor, currency, value_date, payment_method_key, external_reference, approval_request_id,
+                            source, is_historic, recorded_by)
+                        VALUES (:id, current_setting('app.tenant_id')::uuid, clock_timestamp(), :branchId, :loanId,
+                            :txnType, :amountMinor, :currency, :valueDate, :paymentMethodKey, :externalReference,
+                            :approvalRequestId, :source, true, :recordedBy)
+                        """).paramSource(t).update();
+    }
+
     /** The repayment a gateway payment reference (order tracking id) already booked, if any (spec 3.4.1: idempotent at the port). */
     Optional<Txn> gatewayRepayment(String externalReference) {
         return jdbc.sql("""

@@ -31,6 +31,12 @@ class ProductCatalogService implements ProductCatalog {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<ProductTerms> currentByCode(String code) {
+        return repo.findByCode(code).flatMap(row -> terms(row, row.currentVersionId()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Optional<ProductTerms> version(UUID productVersionId) {
         return jdbc.sql("SELECT product_id FROM lending_loan_product_versions WHERE id = ?")
                 .param(productVersionId)

@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.tenancy.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.core.tenancy.PolicyChangeGuard;
@@ -19,6 +20,7 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.Versions;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -45,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
  * is validated and audited with the before and after values of the keys that changed.
  */
 @Service
-class SettingsService implements TenantSettings, ModuleSettings {
+class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
 
     static final Map<String, Integer> DEFAULT_APPRAISAL_WEIGHTS =
             Map.of("repayment_history", 40, "affordability", 30, "collateral_cover", 20, "exposure", 10);
@@ -102,6 +105,11 @@ class SettingsService implements TenantSettings, ModuleSettings {
     @Transactional
     SettingsResponse update(String ifMatch, UpdateSettingsRequest request, boolean proved) {
         int expected = Versions.fromIfMatch(ifMatch);
+        if (request.goLiveDate() != null) {
+            // ADR-071: the go-live date bounds what may be brought in with a past date, so only the Owner moves it; the
+            // owner lock comes first in the transaction (ADR-062).
+            guard.requireOwner("set the go-live date");
+        }
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
@@ -143,6 +151,9 @@ class SettingsService implements TenantSettings, ModuleSettings {
         if (changes.get("theme_primary") instanceof String colour) {
             // An empty string clears the colour: back to the platform look.
             changes.put("theme_primary", colour.isEmpty() ? null : colour.toUpperCase(Locale.ROOT));
+        }
+        if (request.goLiveDate() != null) {
+            changes.put("go_live_date", request.goLiveDate().toString());
         }
         if (changes.containsKey("require_mfa_roles")) {
             changes.put(
@@ -397,6 +408,42 @@ class SettingsService implements TenantSettings, ModuleSettings {
         return current().reportsEnabled();
     }
 
+    // ---- the go-live date (ADR-071) ------------------------------------------------------------
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<LocalDate> set() {
+        return Optional.ofNullable(current().goLiveDate());
+    }
+
+    @Override
+    @Transactional
+    public void setByOperator(LocalDate date, UUID platformUserId, String reason) {
+        if (date.isAfter(clock.today(tenant.profile().timezone()))) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("go_live_date", "go_live_in_future", "The go-live date is today or earlier.")));
+        }
+        Stored stored = lock();
+        Object before = stored.values().get("go_live_date");
+        Map<String, Object> next = new TreeMap<>(stored.values());
+        next.put("go_live_date", date.toString());
+        jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now(), version = version + 1")
+                .param(mapper.writeValueAsString(next))
+                .update();
+        Map<String, Object> was = new LinkedHashMap<>();
+        was.put("go_live_date", before);
+        audit.record(
+                new AuditLog.Entry(
+                        "core.settings.go_live_set",
+                        "core.tenant_settings",
+                        tenant.profile().id(),
+                        null,
+                        was,
+                        Map.of("go_live_date", date.toString(), "reason", reason)),
+                platformUserId,
+                "platform");
+    }
+
     // ---- module settings groups (ADR-033) ---------------------------------------------------
 
     @Override
@@ -508,6 +555,11 @@ class SettingsService implements TenantSettings, ModuleSettings {
             problems.add(
                     new FieldProblem("require_mfa_roles", "invalid", "Choose roles from the list of staff roles."));
         }
+        if (request.goLiveDate() != null
+                && request.goLiveDate().isAfter(clock.today(tenant.profile().timezone()))) {
+            problems.add(
+                    new FieldProblem("go_live_date", "go_live_in_future", "The go-live date is today or earlier."));
+        }
         if (request.displayName() != null && request.displayName().isBlank()) {
             problems.add(new FieldProblem("display_name", "invalid", "Must not be blank."));
         }
@@ -553,6 +605,7 @@ class SettingsService implements TenantSettings, ModuleSettings {
                 s.get("mfa_grace_days") == null ? null : ((Number) s.get("mfa_grace_days")).intValue(),
                 s.get("mfa_enforce_from") == null ? null : Instant.parse((String) s.get("mfa_enforce_from")),
                 tenant.profile().timezone().getId(),
+                s.get("go_live_date") == null ? null : LocalDate.parse((String) s.get("go_live_date")),
                 version);
     }
 }

@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.PolicyChangeGuard;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -26,13 +27,16 @@ class TwoStepChangeGuard implements PolicyChangeGuard {
     private final Outbox outbox;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
+    private final Owners owners;
 
     TwoStepChangeGuard(
             AdminSecurityService security,
             PasswordResets resets,
             Outbox outbox,
             CurrentTenant tenant,
-            BusinessClock clock) {
+            BusinessClock clock,
+            Owners owners) {
+        this.owners = owners;
         this.security = security;
         this.resets = resets;
         this.outbox = outbox;
@@ -53,6 +57,11 @@ class TwoStepChangeGuard implements PolicyChangeGuard {
             }
             security.requirePassword(password);
         }
+    }
+
+    @Override
+    public void requireOwner(String what) {
+        owners.requireOwner(CurrentPrincipal.require(), what);
     }
 
     @Override

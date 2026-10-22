@@ -8,6 +8,7 @@ import com.rincoltech.bms.core.platform.internal.PlatformController.CreateTenant
 import com.rincoltech.bms.core.platform.internal.PlatformController.CreatedTenantResponse;
 import com.rincoltech.bms.core.platform.internal.PlatformController.FirstAdminInvitation;
 import com.rincoltech.bms.core.platform.internal.PlatformController.TenantResponse;
+import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleManifest;
 import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.kernel.ApiException;
@@ -63,6 +64,7 @@ class PlatformService implements TenantProvisioning {
     private final PlatformAuditLog platformAudit;
     private final TransactionTemplate transactions;
     private final Set<String> moduleKeys;
+    private final GoLiveDate goLive;
 
     PlatformService(
             JdbcClient jdbc,
@@ -71,7 +73,9 @@ class PlatformService implements TenantProvisioning {
             AuditLog audit,
             PlatformAuditLog platformAudit,
             PlatformTransactionManager transactionManager,
-            List<ModuleManifest> manifests) {
+            List<ModuleManifest> manifests,
+            GoLiveDate goLive) {
+        this.goLive = goLive;
         this.jdbc = jdbc;
         this.tenantAdmins = tenantAdmins;
         this.hosts = hosts;
@@ -402,6 +406,23 @@ class PlatformService implements TenantProvisioning {
                 tenantId,
                 () -> transactions.execute(status -> {
                     tenantAdmins.requireTenantAdmin(userId);
+                    return null;
+                }));
+    }
+
+    /** ADR-071: the operator sets a business's go-live date, audited in the tenant's log and the platform's. */
+    void setGoLive(UUID tenantId, LocalDate date, String reason) {
+        UUID operator = CurrentPrincipal.require().userId();
+        transactions.execute(status -> tenant(tenantId));
+        TenantContext.callAs(
+                tenantId,
+                () -> transactions.execute(status -> {
+                    goLive.setByOperator(date, operator, reason);
+                    platformAudit.record(
+                            "platform.tenant.go_live_set",
+                            operator,
+                            tenantId,
+                            Map.of("go_live_date", date.toString(), "reason", reason));
                     return null;
                 }));
     }

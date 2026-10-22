@@ -62,6 +62,13 @@ class ProductRepository {
                 .optional();
     }
 
+    Optional<Row> findByCode(String code) {
+        return jdbc.sql(PRODUCT + " WHERE code = ?")
+                .param(code)
+                .query(ProductRepository::row)
+                .optional();
+    }
+
     Optional<Row> lock(UUID id) {
         return jdbc.sql(PRODUCT + " WHERE id = ? FOR UPDATE")
                 .param(id)

@@ -10,6 +10,9 @@ public interface MemberLookup {
 
     Optional<MemberSummary> find(UUID memberId);
 
+    /** By the member number, exactly as stored (an import names members by number, issue #466). */
+    Optional<MemberSummary> findByNumber(String memberNo);
+
     /**
      * {@link #find}, with the member's row locked until the caller's transaction ends. Serialises
      * per-member rules that count rows of another module, such as FR-ORG-07's loan limit.

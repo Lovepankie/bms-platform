@@ -10,6 +10,9 @@ public interface ProductCatalog {
     /** The product's current version, whatever its status; the caller checks {@code productStatus}. */
     Optional<ProductTerms> current(UUID productId);
 
+    /** {@link #current} by the product's code, exactly as stored (an import names products by code, issue #466). */
+    Optional<ProductTerms> currentByCode(String code);
+
     /** A specific version, for loans that keep the terms they were created with (FR-PRD-04). */
     Optional<ProductTerms> version(UUID productVersionId);
 

@@ -15,6 +15,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -98,6 +99,11 @@ class SettingsController {
             @Schema(description = "The business's time zone, in which a two-step deadline is a day's end (ADR-046)")
             String timezone,
 
+            @Schema(
+                    description =
+                            "The day the app became the business's register, as the Owner or the operator set it, or null (then the first administrator sign-in counts); an existing loan is brought in only with a disbursement date before it (ADR-071)")
+            LocalDate goLiveDate,
+
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -141,6 +147,11 @@ class SettingsController {
 
             Boolean setupDismissed,
             Boolean reportsEnabled,
+
+            @Schema(
+                    description =
+                            "The go-live date, today or earlier; only the Owner of the business sets it, 403 owner_only otherwise (ADR-071)")
+            LocalDate goLiveDate,
 
             @Size(max = 20)
             @Schema(

@@ -185,6 +185,16 @@ class PlatformController {
             @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the platform audit log")
             String reason) {}
 
+    @Schema(name = "TenantGoLiveRequest")
+    record GoLiveRequest(
+            @NotNull @Schema(description = "The day the app became the business's register, today or earlier (ADR-071)")
+            LocalDate goLiveDate,
+
+            @NotBlank
+            @Size(min = 5, max = 300)
+            @Schema(description = "Why; kept in the tenant's audit log and the platform's")
+            String reason) {}
+
     @Schema(name = "PlatformReasonRequest")
     record ReasonRequest(
             @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the platform audit log")
@@ -412,6 +422,17 @@ class PlatformController {
     @Operation(summary = "Switch modules on or off; data is kept (FR-TEN-03)", operationId = "platformSetModules")
     TenantResponse modules(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody ModulesRequest request) {
         return service.setModules(tenantId, request.modules(), request.reason());
+    }
+
+    @PutMapping("/tenants/{tenant_id}/go-live")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary =
+                    "Set the business's go-live date, with a reason: an existing loan is brought in only with a disbursement date before it (ADR-071)",
+            operationId = "platformSetGoLiveDate")
+    ResponseEntity<Void> goLive(@PathVariable("tenant_id") UUID tenantId, @Valid @RequestBody GoLiveRequest request) {
+        service.setGoLive(tenantId, request.goLiveDate(), request.reason().trim());
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/tenants/{tenant_id}/pilot")

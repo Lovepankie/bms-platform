@@ -515,6 +515,13 @@ class LoanServicer implements LoanServicing {
         if (!Set.of("repayment", "recovery").contains(txn.txnType())) {
             throw ApiException.rule("not_reversible", "Only a repayment or a recovery is reversed here.");
         }
+        if (txn.journalEntryId() == null) {
+            // ADR-071: a repayment brought in from the register moved no cash in the books; it is corrected by
+            // recording the loan again, not by a reversal that would post one.
+            throw ApiException.rule(
+                    "historic_not_reversible",
+                    "A repayment brought in from the paper register cannot be reversed here.");
+        }
         if (repo.reversed(txn.id())) {
             throw new ApiException(
                     HttpStatus.CONFLICT,

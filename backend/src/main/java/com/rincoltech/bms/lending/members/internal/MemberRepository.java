@@ -99,6 +99,13 @@ class MemberRepository {
                 .optional();
     }
 
+    Optional<MemberResponse> findByNumber(String memberNo) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM lending_members WHERE member_no = ?")
+                .param(memberNo)
+                .query(MemberRepository::mapDetail)
+                .optional();
+    }
+
     long countActive() {
         return jdbc.sql("SELECT count(*) FROM lending_members WHERE status = 'active'")
                 .query(Long.class)

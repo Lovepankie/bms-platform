@@ -193,8 +193,12 @@ class ArrearsRun {
         PenaltyRule rule = rules.computeIfAbsent(
                 loan.productVersionId(), v -> products.version(v).orElseThrow().penalty());
         // Penalties start at the later of the business's first run and the loan's own start in the system, so a long
-        // overdue loan imported today is not charged every period since the first run in one night.
-        LocalDate start = jdbc.sql("SELECT (created_at AT TIME ZONE ?)::date FROM lending_loans WHERE id = ?")
+        // overdue loan imported today is not charged every period since the first run in one night. A loan brought in
+        // from a paper register (ADR-071) starts at its bring-in date, the later of go-live and its approval: no period
+        // before it is charged, while its days overdue still count from the real due dates.
+        LocalDate start = jdbc.sql(
+                        "SELECT greatest((created_at AT TIME ZONE ?)::date, brought_in_on) FROM lending_loans"
+                                + " WHERE id = ?")
                 .params(currentTenant.profile().timezone().getId(), id)
                 .query((rs, n) -> rs.getObject(1, LocalDate.class))
                 .single();

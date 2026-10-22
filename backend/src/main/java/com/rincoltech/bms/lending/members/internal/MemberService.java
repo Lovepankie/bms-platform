@@ -405,6 +405,12 @@ class MemberService implements MemberLookup {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Optional<MemberSummary> findByNumber(String memberNo) {
+        return members.findByNumber(memberNo).map(MemberService::summary);
+    }
+
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<MemberSummary> lock(UUID memberId) {
         return members.lockById(memberId).map(MemberService::summary);
