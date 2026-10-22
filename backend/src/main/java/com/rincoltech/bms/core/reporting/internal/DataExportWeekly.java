@@ -13,7 +13,6 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.HashMap;
@@ -252,13 +251,11 @@ class DataExportWeekly {
             close(w.id(), "failed", null, "no_owner_email");
             return false;
         }
-        ZoneId zone = tenant.profile().timezone();
         boolean attach = w.sizeBytes() != null && w.sizeBytes() <= attachMaxBytes;
         Map<String, String> params = new HashMap<>();
         params.put("owner_name", owner.get().name());
         params.put("business_name", businessName());
         params.put("as_of", ReportFormats.date(w.asOf()));
-        params.put("expires_on", ReportFormats.date(LocalDate.ofInstant(w.expiresAt(), zone)));
         params.put("link", hosts.tenantOrigin(tenant.profile().slug()) + "/staff/setup");
         if (attach) {
             params.put(EmailAttachments.PARAM, DataExportAttachments.KIND + ":" + w.runId());
@@ -270,7 +267,9 @@ class DataExportWeekly {
                 params,
                 "core.data_export_weekly:" + w.id(),
                 null,
-                w.expiresAt()));
+                // An attached file cannot be read after its expiry, so the row is not sent after it either; a linked
+                // email names no file and does not expire. A ready run always has an expiry (V49), but none is assumed.
+                attach ? w.expiresAt() : null));
         jdbc.sql("UPDATE data_export_weekly SET status = 'queued', attached = ? WHERE id = ?")
                 .params(attach, w.id())
                 .update();
