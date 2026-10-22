@@ -172,6 +172,7 @@ class RetailBarcodesIT extends IntegrationTest {
         ResponseEntity<JsonNode> taken = add(other, "0" + UPC);
         assertThat(taken.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(taken.getBody().get("code").asString()).isEqualTo("barcode_taken");
+        assertThat(taken.getBody().get("detail").asString()).contains("removed there for good");
         // A scanner that reports the UPC-A as thirteen digits finds the same item.
         assertThat(lookup("0" + UPC).getBody().get("product").get("id").asString())
                 .isEqualTo(first.toString());
@@ -184,6 +185,12 @@ class RetailBarcodesIT extends IntegrationTest {
         assertThat(lookup(UPC).getBody().get("product").get("id").asString()).isEqualTo(other.toString());
         assertThat(api.get("/products/" + first + "/barcodes", ADMIN).getBody().get("items"))
                 .isEmpty();
+        // Switched back on, the first item does not get the code back.
+        String back = api.get("/products/" + first, ADMIN).getHeaders().getETag();
+        api.call(HttpMethod.PATCH, "/products/" + first, Map.of("active", true), ADMIN, "*", Map.of("If-Match", back));
+        assertThat(api.get("/products/" + first + "/barcodes", ADMIN).getBody().get("items"))
+                .isEmpty();
+        assertThat(lookup(UPC).getBody().get("product").get("id").asString()).isEqualTo(other.toString());
     }
 
     @Test
@@ -348,6 +355,9 @@ class RetailBarcodesIT extends IntegrationTest {
                 .get("rows")
                 .get(0);
         assertThat(dry.get("outcome").asString()).isEqualTo("added");
+        assertThat(dry.get("message").asString())
+                .contains("moves from the switched-off item")
+                .contains("removed there for good");
         ResponseEntity<JsonNode> applied =
                 api.post("/products/import?dry_run=false", Map.of("csv", csv), ADMINISTRATOR);
         assertThat(applied.getStatusCode()).as("%s", applied.getBody()).isEqualTo(HttpStatus.OK);

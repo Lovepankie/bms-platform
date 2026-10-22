@@ -107,7 +107,8 @@ class BarcodeService {
 
     /**
      * Frees a code for {@code taker}: refused while an active product (or the taker itself) holds it, deleted with an
-     * audit row while a product that is switched off holds it.
+     * audit row while a product that is switched off holds it. The switched-off product loses it for good: switching it
+     * back on does not bring the code back.
      */
     private void release(String code, Product taker) {
         BarcodeRepository.Held held = repo.byKey(Barcodes.key(code)).orElse(null);
@@ -124,7 +125,9 @@ class BarcodeService {
                     "barcode_taken",
                     "Duplicate",
                     "This barcode is on another item already: " + held.productDescription() + " (code "
-                            + held.productCode() + "). Remove it there first.");
+                            + held.productCode()
+                            + "). Remove it there first, or switch that item off: a code taken from a"
+                            + " switched-off item is removed there for good.");
         }
         repo.delete(held.barcode().id());
         Map<String, Object> was = new LinkedHashMap<>();

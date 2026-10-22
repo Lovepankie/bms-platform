@@ -279,7 +279,11 @@ class ProductImportService {
                     ? " With a pack of " + packFactor.setScale(3).toPlainString() + " in one " + packUnit + "."
                     : "";
             report.add(new ImportRow(
-                    line, code, description.strip(), "added", (dryRun ? "Would be added." : "Added.") + packNote));
+                    line,
+                    code,
+                    description.strip(),
+                    "added",
+                    (dryRun ? "Would be added." : "Added.") + packNote + movedNote(rowCodes, rowPackCodes, heldCodes)));
             pending.add(new Pending(
                     code,
                     description.strip(),
@@ -526,6 +530,27 @@ class ProductImportService {
             }
         }
         return null;
+    }
+
+    /** The codes a row takes from items that are switched off, which lose them for good. */
+    private static String movedNote(
+            List<String> rowCodes, List<String> packCodes, Map<String, BarcodeRepository.Held> held) {
+        StringBuilder note = new StringBuilder();
+        for (List<String> list : List.of(rowCodes, packCodes)) {
+            for (String c : list) {
+                BarcodeRepository.Held h = held.get(Barcodes.key(c));
+                if (h != null && !h.productActive()) {
+                    note.append(" Barcode ")
+                            .append(c)
+                            .append(" moves from the switched-off item ")
+                            .append(h.productDescription())
+                            .append(" (code ")
+                            .append(h.productCode())
+                            .append(") and is removed there for good.");
+                }
+            }
+        }
+        return note.toString();
     }
 
     private static final java.util.regex.Pattern FACTOR =
