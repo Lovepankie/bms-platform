@@ -45,6 +45,54 @@ import tools.jackson.databind.JsonNode;
 class DataExportIT extends LendingBookSupport {
 
     static final String PERM = "core.data_export.run";
+
+    /** The slug of the business whose workbook carries the sheet of {@link NegativeMoney}. */
+    static final String CELLS = "dxcells";
+
+    /**
+     * A sheet with a negative amount, which no table of the export holds today (every stored amount is checked to be zero or
+     * more): it proves a negative MONEY cell is written as a negative number through the same sheets, spool and writer. Only
+     * the business {@link #CELLS} gets it.
+     */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class NegativeMoney {
+        @org.springframework.context.annotation.Bean
+        com.rincoltech.bms.core.reporting.DataExportSection negativeMoney(
+                com.rincoltech.bms.core.tenancy.CurrentTenant tenant) {
+            return new com.rincoltech.bms.core.reporting.DataExportSection() {
+                @Override
+                public String module() {
+                    return "retail";
+                }
+
+                @Override
+                public int order() {
+                    return 999;
+                }
+
+                @Override
+                public void write(com.rincoltech.bms.core.reporting.DataExportSheets sheets) {
+                    if (!tenant.profile().slug().startsWith(CELLS)) {
+                        return;
+                    }
+                    sheets.table(
+                                    "test_adjustments",
+                                    "Test adjustments",
+                                    List.of(
+                                            new com.rincoltech.bms.core.reporting.ReportOutput.Column(
+                                                    "note",
+                                                    "Note",
+                                                    com.rincoltech.bms.core.reporting.ReportOutput.Kind.TEXT),
+                                            new com.rincoltech.bms.core.reporting.ReportOutput.Column(
+                                                    "amount",
+                                                    "Amount",
+                                                    com.rincoltech.bms.core.reporting.ReportOutput.Kind.MONEY)))
+                            .row("Test refund", -2500L);
+                }
+            };
+        }
+    }
+
     static final String EVIL = "=HYPERLINK(\"http://example.invalid\")";
 
     /** 8 October 2026 as a spreadsheet date serial. */
@@ -264,6 +312,42 @@ class DataExportIT extends LendingBookSupport {
         assertThat(header(x.sheet("Cash book"))).startsWith("Date", "Time");
         assertThat(header(x.sheet("Branches")))
                 .containsExactly("Code", "Name", "Location", "Head office", "Status", "Opened on");
+    }
+
+    @Test
+    void textThatBeginsLikeAFormulaStaysTextAndANegativeAmountIsANegativeNumber() throws Exception {
+        TestDatabase.Fixture t = TestDatabase.tenant(CELLS, false, true);
+        RetailTestSupport api = new RetailTestSupport(http, t);
+        UUID product = api.product("DXC", 600, 1000);
+        List<String> buyers = List.of("+256700000001", "-1 owed", "@SUM(A1:A9)", "\tTest Buyer Tab", "\rTest Buyer CR");
+        for (int i = 0; i < buyers.size(); i++) {
+            sale(
+                    t,
+                    product,
+                    api.userId(),
+                    "C-000" + (i + 1),
+                    buyers.get(i),
+                    LocalDate.of(2026, 10, 8),
+                    Instant.parse("2026-10-08T08:00:00Z").plusSeconds(60L * i));
+        }
+        XlsxReader x = workbook(t, api.userId(), export(t, api.userId()));
+        Sheet sales = x.sheet("Sales");
+        for (int i = 0; i < buyers.size(); i++) {
+            Cell buyer = sales.cell("F" + (i + 2));
+            assertThat(buyer.isText()).as(buyers.get(i)).isTrue();
+            assertThat(buyer.value()).as("kept exactly").isEqualTo(buyers.get(i));
+            assertThat(x.styles.get(buyer.style()).quotePrefix())
+                    .as("%s carries the quote prefix", buyers.get(i))
+                    .isTrue();
+        }
+        assertThat(x.parts.get("xl/worksheets/sheet" + (names(x).indexOf("Sales") + 1) + ".xml"))
+                .asString()
+                .doesNotContain("<f>");
+
+        Sheet adjustments = x.sheet("Test adjustments");
+        assertThat(header(adjustments)).containsExactly("Note", "Amount (UGX)");
+        assertThat(adjustments.cell("B2").value()).isEqualTo("-2500");
+        assertThat(adjustments.cell("B2").t()).as("a number, not text").isEmpty();
     }
 
     @Test
