@@ -30,11 +30,13 @@ class DataExportSheetsTest {
     static final class Recording implements ReportOutput {
 
         final Map<String, String> titles = new LinkedHashMap<>();
+        final Map<String, List<Column>> columns = new LinkedHashMap<>();
         final Map<String, List<Object[]>> rows = new LinkedHashMap<>();
 
         @Override
         public Table table(String key, String title, List<Column> columns) {
             titles.put(key, title);
+            this.columns.put(key, columns);
             List<Object[]> list = new ArrayList<>();
             rows.put(key, list);
             return new Table() {
@@ -126,5 +128,31 @@ class DataExportSheetsTest {
         assertThat(sheets.time(late)).isEqualTo("01:30");
         assertThat(sheets.date(null)).isNull();
         assertThat(sheets.time(null)).isNull();
+    }
+
+    @Test
+    void theEmailedCopyLeavesOutThePersonalColumnsHeaderAndCellsAndTheFullCopyKeepsThem() {
+        List<Column> members = List.of(
+                new Column("member_no", "Member no", Kind.TEXT),
+                new Column("phone", "Phone", Kind.TEXT),
+                new Column("name", "Name", Kind.TEXT),
+                new Column("id_number", "ID number", Kind.TEXT));
+        java.util.Set<String> personal = java.util.Set.of("phone", "id_number");
+
+        Recording emailed = new Recording();
+        DataExportReport.Sheets weekly = new DataExportReport.Sheets(emailed, ZoneId.of("Africa/Kampala"), 3, false);
+        weekly.dated("members", "Members", members, 1, personal)
+                .row(LocalDate.of(2026, 10, 8), "M0001", "+256700000001", "Test Member", "CM00000000TEST");
+        weekly.table("plain", "Plain", COLUMNS, personal).row(LocalDate.of(2026, 10, 8), 5L);
+        assertThat(emailed.columns.get("members")).extracting(Column::key).containsExactly("member_no", "name");
+        assertThat(emailed.rows.get("members").get(0)).containsExactly("M0001", "Test Member");
+        assertThat(emailed.columns.get("plain")).isEqualTo(COLUMNS);
+
+        Recording full = new Recording();
+        new DataExportReport.Sheets(full, ZoneId.of("Africa/Kampala"), 3, true)
+                .dated("members", "Members", members, 1, personal)
+                .row(LocalDate.of(2026, 10, 8), "M0001", "+256700000001", "Test Member", "CM00000000TEST");
+        assertThat(full.columns.get("members")).isEqualTo(members);
+        assertThat(full.rows.get("members").get(0)).hasSize(4);
     }
 }

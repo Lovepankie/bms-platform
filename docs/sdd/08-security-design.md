@@ -421,6 +421,9 @@ Notes:
   the Owner on or off (audited, `core.data_export.settings_changed`). It is offered whatever `reports_enabled` says; the file
   is fetched by the person it was made for while they hold the permission, every refusal 404. A suspended tenant (FR-TEN-06)
   may still ask for it and fetch the signed address of a file, the two reads that are a `POST`; every other write stays 423.
+  The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
+  and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
+  sign-in (ADR-074 decision 6).
   Built (extras slice D2, issue #217): the PDF and Excel renderers and `lending.portfolio_outstanding` add no permission and no seeded
   row either (both lending reports run under `lending.reports.portfolio`); `PermissionMatrixIT` still passes and this matrix equals the
   seeds. A spreadsheet cell is never a formula: text is written as a string cell and text that begins with `=`, `+`, `-`, `@`, a tab or a

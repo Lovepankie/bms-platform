@@ -36,12 +36,13 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <ol>
  *   <li><b>Queue.</b> From 02:00 on Monday in the business's time zone, while the weekly email is on, the week's workbook is
- *       queued as an ordinary run of {@code core.data_export} requested for the Owner (ADR-062), and the week's row of
+ *       queued as an ordinary run of {@code core.data_export} requested for the Owner (ADR-062), made without the columns of
+ *       personal data because it is made to be emailed (decision 6), and the week's row of
  *       {@code data_export_weekly} is written. The row is unique per business and week, so a second tick, a second instance
  *       or a restart queues nothing more. With no active Owner who has an email address the week is recorded as skipped.
  *   <li><b>Email.</b> A week whose run is ready is emailed to the Owner through the outbox, once (the row's id is the
  *       outbox key): the workbook attached when it is at most {@code bms.data-export.attach-max-bytes}, else a link to
- *       Business set-up, where the signed-in Owner downloads it until the file expires. A run that failed or was cancelled
+ *       Business set-up, where the signed-in Owner downloads the full copy. A run that failed or was cancelled
  *       ends the week as failed with its code.
  * </ol>
  *
@@ -167,8 +168,8 @@ class DataExportWeekly {
                     .update();
             return;
         }
-        Requested run = runs.insert(
-                report, "xlsx", report.prepare(Map.of()), owner.get().id(), false);
+        // The copy made to be emailed: without the columns of personal data (ADR-074 decision 6).
+        Requested run = runs.insert(report, "xlsx", report.weekly(), owner.get().id(), false);
         int written = jdbc.sql("""
                         INSERT INTO data_export_weekly (id, tenant_id, week_of, run_id, recipient_user_id, status)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, 'queued')

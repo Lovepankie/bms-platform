@@ -135,6 +135,22 @@ class EmailLayoutTest {
     }
 
     @Test
+    void theWeeklyDataEmailsSayInPlainWordsThatContactDetailsAndIdNumbersAreOnlyInTheSignedInCopy() {
+        // ADR-074 decision 6: the attached copy leaves out personal data; both emails say where it is.
+        for (String key : List.of("core.data_export_weekly", "core.data_export_weekly_link")) {
+            String text = templates.render("email", key, params()).text().replaceAll("\\s+", " ");
+            assertThat(text)
+                    .as(key)
+                    .contains("contact details and ID numbers are only in the copy you download after signing in");
+        }
+        assertThat(templates
+                        .render("email", "core.data_export_weekly", params())
+                        .text()
+                        .replaceAll("\\s+", " "))
+                .contains("this copy leaves out phone numbers, addresses, dates of birth and ID numbers");
+    }
+
+    @Test
     void everyEmailTemplateRendersBothPartsWithTheSameLinks() {
         List<String> keys = OutboxTemplates.keys("email");
         assertThat(keys).isNotEmpty().contains("onboarding.activation", OutboxTemplates.ACTIVATION_TWO_STEP);

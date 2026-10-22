@@ -37,6 +37,14 @@ class DataExportReport implements ReportDefinition {
     static final String KEY = "core.data_export";
     static final String PERMISSION = "core.data_export.run";
 
+    /**
+     * The stored parameter that marks the weekly copy made to be emailed, which leaves out the columns of personal data
+     * (ADR-074 decision 6). It is set by the weekly job only, never by a request, which takes no parameters.
+     */
+    static final String COPY = "copy";
+
+    static final String WEEKLY = "weekly";
+
     /** Rows fetched from the server at a time by the reads of the workbook. */
     static final int FETCH = 2000;
 
@@ -115,6 +123,17 @@ class DataExportReport implements ReportDefinition {
         return new Prepared(Map.of(), Map.of(), clock.today(tenant.profile().timezone()));
     }
 
+    /** The weekly copy for the email: the same workbook without the columns of personal data. */
+    Prepared weekly() {
+        return new Prepared(
+                Map.of(COPY, WEEKLY), Map.of(), clock.today(tenant.profile().timezone()));
+    }
+
+    /** True for a run made with {@link #weekly}. */
+    static boolean isWeekly(Map<String, Object> params) {
+        return WEEKLY.equals(params.get(COPY));
+    }
+
     @Override
     public String describeScope(Prepared run) {
         return "Every branch of the business";
@@ -124,7 +143,12 @@ class DataExportReport implements ReportDefinition {
     public void query(Prepared prepared, ReportOutput out) {
         out.note("A copy of the business's data, every branch. Making it changed nothing.");
         out.note("Dates and times are in the business's time zone; amounts are whole numbers in its currency.");
-        Sheets sheets = new Sheets(out, tenant.profile().timezone(), splitRows);
+        boolean personal = !isWeekly(prepared.params());
+        if (!personal) {
+            out.note("This is the weekly copy sent by email: contact details and ID numbers are only in the copy you"
+                    + " download after signing in.");
+        }
+        Sheets sheets = new Sheets(out, tenant.profile().timezone(), splitRows, personal);
         branches(sheets);
         for (DataExportSection section : sections) {
             if (modules.isEnabled(section.module())) {
@@ -166,11 +190,18 @@ class DataExportReport implements ReportDefinition {
         private final ReportOutput out;
         private final ZoneId zone;
         private final int split;
+        private final boolean personal;
 
         Sheets(ReportOutput out, ZoneId zone, int split) {
+            this(out, zone, split, true);
+        }
+
+        /** @param personal false for the emailed copy: the columns named personal are left out */
+        Sheets(ReportOutput out, ZoneId zone, int split, boolean personal) {
             this.out = out;
             this.zone = zone;
             this.split = split;
+            this.personal = personal;
         }
 
         @Override
@@ -194,16 +225,17 @@ class DataExportReport implements ReportDefinition {
         }
 
         @Override
-        public Rows table(String key, String title, List<Column> columns) {
-            Splitter s = new Splitter(key, title, columns, false);
+        public Rows table(String key, String title, List<Column> columns, Set<String> personalColumns) {
+            Splitter s = new Splitter(key, title, columns, personalColumns, false);
             s.open(null);
             return cells -> s.write(null, cells);
         }
 
         @Override
-        public DatedRows dated(String key, String title, List<Column> columns, long rowCount) {
+        public DatedRows dated(
+                String key, String title, List<Column> columns, long rowCount, Set<String> personalColumns) {
             boolean byYear = rowCount > split;
-            Splitter s = new Splitter(key, title, columns, byYear);
+            Splitter s = new Splitter(key, title, columns, personalColumns, byYear);
             if (!byYear) {
                 s.open(null);
             }
@@ -215,16 +247,29 @@ class DataExportReport implements ReportDefinition {
             private final String key;
             private final String title;
             private final List<Column> columns;
+            /** The positions of the cells written, or null for all of them. */
+            private final int[] kept;
+
             private final boolean byYear;
             private ReportOutput.Table current;
             private Integer year;
             private int part;
             private long inPart;
 
-            Splitter(String key, String title, List<Column> columns, boolean byYear) {
+            Splitter(String key, String title, List<Column> columns, Set<String> personalColumns, boolean byYear) {
                 this.key = key;
                 this.title = title;
-                this.columns = columns;
+                if (personal || personalColumns.isEmpty()) {
+                    this.columns = columns;
+                    this.kept = null;
+                } else {
+                    this.kept = java.util.stream.IntStream.range(0, columns.size())
+                            .filter(i ->
+                                    !personalColumns.contains(columns.get(i).key()))
+                            .toArray();
+                    this.columns =
+                            java.util.Arrays.stream(kept).mapToObj(columns::get).toList();
+                }
                 this.byYear = byYear;
             }
 
@@ -245,7 +290,15 @@ class DataExportReport implements ReportDefinition {
                 if (current == null || !Objects.equals(y, year) || inPart >= split) {
                     open(y);
                 }
-                current.row(cells);
+                if (kept == null) {
+                    current.row(cells);
+                } else {
+                    Object[] left = new Object[kept.length];
+                    for (int i = 0; i < kept.length; i++) {
+                        left[i] = cells[kept[i]];
+                    }
+                    current.row(left);
+                }
                 inPart++;
             }
         }

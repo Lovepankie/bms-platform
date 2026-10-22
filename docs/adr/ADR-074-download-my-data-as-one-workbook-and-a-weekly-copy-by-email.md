@@ -42,15 +42,29 @@ never change data, never show one business another's rows, and never hold a larg
    low. ADR-038 decision 6 already chose a minimal streaming `.xlsx` writer over POI (about 20 MB of libraries on a 224 MB heap),
    which writes each sheet row by row from the spool with one row and one 64 KiB buffer in memory. The data export reuses it, so
    memory does not grow with the business and no library is added.
-6. **A weekly copy emailed to the Owner, on by default.** The job `core.reporting.data-export-weekly` runs every 15 minutes. From
-   02:00 on Monday in the business's time zone, while the switch is on, it queues that week's workbook for the Owner (ADR-062)
-   and writes the week's row in `data_export_weekly`, unique per business and week, so a second tick, a second instance or a
-   restart queues nothing more. Once the run is ready the email goes through the outbox, keyed by the week's row so it is queued
-   once: the workbook attached when it is at most `bms.data-export.attach-max-bytes` (5 MiB), otherwise a link to Business set-up,
-   where the signed-in Owner downloads it until it expires. The attachment is named in the outbox row as a reference, never as
-   bytes; the sender reads it through the `EmailAttachments` port of `core.notifications`, for the row's tenant, only while the
-   run is ready and unexpired. A week with no active Owner who has an email address is recorded as skipped; a run that failed
-   ends the week as failed with its code. Turning the switch off stops the next week; turning it on mid-week sends that week's.
+6. **A weekly copy emailed to the Owner, on by default, without personal data.** The job `core.reporting.data-export-weekly`
+   runs every 15 minutes. From 02:00 on Monday in the business's time zone, while the switch is on, it queues that week's
+   workbook for the Owner (ADR-062) and writes the week's row in `data_export_weekly`, unique per business and week, so a second
+   tick, a second instance or a restart queues nothing more. The weekly workbook is made to be emailed, so it leaves out the
+   columns of personal data (the stored run parameter `copy = weekly`; each section names its columns in `personal`): members'
+   phone numbers, ID numbers, dates of birth and villages, the phone on the Arrears sheet, and the contact of customers, credit
+   buyers and suppliers. Names, member numbers, amounts and every business figure stay. Those columns are only in the full
+   workbook, which the signed-in administrator makes and downloads from Business set-up, and the email says so in plain words:
+   "contact details and ID numbers are only in the copy you download after signing in". The card lists the caller's newest
+   full workbook, never the weekly copy. **Why (data protection):** the members and customers in these columns are data
+   subjects under Uganda's Data Protection and Privacy Act, 2019, and the business is accountable for keeping what identifies
+   or reaches them secure and no wider than its purpose needs. An email attachment leaves every control BMS has: it sits in
+   mail servers and inboxes outside the business, is forwarded, and is opened on shared phones, every week, for as long as the
+   switch is on. A weekly backup the Owner keeps does not need a member's national ID or phone to serve its purpose (knowing
+   who owes what), while the copy inside BMS is reached only after sign-in (with two-step sign-in where the business requires
+   it), for the person it was made for, for 30 days. So the default email carries the minimum, and the full copy stays behind
+   the sign-in. Once the run is ready the email goes through the outbox, keyed by the week's row so it is queued once: the
+   workbook attached when it is at most `bms.data-export.attach-max-bytes` (5 MiB), otherwise the email has no file and a link
+   to Business set-up on the business's own sign-in page. The attachment is named in the outbox row as a
+   reference, never as bytes; the sender reads it through the `EmailAttachments` port of `core.notifications`, for the row's
+   tenant, only while the run is ready and unexpired. A week with no active Owner who has an email address is recorded as
+   skipped; a run that failed ends the week as failed with its code. Turning the switch off stops the next week; turning it on
+   mid-week sends that week's.
 7. **Read only, and served to a business whose subscription has ended.** Making the workbook writes only the run's own rows and
    file. A suspended tenant answers 423 to every write except two reads that are a `POST`: asking for the workbook and the signed
    address of a file; the runner's three definer functions (V49) now include suspended tenants. The nightly expiry of report
@@ -58,7 +72,7 @@ never change data, never show one business another's rows, and never hold a larg
    its 30 days, whatever its status, so a suspended or ended business's workbook is deleted on time like any other. The weekly email follows the
    platform's active tenants only: an ended business keeps "Download my data" but no longer gets the Monday email.
 8. **The card.** Business set-up shows "Download my data" to holders of the permission: when the business's data was last
-   exported (by anyone) and last emailed, the caller's newest workbook (preparing, ready to save until its expiry, or why it
+   exported (by anyone) and last emailed, the caller's newest full workbook (preparing, ready to save until its expiry, or why it
    failed) and the weekly switch. The welcome tour has a step for it.
 
 ## Consequences
@@ -73,5 +87,7 @@ attachment of up to 5 MiB goes through the mail server every week for each busin
 **Tests:** `DataExportIT` (the shop and lender sheets and columns, business time and whole shillings, formula injection, one
 business never sees another's rows or file, the permission, a suspended business still downloads and changes nothing, an ended
 business's file is deleted after its 30 days, the weekly
-job queues once and emails once and stops when switched off, a week with no Owner is skipped once) and `DataExportSheetsTest`
-(the year split and its numbered parts, the business date and time of a moment).
+job queues once and emails once and stops when switched off, the emailed copy leaves out the personal columns that the full
+copy keeps, a week with no Owner is skipped once) and `DataExportSheetsTest`
+(the year split and its numbered parts, the business date and time of a moment, the personal columns left out of the emailed
+copy); `EmailLayoutTest` (both weekly emails say where the contact details and ID numbers are).

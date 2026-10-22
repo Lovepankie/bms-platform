@@ -402,17 +402,18 @@ class DataExportIT extends LendingBookSupport {
         return TestDatabase.owner().sql(sql).params(params).query(Long.class).single();
     }
 
-    @Test
-    void theWeeklyJobQueuesOneWorkbookAndSendsOneEmailHoweverOftenItRunsAndStopsWhenSwitchedOff() throws Exception {
-        Shop s = shop("DXW");
-        UUID tenantId = s.t().tenantId();
+    static String ownerEmail(TestDatabase.Fixture t) {
+        return "owner-" + t.slug() + "@example.test";
+    }
+
+    /** An active Owner with an email address, an administrator first (V79); returns their id. */
+    static UUID owner(TestDatabase.Fixture t) {
+        UUID tenantId = t.tenantId();
         UUID owner = UUID.randomUUID();
-        String email = "owner-" + s.t().slug() + "@example.test";
         TestDatabase.owner().sql("""
                         INSERT INTO users (id, tenant_id, kind, full_name, email, status)
                         VALUES (?, ?, 'staff', 'Test Owner', ?, 'active')
-                        """).params(owner, tenantId, email).update();
-        // The Owner is an administrator first (V79).
+                        """).params(owner, tenantId, ownerEmail(t)).update();
         TestDatabase.owner()
                 .sql("INSERT INTO user_role_assignments (id, tenant_id, user_id, role_key, granted_by)"
                         + " VALUES (?, ?, ?, 'tenant_admin', ?)")
@@ -422,7 +423,64 @@ class DataExportIT extends LendingBookSupport {
                 .sql("UPDATE users SET is_owner = true WHERE tenant_id = ? AND id = ?")
                 .params(tenantId, owner)
                 .update();
+        return owner;
+    }
 
+    /** The document of the week's run of the business's weekly copy. */
+    static String weeklyDocument(TestDatabase.Fixture t) {
+        return TestDatabase.owner()
+                .sql("SELECT r.document_id::text FROM data_export_weekly w JOIN report_runs r ON r.id = w.run_id"
+                        + " WHERE w.tenant_id = ? ORDER BY w.week_of DESC LIMIT 1")
+                .param(t.tenantId())
+                .query(String.class)
+                .single();
+    }
+
+    @Test
+    void theEmailedWeeklyCopyLeavesOutPersonalDataWhichStaysInTheCopyDownloadedAfterSigningIn() throws Exception {
+        Book book = goldenBook();
+        TestDatabase.owner().sql("""
+                        UPDATE lending_loans SET days_past_due = 30, arrears_minor = 1050000
+                         WHERE tenant_id = ? AND loan_no = 'LN0003'
+                        """).param(book.t().tenantId()).update();
+        UUID owner = owner(book.t());
+        weekly.tick();
+        drain();
+        weekly.tick();
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT template_key FROM notification_outbox WHERE recipient = ?")
+                        .param(ownerEmail(book.t()))
+                        .query(String.class)
+                        .single())
+                .isEqualTo(DataExportWeekly.ATTACHED);
+
+        XlsxReader emailed = XlsxReader.read(downloadBytes(book.t(), owner, PERM, weeklyDocument(book.t())));
+        assertThat(header(emailed.sheet("Members")))
+                .contains("Member no", "Name", "Gender", "District", "Occupation", "Branch")
+                .doesNotContain("Phone", "Other phone", "ID number", "Date of birth", "Village");
+        assertThat(header(emailed.sheet("Arrears")))
+                .startsWith("Loan no", "Member no", "Member", "Branch")
+                .doesNotContain("Phone");
+        assertThat(emailed.sheet("Arrears").text("A2")).isEqualTo("LN0003");
+        String all = emailed.parts.values().stream().map(String::new).reduce("", String::concat);
+        assertThat(all).contains("contact details and ID numbers are only in the copy you download after signing in");
+
+        // The copy the Owner makes after signing in is the full one, and it is the one the card shows.
+        XlsxReader full = workbook(book.t(), owner, export(book.t(), owner));
+        assertThat(header(full.sheet("Members")))
+                .contains("Phone", "Other phone", "ID number", "Date of birth", "Village");
+        assertThat(header(full.sheet("Arrears"))).contains("Phone");
+        String phone = full.sheet("Members").text("C2");
+        assertThat(phone).isNotBlank();
+        assertThat(all).doesNotContain(phone);
+    }
+
+    @Test
+    void theWeeklyJobQueuesOneWorkbookAndSendsOneEmailHoweverOftenItRunsAndStopsWhenSwitchedOff() throws Exception {
+        Shop s = shop("DXW");
+        UUID tenantId = s.t().tenantId();
+        UUID owner = owner(s.t());
+        String email = ownerEmail(s.t());
         weekly.tick();
         weekly.tick();
         assertThat(count("SELECT count(*) FROM data_export_weekly WHERE tenant_id = ?", tenantId))

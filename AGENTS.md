@@ -291,7 +291,8 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   the Branches sheet and each vertical's `DataExportSection` (`RetailDataExport`, `LendingDataExport`), a sheet per table split by
   year past `bms.data-export.split-rows`, through the existing streaming writer (not POI SXSSF, ADR-038 decision 6). Routes
   `/api/v1/data-export` (card, `/runs`, `/settings`); a suspended tenant may still ask and fetch the file. The job
-  `core.reporting.data-export-weekly` queues the Owner's copy once a week and emails it through the outbox (attached up to
+  `core.reporting.data-export-weekly` queues the Owner's copy once a week, without the personal-data columns (they are only in
+  the copy downloaded after sign-in), and emails it through the outbox (attached up to
   `bms.data-export.attach-max-bytes`, else a link) via the `EmailAttachments` port of `core.notifications`; the integration tests
   switch it off (`bms.data-export.weekly-enabled=false`) and call `DataExportWeekly.tick`. The card is in Business set-up.
 - **Built (client extras C1, issue #220, ADR-037):** migration `V51` (`ai_calls`, `ai_platform_usage`); `core.ai`, the

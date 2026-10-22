@@ -337,8 +337,9 @@ class OutboxTemplates {
                     "You got this email because you are a BMS platform operator."));
 
     // The weekly copy of the business's data (issue #334, ADR-074): to the Owner, with the workbook attached, or with a
-    // link to Business set-up when the file is too large to attach. The link opens the business's own sign-in, so the
-    // file is only ever fetched by the signed-in Owner, and it is kept until {expires_on}.
+    // link to Business set-up when the file is too large to attach. The attached copy leaves out contact details and ID
+    // numbers (decision 6), and the email says so; the full copy is made and downloaded by the signed-in Owner from the
+    // business's own sign-in page, never through a link that works without signing in.
     private static final Map<String, Template> EMAIL_DATA_EXPORT = Map.of(
             "core.data_export_weekly",
             new Template(
@@ -349,7 +350,9 @@ class OutboxTemplates {
                     This week's copy of the data of {business_name}, as it stood on {as_of}, is attached as an Excel \
                     workbook, with a sheet for each table.
 
-                    You can also download it from Business set-up until {expires_on}:
+                    Because email can be forwarded and read on any phone, this copy leaves out phone numbers, \
+                    addresses, dates of birth and ID numbers: contact details and ID numbers are only in the copy you \
+                    download after signing in. To get that copy, sign in and press Download my data in Business set-up:
 
                     {link}
 
@@ -361,14 +364,17 @@ class OutboxTemplates {
                     "You got this email because you are the Owner of {business_name} on BMS."),
             "core.data_export_weekly_link",
             new Template(
-                    "Your weekly copy of {business_name}'s data is ready",
+                    "Your weekly copy of {business_name}'s data is too large to email",
                     """
                     Hello {owner_name},
 
-                    This week's copy of the data of {business_name}, as it stood on {as_of}, is ready. It is too \
-                    large to attach to an email, so sign in and download it from Business set-up until {expires_on}:
+                    This week's copy of the data of {business_name}, as it stood on {as_of}, is too large to attach \
+                    to an email. Sign in and press Download my data in Business set-up to make your copy and save it:
 
                     {link}
+
+                    That copy is complete: contact details and ID numbers are only in the copy you download after \
+                    signing in.
 
                     To stop these emails, untick the weekly email under Download my data in Business set-up.
 

@@ -10,6 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -30,6 +31,12 @@ class RetailDataExport implements DataExportSection {
     private static final Column CODE = new Column("product_code", "Product code", Kind.TEXT);
     private static final Column PRODUCT = new Column("product", "Product", Kind.TEXT);
     private static final Column QUANTITY = new Column("quantity", "Quantity", Kind.QUANTITY);
+
+    /**
+     * The columns left out of the weekly copy sent by email (ADR-074 decision 6): a customer's or supplier's phone, email or
+     * other contact. They stay in the copy downloaded after signing in.
+     */
+    private static final Set<String> PERSONAL = Set.of("contact");
 
     /** What a credit sale still owes: its unpaid total and a delivery fee left on the account (the credit pages' rule). */
     private static final String OWED = "(s.total_minor - s.paid_minor + coalesce((SELECT o.delivery_fee_minor"
@@ -146,7 +153,8 @@ class RetailDataExport implements DataExportSection {
                         new Column("name", "Name", Kind.TEXT),
                         new Column("contact", "Contact", Kind.TEXT),
                         new Column("active", "Active", Kind.TEXT),
-                        new Column("added_on", "Added on", Kind.DATE)));
+                        new Column("added_on", "Added on", Kind.DATE)),
+                PERSONAL);
         each(
                 "SELECT name, contact, active, created_at FROM retail_suppliers ORDER BY name, id",
                 rs -> rows.row(
@@ -166,7 +174,8 @@ class RetailDataExport implements DataExportSection {
                         new Column("group", "Group", Kind.TEXT),
                         new Column("credit_limit", "Credit limit", Kind.MONEY),
                         new Column("terms_days", "Days to pay", Kind.COUNT),
-                        new Column("added_on", "Added on", Kind.DATE)));
+                        new Column("added_on", "Added on", Kind.DATE)),
+                PERSONAL);
         each(
                 """
                 SELECT c.name, c.contact, g.name AS group_name, c.credit_limit_minor, c.terms_days, c.created_at
@@ -193,7 +202,8 @@ class RetailDataExport implements DataExportSection {
                         new Column("open_sales", "Unpaid credit sales", Kind.COUNT),
                         new Column("owed", "Owed", Kind.MONEY),
                         new Column("oldest_due", "Oldest due date", Kind.DATE),
-                        new Column("credit_limit", "Credit limit", Kind.MONEY)));
+                        new Column("credit_limit", "Credit limit", Kind.MONEY)),
+                PERSONAL);
         each(
                 "SELECT c.name, c.contact, count(s.id) AS open_sales, coalesce(sum(" + OWED + "), 0) AS owed,"
                         + " min(s.due_date) AS oldest_due, c.credit_limit_minor"

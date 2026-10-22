@@ -10,6 +10,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
@@ -29,6 +30,12 @@ class LendingDataExport implements DataExportSection {
     private static final Column MEMBER_NO = new Column("member_no", "Member no", Kind.TEXT);
     private static final Column MEMBER = new Column("member", "Member", Kind.TEXT);
     private static final Column OFFICER = new Column("officer", "Officer", Kind.TEXT);
+
+    /**
+     * The columns left out of the weekly copy sent by email (ADR-074 decision 6): what reaches or identifies a member beyond
+     * their name and number. They stay in the copy downloaded after signing in.
+     */
+    private static final Set<String> PERSONAL = Set.of("phone", "other_phone", "id_number", "date_of_birth", "village");
 
     /** Rows fetched from the server at a time: a table of any length is never held whole (ADR-038). */
     static final int FETCH = 2000;
@@ -105,7 +112,8 @@ class LendingDataExport implements DataExportSection {
                         new Column("kyc", "KYC", Kind.TEXT),
                         new Column("status", "Status", Kind.TEXT),
                         new Column("joined_on", "Joined on", Kind.DATE)),
-                count("SELECT count(*) FROM lending_members"));
+                count("SELECT count(*) FROM lending_members"),
+                PERSONAL);
         each("""
                 SELECT m.member_no, m.full_name, m.phone_e164, m.alt_phone_e164, m.id_type,
                        coalesce(m.national_id, m.other_id_number) AS id_number, m.gender, m.date_of_birth, m.district,
@@ -277,7 +285,8 @@ class LendingDataExport implements DataExportSection {
                         new Column("arrears", "Arrears", Kind.MONEY),
                         new Column("principal_outstanding", "Principal outstanding", Kind.MONEY),
                         new Column("next_due", "Next due date", Kind.DATE),
-                        new Column("last_repayment", "Last repayment", Kind.DATE)));
+                        new Column("last_repayment", "Last repayment", Kind.DATE)),
+                PERSONAL);
         each(
                 """
                 SELECT l.loan_no, m.member_no, m.full_name AS member, m.phone_e164, b.name AS branch,
