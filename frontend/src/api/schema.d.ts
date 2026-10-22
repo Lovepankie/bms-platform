@@ -7637,7 +7637,10 @@ export interface components {
             csv: string;
         };
         ExistingLoanImportResult: {
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Loans recorded, or on a check the loans that would be; 0 while any row is an error
+             */
             added?: number;
             dry_run?: boolean;
             /** Format: int32 */

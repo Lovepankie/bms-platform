@@ -2226,6 +2226,7 @@
       "ExistingLoanImportResult" : {
         "properties" : {
           "added" : {
+            "description" : "Loans recorded, or on a check the loans that would be; 0 while any row is an error",
             "format" : "int32",
             "type" : "integer"
           },
