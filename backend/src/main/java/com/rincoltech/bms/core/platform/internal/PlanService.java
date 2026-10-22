@@ -198,24 +198,7 @@ class PlanService {
         requireKnown(module);
         requireOwner();
         transactions.execute(status -> {
-            Sub sub = subscription();
-            if (!sub.modules().contains(module)) {
-                throw ApiException.rule("module_not_on", "The business does not use " + label(module) + ".");
-            }
-            long staying = sub.modules().size() - scheduledStops().size() - 1;
-            if (!scheduledStops().contains(module) && staying < 1) {
-                throw ApiException.rule(
-                        "last_module",
-                        "A business keeps at least one module. To stop using everything, cancel the subscription"
-                                + " instead.");
-            }
-            if (scheduledStops().contains(module)) {
-                throw new ApiException(
-                        HttpStatus.CONFLICT,
-                        "change_already_scheduled",
-                        "Already scheduled",
-                        "Stopping " + label(module) + " is already scheduled.");
-            }
+            checkStop(subscription(), module);
             return null;
         });
         proof.requireProof(totpCode, password);
@@ -226,17 +209,46 @@ class PlanService {
     ChangeResponse cancel(String totpCode, String password) {
         requireOwner();
         transactions.execute(status -> {
-            if (cancellationOn() != null) {
-                throw new ApiException(
-                        HttpStatus.CONFLICT,
-                        "change_already_scheduled",
-                        "Already scheduled",
-                        "The cancellation is already scheduled.");
-            }
+            checkCancel();
             return null;
         });
         proof.requireProof(totpCode, password);
         return schedule("cancel", null);
+    }
+
+    /**
+     * A module stop is refused when the module is off, already stopping, or the last one staying: the modules on less the
+     * stops already scheduled of modules still on.
+     */
+    private void checkStop(Sub sub, String module) {
+        if (!sub.modules().contains(module)) {
+            throw ApiException.rule("module_not_on", "The business does not use " + label(module) + ".");
+        }
+        List<String> stopping =
+                scheduledStops().stream().filter(sub.modules()::contains).toList();
+        if (stopping.contains(module)) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "change_already_scheduled",
+                    "Already scheduled",
+                    "Stopping " + label(module) + " is already scheduled.");
+        }
+        if (sub.modules().size() - stopping.size() - 1 < 1) {
+            throw ApiException.rule(
+                    "last_module",
+                    "A business keeps at least one module. To stop using everything, cancel the subscription"
+                            + " instead.");
+        }
+    }
+
+    private void checkCancel() {
+        if (cancellationOn() != null) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "change_already_scheduled",
+                    "Already scheduled",
+                    "The cancellation is already scheduled.");
+        }
     }
 
     /** The Owner undoes a change still to come, before its day: the business goes on as before. */
@@ -273,7 +285,18 @@ class PlanService {
     private ChangeResponse schedule(String kind, String module) {
         UUID actor = CurrentPrincipal.require().userId();
         return transactions.execute(status -> {
+            // Under the subscription's row lock the checks are made again, so two stops or two cancellations sent at
+            // once cannot both pass: the second waits, then sees the first.
+            jdbc.sql("SELECT app_lock_subscription(?)")
+                    .param(tenant.profile().id())
+                    .query(String.class)
+                    .optional();
             Sub sub = subscription();
+            if ("cancel".equals(kind)) {
+                checkCancel();
+            } else {
+                checkStop(sub, module);
+            }
             LocalDate today = today();
             LocalDate effective = effectiveOn(sub, today);
             UUID id = UUID.randomUUID();
@@ -364,11 +387,16 @@ class PlanService {
         UUID tenantId = tenant.profile().id();
         if ("stop_module".equals(change.kind())) {
             List<String> modules = new ArrayList<>(subscription().modules());
-            if (modules.remove(change.moduleKey()) && !modules.isEmpty()) {
-                platform.switchModules(tenantId, modules, null, "Stopped by the Owner from " + change.effectiveOn());
-            } else if (modules.isEmpty()) {
-                log.warn("a scheduled stop of the last module of tenant {} was not applied", tenantId);
+            if (!modules.remove(change.moduleKey()) || modules.isEmpty()) {
+                // Nothing to switch off (the module is already off), or it is the last one: the row is closed as
+                // undone, not applied, so nothing claims a change that did not happen.
+                log.warn("a scheduled stop of module {} of tenant {} changed nothing", change.moduleKey(), tenantId);
+                jdbc.sql("UPDATE subscription_scheduled_changes SET status = 'undone', undone_at = now() WHERE id = ?")
+                        .param(id)
+                        .update();
+                return false;
             }
+            platform.switchModules(tenantId, modules, null, "Stopped by the Owner from " + change.effectiveOn());
         } else {
             String before = jdbc.sql("SELECT platform_end_subscription(?, ?)")
                     .params(tenantId, change.effectiveOn())

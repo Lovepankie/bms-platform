@@ -16,6 +16,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -407,6 +413,91 @@ class SelfServePlanIT extends IntegrationTest {
                 withPassword(both.api(), "/api/v1/plan/modules/lending/stop", both.ownerSession()),
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "last_module");
+    }
+
+    // JUSTIFICATION-A3: review fix 4 of #474 asks for this concurrency test; the threads need their own setup.
+    /**
+     * Two stops sent at once are made one after the other under the subscription's row lock: of the two last modules only
+     * one is stopped (the other refused with {@code last_module}), and the same module twice is scheduled once.
+     */
+    @Test
+    void twoStopsSentAtOnceKeepOneModule() throws Exception {
+        Business b = business(bothPlan, true, today.plusDays(10));
+        List<ResponseEntity<JsonNode>> both = atOnce(
+                () -> withPassword(b.api(), "/api/v1/plan/modules/lending/stop", b.ownerSession()),
+                () -> withPassword(b.api(), "/api/v1/plan/modules/retail/stop", b.ownerSession()));
+        assertThat(both.stream().map(r -> r.getStatusCode().value()).sorted().toList())
+                .as("%s", both)
+                .containsExactly(201, 422);
+        assertThat(both.stream()
+                        .filter(r -> r.getStatusCode().value() == 422)
+                        .findFirst()
+                        .orElseThrow()
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("last_module");
+
+        Business c = business(bothPlan, true, today.plusDays(10));
+        List<ResponseEntity<JsonNode>> same = atOnce(
+                () -> withPassword(c.api(), "/api/v1/plan/modules/retail/stop", c.ownerSession()),
+                () -> withPassword(c.api(), "/api/v1/plan/modules/retail/stop", c.ownerSession()));
+        assertThat(same.stream().map(r -> r.getStatusCode().value()).sorted().toList())
+                .as("%s", same)
+                .containsExactly(201, 409);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM subscription_scheduled_changes WHERE tenant_id IN (?, ?)")
+                        .params(b.t().tenantId(), c.t().tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(2);
+    }
+
+    @SafeVarargs
+    static List<ResponseEntity<JsonNode>> atOnce(Callable<ResponseEntity<JsonNode>>... calls) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(calls.length);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<ResponseEntity<JsonNode>>> futures = new ArrayList<>();
+            for (Callable<ResponseEntity<JsonNode>> call : calls) {
+                futures.add(pool.submit(() -> {
+                    start.await();
+                    return call.call();
+                }));
+            }
+            start.countDown();
+            List<ResponseEntity<JsonNode>> results = new ArrayList<>();
+            for (Future<ResponseEntity<JsonNode>> f : futures) {
+                results.add(f.get(60, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** A scheduled stop that has nothing left to switch off is closed as undone, not applied. */
+    @Test
+    void aStopThatChangesNothingIsClosedAsUndone() {
+        LocalDate paidUntil = today.plusDays(10);
+        Business b = business(bothPlan, true, paidUntil);
+        String id = withPassword(b.api(), "/api/v1/plan/modules/retail/stop", b.ownerSession())
+                .getBody()
+                .get("id")
+                .asString();
+        JdbcCall.run("DELETE FROM tenant_modules WHERE tenant_id = ? AND module_key = 'retail'", b.t().tenantId());
+
+        assertThat(applyDue(b.t().tenantId(), paidUntil.plusDays(1))).isZero();
+
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM subscription_scheduled_changes WHERE id = ?::uuid")
+                        .param(id)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("undone");
+        assertThat(modules(b.t().tenantId())).containsExactly("lending");
+        assertThat(platformAudits("platform.tenant.plan_change_applied", b.t().tenantId()))
+                .isZero();
     }
 
     /**

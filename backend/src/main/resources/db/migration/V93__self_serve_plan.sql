@@ -155,6 +155,26 @@ BEGIN
 END
 $$;
 
+-- The Owner's plan change takes the subscription's row lock before it checks and writes (bms_app may only read
+-- subscriptions, and SELECT ... FOR UPDATE needs UPDATE), so two changes sent at once are made one after the other and the
+-- second sees the first. A business with no subscription row yet takes a transaction advisory lock on its id instead.
+-- Bound to its own tenant only. Returns the subscription's status, or null.
+CREATE FUNCTION app_lock_subscription(p_tenant_id uuid) RETURNS text
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+    v_status text;
+BEGIN
+    IF nullif(current_setting('app.tenant_id', true), '') IS DISTINCT FROM p_tenant_id::text THEN
+        RAISE EXCEPTION 'a subscription is locked inside its own tenant only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    SELECT status INTO v_status FROM subscriptions WHERE tenant_id = p_tenant_id FOR UPDATE;
+    IF NOT FOUND THEN
+        PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id::text, 0));
+    END IF;
+    RETURN v_status;
+END
+$$;
+
 -- V2's resolver: a business whose Owner's cancellation took effect answers 'ended' instead of 'suspended', so the read
 -- only refusal names the end of the subscription rather than a suspension by the operator. A scheduled cancellation whose
 -- day has come in the business's own time zone answers 'ended' too, so read only never waits for the quarter-hour job.
@@ -284,11 +304,13 @@ END
 $$;
 
 REVOKE ALL ON FUNCTION platform_end_subscription(uuid, date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app_lock_subscription(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_module_requests(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_module_request_tenant(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_scheduled_changes() FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_tenants_with_due_changes(date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform_end_subscription(uuid, date) TO bms_app;
+GRANT EXECUTE ON FUNCTION app_lock_subscription(uuid) TO bms_app;
 GRANT EXECUTE ON FUNCTION platform_module_requests(text) TO bms_app;
 GRANT EXECUTE ON FUNCTION platform_module_request_tenant(uuid) TO bms_app;
 GRANT EXECUTE ON FUNCTION platform_scheduled_changes() TO bms_app;

@@ -1406,6 +1406,9 @@ applies the scheduled changes on their day in each business's time zone.
 | POST | `/plan/cancel` | `core.settings.manage`, Owner only | `{totp_code}` or `{password}`. 201 `PlanScheduledChange`, as for a stop; 409 `change_already_scheduled` |
 | POST | `/plan/changes/{change_id}/undo` | `core.settings.manage`, Owner only | The change goes to `undone`; 422 `change_not_scheduled`, `change_already_due`; 404 for another business's |
 
+A stop and a cancellation take the subscription's row lock (`app_lock_subscription`, V93) and check again under it, so two sent at
+once are made one after the other. A scheduled stop that finds nothing to switch off on its day is closed `undone`, not `applied`.
+
 After a cancellation's end date every state-changing request of the business answers 423 `subscription_ended`, except staff
 sign-in, MFA, refresh, sign-out, `POST /audit-events/export` and `POST /report-runs`.
 
