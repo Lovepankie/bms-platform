@@ -113,7 +113,10 @@ class BrandingService implements Letterheads {
     @Override
     @Transactional(readOnly = true)
     public Letterhead forBranch(UUID branchId) {
-        return letterhead(branchId == null ? Optional.empty() : branchLogo(branchId));
+        return letterhead(
+                branchId == null
+                        ? Optional.empty()
+                        : branchLogo(branchId).map(l -> new ShopLogo(l, BranchService.logoUrl(branchId, l.id()))));
     }
 
     @Override
@@ -122,22 +125,24 @@ class BrandingService implements Letterheads {
         return letterhead(
                 code == null
                         ? Optional.empty()
-                        : branches.logoDocumentIdByCode(code).flatMap(this::servable));
+                        : branches.logoByCode(code)
+                                .flatMap(b -> servable(b.documentId())
+                                        .map(l -> new ShopLogo(l, BranchService.logoUrl(b.branchId(), l.id())))));
     }
 
     /**
      * The shop's own logo when its bytes can be read, else the business logo (issue #461, ADR-068): a shop logo whose stored file
      * is gone or unreadable falls back to the business logo rather than leaving the document without one.
      */
-    private Letterhead letterhead(Optional<Logo> branchLogo) {
+    private Letterhead letterhead(Optional<ShopLogo> branchLogo) {
         SettingsResponse s = settings.current();
         String colour = s.themePrimary() != null
                         && BrandColour.readableText(s.themePrimary()).isPresent()
                 ? s.themePrimary().toUpperCase()
                 : DEFAULT_BRAND;
-        Optional<Letterheads.Logo> logo = branchLogo.flatMap(this::letterheadLogo);
+        Optional<Letterheads.Logo> logo = branchLogo.flatMap(b -> letterheadLogo(b.logo(), b.path()));
         if (logo.isEmpty()) {
-            logo = logo().flatMap(this::letterheadLogo);
+            logo = logo().flatMap(l -> letterheadLogo(l, LOGO_PATH + "?v=" + l.id()));
         }
         return new Letterhead(
                 s.displayName(),
@@ -147,10 +152,13 @@ class BrandingService implements Letterheads {
                 logo);
     }
 
+    /** A shop's own logo with the path it is served at. */
+    private record ShopLogo(Logo logo, String path) {}
+
     /** A logo's bytes for a document, or empty when they cannot be read: a document without its logo is better than none. */
-    private Optional<Letterheads.Logo> letterheadLogo(Logo l) {
+    private Optional<Letterheads.Logo> letterheadLogo(Logo l, String path) {
         try {
-            return bytes(l).map(b -> new Letterheads.Logo(l.meta().contentType(), b));
+            return bytes(l).map(b -> new Letterheads.Logo(l.meta().contentType(), b, path));
         } catch (ApiException e) {
             log.warn("a logo is unavailable for a generated document: {}", e.code());
             return Optional.empty();

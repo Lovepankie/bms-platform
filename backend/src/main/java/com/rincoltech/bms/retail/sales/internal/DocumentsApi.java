@@ -298,4 +298,99 @@ final class DocumentsApi {
 
             @Schema(description = "The sale's version; it changes with a payment or a return")
             int saleVersion) {}
+
+    /**
+     * The printed receipt for the screen's preview (issue #500), asked for only when View receipt is tapped, so the facts
+     * above stay a cheap read for Share and WhatsApp. Without {@code printed} the receipt could not be laid out for the
+     * screen, and the screen offers the PDF instead.
+     */
+    @Schema(name = "RetailReceiptPreview")
+    record ReceiptPreview(
+            UUID saleId,
+
+            @Schema(description = "The sale's version the receipt was laid out at")
+            int saleVersion,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = "What the receipt PDF prints, in its order and already formatted; absent when it"
+                            + " could not be laid out, and the screen then offers the PDF")
+            ReceiptPrint printed) {}
+
+    /**
+     * What the receipt PDF prints (issue #500), read from the very model its template renders, so the screen shows what
+     * the buyer gets: the letterhead, the sale, the lines, the totals, the returns and the footer. Money is formatted as
+     * on the PDF (UGX without decimals).
+     */
+    @Schema(name = "RetailReceiptPrint")
+    record ReceiptPrint(
+            @Schema(description = "RECEIPT, or RECEIPT AFTER RETURNS")
+            String title,
+
+            String number,
+
+            @Schema(description = "The day the receipt was made, as printed")
+            String date,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description = "The same-origin URL of the logo the receipt PDF prints: the shop's own when its"
+                            + " stored file can be read, else the business logo; absent when the PDF prints none."
+                            + " Versioned so the browser caches it, and public, so an image tag loads it")
+            String logoUrl,
+
+            String businessName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String branchName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String branchLocation,
+            String buyerName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String buyerContact,
+            String saleNo,
+            String saleDate,
+            String payment,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String dueDate,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String priceList,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String quotation,
+            String currency,
+            List<ReceiptPrintLine> lines,
+            String total,
+            String totalWords,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String status,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String due,
+
+            @Schema(description = "One line for each credit note, oldest first")
+            List<String> returns,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "The net after returns")
+            String net,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String notes,
+
+            String issuedBy,
+            String issuedOn,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "The received signature line as printed, such as Received by Test Buyer")
+            String received,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "The receipt footer")
+            String footer) {}
+
+    @Schema(name = "RetailReceiptPrintLine")
+    record ReceiptPrintLine(
+            int no,
+            String code,
+            String description,
+
+            @Schema(description = "The line under the description as printed: the code, and the price list after a bar")
+            String detail,
+
+            @Schema(description = "The quantity and unit as sold, such as 5 carton, or 5 alone without a unit")
+            String quantity,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "A pack in base units, such as = 60 piece")
+            String pack,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) String priceList,
+            String unitPrice,
+            String amount) {}
 }

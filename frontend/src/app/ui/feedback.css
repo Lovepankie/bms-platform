@@ -235,6 +235,164 @@
   }
 }
 
+/* View receipt (Hillary, 23 Oct 2026; issue #500): the receipt as the PDF prints it, drawn like a printed slip. */
+.receipt-preview {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+}
+
+.receipt-preview[hidden] {
+  display: none;
+}
+
+.receipt-paper {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.receipt-paper p,
+.receipt-paper dl,
+.receipt-paper table {
+  margin: 0;
+}
+
+.receipt-paper .num {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.receipt-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-2);
+  align-items: start;
+}
+
+.receipt-logo {
+  max-width: 72px;
+  max-height: 48px;
+  object-fit: contain;
+}
+
+.receipt-business,
+.receipt-strong,
+.receipt-no {
+  font-weight: var(--weight-bold);
+}
+
+.receipt-docline {
+  text-align: end;
+}
+
+.receipt-title {
+  margin: 0;
+  padding-block: var(--space-2);
+  border-block: 1px solid var(--color-border-strong);
+  text-align: center;
+  font-size: var(--text-base);
+  letter-spacing: 0.08em;
+}
+
+.receipt-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+}
+
+.receipt-facts dt {
+  color: var(--color-text-muted);
+}
+
+.receipt-facts dd {
+  margin: 0;
+  text-align: end;
+}
+
+.receipt-lines {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.receipt-lines th {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+  font-size: var(--text-xs);
+  text-align: start;
+  vertical-align: bottom;
+  padding: 0 var(--space-1) var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.receipt-lines td {
+  vertical-align: top;
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.receipt-lines th:first-child,
+.receipt-lines td:first-child {
+  padding-inline-start: 0;
+}
+
+.receipt-lines th:last-child,
+.receipt-lines td:last-child {
+  padding-inline-end: 0;
+}
+
+/* A column head may wrap, so the item column keeps its room on a phone; the figures under it never do. */
+.receipt-lines th.num {
+  white-space: normal;
+}
+
+.receipt-total {
+  display: flex;
+  justify-content: space-between;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-base);
+}
+
+.receipt-words {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
+.receipt-box {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.receipt-footer {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.receipt-download {
+  background: none;
+  border: 0;
+  padding: var(--space-2);
+  color: var(--color-link);
+  text-decoration: underline;
+  font: inherit;
+  cursor: pointer;
+}
+
 /* A line just added to a sale flashes once, so the eye finds it (Hillary, 23 Oct 2026). The flash is its own element,
    keyed by the add, so a repeat scan flashes again and the card never keeps a marker. */
 .line-card {

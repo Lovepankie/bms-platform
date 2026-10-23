@@ -515,13 +515,15 @@ class BranchService implements BranchProvisioning {
 
     /** As {@link #logoDocumentId} by the branch code, which never changes: what an issued document's snapshot keeps. */
     @Transactional(readOnly = true)
-    Optional<UUID> logoDocumentIdByCode(String code) {
-        return jdbc.sql("SELECT logo_document_id FROM branches WHERE code = ?")
+    Optional<BranchLogo> logoByCode(String code) {
+        return jdbc.sql("SELECT id, logo_document_id FROM branches WHERE code = ? AND logo_document_id IS NOT NULL")
                 .param(code)
-                .query((rs, n) -> Optional.ofNullable(rs.getObject(1, UUID.class)))
-                .optional()
-                .flatMap(o -> o);
+                .query((rs, n) -> new BranchLogo(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)))
+                .optional();
     }
+
+    /** A branch with its logo document, for the path the logo is served at (issue #500). */
+    record BranchLogo(UUID branchId, UUID documentId) {}
 
     static final String LOGO_PATH = "/api/v1/branches/%s/logo?v=%s";
 

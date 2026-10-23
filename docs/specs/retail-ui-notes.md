@@ -1241,6 +1241,19 @@ facts (`GET /retail/sales/{sale_id}/receipt`) and shows the server's refusal in 
 whose goods were all taken back. The facts and the PDF are fetched again when the sale's version, paid amount or balance
 changes, so after a payment on the same screen the next share sends the new receipt.
 
+- **View receipt** (issue #500) shows the receipt on the screen as the PDF prints it, in the PDF's order: the logo (the one the PDF
+  prints: the shop's when its stored file can be read, else the business's, by its public cacheable URL), the business, branch and address, the number and date, the title, Bill to, the
+  sale, payment, due date and price list, the items as the PDF's table (No, Item with the code and price list line under it, Quantity with the pack under it, Unit
+  price and Amount), the total in figures and
+  words, the payment status with what was paid and the balance, the credit notes and the net after returns, the notes, Issued
+  by, the received line and the receipt footer. Every one of these strings, the received line and the code and price list line
+  included, is the server's own from the PDF's model; the screen joins and words none of them. It is fetched only when the button is tapped, from
+  `GET /retail/sales/{sale_id}/receipt/printed`, which the server reads off the PDF's own model, so the receipt facts stay a
+  cheap read for Share and WhatsApp and no PDF is fetched to show it: a phone's browser often cannot show a PDF inline (Android
+  Chrome shows a blank box, iOS Safari only the first page). When the receipt cannot be laid out the preview says so and offers
+  **Download the PDF**. The button keeps its label and says open or closed through `aria-expanded` and `aria-controls`; a
+  payment or a return on the same screen closes the preview. Under it, **Download the PDF** fetches the real PDF; it and Share
+  receipt share one fetch, so tapping both fetches the PDF once.
 - **Share receipt** fetches `GET /retail/sales/{sale_id}/receipt/pdf` (never stored, documents capability on or off) and hands the
   PDF to the phone's share sheet as `Receipt <sale no>.pdf` with the caption as its text. On an iPhone (Safari or the installed
   app) and on an Android phone (Chrome or the installed app) the share sheet lists WhatsApp, Gmail, Messages, Telegram and the rest.

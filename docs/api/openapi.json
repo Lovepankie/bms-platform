@@ -16339,6 +16339,160 @@
         },
         "required" : [ "lines", "valid_until" ]
       },
+      "RetailReceiptPreview" : {
+        "properties" : {
+          "printed" : {
+            "$ref" : "#/components/schemas/RetailReceiptPrint"
+          },
+          "sale_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sale_version" : {
+            "description" : "The sale's version the receipt was laid out at",
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "RetailReceiptPrint" : {
+        "description" : "What the receipt PDF prints, in its order and already formatted; absent when it could not be laid out, and the screen then offers the PDF",
+        "properties" : {
+          "branch_location" : {
+            "type" : "string"
+          },
+          "branch_name" : {
+            "type" : "string"
+          },
+          "business_name" : {
+            "type" : "string"
+          },
+          "buyer_contact" : {
+            "type" : "string"
+          },
+          "buyer_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "date" : {
+            "description" : "The day the receipt was made, as printed",
+            "type" : "string"
+          },
+          "due" : {
+            "type" : "string"
+          },
+          "due_date" : {
+            "type" : "string"
+          },
+          "footer" : {
+            "description" : "The receipt footer",
+            "type" : "string"
+          },
+          "issued_by" : {
+            "type" : "string"
+          },
+          "issued_on" : {
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailReceiptPrintLine"
+            },
+            "type" : "array"
+          },
+          "logo_url" : {
+            "description" : "The same-origin URL of the logo the receipt PDF prints: the shop's own when its stored file can be read, else the business logo; absent when the PDF prints none. Versioned so the browser caches it, and public, so an image tag loads it",
+            "type" : "string"
+          },
+          "net" : {
+            "description" : "The net after returns",
+            "type" : "string"
+          },
+          "notes" : {
+            "type" : "string"
+          },
+          "number" : {
+            "type" : "string"
+          },
+          "payment" : {
+            "type" : "string"
+          },
+          "price_list" : {
+            "type" : "string"
+          },
+          "quotation" : {
+            "type" : "string"
+          },
+          "received" : {
+            "description" : "The received signature line as printed, such as Received by Test Buyer",
+            "type" : "string"
+          },
+          "returns" : {
+            "description" : "One line for each credit note, oldest first",
+            "items" : {
+              "description" : "One line for each credit note, oldest first",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "sale_date" : {
+            "type" : "string"
+          },
+          "sale_no" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "RECEIPT, or RECEIPT AFTER RETURNS",
+            "type" : "string"
+          },
+          "total" : {
+            "type" : "string"
+          },
+          "total_words" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailReceiptPrintLine" : {
+        "properties" : {
+          "amount" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "description" : "The line under the description as printed: the code, and the price list after a bar",
+            "type" : "string"
+          },
+          "no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pack" : {
+            "description" : "A pack in base units, such as = 60 piece",
+            "type" : "string"
+          },
+          "price_list" : {
+            "type" : "string"
+          },
+          "quantity" : {
+            "description" : "The quantity and unit as sold, such as 5 carton, or 5 alone without a unit",
+            "type" : "string"
+          },
+          "unit_price" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailRepayment" : {
         "properties" : {
           "advance_id" : {
@@ -40816,6 +40970,34 @@
           }
         },
         "summary" : "The receipt of a sale as a PDF to share from the seller's phone, rendered now and never stored; a seller who sees only their own figures gets their own sales only (issue #439)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/receipt/printed" : {
+      "get" : {
+        "operationId" : "getRetailSaleReceiptPrinted",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptPreview"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "What a sale's receipt PDF prints, laid out for the screen's preview and asked for only when View receipt is tapped; the same check as the PDF, and without printed when it cannot be laid out (issue #500)",
         "tags" : [ "retail-documents" ]
       }
     },

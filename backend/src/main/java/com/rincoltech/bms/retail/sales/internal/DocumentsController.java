@@ -207,6 +207,19 @@ class DocumentsController {
         return service.receiptFacts(saleId);
     }
 
+    // JUSTIFICATION-A3: the printed receipt for the screen's preview, apart so the facts above stay a cheap read.
+    @GetMapping("/sales/{sale_id}/receipt/printed")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary = "What a sale's receipt PDF prints, laid out for the screen's preview and asked for only when View"
+                    + " receipt is tapped; the same check as the PDF, and without printed when it cannot be laid out"
+                    + " (issue #500)",
+            operationId = "getRetailSaleReceiptPrinted")
+    DocumentsApi.ReceiptPreview receiptPrinted(@PathVariable("sale_id") UUID saleId, HttpServletResponse response) {
+        NoStore.apply(response);
+        return service.receiptPreview(saleId);
+    }
+
     // JUSTIFICATION-A3: one new read route; the same PDF response shape as the statement route above.
     @GetMapping(
             path = "/sales/{sale_id}/receipt/pdf",

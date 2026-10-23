@@ -401,8 +401,9 @@ class BranchLogoIT extends IntegrationTest {
         UUID atHeadOffice = RetailTestSupport.id(admin.sell(t.headOffice(), "cash", product, "1"));
         UUID atShop = RetailTestSupport.id(admin.sell(t.secondBranch(), "cash", product, "1"));
 
-        // No logo anywhere: the receipt has none.
+        // No logo anywhere: the receipt has none, and neither has the receipt on the screen.
         assertThat(images(receipt(admin, atShop))).isEmpty();
+        assertThat(printed(admin, atShop).has("logo_url")).isFalse();
 
         businessLogo(BUSINESS);
         assertThat(upload(t.secondBranch(), ImageFixtures.png(256, 256, SHOP)).getStatusCode())
@@ -411,6 +412,15 @@ class BranchLogoIT extends IntegrationTest {
         List<Color> shopReceipt = images(receipt(admin, atShop));
         assertThat(shopReceipt).hasSize(1);
         assertThat(near(shopReceipt.get(0), SHOP)).isTrue();
+
+        // The receipt on the screen gives the same logo by its cacheable URL, never its bytes (issue #500).
+        assertThat(printedLogo(admin, atShop)).startsWith("/api/v1/branches/" + t.secondBranch() + "/logo?v=");
+        assertThat(printedLogo(admin, atHeadOffice)).startsWith("/api/v1/branding/logo?v=");
+        // An image tag sends no Authorization header: both URLs load without one, and without a cookie (issue #500).
+        assertThat(near(centre(logoWithoutCredentials(printedLogo(admin, atShop))), SHOP))
+                .isTrue();
+        assertThat(near(centre(logoWithoutCredentials(printedLogo(admin, atHeadOffice))), BUSINESS))
+                .isTrue();
 
         // The head office has none of its own, so it falls back to the business logo.
         List<Color> headOfficeReceipt = images(receipt(admin, atHeadOffice));
@@ -422,6 +432,24 @@ class BranchLogoIT extends IntegrationTest {
         List<Color> after = images(receipt(admin, atShop));
         assertThat(after).hasSize(1);
         assertThat(near(after.get(0), BUSINESS)).isTrue();
+    }
+
+    static JsonNode printed(RetailTestSupport who, UUID sale) {
+        return who.get("/sales/" + sale + "/receipt/printed", RetailTestSupport.ADMIN)
+                .getBody()
+                .get("printed");
+    }
+
+    static String printedLogo(RetailTestSupport who, UUID sale) {
+        return printed(who, sale).get("logo_url").asString();
+    }
+
+    /** The logo as an image tag loads it: no Authorization header, no cookie, the business from the host. */
+    byte[] logoWithoutCredentials(String url) {
+        ResponseEntity<byte[]> image = publicGet(url, t.slug(), byte[].class);
+        assertThat(image.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(image.getHeaders().getContentType()).isEqualTo(MediaType.IMAGE_PNG);
+        return image.getBody();
     }
 
     @Test
@@ -442,6 +470,11 @@ class BranchLogoIT extends IntegrationTest {
         List<Color> receipt = images(receipt(admin, atShop));
         assertThat(receipt).hasSize(1);
         assertThat(near(receipt.get(0), BUSINESS)).isTrue();
+
+        // The receipt on the screen follows the PDF: the business logo, never the shop's missing one (issue #500).
+        String printed = printedLogo(admin, atShop);
+        assertThat(printed).startsWith("/api/v1/branding/logo?v=");
+        assertThat(near(centre(logoWithoutCredentials(printed)), BUSINESS)).isTrue();
     }
 
     @Autowired

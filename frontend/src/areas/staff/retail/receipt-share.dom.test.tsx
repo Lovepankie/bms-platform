@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Sale, SaleReceipt } from '../../../api/retail';
+import type { ReceiptPreview, Sale, SaleReceipt } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
@@ -15,6 +15,7 @@ vi.setConfig({ testTimeout: 20000 });
 
 const saleReceiptPdf = vi.fn();
 const saleReceipt = vi.fn();
+const saleReceiptPrinted = vi.fn();
 const updateCustomer = vi.fn();
 
 vi.mock('../../../api/retail', async (original) => {
@@ -24,12 +25,13 @@ vi.mock('../../../api/retail', async (original) => {
     retail: {
       saleReceiptPdf: (...a: unknown[]) => saleReceiptPdf(...a),
       saleReceipt: (...a: unknown[]) => saleReceipt(...a),
+      saleReceiptPrinted: (...a: unknown[]) => saleReceiptPrinted(...a),
       updateCustomer: (...a: unknown[]) => updateCustomer(...a),
     },
   };
 });
 
-const { ShareReceipt, DOWNLOADED, SHARE_AGAIN, SHARE_REFUSED, WHATSAPP_HINT } = await import('./receipt-share');
+const { ShareReceipt, NOT_DRAWN, DOWNLOADED, SHARE_AGAIN, SHARE_REFUSED, WHATSAPP_HINT } = await import('./receipt-share');
 
 const seller = mockMe('sales');
 const admin = mockMe('admin');
@@ -43,6 +45,19 @@ const facts: SaleReceipt = {
   customer_has_contact: false, payment_method: 'cash', currency: 'UGX', total_minor: 25000, paid_minor: 25000, balance_minor: 0,
   returned_minor: 0, net_minor: 25000, credit_notes: [], sale_version: 1,
 };
+const preview: ReceiptPreview = {
+  sale_id: 's1', sale_version: 1,
+  printed: {
+    title: 'RECEIPT', number: 'RS00000007', date: '22 Oct 2026', logo_url: '/api/v1/branding/logo?v=test-1', business_name: 'Test Trading Ltd',
+    branch_name: 'Test Branch', branch_location: 'Plot 1 Test Road', buyer_name: 'Test Buyer 01', buyer_contact: '0700 000 031',
+    sale_no: 'RS00000007', sale_date: '22 Oct 2026', payment: 'Cash', currency: 'UGX',
+    lines: [
+      { no: 1, code: 'TST-01', description: 'Test Soap 500g', detail: 'TST-01  |  Wholesale', quantity: '5 carton', pack: '= 60 piece', price_list: 'Wholesale', unit_price: '5,000', amount: '25,000' },
+    ],
+    total: '25,000', total_words: 'Twenty five thousand Uganda shillings only', status: 'Paid in full by Cash.', returns: [],
+    issued_by: 'Test Seller 01', issued_on: '22 Oct 2026', received: 'Received by Test Buyer 01', footer: 'Thank you for shopping with us',
+  },
+};
 
 let open: ReturnType<typeof vi.fn>;
 let click: ReturnType<typeof vi.spyOn>;
@@ -50,6 +65,7 @@ let click: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   saleReceiptPdf.mockResolvedValue(new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }));
   saleReceipt.mockResolvedValue(facts);
+  saleReceiptPrinted.mockResolvedValue(preview);
   open = vi.fn();
   vi.stubGlobal('open', open);
   URL.createObjectURL = vi.fn(() => 'blob:receipt');
@@ -63,6 +79,7 @@ afterEach(() => {
   click.mockRestore();
   saleReceiptPdf.mockReset();
   saleReceipt.mockReset();
+  saleReceiptPrinted.mockReset();
   updateCustomer.mockReset();
   delete (navigator as { share?: unknown }).share;
   delete (navigator as { canShare?: unknown }).canShare;
@@ -96,6 +113,85 @@ const whatsAppButton = () => screen.findByRole('button', { name: 'WhatsApp custo
 const phoneBox = async () => (await screen.findByLabelText("Customer's WhatsApp number")) as HTMLInputElement;
 
 describe('Share receipt', () => {
+  it('fetches the printed receipt only when View receipt is tapped, shows it as printed, and hides it again', async () => {
+    screenOf(seller, sale);
+    const button = await screen.findByRole('button', { name: 'View receipt' });
+    expect(saleReceiptPrinted).not.toHaveBeenCalled();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    const region = document.getElementById(button.getAttribute('aria-controls') ?? '');
+    expect(region?.hidden).toBe(true);
+    fireEvent.click(button);
+    const paper = await screen.findByRole('article', { name: 'RECEIPT RS00000007' });
+    expect(saleReceiptPrinted).toHaveBeenCalledTimes(1);
+    expect(saleReceiptPrinted).toHaveBeenCalledWith('s1');
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(region?.hidden).toBe(false);
+    expect(paper.querySelector('img')?.getAttribute('src')).toBe('/api/v1/branding/logo?v=test-1');
+    expect(paper.textContent).toContain('Plot 1 Test Road');
+    // The lines are the PDF's items table, cell for cell, with the server's strings.
+    const items = within(paper).getByRole('table', { name: 'Items' });
+    expect(within(items).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['No', 'Item', 'Quantity', 'Unit price (UGX)', 'Amount (UGX)']);
+    expect(within(items).getAllByRole('cell').map((c) => c.textContent)).toEqual(['1', 'Test Soap 500gTST-01  |  Wholesale', '5 carton= 60 piece', '5,000', '25,000']);
+    expect(paper.textContent).toContain('Total (UGX)25,000');
+    expect(paper.textContent).toContain('Paid in full by Cash.');
+    expect(paper.textContent).toContain('Received by Test Buyer 01');
+    expect(paper.textContent).toContain('Thank you for shopping with us');
+    expect(saleReceiptPdf).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'View receipt' }));
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(saleReceiptPdf).not.toHaveBeenCalled();
+  });
+
+  it('offers the PDF when the receipt could not be laid out for the screen, and Share still works', async () => {
+    saleReceiptPrinted.mockResolvedValue({ sale_id: 's1', sale_version: 1 });
+    const share = sharing(true);
+    screenOf(seller, sale);
+    fireEvent.click(await screen.findByRole('button', { name: 'View receipt' }));
+    expect(await screen.findByText(NOT_DRAWN)).toBeTruthy();
+    expect(screen.queryByRole('article')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Download the PDF' }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    fireEvent.click(await shareButton());
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    expect(saleReceiptPdf).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the PDF when the printed receipt request fails', async () => {
+    saleReceiptPrinted.mockRejectedValue(new Error('boom'));
+    screenOf(seller, sale);
+    fireEvent.click(await screen.findByRole('button', { name: 'View receipt' }));
+    expect(await screen.findByText(NOT_DRAWN)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Download the PDF' })).toBeTruthy();
+  });
+
+  it('closes the preview when the sale changes, so it never shows a receipt that Share would not send', async () => {
+    const view = screenOf(seller, sale);
+    fireEvent.click(await screen.findByRole('button', { name: 'View receipt' }));
+    await screen.findByRole('article');
+    saleReceipt.mockResolvedValueOnce({ ...facts, sale_version: 2 });
+    view.again({ ...sale, version: 2 });
+    await waitFor(() => expect(saleReceipt).toHaveBeenCalledTimes(2));
+    const button = await screen.findByRole('button', { name: 'View receipt' });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('article')).toBeNull();
+  });
+
+  it('fetches the PDF once when Download the PDF and Share receipt are tapped together', async () => {
+    let arrive: (b: Blob) => void = () => {};
+    saleReceiptPdf.mockReturnValue(new Promise<Blob>((r) => { arrive = r; }));
+    const share = sharing(true);
+    screenOf(seller, sale);
+    fireEvent.click(await screen.findByRole('button', { name: 'View receipt' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Download the PDF' }));
+    fireEvent.click(await shareButton());
+    arrive(new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(saleReceiptPdf).toHaveBeenCalledTimes(1);
+    expect(share.mock.calls[0]?.[0]?.files?.[0]?.name).toBe('Receipt RS00000007.pdf');
+  });
+
   it('hands the PDF to the share sheet as a file, with the caption from the receipt facts', async () => {
     const share = sharing(true);
     screenOf(seller, sale);

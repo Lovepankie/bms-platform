@@ -102,4 +102,18 @@ describe('documents in the mock', () => {
     await expect(api.cancelQuotation(q.id ?? '', 'Again')).rejects.toMatchObject({ code: 'quotation_not_open' });
     await expect(api.convertQuotation(q.id ?? '', { payment_method: 'cash' }, 'c1')).rejects.toMatchObject({ code: 'quotation_not_open' });
   });
+
+  it('lays out a sample printed receipt for View receipt, so it can be seen offline (issue #500)', async () => {
+    const api = createMockRetail();
+    const [bulb] = await api.listProducts({ query: 'P003' });
+    const made = await sale(api, bulb?.id ?? '', hq, '2');
+    const { printed, sale_version } = await api.saleReceiptPrinted(made.id ?? '');
+    expect(sale_version).toBe(made.version ?? 1);
+    expect(printed).toMatchObject({ title: 'RECEIPT', number: made.sale_no, sale_no: made.sale_no, payment: 'Cash', currency: 'UGX', status: 'Paid in full by Cash.' });
+    expect(printed?.lines).toHaveLength(1);
+    expect(printed?.lines?.[0]).toMatchObject({ no: 1, description: bulb?.description, detail: bulb?.code, quantity: '2' });
+    expect(printed?.total).toBe((made.total_minor ?? 0).toLocaleString('en-US'));
+    expect(printed?.received).toBe(`Received by ${printed?.buyer_name}`);
+    expect(printed?.date).toMatch(/^\d{1,2} [A-Z][a-z]{2} \d{4}$/);
+  });
 });

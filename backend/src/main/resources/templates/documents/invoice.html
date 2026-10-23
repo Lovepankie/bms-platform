@@ -38,8 +38,8 @@
     <tbody>
       <tr th:each="l : ${lines}">
         <td th:text="${l.no}">1</td>
-        <td><span th:text="${l.description}">Item</span><br/><span class="muted" th:text="${l.code}">CODE</span><span class="muted" th:if="${l.priceList != null}" th:text="${'  |  ' + l.priceList}"></span></td>
-        <td class="num"><span th:text="${l.qty + ' ' + l.unit}">5 carton</span><br th:if="${l.pack != null}"/><span class="muted" th:if="${l.pack != null}" th:text="${l.pack}">60 pieces</span></td>
+        <td><span th:text="${l.description}">Item</span><br/><span class="muted" th:text="${l.detail}">CODE  |  Wholesale</span></td>
+        <td class="num"><span th:text="${l.quantity}">5 carton</span><br th:if="${l.pack != null}"/><span class="muted" th:if="${l.pack != null}" th:text="${l.pack}">60 pieces</span></td>
         <td class="num" th:text="${l.unitPrice}">1,000</td>
         <td class="num" th:text="${l.total}">5,000</td>
       </tr>
@@ -62,7 +62,7 @@
     <tr>
       <td><div class="signline"><span th:text="${'Issued by ' + signs.issuedBy}">Issued by</span><br/><span class="muted" th:text="${signs.issuedOn}">date</span></div></td>
       <td></td>
-      <td class="last"><div class="signline"><span th:text="${'Received by ' + buyer.name}">Received by</span><br/><span class="muted">Signature and date</span></div></td>
+      <td class="last"><div class="signline"><span th:text="${signs.received}">Received by</span><br/><span class="muted">Signature and date</span></div></td>
     </tr>
   </table>
 </body>

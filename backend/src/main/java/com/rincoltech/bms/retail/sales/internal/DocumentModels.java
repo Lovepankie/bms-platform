@@ -78,6 +78,7 @@ class DocumentModels {
         return m;
     }
 
+    @SuppressWarnings("unchecked")
     private void invoice(DocumentSnapshot s, Map<String, Object> m) {
         DocumentSnapshot.SaleRef sale = s.sale();
         Map<String, Object> ref = new LinkedHashMap<>();
@@ -110,6 +111,9 @@ class DocumentModels {
             totals.put("due", null);
         }
         m.put("totals", totals);
+        // The received line as invoice.html prints it, which the receipt on the screen reads too (issue #500).
+        ((Map<String, Object>) m.get("signs"))
+                .put("received", "Received by " + ((Map<String, Object>) m.get("buyer")).get("name"));
     }
 
     // JUSTIFICATION-A3: the receipt to share (issue #439) is the invoice model with the sale's own balance and returns.
@@ -177,6 +181,87 @@ class DocumentModels {
         return m;
     }
 
+    /**
+     * What the receipt PDF prints, read from its model (issue #500): the screen's preview shows the same values, every one
+     * the invoice template and its letterhead print. Read defensively, as the template does: a missing map or value is
+     * blank, never an error. The logo is given by the URL of the very logo the PDF prints ({@code lh.logoUrl}: the shop's
+     * own when its file can be read, else the business logo, else none), which the browser caches, not its bytes.
+     */
+    DocumentsApi.ReceiptPrint printed(Map<String, Object> m) {
+        Map<String, Object> lh = map(m.get("lh"));
+        Map<String, Object> branch = map(m.get("branch"));
+        Map<String, Object> doc = map(m.get("doc"));
+        Map<String, Object> buyer = map(m.get("buyer"));
+        Map<String, Object> ref = map(m.get("ref"));
+        Map<String, Object> totals = map(m.get("totals"));
+        Map<String, Object> signs = map(m.get("signs"));
+        Map<String, Object> returns = map(m.get("returns"));
+        List<DocumentsApi.ReceiptPrintLine> lines = new ArrayList<>();
+        for (Object o : list(m.get("lines"))) {
+            Map<String, Object> l = map(o);
+            lines.add(new DocumentsApi.ReceiptPrintLine(
+                    l.get("no") instanceof Number n ? n.intValue() : lines.size() + 1,
+                    text(l.get("code")),
+                    text(l.get("description")),
+                    text(l.get("detail")),
+                    text(l.get("quantity")),
+                    blank(l.get("pack")),
+                    blank(l.get("priceList")),
+                    text(l.get("unitPrice")),
+                    text(l.get("total"))));
+        }
+        List<String> returned = new ArrayList<>();
+        for (Object o : list(returns.get("lines"))) {
+            returned.add(text(o));
+        }
+        return new DocumentsApi.ReceiptPrint(
+                text(doc.get("title")),
+                text(doc.get("number")),
+                text(doc.get("date")),
+                blank(lh.get("logoUrl")),
+                text(lh.get("name")),
+                blank(branch.get("name")),
+                blank(branch.get("location")),
+                text(buyer.get("name")),
+                blank(buyer.get("contact")),
+                text(ref.get("saleNo")),
+                text(ref.get("saleDate")),
+                text(ref.get("payment")),
+                blank(ref.get("dueDate")),
+                blank(ref.get("priceList")),
+                blank(ref.get("quotation")),
+                text(m.get("currency")),
+                lines,
+                text(totals.get("total")),
+                text(totals.get("words")),
+                blank(totals.get("status")),
+                blank(totals.get("due")),
+                returned,
+                returns.isEmpty() ? null : blank(returns.get("net")),
+                blank(m.get("notes")),
+                text(signs.get("issuedBy")),
+                text(signs.get("issuedOn")),
+                blank(signs.get("received")),
+                blank(lh.get("footer")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> map(Object o) {
+        return o instanceof Map<?, ?> found ? (Map<String, Object>) found : Map.of();
+    }
+
+    private static List<?> list(Object o) {
+        return o instanceof List<?> found ? found : List.of();
+    }
+
+    private static String text(Object o) {
+        return o == null ? "" : o.toString();
+    }
+
+    private static String blank(Object o) {
+        return o == null || o.toString().isBlank() ? null : o.toString();
+    }
+
     private void deliveryNote(DocumentSnapshot s, Map<String, Object> m) {
         Map<String, Object> ref = new LinkedHashMap<>();
         Map<String, Object> to = new LinkedHashMap<>();
@@ -237,10 +322,12 @@ class DocumentModels {
             m.put("description", l.description());
             m.put("qty", plain(l.qty()));
             m.put("unit", l.unit());
+            m.put("quantity", quantity(l.qty(), l.unit()));
             m.put("pack", l.baseQty() == null ? null : "= " + plain(l.baseQty()) + " " + l.baseUnit());
             m.put("unitPrice", l.unitPriceMinor() == null ? "" : money(l.unitPriceMinor(), s.currency()));
             m.put("total", money(l.totalMinor(), s.currency()));
             m.put("priceList", l.priceList());
+            m.put("detail", detail(l.code(), l.priceList()));
             out.add(m);
         }
         return out;
@@ -347,6 +434,7 @@ class DocumentModels {
                         .map(l -> "data:" + l.contentType() + ";base64,"
                                 + Base64.getEncoder().encodeToString(l.bytes()))
                         .orElse(null));
+        letterhead.put("logoUrl", lh.logo().map(Letterheads.Logo::path).orElse(null));
         Map<String, Object> place = new LinkedHashMap<>();
         place.put("name", branch.name());
         place.put("location", branch.location());
@@ -377,6 +465,18 @@ class DocumentModels {
     /** A quantity without trailing zeros: 5.000 prints as 5 and 2.500 as 2.5. */
     static String plain(String qty) {
         return qty == null ? "" : new BigDecimal(qty).stripTrailingZeros().toPlainString();
+    }
+
+    /** A quantity as a document prints it, with its unit when it has one: 5 carton, or 5 alone. */
+    static String quantity(String qty, String unit) {
+        String q = plain(qty);
+        return unit == null || unit.isBlank() ? q : q + " " + unit;
+    }
+
+    /** The muted line under a line's description on an invoice: the code, and the price list when it has one. */
+    static String detail(String code, String priceList) {
+        String c = code == null ? "" : code;
+        return priceList == null ? c : c + "  |  " + priceList;
     }
 
     /** A pale tint of the brand colour for alternate table rows: 88% white over it. */

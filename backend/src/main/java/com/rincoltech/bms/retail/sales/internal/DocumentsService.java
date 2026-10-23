@@ -42,6 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -78,6 +80,8 @@ class DocumentsService {
     static final int MAX_LIMIT = 200;
     /** A statement PDF is held in memory while it is laid out; the heap of the smallest host is about 224 MB. */
     static final int STATEMENT_PDF_MAX_LINES = 800;
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentsService.class);
 
     private final DocumentsRepository repo;
     private final SalesService sales;
@@ -776,6 +780,38 @@ class DocumentsService {
     }
 
     /**
+     * The printed receipt for the screen's preview (issue #500), asked for only when View receipt is tapped: the receipt
+     * PDF's own model read into what it prints, with the same check and refusals as the PDF. A model that cannot be read
+     * is logged and answered without {@code printed}, so the screen offers the PDF and Share is never affected.
+     */
+    DocumentsApi.ReceiptPreview receiptPreview(UUID saleId) {
+        return reading.execute(status -> {
+            Receipt r = receipt(saleId);
+            Sale sale = r.sale();
+            DocumentsApi.ReceiptPrint printed = null;
+            try {
+                printed = models.printed(receiptModel(r));
+            } catch (RuntimeException e) {
+                log.warn("The receipt of sale {} could not be laid out for the screen", sale.id(), e);
+            }
+            return new DocumentsApi.ReceiptPreview(sale.id(), sale.version(), printed);
+        });
+    }
+
+    /** The model of the receipt PDF, which the screen's preview reads too (issue #500). */
+    private Map<String, Object> receiptModel(Receipt r) {
+        Sale sale = r.sale();
+        DocumentSnapshot snapshot = saleSnapshot(sale, "invoice", sale.saleNo(), today(), true, null);
+        return models.receipt(
+                snapshot,
+                repo.userName(r.madeBy()),
+                r.paidMinor(),
+                sale.balanceMinor(),
+                r.returned(),
+                sale.totalMinor() - r.returnedMinor());
+    }
+
+    /**
      * The receipt of a sale as a PDF, for the seller to share from their own phone (issue #439, ADR-061): the invoice
      * layout titled RECEIPT under the sale's own number, with the balance the sale carries, the returns and the net, and
      * the seller who made the sale. Rendered now and never stored, numbered in no series and written to no table, so it
@@ -785,20 +821,7 @@ class DocumentsService {
      */
     byte[] receiptPdf(UUID saleId) {
         reading.executeWithoutResult(status -> receipt(saleId));
-        return documents.renderSharedPdf(
-                "invoice",
-                () -> reading.execute(status -> {
-                    Receipt r = receipt(saleId);
-                    Sale sale = r.sale();
-                    DocumentSnapshot snapshot = saleSnapshot(sale, "invoice", sale.saleNo(), today(), true, null);
-                    return models.receipt(
-                            snapshot,
-                            repo.userName(r.madeBy()),
-                            r.paidMinor(),
-                            sale.balanceMinor(),
-                            r.returned(),
-                            sale.totalMinor() - r.returnedMinor());
-                }));
+        return documents.renderSharedPdf("invoice", () -> reading.execute(status -> receiptModel(receipt(saleId))));
     }
 
     LocalDate today() {

@@ -37,5 +37,14 @@ public interface Letterheads {
     record Letterhead(
             String displayName, String brandColour, String textOnBrand, String receiptFooter, Optional<Logo> logo) {}
 
-    record Logo(String contentType, byte[] bytes) {}
+    /**
+     * @param path the same-origin, versioned path the logo is served at, publicly and cacheably: the shop's own
+     *     ({@code /api/v1/branches/<id>/logo?v=<id>}) or the business logo's, whichever these bytes are (issue #500)
+     */
+    record Logo(String contentType, byte[] bytes, String path) {
+
+        public Logo(String contentType, byte[] bytes) {
+            this(contentType, bytes, null);
+        }
+    }
 }

@@ -58,6 +58,7 @@ export type ImportResult = S['RetailProductImportResult'];
 export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
 export type SaleReceipt = S['RetailSaleReceipt'];
+export type ReceiptPreview = S['RetailReceiptPreview'];
 export type CustomerPage = S['RetailCustomerList'];
 /** Customer accounts (ADR-033, issue #196): the credit limit and terms, the statement, payment on account. Money is integer minor units. */
 export type CustomerAccount = S['RetailCustomerAccount'];
@@ -474,6 +475,8 @@ export interface RetailApi {
   saleReceiptPdf(saleId: string): Promise<Blob>;
   /** The facts of the receipt to share, as its PDF prints them (same check as the PDF; 422 for a voided, written-off or wholly returned sale). */
   saleReceipt(saleId: string): Promise<SaleReceipt>;
+  /** What the receipt PDF prints, for the screen's preview, asked for only when View receipt is tapped (issue #500); without `printed` when it could not be laid out. */
+  saleReceiptPrinted(saleId: string): Promise<ReceiptPreview>;
   /** Optional documents (the documents capability, issue #197); 404 capability_not_enabled while it is off. */
   listSaleDocuments(saleId: string): Promise<RetailDocument[]>;
   /** The invoice or delivery note of a sale, issued once; takes the Idempotency-Key of its button. */
@@ -1041,6 +1044,10 @@ const realRetail: RetailApi = {
 
   async saleReceipt(saleId) {
     return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}/receipt', { params: { path: { sale_id: saleId } } }));
+  },
+
+  async saleReceiptPrinted(saleId) {
+    return unwrap(await api.GET('/api/v1/retail/sales/{sale_id}/receipt/printed', { params: { path: { sale_id: saleId } } }));
   },
 
   async saleReceiptPdf(saleId) {

@@ -6450,6 +6450,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/sales/{sale_id}/receipt/printed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What a sale's receipt PDF prints, laid out for the screen's preview and asked for only when View receipt is tapped; the same check as the PDF, and without printed when it cannot be laid out (issue #500) */
+        get: operations["getRetailSaleReceiptPrinted"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/sales/{sale_id}/returns": {
         parameters: {
             query?: never;
@@ -15277,6 +15294,69 @@ export interface components {
              * @description Not before the quotation date
              */
             valid_until: string;
+        };
+        RetailReceiptPreview: {
+            printed?: components["schemas"]["RetailReceiptPrint"];
+            /** Format: uuid */
+            sale_id?: string;
+            /**
+             * Format: int32
+             * @description The sale's version the receipt was laid out at
+             */
+            sale_version?: number;
+        };
+        /** @description What the receipt PDF prints, in its order and already formatted; absent when it could not be laid out, and the screen then offers the PDF */
+        RetailReceiptPrint: {
+            branch_location?: string;
+            branch_name?: string;
+            business_name?: string;
+            buyer_contact?: string;
+            buyer_name?: string;
+            currency?: string;
+            /** @description The day the receipt was made, as printed */
+            date?: string;
+            due?: string;
+            due_date?: string;
+            /** @description The receipt footer */
+            footer?: string;
+            issued_by?: string;
+            issued_on?: string;
+            lines?: components["schemas"]["RetailReceiptPrintLine"][];
+            /** @description The same-origin URL of the logo the receipt PDF prints: the shop's own when its stored file can be read, else the business logo; absent when the PDF prints none. Versioned so the browser caches it, and public, so an image tag loads it */
+            logo_url?: string;
+            /** @description The net after returns */
+            net?: string;
+            notes?: string;
+            number?: string;
+            payment?: string;
+            price_list?: string;
+            quotation?: string;
+            /** @description The received signature line as printed, such as Received by Test Buyer */
+            received?: string;
+            /** @description One line for each credit note, oldest first */
+            returns?: string[];
+            sale_date?: string;
+            sale_no?: string;
+            status?: string;
+            /** @description RECEIPT, or RECEIPT AFTER RETURNS */
+            title?: string;
+            total?: string;
+            total_words?: string;
+        };
+        RetailReceiptPrintLine: {
+            amount?: string;
+            code?: string;
+            description?: string;
+            /** @description The line under the description as printed: the code, and the price list after a bar */
+            detail?: string;
+            /** Format: int32 */
+            no?: number;
+            /** @description A pack in base units, such as = 60 piece */
+            pack?: string;
+            price_list?: string;
+            /** @description The quantity and unit as sold, such as 5 carton, or 5 alone without a unit */
+            quantity?: string;
+            unit_price?: string;
         };
         RetailRepayment: {
             /** Format: uuid */
@@ -30049,6 +30129,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    getRetailSaleReceiptPrinted: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sale_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailReceiptPreview"];
                 };
             };
         };
