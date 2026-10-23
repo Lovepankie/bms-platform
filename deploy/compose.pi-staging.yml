@@ -279,7 +279,8 @@ services:
       - |
         set -eu
         case "$${KEEP_DAYS}" in
-          ''|*[!0-9]*) echo "BMS_KEEP_ASSETS_DAYS is not a whole number of days: '$${KEEP_DAYS}'" >&2; exit 1 ;;
+          # A leading zero would be read as octal by $$(( )).
+          ''|*[!0-9]*|0[0-9]*) echo "BMS_KEEP_ASSETS_DAYS is not a whole number of days: '$${KEEP_DAYS}'" >&2; exit 1 ;;
         esac
         # Prune first, so the copy never raises the peak; -mmin, since -mtime +14 means 15 whole days.
         find /previous -type f \( -name '*.part' -o -mmin +$$(( KEEP_DAYS * 1440 )) \) -delete
