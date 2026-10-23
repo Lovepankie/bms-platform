@@ -5924,6 +5924,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/reports/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shop Home summary: today's sales and takings by way of paying, credit owed, top items, each shop, low stock and open orders (issue #485)
+         * @description One read for the Shop cards on Home (ADR-076). The money parts (sales_today, takings, credit_owed, top_items, branches) follow the dashboard's scope and need retail.sale.all_sellers in every branch they cover (ADR-055); without it they are left out, not refused. low_stock needs retail.stock.read and open_orders retail.order.manage, each in its own branch scope. branches is present only over two or more shops
+         */
+        get: operations["getRetailHomeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/reports/margins": {
         parameters: {
             query?: never;
@@ -13017,6 +13037,126 @@ export interface components {
         };
         RetailGoodsReceiptVoidRequest: {
             reason: string;
+        };
+        /** @description Present only with retail.sale.all_sellers in every branch the summary covers (ADR-055): everybody's money; and only when the summary covers two or more shops: one line per shop, most sales first */
+        RetailHomeBranch: {
+            /** Format: uuid */
+            branch_id?: string;
+            name?: string;
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        /** @description What buyers owe on credit sales, as Credit control counts it */
+        RetailHomeCreditOwed: {
+            /**
+             * Format: int32
+             * @description Buyers that owe: a customer record, or a name typed with the sale
+             */
+            customers?: number;
+            /**
+             * Format: date
+             * @description The earliest due date of a sale still owing; absent when none has a due date
+             */
+            oldest_due_date?: string;
+            /** Format: int64 */
+            owed_minor?: number;
+            /** Format: int32 */
+            sales?: number;
+        };
+        /** @description Present only with retail.sale.all_sellers in every branch the summary covers (ADR-055): everybody's money; the same figure as today on the dashboard */
+        RetailHomeSales: {
+            /** Format: int64 */
+            sale_count?: number;
+            /** Format: int64 */
+            sales_minor?: number;
+        };
+        RetailHomeSummary: {
+            /** @description Present only with retail.sale.all_sellers in every branch the summary covers (ADR-055): everybody's money; and only when the summary covers two or more shops: one line per shop, most sales first */
+            branches?: components["schemas"]["RetailHomeBranch"][];
+            credit_owed?: components["schemas"]["RetailHomeCreditOwed"];
+            currency?: string;
+            /**
+             * Format: date
+             * @description The business day in the tenant's zone (Africa/Kampala by default)
+             */
+            date?: string;
+            /**
+             * Format: int32
+             * @description Present only with retail.stock.read: active items at or below the dashboard's low stock threshold
+             */
+            low_stock?: number;
+            /**
+             * Format: int32
+             * @description Present only with retail.order.manage: customer orders ordered, packed or out for delivery
+             */
+            open_orders?: number;
+            sales_today?: components["schemas"]["RetailHomeSales"];
+            takings?: components["schemas"]["RetailHomeTakings"];
+            top_items?: components["schemas"]["RetailHomeTopItems"];
+            /**
+             * Format: date
+             * @description The Monday of this week: the first day of the top items of the week
+             */
+            week_from?: string;
+        };
+        /** @description Money taken today by way of paying, read the way the cash book reads a day for every way: sales paid at the sale dated today, payments on credit sales dated today and delivery fees taken today, less sales cancelled today, payments on account reversed today and money refunded today on goods taken back. Besides retail.sale.all_sellers it needs, as the cash summary, retail.cashbook.read in every branch it covers and retail.till.close (ADR-076) */
+        RetailHomeTakings: {
+            methods?: components["schemas"]["RetailHomeTakingsMethod"][];
+            /** Format: int64 */
+            total_minor?: number;
+        };
+        RetailHomeTakingsMethod: {
+            /**
+             * Format: int64
+             * @description sales_minor + payments_minor + fees_minor - out_minor
+             */
+            amount_minor?: number;
+            /**
+             * Format: int64
+             * @description Delivery fees taken at the door today, or paid today on an account
+             */
+            fees_minor?: number;
+            /**
+             * @description cash and mobile_money always, then any other way that took or gave back money today (bank)
+             * @enum {string}
+             */
+            method?: "cash" | "mobile_money" | "bank";
+            /**
+             * Format: int64
+             * @description Money given back today: sales cancelled, payments on account reversed, refunds on goods taken back (a return cancelled today counts back in), door fees of cancelled orders
+             */
+            out_minor?: number;
+            /**
+             * Format: int64
+             * @description Payments on credit sales dated today, at the branch that took them
+             */
+            payments_minor?: number;
+            /**
+             * Format: int64
+             * @description Sales paid at the sale dated today, cancelled later or not
+             */
+            sales_minor?: number;
+        };
+        RetailHomeTopItem: {
+            code?: string;
+            /**
+             * Format: uuid
+             * @description The product, or the whole item for one with sizes and colours
+             */
+            item_id?: string;
+            label?: string;
+            /** @description Base units, as a decimal string */
+            qty?: string;
+            /** Format: int64 */
+            sales_minor?: number;
+            unit?: string;
+        };
+        /** @description The five items that sold the most by value, today and this week */
+        RetailHomeTopItems: {
+            today?: components["schemas"]["RetailHomeTopItem"][];
+            week?: components["schemas"]["RetailHomeTopItem"][];
         };
         /** @description Dispatched and not received or cancelled, the longest wait first */
         RetailInFlightTransfer: {
@@ -28765,6 +28905,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailDashboard"];
+                };
+            };
+        };
+    };
+    getRetailHomeSummary: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailHomeSummary"];
                 };
             };
         };

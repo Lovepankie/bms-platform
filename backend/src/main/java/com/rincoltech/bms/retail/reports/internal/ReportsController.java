@@ -27,6 +27,7 @@ class ReportsController {
     private final CreditService credit;
     private final EvaluationService evaluation;
     private final DashboardService dashboard;
+    private final HomeService home;
 
     ReportsController(
             ReportsService service,
@@ -35,7 +36,8 @@ class ReportsController {
             StockHealthService stockHealth,
             CreditService credit,
             EvaluationService evaluation,
-            DashboardService dashboard) {
+            DashboardService dashboard,
+            HomeService home) {
         this.service = service;
         this.salesAnalysis = salesAnalysis;
         this.margins = margins;
@@ -43,6 +45,7 @@ class ReportsController {
         this.credit = credit;
         this.evaluation = evaluation;
         this.dashboard = dashboard;
+        this.home = home;
     }
 
     @GetMapping("/valuation")
@@ -166,5 +169,20 @@ class ReportsController {
             @RequestParam(name = "from", required = false) LocalDate from,
             @RequestParam(name = "to", required = false) LocalDate to) {
         return dashboard.dashboard(branchIds, period, from, to);
+    }
+
+    @GetMapping("/home")
+    @RequiresPermission("retail.sale.read")
+    @Operation(
+            summary =
+                    "Shop Home summary: today's sales and takings by way of paying, credit owed, top items, each shop, low stock and open orders (issue #485)",
+            operationId = "getRetailHomeSummary",
+            description =
+                    "One read for the Shop cards on Home (ADR-076). The money parts (sales_today, takings, credit_owed, top_items,"
+                            + " branches) follow the dashboard's scope and need retail.sale.all_sellers in every branch they cover"
+                            + " (ADR-055); without it they are left out, not refused. low_stock needs retail.stock.read and open_orders"
+                            + " retail.order.manage, each in its own branch scope. branches is present only over two or more shops")
+    HomeApi.Summary home(@RequestParam(name = "branch_id", required = false) List<UUID> branchIds) {
+        return home.summary(branchIds);
     }
 }

@@ -56,7 +56,8 @@ class CreditRepository {
             Integer oldestDays,
             int buyers,
             Long creditLimitMinor,
-            Integer termsDays) {}
+            Integer termsDays,
+            LocalDate oldestDue) {}
 
     record OverdueRow(
             UUID saleId,
@@ -96,16 +97,25 @@ class CreditRepository {
                 rs.getLong("over90"));
     }
 
-    /** Everything owed in scope as one row, and how many buyers owe it. */
+    /** Everything owed in scope as one row, how many buyers owe it, and the earliest due date of a sale still owing. */
     BuyerRow totals(List<UUID> branchIds, LocalDate today) {
         if (branchIds != null && branchIds.isEmpty()) {
-            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0, null, null);
+            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0, null, null, null);
         }
-        return jdbc.sql("SELECT " + BUCKETS + ", count(*) AS sales, count(DISTINCT " + key() + ") AS buyers"
+        return jdbc.sql("SELECT " + BUCKETS + ", count(*) AS sales, count(DISTINCT " + key() + ") AS buyers,"
+                        + " min(s.due_date) AS oldest_due"
                         + " FROM retail_sales s" + OPEN + branch(branchIds))
                 .params(params(branchIds, today))
                 .query((rs, n) -> new BuyerRow(
-                        null, null, rs.getInt("sales"), buckets(rs), null, rs.getInt("buyers"), null, null))
+                        null,
+                        null,
+                        rs.getInt("sales"),
+                        buckets(rs),
+                        null,
+                        rs.getInt("buyers"),
+                        null,
+                        null,
+                        rs.getObject("oldest_due", LocalDate.class)))
                 .single();
     }
 
@@ -136,20 +146,21 @@ class CreditRepository {
                         (Integer) rs.getObject("oldest"),
                         0,
                         rs.getObject("credit_limit", Long.class),
-                        rs.getObject("terms_days", Integer.class)))
+                        rs.getObject("terms_days", Integer.class),
+                        null))
                 .list();
     }
 
     /** What the credit buyers with a record owe, as one row (the total row of the customer ageing). */
     BuyerRow customerTotals(List<UUID> branchIds, LocalDate today) {
         if (branchIds != null && branchIds.isEmpty()) {
-            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0, null, null);
+            return new BuyerRow(null, null, 0, new Buckets(0, 0, 0, 0, 0, 0), null, 0, null, null, null);
         }
         return jdbc.sql("SELECT " + BUCKETS + ", count(*) AS sales, count(DISTINCT s.customer_id) AS buyers"
                         + " FROM retail_sales s" + OPEN + " AND s.customer_id IS NOT NULL" + branch(branchIds))
                 .params(params(branchIds, today))
                 .query((rs, n) -> new BuyerRow(
-                        null, null, rs.getInt("sales"), buckets(rs), null, rs.getInt("buyers"), null, null))
+                        null, null, rs.getInt("sales"), buckets(rs), null, rs.getInt("buyers"), null, null, null))
                 .single();
     }
 
@@ -175,7 +186,8 @@ class CreditRepository {
                         (Integer) rs.getObject("oldest"),
                         0,
                         rs.getObject("credit_limit", Long.class),
-                        rs.getObject("terms_days", Integer.class)))
+                        rs.getObject("terms_days", Integer.class),
+                        null))
                 .list();
     }
 

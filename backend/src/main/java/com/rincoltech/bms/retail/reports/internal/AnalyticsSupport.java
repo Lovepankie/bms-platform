@@ -69,6 +69,13 @@ final class AnalyticsSupport {
      * at another), the report covers the supervised shops instead of being refused; asking for a shop outside them is refused.
      */
     static List<UUID> everySellerFilter(Principal principal, List<UUID> requested) {
+        List<UUID> filter = everySellerScope(principal, requested);
+        requireAllSellers(principal, filter);
+        return filter;
+    }
+
+    /** The branches of {@link #everySellerFilter} without the refusal: the Home summary leaves its money parts out instead. */
+    static List<UUID> everySellerScope(Principal principal, List<UUID> requested) {
         List<UUID> filter = principal.branchFilter("retail.sale.read", requested);
         boolean asked = requested != null && !requested.isEmpty();
         if (!asked && !covers(principal, filter)) {
@@ -79,21 +86,18 @@ final class AnalyticsSupport {
                         : filter.stream().filter(supervised::contains).toList();
             }
         }
-        requireAllSellers(principal, filter);
         return filter;
     }
 
-    private static boolean covers(Principal principal, List<UUID> filter) {
+    /** True when the caller sees every seller's sales in every branch of the filter (every branch when null). */
+    static boolean covers(Principal principal, List<UUID> filter) {
         return filter == null
                 ? principal.scopeOf(ALL_SELLERS).map(Principal.BranchScope::all).orElse(false)
                 : filter.stream().allMatch(b -> principal.may(ALL_SELLERS, b));
     }
 
     static void requireAllSellers(Principal principal, List<UUID> filter) {
-        boolean everyone = filter == null
-                ? principal.scopeOf(ALL_SELLERS).map(Principal.BranchScope::all).orElse(false)
-                : filter.stream().allMatch(b -> principal.may(ALL_SELLERS, b));
-        if (!everyone) {
+        if (!covers(principal, filter)) {
             throw new ApiException(
                     HttpStatus.FORBIDDEN,
                     "permission_denied",

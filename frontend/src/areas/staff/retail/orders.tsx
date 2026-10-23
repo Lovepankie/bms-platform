@@ -30,6 +30,8 @@ const invalidate = (client: ReturnType<typeof useQueryClient>) => {
   void client.invalidateQueries({ queryKey: ['retail', 'order'] });
   void client.invalidateQueries({ queryKey: ['retail', 'stock'] });
   void client.invalidateQueries({ queryKey: ['retail', 'products'] });
+  // Home's open orders, and on delivery its sales and takings (issue #485).
+  void client.invalidateQueries({ queryKey: ['retail', 'home'] });
 };
 
 /** The money the customer pays on delivery, how, and what is left on credit. */

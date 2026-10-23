@@ -513,7 +513,7 @@ export const certificatePage: Tour = {
 
 export const staffHomePage: Tour = {
   id: 'page-staff-home',
-  version: 1,
+  version: 2,
   title: 'This page: staff home',
   audience: () => true,
   autoStart: false,
@@ -530,6 +530,16 @@ export const staffHomePage: Tour = {
       target: 'nav-areas',
       title: 'The menu',
       body: 'Each item in the menu opens one area, such as members, loans, insights or users. You see the areas your role allows. On a phone, open the menu at the top left.',
+    },
+    {
+      // Issue #485: on the Takings card, for whoever sees everybody's money and the cash summary (ADR-076 decision 3).
+      id: 'shop-today',
+      target: 'home-shop-today',
+      module: 'retail',
+      needs: ['retail.sale.read', 'retail.sale.all_sellers', 'retail.cashbook.read', 'retail.till.close'],
+      optional: true,
+      title: 'Your shop today',
+      body: 'See the money taken today by cash and by mobile money. Below it: what customers owe, the best selling items and each shop. Tap the link under a card to open the full page.',
     },
     {
       id: 'members',

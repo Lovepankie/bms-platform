@@ -987,7 +987,7 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 
 | Route | Breadcrumb | Page tour | Cross links added (#336) |
 |---|---|---|---|
-| `/staff` | Home | `page-staff-home` v1 (added) | member name opens the member |
+| `/staff` | Home | `page-staff-home` v1 (added); v2 adds the shop summary step (#485) | member name opens the member; each shop summary card opens its full page (#485) |
 | `/staff/approvals` | Approvals | `page-approvals` v1 (added) | "Open the item" on collateral releases |
 | `/staff/assistant` | AI assistant | `page-assistant` v1 (existing) | none added |
 | `/staff/insights` | Insights | `page-insights` v1 (added) | links to the loan list and to maturities |
@@ -1345,3 +1345,36 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
   `page-restock` (version 2), `page-transfer` (version 2) and `page-stocktake` (version 2); `page-labels` version 1.
 - Tests: `barcode-state.test.ts`, `scan.dom.test.tsx` (the Scan box; 1256 typed fast into a quantity, price or count field stays
   there, submits normally and is never looked up), `camera-scan.test.ts`; backend `BarcodesTest`, `RetailBarcodesIT`.
+
+## Shop Home summary cards (issue #485, ADR-076, FR-UXN-06)
+
+- **Where.** The staff Home (`/staff`), after the Shop card and before the Lending card. Every shop figure on Home, the Shop card's
+  included, comes from one read, `GET /retail/reports/home`, under the branch chosen in the header (All branches sends none).
+- **Takings today.** A line each for Cash and Mobile money, then Bank or any other way only when it moved money today, and the
+  Total. Read as the cash book reads a day, so it agrees with the cash summary: sales paid at the sale, payments on credit sales and
+  delivery fees in; cancelled sales, reversed payments on account and refunds on goods taken back (yesterday's sale refunded today
+  included) out. Nothing taken: "No money taken yet today." Link: Open the cash summary. The card is drawn
+  only for a session that may read the cash summary (`retail.cashbook.read` in the branches covered and `retail.till.close`,
+  ADR-076 decision 3), so it never waits on a figure the server will leave out.
+- **Credit owed.** What customers owe, with "3 customers" as a hint, and Oldest due with the earliest due date of a sale still owing
+  ("2 Oct 2026"). Nobody owes: "No customer owes you money." Link: Open credit control.
+- **Top items.** Today and This week (from Monday) as two buttons; the five items that sold the most by value, each with its
+  quantity and unit and the amount. Both lists come in the one read, so the switch asks nothing. Nothing sold: "Nothing sold yet
+  today." or "Nothing sold yet this week." Link: Open sales analysis.
+- **Each shop today.** One line per shop with its sales and number of sales, most first, and "No sales yet" for a shop that has
+  sold nothing. Only with All branches chosen, for a session that sees every seller's sales in more than one branch; the server
+  leaves the lines out over fewer than two shops. Link: Open the shop dashboard.
+- **Who sees what.** The four cards and Sales today are money: they need `retail.sale.all_sellers` in the branches covered
+  (ADR-055); Takings today needs besides what the cash summary needs (`retail.cashbook.read` there and `retail.till.close`), so a
+  Supervisor without the till sees no Takings card; a seller sees no money card, and now sees Low on stock (with `retail.stock.read`) and the open orders (with
+  `retail.order.manage`) on the Shop card. A session with the orders permission and no sales read still reads the orders board.
+- **States.** "Loading" while the read is on its way, "Could not load" in each card when it fails, the other cards unchanged. A
+  part the server leaves out (no money permission over the branches covered, a branch outside the session's scope) takes its card
+  or figure away instead of showing zeros. Recording a sale or moving an order refreshes the Home summary.
+- **Tour.** `page-staff-home` v2: the step Your shop today on the Takings card (`data-tour="home-shop-today"`), for whoever sees
+  everybody's money.
+- **Screenshot description.** On a phone the cards stack: Shop (Sales today UGX 125,000, 7 sales; Low on stock 3 items; Open
+  customer orders 4), Takings today (Cash 60,000, Mobile money 35,000, Bank 3,000, Total 98,000), Credit owed (450,000, 3
+  customers; Oldest due 2 Oct 2026), Top items (Today pressed, Test Sugar 1kg 4 bag 24,000), Each shop today (Test Shop One
+  100,000, 5 sales; Test Shop Two, No sales yet), each with its link underneath. On a wide screen they sit side by side in columns
+  of at least 280px.

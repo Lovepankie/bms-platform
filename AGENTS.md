@@ -520,6 +520,14 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   applies what is due once per business. After a cancellation's end date writes answer 423 `subscription_ended`; reads, sign-in and
   the exports still work; nothing is deleted. Business set-up has the Plan and modules card with plain-words confirms, and the staff
   area the end-date banner and the read-only notice. Tests: `SelfServePlanIT`, `RlsIsolationIT`, `EmailLayoutTest`.
+- **Built (a fuller shop Home, issue #485, FR-UXN-06, ADR-076):** no migration, no permission. `GET /retail/reports/home`
+  (`retail.sale.read`, optional `branch_id`) answers every shop figure on Home in one read: today's sales, the takings split by cash,
+  mobile money and any other way that took money, credit owed (total, customers, oldest due date), the top five items today and this
+  week, a line per shop over two or more, the low stock count and the open orders; the money parts need `retail.sale.all_sellers`
+  over the branches covered and are left out otherwise. Built from the dashboard, credit control and sales analysis queries
+  (`HomeService`). The Shop card and the cards Takings today, Credit owed, Top items and Each shop today (`home-cards.tsx`), each
+  linking to its full page; tour `page-staff-home` v2. Tests: `RetailHomeSummaryIT`, `home-cards.dom.test.tsx`. Notes:
+  `docs/specs/retail-ui-notes.md` (Shop Home summary cards).
 - **Built (send feedback from inside the app, issue #447, FR-FBK-01 to FR-FBK-05, ADR-065):** migration `V80` (directly after `V79`):
   `feedback_items` (forced RLS, `SELECT` and `INSERT` only for the
   application role) and the definer functions `platform_feedback_list`, `platform_feedback_tenant`, `platform_feedback_set_status` and
@@ -878,6 +886,10 @@ Accepted (this list is the ADR index):
   decides; stopping a module and cancelling take effect the day after the last day paid for (at once when nothing is paid ahead), applied
   by a quarter-hour job once; the business read only with `subscription_ended` after a cancellation's end date, data kept (proposed,
   #472; FR-SUB-03 to FR-SUB-07; migration `V90`; renumbered at merge if needed)
+- ADR-076 The shop Home reads one summary built from the existing report queries: today's sales, takings by cash, mobile money and
+  any other way, credit owed with the oldest due date, the top five items today and this week, a line per shop over two or more, the
+  low stock count and the open orders, the money parts left out without `retail.sale.all_sellers` (proposed, #485; FR-UXN-06;
+  supersedes ADR-072 decision 2; no migration; renumbered at merge if needed)
 - ADR-067 Retail sales work offline: the sale catalogue and an outbox per business and person on the device, synced one at a
   time oldest first, sent once by the Idempotency-Key and a client sale id stored on the sale; dated when they happened; stock,
   price and item clashes recorded and flagged, other refusals kept on the device for a manager to resend or discard; a dot in

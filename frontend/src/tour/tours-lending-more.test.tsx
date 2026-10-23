@@ -59,6 +59,8 @@ const OWNER = person('Test Owner 01', ALL);
 const SAVER_READER = person('Test Reader 01', ['lending.savings.read', 'lending.members.read']);
 const INVESTMENT_READER = person('Test Reader 02', ['lending.investments.read']);
 const ASKER = person('Test Asker 01', ['core.approvals.read', 'core.settings.read', 'core.notifications.read']);
+// The owner of a shop (issue #485): Home shows the shop's summary cards.
+const SHOP_OWNER = { ...mockMe('admin'), full_name: 'Test Shop Owner 01', modules: ['retail'], permission_scopes: undefined, branches } as Me;
 
 const account: SavingsAccount = {
   id: 'a1', account_no: 'SV000001', member_id: 'm1', member_no: 'M000001', member_name: 'Test Saver 01', product_code: 'TEST-SAVE', product_name: 'Test passbook savings',
@@ -196,7 +198,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-member-investments': [OWNER],
   'page-investment': [OWNER, INVESTMENT_READER],
   'page-investment-certificate': [OWNER, INVESTMENT_READER],
-  'page-staff-home': [OWNER, ASKER],
+  'page-staff-home': [OWNER, ASKER, SHOP_OWNER],
   'page-approvals': [OWNER, ASKER],
   'page-insights': [OWNER],
   'page-payments': [OWNER, ASKER],

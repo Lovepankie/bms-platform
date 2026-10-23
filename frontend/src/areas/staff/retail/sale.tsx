@@ -241,6 +241,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
       void queryClient.invalidateQueries({ queryKey: ['retail', 'stock'] });
+      // Home's shop figures (issue #485) count the sale at once.
+      void queryClient.invalidateQueries({ queryKey: ['retail', 'home'] });
       onSaved?.(sale, receivedFor(draft.method, sale.total_minor ?? 0, received));
     },
   });
