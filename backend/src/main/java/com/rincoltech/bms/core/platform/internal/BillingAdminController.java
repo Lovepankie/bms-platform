@@ -51,7 +51,9 @@ class BillingAdminController {
     @Schema(name = "BillingSettingsRequest")
     record SettingsRequest(
             @NotNull @Min(0) @Max(60) Integer graceDays,
-            @Size(max = 1000) String howToPay,
+
+            @Size(max = 1000) @Schema(description = "Left out: kept as it is; empty: cleared")
+            String howToPay,
 
             @NotBlank @Size(min = 5, max = 300) @Schema(description = "Why; kept in the platform audit log")
             String reason) {}

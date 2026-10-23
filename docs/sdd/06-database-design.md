@@ -445,7 +445,8 @@ One row (`id = 1`): `grace_days integer NOT NULL DEFAULT 7` (0 to 60), `how_to_p
 first), `updated_at`, `updated_by_platform_user_id`. Changed only through `platform_set_billing_settings`. FR-SUB-09.
 
 `platform_mark_subscription_overdue(tenant, due_on, today)` (`V92`, definer): moves a subscription in its free month or paid, not a
-pilot, of an active tenant, whose last day is still `due_on` and before `today`, to `past_due`, and writes
+pilot, of an active tenant, with no status change scheduled (`next_status_change_on` is null, and is left as it is), whose last
+day is still `due_on` and before `today`, to `past_due`, and writes
 `platform.tenant.subscription_overdue` with no operator; anything else changes nothing. The only automatic status change; it never
 suspends. FR-SUB-09.
 

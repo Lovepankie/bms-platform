@@ -7272,6 +7272,7 @@ export interface components {
         BillingSettingsRequest: {
             /** Format: int32 */
             grace_days: number;
+            /** @description Left out: kept as it is; empty: cleared */
             how_to_pay?: string;
             /** @description Why; kept in the platform audit log */
             reason: string;

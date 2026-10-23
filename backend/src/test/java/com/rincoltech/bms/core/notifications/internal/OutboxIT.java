@@ -545,7 +545,7 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("message", "Test feedback message."),
                 // Subscription billing (issue #480).
                 Map.entry("owner_name", "Test Owner 01"),
-                Map.entry("amount_line", "The price of the next month is UGX 10,000."),
+                Map.entry("amount_line", "The price is UGX 10,000 a month, or UGX 110,000 for a year."),
                 Map.entry("how_to_pay", "Test: pay to the test account."),
                 Map.entry("period", "1 Nov 2026 to 30 Nov 2026"),
                 Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));

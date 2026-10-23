@@ -239,6 +239,14 @@ class BillingAutomationIT extends IntegrationTest {
         assertThat(row.get("channels"))
                 .as("SMS is off unless the platform switches it on")
                 .isEqualTo("{email}");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT params ->> 'amount_line' FROM notification_outbox"
+                                + " WHERE tenant_id = ? AND template_key = 'billing.due_today' AND channel = 'email'")
+                        .param(b.id())
+                        .query(String.class)
+                        .single())
+                .as("the price a month and a year, for a business paying either way")
+                .isEqualTo("The price is UGX 10,000 a month, or UGX 110,000 for a year.");
     }
 
     /** FR-SUB-08: a free month gets its own reminders; a pilot, a suspended and an overdue business get none. */
@@ -309,6 +317,27 @@ class BillingAutomationIT extends IntegrationTest {
         assertThat(status(b)).isEqualTo("past_due");
     }
 
+    /** FR-SUB-09: a subscription with a status change the operator scheduled is never made overdue, and keeps its date. */
+    @Test
+    void frSub09_aScheduledChangeIsNeverOverwrittenByTheOverdueMove() {
+        Business b = business("active", null, LocalDate.of(2026, 11, 8), false);
+        TestDatabase.owner()
+                .sql("UPDATE subscriptions SET next_status_change_on = ? WHERE tenant_id = ?")
+                .params(LocalDate.of(2026, 11, 8), b.id())
+                .update();
+
+        clock.set(Instant.parse("2026-11-10T06:00:00Z"));
+        assertThat(run(b).markedOverdue()).isZero();
+        assertThat(status(b)).isEqualTo("active");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT next_status_change_on FROM subscriptions WHERE tenant_id = ?")
+                        .param(b.id())
+                        .query(LocalDate.class)
+                        .single())
+                .isEqualTo(LocalDate.of(2026, 11, 8));
+        assertThat(audits("platform.tenant.subscription_overdue", b.id())).isZero();
+    }
+
     List<String> listed() {
         ResponseEntity<JsonNode> list =
                 platform.get("/api/v1/platform/billing/due-for-suspension", operator.accessToken());
@@ -334,6 +363,11 @@ class BillingAutomationIT extends IntegrationTest {
         Business inGrace = business("past_due", null, LocalDate.of(2026, 11, 14), false);
         Business pilot = business("past_due", null, LocalDate.of(2026, 11, 1), true);
         Business suspended = business("suspended", null, LocalDate.of(2026, 11, 1), false);
+        Business ended = business("past_due", null, LocalDate.of(2026, 11, 1), false);
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                .param(ended.id())
+                .update();
         String staffToken = token(inGrace);
         signInOperator();
         try {
@@ -343,7 +377,8 @@ class BillingAutomationIT extends IntegrationTest {
                     .doesNotContain(
                             inGrace.id().toString(),
                             pilot.id().toString(),
-                            suspended.id().toString());
+                            suspended.id().toString(),
+                            ended.id().toString());
             JsonNode item = null;
             for (JsonNode i : platform.get("/api/v1/platform/billing/due-for-suspension", operator.accessToken())
                     .getBody()
@@ -369,6 +404,16 @@ class BillingAutomationIT extends IntegrationTest {
             assertThat(page.get("overdue_since").asString()).isEqualTo("2026-11-13");
             assertThat(page.get("pay_by").asString()).isEqualTo("2026-11-22");
             assertThat(page.get("how_to_pay").asString()).isEqualTo("Test: pay to the test account");
+            ResponseEntity<JsonNode> graceOnly = platform.call(
+                    HttpMethod.PUT,
+                    "/api/v1/platform/billing/settings",
+                    Map.of("grace_days", 9, "reason", "Test: grace only"),
+                    operator.accessToken());
+            assertThat(graceOnly.getStatusCode()).as("%s", graceOnly.getBody()).isEqualTo(HttpStatus.OK);
+            assertThat(graceOnly.getBody().get("how_to_pay").asString())
+                    .as("left out, kept as it is")
+                    .isEqualTo("Test: pay to the test account");
+            saveGrace(10);
 
             JsonNode notice = Api.tenant(http, inGrace.fixture().slug())
                     .get("/api/v1/billing/notice", staffToken)

@@ -137,11 +137,15 @@ class BillingService {
                 .single();
     }
 
-    /** The grace period and the words on how to pay, with a reason; unchanged values change nothing. */
+    /**
+     * The grace period and the words on how to pay, with a reason; unchanged values change nothing. A request without
+     * {@code how_to_pay} keeps the words as they are; an empty one clears them.
+     */
     @Transactional
     SettingsResponse saveSettings(SettingsRequest request) {
         Settings before = settings();
-        String howToPay = PriceBookService.blankToNull(request.howToPay());
+        String howToPay =
+                request.howToPay() == null ? before.howToPay() : PriceBookService.blankToNull(request.howToPay());
         if (before.graceDays() == request.graceDays() && Objects.equals(before.howToPay(), howToPay)) {
             return settingsResponse();
         }
@@ -225,8 +229,9 @@ class BillingService {
     /**
      * One pass over every business in its free month or paid: the one overdue the day after its last day becomes past_due
      * (audited by the database function), and the one whose reminder falls today gets it, at most once. A pilot, a suspended
-     * or cancelled business, and a business already overdue get nothing. One business's failure is logged and does not stop
-     * the others.
+     * or cancelled business, and a business already overdue get nothing. One with a status change the operator scheduled (an
+     * end chosen for the end of its period) is never made overdue: the database function leaves it and its date alone.
+     * One business's failure is logged and does not stop the others.
      */
     RunResult run() {
         return run(null);
@@ -299,16 +304,20 @@ class BillingService {
      * Owner gets the row with no channel, so the operator sees in its outbox that nothing went.
      */
     private boolean remind(TenantResponse tenant, String kind, LocalDate due, Settings settings) {
-        Long amount = priceBook
+        PriceBookController.PlanPriceResponse price = priceBook
                 .priceOn(tenant.planCode(), tenant.currency(), due.plusDays(1))
-                .map(PriceBookController.PlanPriceResponse::monthlyMinor)
                 .orElse(null);
-        String amountLine = amount == null
+        Long amount = price == null ? null : price.monthlyMinor();
+        String amountLine = price == null
                 ? "We will tell you the amount."
-                : "The price of the next month is " + BusinessService.money(tenant.currency(), amount) + ".";
+                : "The price is " + BusinessService.money(tenant.currency(), price.monthlyMinor()) + " a month, or "
+                        + BusinessService.money(tenant.currency(), price.annualMinor()) + " for a year.";
         return Boolean.TRUE.equals(TenantContext.callAs(
                 tenant.id(),
                 () -> transactions.execute(status -> {
+                    if (!stillDue(due)) {
+                        return false;
+                    }
                     Optional<Owner> owner = owner();
                     List<String> channels = new ArrayList<>();
                     if (owner.isPresent() && owner.get().email() != null) {
@@ -331,8 +340,8 @@ class BillingService {
                                             channels.toArray(String[]::new))
                                     .update()
                             == 1;
-                    if (!inserted || owner.isEmpty()) {
-                        return inserted;
+                    if (!inserted || channels.isEmpty()) {
+                        return false;
                     }
                     Map<String, String> params = new LinkedHashMap<>();
                     params.put("owner_name", owner.get().fullName());
@@ -370,6 +379,22 @@ class BillingService {
                     }
                     return true;
                 })));
+    }
+
+    /**
+     * Read again in the reminder's own transaction: the subscription is still in its free month or paid and its last day is
+     * still the one the run saw, so a payment recorded during the run sends no reminder for the old date.
+     */
+    private boolean stillDue(LocalDate due) {
+        return jdbc.sql("""
+                        SELECT CASE WHEN status = 'trial' THEN trial_ends_on ELSE current_period_end END
+                          FROM subscriptions
+                         WHERE status IN ('trial', 'active') AND NOT is_pilot
+                        """)
+                .query(LocalDate.class)
+                .optional()
+                .filter(due::equals)
+                .isPresent();
     }
 
     private static String howToPay(Settings settings) {
@@ -562,14 +587,15 @@ class BillingService {
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Every overdue business past its grace period, not a pilot and not already suspended, with how many days it is overdue and
-     * the price of its next month; the most overdue first. The operator suspends from the Business page, by hand.
+     * Every overdue business past its grace period, not a pilot and still active (a business suspended or closed at the
+     * tenant level is left off), with how many days it is overdue and the price of its next month; the most overdue first.
+     * The operator suspends from the Business page, by hand.
      */
     DueForSuspension dueForSuspension() {
         Settings settings = settings();
         List<BillingAdminController.DueItem> items = new ArrayList<>();
         for (TenantResponse tenant : platform.tenants(null, List.of("past_due"), null)) {
-            if (tenant.pilot()) {
+            if (tenant.pilot() || !"active".equals(tenant.status())) {
                 continue;
             }
             LocalDate today = clock.today(ZoneId.of(tenant.timezone()));

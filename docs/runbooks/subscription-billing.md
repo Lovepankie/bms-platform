@@ -7,7 +7,7 @@ by hand (issue #480, ADR-075). Payments are still recorded by the operator on th
 
 | When (in the business's own time zone) | What | Where to see it |
 |---|---|---|
-| 7 days before the last day paid for, the day before, on the day, from 08:00 | An email to the Owner with the price of the next month and how to pay; an SMS too only if billing SMS is on | The Business page, Emails sent |
+| 7 days before the last day paid for, the day before, on the day, from 08:00 | An email to the Owner with the price a month and a year, and how to pay; an SMS too only if billing SMS is on | The Business page, Emails sent |
 | The same three days before the last day of the free month | The free month reminders | The Business page, Emails sent |
 | The first quarter hour after midnight following the last day | The subscription becomes overdue (`past_due`); the business keeps working | The Business page history: `platform.tenant.subscription_overdue`, with no operator |
 | While overdue and within the grace period | Every member of the business's staff sees "overdue since ...; pay by ..." | |

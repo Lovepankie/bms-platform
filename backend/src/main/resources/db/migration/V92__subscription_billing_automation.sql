@@ -3,8 +3,8 @@
 -- sets, the operator's list of businesses due for suspension, a numbered receipt for every subscription payment, and the
 -- Owner's Plan and billing page.
 --
--- V92 is the number this work was given in the agreed merge order (AGENTS.md, the migration ledger): main ends at V84 and
--- V85 to V91 are claimed by open pull requests (#465, #463, #470, #467, #475, #474, #478). Flyway runs with outOfOrder off,
+-- V92 is the number this work was given in the agreed merge order (AGENTS.md, the migration ledger): main ends at V86 and
+-- V87 to V91 are claimed by open pull requests (#470, #467, #475, #474, #478). Flyway runs with outOfOrder off,
 -- so this file is renamed at merge if those numbers land after it.
 --
 -- Expand only, safe on a populated database. Nothing is ever suspended by this migration or by anything it adds: after the
@@ -104,25 +104,29 @@ SELECT bms_grant_app('subscription_receipts', 'SELECT, INSERT');
 SELECT bms_make_append_only('subscription_receipts');
 
 -- Every payment recorded before this migration gets its receipt now, numbered in the order the payments were recorded and
--- dated the day each was recorded in its business's time zone. No email is sent for them.
+-- dated the day each was recorded in its business's time zone. No email is sent for them. The numbers come from
+-- row_number() over that order (nextval in a SELECT need not follow its ORDER BY); the sequence then continues after them.
 INSERT INTO subscription_receipts (id, tenant_id, payment_id, receipt_no, business_name, plan_name, issued_on, created_at)
 SELECT gen_random_uuid(), x.tenant_id, x.id,
-       'RT-' || to_char(x.issued_on, 'YYYY') || '-' || lpad(nextval('subscription_receipt_numbers')::text, 6, '0'),
+       'RT-' || to_char(x.issued_on, 'YYYY') || '-' || lpad(x.n::text, 6, '0'),
        x.business_name, x.plan_name, x.issued_on, x.created_at
   FROM (SELECT sp.tenant_id, sp.id, sp.created_at, left(t.name, 200) AS business_name, left(p.name, 200) AS plan_name,
-               (sp.created_at AT TIME ZONE t.timezone)::date AS issued_on
+               (sp.created_at AT TIME ZONE t.timezone)::date AS issued_on,
+               row_number() OVER (ORDER BY sp.created_at, sp.id) AS n
           FROM subscription_payments sp
           JOIN tenants t ON t.id = sp.tenant_id
           JOIN plans p ON p.id = sp.plan_id
-         WHERE sp.status = 'confirmed'
-         ORDER BY sp.created_at, sp.id) x;
+         WHERE sp.status = 'confirmed') x;
+SELECT setval('subscription_receipt_numbers', count(*)) FROM subscription_receipts HAVING count(*) > 0;
 
 -- ---------------------------------------------------------------------------------------------
 -- 4. The one automatic status change (issue #480 point 2): a business in its free month or paid, not a pilot, whose last
 --    day (of the free month, or paid for) is before its own today becomes past_due, which the screens call overdue. Its
 --    tenant stays active: past_due changes nothing the business can do. Nothing here or anywhere else suspends. The job
 --    passes the business's today in its own time zone and the due date it saw; the function checks both again under the
---    row lock, so a payment that landed meanwhile wins. Audited with no operator. Returns true when it moved the status.
+--    row lock, so a payment that landed meanwhile wins. A subscription with a status change scheduled by the operator (an
+--    end chosen for the end of the period) is left alone and keeps its date. Audited with no operator. Returns true when
+--    it moved the status.
 -- ---------------------------------------------------------------------------------------------
 
 CREATE FUNCTION platform_mark_subscription_overdue(p_tenant_id uuid, p_due_on date, p_today date)
@@ -134,7 +138,7 @@ DECLARE
     v_grace integer;
 BEGIN
     SELECT * INTO v_sub FROM subscriptions WHERE tenant_id = p_tenant_id FOR UPDATE;
-    IF NOT FOUND OR v_sub.is_pilot OR v_sub.status NOT IN ('trial', 'active') THEN
+    IF NOT FOUND OR v_sub.is_pilot OR v_sub.status NOT IN ('trial', 'active') OR v_sub.next_status_change_on IS NOT NULL THEN
         RETURN false;
     END IF;
     v_due := CASE WHEN v_sub.status = 'trial' THEN v_sub.trial_ends_on ELSE v_sub.current_period_end END;
@@ -146,7 +150,7 @@ BEGIN
     END IF;
     SELECT grace_days INTO v_grace FROM platform_billing_settings WHERE id = 1;
     UPDATE subscriptions s
-       SET status = 'past_due', next_status_change_on = NULL, updated_by_platform_user_id = NULL, updated_at = now()
+       SET status = 'past_due', updated_by_platform_user_id = NULL, updated_at = now()
      WHERE s.tenant_id = p_tenant_id;
     INSERT INTO platform_audit_log (id, action, tenant_id, data)
     VALUES (gen_random_uuid(), 'platform.tenant.subscription_overdue', p_tenant_id,

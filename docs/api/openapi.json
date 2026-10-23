@@ -992,6 +992,7 @@
             "type" : "integer"
           },
           "how_to_pay" : {
+            "description" : "Left out: kept as it is; empty: cleared",
             "maxLength" : 1000,
             "minLength" : 0,
             "type" : "string"
