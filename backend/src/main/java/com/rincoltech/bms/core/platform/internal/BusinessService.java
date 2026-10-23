@@ -50,6 +50,7 @@ class BusinessService {
     private final BusinessClock clock;
     private final Referrals referrals;
     private final TransactionTemplate transactions;
+    private final BillingService billing;
 
     BusinessService(
             JdbcClient jdbc,
@@ -59,7 +60,8 @@ class BusinessService {
             Idempotency idempotency,
             BusinessClock clock,
             Referrals referrals,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            BillingService billing) {
         this.jdbc = jdbc;
         this.platform = platform;
         this.priceBook = priceBook;
@@ -68,6 +70,7 @@ class BusinessService {
         this.clock = clock;
         this.referrals = referrals;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.billing = billing;
     }
 
     record Recorded(PaymentResponse payment, boolean replayed) {}
@@ -362,6 +365,8 @@ class BusinessService {
                             data.put("period_end", payment.periodEnd().toString());
                             data.put("before", tenant.subscriptionStatus());
                             data.put("reason", request.reason().trim());
+                            // Issue #480: the receipt is numbered and its email queued in the payment's transaction.
+                            data.put("receipt_no", billing.issueReceipt(tenant, payment, today));
                             audit.record("platform.tenant.payment_recorded", operator, tenantId, data);
                             // ADR-069: a referred business's payment adds its referrer's commission line, from the
                             // rule in force now, in the same transaction.

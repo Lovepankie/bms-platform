@@ -60,8 +60,15 @@ class EmailLayoutTest {
         p.put("kind", "problem");
         p.put("page", "/staff/retail/sale");
         p.put("message", "Test message <b>with</b> markup & an ampersand.");
-        // The weekly copy of the business's data (issue #334).
+        // Subscription billing (issue #480): how to pay is the operator's own text.
         p.put("owner_name", "Test Owner 01");
+        p.put("due_date", "8 Nov 2026");
+        p.put("amount_line", "The price is UGX 10,000 a month, or UGX 110,000 for a year.");
+        p.put("how_to_pay", "Test: pay to the test account <1> & say the business name.");
+        p.put("receipt_no", "RT-2026-000001");
+        p.put("amount", "UGX 10,000");
+        p.put("period", "1 Nov 2026 to 30 Nov 2026");
+        // The weekly copy of the business's data (issue #334).
         p.put("as_of", "19 Oct 2026");
         p.put("expires_on", "18 Nov 2026");
         // The Owner's own plan (issue #472): the module asked for and the decision, with the operator's reason.

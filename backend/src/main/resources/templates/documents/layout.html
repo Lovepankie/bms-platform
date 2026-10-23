@@ -66,7 +66,7 @@
         <td th:if="${lh.logo != null}" class="logocell"><img class="logo" th:src="${lh.logo}" alt=""/></td>
         <td>
           <div class="business" th:text="${lh.name}">Business</div>
-          <div class="muted" th:text="${branch.name}">Branch</div>
+          <div class="muted" th:if="${branch.name != null and branch.name != ''}" th:text="${branch.name}">Branch</div>
           <div class="muted" th:if="${branch.location != null}" th:text="${branch.location}">Address</div>
         </td>
         <td class="docline" style="width: 38%;">

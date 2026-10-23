@@ -252,6 +252,7 @@ platform API and holds no tenant permissions.
 | `core.settings.read` | Y | Y | | | Y | Y | | | | | | |
 | `core.settings.manage` | Y | | | | | | | | | | | |
 | `core.payment_account.manage` | Y | | | | | | | | | | | |
+| `core.billing.read` | Y | | | | | | | | | | | |
 | `core.referrals.read` | Y | | | | | | | | | | | |
 | `core.branches.read` | Y | Y | Y | Y | Y | Y | | | | | | |
 | `core.branches.manage` | Y | | | | | | | | | | | |
@@ -701,6 +702,8 @@ only, valid 7 days, replaced by every new email, carried in the URL fragment and
 body, and compared digest to digest in constant time after the indexed lookup.
 
 `core.branches.manage` covers every branch change: create, rename, close, reopen and the stocking switch (FR-BR-01, FR-BR-07, FR-BR-08, issue #329, ADR-041). No permission was added for closing: only the tenant admin closes a branch, and the call is scoped to the caller's branches like the other branch routes (a branch outside the scope is 404). The retail refusals `branch_not_stocking` and `branch_does_not_sell` (a Store, FR-RET-50, ADR-048, issue #366) are not permissions: they apply to every caller, administrators included. Making a branch a Store is the same `core.branches.manage` call; no permission was added.
+
+`core.billing.read` (migration V92, issue #480, ADR-075) is the business's Plan and billing page and the receipts of its subscription payments, read only: the administrators hold it, the Owner among them (ADR-062); payments are recorded only by the platform operator. The overdue banner (`GET /billing/notice`) is open to every signed-in member of staff, since the whole business keeps working through the grace period. The operator's grace period, words on how to pay and list of businesses due for suspension are read with `platform.tenants.read` and changed with `platform.tenants.manage`, on the platform host only; nothing suspends a business but the operator's own suspend.
 
 `core.settings.manage` also covers the tenant's two-step sign-in policy (`require_mfa_all_staff`, `require_mfa_roles`, `mfa_grace_days` in `PATCH /settings`, FR-IAM-16, issue #348, ADR-046). No permission was added: the people who may change the settings may change who must use a second factor, and `core.settings.read` (the tenant admin, branch manager, accountant and auditor) may read it. A user's own set-up of two-step sign-in (`/auth/staff/mfa/enrol` and `/mfa/confirm`) is open to every signed-in staff user.
 

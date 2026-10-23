@@ -40,8 +40,8 @@ class MigrationOrderIT {
      * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
      * came before V42 (the loan pledge guard, #176, merged), then V43 (payment methods, #160, merged),
      * then V44 (the retail customer accounts, #196), then V45 (customer returns, #201, merged). Nothing here enforces the order, merge order does.
-     * Today V80 to V90 are merged; a number above them is allowed only as an ordered claim (AGENTS.md): V91 (download my
-     * data, #478), then V92 (billing, #482), each merged in its turn or renumbered at merge.
+     * Today V80 to V91 are merged (V91 is download my data, #478); V92 is billing, this pull request (#482). A number above
+     * them is allowed only as an ordered claim (AGENTS.md), merged in its turn or renumbered at merge.
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
@@ -1485,14 +1485,15 @@ class MigrationOrderIT {
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
         // account one, V83 (collections, #266) the two collection list ones, V86 (offline sales, #458)
         // retail.offline.resolve, V88 (referrals, #464) core.referrals.read, V89 (existing loans, #466)
-        // lending.loans.bring_in and V91 (download my data, #334) its own, which are not V48's to answer for.
+        // lending.loans.bring_in, V91 (download my data, #334) its own and V92 (billing, #480) core.billing.read,
+        // which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
                                         + " 'retail.offline.resolve', 'lending.members.contact',"
                                         + " 'lending.collections.all_officers', 'core.referrals.read',"
-                                        + " 'lending.loans.bring_in', 'core.data_export.run')")
+                                        + " 'lending.loans.bring_in', 'core.data_export.run', 'core.billing.read')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
@@ -2123,6 +2124,84 @@ class MigrationOrderIT {
                             .query(String.class)
                             .single())
                     .isEqualTo("2025-12-01");
+        }
+    }
+
+    /**
+     * V92 (ADR-075) on a database at the migration before it, migrated by an owner without BYPASSRLS, so forced row security applies to it: every
+     * payment recorded before gets a receipt, numbered in the order the payments were recorded across businesses, the
+     * sequence continues after them, and the tables end with FORCE ROW LEVEL SECURITY again.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates subscription payments across the billing migration.
+     */
+    @Test
+    void billingMigrationNumbersEveryEarlierPaymentEvenUnderForcedRowSecurity() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            flyway(postgres, VERSIONS.get(VERSIONS.indexOf("92") - 1)).migrate();
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID operator = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO platform_users (id, email, full_name) VALUES (?, 'op-v92@example.test', 'Test Operator')")
+                    .param(operator)
+                    .update();
+            String plan = "00000000-0000-4000-8000-000000000001";
+            // Each payment: business, recorded at. The second business paid first.
+            UUID first = UUID.randomUUID();
+            UUID second = UUID.randomUUID();
+            Object[][] payments = {
+                {second, "2026-03-01 09:00:00+03", UUID.randomUUID()},
+                {first, "2026-05-01 09:00:00+03", UUID.randomUUID()},
+                {second, "2026-06-01 09:00:00+03", UUID.randomUUID()},
+            };
+            int n = 0;
+            for (UUID tenant : List.of(first, second)) {
+                n++;
+                owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, ?, ?, ?::uuid)")
+                        .params(tenant, "test-v92-" + n, "Test Business V92 " + n, plan)
+                        .update();
+                owner.sql("INSERT INTO subscriptions (id, tenant_id, plan_id, status) VALUES (?, ?, ?::uuid, 'active')")
+                        .params(tenant, tenant, plan)
+                        .update();
+            }
+            for (Object[] p : payments) {
+                owner.sql("""
+                                INSERT INTO subscription_payments (id, tenant_id, subscription_id, plan_id, amount_minor,
+                                    currency, method, paid_on, months, period_start, period_end,
+                                    recorded_by_platform_user_id, created_at)
+                                VALUES (?, ?, ?, ?::uuid, 10000, 'UGX', 'mtn_momo', ?::timestamptz::date, 1,
+                                        ?::timestamptz::date, ?::timestamptz::date + 29, ?, ?::timestamptz)
+                                """)
+                        .params(p[2], p[0], p[0], plan, p[1], p[1], p[1], operator, p[1])
+                        .update();
+            }
+            JdbcClient superuser = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword()));
+            superuser.sql("ALTER ROLE bms_owner NOBYPASSRLS").update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+            assertThat(result.success).isTrue();
+
+            for (int i = 0; i < payments.length; i++) {
+                assertThat(superuser
+                                .sql("SELECT receipt_no FROM subscription_receipts WHERE payment_id = ?")
+                                .param(payments[i][2])
+                                .query(String.class)
+                                .single())
+                        .isEqualTo("RT-2026-%06d".formatted(i + 1));
+            }
+            assertThat(superuser
+                            .sql("SELECT nextval('subscription_receipt_numbers')")
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(4);
+            assertThat(superuser.sql("""
+                                    SELECT bool_and(relforcerowsecurity) FROM pg_class
+                                     WHERE relname IN ('tenants', 'subscription_payments', 'subscription_receipts')
+                                    """).query(Boolean.class).single())
+                    .as("forced row security is back on every table")
+                    .isTrue();
         }
     }
 

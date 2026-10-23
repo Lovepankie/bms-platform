@@ -143,6 +143,37 @@ export const plansPage: Tour = {
   ],
 };
 
+// Due for suspension (issue #480, ADR-075): businesses past the grace period, and the grace period and how to pay.
+export const dueForSuspensionPage: Tour = {
+  id: 'page-operator-billing',
+  version: 1,
+  title: 'This page: due for suspension',
+  audience: forOperator,
+  autoStart: false,
+  page: '/platform/billing',
+  steps: [
+    {
+      id: 'intro',
+      target: 'due-intro',
+      title: 'Nothing is automatic',
+      body: 'A business that pays late keeps working through the grace period. After it, the business is listed here for you to decide.',
+    },
+    {
+      id: 'list',
+      target: 'due-list',
+      title: 'Overdue past the grace period',
+      body: 'Each business overdue for longer than the grace period, most overdue first. Nothing is suspended for you: open the business and suspend it there.',
+      optional: true,
+    },
+    {
+      id: 'settings',
+      target: 'billing-settings',
+      title: 'Grace period and how to pay',
+      body: 'How many days an overdue business keeps working before it is listed here. How to pay, in your words, goes in every reminder.',
+    },
+  ],
+};
+
 // Feedback from every business (issue #447, ADR-065).
 export const feedbackInboxPage: Tour = {
   id: 'page-operator-feedback',
@@ -181,4 +212,4 @@ export const feedbackInboxPage: Tour = {
   ],
 };
 
-export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, feedbackInboxPage];
+export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, dueForSuspensionPage, feedbackInboxPage];

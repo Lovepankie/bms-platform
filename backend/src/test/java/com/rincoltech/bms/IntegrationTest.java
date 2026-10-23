@@ -23,6 +23,10 @@ import org.springframework.test.context.TestPropertySource;
  * a business date, write {@code lending_arrears_runs} rows and charge penalties on the loans of whatever test was
  * running. The lending tests that need a run call {@code ArrearsRun} themselves.
  *
+ * <p>Nor the subscription billing run ({@code core.platform.subscription-billing}, issue #480): a tick would move the
+ * subscriptions of other tests' businesses to past_due and queue reminders. {@code BillingAutomationIT} calls the run
+ * itself.
+ *
  * <p>Nor the weekly copy of each business's data ({@code core.reporting.data-export-weekly}, ADR-074): it would queue a
  * workbook for the Owner of every test business. The data export tests call {@code DataExportWeekly.tick} themselves.
  *
@@ -35,6 +39,7 @@ import org.springframework.test.context.TestPropertySource;
         properties = {
             "bms.reports.runner-enabled=false",
             "bms.lending.arrears-job-enabled=false",
+            "bms.platform.billing-job-enabled=false",
             "bms.data-export.weekly-enabled=false",
             "bms.platform.plan-changes-job-enabled=false"
         })

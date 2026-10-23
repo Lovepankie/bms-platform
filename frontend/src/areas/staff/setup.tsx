@@ -385,6 +385,16 @@ export function Setup() {
           </fieldset>
         )}
 
+        {permissions.includes('core.billing.read') && (
+          <fieldset>
+            <legend>Plan and billing</legend>
+            <p>
+              <Link to={'/staff/setup/billing' as never}>Plan and billing</Link>: your plan and its price, what is paid and until when, how to
+              pay, and the receipt of every payment.
+            </p>
+          </fieldset>
+        )}
+
         <fieldset>
           <legend>Two-step sign-in</legend>
           <p>

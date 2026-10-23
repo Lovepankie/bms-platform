@@ -1,0 +1,28 @@
+<!-- Issue #480, ADR-075: the receipt of a subscription payment, in the house letterhead of Rincol Tech (the issuer), not the business's own: the business is the payer. -->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head}"></head>
+<body>
+  <div th:replace="~{layout :: letterhead}"></div>
+  <div th:replace="~{layout :: pagefoot}"></div>
+  <h1 th:text="${doc.title}">RECEIPT</h1>
+
+  <div class="box">
+    <div class="muted">Received from</div>
+    <div class="party" th:text="${receipt.business}">Business</div>
+    <div class="amount" style="margin-top: 3mm;" th:text="${receipt.amount}">UGX 30,000</div>
+    <div class="words" th:text="${receipt.amountWords}">Thirty thousand shillings only</div>
+  </div>
+
+  <table class="facts">
+    <tr><td class="k">Receipt number</td><td class="strong" th:text="${doc.number}">RT-2026-000001</td></tr>
+    <tr><td class="k">For</td><td th:text="${receipt.forWhat}">BMS subscription</td></tr>
+    <tr><td class="k">Plan</td><td th:text="${receipt.plan}">Plan</td></tr>
+    <tr><td class="k">Period covered</td><td th:text="${receipt.period}">1 Nov 2026 to 30 Nov 2026</td></tr>
+    <tr><td class="k">Paid on</td><td th:text="${receipt.paidOn}">31 Oct 2026</td></tr>
+    <tr><td class="k">Payment method</td><td th:text="${receipt.method}">MTN Mobile Money</td></tr>
+    <tr th:if="${receipt.reference != null}"><td class="k">Reference</td><td th:text="${receipt.reference}">Ref</td></tr>
+  </table>
+
+  <div class="muted" style="margin-top: 8mm;" th:text="${receipt.thanks}">Thank you.</div>
+</body>
+</html>

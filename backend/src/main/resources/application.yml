@@ -260,6 +260,18 @@ bms:
   # tests switch it off so that a tick never charges penalties on a test's loans, and drive the run themselves.
   lending:
     arrears-job-enabled: ${BMS_LENDING_ARREARS_JOB_ENABLED:true}
+  # Subscription billing (issue #480, ADR-075): the reminders and the overdue move, every quarter hour. Nothing is ever
+  # suspended by it. On by default; the integration tests switch it off and call the run themselves. The SMS reminder to
+  # the Owner goes only when sms-enabled is true (and then through the SMS channel's own checks). The receipt's issuer
+  # details are environment values, never repository content.
+  platform:
+    billing-job-enabled: ${BMS_PLATFORM_BILLING_JOB_ENABLED:true}
+    billing:
+      sms-enabled: ${BMS_PLATFORM_BILLING_SMS_ENABLED:false}
+      issuer-name: ${BMS_PLATFORM_BILLING_ISSUER_NAME:Rincol Tech}
+      issuer-address: ${BMS_PLATFORM_BILLING_ISSUER_ADDRESS:}
+      issuer-contact: ${BMS_PLATFORM_BILLING_ISSUER_CONTACT:}
+      issuer-tax-id: ${BMS_PLATFORM_BILLING_ISSUER_TAX_ID:}
 
 # Background jobs on PostgreSQL (ADR-008). BMS_SCHEDULER_ENABLED=false turns polling off in an
 # instance that should only serve HTTP, if a separate worker instance is ever split out.

@@ -293,6 +293,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The plan, its price, the subscription's state and dates, how to pay and the payments with their receipts (FR-SUB-12) */
+        get: operations["billingView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/notice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the business is overdue, since when and the last day of its grace period (FR-SUB-09) */
+        get: operations["billingNotice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/payments/{payment_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The receipt of a payment as a PDF (FR-SUB-11) */
+        get: operations["billingReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/branches": {
         parameters: {
             query?: never;
@@ -2957,6 +3008,41 @@ export interface paths {
         put?: never;
         /** Set the first password with the one-time setup token */
         post: operations["platformSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/billing/due-for-suspension": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Overdue businesses past the grace period, with days overdue and the amount; nothing is suspended automatically (FR-SUB-10) */
+        get: operations["platformDueForSuspension"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/billing/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The grace period and how to pay (FR-SUB-09) */
+        get: operations["platformBillingSettings"];
+        /** Change the grace period or how to pay, with a reason; unchanged values change nothing (FR-SUB-09) */
+        put: operations["platformSaveBillingSettings"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7786,6 +7872,103 @@ export interface components {
             /** Format: date-time */
             to?: string;
         };
+        BillingNotice: {
+            /** Format: date */
+            overdue_since?: string;
+            /** Format: date */
+            pay_by?: string;
+            /** @description none, in_grace or overdue */
+            state?: string;
+        };
+        /** @description Newest first */
+        BillingPayment: {
+            /** Format: int64 */
+            amount_minor?: number;
+            currency?: string;
+            /** Format: uuid */
+            id?: string;
+            /** @description mtn_momo, airtel_money, bank_transfer or other */
+            method?: string;
+            /** Format: int32 */
+            months?: number;
+            /** Format: date */
+            paid_on?: string;
+            /** Format: date */
+            period_end?: string;
+            /** Format: date */
+            period_start?: string;
+            /** @description RT-<year>-<number>; null only if the receipt could not be issued */
+            receipt_no?: string;
+            reference?: string;
+        };
+        BillingSettings: {
+            /**
+             * Format: int32
+             * @description Days an overdue business keeps working before it is listed for suspension
+             */
+            grace_days?: number;
+            /** @description How to pay, in the operator's words, shown in reminders and on the Owner's page */
+            how_to_pay?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            updated_by_name?: string;
+        };
+        BillingSettingsRequest: {
+            /** Format: int32 */
+            grace_days: number;
+            /** @description Left out: kept as it is; empty: cleared */
+            how_to_pay?: string;
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+        };
+        BillingView: {
+            /**
+             * Format: int64
+             * @description The yearly price, or null
+             */
+            annual_minor?: number;
+            /**
+             * Format: int32
+             * @description Months charged for a year, or null
+             */
+            annual_months?: number;
+            currency?: string;
+            /** Format: int32 */
+            grace_days?: number;
+            /** @description The operator's words on how to pay, or null */
+            how_to_pay?: string;
+            /**
+             * Format: int64
+             * @description The plan's monthly price today, in minor units, or null when none was entered
+             */
+            monthly_minor?: number;
+            /**
+             * Format: date
+             * @description While overdue: the first day not paid for
+             */
+            overdue_since?: string;
+            /**
+             * Format: date
+             * @description The last day paid for, or null
+             */
+            paid_until?: string;
+            /**
+             * Format: date
+             * @description While overdue: the last day of the grace period
+             */
+            pay_by?: string;
+            /** @description Newest first */
+            payments?: components["schemas"]["BillingPayment"][];
+            plan_code?: string;
+            plan_name?: string;
+            /** @description trial, active, in_grace, overdue, suspended, cancelled or pilot */
+            state?: string;
+            /**
+             * Format: date
+             * @description The last day of the free month, or null
+             */
+            trial_ends_on?: string;
+        };
         BlacklistRequest: {
             is_blacklisted: boolean;
             /** @description Required when blacklisting (FR-MEM-13) */
@@ -8291,6 +8474,44 @@ export interface components {
             /** Format: date-time */
             expires_at?: string;
             url?: string;
+        };
+        DueForSuspension: {
+            /** Format: int32 */
+            grace_days?: number;
+            /** @description Most overdue first */
+            items?: components["schemas"]["DueForSuspensionItem"][];
+        };
+        /** @description Most overdue first */
+        DueForSuspensionItem: {
+            /**
+             * Format: int64
+             * @description The plan's monthly price today, or null when none was entered
+             */
+            amount_due_minor?: number;
+            currency?: string;
+            /** Format: int64 */
+            days_overdue?: number;
+            /**
+             * Format: date
+             * @description The last day paid for, or of the free month
+             */
+            due_on?: string;
+            /**
+             * Format: date
+             * @description The last day of the grace period, passed
+             */
+            grace_ended_on?: string;
+            /** Format: date-time */
+            last_sign_in_at?: string;
+            name?: string;
+            /** Format: date */
+            overdue_since?: string;
+            owner_email?: string;
+            owner_name?: string;
+            plan_name?: string;
+            slug?: string;
+            /** Format: uuid */
+            tenant_id?: string;
         };
         /** @description FR-CLN-02, chapter 14 lending.due_list: sorted by officer then due date */
         DueList: {
@@ -19003,6 +19224,68 @@ export interface operations {
             };
         };
     };
+    billingView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingView"];
+                };
+            };
+        };
+    };
+    billingNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingNotice"];
+                };
+            };
+        };
+    };
+    billingReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+        };
+    };
     listBranches: {
         parameters: {
             query?: never;
@@ -23833,6 +24116,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    platformDueForSuspension: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DueForSuspension"];
+                };
+            };
+        };
+    };
+    platformBillingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingSettings"];
+                };
+            };
+        };
+    };
+    platformSaveBillingSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingSettings"];
+                };
             };
         };
     };

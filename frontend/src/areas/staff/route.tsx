@@ -17,6 +17,7 @@ import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
 import { SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
+import { BillingBanner } from './billing/banner';
 import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
 import { StaffContext, useOptionalStaff } from './context';
 import { PlanNotice } from './plan';
@@ -170,6 +171,7 @@ function StaffLayout() {
                 </p>
               )}
               <TwoStepNotices me={profile} pathname={pathname} />
+              {!mock && <BillingBanner canOpenBilling={(profile.permissions ?? []).includes('core.billing.read')} />}
               {!mock && <PlanNotice />}
               <StaffBreadcrumbs />
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}

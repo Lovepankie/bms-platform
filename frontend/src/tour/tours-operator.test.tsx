@@ -48,6 +48,34 @@ const { BusinessScreen } = await import('../areas/platform/business');
 const { PlansScreen } = await import('../areas/platform/plans');
 const { FeedbackInbox } = await import('../areas/platform/feedback');
 
+vi.mock('../api/billing', async (original) => {
+  const real = await original<typeof import('../api/billing')>();
+  return {
+    ...real,
+    dueForSuspension: () =>
+      Promise.resolve({
+        grace_days: 7,
+        items: [
+          {
+            tenant_id: 't-2',
+            name: 'Test Shop Two',
+            slug: 'test-shop-two',
+            plan_name: 'Test Small',
+            due_on: '2026-11-01',
+            overdue_since: '2026-11-02',
+            grace_ended_on: '2026-11-08',
+            days_overdue: 19,
+            amount_due_minor: 10000,
+            currency: 'UGX',
+          },
+        ],
+      }),
+    billingSettings: () => Promise.resolve({ grace_days: 7, how_to_pay: 'Test: pay to the test account' }),
+  };
+});
+
+const { DueForSuspensionPage } = await import('../areas/platform/billing');
+
 const FEEDBACK = {
   id: 'f-1',
   tenant_id: 't-1',
@@ -94,6 +122,7 @@ describe('operator page tours', () => {
     expect(pageTourFor(TOURS, OPERATOR, '/platform/businesses/t-1')?.id).toBe('page-operator-business');
     expect(pageTourFor(TOURS, OPERATOR, '/platform/plans')?.id).toBe('page-operator-plans');
     expect(pageTourFor(TOURS, OPERATOR, '/platform/feedback')?.id).toBe('page-operator-feedback');
+    expect(pageTourFor(TOURS, OPERATOR, '/platform/billing')?.id).toBe('page-operator-billing');
     expect(pageTourFor(TOURS, mockMe('admin'), '/platform/plans')).toBeUndefined();
   });
 
@@ -105,6 +134,7 @@ describe('operator page tours', () => {
     ['page-operator-businesses', () => <Businesses />, 'Test Shop One'],
     ['page-operator-business', () => <BusinessScreen tenantId="t-1" />, 'Make a reset link'],
     ['page-operator-plans', () => <PlansScreen />, 'Test Small'],
+    ['page-operator-billing', () => <DueForSuspensionPage />, 'Test Shop Two'],
     [
       'page-operator-feedback',
       () => <FeedbackInbox load={() => Promise.resolve([FEEDBACK])} save={() => Promise.resolve(FEEDBACK)} loadScreenshot={() => Promise.resolve(new Blob())} />,

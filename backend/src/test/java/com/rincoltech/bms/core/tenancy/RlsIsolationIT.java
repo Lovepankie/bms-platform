@@ -336,6 +336,7 @@ class RlsIsolationIT {
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
         // A subscription payment the operator recorded (migration V75, issue #407), by a fabricated operator.
         UUID recorder = UUID.randomUUID();
+        UUID subscriptionPayment = UUID.randomUUID();
         owner.sql("INSERT INTO platform_users (id, email, full_name) VALUES (?, ?, 'Test Operator 09')")
                 .params(recorder, "rls-op-" + recorder + "@example.test")
                 .update();
@@ -345,7 +346,20 @@ class RlsIsolationIT {
                         SELECT ?, s.tenant_id, s.id, s.plan_id, 1000, 'UGX', 'other', DATE '2026-01-01', 1, DATE '2026-01-01',
                                DATE '2026-01-31', ?
                           FROM subscriptions s WHERE s.tenant_id = ?
-                        """).params(UUID.randomUUID(), recorder, t.tenantId()).update();
+                        """).params(subscriptionPayment, recorder, t.tenantId()).update();
+        // Its receipt and a subscription reminder (migration V92, issue #480).
+        owner.sql("""
+                        INSERT INTO subscription_receipts (id, tenant_id, payment_id, receipt_no, business_name, plan_name,
+                                                           issued_on)
+                        VALUES (?, ?, ?, 'RT-2026-' || lpad(nextval('subscription_receipt_numbers')::text, 6, '0'),
+                                'Test Business', 'Test Plan', DATE '2026-01-01')
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), subscriptionPayment)
+                .update();
+        owner.sql("""
+                        INSERT INTO subscription_reminders (id, tenant_id, kind, due_on, channels)
+                        VALUES (?, ?, 'due_in_7', DATE '2026-01-31', '{email}')
+                        """).params(UUID.randomUUID(), t.tenantId()).update();
         owner.sql(
                         "INSERT INTO audit_log (id, tenant_id, actor_kind, action, entity_type) VALUES (?, ?, 'system', 'test.fixture.created', 'test')")
                 .params(UUID.randomUUID(), t.tenantId())

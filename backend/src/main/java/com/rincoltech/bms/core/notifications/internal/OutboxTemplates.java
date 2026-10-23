@@ -434,6 +434,151 @@ class OutboxTemplates {
                     "Open the operator portal",
                     "You got this email because you are a BMS platform operator."));
 
+    // Subscription billing (issue #480, ADR-075): the reminders to the Owner of a business before the last day paid for
+    // or
+    // the last day of the free month, and the receipt of a payment the operator recorded (the PDF is attached when the
+    // email
+    // is sent, EmailAttachments). Plain words; the amount is the plan's price from the price book; how to pay is the
+    // operator's own text.
+    private static final Map<String, Template> EMAIL_BILLING = Map.of(
+            "billing.due_in_7",
+            new Template(
+                    "Your BMS subscription is due on {due_date}",
+                    """
+                    Hello {owner_name},
+
+                    The BMS subscription of {business_name} is paid until {due_date}, 7 days from today. Pay before then to keep using BMS without a break. {amount_line}
+
+                    How to pay:
+
+                    {how_to_pay}
+
+                    Your plan, what is paid and your receipts are on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "billing.due_in_1",
+            new Template(
+                    "Your BMS subscription is due tomorrow",
+                    """
+                    Hello {owner_name},
+
+                    The BMS subscription of {business_name} is paid until tomorrow, {due_date}. Pay before then to keep using BMS without a break. {amount_line}
+
+                    How to pay:
+
+                    {how_to_pay}
+
+                    Your plan, what is paid and your receipts are on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "billing.due_today",
+            new Template(
+                    "Your BMS subscription is due today",
+                    """
+                    Hello {owner_name},
+
+                    The BMS subscription of {business_name} is paid until today, {due_date}. Pay today to keep using BMS without a break. {amount_line}
+
+                    How to pay:
+
+                    {how_to_pay}
+
+                    Your plan, what is paid and your receipts are on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "billing.trial_in_7",
+            new Template(
+                    "Your free month of BMS ends in 7 days",
+                    """
+                    Hello {owner_name},
+
+                    The free month of {business_name} on BMS ends on {due_date}, 7 days from today. To keep using BMS after that, pay for your plan. {amount_line}
+
+                    How to pay:
+
+                    {how_to_pay}
+
+                    Your plan, what is paid and your receipts are on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "billing.trial_in_1",
+            new Template(
+                    "Your free month of BMS ends tomorrow",
+                    """
+                    Hello {owner_name},
+
+                    The free month of {business_name} on BMS ends tomorrow, {due_date}. To keep using BMS after that, pay for your plan. {amount_line}
+
+                    How to pay:
+
+                    {how_to_pay}
+
+                    Your plan, what is paid and your receipts are on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "billing.trial_today",
+            new Template(
+                    "Your free month of BMS ends today",
+                    """
+                    Hello {owner_name},
+
+                    The free month of {business_name} on BMS ends today, {due_date}. To keep using BMS after today, pay for your plan. {amount_line}
+
+                    How to pay:
+
+                    {how_to_pay}
+
+                    Your plan, what is paid and your receipts are on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "billing.receipt",
+            new Template(
+                    "Receipt {receipt_no} for your BMS subscription",
+                    """
+                    Hello {owner_name},
+
+                    Thank you. We received {amount} for the BMS subscription of {business_name}, for {period}. Your \
+                    receipt {receipt_no} is attached.
+
+                    Your receipts are also on the Plan and billing page:
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Plan and billing",
+                    "You got this email because you are the owner of {business_name} on BMS."));
+
     private static final Map<String, Template> EMAIL = emailTemplates();
 
     private static Map<String, Template> emailTemplates() {
@@ -445,6 +590,7 @@ class OutboxTemplates {
         all.putAll(EMAIL_FEEDBACK);
         all.putAll(EMAIL_DATA_EXPORT);
         all.putAll(EMAIL_PLAN);
+        all.putAll(EMAIL_BILLING);
         return Map.copyOf(all);
     }
 
@@ -577,6 +723,45 @@ class OutboxTemplates {
                             null,
                             "{tenant_name}: the phone or email of the BMS owner sign-in was changed. Not you? Call Rincol Tech"
                                     + " support at once.")),
+            // Subscription reminders to the Owner of a business (issue #480, ADR-075), only when the platform's billing
+            // SMS is
+            // switched on: no amount and no link, the email carries them.
+            Map.entry(
+                    "billing.due_in_7",
+                    new Template(
+                            null,
+                            "{tenant_name}: your BMS subscription is paid until {due_date}. Pay before then to keep using"
+                                    + " BMS. Rincol Tech")),
+            Map.entry(
+                    "billing.due_in_1",
+                    new Template(
+                            null,
+                            "{tenant_name}: your BMS subscription is paid until tomorrow, {due_date}. Pay to keep using"
+                                    + " BMS. Rincol Tech")),
+            Map.entry(
+                    "billing.due_today",
+                    new Template(
+                            null,
+                            "{tenant_name}: your BMS subscription is paid until today, {due_date}. Pay today to keep"
+                                    + " using BMS. Rincol Tech")),
+            Map.entry(
+                    "billing.trial_in_7",
+                    new Template(
+                            null,
+                            "{tenant_name}: your free month of BMS ends on {due_date}. Pay for your plan to keep using"
+                                    + " BMS. Rincol Tech")),
+            Map.entry(
+                    "billing.trial_in_1",
+                    new Template(
+                            null,
+                            "{tenant_name}: your free month of BMS ends tomorrow, {due_date}. Pay for your plan to keep"
+                                    + " using BMS. Rincol Tech")),
+            Map.entry(
+                    "billing.trial_today",
+                    new Template(
+                            null,
+                            "{tenant_name}: your free month of BMS ends today, {due_date}. Pay for your plan to keep using"
+                                    + " BMS. Rincol Tech")),
             Map.entry(
                     "savings.deposit",
                     new Template(
