@@ -27,12 +27,14 @@ export const icons = {
       <circle cx="17" cy="20" r="1.2" />
     </Svg>
   ),
-  // A parcel on its way: customer orders with delivery (issue #385).
+  // A delivery motorbike: customer orders with delivery (issue #385).
   orders: (
     <Svg>
-      <path d="M3 7l9-4 9 4v10l-9 4-9-4z" />
-      <path d="M3 7l9 4 9-4" />
-      <path d="M12 11v10" />
+      <circle cx="6" cy="17" r="3" />
+      <circle cx="18" cy="17" r="3" />
+      <path d="M6 17h7l3-6h-4" />
+      <path d="M16 11l1.5-4H20" />
+      <path d="M3 13V8h6v5" />
     </Svg>
   ),
   creditSales: (
@@ -42,6 +44,7 @@ export const icons = {
       <path d="M7 15h4" />
     </Svg>
   ),
+  // A till receipt: every sale.
   salesHistory: (
     <Svg>
       <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
@@ -66,28 +69,23 @@ export const icons = {
   ),
   transfers: (
     <Svg>
-      <path d="M8 6h12" />
-      <path d="M8 12h12" />
-      <path d="M8 18h12" />
-      <path d="M4 6h.01" />
-      <path d="M4 12h.01" />
-      <path d="M4 18h.01" />
+      <path d="M10 6h11M10 12h11M10 18h11" />
+      <path d="M3 4.5l2 1.5-2 1.5M3 10.5l2 1.5-2 1.5M3 16.5l2 1.5-2 1.5" />
     </Svg>
   ),
+  // A map pin: stock in each store and shop.
   stockByLocation: (
     <Svg>
-      <path d="M3 9l9-5 9 5" />
-      <path d="M5 9v11h14V9" />
-      <path d="M9 20v-6h6v6" />
+      <path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
+      <circle cx="12" cy="9" r="2.5" />
     </Svg>
   ),
+  // A parcel on the move: stock sent and not yet received.
   inTransit: (
     <Svg>
-      <path d="M1 6h13v10H1z" />
-      <path d="M14 9h4l3 3v4h-7" />
-      <circle cx="5.5" cy="17.5" r="1.8" />
-      <circle cx="17.5" cy="17.5" r="1.8" />
-      <path d="M5 11h5" />
+      <rect x="9" y="6" width="12" height="12" rx="1" />
+      <path d="M13 6v4h4V6" />
+      <path d="M2 9h4M1 12h5M2 15h4" />
     </Svg>
   ),
   usage: (
@@ -124,10 +122,12 @@ export const icons = {
       <path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.3a5 5 0 0 1 3 4.7v1" />
     </Svg>
   ),
+  // A customer beside the lines of their statement: credit limits and statements.
   customerAccounts: (
     <Svg>
-      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
-      <path d="M9 8h6M9 12h6" />
+      <circle cx="8" cy="8" r="3" />
+      <path d="M3 20a5 5 0 0 1 10 0" />
+      <path d="M15 8h6M15 12h6M15 16h4" />
     </Svg>
   ),
   documents: (
@@ -136,10 +136,11 @@ export const icons = {
       <path d="M15 3v4h4M10 12h6M10 16h6" />
     </Svg>
   ),
+  // A speech bubble with quote marks: prices offered to a buyer.
   quotations: (
     <Svg>
-      <path d="M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2z" />
-      <path d="M9 9h6M9 13h3" />
+      <path d="M21 12a8.5 8.5 0 0 1-12.2 7.7L4 21l1.3-4.4A8.5 8.5 0 1 1 21 12z" />
+      <path d="M8.5 10h2.5v2.2a2.2 2.2 0 0 1-2 2.3M13.5 10H16v2.2a2.2 2.2 0 0 1-2 2.3" />
     </Svg>
   ),
   returns: (
@@ -148,65 +149,71 @@ export const icons = {
       <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
     </Svg>
   ),
-  // The purchasing screens (issue #198). JUSTIFICATION-A3: five new icons, one per new screen; the home tiles read icons by screen name.
+  // The purchasing screens (issue #198), each with its own drawing (issue #483): an order sent out, a delivery coming into a tray, an
+  // invoice with money on it, money going out, and what is owed by supplier.
   purchaseOrders: (
     <Svg>
-      <path d="M6 3h9l4 4v14H6z" />
-      <path d="M14 3v5h5M9 12h7M9 16h7" />
+      <path d="M13 21H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h8l4 4v6" />
+      <path d="M9 9h5M9 13h4" />
+      <path d="M15 18h6M18 15l3 3-3 3" />
     </Svg>
   ),
   goodsReceived: (
     <Svg>
-      <path d="M3 8l9-5 9 5v9l-9 5-9-5z" />
-      <path d="M3 8l9 5 9-5M12 13v9" />
+      <path d="M3 13h5l1 3h6l1-3h5v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+      <path d="M12 3v9M8 8l4 4 4-4" />
     </Svg>
   ),
   supplierBills: (
     <Svg>
-      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
-      <path d="M9 8h6M9 12h3" />
-      <path d="M15 13v4M13.5 14.5h3" />
+      <path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M14 3v4h4" />
+      <path d="M12 9.5v8M14 11h-2.75a1.25 1.25 0 0 0 0 2.5h1.5a1.25 1.25 0 0 1 0 2.5H10" />
     </Svg>
   ),
   supplierPayments: (
     <Svg>
-      <rect x="3" y="6" width="18" height="12" rx="2" />
-      <circle cx="12" cy="12" r="2.5" />
-      <path d="M6 9v.01M18 15v.01" />
+      <circle cx="9" cy="12" r="6" />
+      <path d="M9 9.5v5" />
+      <path d="M15 12h7M19 9l3 3-3 3" />
     </Svg>
   ),
   supplierPayables: (
     <Svg>
-      <path d="M4 20V4M4 20h16" />
-      <path d="M8 16v-4M12 16V8M16 16v-6" />
+      <path d="M4 4v16" />
+      <path d="M4 7h10M4 12h15M4 17h6" />
     </Svg>
   ),
-  // JUSTIFICATION-A3: two new icons for landed costs and supplier credit notes (issue #199); the home tiles read icons by screen name.
+  // Landed costs (issue #199): a ship for freight, duty and clearing; credit notes: an invoice with money taken off.
   landedCosts: (
     <Svg>
-      <path d="M2 16h13l2-6h3l2 3v3h-2" />
-      <path d="M5 16V8h8v8" />
-      <circle cx="7" cy="18" r="1.6" />
-      <circle cx="17" cy="18" r="1.6" />
+      <path d="M3 15h18l-3 5H6z" />
+      <path d="M7 15V9h10v6" />
+      <path d="M12 9V5h3" />
     </Svg>
   ),
   supplierCredits: (
     <Svg>
-      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
-      <path d="M9 9h6" />
-      <path d="M9 13h6" />
+      <path d="M13 21H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h8l4 4v5" />
+      <path d="M9 9h5M9 13h3" />
+      <circle cx="17" cy="17" r="4" />
+      <path d="M15 17h4" />
     </Svg>
   ),
+  // A clock: what each credit buyer owes, by how late.
   customerAgeing: (
     <Svg>
-      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
     </Svg>
   ),
+  // Branches, one above two: which are stores and which are shops.
   branchRoles: (
     <Svg>
-      <path d="M3 10l2-5h14l2 5" />
-      <path d="M4 10v9h16v-9" />
-      <path d="M9 19v-5h6v5" />
+      <rect x="9" y="3" width="6" height="5" rx="1" />
+      <rect x="3" y="16" width="6" height="5" rx="1" />
+      <rect x="15" y="16" width="6" height="5" rx="1" />
+      <path d="M12 8v4M6 16v-4h12v4" />
     </Svg>
   ),
   stocktake: (
@@ -216,18 +223,18 @@ export const icons = {
       <path d="M9 13l2 2 4-4" />
     </Svg>
   ),
+  // A gem: what the stock is worth.
   valuation: (
     <Svg>
-      <rect x="2" y="6" width="20" height="12" rx="2" />
-      <circle cx="12" cy="12" r="2.5" />
-      <path d="M6 9v.01M18 15v.01" />
+      <path d="M6 4h12l3 5-9 11L3 9z" />
+      <path d="M3 9h18M9 4l3 5 3-5" />
     </Svg>
   ),
+  // An open book: the catalogue of items.
   catalogue: (
     <Svg>
-      <path d="M4 5h16v4H4z" />
-      <path d="M5 9v10h14V9" />
-      <path d="M9 13h6" />
+      <path d="M12 6c-2-1.5-5-2-8-2v14c3 0 6 .5 8 2 2-1.5 5-2 8-2V4c-3 0-6 .5-8 2z" />
+      <path d="M12 6v14" />
     </Svg>
   ),
   profit: (
@@ -236,11 +243,105 @@ export const icons = {
       <path d="M15 7h6v6" />
     </Svg>
   ),
+  // A safe: money set aside for the day (the retail cash book).
   savings: (
+    <Svg>
+      <rect x="3" y="4" width="18" height="15" rx="2" />
+      <circle cx="12" cy="11.5" r="3.5" />
+      <path d="M12 8v1M12 14v1M7 19v2M17 19v2" />
+    </Svg>
+  ),
+  // A shopping bag: the Retail item of the side menu (issue #483), apart from Sale's cart.
+  retail: (
+    <Svg>
+      <path d="M5 8h14l-1 13H6z" />
+      <path d="M9 10V6a3 3 0 0 1 6 0v4" />
+    </Svg>
+  ),
+  // A shop front with an awning: the Shop heading of the side menu and the Shop card on Home (issue #483).
+  shop: (
+    <Svg>
+      <path d="M3 10l2-5h14l2 5" />
+      <path d="M4 10v9h16v-9" />
+      <path d="M9 19v-5h6v5" />
+    </Svg>
+  ),
+  // A stack of coins: the lending Savings item (issue #483), apart from the retail cash book's safe.
+  coins: (
     <Svg>
       <ellipse cx="12" cy="6" rx="7" ry="3" />
       <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
       <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+    </Svg>
+  ),
+  // A seedling: lending investments.
+  investments: (
+    <Svg>
+      <path d="M12 21v-9" />
+      <path d="M12 12c0-4 3-6 7-6 0 4-3 6-7 6z" />
+      <path d="M12 14c0-3-2.2-5-6-5 0 3 2.2 5 6 5z" />
+    </Svg>
+  ),
+  // A light bulb: lending insights.
+  insights: (
+    <Svg>
+      <path d="M9 18h6M10 21h4" />
+      <path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" />
+    </Svg>
+  ),
+  // A sparkle: the AI assistant.
+  assistant: (
+    <Svg>
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+      <path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+    </Svg>
+  ),
+  // A page with a bar chart: Reports.
+  reports: (
+    <Svg>
+      <path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+      <path d="M9 17v-3M12 17V9M15 17v-5" />
+    </Svg>
+  ),
+  // An arrow coming in to a coin: Receive payments, apart from Banked's bank building (issue #483).
+  receivePayments: (
+    <Svg>
+      <circle cx="15" cy="12" r="6" />
+      <path d="M15 9.5v5" />
+      <path d="M2 12h7M6 9l3 3-3 3" />
+    </Svg>
+  ),
+  // A bar chart with a cross: delivery fees taken and orders cancelled.
+  ordersReport: (
+    <Svg>
+      <path d="M3 20h18" />
+      <path d="M6 16v-6M10 16V6M14 16v-4" />
+      <path d="M17 5l4 4M21 5l-4 4" />
+    </Svg>
+  ),
+  // The catalogue tiles (issue #483): a folder of categories, a ruler for units, an upload for the importer and a barcode label.
+  categories: (
+    <Svg>
+      <path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" />
+      <path d="M8 13h8" />
+    </Svg>
+  ),
+  units: (
+    <Svg>
+      <path d="M3 17L17 3l4 4L7 21z" />
+      <path d="M7 13l2 2M10 10l2 2M13 7l2 2" />
+    </Svg>
+  ),
+  importer: (
+    <Svg>
+      <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+      <path d="M12 15V3M7 8l5-5 5 5" />
+    </Svg>
+  ),
+  labels: (
+    <Svg>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M6 9v6M9 9v6M12 9v6M15 9v6M18 9v6" />
     </Svg>
   ),
   // A coin held out on an open hand: the Lending heading of the side menu (issue #471).
@@ -258,11 +359,12 @@ export const icons = {
       <path d="M3 21h18" />
     </Svg>
   ),
+  // A wallet: money spent.
   expenses: (
     <Svg>
-      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
-      <path d="M9 9h6" />
-      <path d="M12 12v4M10 14l2 2 2-2" />
+      <path d="M3 7a2 2 0 0 1 2-2h12v4" />
+      <path d="M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2" />
+      <path d="M16 14.5h.01" />
     </Svg>
   ),
   withdrawals: (
@@ -272,25 +374,28 @@ export const icons = {
       <circle cx="12" cy="15" r="1.5" />
     </Svg>
   ),
+  // A note with an arrow out and an arrow back: money advanced, and repaid.
   advances: (
     <Svg>
-      <path d="M4 9h14" />
-      <path d="M14 5l4 4-4 4" />
-      <path d="M20 16H6" />
-      <path d="M10 12l-4 4 4 4" />
-      <circle cx="12" cy="12.5" r="0.8" />
+      <rect x="4" y="8.5" width="16" height="7" rx="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <path d="M6 4.5h13M16.5 2l2.5 2.5-2.5 2.5" />
+      <path d="M18 19.5H5M7.5 17L5 19.5 7.5 22" />
     </Svg>
   ),
+  // Two notes: the cash of each shop, each day.
   cashSummary: (
     <Svg>
-      <path d="M9 4h6v3H9z" />
-      <path d="M15 5h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3" />
-      <path d="M8 17v-3M12 17v-6M16 17v-4" />
+      <rect x="2" y="8" width="16" height="10" rx="1.5" />
+      <path d="M6 5h14.5a1.5 1.5 0 0 1 1.5 1.5V15" />
+      <circle cx="10" cy="13" r="2" />
     </Svg>
   ),
+  // A pair of scales: expected against banked.
   bankingReport: (
     <Svg>
-      <path d="M4 20V10M10 20V4M16 20v-8M22 20H2" />
+      <path d="M12 4v16M7 20h10M5 7h14" />
+      <path d="M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z" />
     </Svg>
   ),
   expensesReport: (
@@ -299,11 +404,12 @@ export const icons = {
       <path d="M15 3.5A9 9 0 0 1 20.5 9H15z" />
     </Svg>
   ),
+  // A checklist: the expense categories and items.
   expenseSetup: (
     <Svg>
-      <path d="M8 6h12M8 12h12M8 18h12" />
-      <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
-      <path d="M4 3v6M4 15v6" />
+      <rect x="3" y="4" width="5" height="5" rx="1" />
+      <rect x="3" y="15" width="5" height="5" rx="1" />
+      <path d="M11 6.5h10M11 17.5h10" />
     </Svg>
   ),
   salesAnalysis: (
@@ -323,10 +429,12 @@ export const icons = {
       <path d="M3 12h4l3-8 4 16 3-8h4" />
     </Svg>
   ),
+  // A gauge: who owes and how late.
   creditControl: (
     <Svg>
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M3 10h18M7 15h4" />
+      <path d="M4 18a8 8 0 1 1 16 0" />
+      <path d="M12 18l4-5" />
+      <path d="M3 18h18" />
     </Svg>
   ),
   evaluation: (

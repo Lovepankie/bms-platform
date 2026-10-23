@@ -9,7 +9,7 @@ import { useBranchRolesRead } from './ui';
 // Since issue #455 they are a group under Retail in the side menu on every screen size, not a bar of their own, and a phone has a
 // one-tap Sell button in the staff bar for anyone who can sell.
 
-const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
+export const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
   sale: 'Sale', orders: 'Orders', banking: 'Banked', savings: 'Savings', expenses: 'Expenses', advances: 'Advances', stock: 'Stock', restock: 'Restock', stocktake: 'Count', usage: 'Usage',
 };
 const MAX_SHORTCUTS = 5;

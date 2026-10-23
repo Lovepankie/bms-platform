@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockMe } from '../../api/retail-mock';
+import { icons } from '../../components/icons';
 import { StaffContext } from './context';
 
 // After a logo or colour is saved on the set-up screen, the admin is told the app has a new icon and how it reaches a phone (issue
@@ -69,13 +70,14 @@ afterEach(() => {
   Object.defineProperty(navigator, 'userAgent', { value: REAL_AGENT, configurable: true });
 });
 
-function show({ card = false, modules }: { card?: boolean; modules?: string[] } = {}) {
+function show({ card = false, modules, permissions = ['core.settings.manage'], extra }: { card?: boolean; modules?: string[]; permissions?: string[]; extra?: ReactNode } = {}) {
   const me = mockMe('owner');
-  render(
+  return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me: { ...me, permissions: ['core.settings.manage'], modules: modules ?? me.modules }, branch: null, chooseBranch: () => {} }}>
+      <StaffContext.Provider value={{ me: { ...me, permissions, modules: modules ?? me.modules }, branch: null, chooseBranch: () => {} }}>
         {card && <NewLogoCard />}
         <Setup />
+        {extra}
       </StaffContext.Provider>
     </QueryClientProvider>,
   );
@@ -214,5 +216,39 @@ describe('the set-up hints and module wording', () => {
     expect(reportsWording([])).toBe('and others');
     expect(hasRetail(undefined)).toBe(true);
     expect(hasRetail(['lending'])).toBe(false);
+  });
+});
+
+// Issue #483: no two items of the set-up menu draw the same picture. The page draws none today; any it gains must differ.
+const repeated = (root: ParentNode) => {
+  const drawings = [...root.querySelectorAll('svg')].map((svg) => svg.outerHTML);
+  return drawings.filter((svg, i) => drawings.indexOf(svg) !== i);
+};
+
+// Everything the page renders, with the checklist and every section shown, as `show` draws it: the page's <main> and anything
+// beside it.
+async function wholePage(extra?: ReactNode) {
+  const { container } = show({ modules: ['lending', 'retail'], permissions: ['core.settings.manage', 'core.branches.read', 'core.users.read', 'core.referrals.read'], card: true, extra });
+  await screen.findByRole('link', { name: 'Referrals' });
+  await screen.findByRole('heading', { name: 'Checklist' });
+  expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Business set-up');
+  return container;
+}
+
+describe('the set-up menu icons', () => {
+  beforeEach(() => {
+    settings.setup_dismissed = false;
+  });
+  afterEach(() => {
+    settings.setup_dismissed = true;
+  });
+
+  it('catches one picture drawn twice beside the page', async () => {
+    const container = await wholePage(<>{icons.settings}{icons.settings}</>);
+    expect(repeated(container)).toHaveLength(1);
+  });
+
+  it('draws no picture twice', async () => {
+    expect(repeated(await wholePage())).toEqual([]);
   });
 });

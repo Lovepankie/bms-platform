@@ -15,21 +15,13 @@ import { TurnOnCard } from '../../push/TurnOnCard';
 import { HelpMenu, TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
-import { type MenuLink, type MenuSection, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
+import { SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
 import { StaffContext, useOptionalStaff } from './context';
-import { canConfigureAdvisor, showInsights } from './insights/permissions';
-import { showInvestments } from './lending/investment-state';
-import { showCollateral, showMembers } from './lending/member-permissions';
-import { showLending } from './lending/permissions';
-import { showSavings } from './lending/savings-permissions';
-import { showReports } from './reports/permissions';
-import { RetailMenuGroup, shortcutsFor, useSells } from './retail/nav';
-import { canSeeProfit, showRetail } from './retail/permissions';
-import { showReceivePayments } from './payments/state';
-import { showSms } from './sms/state';
-import { showUsers } from './users/state';
+import { STAFF_SECTIONS, staffAreas } from './menu';
+import { useSells } from './retail/nav';
+import { canSeeProfit } from './retail/permissions';
 import { rememberPage } from './feedback/feedback-state';
 import { TwoStepNotices } from './two-step/notices';
 import { OwnTwoStep } from './two-step/own';
@@ -187,52 +179,6 @@ function StaffLayout() {
       </OfflineProvider>
     </StaffContext.Provider>
   );
-}
-
-/**
- * The two headed parts of the menu for a business with both modules (issue #471). A business with one of them gets no heading: the
- * side menu draws sections only when the links name two.
- */
-export const STAFF_SECTIONS: MenuSection[] = [
-  { id: 'shop', label: 'Shop', icon: icons.stock, tours: ['retail-nav'] },
-  { id: 'lending', label: 'Lending', icon: icons.lending },
-];
-
-/**
- * The areas the session may open, in menu order; Retail carries its shortcuts as a group (`sells` from useSells decides Sale). The
- * sidebar and the drawer both list these, the lending and retail areas marked with their STAFF_SECTIONS id.
- */
-export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
-  const permissions = me.permissions ?? [];
-  const shortcuts = showRetail(me) ? shortcutsFor(me, { sells }) : [];
-  const areas: (MenuLink | false)[] = [
-    { to: '/staff', label: 'Home', icon: icons.home, exact: true },
-    permissions.includes('core.approvals.read') && { to: '/staff/approvals', label: 'Approvals', icon: icons.approve, tour: 'nav-approvals' },
-    showLending(me) && { to: '/staff/lending', label: 'Loans', icon: icons.calendar, exact: true, tour: 'nav-lending', section: 'lending' },
-    showMembers(me) && { to: '/staff/lending/members', label: 'Members', icon: icons.people, tour: 'nav-members', section: 'lending' },
-    !showMembers(me) && showCollateral(me) && { to: '/staff/lending/collateral', label: 'Collateral', icon: icons.lock, section: 'lending' },
-    showSavings(me) && { to: '/staff/lending/savings', label: 'Savings', icon: icons.savings, section: 'lending' },
-    showInvestments(me) && { to: '/staff/lending/investments', label: 'Investments', icon: icons.valuation, section: 'lending' },
-    showInsights(me) && { to: '/staff/insights', label: 'Insights', icon: icons.salesAnalysis, tour: 'nav-insights', section: 'lending' },
-    canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.evaluation, section: 'lending' },
-    showReports(me) && { to: '/staff/reports', label: 'Reports', icon: icons.documents },
-    showRetail(me) && {
-      to: '/staff/retail',
-      label: 'Retail',
-      icon: icons.sale,
-      tour: 'nav-retail',
-      group: <RetailMenuGroup shortcuts={shortcuts} />,
-      groupPaths: shortcuts.map((s) => s.path),
-      section: 'shop',
-    },
-    showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },
-    showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.banking },
-    showUsers(me) && { to: '/staff/users', label: 'Users', icon: icons.user, tour: 'nav-users' },
-    { to: '/staff/notifications', label: 'Notifications', icon: icons.bell, tour: 'nav-notifications' },
-    { to: '/staff/feedback', label: 'Feedback', icon: icons.chat, tour: 'nav-feedback' },
-    permissions.includes('core.settings.manage') && { to: '/staff/setup', label: 'Business set-up', icon: icons.settings },
-  ];
-  return areas.filter((a): a is MenuLink => a !== false);
 }
 
 /**

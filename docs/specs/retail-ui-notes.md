@@ -102,7 +102,8 @@ The inline `<style>` element the screens used to render (`RetailStyles`) is gone
 (`style-src 'self'`) refused it, so on a server the screens had no styles at all. `RetailStyles` stays as
 a no-op export.
 
-- The retail home shows one large tile per screen, with an icon, two per row on a phone.
+- The retail home shows one large tile per screen, with an icon, two per row on a phone. Each tile has its own icon
+  (`icons[screen]`, issue #483), the same one its shortcut shows in the side menu; so do the catalogue tiles (`TILE_ICONS`).
 - The retail shortcuts (`retail/nav.tsx`, up to five the user may use) are a group under Retail in the
   side menu, the sidebar from 720px and the drawer on a phone (issue #455 replaced the bottom bar). Retail stays
   current on every retail page and is drawn as the section above a current shortcut. On a phone a primary Sell

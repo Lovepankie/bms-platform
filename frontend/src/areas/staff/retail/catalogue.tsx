@@ -31,8 +31,8 @@ export function AddPanel({ label, open, onOpen, onClose, children }: { label: st
   );
 }
 
-const TILE_ICONS: Partial<Record<RetailScreen, keyof typeof icons>> = {
-  products: 'stock', categories: 'catalogue', units: 'valuation', suppliers: 'restock', buyers: 'creditSales', importer: 'stocktake', labels: 'catalogue',
+export const TILE_ICONS: Partial<Record<RetailScreen, keyof typeof icons>> = {
+  products: 'stock', categories: 'categories', units: 'units', suppliers: 'restock', buyers: 'customerAccounts', importer: 'importer', labels: 'labels',
 };
 
 export function CatalogueLinks() {
@@ -52,7 +52,7 @@ export function CatalogueLinks() {
       {canUse(me, 'importer') && (
         <li>
           <Link className="rt-tile tile" to={'/staff/retail/catalogue/import' as never} data-tour="catalogue-importer">
-            <span className="icon-chip">{icons.stocktake}</span>
+            <span className="icon-chip">{icons[TILE_ICONS.importer ?? 'catalogue']}</span>
             <strong>Import items</strong>
             <span className="tile-hint">Add many items from a spreadsheet file</span>
           </Link>

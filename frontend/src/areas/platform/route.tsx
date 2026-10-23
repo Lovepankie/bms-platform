@@ -4,26 +4,17 @@ import { type ReactNode, useEffect, useState, useSyncExternalStore } from 'react
 import { api } from '../../api/client';
 import { platformMe } from '../../api/onboarding';
 import { BusyButton } from '../../app/ui/BusyButton';
-import { icons } from '../../components/icons';
-import { type MenuLink, SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
+import { SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { getAccessToken, refreshSession, setAccessToken, setSessionScope, subscribe } from '../../auth/session';
 import { TourProvider } from '../../tour/host';
 import { OPERATOR } from '../../tour/tours-operator';
+import { AREAS } from './operator-areas';
 
 // The operator portal (ADR-024 decision 8, spec section 8) on the platform host: a protected area
 // for platform operators only. It restores the operator session from the platform refresh cookie
 // and sends anyone without one to /platform/sign-in. The API decides every permission.
 
 setSessionScope('platform');
-
-// The portal's areas, in the same side menu as the staff area's: a sidebar from 720px, a drawer on a phone (issue #455).
-const AREAS: MenuLink[] = [
-  { to: '/platform', label: 'Applications', icon: icons.documents, exact: true },
-  { to: '/platform/businesses', label: 'Businesses', icon: icons.building },
-  { to: '/platform/plans', label: 'Plans and prices', icon: icons.priceLists },
-  { to: '/platform/outbox', label: 'Messages not sent', icon: icons.bell },
-  { to: '/platform/feedback', label: 'Feedback', icon: icons.chat },
-];
 
 function PortalLayout() {
   const navigate = useNavigate();

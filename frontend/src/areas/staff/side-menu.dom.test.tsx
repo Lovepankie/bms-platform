@@ -14,7 +14,8 @@ import { TourProvider, useTour } from '../../tour/host';
 import type { Tour } from '../../tour/model';
 import { StaffContext } from './context';
 import { PortalFrame } from '../platform/route';
-import { StaffBar, StaffSideNav, staffAreas } from './route';
+import { staffAreas } from './menu';
+import { StaffBar, StaffSideNav } from './route';
 
 // The side menu of the staff area (issue #455), one list of areas on every screen size. Below 720px a menu button opens a drawer
 // from the left with the areas the session may open, the current one marked, the retail shortcuts as a group under Retail, and the

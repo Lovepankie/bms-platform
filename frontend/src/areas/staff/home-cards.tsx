@@ -79,7 +79,7 @@ function ShopCard({ parts }: { parts: ReturnType<typeof homeParts> }) {
   const open = (board.data?.ordered ?? 0) + (board.data?.packed ?? 0) + (board.data?.out_for_delivery ?? 0);
   return (
     <article className="card home-card" aria-labelledby="home-shop">
-      <h2 id="home-shop" className="card-title">{icons.stock}<span>Shop</span></h2>
+      <h2 id="home-shop" className="card-title">{icons.shop}<span>Shop</span></h2>
       <dl className="home-figures">
         {parts.sales && (
           <Figure label="Sales today" query={dashboard}>
