@@ -42,9 +42,55 @@ export function claimReload(now = Date.now(), storage: Storage | null = sessionS
   }
 }
 
+/** How long the new app may take to arrive before the page reloads anyway. */
+const UPDATE_LIMIT_MS = 3_000;
+
+export const OFFLINE_MESSAGE = 'You are offline. The app will update when you are back online.';
+
+/** Whether the browser says it has no network. Where it cannot tell, the phone counts as online. */
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+
+/**
+ * Asks every registration to fetch the newest worker and, when one is installing or waiting, waits until it takes
+ * over. The worker is generated with skipWaiting and clientsClaim on (vite.config.ts, registerType autoUpdate), so a
+ * new worker takes over by itself as soon as it has saved the new app files.
+ */
+async function updateWorker(): Promise<void> {
+  const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
+  if (!sw) return;
+  const regs = await sw.getRegistrations();
+  await Promise.all(regs.map((r) => r.update().catch(() => undefined)));
+  if (!regs.some((r) => r.installing || r.waiting)) return;
+  await new Promise<void>((resolve) => sw.addEventListener('controllerchange', () => resolve(), { once: true }));
+}
+
+/**
+ * Loads the newest app, also when the phone's offline copy (the service worker) still holds the old one
+ * (Hillary, 24 Oct 2026: refreshing kept showing "A new version of the app is ready"). It lets the new worker take
+ * over first, for at most UPDATE_LIMIT_MS, then always reloads. It deletes no saved app files and keeps the worker
+ * registered, so the app still opens offline and the phone keeps its push notices sign-up (ADR-050); the server
+ * keeps the old app files for a phone that is still behind (#525). Offline it reloads nothing and returns 'offline':
+ * a reload without network would only show the browser's offline page.
+ */
+export async function loadFreshApp(
+  reload: () => void = () => location.reload(),
+  limitMs = UPDATE_LIMIT_MS,
+): Promise<'reloaded' | 'offline'> {
+  if (isOffline()) return 'offline';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, limitMs);
+  });
+  // A browser that refuses any of this still gets the plain reload.
+  await Promise.race([updateWorker().catch(() => undefined), limit]);
+  clearTimeout(timer);
+  reload();
+  return 'reloaded';
+}
+
 /** Reloads the page when a reload can be claimed; true when it reloads. */
-export function reloadOnce(now = Date.now(), storage: Storage | null = sessionStore(), reload = () => location.reload()): boolean {
-  if (!claimReload(now, storage)) return false;
+export function reloadOnce(now = Date.now(), storage: Storage | null = sessionStore(), reload = () => void loadFreshApp()): boolean {
+  if (isOffline() || !claimReload(now, storage)) return false;
   reload();
   return true;
 }
@@ -53,16 +99,25 @@ export function reloadOnce(now = Date.now(), storage: Storage | null = sessionSt
 export function RouteError({ error }: ErrorComponentProps) {
   const stale = isStaleAppError(error);
   // The decision is made once, at the first render; the reload itself runs after rendering.
-  const [reloading] = useState(() => stale && claimReload());
+  const [offline, setOffline] = useState(() => stale && isOffline());
+  const [reloading] = useState(() => stale && !offline && claimReload());
+  const load = () => void loadFreshApp().then((r) => setOffline(r === 'offline'));
   useEffect(() => {
-    if (reloading) location.reload();
+    if (reloading) void loadFreshApp();
     else if (!stale) console.error('Screen error', error);
   }, [reloading, stale, error]);
+  // Back online, the waiting app updates by itself, as the offline message promises.
+  useEffect(() => {
+    if (!offline) return;
+    const back = () => void loadFreshApp();
+    window.addEventListener('online', back, { once: true });
+    return () => window.removeEventListener('online', back);
+  }, [offline]);
   if (reloading) return <p role="status">Getting the new version of the app…</p>;
   return (
     <div role="alert" className={stale ? 'alert alert-info' : 'alert alert-danger'}>
-      <p>{stale ? 'A new version of the app is ready.' : 'This screen could not open.'}</p>
-      <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
+      <p>{offline ? OFFLINE_MESSAGE : stale ? 'A new version of the app is ready.' : 'This screen could not open.'}</p>
+      <button type="button" className="btn btn-primary" onClick={load}>
         Load the page again
       </button>
     </div>
