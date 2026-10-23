@@ -3,6 +3,7 @@ import { useShellBrand } from './branding';
 import { Landing } from './landing';
 import { RefreshButton } from './refresh-button';
 import { Shell } from './shell';
+import { RouteError } from './stale-app';
 
 // Route-level split (ADR-009): /staff and /member are separate lazily loaded route trees, so a
 // member never downloads staff code; sign-in and invitation acceptance are small chunks of their
@@ -447,6 +448,8 @@ export const router = createRouter({
       platformFeedbackRoute,
     ]),
   ]),
+  // A phone on the app from before a deploy reloads itself instead of showing the raw error.
+  defaultErrorComponent: RouteError,
 });
 
 declare module '@tanstack/react-router' {
