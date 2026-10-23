@@ -201,6 +201,49 @@ services:
       BMS_TENANT_HOST_PATTERN: ${BMS_TENANT_HOST_PATTERN:?}
       BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
     mem_limit: 64m
+    # Hashed files of earlier builds, read-only; the Caddyfile falls back to them (ADR-078).
+    volumes:
+      - type: volume
+        source: web_assets
+        target: /srv/previous
+        read_only: true
+        volume:
+          nocopy: true
+
+  # One-shot: deploy.sh runs it with the OUTGOING web image just before web is replaced (ADR-078).
+  # It copies that build's hashed files into web_assets, where the new web container still serves
+  # them, so a phone on the previous app copy keeps loading its screens; it refreshes the date of a
+  # file it already holds and removes files that left the live build more than BMS_KEEP_ASSETS_DAYS
+  # days ago. Hashed names never clash, so nothing is ever overwritten.
+  keep-assets:
+    <<: *logging
+    image: ${KEEP_ASSETS_IMAGE:-${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}}
+    profiles: ["keep-assets"]
+    restart: "no"
+    # Root only to write the volume, which Docker creates root-owned; no network, nothing else.
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        find /previous -type f -name '*.part' -delete
+        mkdir -p /previous/assets
+        cd /srv
+        for f in assets/* workbox-*.js; do
+          [ -f "$$f" ] || continue
+          if [ -e "/previous/$$f" ]; then
+            touch "/previous/$$f"
+          else
+            cp "$$f" "/previous/$$f.part" && mv "/previous/$$f.part" "/previous/$$f"
+          fi
+        done
+        find /previous -type f -mtime +"$${KEEP_DAYS}" -delete
+        echo "kept $$(find /previous -type f | wc -l) hashed files of earlier builds"
+    environment:
+      KEEP_DAYS: ${BMS_KEEP_ASSETS_DAYS:-14}
+    volumes:
+      - web_assets:/previous
 
   proxy:
     <<: *logging
@@ -225,5 +268,6 @@ services:
 
 volumes:
   pgdata:
+  web_assets:
   caddy_data:
   caddy_config:

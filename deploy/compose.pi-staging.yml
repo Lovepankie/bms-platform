@@ -20,7 +20,8 @@
 # MemoryMax=900M is the hard cap for the whole stack, including the one-shot migrate container.
 # The per-container limits below add up to 736 MB steady, 896 MB while a migration runs:
 #
-#   postgres 176  api 448  web 32  proxy 32  cloudflared 48  (migrate 160, only during a deploy)
+#   postgres 176  api 448  web 32  proxy 32  cloudflared 48  (migrate 160, only during a deploy;
+#   keep-assets 32 runs alone, before the switch, ADR-078)
 
 name: bms
 
@@ -246,6 +247,54 @@ services:
       BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
     mem_limit: 32m
     cpus: 0.5
+    # Hashed files of earlier builds, read-only; the Caddyfile falls back to them (ADR-078).
+    volumes:
+      - type: volume
+        source: web_assets
+        target: /srv/previous
+        read_only: true
+        volume:
+          nocopy: true
+
+  # One-shot: deploy.sh runs it with the OUTGOING web image just before web is replaced (ADR-078).
+  # It copies that build's hashed files into web_assets, where the new web container still serves
+  # them, so a phone on the previous app copy keeps loading its screens; it refreshes the date of a
+  # file it already holds and removes files that left the live build more than BMS_KEEP_ASSETS_DAYS
+  # days ago. Hashed names never clash, so nothing is ever overwritten.
+  keep-assets:
+    cgroup_parent: bms.slice
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    mem_limit: 32m
+    image: ${KEEP_ASSETS_IMAGE:-${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}}
+    profiles: ["keep-assets"]
+    restart: "no"
+    # Root (with no capability) only to write the volume, which Docker creates root-owned; no network, nothing else.
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -eu
+        find /previous -type f -name '*.part' -delete
+        mkdir -p /previous/assets
+        cd /srv
+        for f in assets/* workbox-*.js; do
+          [ -f "$$f" ] || continue
+          if [ -e "/previous/$$f" ]; then
+            touch "/previous/$$f"
+          else
+            cp "$$f" "/previous/$$f.part" && mv "/previous/$$f.part" "/previous/$$f"
+          fi
+        done
+        find /previous -type f -mtime +"$${KEEP_DAYS}" -delete
+        echo "kept $$(find /previous -type f | wc -l) hashed files of earlier builds"
+    environment:
+      KEEP_DAYS: ${BMS_KEEP_ASSETS_DAYS:-14}
+    volumes:
+      - web_assets:/previous
 
   # The one internal origin of the tunnel: the proxy image with its tunnel configuration. On both
   # networks, since it is the only service the edge network's cloudflared may reach (ADR-018 M6).
@@ -283,3 +332,4 @@ services:
 
 volumes:
   pgdata:
+  web_assets:

@@ -15,7 +15,10 @@
 #      changes. A failed migration stops the deploy with the old version still serving;
 #   4. switch api, web and proxy (and cloudflared, where BMS_EDGE_SERVICES names it) to the verified
 #      digests. Only these named services are touched: postgres is never recreated by an
-#      application deploy, whatever else changed in the compose file or .env (ADR-018 finding M4);
+#      application deploy, whatever else changed in the compose file or .env (ADR-018 finding M4).
+#      Just before each switch, the outgoing web build's hashed files are copied into the web_assets
+#      volume, which the new web container keeps serving, so a phone on the previous app copy still
+#      loads its screens (ADR-078);
 #   5. wait for the API's readiness (database reachable, migrations at head) and for web behind
 #      the proxy, up to READY_TIMEOUT seconds;
 #   6. on failure, switch back to the previously recorded tag and exit non-zero. Migrations are
@@ -144,7 +147,25 @@ if [ -n "$EDGE_SERVICES" ]; then
     APP_SERVICES+=($EDGE_SERVICES)
 fi
 
+# ADR-078: run the outgoing web image once as keep-assets, which copies its hashed files into the
+# web_assets volume and prunes the old ones. Its image is the digest that web was created from, which
+# its own deploy verified. A failure costs a phone on the old copy a reload, never the deploy.
+keep_outgoing_assets() {
+    local id image=""
+    id="$("${COMPOSE[@]}" ps --quiet web 2>/dev/null || true)"
+    if [[ -n "$id" ]]; then
+        image="$(docker inspect --format '{{.Config.Image}}' "$id" 2>/dev/null || true)"
+    fi
+    if [[ -z "$image" ]]; then
+        return 0
+    fi
+    if ! KEEP_ASSETS_IMAGE="$image" "${COMPOSE[@]}" --profile keep-assets run --rm -T keep-assets < /dev/null; then
+        log "warning: the outgoing web files were not kept; a phone on that build may need a reload"
+    fi
+}
+
 switch_to() {
+    keep_outgoing_assets
     "${COMPOSE[@]}" up --detach --no-deps "${APP_SERVICES[@]}"
 }
 
