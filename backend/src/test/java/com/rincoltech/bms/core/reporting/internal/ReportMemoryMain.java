@@ -107,7 +107,10 @@ public final class ReportMemoryMain {
                             new Ask("lending.portfolio_outstanding", Map.of("group_by", "officer"), "xlsx"),
                             new Ask("test.kinds", Map.of("n", 19_999), "xlsx"),
                             new Ask("test.kinds", Map.of("n", 19_999), "pdf"),
-                            new Ask("test.markup", Map.of(), "pdf"));
+                            new Ask("test.markup", Map.of(), "pdf"),
+                            // The whole business as one workbook (ADR-074): every table of the seeded book, read
+                            // through the streaming reads.
+                            new Ask("core.data_export", Map.of(), "xlsx"));
             List<UUID> ids = new ArrayList<>();
             Map<UUID, Principal> askers = new java.util.HashMap<>();
             Map<UUID, UUID> tenantOf = new java.util.HashMap<>();
@@ -118,7 +121,11 @@ public final class ReportMemoryMain {
                 Principal who = Principal.uniform(
                         UUID.randomUUID(),
                         "staff",
-                        Set.of("lending.reports.portfolio", "lending.insights.read", "lending.insights.all_officers"),
+                        Set.of(
+                                "lending.reports.portfolio",
+                                "lending.insights.read",
+                                "lending.insights.all_officers",
+                                "core.data_export.run"),
                         true,
                         Set.of());
                 CurrentPrincipal.set(who);

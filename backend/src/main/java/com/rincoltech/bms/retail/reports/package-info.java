@@ -8,7 +8,7 @@
 @ApplicationModule(
         id = "retail.reports",
         displayName = "Retail: Reports",
-        allowedDependencies = {"kernel", "core.tenancy", "core.ledger", "retail.stock"})
+        allowedDependencies = {"kernel", "core.reporting", "core.tenancy", "core.ledger", "retail.stock"})
 package com.rincoltech.bms.retail.reports;
 
 import org.springframework.modulith.ApplicationModule;

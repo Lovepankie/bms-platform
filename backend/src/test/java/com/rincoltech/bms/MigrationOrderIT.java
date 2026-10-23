@@ -40,6 +40,8 @@ class MigrationOrderIT {
      * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
      * came before V42 (the loan pledge guard, #176, merged), then V43 (payment methods, #160, merged),
      * then V44 (the retail customer accounts, #196), then V45 (customer returns, #201, merged). Nothing here enforces the order, merge order does.
+     * Today V80 to V90 are merged; a number above them is allowed only as an ordered claim (AGENTS.md): V91 (download my
+     * data, #478), then V92 (billing, #482), each merged in its turn or renumbered at merge.
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
@@ -1482,15 +1484,15 @@ class MigrationOrderIT {
                 .isEqualTo(before);
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
         // account one, V83 (collections, #266) the two collection list ones, V86 (offline sales, #458)
-        // retail.offline.resolve, V88 (referrals, #464) core.referrals.read and V89 (existing loans, #466)
-        // lending.loans.bring_in, which are not V48's to answer for.
+        // retail.offline.resolve, V88 (referrals, #464) core.referrals.read, V89 (existing loans, #466)
+        // lending.loans.bring_in and V91 (download my data, #334) its own, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
                                         + " 'retail.offline.resolve', 'lending.members.contact',"
                                         + " 'lending.collections.all_officers', 'core.referrals.read',"
-                                        + " 'lending.loans.bring_in')")
+                                        + " 'lending.loans.bring_in', 'core.data_export.run')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")

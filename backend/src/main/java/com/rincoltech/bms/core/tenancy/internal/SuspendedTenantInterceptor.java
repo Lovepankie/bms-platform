@@ -1,20 +1,26 @@
 package com.rincoltech.bms.core.tenancy.internal;
 
+import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.kernel.ApiException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
  * A suspended tenant is read only (FR-TEN-06): every state-changing request returns 423
  * {@code tenant_suspended}, except staff sign-in, MFA, refresh and sign-out, so staff can still
- * sign in to read and export. Member portal sign-in is refused like any write.
+ * sign in to read. Member portal sign-in is refused like any write, and so is every export that is
+ * a POST: a business the operator suspended takes nothing away (ADR-073, ADR-074).
  *
  * <p>A business whose Owner cancelled and whose end date has passed is read only the same way, with 423
- * {@code subscription_ended} (ADR-073): besides the sign-in routes, the exports that are a POST (the audit CSV and a
- * report run) still work, so the business can take its data away.
+ * {@code subscription_ended} (ADR-073): besides the sign-in routes, the exports that are a POST (the audit CSV,
+ * a report run, and the business's own workbook of issue #334) still work, so the business can take its data away.
+ * The signed address of a file is passed on marked with {@link Documents#ENDED_BUSINESS_ATTRIBUTE}, and the documents
+ * module decides: it signs only the data export's own files and answers 423 {@code subscription_ended} for member ID
+ * images, receipts and every other document (ADR-074 decision 7).
  */
 class SuspendedTenantInterceptor implements HandlerInterceptor {
 
@@ -32,7 +38,11 @@ class SuspendedTenantInterceptor implements HandlerInterceptor {
             // When member portal sign-in (FR-IAM-09) is built, its routes must be let through here, for an ended
             // business
             // only (ADR-073 decision 5): its members still sign in to read. A suspension by the operator refuses them.
-            if (exportPath(request.getRequestURI())) {
+            if (exportPath(request.getRequestURI()) || dataExportPath(request.getRequestURI())) {
+                return true;
+            }
+            if (DOWNLOAD_URL.matcher(request.getRequestURI()).matches()) {
+                request.setAttribute(Documents.ENDED_BUSINESS_ATTRIBUTE, Boolean.TRUE);
                 return true;
             }
             throw new ApiException(
@@ -53,6 +63,14 @@ class SuspendedTenantInterceptor implements HandlerInterceptor {
     static boolean exportPath(String path) {
         return path.equals("/api/v1/audit-events/export") || path.equals("/api/v1/report-runs");
     }
+
+    /** Asking for the data export changes none of the business's data (ADR-074). */
+    static boolean dataExportPath(String path) {
+        return path.equals("/api/v1/data-export/runs");
+    }
+
+    /** Passed on only so the documents module decides which document an ended business may sign (ADR-074). */
+    private static final Pattern DOWNLOAD_URL = Pattern.compile("^/api/v1/documents/[0-9a-fA-F-]{36}/download-url$");
 
     static boolean staffSessionPath(String path) {
         return path.startsWith("/api/v1/auth/staff/")

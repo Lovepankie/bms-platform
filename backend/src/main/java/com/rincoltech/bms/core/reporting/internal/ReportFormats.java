@@ -57,6 +57,24 @@ final class ReportFormats {
         return (basisPoints < 0 && tenths != 0 ? "-" : "") + tenths / 10 + "." + tenths % 10 + "%";
     }
 
+    /**
+     * A quantity as an exact number without trailing zeros or an exponent (2.500 is 2.5, 10 stays 10): what the spool keeps
+     * and the workbook writes. Read back from the spool it may be a {@code Double}, whose text is parsed again exactly.
+     */
+    static BigDecimal quantity(Object value) {
+        BigDecimal d = value instanceof BigDecimal b ? b : new BigDecimal(String.valueOf(value));
+        d = d.stripTrailingZeros();
+        return d.scale() < 0 ? d.setScale(0) : d;
+    }
+
+    /** A quantity for people: thousands grouped, up to three decimals, half up. */
+    static String quantityText(Object value) {
+        java.text.DecimalFormat f =
+                new java.text.DecimalFormat("#,##0.###", java.text.DecimalFormatSymbols.getInstance(Locale.ENGLISH));
+        f.setRoundingMode(java.math.RoundingMode.HALF_UP);
+        return f.format(quantity(value));
+    }
+
     static String count(long value) {
         return String.format(Locale.ENGLISH, "%,d", value);
     }

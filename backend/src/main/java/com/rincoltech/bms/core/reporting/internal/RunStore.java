@@ -188,6 +188,31 @@ class RunStore {
                 .list();
     }
 
+    /**
+     * The requester's newest run of one report that they asked for, if any (the data export card, ADR-074): the weekly copy
+     * made for the email (stored parameter {@code copy = weekly}) is not one, since it leaves out personal data.
+     */
+    Optional<Run> latestOf(UUID requestedBy, String reportKey) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM report_runs WHERE requested_by = ? AND report_key = ?"
+                        + " AND params->>'copy' IS DISTINCT FROM 'weekly'"
+                        + " ORDER BY created_at DESC, id LIMIT 1")
+                .params(requestedBy, reportKey)
+                .query(this::map)
+                .optional();
+    }
+
+    /** When a run of this report last finished ready, by anyone in the business; null when none has. */
+    Instant lastReadyAt(String reportKey) {
+        return jdbc.sql("""
+                        SELECT finished_at FROM report_runs WHERE report_key = ? AND status = 'ready'
+                         ORDER BY finished_at DESC LIMIT 1
+                        """)
+                .param(reportKey)
+                .query((rs, n) -> instant(rs, "finished_at"))
+                .optional()
+                .orElse(null);
+    }
+
     int countCreatedSince(UUID requestedBy, Instant since) {
         return jdbc.sql("SELECT count(*) FROM report_runs WHERE requested_by = ? AND created_at > ?")
                 .params(requestedBy, ts(since))

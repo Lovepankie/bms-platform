@@ -336,6 +336,70 @@ class OutboxTemplates {
                     "Open the Feedback page",
                     "You got this email because you are a BMS platform operator."));
 
+    // The weekly copy of the business's data (issue #334, ADR-074): to the Owner, with the workbook attached, or with a
+    // link to Business set-up when the file is too large to attach. The attached copy leaves out contact details and ID
+    // numbers (decision 6), and the email says so; the full copy is made and downloaded by the signed-in Owner from the
+    // business's own sign-in page, never through a link that works without signing in.
+    private static final Map<String, Template> EMAIL_DATA_EXPORT = Map.of(
+            "core.data_export_weekly",
+            new Template(
+                    "Your weekly copy of {business_name}'s data",
+                    """
+                    Hello {owner_name},
+
+                    This week's copy of the data of {business_name}, as it stood on {as_of}, is attached as an Excel \
+                    workbook, with a sheet for each table.
+
+                    Because email can be forwarded and read on any phone, this copy leaves out phone numbers, \
+                    addresses, dates of birth and ID numbers: contact details and ID numbers are only in the copy you \
+                    download after signing in. To get that copy, sign in and press Download my data in Business set-up:
+
+                    {link}
+
+                    To stop these emails, untick the weekly email under Download my data in Business set-up.
+
+                    Rincol Tech
+                    """,
+                    "Open Business set-up",
+                    "You got this email because you are the Owner of {business_name} on BMS."),
+            "core.data_export_weekly_link",
+            new Template(
+                    "Your weekly copy of {business_name}'s data is too large to email",
+                    """
+                    Hello {owner_name},
+
+                    This week's copy of the data of {business_name}, as it stood on {as_of}, is too large to attach \
+                    to an email. Sign in and press Download my data in Business set-up to make your copy and save it:
+
+                    {link}
+
+                    That copy is complete: contact details and ID numbers are only in the copy you download after \
+                    signing in.
+
+                    To stop these emails, untick the weekly email under Download my data in Business set-up.
+
+                    Rincol Tech
+                    """,
+                    "Open Business set-up",
+                    "You got this email because you are the Owner of {business_name} on BMS."),
+            "core.data_export_weekly_failed",
+            new Template(
+                    "Your weekly copy of {business_name}'s data could not be made",
+                    """
+                    Hello {owner_name},
+
+                    Your weekly copy of the data of {business_name} could not be made this week. Nothing in the \
+                    business changed. You can download a copy now from Business set-up, under Download my data:
+
+                    {link}
+
+                    To stop these emails, untick the weekly email under Download my data in Business set-up.
+
+                    Rincol Tech
+                    """,
+                    "Open Business set-up",
+                    "You got this email because you are the Owner of {business_name} on BMS."));
+
     // The Owner's own plan (issue #472, ADR-073): the Owner is told the operator's decision on a module they asked for,
     // and
     // every active platform operator is told of a request, a module stopped, a cancellation or an undo. No price or
@@ -379,6 +443,7 @@ class OutboxTemplates {
         all.putAll(EMAIL_POLICY);
         all.putAll(EMAIL_FIND_SIGN_IN);
         all.putAll(EMAIL_FEEDBACK);
+        all.putAll(EMAIL_DATA_EXPORT);
         all.putAll(EMAIL_PLAN);
         return Map.copyOf(all);
     }

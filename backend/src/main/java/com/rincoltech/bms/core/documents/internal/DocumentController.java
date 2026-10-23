@@ -1,11 +1,13 @@
 package com.rincoltech.bms.core.documents.internal;
 
+import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.documents.Documents.StoredDocument;
 import com.rincoltech.bms.core.documents.internal.DocumentService.DownloadUrl;
 import com.rincoltech.bms.kernel.AuthenticatedEndpoint;
 import com.rincoltech.bms.kernel.NoStore;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -42,8 +44,10 @@ class DocumentController {
     @PostMapping("/{document_id}/download-url")
     @AuthenticatedEndpoint(kind = "staff")
     @Operation(summary = "A 5 minute signed download URL (FR-DOC-03)", operationId = "createDocumentDownloadUrl")
-    DownloadUrl downloadUrl(@PathVariable("document_id") UUID documentId, HttpServletResponse response) {
+    DownloadUrl downloadUrl(
+            @PathVariable("document_id") UUID documentId, HttpServletRequest request, HttpServletResponse response) {
         NoStore.apply(response);
-        return service.downloadUrl(documentId);
+        return service.downloadUrl(
+                documentId, Boolean.TRUE.equals(request.getAttribute(Documents.ENDED_BUSINESS_ATTRIBUTE)));
     }
 }

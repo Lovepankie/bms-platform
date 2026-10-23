@@ -115,7 +115,7 @@ core.onboarding       -> core.tenancy, core.platform, core.audit, core.notificat
 core.notifications    -> core.audit (the operator's "send again" is audited)
 core.imports          -> core.ledger, core.documents   (templates register into it)
 core.payments         -> core.tenancy, core.audit, core.jobs, core.ledger, core.operations (built in #213; booking is delegated through the PurposeHandler registry of beans the owning modules supply; it depends on no vertical)
-core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, core.operations
+core.reporting        -> core.tenancy, core.audit, core.documents, core.jobs, core.operations, core.notifications (the weekly data export email and its attachment port, ADR-074)
                          (queued runs, the snapshot transaction, the spool, the JSON, CSV, PDF and Excel renderers, the file
                          expiry; the PDF is laid out by core.documents' shared report template under the letterhead of
                          core.tenancy, the Excel by a streaming writer of its own; verticals register reports, it names none; ADR-038)

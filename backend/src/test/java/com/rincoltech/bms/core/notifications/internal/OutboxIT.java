@@ -543,6 +543,9 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("kind", "idea"),
                 Map.entry("page", "/staff/retail/sale"),
                 Map.entry("message", "Test feedback message."),
+                Map.entry("owner_name", "Test Owner"),
+                Map.entry("as_of", "12 Oct 2026"),
+                Map.entry("expires_on", "11 Nov 2026"),
                 Map.entry("module", "Shop"),
                 Map.entry("decision", "approved: Shop is switched on now"),
                 Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));

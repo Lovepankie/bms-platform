@@ -875,6 +875,34 @@ the pack. Three read-only `SECURITY DEFINER` functions let the runner see across
 beat) is older than the cutoff. The migration sets `lock_timeout` to five seconds before it takes its brief locks on `tenants` and
 `documents`.
 
+Migration V91 (issue #334, ADR-074) leaves the three definer functions as V90 made them: active tenants and those ended by
+the Owner's cancellation (`subscriptions.status = 'cancelled'` with `ended_on`), so an ended business still gets the workbook it
+asks for and a business the operator suspended gets no run. It adds `app_tenants_with_expired_report_files(now)`, the tenants with a ready run whose file is past its expiry and not yet
+deleted, whatever the tenant's status: the nightly expiry walks it, so a suspended or ended business's files go on time too.
+
+### `data_export_settings` (RLS)
+
+Built (issue #334 step 1, migration V91; ADR-074). (std, no `version`) `weekly_email boolean NOT NULL DEFAULT true` (the Owner is
+emailed the workbook every week), `updated_by uuid NOT NULL` (composite foreign key to `users`). Unique `(tenant_id)`: one row
+per business, written on the first change; no row means on. `bms_app` holds SELECT, INSERT and UPDATE; every change is audited
+(`core.data_export.settings_changed`, before and after).
+
+### `data_export_weekly` (RLS)
+
+Built (issue #334 step 1, migration V91; ADR-074). (std, no `version`) `week_of date NOT NULL` (the Monday that starts the week,
+checked), `run_id uuid` (the week's `core.data_export` run, composite foreign key to `report_runs`), `recipient_user_id uuid` (the
+Owner it was made for, composite foreign key to `users`), `status text NOT NULL` [`preparing` (the run is being made),
+`queued` (the email is in the outbox), `emailed` (the outbox recorded it sent), `skipped`, `failed`],
+`attached boolean` (the workbook was attached rather than linked), `reason text` (a stable code: `no_owner_email`, `switched_off`
+(the email was switched off after the week was queued), `cancelled`, `email_failed` or the run's error code), `finished_at timestamptz`. Unique `(tenant_id, week_of)`: one row per business and week, so the job
+queues one workbook and one email however often it runs. Checks: every week but a `skipped` one has a run (a week skipped as `switched_off` keeps the run queued before the switch); only a
+`preparing` or `queued` week has no `finished_at`. Partial index on those open weeks. The definer function
+`app_data_export_weekly_email_status(week_id)` returns the outbox status of the week's own email for the bound tenant, so the
+week becomes `emailed` only when it was sent; `app_data_export_weekly_tenants(now)` lists the businesses the weekly job visits:
+the active ones and those ended by the Owner's cancellation less than 90 days ago by `ended_on`, never one the operator
+suspended (ADR-074 decision 7). `bms_app` holds SELECT and INSERT, and UPDATE of
+`status`, `attached`, `reason` and `finished_at` only.
+
 ### `payment_methods` (RLS)
 
 (std) `method_key text NOT NULL` [`cash`, `bank`, `mtn_momo`, `airtel_money`, `gateway`,

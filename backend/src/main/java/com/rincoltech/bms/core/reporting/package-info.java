@@ -11,11 +11,22 @@
  * the permission to run it, its parameters and its formats, and writes its rows to a
  * {@link com.rincoltech.bms.core.reporting.ReportOutput}. The framework owns the queue, the snapshot, the caps,
  * the files, the audit and the screens' API; a definition owns only its figures.
+ *
+ * <p>"Download my data" (issue #334 step 1, ADR-074) is a report of this module that every business has: the whole business
+ * as one workbook, a sheet per table, from the core's Branches sheet and the sheets each vertical adds through a
+ * {@link com.rincoltech.bms.core.reporting.DataExportSection}, and a weekly copy emailed to the Owner through the outbox.
  */
 @ApplicationModule(
         id = "core.reporting",
         displayName = "Core: Reporting",
-        allowedDependencies = {"kernel", "core.audit", "core.documents", "core.jobs", "core.operations", "core.tenancy"
+        allowedDependencies = {
+            "kernel",
+            "core.audit",
+            "core.documents",
+            "core.jobs",
+            "core.notifications",
+            "core.operations",
+            "core.tenancy"
         })
 package com.rincoltech.bms.core.reporting;
 

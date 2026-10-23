@@ -194,6 +194,7 @@ final class PdfReport {
             case MONEY -> ReportFormats.money(((Number) v).longValue(), exponent);
             case BASIS_POINTS -> ReportFormats.percent(((Number) v).longValue());
             case DATE -> ReportFormats.date(java.time.LocalDate.parse(String.valueOf(v)));
+            case QUANTITY -> ReportFormats.quantityText(v);
         };
     }
 }

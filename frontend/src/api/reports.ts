@@ -143,3 +143,37 @@ export const reports = {
     return unwrap(result, 'Could not prepare the download.').url as string;
   },
 };
+
+/** The "Download my data" card of Business set-up (issue #334 step 1, ADR-074). */
+export interface DataExportStatus {
+  weekly_email: boolean;
+  /** Whether the caller is the Owner, who alone may switch the weekly email; other administrators see it only. */
+  owner: boolean;
+  last_export_at: string | null;
+  last_emailed_at: string | null;
+  /** The caller's newest full workbook, in any state (never the weekly copy made for the email); null when none. */
+  latest: ReportRun | null;
+}
+
+export type GeneratedDataExportStatus = components['schemas']['DataExportStatus'];
+
+export const dataExport = {
+  async status(): Promise<DataExportStatus> {
+    return unwrap(await api.GET('/api/v1/data-export'), 'Could not load the data export.') as DataExportStatus;
+  },
+
+  async request(): Promise<ReportRun> {
+    const key = `data-export-${crypto.randomUUID()}`;
+    return unwrap(
+      await api.POST('/api/v1/data-export/runs', { params: { header: { 'Idempotency-Key': key } } }),
+      'Could not start the export.',
+    ) as ReportRun;
+  },
+
+  async setWeeklyEmail(on: boolean): Promise<DataExportStatus> {
+    return unwrap(
+      await api.PUT('/api/v1/data-export/settings', { body: { weekly_email: on } }),
+      'Could not change the weekly email.',
+    ) as DataExportStatus;
+  },
+};

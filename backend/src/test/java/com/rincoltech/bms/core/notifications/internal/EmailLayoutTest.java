@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.notifications.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.core.tenancy.PlatformHost;
 import jakarta.mail.Session;
@@ -59,6 +60,10 @@ class EmailLayoutTest {
         p.put("kind", "problem");
         p.put("page", "/staff/retail/sale");
         p.put("message", "Test message <b>with</b> markup & an ampersand.");
+        // The weekly copy of the business's data (issue #334).
+        p.put("owner_name", "Test Owner 01");
+        p.put("as_of", "19 Oct 2026");
+        p.put("expires_on", "18 Nov 2026");
         // The Owner's own plan (issue #472): the module asked for and the decision, with the operator's reason.
         p.put("module", "Shop");
         p.put("decision", "declined. The platform operator wrote: Test reason <i>typed</i> & sent.");
@@ -131,6 +136,93 @@ class EmailLayoutTest {
 
     static EmailLayout.Brand platform() {
         return EmailLayout.Brand.platform(PLATFORM);
+    }
+
+    @Test
+    void aRowWhoseAttachmentIsGoneFailsAsAttachmentUnavailableAndIsNeverSentWithoutIt() throws Exception {
+        // ADR-074: the weekly workbook is read when the email is sent; an expired or deleted file fails the send
+        // cleanly.
+        com.rincoltech.bms.core.notifications.EmailAttachments gone =
+                new com.rincoltech.bms.core.notifications.EmailAttachments() {
+                    @Override
+                    public String kind() {
+                        return "core.data_export";
+                    }
+
+                    @Override
+                    public java.util.Optional<Attachment> read(UUID tenantId, String id) {
+                        return java.util.Optional.empty();
+                    }
+                };
+        var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        beans.addBean("gone", gone);
+        SmtpEmailChannel channel = new SmtpEmailChannel(
+                new NotificationProperties(null, null, ""),
+                templates,
+                HOSTS,
+                null,
+                null,
+                null,
+                beans.getBeanProvider(com.rincoltech.bms.core.notifications.EmailAttachments.class),
+                "");
+        UUID tenantId = UUID.randomUUID();
+        for (String ref : List.of("core.data_export:" + UUID.randomUUID(), "unknown.kind:" + UUID.randomUUID())) {
+            OutboxChannel.RowContext row = new OutboxChannel.RowContext(
+                    UUID.randomUUID(),
+                    tenantId,
+                    "transactional",
+                    null,
+                    null,
+                    "core.data_export_weekly",
+                    Map.of(com.rincoltech.bms.core.notifications.EmailAttachments.PARAM, ref),
+                    1,
+                    null,
+                    null);
+            assertThatThrownBy(() -> channel.attachment(row))
+                    .as(ref)
+                    .isInstanceOf(OutboxChannel.SendFailure.class)
+                    .hasMessage("attachment_unavailable");
+        }
+        // A row with no tenant cannot name a tenant's file.
+        OutboxChannel.RowContext platform = new OutboxChannel.RowContext(
+                UUID.randomUUID(),
+                null,
+                "transactional",
+                null,
+                null,
+                "core.data_export_weekly",
+                Map.of(
+                        com.rincoltech.bms.core.notifications.EmailAttachments.PARAM,
+                        "core.data_export:" + UUID.randomUUID()),
+                1,
+                null,
+                null);
+        assertThatThrownBy(() -> channel.attachment(platform)).hasMessage("attachment_unavailable");
+        // A row that names no file sends as before.
+        assertThat(channel.attachment(OutboxChannel.RowContext.NONE)).isNull();
+    }
+
+    @Test
+    void theWeeklyDataEmailsSayInPlainWordsThatContactDetailsAndIdNumbersAreOnlyInTheSignedInCopy() {
+        // ADR-074 decision 6: the attached copy leaves out personal data; both emails say where it is.
+        for (String key : List.of("core.data_export_weekly", "core.data_export_weekly_link")) {
+            String text = templates.render("email", key, params()).text().replaceAll("\\s+", " ");
+            assertThat(text)
+                    .as(key)
+                    .contains("contact details and ID numbers are only in the copy you download after signing in");
+        }
+        assertThat(templates
+                        .render("email", "core.data_export_weekly", params())
+                        .text()
+                        .replaceAll("\\s+", " "))
+                .contains("this copy leaves out phone numbers, addresses, dates of birth and ID numbers");
+        // A week whose copy could not be made: a short email that says where to download one.
+        assertThat(templates
+                        .render("email", "core.data_export_weekly_failed", params())
+                        .text()
+                        .replaceAll("\\s+", " "))
+                .contains("could not be made this week")
+                .contains("download a copy now from Business set-up");
     }
 
     @Test
@@ -432,7 +524,7 @@ class EmailLayoutTest {
             }
         };
         SmtpEmailChannel channel = new SmtpEmailChannel(
-                new NotificationProperties(null, null, ""), templates, HOSTS, jobs, tenant, letterheads, "");
+                new NotificationProperties(null, null, ""), templates, HOSTS, jobs, tenant, letterheads, null, "");
         OutboxChannel.RowContext row = new OutboxChannel.RowContext(
                 UUID.randomUUID(), UUID.randomUUID(), "transactional", null, null, null, Map.of(), 1, null, null);
 

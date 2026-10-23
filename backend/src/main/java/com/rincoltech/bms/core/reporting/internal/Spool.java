@@ -246,6 +246,12 @@ final class Spool {
                     }
                     yield d.toString();
                 }
+                case QUANTITY -> {
+                    if (!(value instanceof java.math.BigDecimal || value instanceof Long || value instanceof Integer)) {
+                        throw wrong(column, value);
+                    }
+                    yield ReportFormats.quantity(value);
+                }
                 default -> {
                     if (!(value instanceof Long || value instanceof Integer)) {
                         throw wrong(column, value);

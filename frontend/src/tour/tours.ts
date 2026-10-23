@@ -135,7 +135,8 @@ export const adminWelcome: Tour = {
   // Version 16 adds the Light or dark step (issue #429): the theme selector at the top right.
   // Version 17 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
   // Version 18 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
-  version: 18,
+  // Version 19 adds the Download my data step (issue #334): the whole business as one Excel workbook, and the weekly copy by email.
+  version: 19,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -173,6 +174,15 @@ export const adminWelcome: Tour = {
       target: 'setup-colour',
       title: 'Pick your colour',
       body: 'Choose the colour of your business. We check that text stays easy to read on it.',
+    },
+    {
+      id: 'data-export',
+      route: '/staff/setup',
+      target: 'setup-data-export',
+      needs: ['core.data_export.run'],
+      optional: true,
+      title: 'Download my data',
+      body: 'Get every table of your business in one Excel workbook, a sheet each, like your old spreadsheet. The Owner also gets a copy by email every week; you can switch that off here.',
     },
     {
       id: 'staff',

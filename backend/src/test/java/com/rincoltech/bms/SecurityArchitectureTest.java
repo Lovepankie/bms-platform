@@ -84,4 +84,16 @@ class SecurityArchitectureTest {
                 .callMethod(com.rincoltech.bms.core.documents.Documents.class, "deleteReportObject", UUID.class)
                 .check(CLASSES);
     }
+
+    /** Reading a stored report file's bytes is for the weekly email of the business's workbook only (ADR-074). */
+    @Test
+    void onlyReportingReadsReportObjects() {
+        noClasses()
+                .that()
+                .resideOutsideOfPackages("com.rincoltech.bms.core.reporting..", "com.rincoltech.bms.core.documents..")
+                .should()
+                .callMethod(
+                        com.rincoltech.bms.core.documents.Documents.class, "readReportObject", UUID.class, long.class)
+                .check(CLASSES);
+    }
 }

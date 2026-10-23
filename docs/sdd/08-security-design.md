@@ -276,6 +276,7 @@ platform API and holds no tenant permissions.
 | `core.payments.allocate` | Y | | | Y | Y | | | | | | | |
 | `core.reports.financial` | Y | Y | | | Y | Y | | | | | | |
 | `core.reports.audit` | Y | | | | | Y | | | | | | |
+| `core.data_export.run` | Y | | | | | | | | | | | |
 | `lending.members.read` | Y | Y | Y | Y | Y | Y | | | | | | |
 | `lending.members.create` | Y | Y | Y | | | | | | | | | |
 | `lending.members.update` | Y | Y | Y | | | | | | | | | |
@@ -431,6 +432,18 @@ Notes:
   it (no signed-in user) can neither widen nor lose it; `lending.par` takes it from the insights module, the same code as the
   insights endpoints, and needs `lending.insights.read` as well. Report runs are off until a tenant administrator sets
   `reports_enabled` in the tenant settings (`core.settings.manage`).
+  Built (issue #334 step 1, ADR-074, migration V91): `core.data_export.run`, the tenant admin's alone (the Owner is one,
+  ADR-062), asks for "Download my data", the whole business as one workbook across every branch, and sees the weekly email switch;
+  only the Owner (`users.is_owner`) turns it on or off (audited, `core.data_export.settings_changed`; anyone else 403
+  `owner_only`). It is offered whatever `reports_enabled` says; the file
+  is fetched by the person it was made for while they hold the permission, every refusal 404. A business ended by its Owner's
+  cancellation (ADR-073) may still ask for it and fetch the signed address of its file, the two reads that are a `POST`; it may
+  sign the download address only of the data export's own report documents (a report document whose run is `core.data_export`,
+  decided by `DocumentAccess.downloadableWhenEnded` in the documents layer), and a KYC upload, a receipt or any other document
+  answers 423 `subscription_ended`, as does every other write. A business the operator suspended (FR-TEN-06) is refused both, 423 `tenant_suspended`.
+  The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
+  and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
+  sign-in (ADR-074 decision 6).
   Built (extras slice D2, issue #217): the PDF and Excel renderers and `lending.portfolio_outstanding` add no permission and no seeded
   row either (both lending reports run under `lending.reports.portfolio`); `PermissionMatrixIT` still passes and this matrix equals the
   seeds. A spreadsheet cell is never a formula: text is written as a string cell and text that begins with `=`, `+`, `-`, `@`, a tab or a

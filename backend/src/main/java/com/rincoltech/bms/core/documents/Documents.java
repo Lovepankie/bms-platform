@@ -10,6 +10,13 @@ import java.util.UUID;
 public interface Documents {
 
     /**
+     * Request attribute the tenancy module sets on a download address asked for by a business whose subscription ended
+     * (ADR-073): the documents module then signs only what a {@link DocumentAccess} lets an ended business take away
+     * (ADR-074 decision 7) and answers 423 {@code subscription_ended} for every other document.
+     */
+    String ENDED_BUSINESS_ATTRIBUTE = "bms.documents.ended_business";
+
+    /**
      * Checks, stores and records an uploaded file in the caller's transaction (FR-DOC-02, chapter 8
      * section 8.8): JPEG, PNG or PDF by content, at most 5 MB, images re-encoded to drop metadata.
      * The caller has already checked its own permission on the subject.
@@ -164,6 +171,15 @@ public interface Documents {
      * enforces that). Safe to call again: a missing object is not an error.
      */
     void deleteReportObject(UUID documentId);
+
+    /**
+     * The bytes of a generated report's stored object, for the weekly email that carries the business's workbook (ADR-074);
+     * empty when the object is gone. Refuses any document that is not of type {@code report}, and an object larger than
+     * {@code maxBytes} (the caller attaches only a small file and links to a larger one). Only {@code core.reporting} calls it
+     * (an architecture test enforces that). The lookup is its own short transaction under the bound tenant; the read holds
+     * none.
+     */
+    Optional<byte[]> readReportObject(UUID documentId, long maxBytes);
 
     /** Removes an object that {@link #putGenerated} wrote and nothing recorded. Never throws. */
     void discardGenerated(GeneratedObject object);

@@ -1027,6 +1027,15 @@ class RlsIsolationIT {
                         INSERT INTO retail_product_barcodes (id, tenant_id, product_id, code, format)
                         VALUES (?, ?, ?, 'TEST-RLS-01', 'code128')
                         """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
+        // Download my data (migration V91, #334): the weekly email switch, and a week skipped for want of an Owner.
+        owner.sql("""
+                        INSERT INTO data_export_settings (id, tenant_id, weekly_email, updated_by)
+                        VALUES (?, ?, false, ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        owner.sql("""
+                        INSERT INTO data_export_weekly (id, tenant_id, week_of, status, reason, finished_at)
+                        VALUES (?, ?, DATE '2026-10-05', 'skipped', 'no_owner_email', now())
+                        """).params(UUID.randomUUID(), t.tenantId()).update();
         // A business this one referred and a commission line the operator typed (migration V88, #464); the referral
         // code
         // of every business is written by the trigger on tenants.

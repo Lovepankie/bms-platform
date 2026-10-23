@@ -5,6 +5,7 @@ import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/cl
 import { BRANDING_QUERY, appTitle, brandOf, useShellBrand } from '../../app/branding';
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
 import { BusyButton } from '../../app/ui/BusyButton';
+import { DataExportCard } from './data-export';
 import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
 import { PlanCard } from './plan';
@@ -348,6 +349,8 @@ export function Setup() {
             Let staff run reports ({reportsWording(me.modules)}), prepared in the background and kept for 30 days
           </label>
         </fieldset>
+
+        {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} zone={me.tenant_timezone} />}
 
         {permissions.includes('core.settings.manage') && <PlanCard mfaEnabled={me.mfa_enabled === true} />}
 

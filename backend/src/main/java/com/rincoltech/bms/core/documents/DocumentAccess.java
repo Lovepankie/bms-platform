@@ -31,4 +31,12 @@ public interface DocumentAccess {
     default boolean canRead(Principal principal, UUID subjectId, UUID documentId) {
         return canRead(principal, subjectId);
     }
+
+    /**
+     * May a business whose subscription ended (ADR-073) still sign this document's download address? Only the data export's
+     * own files (ADR-074 decision 7); every other document, a KYC upload or a receipt among them, is refused with 423.
+     */
+    default boolean downloadableWhenEnded(UUID subjectId, UUID documentId) {
+        return false;
+    }
 }
