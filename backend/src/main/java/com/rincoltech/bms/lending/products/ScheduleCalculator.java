@@ -77,6 +77,29 @@ public final class ScheduleCalculator {
     }
 
     /**
+     * The schedule of an existing loan whose register records the total the borrower agreed to repay instead of a rate
+     * (ADR-071): the principal and the difference, the interest, are each spread as R-FLAT spreads them, over the items
+     * and due dates {@code t} gives. The rate and interest method of {@code t} are not used, and no fee is added.
+     * JUSTIFICATION-A3: a second entry point beside schedule(); it reuses spread, instalments and dueDate unchanged.
+     */
+    public static List<Item> scheduleForTotal(
+            Terms t, long principalMinor, long agreedTotalMinor, LocalDate disbursedOn) {
+        if (principalMinor <= 0 || agreedTotalMinor < principalMinor) {
+            throw new IllegalArgumentException("the agreed total is at least the principal, which is positive");
+        }
+        int n = instalments(t);
+        long[] principal = new long[n];
+        long[] interest = new long[n];
+        spread(principalMinor, principal);
+        spread(agreedTotalMinor - principalMinor, interest);
+        List<Item> items = new ArrayList<>(n);
+        for (int k = 1; k <= n; k++) {
+            items.add(new Item(k, dueDate(t, k, n, disbursedOn), principal[k - 1], interest[k - 1], 0));
+        }
+        return List.copyOf(items);
+    }
+
+    /**
      * R-TERM: the number of schedule items. A term that does not divide into whole instalments is
      * refused with {@code invalid_term_frequency}.
      */

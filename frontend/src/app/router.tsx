@@ -236,6 +236,10 @@ const savingsStatementRoute = lendingScreen('/savings/accounts/$accountId/statem
 );
 const memberSavingsRoute = lendingScreen('/members/$memberId/savings', 'Member savings').lazy(() => import('../areas/staff/lending/member-savings').then((m) => m.Route));
 // Members, next of kin, KYC documents and the collateral register (issue #280).
+const existingLoansRoute = lendingScreen('/existing-loans', 'Existing loans').lazy(() => import('../areas/staff/lending/existing-loans').then((m) => m.Route));
+const existingLoansImportRoute = lendingScreen('/existing-loans/import', 'Import').lazy(() =>
+  import('../areas/staff/lending/existing-loans-import').then((m) => m.Route),
+);
 const membersRoute = lendingScreen('/members', 'Members').lazy(() => import('../areas/staff/lending/members').then((m) => m.Route));
 const memberNewRoute = lendingScreen('/members/new', 'New member').lazy(() => import('../areas/staff/lending/member-form').then((m) => m.NewRoute));
 const lendingMemberRoute = lendingScreen('/members/$memberId', 'Member').lazy(() => import('../areas/staff/lending/member-page').then((m) => m.Route));
@@ -405,6 +409,8 @@ export const router = createRouter({
         savingsProductsRoute,
         savingsAccountRoute,
         savingsStatementRoute,
+        existingLoansRoute,
+        existingLoansImportRoute,
         membersRoute,
         memberNewRoute,
         lendingMemberRoute,

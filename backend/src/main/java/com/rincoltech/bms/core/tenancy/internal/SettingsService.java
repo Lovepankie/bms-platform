@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.tenancy.internal;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.core.tenancy.PolicyChangeGuard;
@@ -19,6 +20,7 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.Versions;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -45,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
  * is validated and audited with the before and after values of the keys that changed.
  */
 @Service
-class SettingsService implements TenantSettings, ModuleSettings {
+class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
 
     static final Map<String, Integer> DEFAULT_APPRAISAL_WEIGHTS =
             Map.of("repayment_history", 40, "affordability", 30, "collateral_cover", 20, "exposure", 10);
@@ -102,11 +105,19 @@ class SettingsService implements TenantSettings, ModuleSettings {
     @Transactional
     SettingsResponse update(String ifMatch, UpdateSettingsRequest request, boolean proved) {
         int expected = Versions.fromIfMatch(ifMatch);
+        if (request.goLiveDate() != null) {
+            // ADR-071: the go-live date bounds what may be brought in with a past date, so only the Owner moves it; the
+            // owner lock comes first in the transaction (ADR-062).
+            guard.requireOwner("set the go-live date");
+        }
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
         }
         validate(request);
+        if (request.goLiveDate() != null) {
+            requireEarlier(stored, request.goLiveDate());
+        }
         Map<String, Object> changes = plan(stored, request);
         boolean relaxes = relaxes(stored.values(), changes);
         if (relaxes && !proved) {
@@ -143,6 +154,10 @@ class SettingsService implements TenantSettings, ModuleSettings {
         if (changes.get("theme_primary") instanceof String colour) {
             // An empty string clears the colour: back to the platform look.
             changes.put("theme_primary", colour.isEmpty() ? null : colour.toUpperCase(Locale.ROOT));
+        }
+        if (request.goLiveDate() != null) {
+            changes.put("go_live_date", request.goLiveDate().toString());
+            changes.put("go_live_source", "set");
         }
         if (changes.containsKey("require_mfa_roles")) {
             changes.put(
@@ -397,6 +412,116 @@ class SettingsService implements TenantSettings, ModuleSettings {
         return current().reportsEnabled();
     }
 
+    // ---- the go-live date (ADR-071) ------------------------------------------------------------
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Live> get() {
+        Map<String, Object> values = load(false).values();
+        return Optional.ofNullable((String) values.get("go_live_date"))
+                .map(d -> new Live(LocalDate.parse(d), (String) values.getOrDefault("go_live_source", "set")));
+    }
+
+    /**
+     * ADR-071: a later go-live date would let loans disbursed after go-live come in as if from paper, so once a date is
+     * stored the Owner moves it only earlier. The operator moves it later, with a reason ({@link #setByOperator}).
+     */
+    private void requireEarlier(Stored stored, LocalDate date) {
+        Object was = stored.values().get("go_live_date");
+        if (was != null && date.isAfter(LocalDate.parse((String) was))) {
+            throw ApiException.rule(
+                    "go_live_locked",
+                    "The go-live date (" + was + ") only moves earlier. Ask the platform operator to move it later,"
+                            + " with a reason.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void adminSignedIn(UUID userId, Instant at) {
+        if (load(false).values().get("go_live_date") != null) {
+            return;
+        }
+        Stored stored = lock();
+        if (stored.values().get("go_live_date") != null) {
+            return;
+        }
+        LocalDate day = firstDay(at.atZone(tenant.profile().timezone()).toLocalDate());
+        Map<String, Object> next = new TreeMap<>(stored.values());
+        next.put("go_live_date", day.toString());
+        next.put("go_live_source", "first_admin_sign_in");
+        // The version stays: no administrator's edit of the settings is made stale by a sign-in.
+        jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now() WHERE tenant_id = ?")
+                .params(mapper.writeValueAsString(next), tenant.profile().id())
+                .update();
+        audit.record(
+                AuditLog.Entry.created(
+                        "core.settings.go_live_defaulted",
+                        "core.tenant_settings",
+                        tenant.profile().id(),
+                        null,
+                        Map.of("go_live_date", day.toString(), "source", "first_admin_sign_in")),
+                userId,
+                "staff");
+    }
+
+    /**
+     * The default go-live date never lands later than the real start (ADR-071 decision 5), or a loan made in the app could
+     * come back as a "paper" loan: the earliest of this sign-in, the first session of anyone ever an administrator, the
+     * earliest last sign-in of the staff, the day the business was created, and the first loan made in the app (created
+     * or disbursed). Sessions are pruned and administrators leave, so this sign-in alone may come too late. V89 backfills
+     * the same date.
+     */
+    private LocalDate firstDay(LocalDate signedIn) {
+        return jdbc.sql("""
+                        SELECT LEAST(CAST(? AS date),
+                                     (SELECT (min(s.created_at) AT TIME ZONE t.timezone)::date
+                                        FROM auth_sessions s
+                                       WHERE s.tenant_id = t.id
+                                         AND EXISTS (SELECT 1 FROM user_role_assignments a
+                                                      WHERE a.user_id = s.user_id AND a.role_key = 'tenant_admin')),
+                                     (SELECT (min(u.last_login_at) AT TIME ZONE t.timezone)::date
+                                        FROM users u WHERE u.tenant_id = t.id AND u.kind = 'staff'),
+                                     (t.created_at AT TIME ZONE t.timezone)::date,
+                                     (SELECT least((min(l.created_at) AT TIME ZONE t.timezone)::date, min(l.disbursed_on))
+                                        FROM lending_loans l WHERE l.tenant_id = t.id AND l.go_live_on IS NULL))
+                          FROM tenants t WHERE t.id = ?
+                        """)
+                .params(signedIn, tenant.profile().id())
+                .query(LocalDate.class)
+                .single();
+    }
+
+    @Override
+    @Transactional
+    public void setByOperator(LocalDate date, UUID platformUserId, String reason) {
+        if (date.isAfter(clock.today(tenant.profile().timezone()))) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("go_live_date", "go_live_in_future", "The go-live date is today or earlier.")));
+        }
+        Stored stored = lock();
+        Object before = stored.values().get("go_live_date");
+        Map<String, Object> next = new TreeMap<>(stored.values());
+        next.put("go_live_date", date.toString());
+        next.put("go_live_source", "set");
+        jdbc.sql(
+                        "UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now(), version = version + 1 WHERE tenant_id = ?")
+                .params(mapper.writeValueAsString(next), tenant.profile().id())
+                .update();
+        Map<String, Object> was = new LinkedHashMap<>();
+        was.put("go_live_date", before);
+        audit.record(
+                new AuditLog.Entry(
+                        "core.settings.go_live_set",
+                        "core.tenant_settings",
+                        tenant.profile().id(),
+                        null,
+                        was,
+                        Map.of("go_live_date", date.toString(), "reason", reason)),
+                platformUserId,
+                "platform");
+    }
+
     // ---- module settings groups (ADR-033) ---------------------------------------------------
 
     @Override
@@ -508,6 +633,11 @@ class SettingsService implements TenantSettings, ModuleSettings {
             problems.add(
                     new FieldProblem("require_mfa_roles", "invalid", "Choose roles from the list of staff roles."));
         }
+        if (request.goLiveDate() != null
+                && request.goLiveDate().isAfter(clock.today(tenant.profile().timezone()))) {
+            problems.add(
+                    new FieldProblem("go_live_date", "go_live_in_future", "The go-live date is today or earlier."));
+        }
         if (request.displayName() != null && request.displayName().isBlank()) {
             problems.add(new FieldProblem("display_name", "invalid", "Must not be blank."));
         }
@@ -553,6 +683,7 @@ class SettingsService implements TenantSettings, ModuleSettings {
                 s.get("mfa_grace_days") == null ? null : ((Number) s.get("mfa_grace_days")).intValue(),
                 s.get("mfa_enforce_from") == null ? null : Instant.parse((String) s.get("mfa_enforce_from")),
                 tenant.profile().timezone().getId(),
+                s.get("go_live_date") == null ? null : LocalDate.parse((String) s.get("go_live_date")),
                 version);
     }
 }

@@ -1,5 +1,7 @@
 package com.rincoltech.bms.lending.products;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -9,6 +11,16 @@ public interface ProductCatalog {
 
     /** The product's current version, whatever its status; the caller checks {@code productStatus}. */
     Optional<ProductTerms> current(UUID productId);
+
+    /** {@link #current} by the product's code, exactly as stored (an import names products by code, issue #466). */
+    Optional<ProductTerms> currentByCode(String code);
+
+    /**
+     * The version in force at the end of {@code date} in {@code zone}: the latest created by then, or the first version
+     * when the product did not exist yet. A loan brought in from a paper register takes the terms of its disbursement
+     * date, not of today (issue #466, ADR-071).
+     */
+    Optional<ProductTerms> inForceOn(UUID productId, LocalDate date, ZoneId zone);
 
     /** A specific version, for loans that keep the terms they were created with (FR-PRD-04). */
     Optional<ProductTerms> version(UUID productVersionId);

@@ -15,4 +15,11 @@ public interface PolicyChangeGuard {
 
     /** Emails every administrator who may change the settings, the actor included, what was relaxed, by whom and when. */
     void notifyRelaxed(String change);
+
+    /**
+     * A setting only the Owner of the business changes (ADR-062), such as the go-live date (ADR-071): 403 {@code owner_only}
+     * for anyone else, and for everyone while the business has no Owner (then only the platform operator changes it). In the
+     * caller's transaction.
+     */
+    void requireOwner(String what);
 }

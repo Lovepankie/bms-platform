@@ -107,6 +107,27 @@ class PenaltiesTest {
         assertThat(charges).extracting(Charge::periodNo).containsExactly(13, 14);
     }
 
+    /**
+     * ADR-071 decision 6: a loan brought in on 29 April is charged only for periods that start on or after that day. A
+     * daily period dated on the bring-in day started the day before, so the first charge is the day after.
+     */
+    @Test
+    void aBroughtInLoanIsChargedOnlyForPeriodsStartingOnOrAfterTheBringIn() {
+        LocalDate broughtIn = LocalDate.of(2026, 4, 29);
+        PenaltyRule daily = new PenaltyRule("flat_per_period", 0, "day", 2_000L, null, null);
+        assertThat(Penalties.due(item(), daily, broughtIn, EARLY, broughtIn, Set.of(), 0))
+                .as("none on the bring-in day")
+                .isEmpty();
+        assertThat(Penalties.due(item(), daily, LocalDate.of(2026, 5, 1), EARLY, broughtIn, Set.of(), 0))
+                .extracting(Charge::chargeDate)
+                .containsExactly(LocalDate.of(2026, 4, 30), LocalDate.of(2026, 5, 1));
+        // Monthly from 17 April: the period dated 17 May began on 17 April, before the bring-in, so it is skipped too.
+        PenaltyRule monthly = new PenaltyRule("flat_per_period", 0, "month", 5_000L, null, null);
+        assertThat(Penalties.due(item(), monthly, LocalDate.of(2026, 6, 20), EARLY, broughtIn, Set.of(), 0))
+                .extracting(Charge::chargeDate)
+                .containsExactly(LocalDate.of(2026, 6, 17));
+    }
+
     /** A percent that rounds to nothing charges nothing (amount_minor is always positive). */
     @Test
     void aPercentThatRoundsToNothingChargesNothing() {

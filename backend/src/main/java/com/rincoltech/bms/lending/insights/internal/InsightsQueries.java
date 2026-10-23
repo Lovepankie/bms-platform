@@ -62,7 +62,8 @@ class InsightsQueries {
                 SELECT t.value_date, sum(t.amount_minor) AS amount, count(*) AS n
                   FROM lending_loan_transactions t
                   JOIN lending_loans l ON l.id = t.loan_id
-                 WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + s.loanFilter("l", p) + """
+                 WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to
+                   AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r WHERE r.reverses_txn_id = t.id)""" + s.loanFilter("l", p) + """
 
                  GROUP BY t.value_date ORDER BY t.value_date
                 """;
@@ -288,13 +289,15 @@ class InsightsQueries {
                     SELECT l.member_id, min(t.value_date) AS first_in
                       FROM lending_loan_transactions t
                       JOIN lending_loans l ON l.id = t.loan_id
-                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + s.loanFilter("l", p) + """
+                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to
+                       AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r WHERE r.reverses_txn_id = t.id)""" + s.loanFilter("l", p) + """
 
                      GROUP BY l.member_id
                 )
                 SELECT count(*) AS members,
                        count(*) FILTER (WHERE EXISTS (
-                           SELECT 1 FROM lending_loans e WHERE e.member_id = d.member_id AND e.disbursed_on < d.first_in))
+                           SELECT 1 FROM lending_loans e
+                            WHERE e.member_id = d.member_id AND e.status <> 'cancelled' AND e.disbursed_on < d.first_in))
                            AS repeat
                   FROM d
                 """;
@@ -465,7 +468,10 @@ class InsightsQueries {
         return jdbc.sql(sql).params(p).query(InsightsQueries::dayTotal).list();
     }
 
-    /** Applied, appraised, approved and disbursed among applications submitted in the range. */
+    /**
+     * Applied, appraised, approved and disbursed among applications submitted in the range. A loan brought in from a
+     * paper register (ADR-071, go_live_on set) was never an application in the app and is left out.
+     */
     long[] funnel(Scope s, ZoneId zone) {
         if (s.empty()) {
             return new long[] {0, 0, 0, 0};
@@ -478,7 +484,8 @@ class InsightsQueries {
                        count(*) FILTER (WHERE l.approved_at IS NOT NULL) AS approved,
                        count(*) FILTER (WHERE l.disbursed_on IS NOT NULL) AS disbursed
                   FROM lending_loans l
-                 WHERE l.submitted_at >= :fromTs AND l.submitted_at < :toTs""" + s.loanFilter("l", p);
+                 WHERE l.submitted_at >= :fromTs AND l.submitted_at < :toTs
+                   AND l.go_live_on IS NULL""" + s.loanFilter("l", p);
         return jdbc.sql(sql)
                 .params(p)
                 .query((rs, n) -> new long[] {
@@ -487,7 +494,10 @@ class InsightsQueries {
                 .single();
     }
 
-    /** Median hours from submission to approval or rejection, for decisions made in the range; null for none. */
+    /**
+     * Median hours from submission to approval or rejection, for decisions made in the range; null for none. A loan
+     * brought in from a paper register (ADR-071) is left out: its recording and approval time is not a lending decision.
+     */
     Long medianDecisionHours(Scope s, ZoneId zone) {
         if (s.empty()) {
             return null;
@@ -500,7 +510,8 @@ class InsightsQueries {
                                     (SELECT min(h.created_at) FROM lending_loan_status_history h
                                       WHERE h.loan_id = l.id AND h.to_status = 'rejected')) AS decided_at
                       FROM lending_loans l
-                     WHERE l.submitted_at IS NOT NULL AND l.status NOT IN ('draft', 'submitted', 'appraised', 'cancelled')""" + s.loanFilter("l", p) + """
+                     WHERE l.submitted_at IS NOT NULL AND l.status NOT IN ('draft', 'submitted', 'appraised', 'cancelled')
+                       AND l.go_live_on IS NULL""" + s.loanFilter("l", p) + """
 
                 )
                 SELECT round(percentile_cont(0.5) WITHIN GROUP (
@@ -591,13 +602,13 @@ class InsightsQueries {
                 + memberFilter(s, "m", p);
         String submitted = "SELECT l.submitted_by, 'submitted' FROM lending_loans l"
                 + " WHERE l.submitted_by IS NOT NULL AND l.submitted_at >= :fromTs AND l.submitted_at < :toTs"
-                + s.loanFilter("l", p);
+                + " AND l.go_live_on IS NULL" + s.loanFilter("l", p);
         String appraisals = "SELECT a.appraised_by, 'appraisals' FROM lending_loan_appraisals a"
                 + " JOIN lending_loans l ON l.id = a.loan_id"
                 + " WHERE a.created_at >= :fromTs AND a.created_at < :toTs" + s.loanFilter("l", p);
         String money = "SELECT t.recorded_by, t.txn_type FROM lending_loan_transactions t"
                 + " JOIN lending_loans l ON l.id = t.loan_id"
-                + " WHERE t.recorded_by IS NOT NULL AND t.txn_type IN ('disbursement', 'repayment')"
+                + " WHERE t.recorded_by IS NOT NULL AND t.txn_type IN ('disbursement', 'repayment') AND NOT t.is_historic"
                 + " AND t.value_date BETWEEN :from AND :to" + s.loanFilter("l", p);
         String sql = "SELECT w.user_id, u.full_name,"
                 + " count(*) FILTER (WHERE w.kind = 'members') AS members,"

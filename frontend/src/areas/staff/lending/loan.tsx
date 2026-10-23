@@ -177,6 +177,7 @@ export function TransactionList({ loan, items }: { loan: Loan; items: LoanTransa
             {t.payment_method_key && `, ${methodWords(t.payment_method_key)}`}
             {t.external_reference && `, ref ${t.external_reference}`}
           </p>
+          {t.historic && <p className="ln-muted">From the paper register, before go-live: not in the app's cash book.</p>}
           {t.reversed_by_txn_id && <p><span className="badge badge-danger">Reversed</span></p>}
           {t.reason && <p className="ln-muted">Reason: {t.reason}</p>}
           {canReverse(me, loan.status, t) &&

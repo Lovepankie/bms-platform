@@ -102,7 +102,8 @@ class InsightsTables {
                       JOIN lending_loan_products pr ON pr.id = pv.product_id
                       JOIN branches b ON b.id = l.branch_id
                       LEFT JOIN users u ON u.id = l.officer_user_id
-                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""",
+                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to
+                       AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r WHERE r.reverses_txn_id = t.id)""",
                         "ORDER BY t.value_date, l.loan_no",
                         Map.of());
             case "collections", "recoveries" ->
@@ -344,13 +345,15 @@ class InsightsTables {
                         """
                     SELECT m.member_no, min(t.value_date) AS first_in_range,
                            (SELECT count(*) FROM lending_loans e
-                             WHERE e.member_id = l.member_id AND e.disbursed_on < min(t.value_date)) AS earlier_loans
+                             WHERE e.member_id = l.member_id AND e.status <> 'cancelled'
+                               AND e.disbursed_on < min(t.value_date)) AS earlier_loans
                       FROM lending_loan_transactions t
                       JOIN lending_loans l ON l.id = t.loan_id
                       JOIN lending_members m ON m.id = l.member_id
-                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""",
+                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to
+                       AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r WHERE r.reverses_txn_id = t.id)""",
                         "GROUP BY m.member_no, l.member_id HAVING (SELECT count(*) FROM lending_loans e WHERE e.member_id = l.member_id"
-                                + " AND e.disbursed_on < min(t.value_date)) > 0 ORDER BY m.member_no",
+                                + " AND e.status <> 'cancelled' AND e.disbursed_on < min(t.value_date)) > 0 ORDER BY m.member_no",
                         Map.of());
             case "dormant_members" ->
                 memberSql(

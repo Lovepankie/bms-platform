@@ -138,6 +138,25 @@ describe('the set-up note on the new icon', () => {
   });
 });
 
+// ADR-071, issue #466: a lending business sets the day the app became its register; existing loans come in only from before it.
+describe('the go-live date', () => {
+  it('is offered to a lending business and saved as go_live_date', async () => {
+    client.PATCH.mockClear();
+    show({ modules: ['lending'] });
+    const input = (await screen.findByLabelText(/The day the app became your register/)) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '2026-03-01' } });
+    fireEvent.blur(input);
+    await screen.findByText(/The go-live date is 2026-03-01/);
+    expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { go_live_date: '2026-03-01' } }));
+  });
+
+  it('is not offered to a business without lending', async () => {
+    show({ modules: ['retail'] });
+    await screen.findByRole('heading', { name: 'Business set-up' });
+    expect(screen.queryByLabelText(/The day the app became your register/)).toBeNull();
+  });
+});
+
 // Issue #468: the page explains its fields in plain words and speaks only of the modules the business has on.
 describe('the set-up hints and module wording', () => {
   it('explains the receipt footer and previews the bottom of a receipt', async () => {

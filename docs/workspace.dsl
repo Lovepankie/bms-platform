@@ -63,7 +63,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 # ---------------- lending vertical ----------------
                 members       = component "Lending: Members" "Members, KYC, next of kin, relationship graph and exposure." "lending" "lending"
                 products      = component "Lending: Loan Products" "Versioned loan products, fees, schedule preview." "lending" "lending"
-                loans         = component "Lending: Loans" "Origination, appraisal, approval, schedules, disbursement, repayments, arrears, penalties, closure, write-off." "lending" "lending"
+                loans         = component "Lending: Loans" "Origination, appraisal, approval, schedules, disbursement, repayments, arrears, penalties, closure, write-off; existing loans brought in from a paper register (ADR-071)." "lending" "lending"
                 collateral    = component "Lending: Collateral" "Collateral register, valuations, custody events, photos and scans; release as a maker-checker action (ADR-019)." "lending" "lending"
                 savings       = component "Lending: Savings" "Savings products, member accounts, deposits, withdrawals with a checker above the threshold, reversals, freeze, dormancy, closure, the nightly end of day with interest per product period, statements and the savings reports (ADR-032)." "lending" "lending"
                 investments   = component "Lending: Investments" "Fixed-term and recurring investment products, member investments, funding with a checker above the threshold, the accrual and payout schedule, the nightly returns and maturity job, payout, rollover, early withdrawal with a penalty, reversals, certificates, statements and the maturity ladder (ADR-031)." "lending" "lending"
@@ -504,6 +504,18 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
             bms.api.loans -> bms.api.documents "Renders the receipt PDF in the request, from the payment's own allocation rows (ADR-034)"
             bms.api.documents -> bms.storage "Stores the receipt PDF once"
             bms.api.jobs -> smsAggregator "Sends the receipt SMS"
+            autoLayout lr
+        }
+
+        dynamic bms.api "ExistingLoanBringIn" "An existing loan from a paper register brought in with its real dates and past repayments, then approved by a second person (ADR-071)." {
+            tenantAdmin -> bms.web "Records the loan, or imports a CSV of loans, after a check"
+            bms.web -> bms.api.loans "POST /lending/existing-loans with Idempotency-Key (or /import)"
+            bms.api.loans -> bms.api.tenancy "Reads the go-live date: the loan must be disbursed before it"
+            bms.api.loans -> bms.api.approvals "Creates a loan_bring_in approval request; the loan waits as brought_in"
+            branchManager -> bms.web "Approves as checker; never the maker"
+            bms.web -> bms.api.approvals "POST /approvals/{id}/approve"
+            bms.api.approvals -> bms.api.loans "Executes: schedule from the real date, historic transactions, loan active"
+            bms.api.loans -> bms.api.ledger "Posts one opening entry at go-live; no old cash is posted again; a loan_bring_in_reversal mirrors it"
             autoLayout lr
         }
 

@@ -1080,6 +1080,16 @@
           }
         }
       },
+      "CancelExistingLoanRequest" : {
+        "properties" : {
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ]
+      },
       "ChargeWaiverRequest" : {
         "description" : "FR-ARR-04: amount_minor left out waives all that is waivable",
         "properties" : {
@@ -2142,6 +2152,323 @@
           }
         }
       },
+      "ExistingLoan" : {
+        "properties" : {
+          "agreed_total_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "description" : "The pending request a second person decides: the bring-in while the loan is brought_in, the reversal of the bring-in (loan_bring_in_reversal) once it is active or closed",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "brought_in_on" : {
+            "description" : "Set on approval: the first business date the app charges penalties for",
+            "format" : "date",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "disbursement_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "go_live_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "loan_id" : {
+            "description" : "Null on a check (dry run), which saves nothing",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "position" : {
+            "$ref" : "#/components/schemas/ExistingLoanPosition"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "product_code" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "register_ref" : {
+            "type" : "string"
+          },
+          "repayments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExistingLoanRepayment"
+            },
+            "type" : "array"
+          },
+          "schedule" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExistingLoanScheduleItem"
+            },
+            "type" : "array"
+          },
+          "status" : {
+            "description" : "brought_in (waiting for a checker), then active or closed; cancelled if withdrawn",
+            "type" : "string"
+          },
+          "term_count" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "warnings" : {
+            "description" : "Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart",
+            "items" : {
+              "description" : "Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ExistingLoanImportRequest" : {
+        "properties" : {
+          "csv" : {
+            "description" : "The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units",
+            "maxLength" : 1000000,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "csv" ]
+      },
+      "ExistingLoanImportResult" : {
+        "properties" : {
+          "added" : {
+            "description" : "Loans recorded, or on a check the loans that would be; 0 while any row is an error",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "dry_run" : {
+            "type" : "boolean"
+          },
+          "errors" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loans" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "repayments" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rows" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExistingLoanImportRow"
+            },
+            "type" : "array"
+          },
+          "rows_read" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ExistingLoanImportRow" : {
+        "properties" : {
+          "line" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "outcome" : {
+            "description" : "ready (a check found nothing wrong), added, skipped (the register number is in use) or error",
+            "type" : "string"
+          },
+          "ref" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ExistingLoanPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExistingLoanSummary"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "ExistingLoanPosition" : {
+        "description" : "As the register leaves the loan, on today's business date",
+        "properties" : {
+          "arrears_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "days_past_due" : {
+            "description" : "Counted from the real due date of the oldest unpaid instalment (R-DPD)",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "fees_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last_repayment_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "next_due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "principal_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "settled" : {
+            "description" : "True when the register shows the loan repaid in full; it is closed on approval",
+            "type" : "boolean"
+          },
+          "total_outstanding_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "total_paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "ExistingLoanRepayment" : {
+        "description" : "One repayment the register shows, before the go-live date",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "note" : {
+            "description" : "The paper receipt number or a note; optional",
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "payment_method_key" : {
+            "pattern" : "cash|bank|mtn_momo|airtel_money",
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "payment_method_key", "value_date" ]
+      },
+      "ExistingLoanScheduleItem" : {
+        "properties" : {
+          "due_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "fees_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "no" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "paid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "principal_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "unpaid_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "ExistingLoanSummary" : {
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "disbursement_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "loan_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "loan_no" : {
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "member_no" : {
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "register_ref" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        }
+      },
       "FeedbackItem" : {
         "properties" : {
           "app_version" : {
@@ -2251,6 +2578,19 @@
           }
         },
         "required" : [ "full_name" ]
+      },
+      "GoLiveDate" : {
+        "properties" : {
+          "go_live_date" : {
+            "description" : "The business's go-live date, or null while none is known",
+            "format" : "date",
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "set (by the Owner or the operator), first_admin_sign_in (the default) or none (nobody has signed in yet)",
+            "type" : "string"
+          }
+        }
       },
       "HeadOfficeRequest" : {
         "properties" : {
@@ -5329,6 +5669,10 @@
           "external_reference" : {
             "type" : "string"
           },
+          "historic" : {
+            "description" : "From the paper register before go-live (ADR-071): no journal entry, no receipt number, not counted as cash in the app's books",
+            "type" : "boolean"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
@@ -6997,6 +7341,62 @@
           }
         },
         "required" : [ "endpoint" ]
+      },
+      "RecordExistingLoanRequest" : {
+        "properties" : {
+          "agreed_total_minor" : {
+            "description" : "The total the borrower agreed to repay (principal and interest), when the register records that instead of the product's rate; the difference is spread as flat interest and no fee is added",
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "disbursement_date" : {
+            "description" : "The real disbursement date, before the business's go-live date",
+            "format" : "date",
+            "type" : "string"
+          },
+          "member_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "maximum" : 1000000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purpose_category" : {
+            "description" : "Defaults to other",
+            "pattern" : "business|school_fees|medical|agriculture|household|construction|other",
+            "type" : "string"
+          },
+          "register_ref" : {
+            "description" : "The loan's number in the paper register; one live loan per number",
+            "maxLength" : 40,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "repayments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExistingLoanRepayment"
+            },
+            "maxItems" : 500,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "term_count" : {
+            "description" : "Defaults to the product's default term; within the product's limits",
+            "format" : "int32",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "disbursement_date", "member_id", "principal_minor", "product_id", "repayments" ]
       },
       "RecoveryCodes" : {
         "properties" : {
@@ -21240,6 +21640,22 @@
           }
         }
       },
+      "TenantGoLiveRequest" : {
+        "properties" : {
+          "go_live_date" : {
+            "description" : "The day the app became the business's register, today or earlier (ADR-071)",
+            "format" : "date",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept in the tenant's audit log and the platform's",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "go_live_date", "reason" ]
+      },
       "TenantHistoryEntry" : {
         "description" : "An operator action on the business, from the platform audit log",
         "properties" : {
@@ -21438,6 +21854,11 @@
           "display_name_set" : {
             "description" : "True once the admin has saved a business name of their own",
             "type" : "boolean"
+          },
+          "go_live_date" : {
+            "description" : "The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)",
+            "format" : "date",
+            "type" : "string"
           },
           "logo_document_id" : {
             "description" : "The current logo (a core document of this tenant), or null; set through PUT /settings/logo",
@@ -22112,6 +22533,11 @@
           "display_name" : {
             "maxLength" : 100,
             "minLength" : 1,
+            "type" : "string"
+          },
+          "go_live_date" : {
+            "description" : "The go-live date, today or earlier; only the Owner of the business sets it, 403 owner_only otherwise (ADR-071)",
+            "format" : "date",
             "type" : "string"
           },
           "max_active_loans_per_member" : {
@@ -24357,6 +24783,268 @@
         },
         "summary" : "Reassign many loans to one officer, all or none (FR-CLN-01)",
         "tags" : [ "lending-collections" ]
+      }
+    },
+    "/api/v1/lending/existing-loans" : {
+      "get" : {
+        "operationId" : "listExistingLoans",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoanPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Loans brought in from the register, newest first (at most 200); status filters, for example brought_in",
+        "tags" : [ "lending-loans" ]
+      },
+      "post" : {
+        "operationId" : "recordExistingLoan",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "dry_run",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RecordExistingLoanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record an existing loan with its real disbursement date and past repayments; 201 brought_in and waiting for a checker, or with dry_run=true 200 and the position it would have, saving nothing (FR-EXL-01 to FR-EXL-03)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/go-live" : {
+      "get" : {
+        "operationId" : "getLendingGoLiveDate",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/GoLiveDate"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The business's go-live date: set by the Owner or the operator, else the first administrator sign-in (ADR-071)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/import" : {
+      "post" : {
+        "operationId" : "importExistingLoans",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "dry_run",
+          "required" : false,
+          "schema" : {
+            "default" : true,
+            "type" : "boolean"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExistingLoanImportRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoanImportResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Import existing loans and their repayments from CSV: check first (dry_run=true, the default), then commit; a commit with any error records nothing (FR-EXL-06)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/{loan_id}" : {
+      "get" : {
+        "operationId" : "getExistingLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An existing loan as recorded: its repayments, schedule and position (FR-EXL-02)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/{loan_id}/approval" : {
+      "post" : {
+        "operationId" : "requestExistingLoanApproval",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask for approval again after a rejected, expired or stale request; checked against today's go-live date (FR-EXL-04)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/{loan_id}/cancel" : {
+      "post" : {
+        "operationId" : "cancelExistingLoan",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CancelExistingLoanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Withdraw an existing loan still waiting for its checker, with a reason; it ends cancelled",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/{loan_id}/reversal" : {
+      "post" : {
+        "operationId" : "requestExistingLoanReversal",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CancelExistingLoanRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ExistingLoan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask a second person to reverse an approved bring-in, with a reason: the opening entry is mirrored, the historic transactions are marked reversed and the loan is cancelled; refused once the loan has a transaction in the app or a penalty charge (FR-EXL-08)",
+        "tags" : [ "lending-loans" ]
       }
     },
     "/api/v1/lending/insights/brief" : {
@@ -30390,6 +31078,37 @@
           }
         },
         "summary" : "One tenant",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/go-live" : {
+      "put" : {
+        "operationId" : "platformSetGoLiveDate",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantGoLiveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the business's go-live date, with a reason: an existing loan is brought in only with a disbursement date before it (ADR-071)",
         "tags" : [ "platform" ]
       }
     },

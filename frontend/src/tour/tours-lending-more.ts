@@ -26,6 +26,7 @@ const PAYMENT_ACCOUNT = 'core.payment_account.manage';
 const USERS_MANAGE = 'core.users.manage';
 const NOTIFICATIONS_READ = 'core.notifications.read';
 const TEMPLATES_MANAGE = 'core.notification_templates.manage';
+const BRING_IN = 'lending.loans.bring_in';
 const REPORT_PERMISSIONS = ['lending.reports.portfolio', 'lending.reports.collections', 'lending.reports.members', 'lending.reports.compliance'];
 
 /** The tenant has the lending module (a /me without a module list counts as having it, as member-permissions.ts reads it). */
@@ -837,9 +838,88 @@ export const ownTwoStepPage: Tour = {
   ],
 };
 
+// Existing loans from a paper register (issue #466, ADR-071): the form with its check, and the CSV import.
+export const existingLoansPage: Tour = {
+  id: 'page-existing-loans',
+  version: 1,
+  title: 'This page: existing loans',
+  audience: (me) => lendingTenant(me) && held(me, BRING_IN),
+  autoStart: false,
+  page: '/staff/lending/existing-loans',
+  steps: [
+    {
+      id: 'go-live',
+      target: 'existing-go-live',
+      module: 'lending',
+      title: 'Only loans from before go-live',
+      body: 'A loan given out before your go-live date comes in here with its real date. No penalty is charged for the time before.',
+    },
+    {
+      id: 'form',
+      target: 'existing-form',
+      module: 'lending',
+      title: 'The loan as the register shows it',
+      body: 'Find the member and pick the product. Type the amount lent and the date it was given out. Then add each repayment received.',
+    },
+    {
+      id: 'check',
+      target: 'existing-check',
+      module: 'lending',
+      title: 'Check before you record',
+      body: 'Check shows the schedule, what is still owed, the next due date and the days overdue. Nothing is saved until you record it.',
+    },
+    {
+      id: 'waiting',
+      target: 'existing-waiting',
+      module: 'lending',
+      title: 'A second person approves',
+      body: 'A recorded loan waits here until someone else approves it in the approvals inbox. Until then it counts nowhere.',
+    },
+    {
+      id: 'import',
+      target: 'existing-import-link',
+      module: 'lending',
+      title: 'Many loans at once',
+      body: 'Tap here to bring in a whole register from a CSV file.',
+    },
+  ],
+};
+
+export const existingLoansImportPage: Tour = {
+  id: 'page-existing-loans-import',
+  version: 1,
+  title: 'This page: import existing loans',
+  audience: (me) => lendingTenant(me) && held(me, BRING_IN),
+  autoStart: false,
+  page: '/staff/lending/existing-loans/import',
+  steps: [
+    {
+      id: 'template',
+      target: 'existing-import-template',
+      module: 'lending',
+      title: 'Start from the template',
+      body: 'Each loan has one row of kind loan, and each repayment a row of kind repayment with the same ref.',
+    },
+    {
+      id: 'text',
+      target: 'existing-import-text',
+      module: 'lending',
+      title: 'Choose or paste the file',
+      body: 'Choose the CSV file above, or paste its rows here.',
+    },
+    {
+      id: 'check',
+      target: 'existing-import-check',
+      module: 'lending',
+      title: 'Check, then record',
+      body: 'The check lists every row with a problem. Nothing is recorded while a row has one, and each loan recorded waits for approval.',
+    },
+  ],
+};
+
 export const LENDING_MORE_TOURS: readonly Tour[] = [
   savingsPage, savingsProductsPage, savingsAccountPage, savingsStatementPage, memberSavingsPage, memberEditPage, collateralEditPage,
   investmentsPage, investmentNewPage, investmentNewForMemberPage, maturitiesPage, investmentProductsPage, memberInvestmentsPage,
   investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, inviteUserPage, reportsPage,
-  smsSettingsPage, smsWordingPage, smsOptOutsPage, ownTwoStepPage,
+  smsSettingsPage, smsWordingPage, smsOptOutsPage, ownTwoStepPage, existingLoansPage, existingLoansImportPage,
 ];

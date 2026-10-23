@@ -762,6 +762,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/existing-loans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loans brought in from the register, newest first (at most 200); status filters, for example brought_in */
+        get: operations["listExistingLoans"];
+        put?: never;
+        /** Record an existing loan with its real disbursement date and past repayments; 201 brought_in and waiting for a checker, or with dry_run=true 200 and the position it would have, saving nothing (FR-EXL-01 to FR-EXL-03) */
+        post: operations["recordExistingLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/go-live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business's go-live date: set by the Owner or the operator, else the first administrator sign-in (ADR-071) */
+        get: operations["getLendingGoLiveDate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import existing loans and their repayments from CSV: check first (dry_run=true, the default), then commit; a commit with any error records nothing (FR-EXL-06) */
+        post: operations["importExistingLoans"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/{loan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An existing loan as recorded: its repayments, schedule and position (FR-EXL-02) */
+        get: operations["getExistingLoan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/{loan_id}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask for approval again after a rejected, expired or stale request; checked against today's go-live date (FR-EXL-04) */
+        post: operations["requestExistingLoanApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/{loan_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw an existing loan still waiting for its checker, with a reason; it ends cancelled */
+        post: operations["cancelExistingLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/{loan_id}/reversal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask a second person to reverse an approved bring-in, with a reason: the opening entry is mirrored, the historic transactions are marked reversed and the loan is cancelled; refused once the loan has a transaction in the app or a penalty charge (FR-EXL-08) */
+        post: operations["requestExistingLoanReversal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/insights/brief": {
         parameters: {
             query?: never;
@@ -3128,6 +3248,23 @@ export interface paths {
         /** One tenant */
         get: operations["platformGetTenant"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/go-live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the business's go-live date, with a reason: an existing loan is brought in only with a disbursement date before it (ADR-071) */
+        put: operations["platformSetGoLiveDate"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7477,6 +7614,9 @@ export interface components {
             plan_price?: components["schemas"]["PlanPrice"];
             tenant?: components["schemas"]["PlatformTenant"];
         };
+        CancelExistingLoanRequest: {
+            reason: string;
+        };
         /** @description FR-ARR-04: amount_minor left out waives all that is waivable */
         ChargeWaiverRequest: {
             /** Format: int64 */
@@ -7891,6 +8031,156 @@ export interface components {
         DuplicateCheckResponse: {
             candidates?: components["schemas"]["DuplicateCandidate"][];
         };
+        ExistingLoan: {
+            /** Format: int64 */
+            agreed_total_minor?: number;
+            /**
+             * Format: uuid
+             * @description The pending request a second person decides: the bring-in while the loan is brought_in, the reversal of the bring-in (loan_bring_in_reversal) once it is active or closed
+             */
+            approval_request_id?: string;
+            /** Format: uuid */
+            branch_id?: string;
+            /**
+             * Format: date
+             * @description Set on approval: the first business date the app charges penalties for
+             */
+            brought_in_on?: string;
+            currency?: string;
+            /** Format: date */
+            disbursement_date?: string;
+            /** Format: date */
+            go_live_date?: string;
+            /**
+             * Format: uuid
+             * @description Null on a check (dry run), which saves nothing
+             */
+            loan_id?: string;
+            loan_no?: string;
+            /** Format: uuid */
+            member_id?: string;
+            member_no?: string;
+            position?: components["schemas"]["ExistingLoanPosition"];
+            /** Format: int64 */
+            principal_minor?: number;
+            product_code?: string;
+            /** Format: uuid */
+            product_id?: string;
+            register_ref?: string;
+            repayments?: components["schemas"]["ExistingLoanRepayment"][];
+            schedule?: components["schemas"]["ExistingLoanScheduleItem"][];
+            /** @description brought_in (waiting for a checker), then active or closed; cancelled if withdrawn */
+            status?: string;
+            /** Format: int32 */
+            term_count?: number;
+            /** @description Things to check before recording or approving, none of which stops it: a loan of the same member for the same amount and date already in the app when no register number tells them apart */
+            warnings?: string[];
+        };
+        ExistingLoanImportRequest: {
+            /** @description The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units */
+            csv: string;
+        };
+        ExistingLoanImportResult: {
+            /**
+             * Format: int32
+             * @description Loans recorded, or on a check the loans that would be; 0 while any row is an error
+             */
+            added?: number;
+            dry_run?: boolean;
+            /** Format: int32 */
+            errors?: number;
+            /** Format: int32 */
+            loans?: number;
+            /** Format: int32 */
+            repayments?: number;
+            rows?: components["schemas"]["ExistingLoanImportRow"][];
+            /** Format: int32 */
+            rows_read?: number;
+            /** Format: int32 */
+            skipped?: number;
+        };
+        ExistingLoanImportRow: {
+            /** Format: int32 */
+            line?: number;
+            /** Format: uuid */
+            loan_id?: string;
+            message?: string;
+            /** @description ready (a check found nothing wrong), added, skipped (the register number is in use) or error */
+            outcome?: string;
+            ref?: string;
+        };
+        ExistingLoanPage: {
+            items?: components["schemas"]["ExistingLoanSummary"][];
+        };
+        /** @description As the register leaves the loan, on today's business date */
+        ExistingLoanPosition: {
+            /** Format: int64 */
+            arrears_minor?: number;
+            /**
+             * Format: int32
+             * @description Counted from the real due date of the oldest unpaid instalment (R-DPD)
+             */
+            days_past_due?: number;
+            /** Format: int64 */
+            fees_outstanding_minor?: number;
+            /** Format: int64 */
+            interest_outstanding_minor?: number;
+            /** Format: date */
+            last_repayment_on?: string;
+            /** Format: date */
+            next_due_date?: string;
+            /** Format: int64 */
+            principal_outstanding_minor?: number;
+            /** @description True when the register shows the loan repaid in full; it is closed on approval */
+            settled?: boolean;
+            /** Format: int64 */
+            total_outstanding_minor?: number;
+            /** Format: int64 */
+            total_paid_minor?: number;
+        };
+        /** @description One repayment the register shows, before the go-live date */
+        ExistingLoanRepayment: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** @description The paper receipt number or a note; optional */
+            note?: string;
+            payment_method_key: string;
+            /** Format: date */
+            value_date: string;
+        };
+        ExistingLoanScheduleItem: {
+            /** Format: date */
+            due_date?: string;
+            /** Format: int64 */
+            fees_due_minor?: number;
+            /** Format: int64 */
+            interest_due_minor?: number;
+            /** Format: int32 */
+            no?: number;
+            /** Format: int64 */
+            paid_minor?: number;
+            /** Format: int64 */
+            principal_due_minor?: number;
+            status?: string;
+            /** Format: int64 */
+            unpaid_minor?: number;
+        };
+        ExistingLoanSummary: {
+            /** Format: uuid */
+            approval_request_id?: string;
+            /** Format: date */
+            disbursement_date?: string;
+            /** Format: uuid */
+            loan_id?: string;
+            loan_no?: string;
+            /** Format: uuid */
+            member_id?: string;
+            member_no?: string;
+            /** Format: int64 */
+            principal_minor?: number;
+            register_ref?: string;
+            status?: string;
+        };
         FeedbackItem: {
             /** @description The version of BMS that was running (version and git SHA) */
             app_version?: string;
@@ -7936,6 +8226,15 @@ export interface components {
             email?: string;
             full_name: string;
             phone?: string;
+        };
+        GoLiveDate: {
+            /**
+             * Format: date
+             * @description The business's go-live date, or null while none is known
+             */
+            go_live_date?: string;
+            /** @description set (by the Owner or the operator), first_admin_sign_in (the default) or none (nobody has signed in yet) */
+            source?: string;
         };
         HeadOfficeRequest: {
             code: string;
@@ -9247,6 +9546,8 @@ export interface components {
             created_at?: string;
             currency?: string;
             external_reference?: string;
+            /** @description From the paper register before go-live (ADR-071): no journal entry, no receipt number, not counted as cash in the app's books */
+            historic?: boolean;
             /** Format: uuid */
             id?: string;
             /** Format: uuid */
@@ -9990,6 +10291,34 @@ export interface components {
         };
         PushUnsubscribeRequest: {
             endpoint: string;
+        };
+        RecordExistingLoanRequest: {
+            /**
+             * Format: int64
+             * @description The total the borrower agreed to repay (principal and interest), when the register records that instead of the product's rate; the difference is spread as flat interest and no fee is added
+             */
+            agreed_total_minor?: number;
+            /**
+             * Format: date
+             * @description The real disbursement date, before the business's go-live date
+             */
+            disbursement_date: string;
+            /** Format: uuid */
+            member_id: string;
+            /** Format: int64 */
+            principal_minor: number;
+            /** Format: uuid */
+            product_id: string;
+            /** @description Defaults to other */
+            purpose_category?: string;
+            /** @description The loan's number in the paper register; one live loan per number */
+            register_ref?: string;
+            repayments: components["schemas"]["ExistingLoanRepayment"][];
+            /**
+             * Format: int32
+             * @description Defaults to the product's default term; within the product's limits
+             */
+            term_count?: number;
         };
         RecoveryCodes: {
             /** @description Shown once; each works once */
@@ -17258,6 +17587,15 @@ export interface components {
             /** @description invited, active or deactivated */
             status?: string;
         };
+        TenantGoLiveRequest: {
+            /**
+             * Format: date
+             * @description The day the app became the business's register, today or earlier (ADR-071)
+             */
+            go_live_date: string;
+            /** @description Why; kept in the tenant's audit log and the platform's */
+            reason: string;
+        };
         /** @description An operator action on the business, from the platform audit log */
         TenantHistoryEntry: {
             action?: string;
@@ -17337,6 +17675,11 @@ export interface components {
             display_name?: string;
             /** @description True once the admin has saved a business name of their own */
             display_name_set?: boolean;
+            /**
+             * Format: date
+             * @description The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)
+             */
+            go_live_date?: string;
             /**
              * Format: uuid
              * @description The current logo (a core document of this tenant), or null; set through PUT /settings/logo
@@ -17634,6 +17977,11 @@ export interface components {
             approval_validity_days?: number;
             disabled_collateral_types?: string[];
             display_name?: string;
+            /**
+             * Format: date
+             * @description The go-live date, today or earlier; only the Owner of the business sets it, 403 owner_only otherwise (ADR-071)
+             */
+            go_live_date?: string;
             /** Format: int32 */
             max_active_loans_per_member?: number;
             /**
@@ -19160,6 +19508,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoanReassignResult"];
+                };
+            };
+        };
+    };
+    listExistingLoans: {
+        parameters: {
+            query?: {
+                status?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoanPage"];
+                };
+            };
+        };
+    };
+    recordExistingLoan: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordExistingLoanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoan"];
+                };
+            };
+        };
+    };
+    getLendingGoLiveDate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoLiveDate"];
+                };
+            };
+        };
+    };
+    importExistingLoans: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExistingLoanImportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoanImportResult"];
+                };
+            };
+        };
+    };
+    getExistingLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoan"];
+                };
+            };
+        };
+    };
+    requestExistingLoanApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoan"];
+                };
+            };
+        };
+    };
+    cancelExistingLoan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelExistingLoanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoan"];
+                };
+            };
+        };
+    };
+    requestExistingLoanReversal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                loan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelExistingLoanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExistingLoan"];
                 };
             };
         };
@@ -23238,6 +23778,30 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlatformTenant"];
                 };
+            };
+        };
+    };
+    platformSetGoLiveDate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantGoLiveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

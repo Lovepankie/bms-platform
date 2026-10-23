@@ -34,6 +34,7 @@ class LoanBooks {
     static final String OVERPAYMENTS = "member_overpayments";
     static final String WRITE_OFF_EXPENSE = "loan_write_off_expense";
     static final String BAD_DEBT_RECOVERED = "bad_debt_recovered";
+    static final String OPENING_EQUITY = "opening_balance_equity";
 
     /** The account each allocation component credits on a repayment. */
     static final Map<String, String> COMPONENT_ACCOUNTS = Map.of(
@@ -92,17 +93,34 @@ class LoanBooks {
             UUID txnId,
             String idempotencyKey,
             List<Leg> legs) {
+        return post(SOURCE_TYPE, branchId, date, reference, memo, txnId, idempotencyKey, legs);
+    }
+
+    /** As above, for an entry whose source is not a loan transaction (the opening entry of ADR-071 is the loan's). */
+    PostedEntry post(
+            String sourceType,
+            UUID branchId,
+            LocalDate date,
+            String reference,
+            String memo,
+            UUID sourceId,
+            String idempotencyKey,
+            List<Leg> legs) {
         List<Line> lines = legs.stream()
                 .filter(l -> l.amountMinor() != 0)
                 .map(this::resolve)
                 .toList();
         return ledger.post(new EntryRequest(
-                branchId, date, reference, memo, SOURCE_MODULE, SOURCE_TYPE, txnId, idempotencyKey, lines));
+                branchId, date, reference, memo, SOURCE_MODULE, sourceType, sourceId, idempotencyKey, lines));
     }
 
     /** The mirror of a posted entry (ADR-004: corrections are reversals). */
     PostedEntry reverse(UUID entryId, LocalDate date, String reference, String idempotencyKey) {
-        return ledger.reverse(new ReversalRequest(entryId, date, reference, "Repayment reversal", idempotencyKey));
+        return reverse(entryId, date, reference, "Repayment reversal", idempotencyKey);
+    }
+
+    PostedEntry reverse(UUID entryId, LocalDate date, String reference, String memo, String idempotencyKey) {
+        return ledger.reverse(new ReversalRequest(entryId, date, reference, memo, idempotencyKey));
     }
 
     private Line resolve(Leg leg) {

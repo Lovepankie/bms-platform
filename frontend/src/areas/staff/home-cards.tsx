@@ -25,7 +25,8 @@ import { money as retailMoney, useBranchView } from './retail/ui';
  */
 export const LENDING_APPROVALS = [
   'collateral_release', 'loan_disbursement', 'repayment_reversal', 'loan_write_off', 'charge_waiver', 'savings_reversal',
-  'savings_withdrawal', 'investment_funding', 'investment_early_withdrawal', 'investment_reversal',
+  'savings_withdrawal', 'investment_funding', 'investment_early_withdrawal', 'investment_reversal', 'loan_bring_in',
+  'loan_bring_in_reversal',
 ];
 
 /**

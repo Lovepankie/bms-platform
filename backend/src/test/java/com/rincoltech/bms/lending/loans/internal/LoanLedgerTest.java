@@ -86,7 +86,7 @@ class LoanLedgerTest {
                 List<AllocationRow> rows) {
             LoanTransaction t = new LoanTransaction(
                     id, type, amount, "UGX", on, "cash", null, receipt, null, reverses, null, null, null, null, next(),
-                    rows);
+                    rows, false);
             txns.add(t);
             return t;
         }
@@ -174,7 +174,8 @@ class LoanLedgerTest {
                             t.approvalRequestId(),
                             t.recordedBy(),
                             t.createdAt(),
-                            t.allocations()))
+                            t.allocations(),
+                            t.historic()))
                     .toList();
         }
 

@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.CsvTable;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
@@ -74,7 +75,7 @@ class ProductImportService {
                     "Permission denied",
                     "Only an administrator can import items from a file.");
         }
-        List<List<String>> table = Csv.parse(text);
+        List<List<String>> table = CsvTable.parse(text);
         if (table.isEmpty()) {
             throw problem("csv", "The file is empty.");
         }
@@ -143,8 +144,8 @@ class ProductImportService {
                     withPack ? cell(cells, columns, "pack_factor").strip() : "";
             boolean hasPack = !packUnit.isEmpty() || !packFactorText.isEmpty();
             java.math.BigDecimal packFactor = hasPack ? factor(packFactorText) : null;
-            Long sell = amount(cell(cells, columns, "sell_price"), exponent);
-            Long cost = withCost ? amount(cell(cells, columns, "cost_price"), exponent) : Long.valueOf(0);
+            Long sell = CsvTable.amountMinor(cell(cells, columns, "sell_price"), exponent);
+            Long cost = withCost ? CsvTable.amountMinor(cell(cells, columns, "cost_price"), exponent) : Long.valueOf(0);
             boolean costBlank = withCost && cell(cells, columns, "cost_price").isBlank();
             if (code == null) {
                 problem = "The code is empty or holds a special character.";
@@ -611,27 +612,6 @@ class ProductImportService {
         return i == null || i >= cells.size() ? "" : cells.get(i);
     }
 
-    /**
-     * A non-negative amount in major units, with or without thousands commas, as integer minor units
-     * for a currency with {@code exponent} decimals (the same rule as the screens' parseMinor); a
-     * fraction is accepted only up to the exponent. Null when it is anything else. No floating point.
-     */
-    private static Long amount(String text, int exponent) {
-        String clean = text.strip().replace(",", "");
-        java.util.regex.Matcher m = AMOUNT.matcher(clean);
-        if (!m.matches()) {
-            return null;
-        }
-        String fraction = m.group(2) == null ? "" : m.group(2);
-        if (fraction.length() > exponent) {
-            return null;
-        }
-        return new java.math.BigDecimal(m.group(1) + fraction + "0".repeat(exponent - fraction.length()))
-                .longValueExact();
-    }
-
-    private static final java.util.regex.Pattern AMOUNT = java.util.regex.Pattern.compile("(\\d{1,15})(?:\\.(\\d+))?");
-
     private static String example(int exponent, long whole) {
         return exponent == 0
                 ? "a whole number, for example " + whole
@@ -640,62 +620,5 @@ class ProductImportService {
 
     private static ApiException problem(String field, String message) {
         return ApiException.validation(List.of(new FieldProblem(field, "invalid", message)));
-    }
-
-    /** A small CSV reader: a byte order mark, quoted cells with doubled quotes, and comma, semicolon or tab separators. */
-    static final class Csv {
-
-        private Csv() {}
-
-        static List<List<String>> parse(String raw) {
-            String text = raw.startsWith("﻿") ? raw.substring(1) : raw;
-            int eol = text.indexOf('\n');
-            String first = eol < 0 ? text : text.substring(0, eol);
-            char separator = first.indexOf('\t') >= 0 ? '\t' : count(first, ';') > count(first, ',') ? ';' : ',';
-            List<List<String>> rows = new ArrayList<>();
-            List<String> row = new ArrayList<>();
-            StringBuilder cell = new StringBuilder();
-            boolean quoted = false;
-            for (int i = 0; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (quoted) {
-                    if (c == '"') {
-                        if (i + 1 < text.length() && text.charAt(i + 1) == '"') {
-                            cell.append('"');
-                            i++;
-                        } else {
-                            quoted = false;
-                        }
-                    } else {
-                        cell.append(c);
-                    }
-                } else if (c == '"' && cell.toString().isBlank()) {
-                    quoted = true;
-                    cell.setLength(0);
-                } else if (c == separator) {
-                    row.add(cell.toString());
-                    cell.setLength(0);
-                } else if (c == '\n' || c == '\r') {
-                    if (c == '\r' && i + 1 < text.length() && text.charAt(i + 1) == '\n') {
-                        i++;
-                    }
-                    row.add(cell.toString());
-                    cell.setLength(0);
-                    rows.add(row);
-                    row = new ArrayList<>();
-                } else {
-                    cell.append(c);
-                }
-            }
-            if (cell.length() > 0 || !row.isEmpty()) {
-                row.add(cell.toString());
-                rows.add(row);
-            }
-            return rows;
-        }
-
-        private static long count(String s, char c) {
-            return s.chars().filter(x -> x == c).count();
-        }
     }
 }

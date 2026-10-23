@@ -65,6 +65,17 @@ function Row({ item, id }: { item: Approval; id: string }) {
     <tr>
       <td data-label="Action">
         <What item={item} />
+        {(item.action_type === 'loan_bring_in' || item.action_type === 'loan_bring_in_reversal') && item.subject_id && (
+          <>
+            {' '}
+            <Link to="/staff/lending/loans/$loanId" params={{ loanId: item.subject_id }}>Open the loan</Link>
+          </>
+        )}
+        {item.action_type === 'loan_bring_in' && (
+          <p className="hint">
+            Approving puts this loan from the paper register in the books. No arrears SMS goes to the borrower in the 7 days after it comes in, so the business can speak to them first.
+          </p>
+        )}
         {item.action_type === 'collateral_release' && item.subject_id && (
           <>
             {' '}

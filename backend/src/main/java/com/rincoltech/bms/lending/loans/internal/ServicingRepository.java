@@ -332,6 +332,31 @@ class ServicingRepository {
                         """).paramSource(t).update();
     }
 
+    /**
+     * A disbursement or repayment from before go-live, brought in from the register (ADR-071): {@code is_historic}, with no
+     * journal, receipt or voucher number, because its cash was never this app's.
+     */
+    void insertHistoricTxn(Txn t) {
+        jdbc.sql("""
+                        INSERT INTO lending_loan_transactions (id, tenant_id, created_at, branch_id, loan_id, txn_type,
+                            amount_minor, currency, value_date, payment_method_key, external_reference, reason,
+                            reverses_txn_id, approval_request_id, source, is_historic, recorded_by)
+                        VALUES (:id, current_setting('app.tenant_id')::uuid, clock_timestamp(), :branchId, :loanId,
+                            :txnType, :amountMinor, :currency, :valueDate, :paymentMethodKey, :externalReference, :reason,
+                            :reversesTxnId, :approvalRequestId, :source, true, :recordedBy)
+                        """).paramSource(t).update();
+    }
+
+    /** The historic disbursement and repayments of a brought-in loan not yet reversed, in recording order (ADR-071). */
+    List<Txn> historicNotReversed(UUID loanId) {
+        return jdbc.sql("""
+                        SELECT * FROM lending_loan_transactions t
+                         WHERE t.loan_id = ? AND t.is_historic AND t.txn_type IN ('disbursement', 'repayment')
+                           AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r WHERE r.reverses_txn_id = t.id)
+                         ORDER BY t.created_at, t.id
+                        """).param(loanId).query(ServicingRepository::txn).list();
+    }
+
     /** The repayment a gateway payment reference (order tracking id) already booked, if any (spec 3.4.1: idempotent at the port). */
     Optional<Txn> gatewayRepayment(String externalReference) {
         return jdbc.sql("""
@@ -357,6 +382,14 @@ class ServicingRepository {
                         .query(Long.class)
                         .single()
                 > 0;
+    }
+
+    /** True for a transaction brought in from the paper register (ADR-071). */
+    boolean historic(UUID txnId) {
+        return jdbc.sql("SELECT is_historic FROM lending_loan_transactions WHERE id = ?")
+                .param(txnId)
+                .query(Boolean.class)
+                .single();
     }
 
     /** Repayments not reversed, in the order R-ALLOC applies them: value date, then recording order. */
@@ -580,7 +613,8 @@ class ServicingRepository {
                             t.approvalRequestId(),
                             t.recordedBy(),
                             t.createdAt(),
-                            List.copyOf(rows.getOrDefault(t.id(), List.of())));
+                            List.copyOf(rows.getOrDefault(t.id(), List.of())),
+                            rs.getBoolean("is_historic"));
                 })
                 .list();
     }
