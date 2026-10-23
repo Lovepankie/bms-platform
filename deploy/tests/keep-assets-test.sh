@@ -23,7 +23,7 @@ cleanup() {
         docker compose --project-name "$ID-${file%%.*}" --file "$REPO/deploy/$file" \
             --env-file "$WORK/env" down --volumes --remove-orphans > /dev/null 2>&1 || true
     done
-    docker image rm "$ID:v1" "$ID:v2" "$ID:v3" > /dev/null 2>&1 || true
+    docker image rm "$ID:v1" "$ID:v2" "$ID:v3" "$ID:broken" "$ID:hung" > /dev/null 2>&1 || true
     rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -113,6 +113,14 @@ deploy() {
 
 log "building three web builds"
 for v in 1 2 3; do build "$v" || { echo "FAIL docker build of build $v"; exit 1; }; done
+# Two outgoing images keep-assets cannot run: one whose sh fails at once, one whose sh never returns.
+for kind in broken hung; do
+    mkdir -p "$WORK/$kind"
+    if [[ "$kind" == broken ]]; then body='exit 1'; else body='sleep 300'; fi
+    printf 'FROM caddy:2.11-alpine\nRUN rm /bin/sh && printf "#!/bin/busybox sh\\n%s\\n" > /bin/sh && chmod 755 /bin/sh\n' \
+        "$body" > "$WORK/$kind/Dockerfile"
+    docker build --quiet --tag "$ID:$kind" "$WORK/$kind" > /dev/null || { echo "FAIL docker build of $kind"; exit 1; }
+done
 
 for file in compose.yml compose.pi-staging.yml; do
     log "$file"
@@ -167,6 +175,35 @@ EOF
     else
         ok "$file: web mounts /srv/previous read-only"
     fi
+    expect "$file: the kept files have no public path of their own" /previous/assets/page-v2.js '404'
+
+    # A keep-assets that fails, and one that hangs, must still let web switch (ADR-078). The
+    # outgoing image is swapped for a broken one by answering docker inspect with its ID.
+    for kind in broken hung; do
+        BROKEN_ID="$(docker image inspect --format '{{.Id}}' "$ID:$kind")"
+        # shellcheck disable=SC2329 # called by keep_outgoing_assets
+        docker() { if [[ "$1" == inspect ]]; then echo "$BROKEN_ID"; else command docker "$@"; fi; }
+        started=$SECONDS
+        BMS_KEEP_ASSETS_TIMEOUT=5 deploy 2 || fail "$file: web did not switch after a $kind keep-assets"
+        unset -f docker
+        if grep -q 'warning: the outgoing web files were not kept' "$WORK/switch.log"; then
+            ok "$file: a $kind keep-assets only warns"
+        else
+            fail "$file: a $kind keep-assets gave no warning:"; sed 's/^/       /' "$WORK/switch.log"
+        fi
+        expect "$file: ... and build 2 is live" / 'index-v2\.js'
+        if (( SECONDS - started < 45 )); then
+            ok "$file: a $kind keep-assets is cut off in time"
+        else
+            fail "$file: a $kind keep-assets held the switch for $(( SECONDS - started ))s"
+        fi
+        if [[ -z "$(docker ps -aq --filter label=com.docker.compose.service=keep-assets \
+            --filter label=com.docker.compose.project="$project")" ]]; then
+            ok "$file: no keep-assets container is left behind"
+        else
+            fail "$file: a keep-assets container was left behind"
+        fi
+    done
 done
 
 if (( FAILURES > 0 )); then

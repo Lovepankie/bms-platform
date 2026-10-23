@@ -217,28 +217,35 @@ services:
   # days ago. Hashed names never clash, so nothing is ever overwritten.
   keep-assets:
     <<: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    mem_limit: 32m
     image: ${KEEP_ASSETS_IMAGE:-${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}}
     profiles: ["keep-assets"]
     restart: "no"
-    # Root only to write the volume, which Docker creates root-owned; no network, nothing else.
+    # Root (with no capability) only to write the volume, which Docker creates root-owned; no network, nothing else.
     user: "0:0"
     network_mode: none
     entrypoint: ["sh", "-c"]
     command:
       - |
         set -eu
+        case "$${KEEP_DAYS}" in ''|*[!0-9]*) echo "BMS_KEEP_ASSETS_DAYS must be a whole number of days" >&2; exit 1;; esac
+        # Prune first, so the copy never adds to a full disk; -mmin, because -mtime +N means N+1 days.
         find /previous -type f -name '*.part' -delete
-        mkdir -p /previous/assets
+        find /previous -type f -mmin +"$$((KEEP_DAYS * 1440))" -delete
         cd /srv
-        for f in assets/* workbox-*.js; do
-          [ -f "$$f" ] || continue
+        find assets workbox-*.js -type f 2>/dev/null | while read -r f; do
           if [ -e "/previous/$$f" ]; then
             touch "/previous/$$f"
           else
-            cp "$$f" "/previous/$$f.part" && mv "/previous/$$f.part" "/previous/$$f"
+            mkdir -p "/previous/$${f%/*}" 2>/dev/null || true
+            cp "$$f" "/previous/$$f.part" && mv "/previous/$$f.part" "/previous/$$f" \
+              || { rm -f "/previous/$$f.part"; echo "could not keep $$f" >&2; exit 1; }
           fi
         done
-        find /previous -type f -mtime +"$${KEEP_DAYS}" -delete
         echo "kept $$(find /previous -type f | wc -l) hashed files of earlier builds"
     environment:
       KEEP_DAYS: ${BMS_KEEP_ASSETS_DAYS:-14}

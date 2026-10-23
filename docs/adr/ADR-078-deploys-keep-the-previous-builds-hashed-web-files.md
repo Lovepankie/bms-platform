@@ -25,13 +25,16 @@ every load so the update is found quickly. They already do: everything outside t
 1. **A named volume `web_assets`**, in both `deploy/compose.yml` (production VM) and `deploy/compose.pi-staging.yml`, mounted
    read-only into `web` at `/srv/previous` (`nocopy`), with the same layout as `/srv`: `assets/<name>` and `workbox-<hash>.js`.
    No new long-running container; the web container stays read-only on staging and keeps its memory limit.
-2. **`deploy.sh` tops it up before every switch.** `switch_to` first runs `keep_outgoing_assets`: it reads the image the running
-   `web` container was created from (the digest its own deploy verified) and runs that image once as the profile service
+2. **`deploy.sh` tops it up before every switch.** `switch_to` first runs `keep_outgoing_assets`: it reads the local image ID of the
+   running `web` container (the image its own deploy verified; not the reference it was created from, which could resolve to
+   another image) and runs that image once, with `--pull never`, as the profile service
    `keep-assets`, which copies the build's `/srv/assets/*` and `/srv/workbox-*.js` into the volume. A name already there is not
    copied again, only its date refreshed; a new file is written under a `.part` name and renamed, so a half-copied file is never
    served. The same step runs before a rollback's switch, so the files of a release that went live briefly and failed the gate are
-   kept too. `keep-assets` runs with no network, as root only to write the root-owned volume, and on staging with no capability,
-   a read-only root and the `bms.slice` cgroup. A failure is logged as a warning and never stops a deploy: the cost is a reload on
+   kept too. `keep-assets` runs with no network, as root only to write the root-owned volume, with no capability, no new privileges,
+   a read-only root and a 32 MB memory cap (and on staging the `bms.slice` cgroup). It prunes before it copies, takes the keep
+   period only as a whole number of days, copies subfolders of `assets/` too, and is cut off after 60 seconds (20 on a rollback,
+   `BMS_KEEP_ASSETS_TIMEOUT`), its container then removed; Caddy answers 404 for `/previous/*` itself. A failure is logged as a warning and never stops a deploy: the cost is a reload on
    a phone with the old copy, the behaviour before this decision.
 3. **Pruned by age, 14 days.** The same run deletes every kept file whose date is older than `BMS_KEEP_ASSETS_DAYS` (default 14).
    The date is the last time the file was in a build being replaced, so a file is kept for 14 days after it left the live build,

@@ -19,6 +19,12 @@
 		respond `{"tenantHostPattern":"{$BMS_TENANT_HOST_PATTERN}","platformHost":"{$BMS_PLATFORM_HOST}"}` 200
 	}
 
+	# The kept files of earlier builds are only reached through the fallback below, never by their
+	# own path (ADR-078).
+	handle /previous/* {
+		respond 404
+	}
+
 	# Everything the build names with a content hash is served here, never through the single-page
 	# fallback below. A hash that is not on disk (a service worker or a page held over a deploy
 	# asking for the previous build) must answer 404. Through the fallback it would answer 200 with

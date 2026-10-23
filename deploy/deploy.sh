@@ -148,24 +148,28 @@ if [ -n "$EDGE_SERVICES" ]; then
 fi
 
 # ADR-078: run the outgoing web image once as keep-assets, which copies its hashed files into the
-# web_assets volume and prunes the old ones. Its image is the digest that web was created from, which
-# its own deploy verified. A failure costs a phone on the old copy a reload, never the deploy.
+# web_assets volume and prunes the old ones. Its image is the local image ID that web runs (not the
+# reference it was created from, which could resolve to something else), never pulled, so only the
+# image its own deploy verified runs. A failure or a hang costs a phone on the old copy a reload,
+# never the deploy or the rollback: the run is cut off after $1 seconds (default 60).
 keep_outgoing_assets() {
-    local id image=""
+    local limit="${1:-${BMS_KEEP_ASSETS_TIMEOUT:-60}}" id image="" name="keep-assets-$$-${SECONDS}"
     id="$("${COMPOSE[@]}" ps --quiet web 2>/dev/null || true)"
     if [[ -n "$id" ]]; then
-        image="$(docker inspect --format '{{.Config.Image}}' "$id" 2>/dev/null || true)"
+        image="$(docker inspect --format '{{.Image}}' "$id" 2>/dev/null || true)"
     fi
     if [[ -z "$image" ]]; then
         return 0
     fi
-    if ! KEEP_ASSETS_IMAGE="$image" "${COMPOSE[@]}" --profile keep-assets run --rm -T keep-assets < /dev/null; then
+    if ! KEEP_ASSETS_IMAGE="$image" timeout --kill-after 5 "$limit" "${COMPOSE[@]}" --profile keep-assets \
+        run --rm -T --pull never --name "$name" keep-assets < /dev/null; then
         log "warning: the outgoing web files were not kept; a phone on that build may need a reload"
     fi
+    docker rm --force "$name" > /dev/null 2>&1 || true
 }
 
 switch_to() {
-    keep_outgoing_assets
+    keep_outgoing_assets "${1:-}"
     "${COMPOSE[@]}" up --detach --no-deps "${APP_SERVICES[@]}"
 }
 
@@ -233,7 +237,8 @@ previous_proxy_digest="$(docker image inspect --format '{{ index .RepoDigests 0 
 export API_IMAGE="$previous_api_digest"
 export WEB_IMAGE="$previous_web_digest"
 export PROXY_IMAGE="$previous_proxy_digest"
-switch_to
+# A rollback waits on nothing it does not need: the old files get a short try only.
+switch_to 20
 if wait_ready; then
     record "$PREVIOUS" "rolled-back-to"
     log "rolled back to ${PREVIOUS}; ${TAG} is NOT live"
