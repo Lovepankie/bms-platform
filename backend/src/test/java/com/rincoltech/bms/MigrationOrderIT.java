@@ -1997,6 +1997,98 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V92 (ADR-075, FR-SUB-11) on a database just before it, run as bms_owner like every deploy: every confirmed subscription
+     * payment gets its receipt, numbered in the order the payments were recorded, and the sequence carries on after them; a
+     * rejected payment gets none. The tables are under forced row level security, which bms_owner bypasses (BYPASSRLS).
+     * JUSTIFICATION-A3: a new test case; no existing case migrates subscription payments across the receipt backfill.
+     */
+    @Test
+    void billingMigrationGivesEveryRecordedPaymentAReceiptInTheOrderRecorded() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            // The last migration before V92, whichever of V86 to V91 have landed by then.
+            org.flywaydb.core.api.MigrationVersion v92 = org.flywaydb.core.api.MigrationVersion.fromVersion("92");
+            String before = Arrays.stream(flyway(postgres, null).info().all())
+                    .map(org.flywaydb.core.api.MigrationInfo::getVersion)
+                    .filter(v -> v.compareTo(v92) < 0)
+                    .max(java.util.Comparator.naturalOrder())
+                    .orElseThrow()
+                    .getVersion();
+            assertThat(flyway(postgres, before).migrate().success).isTrue();
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID operator = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO platform_users (id, email, full_name) VALUES (?, 'op-v92@example.test', 'Test Operator')")
+                    .param(operator)
+                    .update();
+            UUID tenant = UUID.randomUUID();
+            UUID subscription = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v92', 'Test Business V92',"
+                            + " '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql("INSERT INTO subscriptions (id, tenant_id, plan_id, status)"
+                            + " VALUES (?, ?, '00000000-0000-4000-8000-000000000001', 'active')")
+                    .params(subscription, tenant)
+                    .update();
+            // Each payment: status, recorded at. Inserted out of order on purpose.
+            Object[][] payments = {
+                {"confirmed", "2026-03-01 10:00:00+03"},
+                {"confirmed", "2026-01-01 10:00:00+03"},
+                {"rejected", "2026-02-01 10:00:00+03"},
+                {"confirmed", "2026-02-15 10:00:00+03"},
+            };
+            List<UUID> ids = new java.util.ArrayList<>();
+            for (Object[] p : payments) {
+                UUID id = UUID.randomUUID();
+                ids.add(id);
+                owner.sql("""
+                                INSERT INTO subscription_payments (id, tenant_id, subscription_id, plan_id, status, amount_minor,
+                                    currency, method, paid_on, months, period_start, period_end, recorded_by_platform_user_id,
+                                    created_at)
+                                VALUES (?, ?, ?, '00000000-0000-4000-8000-000000000001', ?, 10000, 'UGX', 'other',
+                                        DATE '2026-01-01', 1, DATE '2026-01-01', DATE '2026-01-31', ?, CAST(? AS timestamptz))
+                                """)
+                        .params(id, tenant, subscription, p[0], operator, p[1])
+                        .update();
+            }
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+            assertThat(result.success).isTrue();
+
+            String receiptOf = "SELECT receipt_no FROM subscription_receipts WHERE payment_id = ?";
+            assertThat(owner.sql(receiptOf)
+                            .param(ids.get(1))
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("RT-2026-000001");
+            assertThat(owner.sql(receiptOf)
+                            .param(ids.get(3))
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("RT-2026-000002");
+            assertThat(owner.sql(receiptOf)
+                            .param(ids.get(0))
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("RT-2026-000003");
+            assertThat(owner.sql(receiptOf)
+                            .param(ids.get(2))
+                            .query(String.class)
+                            .optional())
+                    .as("a rejected payment gets no receipt")
+                    .isEmpty();
+            assertThat(owner.sql("SELECT nextval('subscription_receipt_numbers')")
+                            .query(Long.class)
+                            .single())
+                    .as("the next receipt follows the backfilled ones")
+                    .isEqualTo(4L);
+        }
+    }
+
     @Test
     void noTwoMigrationsShareAVersion() {
         try (PostgreSQLContainer postgres = database()) {

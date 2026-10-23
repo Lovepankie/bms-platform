@@ -229,9 +229,9 @@ class BillingService {
     /**
      * One pass over every business in its free month or paid: the one overdue the day after its last day becomes past_due
      * (audited by the database function), and the one whose reminder falls today gets it, at most once. A pilot, a suspended
-     * or cancelled business, and a business already overdue get nothing. One with a status change the operator scheduled (an
-     * end chosen for the end of its period) is never made overdue: the database function leaves it and its date alone.
-     * One business's failure is logged and does not stop the others.
+     * or cancelled business, a business already overdue, and one with a status change the operator scheduled (an end chosen
+     * for the end of its period) get nothing: no reminder, and the database function never makes it overdue or touches its
+     * date. One business's failure is logged and does not stop the others.
      */
     RunResult run() {
         return run(null);
@@ -245,7 +245,10 @@ class BillingService {
         int overdue = 0;
         int failures = 0;
         for (TenantResponse tenant : platform.tenants(null, List.of("trial", "active"), null)) {
-            if (tenant.pilot() || !"active".equals(tenant.status()) || (only != null && !only.contains(tenant.id()))) {
+            if (tenant.pilot()
+                    || !"active".equals(tenant.status())
+                    || tenant.nextStatusChangeOn() != null
+                    || (only != null && !only.contains(tenant.id()))) {
                 continue;
             }
             try {
@@ -290,7 +293,8 @@ class BillingService {
     /** The Owner of the bound business (ADR-062; invited or active, never deactivated), or empty while it has none. */
     private Optional<Owner> owner() {
         return jdbc.sql("""
-                        SELECT full_name, email, phone_e164 FROM users WHERE is_owner AND kind = 'staff'
+                        SELECT full_name, email, phone_e164 FROM users
+                         WHERE is_owner AND kind = 'staff' AND status <> 'deactivated'
                         """)
                 .query((rs, n) ->
                         new Owner(rs.getString("full_name"), rs.getString("email"), rs.getString("phone_e164")))
@@ -382,14 +386,15 @@ class BillingService {
     }
 
     /**
-     * Read again in the reminder's own transaction: the subscription is still in its free month or paid and its last day is
-     * still the one the run saw, so a payment recorded during the run sends no reminder for the old date.
+     * Read again in the reminder's own transaction: the subscription is still in its free month or paid, with no change
+     * scheduled, and its last day is still the one the run saw, so a payment recorded during the run sends no reminder for
+     * the old date.
      */
     private boolean stillDue(LocalDate due) {
         return jdbc.sql("""
                         SELECT CASE WHEN status = 'trial' THEN trial_ends_on ELSE current_period_end END
                           FROM subscriptions
-                         WHERE status IN ('trial', 'active') AND NOT is_pilot
+                         WHERE status IN ('trial', 'active') AND NOT is_pilot AND next_status_change_on IS NULL
                         """)
                 .query(LocalDate.class)
                 .optional()
@@ -587,15 +592,15 @@ class BillingService {
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Every overdue business past its grace period, not a pilot and still active (a business suspended or closed at the
-     * tenant level is left off), with how many days it is overdue and the price of its next month; the most overdue first.
-     * The operator suspends from the Business page, by hand.
+     * Every overdue business past its grace period, not a pilot, still active (a business suspended or closed at the tenant
+     * level is left off) and with no status change scheduled by the operator, with how many days it is overdue and the price
+     * of its next month; the most overdue first. The operator suspends from the Business page, by hand.
      */
     DueForSuspension dueForSuspension() {
         Settings settings = settings();
         List<BillingAdminController.DueItem> items = new ArrayList<>();
         for (TenantResponse tenant : platform.tenants(null, List.of("past_due"), null)) {
-            if (tenant.pilot() || !"active".equals(tenant.status())) {
+            if (tenant.pilot() || !"active".equals(tenant.status()) || tenant.nextStatusChangeOn() != null) {
                 continue;
             }
             LocalDate today = clock.today(ZoneId.of(tenant.timezone()));

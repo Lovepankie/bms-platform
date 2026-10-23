@@ -15,7 +15,9 @@ by hand (issue #480, ADR-075). Payments are still recorded by the operator on th
 | When you record a payment | A numbered receipt (`RT-<year>-<number>`) is emailed to the Owner as a PDF | The Business page, Emails sent; the Owner's Plan and billing page |
 
 **Nothing is ever suspended by itself.** A pilot (complimentary) business, a suspended or cancelled business and one already overdue
-get no reminder. A business with no Owner gets no email: give it an Owner first (Business page, the owner rescue).
+get no reminder. A business with no Owner gets no email: give it an Owner first (Business page, the owner rescue). The
+reminder of that day is still marked as done, so an Owner added later the same day gets the next one, not that one. A
+business with a status change you scheduled gets no reminder and is never made overdue or listed.
 
 ## Set the grace period and how to pay
 

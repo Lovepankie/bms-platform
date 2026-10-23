@@ -1,6 +1,7 @@
 package com.rincoltech.bms.core.platform.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
@@ -317,7 +318,10 @@ class BillingAutomationIT extends IntegrationTest {
         assertThat(status(b)).isEqualTo("past_due");
     }
 
-    /** FR-SUB-09: a subscription with a status change the operator scheduled is never made overdue, and keeps its date. */
+    /**
+     * FR-SUB-08, FR-SUB-09: a subscription with a status change the operator scheduled gets no reminder, is never made overdue,
+     * and keeps its date.
+     */
     @Test
     void frSub09_aScheduledChangeIsNeverOverwrittenByTheOverdueMove() {
         Business b = business("active", null, LocalDate.of(2026, 11, 8), false);
@@ -325,6 +329,10 @@ class BillingAutomationIT extends IntegrationTest {
                 .sql("UPDATE subscriptions SET next_status_change_on = ? WHERE tenant_id = ?")
                 .params(LocalDate.of(2026, 11, 8), b.id())
                 .update();
+        assertThat(run(b).remindersQueued()).as("7 days before: no reminder").isZero();
+        clock.set(Instant.parse("2026-11-08T06:00:00Z"));
+        run(b);
+        assertThat(reminders(b)).as("nor on the day").isEmpty();
 
         clock.set(Instant.parse("2026-11-10T06:00:00Z"));
         assertThat(run(b).markedOverdue()).isZero();
@@ -364,6 +372,11 @@ class BillingAutomationIT extends IntegrationTest {
         Business pilot = business("past_due", null, LocalDate.of(2026, 11, 1), true);
         Business suspended = business("suspended", null, LocalDate.of(2026, 11, 1), false);
         Business ended = business("past_due", null, LocalDate.of(2026, 11, 1), false);
+        Business scheduled = business("past_due", null, LocalDate.of(2026, 11, 1), false);
+        TestDatabase.owner()
+                .sql("UPDATE subscriptions SET next_status_change_on = ? WHERE tenant_id = ?")
+                .params(LocalDate.of(2026, 11, 30), scheduled.id())
+                .update();
         TestDatabase.owner()
                 .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
                 .param(ended.id())
@@ -378,7 +391,8 @@ class BillingAutomationIT extends IntegrationTest {
                             inGrace.id().toString(),
                             pilot.id().toString(),
                             suspended.id().toString(),
-                            ended.id().toString());
+                            ended.id().toString(),
+                            scheduled.id().toString());
             JsonNode item = null;
             for (JsonNode i : platform.get("/api/v1/platform/billing/due-for-suspension", operator.accessToken())
                     .getBody()
@@ -427,8 +441,23 @@ class BillingAutomationIT extends IntegrationTest {
                     .as("not for a business's staff")
                     .isEqualTo(HttpStatus.UNAUTHORIZED);
         } finally {
-            saveGrace(7);
+            platform.call(
+                    HttpMethod.PUT,
+                    "/api/v1/platform/billing/settings",
+                    Map.of("grace_days", 7, "how_to_pay", "", "reason", "Test: back to the defaults"),
+                    operator.accessToken());
         }
+    }
+
+    /** FR-SUB-08, FR-SUB-11: the Owner written to is never deactivated; the database refuses to deactivate an Owner. */
+    @Test
+    void theOwnerCannotBeDeactivatedSoNoDeactivatedPersonIsWrittenTo() {
+        Business b = business("active", null, LocalDate.of(2026, 11, 8), false);
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE users SET status = 'deactivated' WHERE id = ?")
+                        .param(b.ownerId())
+                        .update())
+                .hasStackTraceContaining("users_owner_is_staff");
     }
 
     /** FR-SUB-11: a payment gets a numbered receipt in its own transaction, emailed to the Owner with the PDF attached. */

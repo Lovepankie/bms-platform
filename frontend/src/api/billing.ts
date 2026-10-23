@@ -47,7 +47,8 @@ export async function downloadReceipt(paymentId: string, receiptNo: string): Pro
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Revoked later: revoking right after the click can cancel the download in Safari and Firefox.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function billingSettings(): Promise<BillingSettings> {
