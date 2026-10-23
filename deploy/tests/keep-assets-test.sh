@@ -174,12 +174,16 @@ EOF
     expect "$file: after a rollback, index.html is build 2's" / 'index-v2\.js'
     expect "$file: after a rollback, the rolled-back build's chunk answers 200" /assets/page-v3.js 'HTTP/1.1 200'
 
-    # keep-assets fails, then hangs: the switch still happens, the hang is cut off at the limit and
-    # no run container is left behind.
+    # keep-assets fails, hangs, or names an image that is not on the host (--pull never must refuse
+    # it): the switch still happens, the hang is cut off at the limit and no run container is left.
     base=("${COMPOSE[@]}")
-    for mode in fails hangs; do
-        if [[ "$mode" == fails ]]; then entry='["false"]'; target=3; limit=60; else entry='["sleep", "300"]'; target=2; limit=3; fi
-        printf 'services:\n  keep-assets:\n    entrypoint: %s\n    command: !reset []\n' "$entry" > "$WORK/keep-$mode.yml"
+    for mode in fails hangs missing; do
+        case "$mode" in
+            fails) override='entrypoint: ["false"]'; target=3; limit=60 ;;
+            hangs) override='entrypoint: ["sleep", "300"]'; target=2; limit=3 ;;
+            missing) override="image: sha256:$(printf '0%.0s' {1..64})"; target=3; limit=60 ;;
+        esac
+        printf 'services:\n  keep-assets:\n    %s\n    command: !reset []\n' "$override" > "$WORK/keep-$mode.yml"
         COMPOSE=("${base[@]}" --file "$WORK/keep-$mode.yml")
         started=$SECONDS
         deploy "$target" "$limit" || fail "$file: build $target did not start when keep-assets $mode"
@@ -191,7 +195,8 @@ EOF
         fi
         if [[ "$mode" == hangs ]]; then
             if (( SECONDS - started < 40 )); then ok "$file: a hanging keep-assets is cut off"; else fail "$file: a hanging keep-assets took $(( SECONDS - started ))s"; fi
-            if [[ -z "$(docker ps --all --quiet --filter name=bms-keep-assets-)" ]]; then
+            if [[ -z "$(docker ps --all --quiet --filter "label=com.docker.compose.project=$project" \
+                    --filter label=com.docker.compose.service=keep-assets)" ]]; then
                 ok "$file: no keep-assets container is left behind"
             else
                 fail "$file: a keep-assets container is left behind"

@@ -153,7 +153,8 @@ fi
 # web_assets volume and prunes the old ones. It runs by local image ID with --pull never, so only the
 # image web was created from (verified by its own deploy) can run, never a pull of a moved tag. A
 # failure or a run past the time limit (the first argument, seconds) costs a phone on the old copy a
-# reload, never the deploy or the rollback.
+# reload, never the deploy or the rollback. The ps, inspect and rm calls are not under the limit: a
+# daemon that hangs on those would hang the switch's own `up` as well.
 keep_outgoing_assets() {
     local limit="$1" id image="" name="bms-keep-assets-$$"
     id="$("${COMPOSE[@]}" ps --quiet web 2>/dev/null || true)"
