@@ -161,6 +161,12 @@ describe('a sale line with price lists', () => {
       <SaleLineCard line={line} index={0} unitsOn={false} price={priced && { ...priced, listName: 'Wholesale' }} onQty={() => undefined} onPrice={() => undefined} onUnit={() => undefined} onReason={() => undefined} onReset={() => undefined} onRemove={() => undefined} />,
     );
 
+  it('flashes the line just added, and only that one (Hillary, 23 Oct 2026)', () => {
+    const fresh = renderToString(<SaleLineCard line={{ ...newLine(pen), price: '80' }} index={0} unitsOn={false} fresh={1} onQty={() => undefined} onPrice={() => undefined} onUnit={() => undefined} onReason={() => undefined} onReset={() => undefined} onRemove={() => undefined} />);
+    expect(fresh).toContain('line-added');
+    expect(card(undefined)).not.toContain('line-added');
+  });
+
   it('says which list and which break priced the line', () => {
     const html = card({ resolved: resolved(), canOverride: true });
     expect(html).toContain('Price list Wholesale, from 10');

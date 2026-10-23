@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../../../api/retail';
-import { CODE128, barcodeKey, checkBarcode, code128Values, code128Widths, findByBarcodeIn, plusOne, scanInto } from './barcode-state';
+import { CODE128, barcodeKey, checkBarcode, code128Values, code128Widths, findByBarcodeIn, plusOne, scanInto, touchedLine } from './barcode-state';
 
 // Barcodes (ADR-070, issue #345; FR-RET-68): the same format rules as the server, the line a scan
 // adds or bumps, and the Code 128 bars of a label. Fabricated codes and items.
@@ -90,5 +90,18 @@ describe('Code 128 labels', () => {
     // Start B (104) + 'A' (33) at 1 + 'B' (34) at 2: 104 + 33 + 68 = 205, and 205 mod 103 = 102.
     expect(code128Values('AB')).toEqual([104, 33, 34, 102, 106]);
     expect(code128Widths('IN00000001').reduce((a, b) => a + b, 0)).toBe(13 * 11 + 2);
+  });
+});
+
+describe('the line an add touched (#504)', () => {
+  const a = { id: 'a' }, b = { id: 'b' }, b2 = { id: 'b', qty: 2 };
+  it('is the new last line when one was added', () => {
+    expect(touchedLine([a], [a, b])).toEqual({ index: 1, created: true });
+  });
+  it('is the line that changed when one was topped up, not the last line of that item', () => {
+    expect(touchedLine([b, a], [b2, a])).toEqual({ index: 0, created: false });
+  });
+  it('is none when nothing changed', () => {
+    expect(touchedLine([a], [a])).toEqual({ index: -1, created: false });
   });
 });

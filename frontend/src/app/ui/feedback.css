@@ -234,3 +234,42 @@
     display: inline;
   }
 }
+
+/* A line just added to a sale flashes once, so the eye finds it (Hillary, 23 Oct 2026). The flash is its own element,
+   keyed by the add, so a repeat scan flashes again and the card never keeps a marker. */
+.line-card {
+  position: relative;
+}
+
+.line-added {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-success-tint);
+  pointer-events: none;
+  animation: rt-line-added 1.2s var(--ease-out) forwards;
+}
+
+@keyframes rt-line-added {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line-added {
+    animation: rt-line-added-still 1.2s steps(1, end) forwards;
+  }
+
+  @keyframes rt-line-added-still {
+    from {
+      opacity: 0.6;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}

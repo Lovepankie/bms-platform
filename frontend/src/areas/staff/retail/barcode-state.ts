@@ -136,3 +136,9 @@ export function code128Values(text: string): number[] {
 export function code128Widths(text: string): number[] {
   return code128Values(text).flatMap((v) => [...(CODE128[v] ?? '')].map(Number));
 }
+
+/** Which line an add or a scan touched: the new last line, or the first line that changed; -1 when nothing did. */
+export function touchedLine<L>(before: L[], after: L[]): { index: number; created: boolean } {
+  if (after.length > before.length) return { index: after.length - 1, created: true };
+  return { index: after.findIndex((l, i) => l !== before[i]), created: false };
+}

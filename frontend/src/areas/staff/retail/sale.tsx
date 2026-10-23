@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
@@ -27,7 +27,8 @@ import { ShareReceipt } from './receipt-share';
 import { ChangePanel, ReceiptChange } from './sale-change';
 import { receivedFor, receivedProblem } from './sale-change-state';
 import { ScanBar } from './scan';
-import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
+import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
+import { useToast } from './toast';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -105,7 +106,11 @@ export function Receipt({ sale, onNew, received }: { sale: Sale; onNew?: () => v
  * One line of the sale being made. The unit choice is drawn only while the tenant has the units capability
  * (`unitsOn`) and the item has active pack sizes; otherwise the line is exactly what it was before packs.
  */
-export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh, onFlashed, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+  /** Set on the line just added or topped up, a new number each time: it flashes once (Hillary, 23 Oct 2026). */
+  fresh?: number;
+  /** Called when the flash has run, so it never stays on or moves to another line. */
+  onFlashed?: () => void;
   line: DraftLine;
   index: number;
   unitsOn: boolean;
@@ -132,7 +137,8 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, onQty,
   const noPrice = price ? hasNoPrice(price.resolved) : false;
   const changedOffline = offlinePrice !== undefined && f !== null && f.priceMinor !== defaultPrice(line.product, line.unitId);
   return (
-    <div className="rt-card">
+    <div className="rt-card line-card">
+      {fresh !== undefined && <span key={fresh} className="line-added" aria-hidden="true" onAnimationEnd={onFlashed} />}
       <strong>{line.product.description}</strong>
       {packs.length > 0 && (
         <div>
@@ -262,14 +268,38 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     setDraft((d) => ({ ...d, lines: d.lines.map((l, n) => (n === i ? withUnit(l, unitId) : l)) }));
   const unitsOn = capabilityOn(me, 'retail', UNITS);
   // An item can be on the sale twice (cartons and loose pieces) only while it has pack sizes to choose from.
-  const add = (p: Product) =>
-    setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
+  // Every add says so on screen (Hillary, 23 Oct 2026): a short toast, and the new line flashes once.
+  const { show, toast } = useToast(2500);
+  // The line just added or topped up flashes once; `n` changes on every add so a repeat scan flashes again.
+  const [fresh, setFresh] = useState<{ index: number; n: number } | null>(null);
+  // The lines as of the last add, so two taps or scans before React renders again see each other.
+  const lines = useRef(draft.lines);
+  lines.current = draft.lines;
+  const mark = (index: number) => setFresh((f) => ({ index, n: (f?.n ?? 0) + 1 }));
+  const add = (p: Product) => {
+    const now = lines.current;
+    if (now.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0)) {
+      show(`${p.description} is already on the sale. Change its quantity below.`);
+      return;
+    }
+    const next = [...now, newLine(p)];
+    lines.current = next;
+    setDraft((d) => ({ ...d, lines: next }));
+    mark(next.length - 1);
+    show(`Added ${p.description}`);
+  };
   // A scan (issue #345) adds the item at 1, or one more to its line in the pack the barcode is on; a pack it cannot
   // use is refused, never sold as one piece.
   const scanAdd = (p: Product, unitId?: string) => {
     const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
     if (unitId && !unit) return PACK_UNUSABLE;
-    setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, unit, (l) => ({ ...l, qty: plusOne(l.qty) }), () => (unit ? withUnit(newLine(p), unit) : newLine(p))) }));
+    const now = lines.current;
+    const next = scanInto(now, p, unit, (l) => ({ ...l, qty: plusOne(l.qty) }), () => (unit ? withUnit(newLine(p), unit) : newLine(p)));
+    const { index, created } = touchedLine(now, next);
+    lines.current = next;
+    setDraft((d) => ({ ...d, lines: next }));
+    if (index >= 0) mark(index);
+    show(created ? `Added ${p.description}` : `One more ${p.description}`);
   };
 
   const total = draftTotal(shown.lines);
@@ -349,6 +379,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           line={l}
           index={i}
           unitsOn={unitsOn}
+          fresh={fresh !== null && fresh.index === i ? fresh.n : undefined}
+          onFlashed={() => setFresh(null)}
           price={pricesOn ? { resolved: resolved?.[i], listName: resolution.data?.price_list, canOverride: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
           offlinePrice={offlineMode ? { canType: holdsAt(me, PRICE_OVERRIDE, branchId) } : undefined}
           onQty={(v) => setLine(i, { qty: v })}
@@ -524,6 +556,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           </div>
         </div>
       )}
+      {toast}
     </form>
   );
 }
