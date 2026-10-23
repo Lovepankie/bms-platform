@@ -68,6 +68,12 @@ class SignUpController {
             @Size(max = 40) @Pattern(regexp = "^[A-Za-z0-9-]*$") @Schema(description = "Recorded; agents arrive later")
             String agentCode,
 
+            @Size(max = 20)
+            @Schema(
+                    description =
+                            "Optional: the referral code of the business that referred the applicant (the ?ref= of its link). An unknown code is 422 referral_code_unknown (ADR-069)")
+            String referralCode,
+
             @Size(max = 1000) String message,
 
             @Size(max = 200)

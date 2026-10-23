@@ -1012,6 +1012,242 @@ class RlsIsolationIT {
                         INSERT INTO retail_product_barcodes (id, tenant_id, product_id, code, format)
                         VALUES (?, ?, ?, 'TEST-RLS-01', 'code128')
                         """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
+        // A business this one referred and a commission line the operator typed (migration V88, #464); the referral
+        // code
+        // of every business is written by the trigger on tenants.
+        UUID referred = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, ?, 'Test Referred Shop', '00000000-0000-4000-8000-000000000001')")
+                .params(referred, "rls-ref-" + referred.toString().substring(0, 8))
+                .update();
+        UUID referral = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO tenant_referrals (id, tenant_id, referred_tenant_id, code, source)
+                        VALUES (?, ?, ?, 'TESTRF22', 'operator')
+                        """).params(referral, t.tenantId(), referred).update();
+        owner.sql("""
+                        INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, amount_minor, currency, note)
+                        VALUES (?, ?, ?, 'manual', 1000, 'UGX', 'Test commission')
+                        """).params(UUID.randomUUID(), t.tenantId(), referral).update();
+    }
+
+    /**
+     * Referrals (V88, #464, ADR-069): bound to A, no code, referral or commission line of B is read; the application role
+     * writes none of them; the operator's cross-business functions refuse a tenant-bound call; and A's own list holds only A's
+     * referrals.
+     */
+    @Test
+    void referralsAreIsolatedPerBusiness() throws SQLException {
+        for (String table : List.of("referral_codes", "tenant_referrals", "referral_commission_lines")) {
+            long ofB = asApp(
+                    a.tenantId(),
+                    c -> count(c, "SELECT count(*) FROM " + table + " WHERE tenant_id = ?", b.tenantId()));
+            long ofA = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table));
+            assertThat(ofB).as("rows of B in %s", table).isZero();
+            assertThat(ofA).as("rows of A in %s", table).isPositive();
+            assertThatThrownBy(() -> asApp(
+                            a.tenantId(),
+                            c -> count(c, "WITH d AS (DELETE FROM " + table + " RETURNING 1) SELECT count(*) FROM d")))
+                    .as("DELETE on %s", table)
+                    .hasStackTraceContaining("permission denied");
+        }
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps = c.prepareStatement("""
+                            INSERT INTO tenant_referrals (id, tenant_id, referred_tenant_id, code, source)
+                            VALUES (gen_random_uuid(), ?, ?, 'TESTRF33', 'operator')
+                            """)) {
+                        ps.setObject(1, a.tenantId());
+                        ps.setObject(2, b.tenantId());
+                        return ps.executeUpdate();
+                    }
+                }))
+                .hasStackTraceContaining("permission denied");
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(
+                                c,
+                                "SELECT count(*) FROM platform_referrals_list(NULL, NULL, NULL, NULL, NULL, 10, 0)")))
+                .hasStackTraceContaining("platform operator only");
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(
+                                c,
+                                "SELECT count(*) FROM platform_referral_set_referrer(?, NULL, NULL, now())",
+                                a.tenantId())))
+                .hasStackTraceContaining("platform operator only");
+        // The sign-up's and Activate's functions refuse a tenant-bound call too (review of #467): no oracle on another
+        // business's administrators, no referral written for another business, no cross-business read of a line.
+        for (String call : List.of(
+                // count(f(..)) consumes the result, so the planner cannot drop the call.
+                "SELECT count(referral_is_self(?, 'someone@example.test', NULL))",
+                "SELECT count(*) FROM (SELECT onboarding_application_set_referrer(gen_random_uuid(), ?, 'TESTRF22')) x",
+                "SELECT count(platform_referral_of_line(?))",
+                "SELECT count(platform_referral_mark_payment_refunded(?, NULL, now()))",
+                "SELECT count(*) FROM onboarding_application_referrer(?)",
+                "SELECT count(*) FROM platform_referral_from_application(gen_random_uuid(), ?, NULL)")) {
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, call, b.tenantId())))
+                    .as(call)
+                    .satisfiesAnyOf(
+                            e -> assertThat(e).hasStackTraceContaining(" only"),
+                            e -> assertThat(e).hasStackTraceContaining("platform operator's"));
+        }
+        // A typed commission line refuses a tenant-bound call even bound to the referrer itself, with a real referral
+        // of
+        // that referrer and an active operator: the beneficiary never writes commission to itself (review of #467).
+        UUID operator = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("INSERT INTO platform_users (id, email, full_name) VALUES (?, ?, 'Test Operator 12')")
+                .params(operator, "rls-ref-op-" + operator.toString().substring(0, 8) + "@example.test")
+                .update();
+        UUID referralOfA = TestDatabase.owner()
+                .sql("SELECT id FROM tenant_referrals WHERE tenant_id = ? LIMIT 1")
+                .param(a.tenantId())
+                .query(UUID.class)
+                .single();
+        long linesOfA = TestDatabase.owner()
+                .sql("SELECT count(*) FROM referral_commission_lines WHERE tenant_id = ?")
+                .param(a.tenantId())
+                .query(Long.class)
+                .single();
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(
+                                c,
+                                "SELECT count(platform_referral_add_manual_line(gen_random_uuid(), ?, 1000, 'UGX', 'Test', ?))",
+                                referralOfA,
+                                operator)))
+                .hasStackTraceContaining("typed by the platform operator only");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM referral_commission_lines WHERE tenant_id = ?")
+                        .param(a.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(linesOfA);
+        for (String table : List.of("referral_commission_rules", "referral_settings", "referral_payment_outcomes")) {
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
+                    .as("SELECT on %s", table)
+                    .hasStackTraceContaining("permission denied");
+        }
+        long mine = asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM tenant_referrals_mine()"));
+        long all = TestDatabase.owner()
+                .sql("SELECT count(*) FROM tenant_referrals WHERE tenant_id = ? AND ended_at IS NULL")
+                .param(a.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(mine).isEqualTo(all).isPositive();
+    }
+
+    /**
+     * Referrals through the application role, adversarially (test review of #467): bound to A, no referral row of B or of A
+     * itself is changed or added by statement, no operator function acts on B's referral or line, no commission is worked out
+     * for B's payment, and the business A referred sees none of the commission its payments earn A. B's rows are as they were.
+     */
+    @Test
+    void referralRowsAreNeverChangedOrWorkedOutThroughTheAppRole() throws SQLException {
+        JdbcClient owner = TestDatabase.owner();
+        UUID lineOfB = owner.sql("SELECT id FROM referral_commission_lines WHERE tenant_id = ? LIMIT 1")
+                .param(b.tenantId())
+                .query(UUID.class)
+                .single();
+        UUID referralOfB = owner.sql("SELECT id FROM tenant_referrals WHERE tenant_id = ? LIMIT 1")
+                .param(b.tenantId())
+                .query(UUID.class)
+                .single();
+        UUID lineOfA = owner.sql("SELECT id FROM referral_commission_lines WHERE tenant_id = ? LIMIT 1")
+                .param(a.tenantId())
+                .query(UUID.class)
+                .single();
+        UUID referralOfA = owner.sql("SELECT id FROM tenant_referrals WHERE tenant_id = ? LIMIT 1")
+                .param(a.tenantId())
+                .query(UUID.class)
+                .single();
+        UUID referredByA = owner.sql("SELECT referred_tenant_id FROM tenant_referrals WHERE id = ?")
+                .param(referralOfA)
+                .query(UUID.class)
+                .single();
+        UUID paymentOfB = owner.sql("SELECT id FROM subscription_payments WHERE tenant_id = ? LIMIT 1")
+                .param(b.tenantId())
+                .query(UUID.class)
+                .single();
+        String linesOfB = owner.sql(
+                        "SELECT string_agg(to_jsonb(l)::text, ',' ORDER BY id) FROM referral_commission_lines l WHERE tenant_id = ?")
+                .param(b.tenantId())
+                .query(String.class)
+                .single();
+
+        for (Map.Entry<String, UUID> write : List.of(
+                Map.entry(
+                        "UPDATE referral_commission_lines SET paid_on = current_date, paid_at = now() WHERE id = ?",
+                        lineOfB),
+                Map.entry(
+                        "UPDATE referral_commission_lines SET paid_on = current_date, paid_at = now() WHERE id = ?",
+                        lineOfA),
+                Map.entry(
+                        "UPDATE referral_commission_lines SET amount_minor = 999999 WHERE tenant_id = ?", a.tenantId()),
+                Map.entry("UPDATE tenant_referrals SET tenant_id = tenant_id WHERE id = ?", referralOfB),
+                Map.entry("UPDATE tenant_referrals SET rule_id = NULL WHERE id = ?", referralOfA),
+                Map.entry("UPDATE referral_codes SET code = 'TESTRF99' WHERE tenant_id = ?", b.tenantId()),
+                Map.entry("""
+                        INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, amount_minor, currency, note)
+                        SELECT gen_random_uuid(), tenant_id, id, 'manual', 1000000, 'UGX', 'Test' FROM tenant_referrals WHERE id = ?
+                        """, referralOfA))) {
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                        try (PreparedStatement ps = c.prepareStatement(write.getKey())) {
+                            ps.setObject(1, write.getValue());
+                            return ps.executeUpdate();
+                        }
+                    }))
+                    .as(write.getKey())
+                    .hasStackTraceContaining("permission denied");
+        }
+        for (String call : List.of(
+                "SELECT count(platform_referral_mark_paid(?, current_date, 'cash', NULL, NULL, true, NULL, now()))",
+                "SELECT count(platform_referral_reverse_line(gen_random_uuid(), ?, 'Test', true, NULL, now()))",
+                "SELECT count(*) FROM platform_referral_lines(?)",
+                "SELECT count(platform_referral_set_rule(?, '00000000-0000-4000-8000-000000000890'))")) {
+            UUID target = call.contains("set_rule") || call.contains("_lines(") ? referralOfB : lineOfB;
+            assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, call, target)))
+                    .as(call)
+                    .satisfiesAnyOf(
+                            e -> assertThat(e).hasStackTraceContaining(" only"),
+                            e -> assertThat(e).hasStackTraceContaining("platform operator's"));
+        }
+        assertThatThrownBy(
+                        () -> asApp(
+                                a.tenantId(),
+                                c -> count(
+                                        c,
+                                        "SELECT count(platform_referral_add_rule(gen_random_uuid(), 'percent_of_payment', 10000, NULL, NULL, NULL, NULL, NULL))")))
+                .hasStackTraceContaining("platform operator's");
+        assertThatThrownBy(
+                        () -> asApp(
+                                a.tenantId(),
+                                c -> count(
+                                        c,
+                                        "SELECT count(platform_referral_set_default_rule('00000000-0000-4000-8000-000000000890', NULL, now()))")))
+                .hasStackTraceContaining("platform operator's");
+        // The commission of a payment is worked out only for the bound business's own payment.
+        assertThatThrownBy(() -> asApp(
+                        a.tenantId(),
+                        c -> count(
+                                c,
+                                "SELECT count(*) FROM platform_referral_commission_for_payment(?, NULL)",
+                                paymentOfB)))
+                .hasStackTraceContaining("unknown payment");
+        // The business A referred sees no referral and no commission line, though its payments are what earn them.
+        for (String table : List.of("referral_codes", "tenant_referrals", "referral_commission_lines")) {
+            long seen = asApp(
+                    referredByA, c -> count(c, "SELECT count(*) FROM " + table + " WHERE tenant_id = ?", a.tenantId()));
+            assertThat(seen).as("rows of the referrer in %s", table).isZero();
+        }
+        long mineOfReferred = asApp(referredByA, c -> count(c, "SELECT count(*) FROM tenant_referrals_mine()"));
+        assertThat(mineOfReferred).isZero();
+        assertThat(owner.sql(
+                                "SELECT string_agg(to_jsonb(l)::text, ',' ORDER BY id) FROM referral_commission_lines l WHERE tenant_id = ?")
+                        .param(b.tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo(linesOfB);
     }
 
     /**

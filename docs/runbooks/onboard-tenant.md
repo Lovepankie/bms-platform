@@ -232,6 +232,13 @@ nothing.
   no free month end), and `POST .../payments` with an `Idempotency-Key` header (a payment received; an amount far from
   the plan's price needs `"confirm_unusual_amount": true`).
 - Plans and prices: `PUT /api/v1/platform/plans/{code}` and `POST .../prices`, each with a `reason`.
+- Referral commissions (ADR-069): the platform default rule is 10% of each subscription payment a referred business
+  makes, for its first 12 paid months, no cap (product owner decision, 22 Oct 2026; `V88` sets it). For example a
+  Growing business paying 60,000 a month earns its referrer 6,000 on each of its first 12 payments and nothing after;
+  a year paid upfront earns 10% of that payment once. Recording a payment (above) adds the line by itself. To change
+  the default for every later payment: `GET` and `PUT /api/v1/platform/referrals/default-rule {"rule", "reason",
+  "totp_code"}`; to give one referral its own deal: `PUT /api/v1/platform/referrals/{id}/rule` the same way (`"rule":
+  null` puts it back on the default). Lines already worked out never change.
 
 Every change is written to `platform_audit_log`.
 

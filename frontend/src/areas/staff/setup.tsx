@@ -370,6 +370,15 @@ export function Setup() {
           </fieldset>
         )}
 
+        {permissions.includes('core.referrals.read') && (
+          <fieldset>
+            <legend>Referrals</legend>
+            <p>
+              <Link to={'/staff/setup/referrals' as never}>Referrals</Link>: your link to send to other businesses, and the businesses that signed up with it.
+            </p>
+          </fieldset>
+        )}
+
         <fieldset>
           <legend>Text messages</legend>
           <p>

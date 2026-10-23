@@ -530,6 +530,9 @@ class OnboardingIT extends IntegrationTest {
     @Autowired
     List<com.rincoltech.bms.core.tenancy.ModuleManifest> manifests;
 
+    @Autowired
+    com.rincoltech.bms.core.referrals.Referrals referrals;
+
     /**
      * Review B2 (c): the global caps. Over the hourly cap of new applications or of confirmation
      * emails a sign-up is answered and nothing is created or sent; the first request over it writes
@@ -555,6 +558,7 @@ class OnboardingIT extends IntegrationTest {
                 clock,
                 new SignUpRateLimiter(clock),
                 new OnboardingProperties(5, 5, 3),
+                referrals,
                 manifests);
         String hour = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00", java.util.Locale.ROOT)
                 .format(future.atOffset(java.time.ZoneOffset.UTC));
@@ -630,6 +634,7 @@ class OnboardingIT extends IntegrationTest {
                 List.of("retail"),
                 "monthly",
                 "trial",
+                null,
                 null,
                 null,
                 null);

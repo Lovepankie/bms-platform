@@ -277,7 +277,9 @@ punctuation, without Ltd, Limited, Co, Company, SMC, Enterprise(s), The), `conta
 `onboarding_email_key`: lower case, a +tag dropped, Gmail dots dropped and googlemail.com read as
 gmail.com), `contact_phone_e164 varchar(20)`, `country char(2)`,
 `modules text[]`, `term` [`monthly`, `annual`], `way_in` [`trial`, `paid`], `agent_code` (recorded,
-unused until agents), `message varchar(1000)`, `link_token_hash char(64) UNIQUE` and
+unused until agents), `referral_code varchar(10)` and `referrer_tenant_id uuid` (FK `tenants`; the code the applicant
+brought and its business, resolved at the sign-up, made the referral at Activate; `V88`, ADR-069; the operator reads it through
+`onboarding_application_referrer`, which refuses a tenant-bound transaction), `message varchar(1000)`, `link_token_hash char(64) UNIQUE` and
 `link_token_expires_at` (the applicant link: SHA-256 of 256 random bits, 7 days; replaced by every
 email to the applicant), `email_verified_at` (in the operator queue once set), `operator_note`,
 `applicant_reply`, `reject_reason`, `decided_by` and `decided_at` (FK `platform_users`),
@@ -289,8 +291,34 @@ mailbox; indexes on status and date, phone and normalised name serve the queue a
 warning. Row-level security is enabled and forced with no policy (`bms_owner` has BYPASSRLS), and nothing
 is granted to `bms_app`: the definer functions owned by `bms_owner` are its only way in (create,
 relink, created since, read by link, reply, list, counts, duplicates, decide, lock, activated,
-expire, purge). Rejected and
+expire, purge, and since `V88` set referrer and referrer). Rejected and
 expired rows are deleted 90 days after `closed_at` (FR-ONB-09).
+
+### `referral_commission_rules` and `referral_settings` (platform; no privilege for `bms_app`, definer functions only; `V88`, ADR-069)
+
+`referral_commission_rules`: a commission rule the platform operator typed, never changed (append-only; a change is a new rule).
+`id uuid PK`, `kind text NOT NULL` [`percent_of_payment`, `fixed_first_payment`, `fixed_per_month`], `percent_bp integer` (1 to
+10000 basis points), `amount_minor bigint` (1 to 50,000,000), `currency char(3)` (FK `currencies`), `months integer` (1 to 120, the
+first paid months of the referred business it applies to; null for no end), `cap_minor bigint` (1 to 1,000,000,000, a percent rule
+only, with its currency), `created_by_platform_user_id` (FK `platform_users`; null only on the default rule `V88` seeds), `created_at`; a CHECK holds the
+shape of each kind. `referral_settings`: one row (`id boolean PK CHECK (id)`) with `default_rule_id` (FK; null means no rule, so
+nothing is worked out), `updated_by_platform_user_id`, `updated_at`. Row-level security is enabled and forced with no policy on both, and nothing
+is granted to `bms_app`: the definer functions `platform_referral_add_rule`, `platform_referral_set_default_rule`,
+`platform_referral_set_rule` and `platform_referral_rule` are the only way in, each refusing a transaction bound to a tenant. `V88` seeds one
+rule, the default the product owner decided (ADR-069 decision 14: `percent_of_payment`, 1000 basis points, 12 months, no cap,
+fixed id `00000000-0000-4000-8000-000000000890`), and points the default at it only when none is set, with a
+`platform.referral.default_rule_changed` audit row.
+
+`referral_payment_outcomes` (same protection): what each payment of a referred business gave under its referral (for a payment
+made while no referral was current after the first one, `no_referral` under the referral that ended last),
+`payment_id uuid PK` (FK `subscription_payments`), `referral_id` (FK `tenant_referrals`), `outcome text` [`added`, `no_referral`, `no_rule`,
+`not_first_payment`, `months_used`, `currency_differs`, `cap_reached`, `zero`], `created_at`, `refunded_at timestamptz` and
+`refunded_by_line_id uuid` (FK `referral_commission_lines`, the reversal that said so) and `refunded_by_platform_user_id uuid` (FK
+`platform_users`); both are null until `refunded_at` is set. Inserted only by `platform_referral_commission_for_payment`;
+`platform_referral_reverse_line` with `p_refunded`, or `platform_referral_mark_payment_refunded` for a payment with no line to
+reverse (it refuses one whose `payment` line has no reversal), sets the refund columns. A trigger
+refuses a delete and any update except setting the refund columns once. A payment whose outcome was `currency_differs`, or that
+was recorded as refunded, never uses up a rule's first N months (ADR-069 decision 9).
 
 ### `notification_outbox` (platform; no privilege for `bms_app`, definer functions only, ADR-024)
 
@@ -599,6 +627,49 @@ one item, so the operator's screenshot read can bind it) and `platform_feedback_
 `platform_feedback_set_linked_issue(id, issue)` (sets the linked issue or clears it with a null; answers `not_found` or the tenant id).
 The status and the reply change only through `platform_feedback_set_status`, the linked issue only through
 `platform_feedback_set_linked_issue`.
+
+### `referral_codes` (RLS; `bms_app` SELECT only; append-only; `V88`, ADR-069)
+
+`tenant_id uuid PK` (FK `tenants`), `code varchar(10) UNIQUE` (`^[A-Z0-9]{4,10}$`, upper case), `created_at`. Written by the trigger
+`referral_code_on_new_tenant` (after insert on `tenants`) through `bms_assign_referral_code`, and backfilled by `V88` for every
+business that existed: up to five letters of the slug and two characters without 0, 1, I or O, four after ten taken tries, eight
+random after twenty. `referral_code_tenant(code)` (definer, no tenant needed) resolves a typed code, without case, for the public
+sign-up.
+
+### `tenant_referrals` (RLS on the referrer; `bms_app` SELECT only; `V88`, ADR-069)
+
+Who referred whom. `tenant_id` is the **referrer** (the business that owns and reads the row), `referred_tenant_id` (FK `tenants`)
+the business it brought, `code varchar(10)` (the code used), `source text` [`sign_up`, `operator`], `application_id uuid` (the
+sign-up application, for `sign_up`), `rule_id uuid` (FK `referral_commission_rules`; the operator's override, null follows the
+default), `started_at`, `ended_at` (set when the operator moves the business to another referrer), `created_by_platform_user_id`.
+`UNIQUE (tenant_id, id)`; `CHECK (tenant_id <> referred_tenant_id)` (a business never refers itself); a partial unique index on
+`referred_tenant_id` where `ended_at IS NULL` (one current referrer). A trigger refuses a delete and any update but `rule_id` and
+setting `ended_at` once. Written by `platform_referral_from_application` (Activate) and `platform_referral_set_referrer` (the
+operator: ends the current row and starts a new one, so lines stay with the referrer who earned them). The months a rule's
+first N count start at the business's earliest `started_at` over all its rows, so a new row earns only the months left
+(ADR-069 decision 9).
+
+### `referral_commission_lines` (RLS on the referrer; `bms_app` SELECT only; `V88`, ADR-069)
+
+What a referrer earned. `tenant_id` (the referrer), `referral_id` (FK `(tenant_id, referral_id)` to `tenant_referrals`), `kind text`
+[`payment`, `manual`, `reversal`], `payment_id uuid` (FK `subscription_payments`; one `payment` line per payment, a partial unique
+index), `reverses_line_id uuid UNIQUE` (FK `(tenant_id, reverses_line_id)`; a line is reversed once), `amount_minor bigint` (not
+zero, at most 1,000,000,000 either way; negative only for a reversal), `currency char(3)`, `months_counted integer`, `rule_snapshot
+jsonb` (the rule, the payment's months and the months already used; required for `payment`; never the payment's amount, which the
+referrer could read: `platform_referral_lines` adds it for the operator only), `referrer_inactive boolean NOT NULL DEFAULT false`
+(the referrer business was inactive, `bms_referrer_status` not `active`, when the line was worked out, ADR-069 decision 12; the reads return it as
+`inactive_when_worked_out` and work out `referrer_status` and `referrer_inactive` now with `bms_referrer_status`, and
+`platform_referral_mark_paid` refuses an unconfirmed paid mark while the referrer is suspended, cancelled, past due or out of
+an unpaid free month), `note varchar(500)` (the reason of a `manual` or
+`reversal` line), `paid_on date`, `paid_method text` [`mtn_momo`, `airtel_money`, `bank_transfer`, `cash`, `other`],
+`paid_reference varchar(100)`, `paid_note varchar(500)`, `paid_at`, `paid_by_platform_user_id`, `created_by_platform_user_id`,
+`created_at`. `UNIQUE (tenant_id, id)`. A trigger refuses a delete and any update except setting the paid columns once. Written only by
+the definer functions `platform_referral_commission_for_payment` (in the payment's transaction, bound to the paying business, which
+must own the payment), `platform_referral_add_manual_line`, `platform_referral_reverse_line` and `platform_referral_mark_paid` (each
+refusing a tenant-bound transaction; the typed line's Idempotency-Key row is written bound to the referrer and the line unbound,
+in one transaction); read
+across businesses by `platform_referrals_list` and `platform_referral_lines` (each refusing a tenant-bound transaction) and, for the
+bound business only, by `tenant_referrals_mine()`.
 
 ### `auth_sessions` (RLS)
 
@@ -1724,8 +1795,11 @@ reversal that reopens a closed loan can restore that loan's own pledges (section
 `V63__retail_catalogue_corrections.sql` (#351 and #352, ADR-044) is expand only:
 `bms_name_key`, the generated `retail_products.name_key` with its index, `retail_products.duplicate_reason`,
 `retail_purchase_voids` and `retail_stock_corrections` (section 6.11.2a). No column or check of the movement and balance tables
-changes. The next migration takes the number above the highest on `main` (`MigrationOrderIT`, chapter 15 section
-15.4.3).
+changes. `V88__referrals_and_commissions.sql` (#464, ADR-069) is expand only: `referral_codes` (with the trigger on `tenants` and
+the backfill), `tenant_referrals`, `referral_commission_lines`, `referral_commission_rules`, `referral_settings`, two columns on
+`onboarding_applications`, their definer functions and the permission `core.referrals.read`; `V85` is shop logos and `V86` and `V87`
+are the ordered claims before it (offline sales, barcodes); it is renamed at merge if that order changes. The next migration takes the number above the highest on `main`
+(`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items
 

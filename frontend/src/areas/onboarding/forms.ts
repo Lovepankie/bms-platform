@@ -36,6 +36,8 @@ export interface SignUpForm {
   term: string;
   way_in: string;
   agent_code: string;
+  /** The code of the business that referred the applicant, from the link's ?ref= or typed (ADR-069). */
+  referral_code: string;
   message: string;
   /** The hidden field: people never see it, so it stays empty. */
   website: string;
@@ -51,6 +53,7 @@ export const EMPTY_SIGN_UP: SignUpForm = {
   term: 'monthly',
   way_in: 'trial',
   agent_code: '',
+  referral_code: '',
   message: '',
   website: '',
 };
@@ -61,6 +64,7 @@ export type Problems = Partial<Record<string, string>>;
 const EMAIL = /^[\x21-\x3F\x41-\x7E]+@[\x21-\x3F\x41-\x7E]+\.[\x21-\x3F\x41-\x7E]+$/;
 const PHONE = /^\+?[0-9 ()-]{9,20}$/;
 const AGENT = /^[A-Za-z0-9-]*$/;
+const REFERRAL = /^[A-Za-z0-9]{4,10}$/;
 
 export function signUpProblems(form: SignUpForm): Problems {
   const problems: Problems = {};
@@ -75,6 +79,9 @@ export function signUpProblems(form: SignUpForm): Problems {
   if (form.modules.length === 0) problems.modules = 'Choose at least one.';
   if (!AGENT.test(form.agent_code) || form.agent_code.length > 40) {
     problems.agent_code = 'Letters, digits and hyphens only.';
+  }
+  if (form.referral_code.trim() !== '' && !REFERRAL.test(form.referral_code.trim())) {
+    problems.referral_code = 'A referral code is 4 to 10 letters and digits, for example DODOS7K. Check it, or leave it empty.';
   }
   if (form.message.length > 1000) problems.message = 'Use at most 1000 characters.';
   return problems;
@@ -91,9 +98,19 @@ export function toSignUpRequest(form: SignUpForm): SignUpRequest {
     term: form.term,
     way_in: form.way_in,
     agent_code: form.agent_code.trim() || undefined,
+    referral_code: form.referral_code.trim().toUpperCase() || undefined,
     message: form.message.trim() || undefined,
     website: form.website || undefined,
   };
+}
+
+/**
+ * The code in a referral link, `/sign-up?ref=DODOS7K` (ADR-069): letters and digits only, in upper case, or empty for none or a
+ * malformed one (the applicant can still type it).
+ */
+export function referralCodeFrom(search: string): string {
+  const code = (new URLSearchParams(search).get('ref') ?? '').trim().toUpperCase();
+  return REFERRAL.test(code) ? code : '';
 }
 
 /** The token of an emailed link: in the fragment (#token=...), which never reaches a server log. */

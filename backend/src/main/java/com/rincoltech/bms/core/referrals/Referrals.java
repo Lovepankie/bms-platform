@@ -1,0 +1,264 @@
+package com.rincoltech.bms.core.referrals;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Referrals and their commissions (issue #464, ADR-069), for {@code core.onboarding} (the sign-up and Activate) and
+ * {@code core.platform} (the payment the operator records, and the operator's routes). Every operator method runs with no
+ * tenant bound and writes a {@code platform_audit_log} row with the operator and the reason; {@link #commissionForPayment}
+ * runs inside the paying business's transaction.
+ */
+public interface Referrals {
+
+    /** The business a typed code belongs to, the code in upper case; 422 {@code referral_code_unknown} for none. */
+    Code resolve(String code);
+
+    /**
+     * Whether the applicant's email or phone (E.164) is that of the Owner or an administrator of the business the code
+     * belongs to: a business is not referred by its own people.
+     */
+    boolean isSelf(Code code, String email, String phoneE164);
+
+    /**
+     * Records the referrer on an application just created, or on the open one a returning applicant brings a code to; only
+     * while it has no referrer and is still submitted, otherwise nothing changes.
+     */
+    void attachToApplication(UUID applicationId, Code code);
+
+    /** The referrer an application carries, for the operator's application page. */
+    Optional<ApplicationReferrer> applicationReferrer(UUID applicationId);
+
+    /**
+     * Activate: the application's referrer becomes the new business's referral, audited. Empty when it had none, or when the
+     * applicant is now the Owner or an administrator of the referrer: then no referral is stored and the refusal is audited.
+     */
+    Optional<UUID> recordFromApplication(UUID applicationId, UUID tenantId, UUID operatorId);
+
+    /**
+     * The commission of a payment just recorded for the bound business, from the rule in force now; a line is added and
+     * audited when the rule gives an amount. Never throws for a business with no referrer or no rule.
+     */
+    Commission commissionForPayment(UUID paymentId, UUID operatorId);
+
+    /** Referrals and open applications with a code, newest first; filters may be null. */
+    List<Referral> list(Filter filter, int limit, int offset);
+
+    /** The same rows as CSV, at most 10,000, audited. */
+    String exportCsv(Filter filter, UUID operatorId);
+
+    /** One referral, its rule in force and its lines; 404 when there is none. */
+    ReferralDetail detail(UUID referralId);
+
+    /**
+     * Sets, corrects or clears (a null code) the referrer of a business, with a reason; 422 {@code referral_self} for the
+     * business itself, 422 {@code referral_code_unknown} for an unknown code. The same referrer again changes nothing.
+     */
+    Optional<Referral> setReferrer(UUID tenantId, String referrerCode, String reason, UUID operatorId);
+
+    /** The platform default rule, or empty while none is set. */
+    Optional<Rule> defaultRule();
+
+    /** Sets (or clears, with null) the platform default rule, with a reason. */
+    Optional<Rule> setDefaultRule(RuleInput rule, String reason, UUID operatorId);
+
+    /** Sets (or clears, with null: the default applies) the rule of one current referral, with a reason. */
+    ReferralDetail setRule(UUID referralId, RuleInput rule, String reason, UUID operatorId);
+
+    /** The business that owns a referral (its referrer), read with no tenant bound; 404 when there is none. */
+    UUID referrerOf(UUID referralId);
+
+    /**
+     * A line with an amount the operator typed, with a reason, behind the Idempotency-Key protocol. The caller binds the
+     * referrer ({@code TenantContext.callAs}, as the platform console binds the paying business for a payment), so the key row
+     * is that business's: a repeat adds nothing and says it was replayed.
+     */
+    LineAdded addLine(
+            UUID referralId,
+            UUID referrerTenantId,
+            String idempotencyKey,
+            long amountMinor,
+            String currency,
+            String reason,
+            UUID operatorId);
+
+    /**
+     * The exact opposite of one line, with a reason; a line is reversed once and a reversal never. With {@code refunded}, the
+     * line's payment was refunded, so it no longer uses up the rule's months; 422 {@code commission_line_not_payment} for a
+     * line that has no payment.
+     */
+    ReferralDetail reverseLine(UUID lineId, String reason, boolean refunded, UUID operatorId);
+
+    /**
+     * Records that a subscription payment of a referred business was refunded when it has no commission line left standing,
+     * so it no longer uses up the rule's months; with a reason, audited. 404 when the payment has no referral outcome, 409
+     * {@code payment_already_refunded}, 409 {@code payment_line_not_reversed} while its line stands.
+     */
+    ReferralDetail markPaymentRefunded(UUID paymentId, String reason, UUID operatorId);
+
+    /**
+     * Marks one line paid; 409 {@code commission_already_paid} for a line already marked, 409 {@code commission_line_reversed}
+     * for an unpaid line that was reversed, 409 {@code commission_reversal_of_unpaid} for the reversal of a line never paid, 409 {@code referrer_inactive} when the referrer is suspended or cancelled now and
+     * the payout does not confirm it.
+     */
+    ReferralDetail markPaid(UUID lineId, Payout payout, UUID operatorId);
+
+    record Code(String code, UUID tenantId) {}
+
+    @Schema(name = "ApplicationReferrer", description = "The business whose referral code the applicant brought")
+    record ApplicationReferrer(String code, UUID tenantId, String tenantSlug, String tenantName) {}
+
+    @Schema(name = "ReferralCommissionOutcome")
+    record Commission(
+            @Schema(
+                    description =
+                            "added, no_referral, no_rule, not_first_payment, months_used, currency_differs, cap_reached or zero")
+            String outcome,
+
+            UUID lineId,
+            UUID referralId,
+            Long amountMinor,
+            String currency) {}
+
+    record Filter(UUID referrerTenantId, String status, String commission) {}
+
+    @Schema(name = "ReferralTotal", description = "One currency: everything earned, what was marked paid, and the rest")
+    record Total(String currency, long earnedMinor, long paidMinor, long dueMinor) {}
+
+    @Schema(name = "PlatformReferral")
+    record Referral(
+            @Schema(description = "Null for an application not activated yet")
+            UUID referralId,
+
+            @Schema(description = "The sign-up application, while it is open or when the referral came from one")
+            UUID applicationId,
+
+            UUID referrerTenantId,
+            String referrerSlug,
+            String referrerName,
+
+            @Schema(description = "The referrer business now: active, suspended, cancelled, past_due or trial_lapsed")
+            String referrerStatus,
+
+            String code,
+
+            @Schema(description = "Null while the referred business is an application")
+            UUID referredTenantId,
+
+            String referredSlug,
+            String referredName,
+
+            @Schema(
+                    description =
+                            "applied, active, paying, suspended or cancelled (the referred business's subscription),"
+                                    + " or ended")
+            String status,
+
+            @Schema(description = "sign_up or operator") String source,
+
+            @Schema(description = "When the business was created, or the application sent")
+            Instant joinedAt,
+
+            Instant startedAt,
+            Instant endedAt,
+
+            @Schema(description = "True when the operator set a rule for this referral")
+            boolean ruleOverride,
+
+            List<Total> totals) {}
+
+    @Schema(name = "ReferralCommissionRule")
+    record Rule(
+            UUID id,
+
+            @Schema(description = "percent_of_payment, fixed_first_payment or fixed_per_month")
+            String kind,
+
+            @Schema(description = "Basis points of each payment: 1000 is 10%")
+            Integer percentBp,
+
+            @Schema(description = "Minor units: once (fixed_first_payment) or per paid month (fixed_per_month)")
+            Long amountMinor,
+
+            String currency,
+
+            @Schema(description = "The first paid months of the referred business it applies to; null: no end")
+            Integer months,
+
+            @Schema(description = "The most a referral earns under a percent rule, in currency; null: no cap")
+            Long capMinor,
+
+            String createdByName,
+            Instant createdAt) {}
+
+    @Schema(
+            name = "ReferralCommissionRuleInput",
+            description = "No rate or amount is built in: the operator types them")
+    record RuleInput(
+            String kind, Integer percentBp, Long amountMinor, String currency, Integer months, Long capMinor) {}
+
+    @Schema(name = "ReferralCommissionLine")
+    record Line(
+            UUID id,
+
+            @Schema(description = "payment (worked out from a rule), manual (typed) or reversal")
+            String kind,
+
+            UUID paymentId,
+            UUID reversesLineId,
+            UUID reversedByLineId,
+            long amountMinor,
+            String currency,
+            Integer monthsCounted,
+
+            @Schema(description = "The rule as it was when the line was worked out, and the payment it was applied to")
+            Map<String, Object> ruleSnapshot,
+
+            @Schema(description = "The referrer business now: active, suspended, cancelled, past_due or trial_lapsed")
+            String referrerStatus,
+
+            @Schema(
+                    description = "The referrer business is not active now: marking the line paid needs"
+                            + " confirm_referrer_inactive")
+            boolean referrerInactive,
+
+            @Schema(description = "The referrer business was not active when the line was worked out")
+            boolean inactiveWhenWorkedOut,
+
+            String note,
+            LocalDate paidOn,
+            String paidMethod,
+            String paidReference,
+            String paidNote,
+            Instant paidAt,
+            String paidByName,
+            String createdByName,
+            Instant createdAt) {}
+
+    @Schema(name = "PlatformReferralDetail")
+    record ReferralDetail(
+            Referral referral,
+
+            @Schema(description = "The rule a payment recorded now would use, or null")
+            Rule ruleInForce,
+
+            @Schema(description = "override, default or none")
+            String ruleSource,
+
+            @Schema(description = "Oldest first") List<Line> lines) {}
+
+    record Payout(
+            LocalDate paidOn,
+            String method,
+            String reference,
+            String note,
+            String reason,
+            boolean confirmReferrerInactive) {}
+
+    record LineAdded(UUID lineId, boolean replayed) {}
+}

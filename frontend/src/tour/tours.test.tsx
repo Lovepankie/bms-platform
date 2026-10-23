@@ -46,6 +46,7 @@ import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
 import { NotificationsPage } from '../areas/staff/notifications/page';
 import { FeedbackPage } from '../areas/staff/feedback/page';
+import { ReferralsPage } from '../areas/staff/referrals/page';
 import { BusinessNotificationsScreen } from '../areas/staff/notifications/business';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
@@ -96,6 +97,8 @@ function screen(path: string | undefined): ReactElement {
       return <NotificationsPage />;
     case '/staff/feedback':
       return <FeedbackPage />;
+    case '/staff/setup/referrals':
+      return <ReferralsPage />;
     case '/staff/setup/two-step':
       return <TwoStepPolicyScreen />;
     case '/staff/setup/notifications':
@@ -280,12 +283,16 @@ const BUYER: Me = { ...ADMIN, full_name: 'Test Buyer 01', module_capabilities: {
 // An administrator of a business with lending, who may configure the AI assistant (extras slice C3, issue #226).
 const ASSISTANT: Me = { ...ADMIN, full_name: 'Test Assistant Admin 01', permissions: [...(ADMIN.permissions ?? []), 'lending.advisor.configure'], modules: ['retail', 'lending'] } as Me;
 
+// The owner or an administrator, who reads the business's referrals (issue #464, ADR-069).
+const REFERRER: Me = { ...ADMIN, full_name: 'Test Referrer 01', permissions: [...(ADMIN.permissions ?? []), 'core.referrals.read'] } as Me;
+
 const AUDIENCE: Record<string, Me[]> = {
   'page-assistant': [ASSISTANT],
   'page-users': [ADMIN],
   'page-branches': [ADMIN],
   'page-notifications': [ADMIN, CASHIER],
   'page-feedback': [ADMIN, CASHIER],
+  'page-referrals': [REFERRER],
   'page-two-step': [ADMIN],
   'page-business-notifications': [ADMIN],
   'page-members': [CLERK, OFFICER],
