@@ -130,7 +130,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       })}
 
       <label htmlFor="transfer-date">Date</label>
-      <input id="transfer-date" type="date" value={draft.transferDate} onChange={(e) => update({ transferDate: e.target.value })} />
+      <input id="transfer-date" type="date" max={businessToday()} value={draft.transferDate} onChange={(e) => update({ transferDate: e.target.value })} />
       <label htmlFor="transfer-note">Note (optional)</label>
       <input id="transfer-note" maxLength={300} value={draft.note} onChange={(e) => update({ note: e.target.value })} />
 

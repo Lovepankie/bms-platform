@@ -202,7 +202,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
         </>
       )}
       <label htmlFor="bought-on">Bought on</label>
-      <input id="bought-on" type="date" value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
+      <input id="bought-on" type="date" max={businessToday()} value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
       {again && purchasedOn < businessToday() && (
         <p role="note" className="alert alert-warning" data-testid="date-warning">
           This restock is dated {showDate(purchasedOn)}. The cash book of that day may be banked already, and saving will change its figures. Use today's date unless the goods really arrived then.
