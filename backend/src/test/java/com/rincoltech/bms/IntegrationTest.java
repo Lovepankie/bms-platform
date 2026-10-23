@@ -32,6 +32,13 @@ import org.springframework.test.context.TestPropertySource;
  *
  * <p>Nor the plan changes ({@code core.platform.plan-scheduled-changes}, ADR-073): a tick would end the subscription or
  * stop a module of whatever test's business had one due. The tests that need it call {@code PlanService.applyDue}.
+ *
+ * <p>Nor the payment poller ({@code core.payments.poll}, issue #487). It asks for the due checks of every tenant, and a
+ * cached context keeps its scheduler running while another context's test runs, so it claimed the payment test's
+ * intents on its own clock: a pending intent dated by the test's clock was already past its expiry by the wall clock
+ * and ended {@code expired}, and a paid one was leased far beyond the test clock, so the test's own ticks could no
+ * longer take it and it never reached {@code needs_attention}. The payment tests call {@code PaymentPoller.tick}
+ * themselves.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -41,7 +48,8 @@ import org.springframework.test.context.TestPropertySource;
             "bms.lending.arrears-job-enabled=false",
             "bms.platform.billing-job-enabled=false",
             "bms.data-export.weekly-enabled=false",
-            "bms.platform.plan-changes-job-enabled=false"
+            "bms.platform.plan-changes-job-enabled=false",
+            "bms.payments.poller-enabled=false"
         })
 @AutoConfigureTestRestTemplate
 public abstract class IntegrationTest {

@@ -166,13 +166,18 @@ class SmsSettingsService {
     @Transactional
     View update(String ifMatch, Change c) {
         int expected = Versions.fromIfMatch(ifMatch);
-        // The version first: a request that lost a race is a conflict whatever else is wrong with it. (The check that
-        // counts is the one under the row lock inside the change below.)
+        // A request that lost a race is a conflict whatever else is wrong with it. (The check that counts is the one
+        // under the row lock inside the change below.) The group is read before the version, in separate statements:
+        // a change committed between the two then shows as a newer version, so a group that passes this check is the
+        // group at the version expected. Read the other way round, a switch-on committed in between passed the check
+        // and the loser's acknowledgement was refused as 422 against the winner's settings (issue #487). This holds
+        // only while the two reads are separate uncached statements under READ COMMITTED (each sees what is committed
+        // when it runs): a cache or REPEATABLE READ would read one snapshot for both and bring the 422 back.
+        Map<String, Object> before = settings.group(SmsSettingsGroup.KEY);
         int current = settings.version();
         if (current != expected) {
             throw Versions.conflict(current);
         }
-        Map<String, Object> before = settings.group(SmsSettingsGroup.KEY);
         boolean wasOn = Boolean.TRUE.equals(before.get(SmsSettingsGroup.ENABLED));
         boolean switchingOn = Boolean.TRUE.equals(c.enabled()) && !wasOn;
 
