@@ -6,7 +6,9 @@
 
 `deploy.sh` rolls back by itself when a new release does not pass the readiness gate: it
 switches `api`, `web` and `proxy` back to the tag in `state/current_tag`, waits for it to be
-ready, records `failed-health` and `rolled-back-to` in `state/history.log`, and exits 1. Nothing
+ready, records `failed-health` and `rolled-back-to` in `state/history.log`, and exits 1. Before
+switching back it keeps the failed build's hashed web files in `bms_web_assets`, so a phone that
+loaded that build in the meantime still works (ADR-078). Nothing
 more is needed except fixing the release. On staging the puller also writes the failed tag to
 `state/last_failed_tag`, so it is not tried again every two minutes; the next merge to `main`
 moves the pointer to a new tag, which is tried at once.

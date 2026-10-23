@@ -42,7 +42,7 @@ skips with a notice. Staging differs as section 9.13 describes (ADR-018).
 |     |  db-scheduler polling (the worker role, ADR-008)                                      |
 |     v                                                                                      |
 |  postgres (PostgreSQL 16)  volume pgdata       migrate (one-shot, bms_owner) -> postgres   |
-|  web (Caddy serving the PWA bundle)  :8080                                                 |
+|  web (Caddy serving the PWA bundle)  :8080, volume web_assets read-only (ADR-078)          |
 +--------------------------------------------------------------------------------------------+
         |                                                         |
         | nightly backup.sh (pg_dump, encrypted)                   | documents (later)
@@ -148,7 +148,7 @@ The web image serves the bundle in three classes, which `frontend/Caddyfile` kee
 
 | Path | Cache-Control | Missing file |
 |---|---|---|
-| `/assets/*` and `/workbox-*.js`, everything the build names with a content hash | `public, max-age=31536000, immutable` | 404, `no-store` |
+| `/assets/*` and `/workbox-*.js`, everything the build names with a content hash | `public, max-age=31536000, immutable` | the same path in `/srv/previous` (earlier builds, ADR-078), else 404, `no-store` |
 | `/app-config.json`, built from the container's environment | `no-cache` | not applicable, it is a `respond` and never reads the disk |
 | everything else (`/`, every route, `sw.js`, `push-sw.js`, the BMS icons) | `no-cache` | `/index.html`, so the router takes over |
 
@@ -168,6 +168,20 @@ fails to install, costing offline and push as well. A 404 that is not cached kee
 loud and lets the next load repair itself. For the same reason every HTML response revalidates: a
 path matcher cannot do it, because `header /index.html` matches the literal path only while real
 pages arrive as `/` or a route.
+
+Earlier builds' hashed files stay served for 14 days (ADR-078). A page left open, or a service
+worker that has not yet taken the new build, still runs the previous `index.html` and loads its
+screens lazily by hashed names the new image does not carry. So `web` mounts the named volume
+`web_assets` read-only at `/srv/previous`, and the Caddyfile tries a hashed path there after
+`/srv`; `/previous` itself answers 404. `deploy.sh` fills it just before every switch, rollbacks
+included: it runs the outgoing web image, by its local image ID with `--pull never`, once as the
+one-shot `keep-assets` service (no network, no capability, read-only root, 32 MB). That run first
+deletes files whose date is more than `BMS_KEEP_ASSETS_DAYS` (default 14) days old, that is files
+that left the live build more than 14 days ago, then copies that build's `/assets` tree and
+`/workbox-*.js` without overwriting anything, refreshing the date of names it already holds. It has
+60 seconds before a deploy's switch (`BMS_KEEP_ASSETS_TIMEOUT`) and 20 before a rollback's. A
+failure or a timeout is a warning, never a failed deploy or rollback. The volume is not backed up; losing it costs
+a reload on an old copy, not data.
 
 The API image carries two commands: the default starts the application; `migrate` applies the
 Flyway migrations as `bms_owner` and exits (ADR-006, ADR-010). The API image also carries the
@@ -406,7 +420,7 @@ Staging runs on an ARM64 host that already exists at a Rincol home site: a Raspb
 |  cloudflared  --http-->  proxy :8080 (Caddyfile.tunnel; security headers, 6 MB bodies)      |
 |                             |  /api/*, /healthz, /readyz, /version  ->  api:8080            |
 |                             |  everything else                       ->  web:8080            |
-|  api (bms_app)   postgres (volume pgdata)   web   migrate (one-shot, bms_owner)             |
+|  api (bms_app)   postgres (volume pgdata)   web (volume web_assets)   migrate (one-shot)    |
 |  bms-pull.timer (every 2 min) -> pull-staging.sh -> deploy.sh <sha-tag>                     |
 +--------------------------------------------------------------------------------------------+
         | nightly backup.sh (pg_dump, encrypted)  ->  Cloudflare R2: bms-backups/staging/

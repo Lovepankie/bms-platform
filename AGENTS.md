@@ -909,6 +909,10 @@ Accepted (this list is the ADR index):
 - ADR-075 Subscription reminders to the Owner, overdue the day after with a grace period the operator sets, a list for suspension and
   never an automatic suspension, a numbered receipt emailed as a PDF, and the Owner's Plan and billing page (proposed, #480;
   FR-SUB-08 to FR-SUB-12; migration `V92`; renumbered at merge if needed)
+- ADR-078 Deploys keep the previous builds' hashed web files: before each switch, rollbacks included, `deploy.sh` runs the outgoing
+  web image once (local image ID, `--pull never`, 60 seconds at most) as `keep-assets` to copy its `/assets` and workbox runtime into the `web_assets` volume, which `web` serves read-only
+  from `/srv/previous` after `/srv`; files pruned 14 days after they leave the live build; `index.html` and `sw.js` stay `no-cache`
+  (proposed, #525; no migration; renumbered at merge if needed)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared
