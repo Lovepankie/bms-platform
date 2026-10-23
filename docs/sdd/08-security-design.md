@@ -595,6 +595,12 @@ Notes:
   `retail.catalogue.manage` (add, change), a pack sale uses `retail.sale.create` and a pack restock `retail.purchase.create`, each with the
   branch scope it had. A pack line is judged against `retail.price.below_cost` on its line total. A restock line's pack cost and the
   purchase response's `unit_cost_minor` are as sensitive as the existing `cost_minor` and are shown to the same callers.
+- Barcodes (issue #345, ADR-070, FR-RET-68, migration V87) add no permission, so the matrix is unchanged. Scanning and the lookup
+  `GET /retail/products/by-barcode/{code}` need `retail.stock.read` (sellers, storekeepers, administrators, in their branch scope for
+  `branch_id`). Adding and removing a barcode, making label codes and the Barcode labels page need `retail.catalogue.manage`
+  (administrators): a barcode decides which item a scan sells, so it is a catalogue change like a code or a pack. A seller who scans an
+  unknown code sees the message without "Add this barcode to a product". The label shows the selling price, which an administrator may
+  see. The camera stays under `Permissions-Policy: camera=(self)`; no CSP change (the fallback decoder is pure JavaScript, no WebAssembly).
 - Corrections of entry mistakes (issues #351 and #352, ADR-044, FR-RET-44 to FR-RET-46) add no permission, so the matrix is unchanged. Voiding a
   restock (`POST /retail/purchases/{id}/void`) and reading one restock need `retail.purchase.create`; the void needs it at **every** branch the
   restock added stock to (403 `permission_denied` when one is outside the caller's scope), because it takes stock out of all of them. Correcting a

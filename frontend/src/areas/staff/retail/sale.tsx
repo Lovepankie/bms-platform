@@ -26,6 +26,8 @@ import { SaleDocuments } from './documents-ui';
 import { ShareReceipt } from './receipt-share';
 import { ChangePanel, ReceiptChange } from './sale-change';
 import { receivedFor, receivedProblem } from './sale-change-state';
+import { ScanBar } from './scan';
+import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -260,6 +262,13 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
   // An item can be on the sale twice (cartons and loose pieces) only while it has pack sizes to choose from.
   const add = (p: Product) =>
     setDraft((d) => (d.lines.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? d : { ...d, lines: [...d.lines, newLine(p)] }));
+  // A scan (issue #345) adds the item at 1, or one more to its line in the pack the barcode is on; a pack it cannot
+  // use is refused, never sold as one piece.
+  const scanAdd = (p: Product, unitId?: string) => {
+    const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
+    if (unitId && !unit) return PACK_UNUSABLE;
+    setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, unit, (l) => ({ ...l, qty: plusOne(l.qty) }), () => (unit ? withUnit(newLine(p), unit) : newLine(p))) }));
+  };
 
   const total = draftTotal(shown.lines);
   const problem = (offlineMode ? offlineProblem(draft, holdsAt(me, PRICE_OVERRIDE, branchId)) : draftProblem(shown, pricing, accounts)) ?? receivedProblem(draft.method, total, received);
@@ -322,6 +331,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       <div data-tour="sale-search">
         {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />}
       </div>
+      <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} autoFocus />
 
       <h2>Items</h2>
       {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Search above and tap Add.</EmptyState>}

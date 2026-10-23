@@ -11,6 +11,7 @@ import { useStaff } from '../context';
 import { BackToCatalogue } from './catalogue';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
+import { BarcodeEditor } from './catalogue-barcodes';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
 import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
@@ -221,6 +222,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
           )}
           <p className="hint">To change the price, use Change price on the list.</p>
           <PackEditor product={product} />
+          <BarcodeEditor product={product} />
           <StockMinimumEditor productId={product.id ?? ''} unit={product.unit} />
           {canManage && (
             <PhotoEditor

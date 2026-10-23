@@ -848,7 +848,7 @@ An item that is no longer sold is switched off, never deleted.
 
 - Analytics: export to PDF and Excel and the daily WhatsApp summary (#149 items 8), and the cash view per shop per day (item 5), which need the cash book.
 - The component tests render static markup (no DOM in the test setup); the browser run above covers behaviour.
-- Offline use, barcode scanning and receipts to SMS are out of the first release.
+- Offline use and receipts to SMS are out of the first release; barcode scanning is built (issue #345, below).
 - The tenant's timezone and a transfer number are not in the API; when they are, use them (#112).
 
 ## Sales grouped by a chain of levels (issue #341)
@@ -1302,3 +1302,45 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
 Tests: `outbox.test.ts`, `sync-engine.test.ts`, `catalogue.test.ts`, `offline-sale.dom.test.tsx`, `sync-status.dom.test.tsx`; backend
 `RetailOfflineSalesIT` and `PushPublishersIT`.
 
+## Barcodes, scanning and labels (issue #345)
+
+ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability switch.
+
+- **Scan box** (`scan.tsx`, data-tour `scan-bar`) under the item search of the sale, restock, goods received without an order (purchasing), move stock and stock count forms
+  (ADR-070 decision 11, owner decision D7): a box labelled **Scan here** ("Scan or type a barcode, then Enter"; "A barcode scanner
+  types into this box. You can also type the barcode and press Enter.") and, beside it, a camera icon button **Scan with the
+  camera** (data-tour `scan-camera`) shown only where the browser can open a camera (`navigator.mediaDevices.getUserMedia`). A USB
+  or Bluetooth scanner types the code into the box and presses Enter, at any speed; a code typed by hand and Enter works the same.
+  Enter in the box looks the code up and never submits the form. On the sale, restock, move stock and stock count forms the box
+  takes the cursor when the form opens on a device with a mouse or trackpad (not on a phone, where it would open the keyboard);
+  after each scan the box is empty and keeps the cursor for the next one (after the camera too, on such a device). Nothing reads keys
+  anywhere else: with the cursor in a quantity, price or count field, whatever is typed stays in that field and Enter submits the
+  form as usual (a scan made there types the code into the field, as any typing would). There is no scanner setting in
+  Notifications and app. A found item is added at 1 or its line gains one, in the pack the barcode is on (the sale and the restock,
+  with pack sizes on); on the stock count it adds one to the count, or the pack factor, and clears the search so the counted line shows, marked with an outline and scrolled into view; an item not on the branch's count sheet is refused with "<item> is not on the count sheet of this branch." "Added <item>." is read out politely, with a
+  short beep and buzz where the device allows. On the restock the quantity goes to the branch chosen at the top; with none chosen a scan says "Choose the branch at the top of the page first".
+- **Unknown code:** "No item has the barcode <code>." An administrator gets **Add this barcode to a product**: the item search
+  opens, Choose puts the barcode on that item and adds it to the form. For a code that looks like spreadsheet damage (all digits of
+  6, 7, 9, 10, 11 or 14, such as a GTIN-14 or a UPC-E) the search shows "This code is exactly as printed (Code 128)", as the item
+  form does, and with it ticked the code is added as Code 128. Anyone else reads "Ask an administrator to add it to the
+  item, or find the item by name above." A scanned code holding % ; ? # / or \ (a foreign Code 128) is
+  never sent to the server: no item can hold it, so it gets the unknown code message at once, without the add button.
+- **Camera** (`camera-scan.tsx`, loaded on Scan): the back camera full screen, "Hold the barcode inside the frame, about a hand
+  away.", Close the camera. The browser's BarcodeDetector reads the frames; on an iPhone Quagga2 (loaded only then) reads a still
+  four times a second. A blocked camera says how to allow it (on an iPhone: Settings, Safari, Camera); a missing or busy camera and
+  an insecure address each have their own sentence.
+- **Offline:** when the lookup cannot reach the server, only the items the screen has already read and cached (with their
+  `barcodes`) are searched; the whole catalogue only once the offline catalogue cache of issue #463 carries `barcodes`.
+- **Item form** (edit an item, `catalogue-barcodes.tsx`, data-tour `item-barcodes`): the barcodes with their format and pack, Remove,
+  Add a barcode (the format and check digit are judged as you type, in the server's words), "This barcode is on" one unit or one
+  pack, and **Make a barcode for labels** for an item with no made code. Administrators only.
+- **Barcode labels** (`/staff/retail/catalogue/labels`, `labels.tsx`, a Catalogue tile, tour `page-labels`): find items and Add, how
+  many labels of each, **Make the labels** (every label carries the item's own `IN` label code in Code 128, made for an item that has none, so one scanner setting reads every label), **Print**: an A4 sheet of 3 by 8
+  labels of 70 by 37 mm with the name, the price and the barcode, black on white whatever the theme. The page states the label stock (A4, 3 by 8 labels of 70 by 37 mm, zero margin, actual size) and offers "My printer cannot print to the edge: keep 4 mm clear inside each label". Print takes everything else out of the layout (display none on the shell, not visibility hidden), so the sheet starts at the corner of the page.
+- **Import:** the item file takes `barcode`, `pack barcode` and `barcode format` columns (several codes separated by spaces or `|`).
+  A code a spreadsheet may have damaged (all digits of 6, 7, 9, 10, 11 or 14, or `4.00638E+12`) is an error row unless the
+  row's `barcode format` is `code128`; on the item form the same code offers "This code is exactly as printed (Code 128)".
+- Tours: a **Scan here** step on the Scan box in `retail-sales` (version 15, from version 14's Scan step), `page-sale` (version 3),
+  `page-restock` (version 2), `page-transfer` (version 2) and `page-stocktake` (version 2); `page-labels` version 1.
+- Tests: `barcode-state.test.ts`, `scan.dom.test.tsx` (the Scan box; 1256 typed fast into a quantity, price or count field stays
+  there, submits normally and is never looked up), `camera-scan.test.ts`; backend `BarcodesTest`, `RetailBarcodesIT`.

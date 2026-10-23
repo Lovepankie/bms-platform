@@ -16,6 +16,8 @@ import { useOrderBranches } from './purchase-order-form';
 import { BranchField, SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { showQty } from './maths';
 import { Gate, Problem, ProductPicker, money } from './ui';
+import { ScanBar } from './scan';
+import { PACK_UNUSABLE, plusOne } from './barcode-state';
 
 // Goods received (the purchasing capability, ADR-033, issue #198): what arrived from a supplier, against an order or with none (a
 // "blind" receipt, which needs the supplier). Saving puts the goods into stock at the cost typed and, when a new selling price
@@ -177,8 +179,25 @@ export function ReceiveBlindPage() {
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<ReceiveForm>(`goods-received:${me.user_id ?? ''}:blind`, blankReceipt(defaultBranch));
   const suppliers = useSuppliers(draft.supplierId);
   const save = useSaveReceipt(key, finish, () => buildReceiptRequest(draft));
+  // A scan (issue #345): the item arrives at 1, or one more on its line in the pack the barcode is on.
+  const scanAdd = (p: Product, unitId?: string) => {
+    const fresh = blindLineFor(p, unitsOn, newIdempotencyKey());
+    const unit = fresh.packs.some((k) => k.unit_id === unitId) ? unitId : undefined;
+    // A pack this form cannot use is refused, never received as one piece.
+    if (unitId && !unit) return PACK_UNUSABLE;
+    setDraft((d) => {
+      const at = d.lines.findIndex((l) => l.productId === p.id && !l.orderLineId && (l.unitId ?? '') === (unit ?? ''));
+      return at < 0
+        ? { ...d, lines: [...d.lines, { ...(unit ? withReceiveUnit(fresh, unit) : fresh), qty: '1' }] }
+        : { ...d, lines: d.lines.map((l, i) => (i === at ? { ...l, qty: plusOne(l.qty) } : l)) };
+    });
+    return undefined;
+  };
   const picker = (
-    <ProductPicker id="receive-search" showStock={false} onAdd={(p: Product) => setDraft((d) => ({ ...d, lines: [...d.lines, blindLineFor(p, unitsOn, newIdempotencyKey())] }))} />
+    <>
+      <ProductPicker id="receive-search" showStock={false} onAdd={(p: Product) => setDraft((d) => ({ ...d, lines: [...d.lines, blindLineFor(p, unitsOn, newIdempotencyKey())] }))} />
+      <ScanBar id="receive-scan" onFound={scanAdd} />
+    </>
   );
   return (
     <Gate screen="goodsReceived" title="Receive goods without an order">

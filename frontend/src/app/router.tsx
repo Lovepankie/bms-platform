@@ -119,6 +119,8 @@ const retailCategoriesRoute = retailScreen('/catalogue/categories', 'Categories'
 const retailUnitsRoute = retailScreen('/catalogue/units', 'Units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
 const retailImportRoute = retailScreen('/catalogue/import', 'Import items').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
+// Barcode labels (issue #345): an A4 sheet of labels with the name, the price and the barcode.
+const retailLabelsRoute = retailScreen('/catalogue/labels', 'Barcode labels').lazy(() => import('../areas/staff/retail/labels').then((m) => m.LabelsRoute));
 const retailBuyersRoute = retailScreen('/catalogue/buyers', 'Credit buyers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
 const retailBankingRoute = retailScreen('/banking', 'Banking').lazy(() => import('../areas/staff/retail/banking').then((m) => m.Route));
 const retailBankingReportRoute = retailScreen('/banking-report', 'Banking report').lazy(() => import('../areas/staff/retail/banking').then((m) => m.ReportRoute));
@@ -349,6 +351,7 @@ export const router = createRouter({
         retailSuppliersRoute,
         retailBuyersRoute,
         retailImportRoute,
+        retailLabelsRoute,
         retailSavingsRoute,
         retailCashSummaryRoute,
         retailAdvancesRoute,

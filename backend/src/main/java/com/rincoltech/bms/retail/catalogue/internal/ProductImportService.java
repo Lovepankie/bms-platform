@@ -49,12 +49,19 @@ class ProductImportService {
     private final CurrentTenant tenant;
     private final AuditLog audit;
     private final ModuleSettings settings;
+    private final BarcodeRepository barcodes;
 
-    ProductImportService(CatalogueRepository repo, CurrentTenant tenant, AuditLog audit, ModuleSettings settings) {
+    ProductImportService(
+            CatalogueRepository repo,
+            CurrentTenant tenant,
+            AuditLog audit,
+            ModuleSettings settings,
+            BarcodeRepository barcodes) {
         this.repo = repo;
         this.tenant = tenant;
         this.audit = audit;
         this.settings = settings;
+        this.barcodes = barcodes;
     }
 
     @Transactional
@@ -97,6 +104,10 @@ class ProductImportService {
         }
 
         Set<String> existing = repo.productCodes();
+        // Issue #345: the optional barcode columns, several codes per cell separated by spaces or |.
+        boolean withBarcodes = columns.containsKey("barcode") || columns.containsKey("pack_barcode");
+        Map<String, BarcodeRepository.Held> heldCodes = withBarcodes ? barcodes.allKeys() : Map.of();
+        Map<String, Integer> codesInFile = new HashMap<>();
         // Issue #352: a name is kept once per unit, like a code. The keys are the database's own (bms_name_key).
         Map<String, String> existingNames = repo.productNames();
         Map<String, Integer> namesInFile = new HashMap<>();
@@ -231,6 +242,29 @@ class ProductImportService {
                 report.add(new ImportRow(line, code, description.strip(), "error", "Line " + line + ": the " + off));
                 continue;
             }
+            List<String> rowCodes = withBarcodes ? codes(cell(cells, columns, "barcode")) : List.of();
+            List<String> rowPackCodes = withBarcodes ? codes(cell(cells, columns, "pack_barcode")) : List.of();
+            // Blank reads the format from each code; code128 takes an all-digit code a spreadsheet may have damaged as
+            // is.
+            String barcodeFormat =
+                    cell(cells, columns, "barcode_format").strip().toLowerCase(Locale.ROOT);
+            String rowFormat = barcodeFormat.isEmpty() ? null : barcodeFormat;
+            String barcodeProblem = !rowPackCodes.isEmpty() && !hasPack
+                    ? "A pack barcode needs a pack unit and a pack factor on the same row."
+                    : barcodeProblem(rowCodes, rowPackCodes, rowFormat, heldCodes, codesInFile, line);
+            if (barcodeProblem != null) {
+                seen.remove(key);
+                errors++;
+                report.add(new ImportRow(line, code, description.strip(), "error", barcodeProblem));
+                continue;
+            }
+            // Only a row that passes holds its codes, so a later row is never refused over a code of an error row.
+            for (String c : rowCodes) {
+                codesInFile.putIfAbsent(Barcodes.key(c, rowFormat), line);
+            }
+            for (String c : rowPackCodes) {
+                codesInFile.putIfAbsent(Barcodes.key(c, rowFormat), line);
+            }
             if (!categories.containsKey(categoryKey)) {
                 newCategories.putIfAbsent(categoryKey, category);
             }
@@ -245,7 +279,13 @@ class ProductImportService {
                     ? " With a pack of " + packFactor.setScale(3).toPlainString() + " in one " + packUnit + "."
                     : "";
             report.add(new ImportRow(
-                    line, code, description.strip(), "added", (dryRun ? "Would be added." : "Added.") + packNote));
+                    line,
+                    code,
+                    description.strip(),
+                    "added",
+                    (dryRun ? "Would be added." : "Added.")
+                            + packNote
+                            + movedNote(rowCodes, rowPackCodes, rowFormat, heldCodes)));
             pending.add(new Pending(
                     code,
                     description.strip(),
@@ -254,7 +294,10 @@ class ProductImportService {
                     sell,
                     cost == null ? 0 : cost,
                     hasPack ? packUnit : null,
-                    packFactor));
+                    packFactor,
+                    rowCodes,
+                    rowPackCodes,
+                    rowFormat));
         }
         if (!dryRun) {
             if (errors > 0) {
@@ -360,8 +403,9 @@ class ProductImportService {
                             currency,
                             null),
                     product.id());
+            UUID packUnitId = null;
             if (p.packUnit() != null) {
-                UUID packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
+                packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
                 UUID packId = UUID.randomUUID();
                 repo.insertPack(packId, product.id(), packUnitId, p.packFactor(), by);
                 audit.record(AuditLog.Entry.created(
@@ -378,6 +422,12 @@ class ProductImportService {
                                 p.packFactor().setScale(3).toPlainString(),
                                 "source",
                                 "import")));
+            }
+            for (String c : p.barcodes()) {
+                addBarcode(product.id(), null, c, p.barcodeFormat(), by);
+            }
+            for (String c : p.packBarcodes()) {
+                addBarcode(product.id(), packUnitId, c, p.barcodeFormat(), by);
             }
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("code", p.code());
@@ -396,6 +446,48 @@ class ProductImportService {
         audit.record(AuditLog.Entry.created("retail.product.imported", PRODUCT, null, null, summary));
     }
 
+    /** One imported barcode; a code an item that is switched off held is released to it first, as the screen does. */
+    private void addBarcode(UUID productId, UUID unitId, String raw, String format, UUID by) {
+        Barcodes.Checked c = Barcodes.check(raw, format).checked();
+        barcodes.byKey(Barcodes.key(c)).ifPresent(h -> {
+            // The holder is locked and read again, so an item switched on at this moment keeps its code.
+            if (h.productActive()
+                    || repo.lock(h.productId()).map(Product::active).orElse(false)) {
+                throw barcodeConflict(c);
+            }
+            barcodes.delete(h.barcode().id());
+            audit.record(new AuditLog.Entry(
+                    "retail.barcode.released",
+                    BarcodeService.BARCODE,
+                    h.barcode().id(),
+                    null,
+                    Map.of("product_id", h.productId(), "code", h.barcode().code()),
+                    Map.of("product_id", productId)));
+        });
+        UUID id = UUID.randomUUID();
+        try {
+            barcodes.insert(id, productId, unitId, c.code(), c.format().key, false, by);
+        } catch (DuplicateKeyException e) {
+            // Another writer took the code between the read above and this insert; the unique index refuses it.
+            throw barcodeConflict(c);
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("product_id", productId);
+        after.put("code", c.code());
+        after.put("format", c.format().key);
+        after.put("source", "import");
+        audit.record(AuditLog.Entry.created("retail.barcode.added", BarcodeService.BARCODE, id, null, after));
+    }
+
+    private static ApiException barcodeConflict(Barcodes.Checked c) {
+        return new ApiException(
+                HttpStatus.CONFLICT,
+                "import_conflict",
+                "Import conflict",
+                "Another change put the barcode " + c.code()
+                        + " on an item while this file was being applied. Nothing was added. Run the check again and apply the file again.");
+    }
+
     private record Pending(
             String code,
             String description,
@@ -404,7 +496,75 @@ class ProductImportService {
             long sell,
             long cost,
             String packUnit,
-            java.math.BigDecimal packFactor) {}
+            java.math.BigDecimal packFactor,
+            List<String> barcodes,
+            List<String> packBarcodes,
+            String barcodeFormat) {}
+
+    /** The codes of a barcode cell: separated by spaces or a vertical bar, since the file's separator may be a comma. */
+    private static List<String> codes(String text) {
+        return java.util.Arrays.stream(text.strip().split("[|\\s]+"))
+                .filter(c -> !c.isEmpty())
+                .toList();
+    }
+
+    /**
+     * Issue #345: the first problem of a row's barcodes, or null. A code another active item holds, or one repeated in
+     * the file, is an error, never a guess; a code held by an item that is switched off moves to the new item on apply.
+     * {@code inFile} holds the codes of the rows that passed so far; the caller adds this row's once the row passes.
+     */
+    private static String barcodeProblem(
+            List<String> rowCodes,
+            List<String> packCodes,
+            String format,
+            Map<String, BarcodeRepository.Held> held,
+            Map<String, Integer> inFile,
+            int line) {
+        List<String> all = new ArrayList<>(rowCodes);
+        all.addAll(packCodes);
+        java.util.Set<String> inRow = new java.util.HashSet<>();
+        for (String c : all) {
+            Barcodes.Result r = Barcodes.check(c, format);
+            if (!r.ok()) {
+                return "Barcode " + c + ": " + r.problem();
+            }
+            String k = Barcodes.key(r.checked());
+            BarcodeRepository.Held h = held.get(k);
+            if (h != null && h.productActive()) {
+                return "Barcode " + c + " is on the item " + h.productDescription() + " (code " + h.productCode()
+                        + ") already.";
+            }
+            Integer first = inFile.get(k);
+            if (first != null) {
+                return "Barcode " + c + " is repeated in the file (same as line " + first + ").";
+            }
+            if (!inRow.add(k)) {
+                return "Barcode " + c + " is repeated on this line.";
+            }
+        }
+        return null;
+    }
+
+    /** The codes a row takes from items that are switched off, which lose them for good. */
+    private static String movedNote(
+            List<String> rowCodes, List<String> packCodes, String format, Map<String, BarcodeRepository.Held> held) {
+        StringBuilder note = new StringBuilder();
+        for (List<String> list : List.of(rowCodes, packCodes)) {
+            for (String c : list) {
+                BarcodeRepository.Held h = held.get(Barcodes.key(c, format));
+                if (h != null && !h.productActive()) {
+                    note.append(" Barcode ")
+                            .append(c)
+                            .append(" moves from the switched-off item ")
+                            .append(h.productDescription())
+                            .append(" (code ")
+                            .append(h.productCode())
+                            .append(") and is removed there for good.");
+                }
+            }
+        }
+        return note.toString();
+    }
 
     private static final java.util.regex.Pattern FACTOR =
             java.util.regex.Pattern.compile("(\\d{1,11})(?:\\.(\\d{1,3}))?");
@@ -434,6 +594,9 @@ class ProductImportService {
                 case "cost_price", "cost", "buying_price" -> "cost_price";
                 case "pack_unit" -> "pack_unit";
                 case "pack_factor", "pack_size" -> "pack_factor";
+                case "barcode", "barcodes", "ean", "upc" -> "barcode";
+                case "pack_barcode", "pack_barcodes" -> "pack_barcode";
+                case "barcode_format", "barcode_type" -> "barcode_format";
                 default -> null;
             };
             if (canonical != null) {

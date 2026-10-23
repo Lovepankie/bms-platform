@@ -3,11 +3,15 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { NoResults, SearchBox } from '../../../app/ui/SearchBox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
-import { retail, type Stocktake, type StocktakeLine } from '../../../api/retail';
-import { milliOf, parseCount, showQty } from './maths';
+import { retail, type Product, type Stocktake, type StocktakeLine } from '../../../api/retail';
+import { milliOf, parseCount, parseQty, showQty } from './maths';
+import { ScanBar } from './scan';
+import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
-import { needsOf } from './permissions';
+import { UNITS, capabilityOn, needsOf } from './permissions';
+import { chosenPack } from './units-state';
+import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
@@ -71,11 +75,28 @@ export async function countableStock(branchId: string, api: Pick<typeof retail, 
 
 function CountSheet({ branchId }: { branchId: string }) {
   const queryClient = useQueryClient();
+  const { me } = useStaff();
+  const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<Stocktake | null>(null);
+  // The line the last scan counted, marked so the counter sees which one went up; the cursor stays in the Scan box.
+  const [scanned, setScanned] = useState<string | null>(null);
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
 
+  // A scan (issue #345) counts one more of the item, or a whole pack when the barcode is on a pack. The search is cleared
+  // so the counted line shows; an item not on this branch's sheet is refused rather than counted out of sight.
+  const scanAdd = (p: Product, unitId?: string) => {
+    const id = p.id ?? '';
+    if (!stock.data) return 'The count sheet is still loading. Scan again in a moment.';
+    if (!stock.data.some((r) => r.product_id === id)) return `${p.description ?? p.code ?? 'This item'} is not on the count sheet of this branch. Restock it first, or count it at its own branch.`;
+    const pack = unitsOn ? chosenPack(p, unitId) : undefined;
+    if (unitId && !pack) return PACK_UNUSABLE;
+    search.clear();
+    setCounts((c) => ({ ...c, [id]: plusOne(c[id], pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000) }));
+    setScanned(id);
+    return undefined;
+  };
   const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const review = useMutation({
@@ -108,13 +129,15 @@ function CountSheet({ branchId }: { branchId: string }) {
       <div data-tour="count-search">
         <SearchBox id="count-search" label="Search by name, code or category" search={search} fetching={false} count={stock.data ? rows.length : undefined} />
       </div>
+      <ScanBar id="count-scan" branchId={branchId} onFound={scanAdd} autoFocus />
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
       {stock.data && rows.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
       {rows.map((r) => {
         const id = r.product_id ?? '';
         return (
-          <div key={id} className="rt-card">
+          <div key={id} className={id === scanned ? 'rt-card scan-hit' : 'rt-card'} data-testid={id === scanned ? 'scan-hit' : undefined}
+            ref={id === scanned ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}>
             <label htmlFor={`count-${id}`}>{r.description} ({r.unit})</label>
             <CategoryLabel category={r.category} />
             <input id={`count-${id}`} inputMode="decimal" value={counts[id] ?? ''} placeholder="Counted"

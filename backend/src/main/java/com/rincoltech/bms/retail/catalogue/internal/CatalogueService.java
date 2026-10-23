@@ -63,12 +63,19 @@ class CatalogueService {
     private final CurrentTenant currentTenant;
     private final AuditLog audit;
     private final ModuleSettings settings;
+    private final BarcodeRepository barcodes;
 
-    CatalogueService(CatalogueRepository repo, CurrentTenant currentTenant, AuditLog audit, ModuleSettings settings) {
+    CatalogueService(
+            CatalogueRepository repo,
+            CurrentTenant currentTenant,
+            AuditLog audit,
+            ModuleSettings settings,
+            BarcodeRepository barcodes) {
         this.repo = repo;
         this.currentTenant = currentTenant;
         this.audit = audit;
         this.settings = settings;
+        this.barcodes = barcodes;
     }
 
     /**
@@ -90,20 +97,37 @@ class CatalogueService {
         }
     }
 
-    /** Pack sizes on the products, in one statement, while the capability is on; untouched while it is off. */
+    /**
+     * Pack sizes on the products, in one statement, while the capability is on; and their barcodes (issue #345), in one
+     * more. A pack's barcode is left out while the capability is off, as the pack is.
+     */
     private List<Product> withPacks(List<Product> products) {
-        if (products.isEmpty() || !unitsOn()) {
+        if (products.isEmpty()) {
             return products;
         }
-        Map<UUID, List<Pack>> packs =
-                repo.packsOf(products.stream().map(Product::id).toList());
+        List<UUID> ids = products.stream().map(Product::id).toList();
+        boolean units = unitsOn();
+        Map<UUID, List<CatalogueApi.Barcode>> codes = barcodes.ofProducts(ids);
+        Map<UUID, List<Pack>> packs = units ? repo.packsOf(ids) : Map.of();
         return products.stream()
-                .map(p -> p.withPacks(packs.getOrDefault(p.id(), List.of())))
+                .map(p -> {
+                    List<CatalogueApi.Barcode> own = codes.getOrDefault(p.id(), List.of()).stream()
+                            .filter(b -> units || b.unitId() == null)
+                            .toList();
+                    // Absent, not an empty list, for an item with no barcode, as the schema says.
+                    Product q = p.withBarcodes(own.isEmpty() ? null : own);
+                    return units ? q.withPacks(packs.getOrDefault(p.id(), List.of())) : q;
+                })
                 .toList();
     }
 
     private Product withPacks(Product p) {
         return withPacks(List.of(p)).getFirst();
+    }
+
+    /** A product as the reads send it: the caller's view of the prices, its packs and its barcodes. */
+    Product detailed(Product p) {
+        return withPacks(visible(p));
     }
 
     // ---- Categories and units ------------------------------------------------------------

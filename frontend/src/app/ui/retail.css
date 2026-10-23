@@ -828,3 +828,140 @@ th[scope='rowgroup'] .cat-head {
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* Scanning (ADR-070, issue #345): the scan box over a form's lines and the camera view. */
+.scan-bar {
+  margin-bottom: var(--space-3);
+}
+
+.scan-bar .rt-row input {
+  flex: 1;
+}
+
+.scan-bar > label {
+  font-weight: 600;
+}
+
+.scan-bar .scan-camera {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+}
+
+/* The count line the last scan counted (issue #345). */
+.rt-card.scan-hit {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.camera-scan {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  background: var(--color-surface);
+}
+
+.camera-scan video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--rt-black);
+}
+
+/* Printable labels (issue #345): an A4 sheet of 3 by 8 labels of 70 by 37 mm. The bars are the fixed black on white
+   pair, like the QR code, so a label scans whatever the theme. */
+.label-sheet {
+  display: grid;
+  grid-template-columns: repeat(3, 70mm);
+  grid-auto-rows: 37mm;
+  gap: 0;
+  width: 210mm;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2mm 4mm;
+  overflow: hidden;
+  color: var(--rt-black);
+  background: var(--rt-white);
+  border: 1px dashed var(--color-border);
+  font-size: 9pt;
+  line-height: 1.2;
+}
+
+.label-name {
+  font-weight: var(--weight-semibold);
+  max-height: 2.4em;
+  overflow: hidden;
+}
+
+.label svg {
+  display: block;
+  width: 100%;
+  height: 14mm;
+}
+
+.label-code {
+  font-size: 8pt;
+  text-align: center;
+}
+
+/* For a printer that cannot print to the edge of the paper: 4 mm kept clear inside every label. */
+.label-sheet.label-safe .label {
+  padding: 4mm;
+}
+
+@media print {
+  /* Only the label sheet prints. Everything that neither is the sheet, holds it nor sits in it leaves the layout
+     (display none, not visibility hidden, which keeps its space), and the elements that hold it lose their own margins,
+     padding and position, so the shell's menu and header can never push the 70 by 37 mm grid off the label stock. */
+  body:has(.label-sheet) *:not(.label-sheet, .label-sheet *, :has(.label-sheet)) {
+    display: none !important;
+  }
+
+  body:has(.label-sheet),
+  body:has(.label-sheet) *:has(.label-sheet) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: none !important;
+    overflow: visible !important;
+  }
+
+  .label-sheet {
+    max-width: none;
+    overflow: visible;
+  }
+
+  .label-hint {
+    display: none;
+  }
+
+  .label {
+    border: 0;
+    break-inside: avoid;
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+}

@@ -1007,6 +1007,11 @@ class RlsIsolationIT {
                         INSERT INTO feedback_items (id, tenant_id, sender_user_id, kind, message, app_version)
                         VALUES (?, ?, ?, 'idea', 'Test feedback message', 'test (abc123)')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // A barcode on a product (migration V87, #345).
+        owner.sql("""
+                        INSERT INTO retail_product_barcodes (id, tenant_id, product_id, code, format)
+                        VALUES (?, ?, ?, 'TEST-RLS-01', 'code128')
+                        """).params(UUID.randomUUID(), t.tenantId(), retailProduct).update();
     }
 
     /**

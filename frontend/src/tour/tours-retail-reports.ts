@@ -40,7 +40,8 @@ export const retailHomePage: Tour = {
 
 export const restockPage: Tour = {
   id: 'page-restock',
-  version: 1,
+  // Version 2 adds the Scan here step (issue #345, ADR-070).
+  version: 2,
   title: 'This page: restock',
   audience: (me) => held(me, RESTOCK),
   autoStart: false,
@@ -48,6 +49,7 @@ export const restockPage: Tour = {
   steps: [
     retail({ id: 'supplier', target: 'restock-supplier', title: 'Who supplied it', body: 'Pick the supplier, or type a new one. You can also leave it as No supplier.' }),
     retail({ id: 'search', target: 'restock-search', title: 'Add the items', body: 'Type part of the name or code. Tap Add on each item you bought. Then fill in the cost, the sell price and how many went to each branch.' }),
+    retail({ id: 'scan', target: 'scan-bar', title: 'Scan here', body: 'Or scan each item in the Scan box. It is added for the branch at the top, and a second scan adds one more.' }),
     retail({ id: 'paid', target: 'restock-paid', title: 'How you paid', body: 'Choose Cash, Bank or Credit. Credit means you pay the supplier later.' }),
     retail({ id: 'save', target: 'restock-save', title: 'Save the restock', body: 'Tap Save restock. Stock goes up, and the cost and sell price of each item change to what you typed.' }),
   ],
@@ -70,7 +72,8 @@ export const usagePage: Tour = {
 
 export const transferPage: Tour = {
   id: 'page-transfer',
-  version: 1,
+  // Version 2 adds the Scan here step (issue #345, ADR-070).
+  version: 2,
   title: 'This page: move stock',
   audience: (me) => held(me, TRANSFER) && held(me, STOCK_READ),
   autoStart: false,
@@ -78,6 +81,7 @@ export const transferPage: Tour = {
   steps: [
     retail({ id: 'to', target: 'transfer-to', title: 'Where it goes', body: 'The branch chosen at the top of the page is where the stock leaves from. Pick the branch it goes to.' }),
     retail({ id: 'search', target: 'transfer-search', title: 'Add the items', body: 'Type part of the name or code. Tap Add on each item to move.' }),
+    retail({ id: 'scan', target: 'scan-bar', title: 'Scan here', body: 'Or scan each item in the Scan box. It is added, and a second scan adds one more.' }),
     retail({ id: 'items', target: 'transfer-items', title: 'How many', body: 'Type the quantity for each item. You cannot move more than the branch holds.' }),
     retail({ id: 'save', target: 'transfer-save', title: 'Save the move', body: 'Tap Move stock, or Send stock if the other branch must receive it first.' }),
   ],

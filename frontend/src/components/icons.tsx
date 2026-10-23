@@ -444,6 +444,13 @@ export const icons = {
       <path d="M5 12.5l4.5 4.5L19 7.5" />
     </Svg>
   ),
+  // A barcode inside a viewfinder: the camera button of the Scan box (issue #345).
+  scan: (
+    <Svg>
+      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
+      <path d="M7 8v8M10 8v8M13 8v8M17 8v8" />
+    </Svg>
+  ),
   signOut: (
     <Svg>
       <path d="M10 4H5v16h5" />

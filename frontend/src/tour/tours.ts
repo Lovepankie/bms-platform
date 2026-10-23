@@ -386,7 +386,9 @@ export const retailSales: Tour = {
   // Version 11 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
   // Version 12 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
   // Version 13 adds the Online or offline step (issue #458, ADR-067): the dot, and selling with no network.
-  version: 13,
+  // Version 14 adds the Scan step (issue #345): a barcode scanner, a typed barcode or the phone camera adds the item.
+  // Version 15 makes it the Scan here step (ADR-070 decision 11): a scanner types only into the Scan box.
+  version: 15,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -413,6 +415,15 @@ export const retailSales: Tour = {
       optional: true,
       title: 'Find the item',
       body: 'Type part of the name or code, then tap Add.',
+    },
+    {
+      id: 'sale-scan',
+      route: '/staff/retail/sale',
+      target: 'scan-bar',
+      module: 'retail',
+      optional: true,
+      title: 'Scan here',
+      body: 'Keep the cursor in the Scan box and scan: the item is added, and scanning it again adds one more. You can also type the barcode and press Enter, or tap the camera button to scan with the phone. Typing in a quantity or price is never taken for a scan.',
     },
     {
       id: 'sale-payment',
@@ -600,8 +611,8 @@ export const staffWelcome: Tour = {
 
 export const salePage: Tour = {
   id: 'page-sale',
-  // Version 2 adds the Online or offline step (issue #458, ADR-067).
-  version: 2,
+  // Version 2 adds the Online or offline step (issue #458, ADR-067); version 3 the Scan here step (issue #345, ADR-070).
+  version: 3,
   title: 'This page: record a sale',
   audience: (me) => held(me, SELL),
   autoStart: false,
@@ -823,7 +834,8 @@ export const cataloguePage: Tour = {
 
 export const stocktakePage: Tour = {
   id: 'page-stocktake',
-  version: 1,
+  // Version 2 adds the Scan here step (issue #345, ADR-070).
+  version: 2,
   title: 'This page: stock-take',
   audience: (me) => STOCKTAKE.every((p) => held(me, p)),
   autoStart: false,
@@ -834,6 +846,12 @@ export const stocktakePage: Tour = {
       target: 'count-search',
       title: 'Count each item',
       body: 'Find an item and type how many you counted. Leave an item blank to skip it.',
+    },
+    {
+      id: 'scan',
+      target: 'scan-bar',
+      title: 'Scan here',
+      body: 'Or scan each item in the Scan box as you count it. Each scan adds one to its count and marks the line.',
     },
     {
       id: 'review',
