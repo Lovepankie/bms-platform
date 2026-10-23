@@ -543,6 +543,8 @@ class OutboxIT extends IntegrationTest {
                 Map.entry("kind", "idea"),
                 Map.entry("page", "/staff/retail/sale"),
                 Map.entry("message", "Test feedback message."),
+                Map.entry("module", "Shop"),
+                Map.entry("decision", "approved: Shop is switched on now"),
                 Map.entry("links", "Test Shop\nhttps://test-bms-staging.rincoltech.test/sign-in"));
         for (String channel : List.of("email", "telegram", "sms")) {
             for (String key : OutboxTemplates.keys(channel)) {

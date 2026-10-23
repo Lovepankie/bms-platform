@@ -1080,6 +1080,111 @@
           }
         }
       },
+      "BusinessPlan" : {
+        "properties" : {
+          "applies_at_once" : {
+            "description" : "Whether a change asked for now takes effect at once, as nothing is paid ahead",
+            "type" : "boolean"
+          },
+          "can_change" : {
+            "description" : "Whether the signed-in user is the Owner, who alone may change the plan",
+            "type" : "boolean"
+          },
+          "changes" : {
+            "description" : "Changes still to come, soonest first, then the latest done or undone",
+            "items" : {
+              "$ref" : "#/components/schemas/PlanScheduledChange"
+            },
+            "type" : "array"
+          },
+          "changes_take_effect_on" : {
+            "description" : "The day a change asked for now would take effect",
+            "format" : "date",
+            "type" : "string"
+          },
+          "ended_on" : {
+            "description" : "When the subscription has ended: the day it ended",
+            "format" : "date",
+            "type" : "string"
+          },
+          "ends_on" : {
+            "description" : "While a cancellation is scheduled: the first day the business is read only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "modules" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modules_available" : {
+            "description" : "Modules the business does not use and may ask for",
+            "items" : {
+              "description" : "Modules the business does not use and may ask for",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "modules_in_plan" : {
+            "description" : "Modules the plan includes: asking for one of these switches it on at once",
+            "items" : {
+              "description" : "Modules the plan includes: asking for one of these switches it on at once",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "paid_until" : {
+            "description" : "The last day paid for, or null",
+            "format" : "date",
+            "type" : "string"
+          },
+          "pilot" : {
+            "type" : "boolean"
+          },
+          "plan_code" : {
+            "type" : "string"
+          },
+          "plan_name" : {
+            "type" : "string"
+          },
+          "requests" : {
+            "description" : "The latest module requests, newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/PlanModuleRequest"
+            },
+            "type" : "array"
+          },
+          "subscription_status" : {
+            "description" : "trial, active, past_due, suspended or cancelled; null when the business has none yet",
+            "type" : "string"
+          },
+          "today" : {
+            "description" : "Today in the business's own time zone",
+            "format" : "date",
+            "type" : "string"
+          },
+          "trial_ends_on" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "BusinessPlanStatus" : {
+        "description" : "For the banner and the read-only notice every member of staff sees",
+        "properties" : {
+          "ended_on" : {
+            "description" : "When the subscription has ended: the day it ended; the business is read only",
+            "format" : "date",
+            "type" : "string"
+          },
+          "ends_on" : {
+            "description" : "While a cancellation is scheduled: the first day the business is read only",
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
       "CancelExistingLoanRequest" : {
         "properties" : {
           "reason" : {
@@ -6767,6 +6872,60 @@
           }
         }
       },
+      "PlanModuleAsk" : {
+        "description" : "The module, with the Owner's step-up: the authenticator code when the Owner has two-step sign-in, else the password",
+        "properties" : {
+          "module" : {
+            "pattern" : "^[a-z]{2,30}$",
+            "type" : "string"
+          },
+          "password" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "PlanModuleRequest" : {
+        "description" : "A module the Owner asked for, and the operator's decision",
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_automatically" : {
+            "description" : "True when the plan already included the module, so it was switched on at once",
+            "type" : "boolean"
+          },
+          "decision_reason" : {
+            "description" : "The operator's reason, shown to the Owner when declined",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "module_key" : {
+            "type" : "string"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "pending, approved or declined",
+            "type" : "string"
+          }
+        }
+      },
       "PlanPrice" : {
         "description" : "A price of a plan from a date; a later row replaces it from its own date",
         "properties" : {
@@ -6804,6 +6963,57 @@
             "type" : "integer"
           },
           "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlanScheduledChange" : {
+        "description" : "A module stopped or the subscription cancelled, from a date",
+        "properties" : {
+          "applied_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "effective_on" : {
+            "description" : "The first day the change is in force",
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "stop_module or cancel",
+            "type" : "string"
+          },
+          "module_key" : {
+            "type" : "string"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "scheduled, applied or undone",
+            "type" : "string"
+          }
+        }
+      },
+      "PlanStepUp" : {
+        "description" : "The authenticator code when the Owner has two-step sign-in, else the password",
+        "properties" : {
+          "password" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "maxLength" : 20,
+            "minLength" : 0,
             "type" : "string"
           }
         }
@@ -6923,6 +7133,103 @@
           }
         }
       },
+      "PlatformModuleApproval" : {
+        "properties" : {
+          "plan_code" : {
+            "description" : "Move the business to this plan first, when its plan does not include the module",
+            "pattern" : "^[a-z0-9_-]{1,40}$",
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "A current 6 digit code from the operator's own authenticator app",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "totp_code" ]
+      },
+      "PlatformModuleDecline" : {
+        "properties" : {
+          "reason" : {
+            "description" : "Why; shown to the Owner and kept in the audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "description" : "A current 6 digit code from the operator's own authenticator app",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason", "totp_code" ]
+      },
+      "PlatformModuleRequest" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_automatically" : {
+            "type" : "boolean"
+          },
+          "decision_reason" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "module_key" : {
+            "type" : "string"
+          },
+          "plan_code" : {
+            "type" : "string"
+          },
+          "plan_includes" : {
+            "description" : "Whether the business's plan already includes the module",
+            "type" : "boolean"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant_name" : {
+            "type" : "string"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformModuleRequestList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformModuleRequest"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "PlatformReasonRequest" : {
         "properties" : {
           "reason" : {
@@ -7034,6 +7341,51 @@
           "items" : {
             "items" : {
               "$ref" : "#/components/schemas/PlatformReferral"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "PlatformScheduledChange" : {
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "effective_on" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "module_key" : {
+            "type" : "string"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant_name" : {
+            "type" : "string"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformScheduledChangeList" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PlatformScheduledChange"
             },
             "type" : "array"
           }
@@ -29747,6 +30099,167 @@
         "tags" : [ "payments" ]
       }
     },
+    "/api/v1/plan" : {
+      "get" : {
+        "operationId" : "getPlan",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BusinessPlan"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The plan card: the plan, the modules on, the paid-until date, module requests and changes still to come (ADR-073)",
+        "tags" : [ "plan" ]
+      }
+    },
+    "/api/v1/plan/cancel" : {
+      "post" : {
+        "operationId" : "cancelPlan",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlanStepUp"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanScheduledChange"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only, with the step-up: cancel the subscription at the end of the paid period; the business is read only after it, data kept (ADR-073)",
+        "tags" : [ "plan" ]
+      }
+    },
+    "/api/v1/plan/changes/{change_id}/undo" : {
+      "post" : {
+        "operationId" : "undoPlanChange",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "change_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanScheduledChange"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only: undo a module stop or the cancellation before its day (ADR-073)",
+        "tags" : [ "plan" ]
+      }
+    },
+    "/api/v1/plan/module-requests" : {
+      "post" : {
+        "operationId" : "requestPlanModule",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlanModuleAsk"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanModuleRequest"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only, after the step-up: ask for a module; switched on at once when the plan includes it, otherwise the platform operator decides (ADR-073)",
+        "tags" : [ "plan" ]
+      }
+    },
+    "/api/v1/plan/modules/{module}/stop" : {
+      "post" : {
+        "operationId" : "stopPlanModule",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "module",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlanStepUp"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanScheduledChange"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only, with the step-up: stop using a module at the end of the paid period (at once when nothing is paid ahead); records are kept (ADR-073)",
+        "tags" : [ "plan" ]
+      }
+    },
+    "/api/v1/plan/status" : {
+      "get" : {
+        "operationId" : "getPlanStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BusinessPlanStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "When the subscription ends or ended, for the banner and the read-only notice (ADR-073)",
+        "tags" : [ "plan" ]
+      }
+    },
     "/api/v1/platform/applications" : {
       "get" : {
         "operationId" : "platformListApplications",
@@ -30329,6 +30842,110 @@
         "tags" : [ "platform-auth" ]
       }
     },
+    "/api/v1/platform/module-requests" : {
+      "get" : {
+        "operationId" : "platformListModuleRequests",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "default" : "pending",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformModuleRequestList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Module requests of every business, newest first; pending by default (ADR-073)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/module-requests/{request_id}/approve" : {
+      "post" : {
+        "operationId" : "platformApproveModuleRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "request_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformModuleApproval"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanModuleRequest"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Approve a module request with a reason, optionally moving the plan first; switches the module on, data kept; needs a current code from the operator's own authenticator (ADR-073)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/module-requests/{request_id}/decline" : {
+      "post" : {
+        "operationId" : "platformDeclineModuleRequest",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "request_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformModuleDecline"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlanModuleRequest"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Decline a module request with a reason the Owner sees; needs a current code from the operator's own authenticator (ADR-073)",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/outbox" : {
       "get" : {
         "operationId" : "platformOutbox",
@@ -30863,6 +31480,25 @@
           }
         },
         "summary" : "Set this referral's own commission rule, or clear it so the default applies, with a reason; 422 referral_ended; needs a current code from the operator's own authenticator",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/scheduled-changes" : {
+      "get" : {
+        "operationId" : "platformListScheduledChanges",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformScheduledChangeList"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Module stops and cancellations still to come, soonest first (ADR-073)",
         "tags" : [ "platform" ]
       }
     },

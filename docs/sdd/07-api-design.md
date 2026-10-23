@@ -439,6 +439,15 @@ Feedback from every business (issue #447, ADR-065, FR-FBK-03), served by `core.p
 | PUT | `/platform/feedback/{feedback_id}/linked-issue` | `platform.tenants.manage` | `{linked_issue_number}`: the number of the issue opened for the item (a whole number above zero, else 422), or null to clear it; 404 when there is no such item; audited `platform.feedback.issue_linked` with before and after. Through `platform_feedback_set_linked_issue` (V80) |
 | GET | `/platform/feedback/{feedback_id}/screenshot` | `platform.tenants.read` | The picture (PNG or JPEG), read with the item's business bound (`TenantContext.callAs`); 404 when there is none |
 
+Module requests and scheduled plan changes (ADR-073, issue #472):
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/platform/module-requests` | `platform.tenants.read` | `?status=` `pending` (default), `approved`, `declined` or `all`. `{items: [PlatformModuleRequest]}` newest first across every business, at most 500: the business's id, slug and name, its plan and whether the plan includes the module, the module, status, who asked, dates, whether the system approved it and the reason. Through `platform_module_requests` (V90) |
+| POST | `/platform/module-requests/{request_id}/approve` | `platform.tenants.manage` | `{totp_code, reason, plan_code?}`: the operator's own authenticator code first; moves the business to `plan_code` when given (the checks of FR-TEN-11), then switches the module on through `platform_set_tenant_modules` (data kept); 409 `request_already_decided`; 422 `module_not_allowed` when the plan still does not include it. Emails the Owner; audited `platform.tenant.module_request_decided` |
+| POST | `/platform/module-requests/{request_id}/decline` | `platform.tenants.manage` | `{totp_code, reason}` (a current code from the operator's own authenticator, as for the approval; reason 5 to 300 characters, shown to the Owner); 409 `request_already_decided`. Emails the Owner; audited |
+| GET | `/platform/scheduled-changes` | `platform.tenants.read` | `{items: [PlatformScheduledChange]}`: every module stop and cancellation still to come, soonest first, with the business and who asked. Through `platform_scheduled_changes` (V90) |
+
 Referrals and their commissions across every business (issue #464, ADR-069, FR-REF-03 to FR-REF-06 and FR-REF-08), served by
 `core.platform` through the `Referrals` port of `core.referrals`. Every change takes a `reason` (5 to 300 characters) kept in the
 platform audit log. Setting or correcting the referrer, the default rule and a referral's rule also take `totp_code`, a current code
@@ -1442,6 +1451,28 @@ side is in section 7.11.3.
 | POST | `/feedback` | authenticated staff | `multipart/form-data`: `kind` (`idea`, `problem`, `question`), `message` (1 to 2000 characters), `page_path` (optional; only the path is kept), `screenshot` (optional PNG or JPEG, at most 2 MB). The user agent is read from the request and the version from the server's own build. 201 with the `FeedbackItem`. 422 `validation_failed`, `screenshot_not_an_image`, `screenshot_too_large`; 429 `feedback_rate_limited` with `Retry-After` after 10 in an hour (FR-FBK-01, FR-FBK-05). Queues the operator email in a savepoint (FR-FBK-04) |
 | GET | `/feedback` | authenticated staff | `{items: [FeedbackItem]}`: the caller's own, newest first, at most 100, with status, reply and `has_screenshot` (FR-FBK-02) |
 | GET | `/feedback/{feedback_id}/screenshot` | authenticated staff | The picture of one of the caller's own items; 404 for anyone else's or none |
+
+### 7.11.27 Plan (`/plan`, ADR-073, issue #472)
+
+A business's own plan on its own host. The card needs `core.settings.manage` (administrators); every change is the Owner's alone
+(403 `owner_only` for anyone else). The job `core.platform.plan-scheduled-changes` (every quarter hour, `bms.platform.plan-changes-job-enabled`)
+applies the scheduled changes on their day in each business's time zone.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/plan` | `core.settings.manage` | `Plan`: plan code and name, subscription status, last day of the free month, last day paid for, pilot, the modules on, the modules available and those in the plan, `changes_take_effect_on`, `applies_at_once` (nothing is paid ahead, so a change asked for now takes effect at once), `today` (the business date in its own time zone, which the screen uses for its wording and the undo), `ends_on` (a cancellation scheduled), `ended_on`, `can_change` (the caller is the Owner), the latest 20 requests and the changes still to come with the latest ten done or undone |
+| GET | `/plan/status` | authenticated staff | `{ends_on, ended_on}` for the banner and the read-only notice |
+| POST | `/plan/module-requests` | `core.settings.manage`, Owner only | `{module}` with `{totp_code}` or `{password}` (the owner step-up, 422 `totp_required`, `password_required`). 201 `PlanModuleRequest`: `approved` at once (`decided_automatically`) when the plan includes it, otherwise `pending`; 422 `module_already_on`; 409 `module_request_pending`. Operators emailed |
+| POST | `/plan/modules/{module}/stop` | `core.settings.manage`, Owner only | `{totp_code}` or `{password}` (the owner step-up, 422 `totp_required`, `password_required`). 201 `PlanScheduledChange`, `scheduled` from the day after the last day paid for, or `applied` at once when nothing is paid ahead; 422 `module_not_on`, `last_module`; 409 `change_already_scheduled` |
+| POST | `/plan/cancel` | `core.settings.manage`, Owner only | `{totp_code}` or `{password}`. 201 `PlanScheduledChange`, as for a stop; 409 `change_already_scheduled` |
+| POST | `/plan/changes/{change_id}/undo` | `core.settings.manage`, Owner only | The change goes to `undone`; 422 `change_not_scheduled`, `change_already_due`; 404 for another business's |
+
+A stop, a cancellation, an ask, the job applying what is due and the operator's decision on a request all take the
+subscription's row lock (`app_lock_subscription`, V90) and read the modules and check again under it, so two sent at once are
+made one after the other and neither switch of the modules overwrites the other. A scheduled stop that finds nothing to switch off on its day is closed `undone`, not `applied`, and a module switched on again by an approved request (the system's or the operator's) closes its scheduled stop as `undone`.
+
+After a cancellation's end date every state-changing request of the business answers 423 `subscription_ended`, except staff
+sign-in, MFA, refresh, sign-out, `POST /audit-events/export` and `POST /report-runs`.
 
 ### 7.11.26 Referrals (`/referrals`, ADR-069, issue #464)
 

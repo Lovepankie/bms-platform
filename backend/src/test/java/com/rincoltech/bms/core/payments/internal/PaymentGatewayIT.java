@@ -872,6 +872,159 @@ class PaymentGatewayIT extends IntegrationTest {
         assertThat(row(id).get("next_check_at")).isNull();
     }
 
+    // ---- a business whose subscription ended (ADR-073 decision 5) ----------------------------------------
+
+    /** The Owner's cancellation took effect: cancelled with an end date, the tenant suspended (read only). */
+    void endSubscription(TestDatabase.Fixture t, boolean byOwner) {
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO subscriptions (id, tenant_id, plan_id, status, ended_on)"
+                                + " SELECT gen_random_uuid(), id, plan_id, ?, ? FROM tenants WHERE id = ?"
+                                + " ON CONFLICT (tenant_id) DO UPDATE SET status = EXCLUDED.status, ended_on = EXCLUDED.ended_on")
+                .params(
+                        byOwner ? "cancelled" : "suspended",
+                        byOwner ? java.sql.Date.valueOf("2026-01-31") : null,
+                        t.tenantId())
+                .update();
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                .param(t.tenantId())
+                .update();
+    }
+
+    void resume(TestDatabase.Fixture t) {
+        TestDatabase.owner()
+                .sql("UPDATE subscriptions SET status = 'active', ended_on = NULL WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'active' WHERE id = ?")
+                .param(t.tenantId())
+                .update();
+    }
+
+    @Test
+    void aNotificationAfterTheSubscriptionEndedStillBooksThePayment() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        pay(intent, 1500, "UGX", "CONF-0E01");
+        endSubscription(BOUND, true);
+        try {
+            ResponseEntity<JsonNode> r = ipn(
+                    token(), tracking(intent), intent.get("merchant_reference").asString());
+            assertThat(r.getStatusCode().value()).isEqualTo(200);
+            assertThat(TestDatabase.owner()
+                            .sql("SELECT count(*) FROM payment_callbacks WHERE intent_id = ?")
+                            .param(UUID.fromString(id))
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(1);
+            clock.set(clock.instant().plusSeconds(11));
+            tick();
+            assertThat(statusOf(id)).isEqualTo("booked");
+            assertThat(handler.bookings).hasSize(1);
+        } finally {
+            resume(BOUND);
+        }
+    }
+
+    @Test
+    void aDuePollAfterTheSubscriptionEndedStillBooksThePayment() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        pay(intent, 1500, "UGX", "CONF-0E02");
+        endSubscription(BOUND, true);
+        try {
+            clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+            tick();
+            assertThat(statusOf(id)).isEqualTo("booked");
+            assertThat(handler.bookings).hasSize(1);
+        } finally {
+            resume(BOUND);
+        }
+    }
+
+    // JUSTIFICATION-A3: one new test method appended beside the ones whose fixtures it reuses; no production code.
+    /**
+     * Independent review of #474: the end made by the real definer (as the plan job does), not by hand. A mobile money
+     * notification after it is recorded and booked, while a new payment request is refused; once the operator suspends the
+     * ended business, the next notification is ignored.
+     */
+    @Test
+    void aNotificationAfterTheRealEndIsRecordedUntilTheOperatorSuspends() {
+        JsonNode first = create(1500);
+        JsonNode second = create(1700);
+        pay(first, 1500, "UGX", "CONF-0E04");
+        pay(second, 1700, "UGX", "CONF-0E05");
+        UUID tenant = BOUND.tenantId();
+        TestDatabase.owner()
+                .sql("DO $$ BEGIN PERFORM set_config('app.tenant_id', '" + tenant + "', true);"
+                        + " PERFORM platform_end_subscription('" + tenant + "', DATE '2026-01-31'); END $$")
+                .update();
+        try {
+            assertThat(TestDatabase.owner()
+                            .sql(
+                                    "SELECT s.status || '/' || t.status FROM subscriptions s JOIN tenants t ON t.id = s.tenant_id"
+                                            + " WHERE t.id = ?")
+                            .param(tenant)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("cancelled/suspended");
+            ResponseEntity<JsonNode> refused = call(
+                    HttpMethod.POST,
+                    "/api/v1/payments/intents",
+                    BOUND,
+                    staff,
+                    Map.of("purpose", PURPOSE, "subject_id", subject, "amount_minor", 900, "payer_phone", "0700000123"),
+                    "key-" + UUID.randomUUID());
+            assertThat(refused.getStatusCode().value()).isEqualTo(423);
+            assertThat(refused.getBody().get("code").asString()).isEqualTo("subscription_ended");
+
+            String firstId = first.get("id").asString();
+            assertThat(ipn(
+                                    token(),
+                                    tracking(first),
+                                    first.get("merchant_reference").asString())
+                            .getStatusCode()
+                            .value())
+                    .isEqualTo(200);
+            clock.set(clock.instant().plusSeconds(11));
+            tick();
+            assertThat(statusOf(firstId)).isEqualTo("booked");
+            assertThat(handler.bookings).hasSize(1);
+
+            TestDatabase.owner()
+                    .sql("SELECT platform_set_subscription_status(?, 'suspended', NULL, NULL)")
+                    .param(tenant)
+                    .query()
+                    .singleRow();
+            ipn(token(), tracking(second), second.get("merchant_reference").asString());
+            clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+            tick();
+            assertThat(statusOf(second.get("id").asString())).isEqualTo("pending");
+            assertThat(handler.bookings).hasSize(1);
+        } finally {
+            resume(BOUND);
+        }
+    }
+
+    @Test
+    void aBusinessTheOperatorSuspendedHasNeitherNotificationNorPollActedOn() {
+        JsonNode intent = create(1500);
+        String id = intent.get("id").asString();
+        pay(intent, 1500, "UGX", "CONF-0E03");
+        endSubscription(BOUND, false);
+        try {
+            ipn(token(), tracking(intent), intent.get("merchant_reference").asString());
+            clock.set(clock.instant().plus(Duration.ofMinutes(3)));
+            tick();
+            assertThat(statusOf(id)).isEqualTo("pending");
+            assertThat(handler.bookings).isEmpty();
+        } finally {
+            resume(BOUND);
+        }
+    }
+
     // ---- the handler -------------------------------------------------------------------------------
 
     @Test

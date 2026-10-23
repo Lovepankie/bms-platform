@@ -48,6 +48,14 @@ public interface TenantJobs {
      */
     <T> T callForTenant(UUID tenantId, Supplier<T> work);
 
+    /**
+     * As {@link #callForTenant}, for the payment gateway's callback and poller (ADR-073 decision 5): a business whose
+     * Owner's cancellation took effect still has its payments recorded, so it is taken as well as an active one
+     * ({@code app_tenant_takes_payments}). A business suspended by the operator, or closed, is refused with
+     * {@link InactiveTenantException} before anything runs.
+     */
+    <T> T callForTenantTakingPayments(UUID tenantId, Supplier<T> work);
+
     /** The tenant is unknown, suspended or closed: nothing ran. */
     final class InactiveTenantException extends RuntimeException {
 

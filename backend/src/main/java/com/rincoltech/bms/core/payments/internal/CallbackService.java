@@ -44,11 +44,11 @@ class CallbackService {
         THROTTLED,
         /** It named no order of this credential pair. */
         UNKNOWN,
-        /** It named an order whose tenant is suspended, or one in a state nobody re-checks. */
+        /** It named an order whose tenant the operator suspended, or one in a state nobody re-checks. */
         IGNORED
     }
 
-    private record Resolved(UUID tenantId, UUID intentId, String tenantStatus, String match) {}
+    private record Resolved(UUID tenantId, UUID intentId, String match) {}
 
     private final JdbcClient jdbc;
     private final TenantJobs tenantJobs;
@@ -76,13 +76,12 @@ class CallbackService {
     Result receive(
             Scope scope, UUID tokenTenant, String kind, String notificationType, String trackingId, String reference) {
         Instant now = clock.now();
-        Optional<Resolved> resolved = jdbc.sql("SELECT tenant_id, intent_id, tenant_status, match"
+        Optional<Resolved> resolved = jdbc.sql("SELECT tenant_id, intent_id, match"
                         + " FROM app_resolve_payment_intent('pesapal', ?, ?, ?, ?::uuid)")
                 .params(scope.key(), trackingId.toLowerCase(Locale.ROOT), reference, tokenTenant)
                 .query((rs, n) -> new Resolved(
                         rs.getObject("tenant_id", UUID.class),
                         rs.getObject("intent_id", UUID.class),
-                        rs.getString("tenant_status"),
                         rs.getString("match")))
                 .optional();
         if (resolved.isEmpty() || !"ok".equals(resolved.get().match())) {
@@ -101,13 +100,11 @@ class CallbackService {
             return Result.UNKNOWN;
         }
         Resolved r = resolved.get();
-        if (!"active".equals(r.tenantStatus())) {
-            counters.count("tenant_suspended");
-            return Result.IGNORED;
-        }
         Result result;
         try {
-            result = tenantJobs.callForTenant(
+            // A business whose subscription ended still has its payments recorded (ADR-073); one the operator
+            // suspended does not.
+            result = tenantJobs.callForTenantTakingPayments(
                     r.tenantId(), () -> note(r.intentId(), kind, notificationType, trackingId, reference, now));
         } catch (TenantJobs.InactiveTenantException e) {
             counters.count("tenant_suspended");

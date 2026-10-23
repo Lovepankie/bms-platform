@@ -293,12 +293,22 @@ class PlatformService implements TenantProvisioning {
         if (modules.equals(before.modules().stream().sorted().toList())) {
             return before;
         }
+        switchModules(tenantId, modules, CurrentPrincipal.require().userId(), reason);
+        return tenant(tenantId);
+    }
+
+    /**
+     * FR-TEN-03: switches the tenant's modules to exactly these through {@code platform_set_tenant_modules} (data kept), in
+     * the caller's transaction, and audits the change. {@code operator} is null when the Owner's own change or the nightly
+     * job switches them (ADR-073).
+     */
+    @Transactional
+    void switchModules(UUID tenantId, List<String> requested, UUID operator, String reason) {
+        TenantResponse before = tenant(tenantId);
+        List<String> modules = checkModules(requested);
         try {
             jdbc.sql("SELECT platform_set_tenant_modules(?, ?, ?)")
-                    .params(
-                            tenantId,
-                            modules.toArray(String[]::new),
-                            CurrentPrincipal.require().userId())
+                    .params(tenantId, modules.toArray(String[]::new), operator)
                     .query()
                     .singleRow();
         } catch (DataIntegrityViolationException e) {
@@ -310,12 +320,11 @@ class PlatformService implements TenantProvisioning {
             }
             throw ApiException.rule("module_not_allowed", "The tenant's plan does not allow these modules.");
         }
-        platformAudit.record(
-                "platform.tenant.modules_changed",
-                CurrentPrincipal.require().userId(),
-                tenantId,
-                Map.of("before", before.modules(), "after", modules, "reason", reason.trim()));
-        return tenant(tenantId);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("before", before.modules());
+        data.put("after", modules);
+        data.put("reason", reason.trim());
+        platformAudit.record("platform.tenant.modules_changed", operator, tenantId, data);
     }
 
     /**

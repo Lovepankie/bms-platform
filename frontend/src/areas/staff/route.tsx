@@ -19,6 +19,7 @@ import { SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
 import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
 import { StaffContext, useOptionalStaff } from './context';
+import { PlanNotice } from './plan';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { useSells } from './retail/nav';
 import { canSeeProfit } from './retail/permissions';
@@ -169,6 +170,7 @@ function StaffLayout() {
                 </p>
               )}
               <TwoStepNotices me={profile} pathname={pathname} />
+              {!mock && <PlanNotice />}
               <StaffBreadcrumbs />
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
               <SignOutWarning ask={askSignOut} onSignOut={() => void signOut(true)} />

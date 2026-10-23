@@ -70,10 +70,17 @@ class TransactionalTenantJobs implements TenantJobs {
 
     @Override
     public <T> T callForTenant(UUID tenantId, Supplier<T> work) {
-        if (!Boolean.TRUE.equals(jdbc.sql("SELECT app_tenant_is_active(?)")
-                .param(tenantId)
-                .query(Boolean.class)
-                .single())) {
+        return callIf("SELECT app_tenant_is_active(?)", tenantId, work);
+    }
+
+    @Override
+    public <T> T callForTenantTakingPayments(UUID tenantId, Supplier<T> work) {
+        return callIf("SELECT app_tenant_takes_payments(?)", tenantId, work);
+    }
+
+    private <T> T callIf(String check, UUID tenantId, Supplier<T> work) {
+        if (!Boolean.TRUE.equals(
+                jdbc.sql(check).param(tenantId).query(Boolean.class).single())) {
             throw new InactiveTenantException();
         }
         return TenantContext.callAs(tenantId, () -> transactions.execute(status -> work.get()));

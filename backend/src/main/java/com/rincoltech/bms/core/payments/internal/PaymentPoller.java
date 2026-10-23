@@ -68,7 +68,7 @@ class PaymentPoller {
             int take = Math.min(properties.pollPerTenant(), budget);
             List<UUID> claimed;
             try {
-                claimed = tenantJobs.callForTenant(
+                claimed = tenantJobs.callForTenantTakingPayments(
                         tenantId, () -> store.claimDue(now, take, now.plus(CheckSchedule.LEASE)));
             } catch (TenantJobs.InactiveTenantException e) {
                 continue;

@@ -623,6 +623,34 @@ class SmsChannelIT extends IntegrationTest {
         assertThat(outboxRow(key).get("last_error")).isEqualTo("tenant_inactive");
     }
 
+    /**
+     * A business whose Owner's cancellation took effect (ADR-073: the subscription cancelled with its end date, the tenant
+     * read only) sends nothing either: its queued messages are refused like a suspended tenant's.
+     */
+    @Test
+    void anEndedBusinessMessageIsRefused() {
+        Rig rig = live(day(29));
+        TestDatabase.Fixture t = tenant(100);
+        String key = receipt(rig, t, "+256700000208");
+        TestDatabase.owner().sql("""
+                        INSERT INTO subscriptions (id, tenant_id, plan_id, status)
+                        SELECT gen_random_uuid(), id, plan_id, 'active' FROM tenants
+                         WHERE id = ? AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE tenant_id = ?)
+                        """).params(t.tenantId(), t.tenantId()).update();
+        TestDatabase.owner()
+                .sql("UPDATE subscriptions SET status = 'cancelled', ended_on = current_date WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .update();
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'suspended' WHERE id = ?")
+                .param(t.tenantId())
+                .update();
+        assertThat(rig.dispatch(1)).isEqualTo(1);
+        assertThat(rig.provider.sent()).isEmpty();
+        assertThat(outboxRow(key).get("status")).isEqualTo("failed");
+        assertThat(outboxRow(key).get("last_error")).isEqualTo("tenant_inactive");
+    }
+
     @Test
     void anSmsNeedsABoundTenantAndAKnownCategory() {
         Rig rig = live(day(10));
