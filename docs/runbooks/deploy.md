@@ -46,9 +46,10 @@ systemctl list-timers bms-pull.timer
 
 Before `web` is replaced, `deploy.sh` copies the outgoing build's hashed files into the volume
 `bms_web_assets`, so a phone still on the previous app copy keeps loading its screens. The deploy log
-shows `kept <n> hashed files of earlier builds`; a line starting `warning: the outgoing web files were
-not kept` means only that old copies may need a reload, and the deploy went on. Files leave the volume
-14 days after they leave the live build (`BMS_KEEP_ASSETS_DAYS` in `.env` changes it).
+shows `kept <n> hashed files of earlier builds (<size>)`; a line starting `warning: the outgoing web
+files were not kept` means only that old copies may need a reload, and the deploy went on (the step
+failed, or ran past its 60 seconds, `BMS_KEEP_ASSETS_TIMEOUT`). Files leave the volume 14 days after
+they leave the live build (`BMS_KEEP_ASSETS_DAYS` in `.env`, a whole number of days, changes it).
 
 Manual check after a deploy, from any machine (never needed for a normal deploy):
 

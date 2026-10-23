@@ -4,7 +4,9 @@
 # more than the keep period ago are pruned. Needs Docker and nothing else: no registry, no cosign,
 # no api or database. It builds three small web images from frontend/Caddyfile with fabricated
 # bundles, then runs deploy.sh's own keep_outgoing_assets and switch_to (copied out of the script,
-# with APP_SERVICES set to web only) against the real compose.yml and compose.pi-staging.yml.
+# with APP_SERVICES set to web only) against the real compose.yml and compose.pi-staging.yml. It also
+# switches back as a rollback does, and checks that a keep-assets run that fails or hangs never
+# stops the switch.
 # Run: bash deploy/tests/keep-assets-test.sh
 set -uo pipefail
 
@@ -41,6 +43,8 @@ build() {
     printf '// workbox %s\n' "$v" > "$dir/dist/workbox-v$v.js"
     if [[ "$v" != 3 ]]; then
         printf 'export const shared = 1\n' > "$dir/dist/assets/shared-s1.js"
+        mkdir -p "$dir/dist/assets/nested"
+        printf 'export const deep = %s\n' "$v" > "$dir/dist/assets/nested/deep-v$v.js"
     fi
     # The runtime stage of frontend/Dockerfile, without the npm build.
     cat > "$dir/Dockerfile" <<'EOF'
@@ -105,9 +109,10 @@ wait_web() {
     done
     return 1
 }
+# deploy <build> [keep-assets time limit]: the second argument is what deploy.sh passes to switch_to.
 deploy() {
     export WEB_IMAGE="$ID:v$1"
-    switch_to > "$WORK/switch.log" 2>&1 || { cat "$WORK/switch.log"; return 1; }
+    switch_to "${2:-60}" > "$WORK/switch.log" 2>&1 || { cat "$WORK/switch.log"; return 1; }
     wait_web
 }
 
@@ -145,6 +150,8 @@ EOF
     expect "$file: build 1's workbox runtime still answers 200" /workbox-v1.js 'HTTP/1.1 200'
     expect "$file: build 2's own chunk answers 200" /assets/page-v2.js 'HTTP/1.1 200'
     expect "$file: an unknown hash still answers 404" /assets/page-v0.js '404'
+    expect "$file: a nested chunk of build 1 still answers 200" /assets/nested/deep-v1.js 'HTTP/1.1 200'
+    expect "$file: the volume is not a public path" /previous/assets/page-v1.js '404'
 
     # Age build 1's own files past the keep period, as if build 1 had left 15 days ago. The shared
     # chunk is touched again by the next copy (build 2 still has it), so it stays.
@@ -160,6 +167,38 @@ EOF
     else
         fail "$file: keep-assets did not report:"; sed 's/^/       /' "$WORK/switch.log"
     fi
+
+    # A rollback: switch back to build 2 with the rollback's shorter limit. Build 3's files are kept,
+    # for a phone that loaded build 3 while it was live.
+    deploy 2 20 || fail "$file: the switch back to build 2 did not start"
+    expect "$file: after a rollback, index.html is build 2's" / 'index-v2\.js'
+    expect "$file: after a rollback, the rolled-back build's chunk answers 200" /assets/page-v3.js 'HTTP/1.1 200'
+
+    # keep-assets fails, then hangs: the switch still happens, the hang is cut off at the limit and
+    # no run container is left behind.
+    base=("${COMPOSE[@]}")
+    for mode in fails hangs; do
+        if [[ "$mode" == fails ]]; then entry='["false"]'; target=3; limit=60; else entry='["sleep", "300"]'; target=2; limit=3; fi
+        printf 'services:\n  keep-assets:\n    entrypoint: %s\n    command: !reset []\n' "$entry" > "$WORK/keep-$mode.yml"
+        COMPOSE=("${base[@]}" --file "$WORK/keep-$mode.yml")
+        started=$SECONDS
+        deploy "$target" "$limit" || fail "$file: build $target did not start when keep-assets $mode"
+        expect "$file: when keep-assets $mode, the switch still happens" / "index-v$target\\.js"
+        if grep -q 'warning: the outgoing web files were not kept' "$WORK/switch.log"; then
+            ok "$file: when keep-assets $mode, the deploy logs a warning"
+        else
+            fail "$file: when keep-assets $mode, no warning:"; printf '       %s\n' "$(cat "$WORK/switch.log")"
+        fi
+        if [[ "$mode" == hangs ]]; then
+            if (( SECONDS - started < 40 )); then ok "$file: a hanging keep-assets is cut off"; else fail "$file: a hanging keep-assets took $(( SECONDS - started ))s"; fi
+            if [[ -z "$(docker ps --all --quiet --filter name=bms-keep-assets-)" ]]; then
+                ok "$file: no keep-assets container is left behind"
+            else
+                fail "$file: a keep-assets container is left behind"
+            fi
+        fi
+    done
+    COMPOSE=("${base[@]}")
 
     # The volume is read-only inside web.
     if "${COMPOSE[@]}" exec -T web sh -c 'touch /srv/previous/x' > /dev/null 2>&1 < /dev/null; then

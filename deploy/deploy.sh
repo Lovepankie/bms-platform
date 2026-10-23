@@ -58,6 +58,8 @@ COSIGN_PUBKEY="${BMS_COSIGN_PUBKEY:-$PWD/cosign.pub}"
 ENV_FILE="${BMS_ENV_FILE:-$PWD/.env}"
 mkdir -p "$STATE_DIR"
 READY_TIMEOUT="${READY_TIMEOUT:-240}"
+# Seconds the keep-assets step may take before a switch (ADR-078); the rollback allows 20.
+KEEP_ASSETS_TIMEOUT="${BMS_KEEP_ASSETS_TIMEOUT:-60}"
 COMPOSE=(docker compose --project-name bms --file compose.yml --env-file "$ENV_FILE")
 
 log() { echo "[deploy $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
@@ -148,24 +150,29 @@ if [ -n "$EDGE_SERVICES" ]; then
 fi
 
 # ADR-078: run the outgoing web image once as keep-assets, which copies its hashed files into the
-# web_assets volume and prunes the old ones. Its image is the digest that web was created from, which
-# its own deploy verified. A failure costs a phone on the old copy a reload, never the deploy.
+# web_assets volume and prunes the old ones. It runs by local image ID with --pull never, so only the
+# image web was created from (verified by its own deploy) can run, never a pull of a moved tag. A
+# failure or a run past the time limit (the first argument, seconds) costs a phone on the old copy a
+# reload, never the deploy or the rollback.
 keep_outgoing_assets() {
-    local id image=""
+    local limit="$1" id image="" name="bms-keep-assets-$$"
     id="$("${COMPOSE[@]}" ps --quiet web 2>/dev/null || true)"
     if [[ -n "$id" ]]; then
-        image="$(docker inspect --format '{{.Config.Image}}' "$id" 2>/dev/null || true)"
+        image="$(docker inspect --format '{{.Image}}' "$id" 2>/dev/null || true)"
     fi
     if [[ -z "$image" ]]; then
         return 0
     fi
-    if ! KEEP_ASSETS_IMAGE="$image" "${COMPOSE[@]}" --profile keep-assets run --rm -T keep-assets < /dev/null; then
+    if ! KEEP_ASSETS_IMAGE="$image" timeout --kill-after=5 "$limit" "${COMPOSE[@]}" --profile keep-assets \
+            run --rm -T --pull never --name "$name" keep-assets < /dev/null; then
+        docker rm --force "$name" > /dev/null 2>&1 || true
         log "warning: the outgoing web files were not kept; a phone on that build may need a reload"
     fi
 }
 
+# The argument is keep_outgoing_assets' time limit: the rollback passes a shorter one.
 switch_to() {
-    keep_outgoing_assets
+    keep_outgoing_assets "$1"
     "${COMPOSE[@]}" up --detach --no-deps "${APP_SERVICES[@]}"
 }
 
@@ -200,7 +207,7 @@ if ! "${COMPOSE[@]}" --profile migrate run --rm -T migrate < /dev/null; then
 fi
 
 log "switching application containers to ${TAG}"
-switch_to
+switch_to "$KEEP_ASSETS_TIMEOUT"
 
 if wait_ready; then
     write_state "$STATE_DIR/current_tag" "$TAG"
@@ -233,7 +240,7 @@ previous_proxy_digest="$(docker image inspect --format '{{ index .RepoDigests 0 
 export API_IMAGE="$previous_api_digest"
 export WEB_IMAGE="$previous_web_digest"
 export PROXY_IMAGE="$previous_proxy_digest"
-switch_to
+switch_to 20
 if wait_ready; then
     record "$PREVIOUS" "rolled-back-to"
     log "rolled back to ${PREVIOUS}; ${TAG} is NOT live"

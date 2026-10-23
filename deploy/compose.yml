@@ -212,34 +212,44 @@ services:
 
   # One-shot: deploy.sh runs it with the OUTGOING web image just before web is replaced (ADR-078).
   # It copies that build's hashed files into web_assets, where the new web container still serves
-  # them, so a phone on the previous app copy keeps loading its screens; it refreshes the date of a
-  # file it already holds and removes files that left the live build more than BMS_KEEP_ASSETS_DAYS
-  # days ago. Hashed names never clash, so nothing is ever overwritten.
+  # them, so a phone on the previous app copy keeps loading its screens; it first removes files that
+  # left the live build more than BMS_KEEP_ASSETS_DAYS days ago, then copies, refreshing the date of a
+  # file it already holds. Hashed names never clash, so nothing is ever overwritten.
   keep-assets:
     <<: *logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    mem_limit: 32m
     image: ${KEEP_ASSETS_IMAGE:-${WEB_IMAGE:?WEB_IMAGE is set by deploy.sh}}
     profiles: ["keep-assets"]
     restart: "no"
-    # Root only to write the volume, which Docker creates root-owned; no network, nothing else.
+    # Root (with no capability) only to write the volume, which Docker creates root-owned; no network.
     user: "0:0"
     network_mode: none
     entrypoint: ["sh", "-c"]
     command:
       - |
         set -eu
-        find /previous -type f -name '*.part' -delete
-        mkdir -p /previous/assets
+        case "$${KEEP_DAYS}" in
+          ''|*[!0-9]*) echo "BMS_KEEP_ASSETS_DAYS is not a whole number of days: '$${KEEP_DAYS}'" >&2; exit 1 ;;
+        esac
+        # Prune first, so the copy never raises the peak; -mmin, since -mtime +14 means 15 whole days.
+        find /previous -type f \( -name '*.part' -o -mmin +$$(( KEEP_DAYS * 1440 )) \) -delete
+        find /previous -mindepth 1 -type d -empty -delete
         cd /srv
-        for f in assets/* workbox-*.js; do
-          [ -f "$$f" ] || continue
-          if [ -e "/previous/$$f" ]; then
-            touch "/previous/$$f"
-          else
-            cp "$$f" "/previous/$$f.part" && mv "/previous/$$f.part" "/previous/$$f"
-          fi
-        done
-        find /previous -type f -mtime +"$${KEEP_DAYS}" -delete
-        echo "kept $$(find /previous -type f | wc -l) hashed files of earlier builds"
+        { find assets -type f; find . -maxdepth 1 -type f -name 'workbox-*.js' | sed 's|^\./||'; } |
+          while IFS= read -r f; do
+            if [ -e "/previous/$$f" ]; then
+              touch "/previous/$$f"
+              continue
+            fi
+            mkdir -p "/previous/$$(dirname "$$f")"
+            cp "$$f" "/previous/$$f.part" || { rm -f "/previous/$$f.part"; exit 1; }
+            mv "/previous/$$f.part" "/previous/$$f"
+          done
+        echo "kept $$(find /previous -type f | wc -l) hashed files of earlier builds ($$(du -sh /previous | cut -f1))"
     environment:
       KEEP_DAYS: ${BMS_KEEP_ASSETS_DAYS:-14}
     volumes:

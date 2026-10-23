@@ -36,6 +36,12 @@
 	# up from the outgoing container before every switch (ADR-078), so a phone still running the
 	# previous app copy keeps loading its screens while the new service worker installs. Without
 	# the volume (local development) try_files finds nothing there and the 404 above stands.
+	# The volume itself is not a public path: only the fallback below reads it.
+	@previous path /previous /previous/*
+	handle @previous {
+		error 404
+	}
+
 	@hashed path /assets/* /workbox-*.js
 	handle @hashed {
 		header Cache-Control "public, max-age=31536000, immutable"

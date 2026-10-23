@@ -910,7 +910,7 @@ Accepted (this list is the ADR index):
   never an automatic suspension, a numbered receipt emailed as a PDF, and the Owner's Plan and billing page (proposed, #480;
   FR-SUB-08 to FR-SUB-12; migration `V92`; renumbered at merge if needed)
 - ADR-078 Deploys keep the previous builds' hashed web files: before each switch, rollbacks included, `deploy.sh` runs the outgoing
-  web image once as `keep-assets` to copy its `/assets` and workbox runtime into the `web_assets` volume, which `web` serves read-only
+  web image once (local image ID, `--pull never`, 60 seconds at most) as `keep-assets` to copy its `/assets` and workbox runtime into the `web_assets` volume, which `web` serves read-only
   from `/srv/previous` after `/srv`; files pruned 14 days after they leave the live build; `index.html` and `sw.js` stay `no-cache`
   (proposed, #525; no migration; renumbered at merge if needed)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace

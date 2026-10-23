@@ -173,12 +173,14 @@ Earlier builds' hashed files stay served for 14 days (ADR-078). A page left open
 worker that has not yet taken the new build, still runs the previous `index.html` and loads its
 screens lazily by hashed names the new image does not carry. So `web` mounts the named volume
 `web_assets` read-only at `/srv/previous`, and the Caddyfile tries a hashed path there after
-`/srv`. `deploy.sh` fills it just before every switch, rollbacks included: it runs the outgoing web
-image once as the one-shot `keep-assets` service (no network; on staging no capability and a
-read-only root), which copies that build's `/assets/*` and `/workbox-*.js` without overwriting
-anything, refreshes the date of names it already holds, and deletes files whose date is older than
-`BMS_KEEP_ASSETS_DAYS` (default 14), that is files that left the live build more than 14 days ago.
-A failure there is a warning, never a failed deploy. The volume is not backed up; losing it costs
+`/srv`; `/previous` itself answers 404. `deploy.sh` fills it just before every switch, rollbacks
+included: it runs the outgoing web image, by its local image ID with `--pull never`, once as the
+one-shot `keep-assets` service (no network, no capability, read-only root, 32 MB). That run first
+deletes files whose date is more than `BMS_KEEP_ASSETS_DAYS` (default 14) days old, that is files
+that left the live build more than 14 days ago, then copies that build's `/assets` tree and
+`/workbox-*.js` without overwriting anything, refreshing the date of names it already holds. It has
+60 seconds before a deploy's switch (`BMS_KEEP_ASSETS_TIMEOUT`) and 20 before a rollback's. A
+failure or a timeout is a warning, never a failed deploy or rollback. The volume is not backed up; losing it costs
 a reload on an old copy, not data.
 
 The API image carries two commands: the default starts the application; `migrate` applies the
