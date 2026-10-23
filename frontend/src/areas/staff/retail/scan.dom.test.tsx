@@ -325,6 +325,28 @@ describe('FR-RET-68 the Scan box', () => {
     await waitFor(() => expect(screen.getByTestId('scan-hit').querySelector('input')?.id).toBe(`count-${LAMP}`));
     expect(document.activeElement?.id).toBe('count-scan');
   });
+
+  it('scrolls to the counted line once per scan, not again while another count is typed', async () => {
+    const scroll = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+    try {
+      await retail.addBarcode(LAMP, { code: EAN });
+      screenOf(<StocktakePage />);
+      await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).not.toBeNull());
+      scan(EAN);
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+      // Typing into another item's count re-renders the sheet; the view must stay where the person is typing.
+      const other = [...document.querySelectorAll<HTMLInputElement>('.rt-card input[id^="count-"]')].find((i) => i.id !== `count-${LAMP}`) as HTMLInputElement;
+      fireEvent.change(other, { target: { value: '7' } });
+      fireEvent.change(other, { target: { value: '75' } });
+      expect(other.value).toBe('75');
+      expect(scroll).toHaveBeenCalledTimes(1);
+      scan(EAN);
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(2));
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
 });
 
 describe('FR-RET-68 typing in a quantity, price or count field is never a scan', () => {

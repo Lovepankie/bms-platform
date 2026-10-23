@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NoResults, SearchBox } from '../../../app/ui/SearchBox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type Stocktake, type StocktakeLine } from '../../../api/retail';
@@ -82,6 +82,11 @@ function CountSheet({ branchId }: { branchId: string }) {
   const [draft, setDraft] = useState<Stocktake | null>(null);
   // The line the last scan counted, marked so the counter sees which one went up; the cursor stays in the Scan box.
   const [scanned, setScanned] = useState<string | null>(null);
+  // Counts the scans, so the counted line is scrolled into view once per scan and never again while the person types.
+  const [scans, setScans] = useState(0);
+  useEffect(() => {
+    if (scans > 0) document.querySelector('[data-testid="scan-hit"]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [scans]);
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
 
   // A scan (issue #345) counts one more of the item, or a whole pack when the barcode is on a pack. The search is cleared
@@ -95,6 +100,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     search.clear();
     setCounts((c) => ({ ...c, [id]: plusOne(c[id], pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000) }));
     setScanned(id);
+    setScans((n) => n + 1);
     return undefined;
   };
   const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
@@ -136,8 +142,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       {rows.map((r) => {
         const id = r.product_id ?? '';
         return (
-          <div key={id} className={id === scanned ? 'rt-card scan-hit' : 'rt-card'} data-testid={id === scanned ? 'scan-hit' : undefined}
-            ref={id === scanned ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}>
+          <div key={id} className={id === scanned ? 'rt-card scan-hit' : 'rt-card'} data-testid={id === scanned ? 'scan-hit' : undefined}>
             <label htmlFor={`count-${id}`}>{r.description} ({r.unit})</label>
             <CategoryLabel category={r.category} />
             <input id={`count-${id}`} inputMode="decimal" value={counts[id] ?? ''} placeholder="Counted"
