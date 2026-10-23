@@ -1,5 +1,6 @@
 import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { TOAST_MS, useToast as useToastOf } from './toast';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import type { Me } from '../../../api/client';
@@ -42,18 +43,11 @@ export function Success({ children }: { children: ReactNode }) {
 /**
  * A short toast above the bottom bar (`.toast`), gone after four seconds. It repeats the on-screen
  * success message and is hidden from assistive technology, which already has that message (#146).
- * Render `toast` anywhere in the screen and call `show` when a save succeeds.
+ * Render `toast` anywhere in the screen and call `show(text, 'success')` when a save succeeds, or `'info'` when it only waits
+ * for an approval.
  */
-export function useToast(): { show: (message: string) => void; toast: ReactNode } {
-  const [text, setText] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const show = (message: string) => {
-    setText(message);
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setText(null), 4000);
-  };
-  return { show, toast: text ? <p className="toast" aria-hidden="true">{text}</p> : null };
+export function useToast() {
+  return useToastOf(TOAST_MS, true);
 }
 
 /** The debounce of the shared search hook (#241), kept here for the screens that import it from this file. */

@@ -10,6 +10,7 @@ import { PURCHASE_CREATE, canUse, holdsAt } from './permissions';
 import { canCancelOrder, canEditOrder, canReceiveOrder, canSendOrder, inLineUnit, orderStatusWords, sendOutcomeWords } from './purchasing-state';
 import { Facts, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys } from './purchasing-ui';
 import { showDate } from './transfers';
+import type { ToastTone } from './toast';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
@@ -93,16 +94,16 @@ export function PurchaseOrderPage() {
   const allowed = canUse(me, 'purchaseOrders');
   const order = useQuery({ queryKey: ['retail', 'purchase-order', orderId], queryFn: () => retail.getPurchaseOrder(orderId), enabled: allowed });
   useCrumbLabel(order.data?.order_no);
-  const done = (text: string) => {
+  const done = (text: string, tone: ToastTone = 'success') => {
     setMessage(text);
-    show(text);
+    show(text, tone);
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
   const send = useMutation({
     mutationFn: () => retail.sendPurchaseOrder(orderId, keys.keyFor(orderId, 'send')),
     onSuccess: (r) => {
       keys.done(orderId);
-      done(sendOutcomeWords(r));
+      done(sendOutcomeWords(r), r.executed === false ? 'info' : 'success');
     },
   });
   const cancel = useMutation({

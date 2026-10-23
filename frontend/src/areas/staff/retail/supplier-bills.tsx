@@ -167,7 +167,7 @@ export function SupplierBillPage() {
       keys.done(billId);
       const text = `Voided ${b.bill_no ?? 'the invoice'}. The goods can be put on another invoice.`;
       setMessage(text);
-      show(text);
+      show(text, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

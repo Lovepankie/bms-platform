@@ -205,6 +205,11 @@ body {
   --color-danger-fill: var(--color-danger); /* the destructive button; text on it is always white */
   --color-inverse: var(--rt-grey-900); /* toasts and chart read-outs, drawn the other way round */
   --color-on-inverse: #ffffff;
+  /* The toast (docs/ui-rules.md rule 15) stays a dark neutral pill in both themes; its icon takes a status colour lifted to read on it. */
+  --color-toast: var(--rt-grey-900);
+  --color-on-toast: #ffffff;
+  --color-toast-success: #47cd89;
+  --color-toast-error: #f97066;
   --color-logo-plate: transparent; /* a logo may be dark on transparent; the dark theme sets it light */
   --color-hover: var(--rt-grey-50);
   --viz-1-value: var(--rt-blue-strong);
@@ -254,17 +259,22 @@ body {
   --z-toast: 400;
 
   /* Interaction */
-  --tap: 44px;
+  --tap: 48px; /* docs/ui-rules.md rule 12 */
   --focus-ring: 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent);
   --content-width: 1120px;
   --transition: var(--motion-fast) var(--ease-out);
 
-  /* Motion (#106): short and calm, 150 to 250 ms; base.css stops it under prefers-reduced-motion. */
-  --motion-fast: 150ms;
+  /* Motion (#106, docs/ui-rules.md rule 13): 120 ms for a press, 200 ms for something arriving, 250 ms at most, always easing
+     out on the one curve, never easing in and never overshooting. base.css stops it under prefers-reduced-motion. */
+  --motion-fast: 120ms;
   --motion: 200ms;
   --motion-slow: 250ms;
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --press-scale: 0.98;
+
+  /* The display size (docs/ui-rules.md rule 8): the one key amount of a screen, such as a sale's total, 40px on a phone to 56px. */
+  --text-display: clamp(2.5rem, 2rem + 2.5vw, 3.5rem);
+  --weight-display: var(--weight-semibold);
 }
 
 /*
@@ -311,6 +321,7 @@ body {
   --color-neutral-tint: #222c39;
   --color-inverse: #e8edf3;
   --color-on-inverse: #0e141b;
+  --color-toast: #2a3442;
   --color-logo-plate: #ffffff;
   --color-hover: #1b2430;
   --viz-1-value: var(--rt-viz-blue-dark);

@@ -117,7 +117,7 @@ export function CreditNotePage() {
       keys.current.done(returnId);
       const text = r.executed ? `Voided ${r.sale_return?.credit_note_no ?? 'the credit note'}.` : 'This return is large enough to need a second administrator. It will be voided when they approve it in Approvals.';
       setMessage(text);
-      show(text);
+      show(text, r.executed ? 'success' : 'info');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

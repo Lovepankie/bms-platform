@@ -79,7 +79,7 @@ function NamedList({ noun, plural, list, create, update }: {
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
   const done = (text: string) => {
     setMessage(text);
-    show(text);
+    show(text, 'success');
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
   const add = useMutation({

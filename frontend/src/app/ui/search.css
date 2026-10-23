@@ -59,7 +59,7 @@
 
 .sb-results[aria-busy='true'] {
   opacity: 0.55;
-  transition: opacity 0.15s ease-in;
+  transition: opacity var(--motion-fast) var(--ease-out);
 }
 
 .sb-mark {

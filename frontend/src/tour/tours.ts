@@ -460,7 +460,7 @@ export const retailSales: Tour = {
       module: 'retail',
       optional: true,
       title: 'Save the sale',
-      body: 'Check the total, then tap Save sale. You get a receipt to show the customer. Tap Share receipt to send the PDF from your phone, on WhatsApp or any other app. WhatsApp customer sends the details to their number.',
+      body: 'Check the total, then tap Record sale. You get a receipt to show the customer. Tap Share receipt to send the PDF from your phone, on WhatsApp or any other app. WhatsApp customer sends the details to their number.',
     },
     {
       id: 'sync-status',

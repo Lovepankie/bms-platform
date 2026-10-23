@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { Me } from '../../../api/client';
 import { useStaff } from '../context';
 import { icons } from '../../../components/icons';
+import { Tile, TileGrid } from '../../../app/ui/Tile';
 import { CATALOGUE_LINKS, canUse, type RetailScreen } from './permissions';
 import { Gate } from './ui';
 
@@ -39,26 +40,14 @@ export function CatalogueLinks() {
   const { me } = useStaff();
   const links = catalogueLinksFor(me);
   return (
-    <ul className="tile-grid" data-tour="catalogue-links">
+    <TileGrid label="Catalogue pages" tour="catalogue-links">
       {links.map((l) => (
-        <li key={l.screen}>
-          <Link className="rt-tile tile" to={l.path as never} data-tour={`catalogue-${l.screen}`}>
-            <span className="icon-chip">{icons[TILE_ICONS[l.screen] ?? 'catalogue']}</span>
-            <strong>{l.label}</strong>
-            <span className="tile-hint">{l.hint}</span>
-          </Link>
-        </li>
+        <Tile key={l.screen} to={l.path} icon={icons[TILE_ICONS[l.screen] ?? 'catalogue']} label={l.label} hint={l.hint} tour={`catalogue-${l.screen}`} />
       ))}
       {canUse(me, 'importer') && (
-        <li>
-          <Link className="rt-tile tile" to={'/staff/retail/catalogue/import' as never} data-tour="catalogue-importer">
-            <span className="icon-chip">{icons[TILE_ICONS.importer ?? 'catalogue']}</span>
-            <strong>Import items</strong>
-            <span className="tile-hint">Add many items from a spreadsheet file</span>
-          </Link>
-        </li>
+        <Tile to="/staff/retail/catalogue/import" icon={icons[TILE_ICONS.importer ?? 'catalogue']} label="Import items" hint="Add many items from a spreadsheet file" tour="catalogue-importer" />
       )}
-    </ul>
+    </TileGrid>
   );
 }
 

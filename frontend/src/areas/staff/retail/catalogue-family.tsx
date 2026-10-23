@@ -40,7 +40,7 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
   useCrumbLabel(family.data?.name);
   const canManage = (me.permissions ?? []).includes(CATALOGUE);
   const canPrice = (me.permissions ?? []).includes(PRICE);
-  const done = (text: string) => { setMessage(text); show(text); setEditing(null); };
+  const done = (text: string) => { setMessage(text); show(text, 'success'); setEditing(null); };
   const f = family.data;
   return (
     <Gate screen="products" title={f?.name ?? 'Sizes and colours'}>
@@ -70,7 +70,7 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
                 label={f.name ?? ''}
                 onUpload={(file) => retail.setFamilyPhoto(f.id ?? '', file)}
                 onClear={() => retail.clearFamilyPhoto(f.id ?? '')}
-                onSaved={(text) => { setMessage(text); show(text); }}
+                onSaved={(text) => { setMessage(text); show(text, 'success'); }}
               />
             )}
             {f && !canManage && (f.photo_id ? <ItemPhoto photoId={f.photo_id} label={f.name ?? ''} size={96} /> : <p className="empty-state">No photo yet.</p>)}
@@ -109,10 +109,10 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
           {canManage && (
             <section data-tour="family-add" aria-label="Add more sizes or colours">
               <h2>Add more sizes or colours</h2>
-              {f && <AddVariants family={f} onDone={(text) => { setMessage(text); show(text); }} />}
+              {f && <AddVariants family={f} onDone={(text) => { setMessage(text); show(text, 'success'); }} />}
             </section>
           )}
-          {canManage && f && <RenameFamily family={f} onDone={(text) => { setMessage(text); show(text); }} />}
+          {canManage && f && <RenameFamily family={f} onDone={(text) => { setMessage(text); show(text, 'success'); }} />}
         </>
       )}
       {toast}

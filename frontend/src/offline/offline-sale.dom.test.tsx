@@ -142,7 +142,7 @@ describe('Record a sale offline', () => {
 
     fireEvent.change(screen.getByLabelText('Find an item by name, code or category'), { target: { value: 'bulb' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Add Test Bulb 9W' }));
-    const save = screen.getByRole('button', { name: 'Save sale' }) as HTMLButtonElement;
+    const save = screen.getByRole('button', { name: /^Record sale/ }) as HTMLButtonElement;
     await waitFor(() => expect(save.disabled).toBe(false));
     fireEvent.click(save);
 

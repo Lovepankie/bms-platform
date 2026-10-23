@@ -282,7 +282,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const ranged = from !== '' && to !== '' && from <= to;
   const statement = useQuery({ queryKey: ['retail', 'account-statement', customerId, from, to], queryFn: () => retail.customerStatement(customerId, { from, to }), enabled: allowed && ranged });
   useCrumbLabel(account.data?.name);
-  const done = (text: string) => { setMessage(text); show(text); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
+  const done = (text: string) => { setMessage(text); show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
   const save = useMutation({
     mutationFn: (form: AccountForm) => retail.setCustomerAccount(customerId, requireVersion(account.data?.version), accountRequest(form)),
     onSuccess: () => done('Saved the credit limit and terms.'),

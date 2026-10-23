@@ -147,12 +147,12 @@ export function ExpensesScreen() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
-          <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.'); }} />
+          <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.', 'success'); }} />
         </>
       )}
       </div>
       {toast}
-      {holds(me, CASHBOOK_READ) && <ExpenseRecords onVoided={show} />}
+      {holds(me, CASHBOOK_READ) && <ExpenseRecords onVoided={(text) => show(text, 'success')} />}
     </Gate>
   );
 }

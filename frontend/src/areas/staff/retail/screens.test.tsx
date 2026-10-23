@@ -60,7 +60,7 @@ describe('sale screen', () => {
     expect(html).toContain('in stock here');
     expect(html).toContain('(negative)');
     expect(html).toContain('for="sale-search"');
-    expect(html).toContain('Total UGX 0');
+    expect(html).toContain('<span>Total</span> <span class="rt-total-amount">UGX 0</span>');
     expect(html).not.toMatch(/cost|profit/i);
   });
 

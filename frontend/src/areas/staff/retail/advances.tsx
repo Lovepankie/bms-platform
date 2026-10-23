@@ -297,7 +297,7 @@ export function AdvancesScreen() {
       </div>
       <div data-tour="advance-body">
 
-      {mode === 'list' && canRead && (open ? <AdvanceDetail id={open} onClose={() => setOpen(null)} onVoided={show} /> : <AdvanceList onOpen={setOpen} />)}
+      {mode === 'list' && canRead && (open ? <AdvanceDetail id={open} onClose={() => setOpen(null)} onVoided={(text) => show(text, 'success')} /> : <AdvanceList onOpen={setOpen} />)}
       {mode === 'outstanding' && canRead && <Outstanding />}
 
       {mode === 'new' && (branchId === null ? <BranchRequired permissions={[ADVANCE_CREATE]} /> : savedAdvance ? (
@@ -307,7 +307,7 @@ export function AdvancesScreen() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
-          <AdvanceForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(a) => { setSavedAdvance(a); show('Advance recorded.'); }} />
+          <AdvanceForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(a) => { setSavedAdvance(a); show('Advance recorded.', 'success'); }} />
         </>
       ))}
 
@@ -321,7 +321,7 @@ export function AdvancesScreen() {
       ) : (
         <>
           <p className="branch-line">Receiving branch: <strong>{branchName}</strong></p>
-          <RepaymentForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(repayment, advance) => { setSavedRepayment({ repayment, advance }); show('Repayment recorded.'); }} />
+          <RepaymentForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(repayment, advance) => { setSavedRepayment({ repayment, advance }); show('Repayment recorded.', 'success'); }} />
         </>
       ))}
       </div>

@@ -124,7 +124,7 @@ export function ExpenseListsScreen() {
   const categories = useQuery({ queryKey: ['retail', 'expense-categories', false], queryFn: () => retail.listExpenseCategories() });
   const change = useMutation({
     mutationFn: (run: () => Promise<unknown>) => run(),
-    onSuccess: () => show('Saved.'),
+    onSuccess: () => show('Saved.', 'success'),
     // Success or a refusal (for example a stale version), the lists are read again so the next change uses what is current.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'expense-categories'] }),
   });

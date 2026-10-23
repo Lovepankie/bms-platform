@@ -24,8 +24,9 @@
 
 .tour-hole {
   position: fixed;
-  top: var(--tour-top, 0);
-  left: var(--tour-left, 0);
+  top: 0;
+  left: 0;
+  transform: translate(var(--tour-left, 0), var(--tour-top, 0));
   width: var(--tour-width, 0);
   height: var(--tour-height, 0);
   border-radius: var(--radius);
@@ -142,11 +143,13 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .tour-hole {
-    transition: top 180ms ease, left 180ms ease, width 180ms ease, height 180ms ease;
+    /* The spotlight glides to the next step by transform alone (rule 13); its size snaps, as animating it would lay out
+       every frame. */
+    transition: transform var(--motion) var(--ease-out);
   }
 
   .tour-card {
-    animation: tour-in 160ms ease-out;
+    animation: tour-in var(--motion) var(--ease-out);
   }
 }
 

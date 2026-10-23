@@ -25,7 +25,7 @@ button,
   text-decoration: none;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
@@ -200,6 +200,6 @@ button[aria-disabled='true'],
   .busy-spinner {
     border: 0;
     background: var(--color-focus);
-    animation: rt-busy-pulse 1.6s ease-in-out infinite !important;
+    animation: rt-busy-pulse 1.6s var(--ease-out) infinite !important;
   }
 }

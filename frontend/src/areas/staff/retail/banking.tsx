@@ -142,12 +142,12 @@ export function BankingScreen() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
-          <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(b) => { setSaved(b); show('Banking recorded.'); }} />
+          <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(b) => { setSaved(b); show('Banking recorded.', 'success'); }} />
         </>
       )}
       </div>
       {toast}
-      {holds(me, CASHBOOK_READ) && <BankingRecords onVoided={show} />}
+      {holds(me, CASHBOOK_READ) && <BankingRecords onVoided={(text) => show(text, 'success')} />}
     </Gate>
   );
 }

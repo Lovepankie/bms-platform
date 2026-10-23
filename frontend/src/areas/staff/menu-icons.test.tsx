@@ -19,7 +19,7 @@ import { CATALOGUE_LINKS, CATALOGUE_SCREENS, SCREENS, SCREEN_CAPABILITY, needsOf
 // Every item of a menu has its own icon (issue #483): two items of one menu never draw the same picture, compared by the drawing
 // itself, so two names for one drawing are caught too. The same item keeps its icon wherever it shows (a retail shortcut and its
 // tile, the Shop and Lending headings and their cards on Home, checked in home-cards.dom.test.tsx), which is why the tiles and
-// shortcuts read their icon by the screen's name. Business set-up is one page of fields that draws no icons today;
+// shortcuts read their icon by the screen's name. Business set-up draws its More set-up tiles (#508);
 // setup.dom.test.tsx fails if it ever draws one picture twice.
 
 // An icon as its markup; a tile's icon already is.
@@ -69,7 +69,7 @@ function draw(me: Me, page: ReactElement): string {
 
 /** The icons a page draws in its tiles, in order, as each tile's label and drawing. */
 function tileIcons(me: Me, page: ReactElement): { label: string; icon: string }[] {
-  return [...draw(me, page).matchAll(/<span class="icon-chip">(.*?<\/svg>)?<\/span><strong>(.*?)<\/strong>/g)].map((m) => ({ label: m[2] ?? '', icon: m[1] ?? '' }));
+  return [...draw(me, page).matchAll(/<span class="icon-chip">(.*?<\/svg>)?<\/span><strong[^>]*>(.*?)<\/strong>/g)].map((m) => ({ label: m[2] ?? '', icon: m[1] ?? '' }));
 }
 
 /** Every retail shortcut as the side menu's Retail group draws it, as each link's label and drawing. */

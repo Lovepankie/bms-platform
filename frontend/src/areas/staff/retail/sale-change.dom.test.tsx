@@ -55,7 +55,8 @@ async function addBoth() {
 
 const field = () => screen.getByLabelText('Amount received (UGX)') as HTMLInputElement;
 const type = (v: string) => fireEvent.change(field(), { target: { value: v } });
-const saveButton = () => screen.getByRole('button', { name: 'Save sale' }) as HTMLButtonElement;
+const saveButton = () => screen.getByRole('button', { name: /^Record sale/ }) as HTMLButtonElement;
+const totalLine = () => document.querySelector('.rt-total-hero')?.textContent;
 const pay = (name: string) => fireEvent.click(screen.getByLabelText(name));
 
 afterEach(() => {
@@ -84,7 +85,7 @@ describe('amount received on the sale form', () => {
   it('refuses an amount below the total in plain words and shows the change once it covers the total', async () => {
     open();
     await addBoth();
-    expect(screen.getByText('Total UGX 15,500')).toBeTruthy();
+    expect(totalLine()).toBe('Total UGX 15,500');
     type('10000');
     expect(screen.getByRole('alert').textContent).toBe('Enter at least the total, UGX 15,500.');
     expect(saveButton().disabled).toBe(true);
@@ -181,7 +182,7 @@ describe('amount received on the sale form', () => {
   });
 
   // JUSTIFICATION-A3: the busy-button test case issue #456 asks for.
-  it('shows Save sale as busy while the sale is sent, and a double click records it once', async () => {
+  it('shows Record sale as busy while the sale is sent, and a double click records it once', async () => {
     let finish: (s: Sale) => void = () => undefined;
     createSale.mockReturnValue(new Promise<Sale>((resolve) => { finish = resolve; }));
     open();

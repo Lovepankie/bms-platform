@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockMe } from '../../api/retail-mock';
@@ -219,7 +219,7 @@ describe('the set-up hints and module wording', () => {
   });
 });
 
-// Issue #483: no two items of the set-up menu draw the same picture. The page draws none today; any it gains must differ.
+// Issue #483: no two items of the set-up menu draw the same picture. The More set-up tiles (#508) each draw their own.
 const repeated = (root: ParentNode) => {
   const drawings = [...root.querySelectorAll('svg')].map((svg) => svg.outerHTML);
   return drawings.filter((svg, i) => drawings.indexOf(svg) !== i);
@@ -250,5 +250,17 @@ describe('the set-up menu icons', () => {
 
   it('draws no picture twice', async () => {
     expect(repeated(await wholePage())).toEqual([]);
+  });
+
+  it('lists the other set-up pages as tiles, each an icon above its label and a hint (#508)', async () => {
+    await wholePage();
+    const tiles = within(screen.getByRole('list', { name: 'More set-up' })).getAllByRole('listitem');
+    expect(tiles.map((t) => t.querySelector('.tile-label')?.textContent)).toEqual([
+      'Branches', 'Users', 'Two-step sign-in', 'Two-step for yourself', 'Notifications for the business', 'Referrals', 'Text messages',
+    ]);
+    for (const t of tiles) {
+      expect(t.querySelector('.icon-chip svg')).not.toBeNull();
+      expect(t.querySelector('.tile-hint')?.textContent).not.toBe('');
+    }
   });
 });

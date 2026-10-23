@@ -157,7 +157,7 @@ export function GoodsReceiptPage() {
       keys.done(receiptId);
       const text = `Voided ${r.receipt_no ?? 'the delivery'}. The goods are out of stock again.`;
       setMessage(text);
-      show(text);
+      show(text, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -169,7 +169,7 @@ export function GoodsReceiptPage() {
       releaseKeys.done(receiptId);
       const text = `Released ${r.receipt_no ?? 'the delivery'}. It no longer waits for a landed cost.`;
       setMessage(text);
-      show(text);
+      show(text, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

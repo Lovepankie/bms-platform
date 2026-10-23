@@ -8,6 +8,7 @@ import { SideMenu } from '../../components/side-menu';
 import { illustrations, type IllustrationName } from '../../components/illustrations';
 import { BrandLoader, EmptyState, SkeletonList, StatusPanel } from '../../components/states';
 import { BusyButton } from '../../app/ui/BusyButton';
+import { Toast } from '../staff/retail/toast';
 
 // The living style page (#106, docs/ui/design-system.md): every shared component and illustration
 // on one page, drawn by the same classes the screens use, so a change to the design layer can be
@@ -270,11 +271,7 @@ function StylePage() {
           <button onClick={() => dialog.current?.showModal()}>Open a dialog</button>
           <button onClick={() => sheet.current?.showModal()}>Open a sheet</button>
         </div>
-        {toast && (
-          <div className="toast toast-success" role="status">
-            {toast}
-          </div>
-        )}
+        {toast && <Toast message={toast} tone="success" />}
         <dialog ref={dialog} aria-labelledby="style-dialog-title">
           <h2 id="style-dialog-title">A dialog</h2>
           <p>Centred, with a backdrop. It rises in over 200 ms.</p>

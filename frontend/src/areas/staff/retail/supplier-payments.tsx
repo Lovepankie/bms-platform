@@ -139,7 +139,7 @@ export function SupplierPaymentPage() {
       keys.done(paymentId);
       const text = `Reversed ${p.payment_no ?? 'the payment'}. What it paid is owed again.`;
       setMessage(text);
-      show(text);
+      show(text, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

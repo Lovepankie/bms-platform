@@ -113,7 +113,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const people = (rows.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const done = (text: string) => {
     setMessage(text);
-    show(text);
+    show(text, 'success');
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
   const add = useMutation({

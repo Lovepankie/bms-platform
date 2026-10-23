@@ -101,12 +101,12 @@ export function WithdrawalsScreen() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
-          <WithdrawalForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(w) => { setSaved(w); show('Withdrawal recorded.'); }} />
+          <WithdrawalForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(w) => { setSaved(w); show('Withdrawal recorded.', 'success'); }} />
         </>
       )}
       </div>
       {toast}
-      {holds(me, CASHBOOK_READ) && <WithdrawalRecords onVoided={show} />}
+      {holds(me, CASHBOOK_READ) && <WithdrawalRecords onVoided={(text) => show(text, 'success')} />}
     </Gate>
   );
 }

@@ -143,7 +143,6 @@
   overflow-x: hidden;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
-  transition: width var(--motion) var(--ease-out);
 }
 
 .side-nav-folded {
@@ -206,12 +205,6 @@
   margin-left: 0;
   border-left: 0;
   border-top: 1px solid var(--color-border);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .side-nav {
-    transition: none;
-  }
 }
 
 /*
@@ -604,12 +597,89 @@ body.side-menu-open {
 
 @media (prefers-reduced-motion: no-preference) {
   .sync-dot-syncing {
-    animation: rt-sync-pulse 1.2s ease-in-out infinite;
+    animation: rt-sync-pulse 1.2s var(--ease-out) infinite;
   }
 }
 
 @keyframes rt-sync-pulse {
   50% {
     opacity: 0.4;
+  }
+}
+
+/*
+ * The navigation tiles of every hub page (#508, src/app/ui/Tile.tsx): two per row on a phone, an icon above the label and a
+ * one-line hint under it. A press shrinks the tile to --press-scale in --motion-fast; hover changes the edge and focus adds a 3px
+ * ring, and neither grows the shadow or glows. Only the transform animates (docs/ui-rules.md rule 13).
+ */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  height: 100%;
+  min-height: 132px;
+  box-sizing: border-box;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.tile:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-hover);
+  text-decoration: none;
+}
+
+.tile:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+  box-shadow: var(--shadow-sm), 0 0 0 3px var(--color-focus);
+}
+
+.tile:active {
+  transform: scale(var(--press-scale));
+}
+
+.tile .icon-chip {
+  margin-bottom: var(--space-1);
+}
+
+.tile-label {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+}
+
+.tile-hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+@media (min-width: 720px) {
+  .tile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .tile {
+    min-height: 152px;
+    padding: var(--space-5);
   }
 }

@@ -552,6 +552,20 @@ export const icons = {
       <path d="M5 12.5l4.5 4.5L19 7.5" />
     </Svg>
   ),
+  // A circle with an exclamation mark: a toast that says something failed (#508).
+  error: (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5M12 16.5v.01" />
+    </Svg>
+  ),
+  // A circle with an i: a toast that only informs (#508).
+  info: (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.5v.01" />
+    </Svg>
+  ),
   // A barcode inside a viewfinder: the camera button of the Scan box (issue #345).
   scan: (
     <Svg>

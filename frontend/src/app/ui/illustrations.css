@@ -174,7 +174,7 @@
 .brand-loader-core {
   transform-box: fill-box;
   transform-origin: center;
-  animation: rt-pulse 1.2s ease-in-out infinite;
+  animation: rt-pulse 1.2s var(--ease-out) infinite;
 }
 
 /* Skeleton rows: cards of the same size as the content that replaces them, so nothing jumps. */

@@ -74,7 +74,7 @@ export function ImportPage() {
       setDone(result);
       setChecked(null);
       setText('');
-      show(`Added ${result.added} items.`);
+      show(`Added ${result.added} items.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

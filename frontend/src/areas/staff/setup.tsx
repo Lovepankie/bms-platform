@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute } from '@tanstack/react-router';
+import { createLazyRoute } from '@tanstack/react-router';
 import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { api, fetchSettings, problemOf, type TenantSettings } from '../../api/client';
 import { BRANDING_QUERY, appTitle, brandOf, useShellBrand } from '../../app/branding';
 import { checkColour, colourMessage, suggestColour } from '../../app/contrast';
 import { BusyButton } from '../../app/ui/BusyButton';
+import { Tile, TileGrid } from '../../app/ui/Tile';
+import { icons } from '../../components/icons';
 import { DataExportCard } from './data-export';
 import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
@@ -367,75 +369,33 @@ export function Setup() {
           </fieldset>
         )}
 
-        {permissions.includes('core.branches.read') && (
-          <fieldset>
-            <legend>Branches</legend>
-            <p>
-              <Link to={'/staff/setup/branches' as never}>Branches</Link>: close a shop you no longer use and keep its history, reopen it, or say that your head office keeps no goods.
-            </p>
-          </fieldset>
-        )}
-
-        {permissions.includes('core.users.read') && (
-          <fieldset>
-            <legend>Staff</legend>
-            <p>
-              <Link to="/staff/users">Users</Link>: invite your staff, give each person a role, and see who has not joined yet.
-            </p>
-          </fieldset>
-        )}
-
-        {permissions.includes('core.billing.read') && (
-          <fieldset>
-            <legend>Plan and billing</legend>
-            <p>
-              <Link to={'/staff/setup/billing' as never}>Plan and billing</Link>: your plan and its price, what is paid and until when, how to
-              pay, and the receipt of every payment.
-            </p>
-          </fieldset>
-        )}
-
-        <fieldset>
-          <legend>Two-step sign-in</legend>
-          <p>
-            <Link to={'/staff/setup/two-step' as never}>Two-step sign-in</Link>: ask your staff for a code from their phone as well as the password. It is optional until you choose who must use it.
-          </p>
-          <p>
-            <Link to={'/staff/two-step' as never}>Turn it on for yourself</Link>.
-          </p>
-        </fieldset>
-
-        {hasRetail(me.modules) && (
-          <fieldset>
-            <legend>Notifications</legend>
-            <p>
-              <Link to={'/staff/setup/notifications' as never}>Notifications for the business</Link>: which notices your staff get on their phones
-              (new orders, low stock, credit to collect) and when the daily summary goes.
-            </p>
-          </fieldset>
-        )}
-
-        {permissions.includes('core.referrals.read') && (
-          <fieldset>
-            <legend>Referrals</legend>
-            <p>
-              <Link to={'/staff/setup/referrals' as never}>Referrals</Link>: your link to send to other businesses, and the businesses that signed up with it.
-            </p>
-          </fieldset>
-        )}
-
-        <fieldset>
-          <legend>Text messages</legend>
-          <p>
-            <Link to="/staff/sms">SMS settings, wording and opt-outs</Link>: switch text messages on, choose the sender name and sending hours, and reword the messages.
-          </p>
-        </fieldset>
-
         <BusyButton busy={busy} disabled={colour !== '' && !check.ok} onClick={save} data-tour="setup-save">
           Save
         </BusyButton>
         {message && <p role="status">{message}</p>}
       </div>
+
+      <h2>More set-up</h2>
+      <TileGrid label="More set-up">
+        {permissions.includes('core.branches.read') && (
+          <Tile to="/staff/setup/branches" icon={icons.building} label="Branches" hint="Close or reopen a shop, or say your head office keeps no goods" />
+        )}
+        {permissions.includes('core.users.read') && (
+          <Tile to="/staff/users" icon={icons.people} label="Users" hint="Invite your staff, give each a role, see who has not joined" />
+        )}
+        {permissions.includes('core.billing.read') && (
+          <Tile to="/staff/setup/billing" icon={icons.creditSales} label="Plan and billing" hint="Your plan, what is paid and until when, and every receipt" />
+        )}
+        <Tile to="/staff/setup/two-step" icon={icons.shield} label="Two-step sign-in" hint="Ask your staff for a code from their phone as well" />
+        <Tile to="/staff/two-step" icon={icons.lock} label="Two-step for yourself" hint="Turn on a code from your phone for your own sign-in" />
+        {hasRetail(me.modules) && (
+          <Tile to="/staff/setup/notifications" icon={icons.bell} label="Notifications for the business" hint="Notices for new orders, low stock, credit to collect, and the daily summary" />
+        )}
+        {permissions.includes('core.referrals.read') && (
+          <Tile to="/staff/setup/referrals" icon={icons.arrow} label="Referrals" hint="Your link for other businesses and who signed up with it" />
+        )}
+        <Tile to="/staff/sms" icon={icons.chat} label="Text messages" hint="Switch SMS on, choose the sender name and hours, reword messages" />
+      </TileGrid>
     </main>
   );
 }

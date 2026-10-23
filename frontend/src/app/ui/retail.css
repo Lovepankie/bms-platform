@@ -144,65 +144,6 @@
   font-size: var(--text-sm);
 }
 
-/* Retail home: big touch tiles, two per row on a phone. */
-.tile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  height: 100%;
-  min-height: 132px;
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  color: var(--color-text);
-  text-decoration: none;
-  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
-}
-
-.tile:hover {
-  border-color: var(--color-accent);
-  box-shadow: var(--shadow-lg);
-  text-decoration: none;
-}
-
-.tile:active {
-  transform: scale(0.98);
-}
-
-.tile strong {
-  font-size: var(--text-base);
-  line-height: 1.3;
-}
-
-.tile .tile-hint {
-  font-size: var(--text-sm);
-  color: var(--color-text-muted);
-  line-height: 1.4;
-}
-
-@media (min-width: 720px) {
-  .tile-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: var(--space-4);
-  }
-
-  .tile {
-    min-height: 160px;
-    padding: var(--space-5);
-  }
-}
-
 /* A line's total with its Remove action on the right. */
 .line-foot {
   display: flex;
@@ -364,6 +305,97 @@
   margin-top: var(--space-4);
 }
 
+/* The sale's total as the hero of the screen (#508, docs/ui-rules.md rule 8): the word small, the amount at the display size. */
+.rt-total-hero {
+  flex-wrap: wrap;
+}
+
+.rt-total-hero > span:first-child {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.rt-total-amount {
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: var(--leading-tight);
+}
+
+/*
+ * The sale's one primary action (#508, docs/ui-rules.md rule 6): the button carries the live total. On a phone the bar sticks full
+ * width to the bottom of the screen, edge to edge over the page gutter, and the toast rises above it; from 720px it sits in the form.
+ */
+.sale-bar .sale-bar-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 56px;
+}
+
+.sale-bar-amount {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 719px) {
+  .sale-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-nav);
+    margin: var(--space-3) calc(-1 * var(--space-4)) 0;
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .sale-bar .rt-primary {
+    margin-top: 0;
+  }
+
+}
+
+/* SaleBar sets --bottom-bar to its measured height while it sticks. A field scrolled into view, by a tap that opens the keyboard
+   or by Tab or Next, stops above the bar, and the form ends with room for it, so the bar never covers a field. */
+:root {
+  scroll-padding-bottom: calc(var(--bottom-bar, 0px) + var(--space-4));
+}
+
+.sale-form {
+  padding-bottom: var(--bottom-bar, 0px);
+}
+
+/* An item going on the sale (#508): a new line slides up 8px and fades in, and the count beside Items pops on every add or
+   top-up, without overshoot. Both are keyed by the add in sale.tsx, so nothing moves on a removal or a refused duplicate. The
+   pop is its own class, set only after an add, so a badge that mounts with lines restored from a saved draft stays still. */
+.line-new {
+  animation: rt-line-in var(--motion) var(--ease-out);
+}
+
+.count-badge {
+  margin-left: var(--space-1);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.count-pop {
+  animation: rt-count-pop var(--motion) var(--ease-out);
+}
+
+@keyframes rt-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes rt-count-pop {
+  from {
+    transform: scale(0.8);
+  }
+}
+
 /*
  * Item lists grouped by category (retail/category-groups.tsx): the switch and Expand all / Collapse all
  * above the list, then one section per category whose header is a full-width button with the name on
@@ -411,7 +443,7 @@
   border: 5px solid transparent;
   border-left-color: var(--color-text-muted);
   border-right-width: 0;
-  transition: transform 120ms ease;
+  transition: transform var(--motion-fast) var(--ease-out);
 }
 
 .cat-head[aria-expanded='true']::before {

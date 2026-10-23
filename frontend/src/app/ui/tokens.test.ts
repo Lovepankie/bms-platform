@@ -204,3 +204,16 @@ describe('the dark theme tokens', () => {
     expect(dark).not.toMatch(/:\s*(white|black|red|green|blue|gray|grey)\s*;/);
   });
 });
+
+describe('the toast tokens (#508)', () => {
+  it('white text reads on the dark pill and the icons reach 3:1 on it, in both themes', () => {
+    for (const pill of [token('--rt-grey-900'), darkToken('--color-toast')]) {
+      expect(contrast(WHITE, pill)).toBeGreaterThanOrEqual(4.5);
+      for (const icon of ['--color-toast-success', '--color-toast-error']) expect(contrast(token(icon), pill)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('the pill stays dark in the dark theme rather than turning light like the other inverse surfaces', () => {
+    expect(contrast(darkToken('--color-toast'), WHITE)).toBeGreaterThanOrEqual(4.5);
+  });
+});

@@ -1,4 +1,5 @@
-import { Link, createLazyRoute } from '@tanstack/react-router';
+import { createLazyRoute } from '@tanstack/react-router';
+import { Tile, TileGrid } from '../../../app/ui/Tile';
 import { icons } from '../../../components/icons';
 import { useStaff } from '../context';
 import { RetailDashboard } from './dashboard';
@@ -28,17 +29,13 @@ export function RetailHome() {
       </div>
       {dashboard && ownerFirst && <RetailDashboard />}
       {screens.length === 0 && <p className="empty-state">You do not have access to any retail pages.</p>}
-      <ul className="tile-grid" data-tour="retail-tiles">
-        {screens.map((s) => (
-          <li key={s.screen}>
-            <Link className="rt-tile tile" to={s.path as never} data-tour={`retail-${s.screen}`}>
-              <span className="icon-chip">{icons[s.screen as keyof typeof icons]}</span>
-              <strong>{s.label}</strong>
-              <span className="tile-hint">{s.hint}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {screens.length > 0 && (
+        <TileGrid label="Retail pages" tour="retail-tiles">
+          {screens.map((s) => (
+            <Tile key={s.screen} to={s.path} icon={icons[s.screen as keyof typeof icons]} label={s.label} hint={s.hint} tour={`retail-${s.screen}`} />
+          ))}
+        </TileGrid>
+      )}
       {dashboard && !ownerFirst && <RetailDashboard />}
       {ownSales && <OwnSales />}
     </main>

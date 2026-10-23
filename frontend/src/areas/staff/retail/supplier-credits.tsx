@@ -148,7 +148,7 @@ export function SupplierCreditPage() {
       keys.done(creditId);
       const text = `Voided ${c.credit_no ?? 'the credit note'}. The invoice is owed for what the credit note took off.`;
       setMessage(text);
-      show(text);
+      show(text, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

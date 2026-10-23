@@ -197,7 +197,7 @@ export function LandedCostPage() {
       keys.done(landedCostId);
       const text = `Voided ${c.landed_no ?? 'the landed cost'}. The charges no longer count towards the cost of the goods.`;
       setMessage(text);
-      show(text);
+      show(text, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });

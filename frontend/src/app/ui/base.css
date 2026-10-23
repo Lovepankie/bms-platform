@@ -139,7 +139,32 @@ hr {
   white-space: nowrap;
 }
 
+/* Every amount in tabular figures (docs/ui-rules.md rule 8), so a column of figures lines up and a changing total does not jitter.
+   Amounts are formatted only by formatMinor (money() on the retail screens). */
+.num,
+.rt-total,
+.rt-group-total,
+.rc-total,
+.line-foot,
+.sale-bar-amount,
+.an-stat-value,
+.iv-card-value,
+.iv-bars-value,
+.iv-value-btn,
+.home-figure dd {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion (docs/ui-rules.md rule 13): the tokens go to zero and a press no longer shrinks, and anything that still animates
+   ends at once. */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion: 0ms;
+    --motion-slow: 0ms;
+    --press-scale: 1;
+  }
+
   *,
   *::before,
   *::after {

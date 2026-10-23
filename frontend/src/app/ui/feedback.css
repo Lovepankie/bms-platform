@@ -112,7 +112,7 @@
   border-radius: var(--radius-sm);
   background: linear-gradient(90deg, var(--color-neutral-tint), var(--color-surface-muted), var(--color-neutral-tint));
   background-size: 200% 100%;
-  animation: rt-shimmer 1.2s ease-in-out infinite;
+  animation: rt-shimmer 1.2s var(--ease-out) infinite;
 }
 
 @keyframes rt-spin {
@@ -130,23 +130,50 @@
   }
 }
 
-/* A toast, bottom centre, rising in (#106); beside the sidebar it centres on the content column (#455). Give it role="status" (or
-   "alert" for a failure); -success and -danger add a coloured edge, the words carry the meaning. */
+/* A toast (#106, #508, docs/ui-rules.md rule 15): a dark neutral pill, bottom centre, rising in; beside the sidebar it centres on
+   the content column (#455), and above the sticky sale bar when a screen has one. Its kind is the leading icon and the words, never
+   a coloured edge. Render it with the Toast of areas/staff/retail/toast.tsx. */
 .toast {
   position: fixed;
   left: calc(50% + var(--side-nav-width, 0px) / 2);
-  bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+  bottom: calc(var(--space-5) + var(--bottom-bar, 0px) + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
   max-width: calc(100% - var(--side-nav-width, 0px) - 32px);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius);
-  background: var(--color-inverse);
-  color: var(--color-on-inverse);
+  margin: 0;
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-toast);
+  color: var(--color-on-toast);
   box-shadow: var(--shadow-lg);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
+  line-height: 1.4;
   animation: rt-toast-in var(--motion) var(--ease-out);
+}
+
+.toast-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.toast-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* The icon alone carries the kind, in a colour that reads on the dark pill. */
+.toast-success .toast-icon {
+  color: var(--color-toast-success);
+}
+
+.toast-error .toast-icon {
+  color: var(--color-toast-error);
 }
 
 @keyframes rt-toast-in {

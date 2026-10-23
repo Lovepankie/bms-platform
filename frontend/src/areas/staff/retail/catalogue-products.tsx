@@ -414,7 +414,7 @@ export function ProductsPage() {
   const { show, toast } = useToast();
   const back = () => setView({ mode: 'list' });
   const open = (id: string) => { setMessage(null); setView({ mode: 'edit', id }); };
-  const saved = (text: string) => { setMessage(text); show(text); back(); };
+  const saved = (text: string) => { setMessage(text); show(text, 'success'); back(); };
   return (
     <Gate screen="products" title="Items">
       {message && view.mode === 'list' && <Success>{message}</Success>}
