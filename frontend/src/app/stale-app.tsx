@@ -60,7 +60,7 @@ export function RouteError({ error }: ErrorComponentProps) {
   }, [reloading, stale, error]);
   if (reloading) return <p role="status">Getting the new version of the app…</p>;
   return (
-    <div role="alert" className="alert alert-danger">
+    <div role="alert" className={stale ? 'alert alert-info' : 'alert alert-danger'}>
       <p>{stale ? 'A new version of the app is ready.' : 'This screen could not open.'}</p>
       <button type="button" className="btn btn-primary" onClick={() => location.reload()}>
         Load the page again

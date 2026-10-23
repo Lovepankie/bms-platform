@@ -340,7 +340,7 @@ body.side-menu-open {
 .side-menu-links a[aria-current='page'] {
   background: var(--color-accent-tint);
   color: var(--color-link);
-  box-shadow: inset 3px 0 0 var(--color-accent);
+  font-weight: var(--weight-semibold);
 }
 
 .side-menu-links a[aria-current='page'] svg {

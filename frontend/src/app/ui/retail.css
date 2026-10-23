@@ -101,7 +101,6 @@
   border-radius: var(--radius);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-left: 4px solid var(--color-accent);
   font-size: var(--text-xl);
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
@@ -816,11 +815,11 @@ th[scope='rowgroup'] .cat-head {
   width: 16px;
   height: 0;
   vertical-align: middle;
-  border-top: 3px solid var(--color-primary);
+  border-bottom: 3px solid var(--color-primary);
 }
 
 .rc-key-prev {
-  border-top: 2px dashed var(--color-text-muted);
+  border-bottom: 2px dashed var(--color-text-muted);
 }
 
 .rc-links {
