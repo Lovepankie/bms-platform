@@ -215,9 +215,9 @@ Actions run shows the pointer move; staging's own result is in `state/history.lo
 | 3 | Refuse a release built before `state/current_created` unless `state/allow_downgrade` exists (ADR-018 finding L1) | Exit 1, `refused-downgrade` recorded; nothing changed |
 | 4 | Start PostgreSQL if needed; wait until healthy | Exit non-zero; nothing changed |
 | 5 | `docker compose run --rm migrate` (Flyway as `bms_owner`) | Exit 1; old containers still serving; `failed-migration` recorded |
-| 6 | `docker compose up --no-deps` only the named application services (`api`, `web`, `proxy`, plus `cloudflared` on staging via `BMS_EDGE_SERVICES`): `postgres` is never in this list, so it is never recreated by an application deploy, whatever else changed in `.env` (ADR-018 finding M4) | |
+| 6 | First run the outgoing `web` image once as `keep-assets`, which copies its hashed files into the `web_assets` volume and prunes those that left the live build more than 14 days ago (ADR-078); then `docker compose up --no-deps` only the named application services (`api`, `web`, `proxy`, plus `cloudflared` on staging via `BMS_EDGE_SERVICES`): `postgres` is never in this list, so it is never recreated by an application deploy, whatever else changed in `.env` (ADR-018 finding M4) | A failed `keep-assets` is a warning only; the switch goes on |
 | 7 | Wait up to `READY_TIMEOUT` (240 s) for the API health check (`/readyz`: database and migrations at head), and for `web` and `api` to answer through the proxy container | Go to 8 |
-| 8 | Switch back to the previous tag's already-verified digests, wait for it to be ready, record `failed-health` and `rolled-back-to`, exit 1 | Record `rollback-unhealthy`, exit 1; follow `docs/runbooks/rollback.md` |
+| 8 | Keep the failed build's hashed web files as in 6, then switch back to the previous tag's already-verified digests, wait for it to be ready, record `failed-health` and `rolled-back-to`, exit 1 | Record `rollback-unhealthy`, exit 1; follow `docs/runbooks/rollback.md` |
 | 9 | Write the tag and its build time to `state/current_tag` and `state/current_created` (temp file, `sync`, rename, so a power loss never leaves a truncated file, ADR-018 finding L7); append `deployed` to `state/history.log` | |
 
 Migrations are never reversed on rollback, so they are expand and contract (chapter 6 section

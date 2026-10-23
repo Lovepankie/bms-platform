@@ -1,6 +1,6 @@
 # Runbook: deploy
 
-**Applies to:** staging and production · **Decisions:** ADR-006, ADR-018 · **Detail:** `docs/sdd/10-cicd-pipeline.md`
+**Applies to:** staging and production · **Decisions:** ADR-006, ADR-018, ADR-078 · **Detail:** `docs/sdd/10-cicd-pipeline.md`
 
 ## Normal path (no host access needed)
 
@@ -41,6 +41,29 @@ systemctl list-timers bms-pull.timer
   `rm /opt/bms/state/last_failed_tag`. `releases/<tag>/` on the host keeps that release's files for
   inspection until the next successful deploy cleans it up.
 - To pause staging deploys: `systemctl stop bms-pull.timer` (and `start` to resume).
+
+## Old app copies after a deploy (ADR-078)
+
+Before `web` is replaced, `deploy.sh` copies the outgoing build's hashed files into the volume
+`bms_web_assets`, so a phone still on the previous app copy keeps loading its screens. The deploy log
+shows `kept <n> hashed files of earlier builds`; a line starting `warning: the outgoing web files were
+not kept` means only that old copies may need a reload, and the deploy went on. Files leave the volume
+14 days after they leave the live build (`BMS_KEEP_ASSETS_DAYS` in `.env` changes it).
+
+Manual check after a deploy, from any machine (never needed for a normal deploy):
+
+1. Before the deploy, note one hashed name the live build uses:
+   `curl -s https://<platform host>/ | grep -o '/assets/index-[^"]*\.js'`.
+2. After the deploy, the same command shows a new name, and the old one still loads:
+   `curl -sI https://<platform host>/assets/index-<old hash>.js` answers `200` with
+   `cache-control: public, max-age=31536000, immutable`.
+3. `curl -sI https://<platform host>/` and `curl -sI https://<platform host>/sw.js` answer
+   `cache-control: no-cache`.
+4. On the host, what is kept: `docker compose --project-name bms -f /opt/bms/compose.yml exec web du -sh /srv/previous`.
+
+The volume holds copies only; deleting it (`docker volume rm bms_web_assets` while `web` is stopped)
+loses nothing but those copies. The CI test `deploy/tests/keep-assets-test.sh` runs the same switch
+against both compose files with three small builds.
 
 ## Manual deploy (only when the pipeline is unavailable)
 
