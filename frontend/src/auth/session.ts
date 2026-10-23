@@ -13,7 +13,10 @@ export function getAccessToken(): string | null {
 
 export function setAccessToken(token: string | null): void {
   // A new sign-in replaced the refresh cookie: the session left behind by an offline sign-out is no longer this device's.
-  if (token !== null) clearLogoutPending();
+  if (token !== null) {
+    cancelPendingLogout();
+    clearLogoutPending();
+  }
   accessToken = token;
   listeners.forEach((l) => l());
 }
@@ -105,15 +108,52 @@ function clearLogoutPending(): void {
   }
 }
 
+// A stalled connection (a captive portal, a weak signal) must not hold the installed app, which has no address bar, on a loader.
+const PENDING_LOGOUT_TIMEOUT_MS = 10_000;
+
+function deadline(ms: number): { controller: AbortController; clear: () => void } {
+  const controller = new AbortController();
+  if (typeof AbortSignal.timeout === 'function') {
+    const timeout = AbortSignal.timeout(ms);
+    const onTimeout = () => controller.abort(timeout.reason);
+    timeout.addEventListener('abort', onTimeout);
+    return { controller, clear: () => timeout.removeEventListener('abort', onTimeout) };
+  }
+  const timer = setTimeout(() => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);
+  return { controller, clear: () => clearTimeout(timer) };
+}
+
+// Moved on by every sign-in, so a pending-logout call that began before one never touches the note after it: its late
+// answer would otherwise put back, or clear, the note for a cookie that is no longer the last person's.
+let signInGeneration = 0;
+let pendingLogoutCall: AbortController | null = null;
+
+/** A sign-in is starting: abort any pending-logout call first, so its answer cannot replace the new person's cookie. */
+export function cancelPendingLogout(): void {
+  signInGeneration += 1;
+  pendingLogoutCall?.abort(new DOMException('A sign-in started.', 'AbortError'));
+  pendingLogoutCall = null;
+}
+
 /**
  * Ends the session an offline sign-out left on the server, before anything restores it. The logout call needs an access
  * token, so the cookie is rotated for that one call; the token is never stored or shown. True once the session is gone
- * (also when the server already refuses the cookie); false with no answer, and the sign-out stays pending.
+ * (also when the server already refuses the cookie); false with no answer within 10 seconds, and the sign-out stays pending.
+ * False as well, with the note left alone, when a sign-in began meanwhile: that sign-in owns the note from then on.
  */
 export async function endPendingLogout(): Promise<boolean> {
   if (!logoutPending()) return true;
+  // One deadline for both calls, so the person waits 10 seconds at most.
+  const limit = deadline(PENDING_LOGOUT_TIMEOUT_MS);
+  const generation = signInGeneration;
+  pendingLogoutCall = limit.controller;
   try {
-    const refreshed = await fetch(refreshPath, { method: 'POST', credentials: 'same-origin', headers: tenantHeaders() });
+    const refreshed = await fetch(refreshPath, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: tenantHeaders(),
+      signal: limit.controller.signal,
+    });
     // 401: the server already refuses the cookie, so the session is gone; any other refusal may be passing.
     if (!refreshed.ok && refreshed.status !== 401) return false;
     const token = refreshed.ok ? ((await refreshed.json()) as { access_token?: string | null }).access_token : null;
@@ -122,13 +162,18 @@ export async function endPendingLogout(): Promise<boolean> {
         method: 'POST',
         credentials: 'same-origin',
         headers: { ...tenantHeaders(), Authorization: `Bearer ${token}` },
+        signal: limit.controller.signal,
       });
       if (!out.ok) return false;
     }
+    if (generation !== signInGeneration) return false;
     clearLogoutPending();
     return true;
   } catch {
     return false;
+  } finally {
+    limit.clear();
+    if (pendingLogoutCall === limit.controller) pendingLogoutCall = null;
   }
 }
 

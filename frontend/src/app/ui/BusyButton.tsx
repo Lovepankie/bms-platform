@@ -66,6 +66,7 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
   // submit of its form that this button did not send holds it the same way.
   const held = useRef(false);
   const holds = useRef(0);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!busy) {
@@ -75,6 +76,8 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
     countBusy(1);
     return () => countBusy(-1);
   }, [busy]);
+  // A button gone while busy (its notice closed by the work it ran) never sees busy end, so its HOLD_MAX timer goes with it.
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
 
   // Enter in a field presses the form's first submit button, which the press guard covers; a form with
   // another submit button first, or one submitted from code, still submits, so while busy (or held by a
@@ -98,14 +101,18 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
   // Holds the button for one press or submit and returns the call that says its work is over. Two tasks
   // after that the query library and React have rendered any pending state it started; if busy shows,
   // the busy effect releases the hold when busy ends. If busy never shows the hold ends after HOLD_MAX at
-  // the latest, so the button cannot stick. A newer hold is never released by an older one.
+  // the latest, so the button cannot stick. A newer hold is never released by an older one. A released hold clears its
+  // HOLD_MAX timer, so nothing keeps running once the work is over.
   function hold() {
     held.current = true;
     const id = ++holds.current;
     const release = () => {
-      if (holds.current === id && !busyNow.current) held.current = false;
+      if (holds.current !== id || busyNow.current) return;
+      held.current = false;
+      clearTimeout(holdTimer.current);
     };
-    setTimeout(release, HOLD_MAX);
+    clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(release, HOLD_MAX);
     return () => void setTimeout(() => setTimeout(release));
   }
 
