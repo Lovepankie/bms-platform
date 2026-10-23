@@ -18520,7 +18520,7 @@ export interface components {
             approval_validity_days?: number;
             disabled_collateral_types?: string[];
             display_name?: string;
-            /** @description True once the admin has saved a business name of their own */
+            /** @description True when the business has a name: the one given at onboarding or one the admin saved */
             display_name_set?: boolean;
             /**
              * Format: date

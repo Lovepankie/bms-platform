@@ -139,6 +139,23 @@ class BrandingIT extends IntegrationTest {
         assertThat(none.getBody().get("code").asString()).isEqualTo("not_found");
     }
 
+    /** Issue #514: the name given at onboarding (the tenant profile's) counts as set before any name is saved. */
+    @Test
+    void theOnboardingNameCountsAsSetForTheChecklist() {
+        HttpHeaders h = staff(t, ADMIN);
+        JsonNode s = http.exchange("/api/v1/settings", HttpMethod.GET, new HttpEntity<>(h), JsonNode.class)
+                .getBody();
+        assertThat(s.get("display_name").asString()).isEqualTo("Test Tenant " + t.slug());
+        assertThat(s.get("display_name_set").asBoolean()).isTrue();
+        assertThat(s.get("theme_primary").isNull()).isTrue();
+        assertThat(s.get("receipt_footer").asString()).isEmpty();
+        assertThat(patch(Map.of("display_name", "Test Shop Display"))
+                        .getBody()
+                        .get("display_name_set")
+                        .asBoolean())
+                .isTrue();
+    }
+
     /** #99: the public branding lists the enabled module keys, sorted, so the landing copy follows them. */
     @Test
     void theBrandingListsOnlyTheModulesTheTenantHasSwitchedOn() {

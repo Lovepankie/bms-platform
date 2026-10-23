@@ -72,7 +72,9 @@ class SettingsController {
             @Schema(description = "Brand colour #RRGGBB, or null for the platform look (FR-TEN-08)")
             String themePrimary,
 
-            @Schema(description = "True once the admin has saved a business name of their own")
+            @Schema(
+                    description =
+                            "True when the business has a name: the one given at onboarding or one the admin saved")
             boolean displayNameSet,
 
             @Schema(description = "True once the business set-up checklist has been dismissed")

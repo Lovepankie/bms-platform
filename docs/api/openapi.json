@@ -22825,7 +22825,7 @@
             "type" : "string"
           },
           "display_name_set" : {
-            "description" : "True once the admin has saved a business name of their own",
+            "description" : "True when the business has a name: the one given at onboarding or one the admin saved",
             "type" : "boolean"
           },
           "go_live_date" : {

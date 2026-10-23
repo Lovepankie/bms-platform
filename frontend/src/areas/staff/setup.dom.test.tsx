@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TenantSettings } from '../../api/client';
 import { mockMe } from '../../api/retail-mock';
 import { icons } from '../../components/icons';
 import { StaffContext } from './context';
@@ -52,7 +53,7 @@ vi.mock('@tanstack/react-router', async (original) => ({
   Link: ({ children }: { children: ReactNode }) => <a href="#test">{children}</a>,
 }));
 
-const { Setup, hasRetail, reportsWording } = await import('./setup');
+const { Setup, brandDone, hasRetail, reportsWording } = await import('./setup');
 const { ICON_VERSION_KEY, NewLogoCard } = await import('../../install/NewIcon');
 
 const REAL_AGENT = navigator.userAgent;
@@ -156,6 +157,56 @@ describe('the go-live date', () => {
     show({ modules: ['retail'] });
     await screen.findByRole('heading', { name: 'Business set-up' });
     expect(screen.queryByLabelText(/The day the app became your register/)).toBeNull();
+  });
+});
+
+// Issue #514: an item of the checklist is Done when its value is saved, the business name given at onboarding included.
+// JUSTIFICATION-A3: a new block of tests for the fix, no new mechanism.
+describe('the set-up checklist', () => {
+  // Each test starts from the same settings: the whole object is restored, so no logo or colour leaks into the next test.
+  let saved: Record<string, unknown> = {};
+  beforeEach(() => {
+    saved = { ...settings };
+  });
+  afterEach(() => {
+    for (const k of Object.keys(settings)) delete settings[k];
+    Object.assign(settings, saved);
+  });
+
+  function status(label: string): string | undefined {
+    const item = screen.getAllByRole('listitem').find((li) => li.textContent?.startsWith(`${label}:`));
+    return item?.querySelector('strong')?.textContent ?? undefined;
+  }
+
+  it('shows Done for a name, logo, colour and footer that are already set', async () => {
+    Object.assign(settings, {
+      setup_dismissed: false,
+      display_name_set: false,
+      logo_document_id: '00000000-0000-4000-8000-0000000000a2',
+      theme_primary: '#7A0019',
+      receipt_footer: 'Thank you for coming',
+    });
+    show();
+    await screen.findByRole('heading', { name: 'Checklist' });
+    for (const label of ['Business name', 'Logo', 'Theme colour', 'Receipt footer']) expect(status(label)).toBe('Done');
+  });
+
+  it('shows To do for no logo, the platform colour and a blank footer', async () => {
+    Object.assign(settings, { setup_dismissed: false, receipt_footer: '   ' });
+    show();
+    await screen.findByRole('heading', { name: 'Checklist' });
+    expect(status('Business name')).toBe('Done');
+    for (const label of ['Logo', 'Theme colour', 'Receipt footer']) expect(status(label)).toBe('To do');
+  });
+
+  it('judges each item from the saved settings', () => {
+    const base = { version: 1, display_name_set: false } as TenantSettings;
+    expect(brandDone(base)).toEqual({ name: false, logo: false, colour: false, footer: false });
+    expect(brandDone({ ...base, display_name: 'Test Shop 01' }).name).toBe(true);
+    expect(brandDone({ ...base, display_name: '  ' }).name).toBe(false);
+    expect(brandDone({ ...base, display_name_set: true }).name).toBe(true);
+    expect(brandDone({ ...base, theme_primary: '#0D5C75' }).colour).toBe(true);
+    expect(brandDone({ ...base, receipt_footer: ' \n' }).footer).toBe(false);
   });
 });
 

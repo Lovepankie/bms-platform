@@ -51,6 +51,20 @@ async function suggestFrom(file: File): Promise<string | null> {
   }
 }
 
+/**
+ * Which of the business's own checklist items are done, from what is saved (issue #514): the name when the business has one
+ * (the one given at onboarding counts), the logo when there is one, the theme colour once one was chosen (none means the
+ * platform look), the receipt footer when it is not blank.
+ */
+export function brandDone(settings: TenantSettings): { name: boolean; logo: boolean; colour: boolean; footer: boolean } {
+  return {
+    name: Boolean(settings.display_name_set) || (settings.display_name ?? '').trim() !== '',
+    logo: Boolean(settings.logo_document_id),
+    colour: (settings.theme_primary ?? '') !== '',
+    footer: (settings.receipt_footer ?? '').trim() !== '',
+  };
+}
+
 export function Setup() {
   const { me } = useStaff();
   const queryClient = useQueryClient();
@@ -225,11 +239,12 @@ export function Setup() {
     });
   }
 
+  const done = brandDone(current);
   const items: { label: string; done: boolean | null }[] = [
-    { label: 'Business name', done: current.display_name_set ?? false },
-    { label: 'Logo', done: Boolean(current.logo_document_id) },
-    { label: 'Theme colour', done: Boolean(current.theme_primary) },
-    { label: 'Receipt footer', done: (current.receipt_footer ?? '') !== '' },
+    { label: 'Business name', done: done.name },
+    { label: 'Logo', done: done.logo },
+    { label: 'Theme colour', done: done.colour },
+    { label: 'Receipt footer', done: done.footer },
     { label: 'First branch (besides the head office)', done: branches.data === undefined ? null : branches.data > 1 },
     { label: 'First staff user (besides you)', done: users.data === undefined ? null : users.data > 1 },
   ];

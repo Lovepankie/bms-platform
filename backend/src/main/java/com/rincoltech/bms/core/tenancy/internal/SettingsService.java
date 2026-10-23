@@ -664,8 +664,10 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
         ((Map<String, Object>) s.getOrDefault("appraisal_weights", DEFAULT_APPRAISAL_WEIGHTS))
                 .forEach((k, v) -> weights.put(k, ((Number) v).intValue()));
         Object maxLoans = s.get("max_active_loans_per_member");
+        String displayName =
+                (String) s.getOrDefault("display_name", tenant.profile().name());
         return new SettingsResponse(
-                (String) s.getOrDefault("display_name", tenant.profile().name()),
+                displayName,
                 (String) s.getOrDefault("receipt_footer", ""),
                 thresholds,
                 ((Number) s.getOrDefault("approval_validity_days", 14)).intValue(),
@@ -676,7 +678,8 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
                 (Boolean) s.getOrDefault("require_mfa_all_staff", false),
                 s.get("logo_document_id") == null ? null : UUID.fromString((String) s.get("logo_document_id")),
                 (String) s.get("theme_primary"),
-                s.containsKey("display_name"),
+                // Issue #514: the name given at onboarding is the tenant profile's, and counts as set like a saved one.
+                displayName != null && !displayName.isBlank(),
                 (Boolean) s.getOrDefault("setup_dismissed", false),
                 (Boolean) s.getOrDefault("reports_enabled", false),
                 List.copyOf((List<String>) s.getOrDefault("require_mfa_roles", List.of())),

@@ -278,7 +278,9 @@ The rebate is recorded as a `waived` amount on the affected items, with reason
 holds the display name, the logo (upload, replace, remove, with a preview), the theme colour and the
 receipt footer, and a checklist (name, logo, colour, receipt footer, first branch besides the head
 office, first staff user besides the admin) that a tenant admin lands on at first sign-in until it
-is dismissed (`setup_dismissed`, tenant wide). Each field whose meaning is not obvious carries a
+is dismissed (`setup_dismissed`, tenant wide). An item is Done when its value is saved (issue #514): the
+name when the business has one, the one given at onboarding included (`display_name_set`), the logo
+when there is one, the colour once one was chosen, the receipt footer when it is not blank. Each field whose meaning is not obvious carries a
 one-line plain-words hint, and the receipt footer shows a live preview of the bottom of a receipt.
 Wording that belongs to one module follows the tenant's modules from `/me` (issue #468): the
 reports switch speaks of sales, stock and profit for retail and of portfolio at risk for lending,
