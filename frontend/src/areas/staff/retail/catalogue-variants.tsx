@@ -139,16 +139,16 @@ export function VariantPreview({ rows, profit, onEdit }: { rows: PreviewRow[]; p
                 <label htmlFor={`${id}-code`}>Code</label>
                 <input id={`${id}-code`} value={r.codeText} maxLength={40} autoComplete="off" onChange={(e) => onEdit(r, { codeText: e.target.value })} aria-label={`Code of ${label}`} />
               </div>
+              {profit && (
+                <div>
+                  <label htmlFor={`${id}-cost`}>Buying price ({RETAIL_CURRENCY})</label>
+                  <input id={`${id}-cost`} inputMode="numeric" value={r.costText} autoComplete="off" onChange={(e) => onEdit(r, { costText: e.target.value })} aria-label={`Buying price of ${label}`} aria-invalid={parseMinor(r.costText, RETAIL_CURRENCY) === null} />
+                </div>
+              )}
               <div>
                 <label htmlFor={`${id}-sell`}>Selling price ({RETAIL_CURRENCY})</label>
                 <input id={`${id}-sell`} inputMode="numeric" value={r.sellText} autoComplete="off" onChange={(e) => onEdit(r, { sellText: e.target.value })} aria-label={`Selling price of ${label}`} aria-invalid={parseMinor(r.sellText, RETAIL_CURRENCY) === null} />
               </div>
-              {profit && (
-                <div>
-                  <label htmlFor={`${id}-cost`}>Cost price ({RETAIL_CURRENCY})</label>
-                  <input id={`${id}-cost`} inputMode="numeric" value={r.costText} autoComplete="off" onChange={(e) => onEdit(r, { costText: e.target.value })} aria-label={`Cost price of ${label}`} aria-invalid={parseMinor(r.costText, RETAIL_CURRENCY) === null} />
-                </div>
-              )}
             </div>
           </li>
         );
@@ -231,15 +231,15 @@ export function NewFamilyPage() {
             <option value="">Choose a unit</option>
             {(units.data ?? []).filter((u) => u.active !== false).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
-          <label htmlFor="sizes-item-sell">Selling price ({RETAIL_CURRENCY})</label>
-          <input id="sizes-item-sell" inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} autoComplete="off" aria-invalid={sell.trim() !== '' && sellMinor === null} />
           {profit && (
             <>
-              <label htmlFor="sizes-item-cost">Cost price ({RETAIL_CURRENCY})</label>
+              <label htmlFor="sizes-item-cost">Buying price ({RETAIL_CURRENCY})</label>
               <input id="sizes-item-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} autoComplete="off" aria-invalid={costMinor === null} />
-              <p className="hint">Leave 0 if you do not know it yet. A restock sets the cost.</p>
+              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; a restock sets it.</p>
             </>
           )}
+          <label htmlFor="sizes-item-sell">Selling price ({RETAIL_CURRENCY})</label>
+          <input id="sizes-item-sell" inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} autoComplete="off" aria-invalid={sell.trim() !== '' && sellMinor === null} />
           <p className="hint">Every size and colour starts at these prices. Change any of them in the list below, for example when a bigger size costs more.</p>
         </div>
         <div data-tour="sizes-options">

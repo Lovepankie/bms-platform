@@ -703,14 +703,14 @@ export function createMockRetail(): RetailApi {
         for (const need of ['code', 'description', 'category', 'unit', 'sell_price']) {
           if (!head.includes(need)) refuse(422, 'validation_failed', `The file needs a column called ${need.replace('_', ' ')}.`);
         }
-        if (head.includes('cost_price') && !profitAccess) refuse(422, 'cost_not_allowed', 'The cost price column needs permission to see costs. Take that column out of the file and try again.');
+        if (head.includes('cost_price') && !profitAccess) refuse(422, 'cost_not_allowed', 'The buying price column needs permission to see buying prices. Take that column out of the file and try again.');
         const seen = new Set<string>();
         const rows = lines.slice(1).map((l, i) => {
           const c = l.split(sep).map((x) => x.trim());
           const get = (n: string) => c[head.indexOf(n)] ?? '';
           const code = get('code');
           const base = { line: i + 2, code, description: get('description') };
-          if (!/^\d+$/.test(get('sell_price').replace(/,/g, ''))) return { ...base, outcome: 'error', message: 'The sell price must be a whole number, for example 12000.' };
+          if (!/^\d+$/.test(get('sell_price').replace(/,/g, ''))) return { ...base, outcome: 'error', message: 'The selling price must be a whole number, for example 12000.' };
           if ([...products.values()].some((p) => p.code.toLowerCase() === code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'An item with this code exists already.' };
           if (seen.has(code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'This code is repeated in the file; the first row is used.' };
           seen.add(code.toLowerCase());

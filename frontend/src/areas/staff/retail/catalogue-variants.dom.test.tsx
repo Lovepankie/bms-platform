@@ -62,6 +62,13 @@ function screenOf(node: ReactElement) {
 }
 
 describe('an item with sizes and colours', () => {
+  it('asks the buying price before the selling price (#494)', async () => {
+    screenOf(<NewFamilyPage />);
+    const selling = await screen.findByLabelText(/^Selling price/);
+    const buying = screen.getByLabelText(/^Buying price/);
+    expect(buying.compareDocumentPosition(selling) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('lists every combination with its code and sends the list the owner checked', async () => {
     createFamily.mockResolvedValue({ id: 'f1', name: 'Test romper', variants: [] });
     screenOf(<NewFamilyPage />);

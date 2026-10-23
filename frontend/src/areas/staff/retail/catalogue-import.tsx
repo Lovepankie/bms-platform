@@ -95,8 +95,8 @@ export function ImportPage() {
       <BackToCatalogue />
       <div data-tour="import-note">
         <Note>
-          The first row names the columns: code, description, category, unit, sell price{profit ? ' and, if you wish, cost price' : ''}. Then one item on each row.
-          {profit ? '' : ' Leave the cost price out.'} Check the file first: nothing is saved until you add the items.
+          The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row.
+          {profit ? '' : ' Leave the buying price out.'} Check the file first: nothing is saved until you add the items.
         </Note>
       </div>
       <label htmlFor="import-file">Choose a CSV file</label>

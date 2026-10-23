@@ -85,19 +85,22 @@ describe('suppliers and credit buyers', () => {
 describe('items and prices', () => {
   it('shows cost on an item card only when asked to', () => {
     const withCost = renderToString(<ul><ProductCard product={bulb} showCost canPrice onEdit={() => undefined} onPrice={() => undefined} /></ul>);
-    expect(withCost).toContain('cost UGX 3,500');
+    expect(withCost).toContain('bought at UGX 3,500');
     expect(withCost).toContain('Change price');
     const without = renderToString(<ul><ProductCard product={{ ...bulb, cost_minor: undefined }} showCost={false} canPrice={false} onEdit={() => undefined} onPrice={() => undefined} /></ul>);
-    expect(without).not.toMatch(/cost/i);
+    expect(without).not.toMatch(/cost|bought at/i);
     expect(without).not.toContain('Change price');
   });
 
   it('asks for cost on a new item only with retail.profit.read', () => {
-    expect(page('admin', <ProductForm onSaved={() => undefined} onCancel={() => undefined} />)).toContain('Cost price');
+    expect(page('admin', <ProductForm onSaved={() => undefined} onCancel={() => undefined} />)).toContain('Buying price');
+    // Hillary, 23 Oct 2026: what you pay comes before what you sell for, and is called the buying price.
+    const form = page('admin', <ProductForm onSaved={() => undefined} onCancel={() => undefined} />);
+    expect(form.indexOf('Buying price')).toBeLessThan(form.indexOf('Selling price'));
     const sales = ['retail.catalogue.manage', 'retail.stock.read'];
     const html = page('admin', <ProductForm onSaved={() => undefined} onCancel={() => undefined} />, sales);
-    expect(html).not.toContain('Cost price');
-    expect(html).toContain('The cost is set when you record a restock.');
+    expect(html).not.toContain('Buying price');
+    expect(html).toContain('The buying price is set when you record a restock.');
   });
 
   it('edits the item fields but sends the user to the price form for prices', () => {
@@ -112,17 +115,20 @@ describe('items and prices', () => {
     const noCost = ['retail.catalogue.manage', 'retail.stock.read', 'retail.price.edit'];
     const html = page('admin', <PriceForm product={{ ...bulb, cost_minor: undefined }} onSaved={() => undefined} onCancel={() => undefined} />, noCost);
     expect(html).toContain('New selling price');
-    expect(html).not.toContain('New cost price');
-    expect(html).not.toMatch(/cost/i);
+    expect(html).not.toContain('New buying price');
+    expect(html).not.toMatch(/cost|buying price|bought at/i);
     // The real server sends null where there is no earlier price (the first price) and no reason.
     const first = { id: 'h0', at: '2026-10-01T05:00:00Z', source: 'initial', old_sell_minor: null, new_sell_minor: 5000, old_cost_minor: null, new_cost_minor: 3500, reason: null } as unknown as PriceChange;
-    expect(renderToString(<PriceHistory changes={[first]} />)).toContain('Selling price UGX 5,000, cost UGX 3,500');
+    expect(renderToString(<PriceHistory changes={[first]} />)).toContain('Selling price UGX 5,000, buying price UGX 3,500');
     const list = renderToString(<PriceHistory changes={history} />);
     expect(list).toContain('Selling price UGX 5,000 to UGX 6,000');
     expect(list).toContain('Changed by hand');
     expect(list).toContain('Reason: Test supplier increase');
-    expect(list).not.toMatch(/cost/i);
-    expect(page('admin', <PriceForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />)).toContain('New cost price');
+    expect(list).not.toMatch(/cost|buying price|bought at/i);
+    expect(page('admin', <PriceForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />)).toContain('New buying price');
+    expect(html).not.toContain('bought at');
+    const priced = page('admin', <PriceForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />);
+    expect(priced.indexOf('New buying price')).toBeLessThan(priced.indexOf('New selling price'));
   });
 
   it('hints, without blocking, when the price is not above a known cost', () => {
@@ -256,7 +262,7 @@ describe('importing items from a file', () => {
     expect(html).toContain('What would happen');
     expect(html).toContain('<strong>1</strong> to add');
     expect(html).toContain('An item with this code exists already.');
-    expect(html).toContain('The sell price must be a whole number');
+    expect(html).toContain('The selling price must be a whole number');
     expect((await api.listCatalogue({ query: 'IMP-1' })).items).toHaveLength(0);
   });
 

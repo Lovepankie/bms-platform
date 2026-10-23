@@ -85,8 +85,12 @@ class ProductImportService {
                 throw problem(
                         "csv",
                         "The file needs a column called "
-                                + required.replace('_', ' ')
-                                + ". The columns are: code, description, category, unit, sell price and, optionally, cost price.");
+                                + shown(required)
+                                + ". The columns are: code, description, category, unit, "
+                                + (principal.hasPermission("retail.profit.read")
+                                        ? "buying price (if you wish) and "
+                                        : "")
+                                + "selling price.");
             }
         }
         boolean withCost = columns.containsKey("cost_price");
@@ -97,7 +101,7 @@ class ProductImportService {
         if (withCost && !principal.hasPermission("retail.profit.read")) {
             throw ApiException.rule(
                     "cost_not_allowed",
-                    "The cost price column needs permission to see costs. Take that column out of the file and try again.");
+                    "The buying price column needs permission to see buying prices. Take that column out of the file and try again.");
         }
         List<List<String>> dataRows = table.subList(1, table.size());
         if (dataRows.size() > MAX_ROWS) {
@@ -167,14 +171,14 @@ class ProductImportService {
             } else if (hasPack && packUnit.equalsIgnoreCase(unit)) {
                 problem = "The pack unit must differ from the unit.";
             } else if (sell == null) {
-                problem = "The sell price must be " + example(exponent, 12000) + ".";
+                problem = "The selling price must be " + example(exponent, 12000) + ".";
             } else if (cost == null && !costBlank) {
-                problem = "The cost price must be " + example(exponent, 9000) + ".";
+                problem = "The buying price must be " + example(exponent, 9000) + ".";
             } else if (sell > RetailCatalogue.MAX_AMOUNT_MINOR
                     || (cost != null && cost > RetailCatalogue.MAX_AMOUNT_MINOR)) {
                 problem = "A price is too large.";
             } else if (cost != null && cost > 0 && sell <= cost) {
-                problem = "The sell price must be above the cost price.";
+                problem = "The selling price must be above the buying price.";
             }
             if (problem != null) {
                 errors++;
@@ -579,6 +583,15 @@ class ProductImportService {
         }
         java.math.BigDecimal value = new java.math.BigDecimal(m.group());
         return value.compareTo(java.math.BigDecimal.ONE) >= 0 ? value : null;
+    }
+
+    /** A column as the help and the messages name it (#494): the price columns are the buying and selling price. */
+    private static String shown(String column) {
+        return switch (column) {
+            case "sell_price" -> "selling price";
+            case "cost_price" -> "buying price";
+            default -> column.replace('_', ' ');
+        };
     }
 
     /** Header names are matched ignoring case, spaces, hyphens and underscores; a few plain synonyms are accepted. */

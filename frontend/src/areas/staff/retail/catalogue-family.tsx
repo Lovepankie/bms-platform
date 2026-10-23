@@ -94,7 +94,7 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
                     <p className="hint">{v.code}</p>
                     <p>
                       Sells at <strong>{money(v.sell_minor ?? 0)}</strong>
-                      {profit && v.cost_minor !== undefined && <>, cost {money(v.cost_minor)}</>}
+                      {profit && v.cost_minor !== undefined && <>, bought at {money(v.cost_minor)}</>}
                       . In stock: <strong>{showQty(v.stock_on_hand ?? '0')}</strong>
                     </p>
                     <p className="cluster">
