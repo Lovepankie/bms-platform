@@ -15,6 +15,7 @@ import { UNITS, capabilityOn } from './permissions';
 import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, packPriceMinor } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
+import { NewItemHere, type AddedItem } from './new-item-here';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -150,23 +151,29 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   });
 
   const unitsOn = capabilityOn(me, 'retail', UNITS);
-  const add = (p: Product) =>
-    setLines((ls) =>
-      ls.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0)
-        ? ls
-        : [...ls, { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: { ...(branch && branches.some((b) => b.id === branch) ? { [branch]: '' } : {}) } }],
-    );
   // A scan (issue #345): the item at 1 for this branch, or one more on its line in the pack the barcode is on.
   const here = branch && branches.some((b) => b.id === branch) ? branch : undefined;
+  /** A new line of the item at its current prices, with the quantity at this branch. */
+  const lineOf = (p: Product, qty: string): RestockLine => ({ product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: qty } : {} });
+  const add = (p: Product) =>
+    setLines((ls) => (ls.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? ls : [...ls, lineOf(p, '')]));
   const scanAdd = (p: Product, unitId?: string) => {
     const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
     if (unitId && !unit) return PACK_UNUSABLE;
     // Without a stocking branch chosen at the top, the scanned quantity would go nowhere.
     if (!here) return 'Choose the branch at the top of the page first, so the scanned item is counted there.';
-    const fresh: RestockLine = { product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: '1' } : {} };
+    const fresh = lineOf(p, '1');
     setLines((ls) => scanInto(ls, p, unit, (l) => ({ ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } }), () => (unit ? withUnit(fresh, unit) : fresh)));
     return undefined;
   };
+  // Issue #505: an item added here goes on the purchase with what was typed for it and its quantity at this branch. An item already
+  // on the purchase (one chosen from the name warning) keeps its line and prices, and the quantity is added to it, as a scan adds.
+  const addNew = ({ product, qty, cost, sell }: AddedItem) => {
+    const milli = qty ? parseQty(qty) : null;
+    const fresh = { ...lineOf(product, qty), ...(cost ? { cost } : {}), ...(sell !== undefined ? { sell } : {}) };
+    setLines((ls) => scanInto(ls, product, undefined, (l) => (here && milli ? { ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here], milli) } } : l), () => fresh));
+  };
+  const hereBranch = branches.find((b) => b.id === here);
   const patch = (i: number, change: Partial<RestockLine>) => setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...change } : l)));
   const patchWhole = (i: number, line: RestockLine) => setLines((ls) => ls.map((l, n) => (n === i ? line : l)));
 
@@ -203,6 +210,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       <div data-tour="restock-search">
       <ProductPicker id="restock-search" showStock={false} onAdd={add} />
       </div>
+      <NewItemHere id="restock-new" askCost qtyLabel={hereBranch ? `Quantity bought (${branchLabel(hereBranch)})` : undefined} onAdded={addNew} />
       <ScanBar id="restock-scan" onFound={scanAdd} autoFocus />
 
       <h2>Items</h2>

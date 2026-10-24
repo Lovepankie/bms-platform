@@ -12,12 +12,12 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 |---|---|---|
 | `/staff/retail` | Landing: one tile per screen the user may use | any `retail.*` permission |
 | `/staff/retail/sale` | Record a sale, then the receipt summary | `retail.sale.create` |
-| `/staff/retail/restock` | Restock: supplier, lines, per-branch quantities | `retail.purchase.create` |
+| `/staff/retail/restock` | Buy stock: supplier, lines, per-branch quantities; under the item search, Not in the list? Add it here (issue #505): Item code filled in from the category, Category, Description, Counted in, Buying price, Selling price and the quantity at this branch, one Save that makes the item and puts it on the purchase | `retail.purchase.create` (Add it here: `retail.catalogue.manage`, others read Ask your manager to add this item) |
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
 | `/staff/retail/credit-sales` | Credit sales, grouped by a chain of levels the user chooses (issues #328, #341): buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
 | `/staff/retail/sales` | All sales, grouped by a chain of levels the user chooses (issues #328, #341): filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
 | `/staff/retail/stock` | Stock per branch or All branches, search, category filter, Out of stock and Low stock tabs, negative flag | `retail.stock.read` |
-| `/staff/retail/stocktake` | Count, review variance, commit | `retail.stocktake.commit` and `retail.stock.read` |
+| `/staff/retail/stocktake` | Count stock: count, review the difference, commit; the same Add it here as Buy stock, for a first count, with How many you counted (the buying price only with `retail.profit.read`) (issue #505) | `retail.stocktake.commit` and `retail.stock.read` (Add it here: `retail.catalogue.manage`) |
 | `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
 | `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
 | `/staff/retail/stock-by-location` | Stores and shops: every product in each branch, stores first, a subtotal per role, stock on the way, the combined total (#193); only while `branch_roles` is on | `retail.stock.transfer` and `retail.stock.read` (the API needs only the read; value: `retail.profit.read`) |

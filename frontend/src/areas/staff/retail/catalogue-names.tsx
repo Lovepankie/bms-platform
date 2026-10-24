@@ -30,8 +30,10 @@ export function duplicateReasonOf(text: string): string | null {
 }
 
 /** The name already exists in this unit: open the item, change the name, or (an administrator) add it anyway with a reason. */
-export function ExistsPanel({ item, canAddAnyway, busy, onOpen, onAddAnyway, onChangeName }: {
+export function ExistsPanel({ item, canAddAnyway, busy, openLabel = 'Open it', onOpen, onAddAnyway, onChangeName }: {
   item: ExistingItem;
+  /** The words of the button that takes the existing item; Buy stock and Count stock put it on the line instead (issue #505). */
+  openLabel?: string;
   canAddAnyway: boolean;
   busy?: boolean;
   onOpen: (id: string) => void;
@@ -43,9 +45,9 @@ export function ExistsPanel({ item, canAddAnyway, busy, onOpen, onAddAnyway, onC
   const ready = duplicateReasonOf(reason);
   return (
     <section className="alert alert-warning" role="alert" aria-label="This product already exists" data-testid="name-exists">
-      <p><strong>{existsText(item)}</strong> Open it?</p>
+      <p><strong>{existsText(item)}</strong> {openLabel}?</p>
       <p className="cluster">
-        <button type="button" className="rt-primary" onClick={() => onOpen(item.id)}>Open it</button>
+        <button type="button" className="rt-primary" onClick={() => onOpen(item.id)}>{openLabel}</button>
         <button type="button" className="btn-ghost" onClick={onChangeName}>Change the name</button>
         {canAddAnyway && !asking && <button type="button" className="btn-sm" onClick={() => setAsking(true)}>Add anyway</button>}
       </p>
@@ -68,8 +70,9 @@ export function closeText(s: SimilarProduct): string {
 }
 
 /** Items whose name is close to the one typed: check it is not the same item twice, then save or change the name. */
-export function SimilarPanel({ items, busy, onOpen, onSaveAnyway, onChangeName }: {
+export function SimilarPanel({ items, busy, openLabel = 'Open', onOpen, onSaveAnyway, onChangeName }: {
   items: SimilarProduct[];
+  openLabel?: string;
   busy?: boolean;
   onOpen: (id: string) => void;
   onSaveAnyway: () => void;
@@ -82,7 +85,7 @@ export function SimilarPanel({ items, busy, onOpen, onSaveAnyway, onChangeName }
         {items.map((s) => (
           <li key={s.id} className="rt-row">
             <span>{closeText(s)}</span>
-            <button type="button" className="btn-sm" onClick={() => onOpen(s.id ?? '')} aria-label={`Open ${s.description}`}>Open</button>
+            <button type="button" className="btn-sm" onClick={() => onOpen(s.id ?? '')} aria-label={`${openLabel} ${s.description}`}>{openLabel}</button>
           </li>
         ))}
       </ul>

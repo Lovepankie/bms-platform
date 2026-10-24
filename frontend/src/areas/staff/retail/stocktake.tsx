@@ -9,12 +9,13 @@ import { milliOf, parseCount, parseQty, showQty } from './maths';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
-import { BranchRequired, CategoryLabel, Gate, Note, Problem, useStockingBranch } from './ui';
+import { BranchRequired, CategoryLabel, Gate, Note, Problem, useProfitAccess, useStockingBranch } from './ui';
 import { UNITS, capabilityOn, needsOf } from './permissions';
 import { chosenPack } from './units-state';
 import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
+import { NewItemHere, type AddedItem } from './new-item-here';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -102,6 +103,21 @@ function CountSheet({ branchId }: { branchId: string }) {
   /** A line leaves Not counted yet once its count is in, and goes back if the count is emptied. */
   const settle = (id: string) => setDone((d) => ((counts[id] ?? '').trim() === '' ? d.filter((x) => x !== id) : d.includes(id) ? d : [...d, id]));
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
+  const profit = useProfitAccess();
+  // Issue #505: a first count of an item not in the list. The new item joins the sheet once it is read again, with its count done.
+  // An item already counted (one chosen from the name warning) has the count added to it, as a scan adds; an item the sheet of
+  // this branch does not hold is refused, as a scan is, rather than counted out of sight.
+  const addNew = async ({ product, qty }: AddedItem) => {
+    const id = product.id ?? '';
+    const sheet = await stock.refetch();
+    if (!(sheet.data ?? []).some((r) => r.product_id === id)) {
+      return `${product.description ?? 'The item'} is saved, but it is not on the count sheet of this branch${sheet.isError ? ', which could not be read again' : ''}. Find it in the search to count it, or count it at its own branch.`;
+    }
+    list(id);
+    setCounts((c) => ({ ...c, [id]: plusOne(c[id], parseCount(qty) ?? 0) }));
+    setDone((d) => (d.includes(id) ? d : [...d, id]));
+    setScanned(id);
+  };
 
   // A scan (issue #345) counts one more of the item, or a whole pack when the barcode is on a pack, and puts it on the count.
   // The search is cleared so the counted line shows; an item not on this branch's sheet is refused rather than counted out of sight.
@@ -211,6 +227,7 @@ function CountSheet({ branchId }: { branchId: string }) {
           )}
         />
       </div>
+      <NewItemHere id="count-new" counting askCost={profit} qtyLabel="How many you counted" onAdded={addNew} />
       <ScanBar id="count-scan" branchId={branchId} onFound={scanAdd} autoFocus />
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
