@@ -249,7 +249,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
             </fieldset>
             <p>
               {newSell !== null && newSell !== l.product.sell_minor ? `Sell price will change from ${money(l.product.sell_minor ?? 0)} to ${money(newSell)}.` : 'Sell price stays the same.'}
-              {canProfit && newCost !== null && l.product.cost_minor !== undefined && newCost !== l.product.cost_minor ? ` Cost will change from ${money(l.product.cost_minor)} to ${money(newCost)}.` : ''}
+              {canProfit && newCost !== null && l.product.cost_minor !== undefined && newCost !== l.product.cost_minor ? ` Last paid will change from ${money(l.product.cost_minor)} to ${money(newCost)}.` : ''}
             </p>
             {problems[i] && <p className="rt-flag">{problems[i]}</p>}
             <button type="button" className="btn-ghost" onClick={() => setLines((ls) => ls.filter((_, n) => n !== i))} aria-label={`Remove ${l.product.description}`}>Remove</button>
@@ -287,7 +287,7 @@ export function priceChanges(p: Purchase, before: RestockContext['before'], show
       out.push(`${l.description}: sell price changed from ${money(was.sell)} to ${money(l.sell_minor)}.`);
     }
     if (showCost && l.cost_minor !== undefined && was.cost !== undefined && l.cost_minor !== was.cost) {
-      out.push(`${l.description}: cost changed from ${money(was.cost)} to ${money(l.cost_minor)}.`);
+      out.push(`${l.description}: last paid changed from ${money(was.cost)} to ${money(l.cost_minor)}.`);
     }
     return out;
   });

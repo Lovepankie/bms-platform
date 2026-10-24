@@ -4,6 +4,11 @@ import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.stock.Quantities;
+import com.rincoltech.bms.retail.stock.RetailBooks;
+import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
+import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -11,8 +16,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -28,14 +37,24 @@ class JdbcStockLedger implements StockLedger {
     /** Kinds that carry the transfer they belong to, the movement's source id (FR-RET-16). */
     static final Set<String> TRANSFER = Set.of("transfer_out", "transfer_in");
 
+    /** The source type of the entry that posts what an average does not carry (ADR-079). */
+    static final String AVERAGE_COST = "retail.average_cost";
+
+    /** The kinds {@link #averaged} is told for a change of value alone ({@link #revalue}): a document, or its void. */
+    private static final String REVALUE = "revalue";
+
+    private static final String REVALUE_VOID = "revalue_void";
+
     private final JdbcClient jdbc;
     private final BusinessClock clock;
     private final LowStockAlerts lowStock;
+    private final RetailBooks books;
 
-    JdbcStockLedger(JdbcClient jdbc, BusinessClock clock, LowStockAlerts lowStock) {
+    JdbcStockLedger(JdbcClient jdbc, BusinessClock clock, LowStockAlerts lowStock, RetailBooks books) {
         this.jdbc = jdbc;
         this.clock = clock;
         this.lowStock = lowStock;
+        this.books = books;
     }
 
     @Override
@@ -67,6 +86,7 @@ class JdbcStockLedger implements StockLedger {
                         .thenComparing(i -> i));
         UUID by = CurrentPrincipal.get().map(Principal::userId).orElse(null);
         Timestamp now = Timestamp.from(clock.now());
+        Remainders remainders = new Remainders();
         for (int i : order) {
             Movement m = movements.get(i);
             Locked locked = lockRow(m.branchId(), m.productId());
@@ -118,12 +138,20 @@ class JdbcStockLedger implements StockLedger {
                     .param("by", by)
                     .param("transfer", TRANSFER.contains(m.kind()) ? m.sourceId() : null)
                     .update();
+            long average = locked.average();
+            if (m.unitCostMinor() != average) {
+                Quantities.Averaged a = averaged(
+                        m.productId(), m.kind(), locked, m.qty(), Quantities.value(m.qty(), m.unitCostMinor()));
+                average = a.averageMinor();
+                remainders.add(m, id, a.remainderMinor());
+            }
             jdbc.sql("""
-                            UPDATE retail_stock_balances SET qty = qty + ?, updated_at = now()
+                            UPDATE retail_stock_balances SET qty = qty + ?, avg_cost_minor = ?, updated_at = now()
                              WHERE branch_id = ? AND product_id = ?
-                            """).params(m.qty(), m.branchId(), m.productId()).update();
+                            """).params(m.qty(), average, m.branchId(), m.productId()).update();
             ids[i] = id;
         }
+        remainders.post(businessDate);
         // Issue #412: an item that stock left may now be low at that branch; the check never fails the movement.
         lowStock.afterOut(movements.stream()
                 .filter(m -> m.qty().signum() < 0)
@@ -132,14 +160,165 @@ class JdbcStockLedger implements StockLedger {
         return List.of(ids);
     }
 
+    /** The new average, refused when it would fall below zero or above what a cost may be. */
+    private Quantities.Averaged averaged(UUID productId, String kind, Locked locked, BigDecimal qty, long valueMinor) {
+        Quantities.Averaged a = Quantities.average(locked.qty(), locked.average(), qty, valueMinor);
+        if (a.averageMinor() < 0 && REVALUE.equals(kind)) {
+            // A supplier price credit takes more off this branch's stock than it is carried at now.
+            throw ApiException.rule(
+                    "average_cost_negative",
+                    itemName(productId) + ": this credit would take more off the stock at this branch than it is worth"
+                            + " now, because the stock there is carried at a lower cost. Record a smaller price credit,"
+                            + " or send the goods back to the supplier instead.");
+        }
+        if (a.averageMinor() < 0 && REVALUE_VOID.equals(kind)) {
+            // The void of a landed cost or a price credit takes back the part this branch took, from what it holds now.
+            throw ApiException.rule(
+                    "average_cost_negative",
+                    itemName(productId) + ": taking this cost back out would leave the rest of the stock at this branch"
+                            + " at a cost below zero, because the goods it was added to have been sold there since. It"
+                            + " cannot be voided now.");
+        }
+        if (a.averageMinor() < 0 && "return_to_supplier".equals(kind)) {
+            // Goods sent back leave at their receipt's carrying cost (#199), above what the rest is worth now.
+            throw ApiException.rule(
+                    "average_cost_negative",
+                    itemName(productId) + ": sending this many back at what they were bought for would leave the rest"
+                            + " of the stock at this branch at a cost below zero, because it was sold at a higher average"
+                            + " since. Send back fewer, or ask the supplier for a price credit instead.");
+        }
+        if (a.averageMinor() < 0) {
+            throw ApiException.rule(
+                    "average_cost_negative",
+                    itemName(productId) + ": this would leave the rest of the stock at this branch at a cost below"
+                            + " zero, because some of it was sold or moved at a higher average since. It cannot be done"
+                            + " here. Use Correct the quantity on the stock list, or count the stock.");
+        }
+        if (a.averageMinor() > RetailCatalogue.MAX_AMOUNT_MINOR) {
+            throw ApiException.rule(
+                    "amount_out_of_range", itemName(productId) + ": the average cost is too large to compute.");
+        }
+        return a;
+    }
+
+    /**
+     * What the averages did not carry, by branch (ADR-079): one entry per branch, dated as the movements, between inventory and
+     * purchase rounding. It is keyed by the first movement it covers, so it is posted once, and has its own source type, so a
+     * void that reverses a document's entries never reverses it (the void's own movements re-average and post their own).
+     */
+    private final class Remainders {
+        private final Map<UUID, long[]> amounts = new TreeMap<>();
+        private final Map<UUID, Movement> first = new HashMap<>();
+        private final Map<UUID, UUID> firstId = new HashMap<>();
+        private final Set<UUID> closedOk = new HashSet<>();
+
+        void add(Movement m, UUID movementId, long remainder) {
+            if (remainder == 0) {
+                return;
+            }
+            long[] sum = amounts.computeIfAbsent(m.branchId(), k -> new long[1]);
+            sum[0] = Math.addExact(sum[0], remainder);
+            first.putIfAbsent(m.branchId(), m);
+            firstId.putIfAbsent(m.branchId(), movementId);
+            if ("transfer_in".equals(m.kind())) {
+                // The receipt of goods already on the road to a branch that has closed since (ADR-041).
+                closedOk.add(m.branchId());
+            }
+        }
+
+        void post(LocalDate businessDate) {
+            amounts.forEach((branch, sum) -> {
+                Movement m = first.get(branch);
+                postRemainder(
+                        branch,
+                        businessDate,
+                        sum[0],
+                        m.sourceType(),
+                        m.sourceId(),
+                        firstId.get(branch).toString(),
+                        closedOk.contains(branch));
+            });
+        }
+    }
+
+    private void postRemainder(
+            UUID branch,
+            LocalDate date,
+            long remainder,
+            String sourceType,
+            UUID sourceId,
+            String key,
+            boolean closedBranchOk) {
+        if (remainder == 0) {
+            return;
+        }
+        // Positive: the new average carries less than came in, so purchase rounding takes the rest; negative: more.
+        List<Leg> legs = remainder > 0
+                ? List.of(Leg.debit("purchase_rounding", remainder), Leg.credit("inventory", remainder))
+                : List.of(Leg.debit("inventory", -remainder), Leg.credit("purchase_rounding", -remainder));
+        books.post(new Posting(
+                branch,
+                date,
+                "Average cost",
+                "Average cost rounding (" + sourceType + ")",
+                AVERAGE_COST,
+                sourceId,
+                AVERAGE_COST + ":" + key,
+                legs,
+                closedBranchOk));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public long averageCost(UUID branchId, UUID productId) {
+        return jdbc.sql("""
+                        SELECT coalesce(b.avg_cost_minor, p.cost_minor)
+                          FROM retail_products p
+                          LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = ?
+                         WHERE p.id = ?
+                        """).params(branchId, productId).query(Long.class).single();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void revalue(
+            LocalDate businessDate,
+            UUID branchId,
+            UUID productId,
+            long valueMinor,
+            String sourceType,
+            UUID sourceId,
+            boolean reversal) {
+        if (valueMinor == 0) {
+            return;
+        }
+        Locked locked = lockRow(branchId, productId);
+        Quantities.Averaged a =
+                averaged(productId, reversal ? REVALUE_VOID : REVALUE, locked, BigDecimal.ZERO, valueMinor);
+        jdbc.sql("""
+                        UPDATE retail_stock_balances SET avg_cost_minor = ?, updated_at = now()
+                         WHERE branch_id = ? AND product_id = ?
+                        """).params(a.averageMinor(), branchId, productId).update();
+        postRemainder(
+                branchId,
+                businessDate,
+                a.remainderMinor(),
+                sourceType,
+                sourceId,
+                // A document may revalue one branch and product more than once (two lines of one product), and its
+                // request is already idempotent as a whole, so each revaluation's entry has a key of its own.
+                UUID.randomUUID().toString(),
+                false);
+    }
+
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public BigDecimal lock(UUID branchId, UUID productId) {
         return lockBalance(branchId, productId);
     }
 
-    /** The balance and what customer orders keep of it, read under the row's lock. */
-    private record Locked(BigDecimal qty, BigDecimal reserved) {}
+    /** The balance, what customer orders keep of it and the average cost per base unit, read under the row's lock. */
+    private record Locked(BigDecimal qty, BigDecimal reserved, long average) {}
 
     /** Creates the balance row on first use, then takes its lock for the rest of the transaction. */
     private BigDecimal lockBalance(UUID branchId, UUID productId) {
@@ -147,16 +326,22 @@ class JdbcStockLedger implements StockLedger {
     }
 
     private Locked lockRow(UUID branchId, UUID productId) {
+        // A branch's first row starts at the product's last paid cost, the average of nothing yet (ADR-079).
         jdbc.sql("""
-                        INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id)
-                        VALUES (current_setting('app.tenant_id')::uuid, ?, ?)
+                        INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, avg_cost_minor)
+                        SELECT current_setting('app.tenant_id')::uuid, ?, p.id, p.cost_minor FROM retail_products p WHERE p.id = ?
                         ON CONFLICT (tenant_id, branch_id, product_id) DO NOTHING
                         """).params(branchId, productId).update();
-        return jdbc.sql(
-                        "SELECT qty, reserved_qty FROM retail_stock_balances WHERE branch_id = ? AND product_id = ? FOR UPDATE")
+        return jdbc.sql("""
+                        SELECT qty, reserved_qty, avg_cost_minor FROM retail_stock_balances
+                         WHERE branch_id = ? AND product_id = ? FOR UPDATE
+                        """)
                 .params(branchId, productId)
-                .query((rs, n) -> new Locked(rs.getBigDecimal("qty"), rs.getBigDecimal("reserved_qty")))
-                .single();
+                .query((rs, n) -> new Locked(
+                        rs.getBigDecimal("qty"), rs.getBigDecimal("reserved_qty"), rs.getLong("avg_cost_minor")))
+                .optional()
+                // No row was made: the product does not exist in this business (callers check it first).
+                .orElseThrow(() -> ApiException.rule("unknown_product", "No such product."));
     }
 
     @Override
@@ -301,7 +486,7 @@ class JdbcStockLedger implements StockLedger {
                         .thenComparing(i -> i));
         for (int i : order) {
             HistoricalMovement m = movements.get(i);
-            lockBalance(m.branchId(), m.productId());
+            Locked locked = lockRow(m.branchId(), m.productId());
             UUID id = UUID.randomUUID();
             jdbc.sql("""
                             INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind,
@@ -323,9 +508,11 @@ class JdbcStockLedger implements StockLedger {
                     .param("note", m.note())
                     .update();
             jdbc.sql("""
-                            UPDATE retail_stock_balances SET qty = qty + ?, updated_at = now()
+                            UPDATE retail_stock_balances SET qty = qty + ?, avg_cost_minor = ?, updated_at = now()
                              WHERE branch_id = ? AND product_id = ?
-                            """).params(m.qty(), m.branchId(), m.productId()).update();
+                            """)
+                    .params(m.qty(), historicalAverage(locked, m), m.branchId(), m.productId())
+                    .update();
             ids[i] = id;
         }
         // Issue #412: an item that stock left may now be low at that branch; the check never fails the movement.
@@ -334,6 +521,28 @@ class JdbcStockLedger implements StockLedger {
                 .map(m -> new LowStockAlerts.Touched(m.branchId(), m.productId()))
                 .toList());
         return List.of(ids);
+    }
+
+    /**
+     * ADR-079: history posts nothing, so its movements leave the average alone, apart from the opening balance of an import
+     * ({@code legacy_balance}), which the opening journal values at the cost it carries: into a branch that holds nothing it is
+     * the average; added to stock already held it re-averages with it (never below zero); taking stock away leaves it.
+     */
+    private static long historicalAverage(Locked locked, HistoricalMovement m) {
+        if (!"legacy_balance".equals(m.kind())) {
+            return locked.average();
+        }
+        if (locked.qty().signum() <= 0) {
+            return m.unitCostMinor();
+        }
+        if (m.qty().signum() <= 0) {
+            return locked.average();
+        }
+        long value = Quantities.value(m.qty(), m.unitCostMinor());
+        return Math.max(
+                0,
+                Quantities.average(locked.qty(), locked.average(), m.qty(), value)
+                        .averageMinor());
     }
 
     @Override

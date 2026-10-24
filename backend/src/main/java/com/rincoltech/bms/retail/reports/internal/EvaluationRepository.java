@@ -65,7 +65,7 @@ class EvaluationRepository {
                         + " WHERE s.status = 'completed' AND s.sale_date BETWEEN :from AND :to" + soldBranch
                         + " GROUP BY s.branch_id, l.product_id),"
                         + " stock AS (SELECT b.branch_id, b.product_id, b.qty,"
-                        + " round(b.qty * p.sell_minor) AS at_price, round(b.qty * p.cost_minor) AS at_cost"
+                        + " round(b.qty * p.sell_minor) AS at_price, round(b.qty * b.avg_cost_minor) AS at_cost"
                         + "  FROM retail_stock_balances b JOIN retail_products p"
                         + "    ON p.tenant_id = b.tenant_id AND p.id = b.product_id"
                         + " WHERE b.qty > 0" + stockBranch + "),"

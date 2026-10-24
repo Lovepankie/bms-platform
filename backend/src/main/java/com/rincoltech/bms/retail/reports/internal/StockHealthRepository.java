@@ -195,7 +195,7 @@ class StockHealthRepository {
             return List.of();
         }
         return jdbc.sql(soldCte(branchIds) + " SELECT b.branch_id, count(*) AS items,"
-                        + " sum(round(b.qty * p.sell_minor)) AS at_price, sum(round(b.qty * p.cost_minor)) AS at_cost"
+                        + " sum(round(b.qty * p.sell_minor)) AS at_price, sum(round(b.qty * b.avg_cost_minor)) AS at_cost"
                         + DEAD_FROM + in(branchIds, "b.branch_id") + " GROUP BY b.branch_id ORDER BY b.branch_id")
                 .params(deadParams(branchIds, since, today))
                 .query((rs, n) -> new DeadTotal(
@@ -216,7 +216,7 @@ class StockHealthRepository {
         return jdbc.sql(soldCte(branchIds)
                         + " SELECT b.branch_id, p.id, p.code, p.description,"
                         + " (SELECT u.name FROM retail_units u WHERE u.tenant_id = p.tenant_id AND u.id = p.unit_id) AS unit,"
-                        + " b.qty, round(b.qty * p.sell_minor) AS at_price, round(b.qty * p.cost_minor) AS at_cost"
+                        + " b.qty, round(b.qty * p.sell_minor) AS at_price, round(b.qty * b.avg_cost_minor) AS at_cost"
                         + DEAD_FROM + in(branchIds, "b.branch_id")
                         + " ORDER BY round(b.qty * p.sell_minor) DESC, p.code, b.branch_id, p.id LIMIT :limit")
                 .params(params)
@@ -294,8 +294,8 @@ class StockHealthRepository {
         return jdbc.sql(soldWithLastCte(branchIds)
                         + " SELECT sold.branch_id, p.id, p.code, p.description,"
                         + " (SELECT u.name FROM retail_units u WHERE u.tenant_id = p.tenant_id AND u.id = p.unit_id) AS unit,"
-                        + " b.qty, sold.sold, sold.last_sold, age.days, round(b.qty * p.cost_minor) AS at_cost,"
-                        + " count(*) OVER () AS total, sum(round(b.qty * p.cost_minor)) OVER () AS total_at_cost"
+                        + " b.qty, sold.sold, sold.last_sold, age.days, round(b.qty * b.avg_cost_minor) AS at_cost,"
+                        + " count(*) OVER () AS total, sum(round(b.qty * b.avg_cost_minor)) OVER () AS total_at_cost"
                         + "  FROM sold"
                         + "  JOIN retail_products p ON p.tenant_id = current_setting('app.tenant_id')::uuid AND p.id = sold.product_id"
                         + "  JOIN retail_stock_balances b ON b.tenant_id = p.tenant_id"

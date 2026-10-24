@@ -8,6 +8,10 @@ Proposed (2026-10-05), accepted on merge. Amends one sentence of ADR-001: retail
 Amended (2026-10-06, issue #84): transfers between branches move from reserved to built; see the
 amendment at the end. Decision 3's last sentence is superseded by it.
 
+Amended (2026-10-24, issue #523): decision 6 is superseded by ADR-079 (the moving weighted average cost per smallest unit, kept
+per branch), which takes the place of the record decision 6 called pending ADR-021. The product's `cost_minor` of decision 5 is now
+the last price paid; decision 8's revaluation difference is mostly removed (ADR-079 decision 2).
+
 ## Context
 
 ADR-001 named retail as the second vertical and deferred it. A multi-shop electrical retailer

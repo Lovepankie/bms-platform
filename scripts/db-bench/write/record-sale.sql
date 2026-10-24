@@ -44,13 +44,13 @@ INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty,
     line_total_minor, line_cost_minor)
 VALUES (':l3', current_setting('app.tenant_id')::uuid, ':sale', 3, ':p3', 1, 10000, 8000, 10000, 8000);
 -- Stock (JdbcStockLedger.record): lock each balance, append a movement, move the balance.
-INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id) VALUES (current_setting('app.tenant_id')::uuid, ':branch', ':p1')
+INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, avg_cost_minor) SELECT current_setting('app.tenant_id')::uuid, ':branch', p.id, p.cost_minor FROM retail_products p WHERE p.id = ':p1'
 ON CONFLICT (tenant_id, branch_id, product_id) DO NOTHING;
 SELECT qty FROM retail_stock_balances WHERE branch_id = ':branch' AND product_id = ':p1' FOR UPDATE;
-INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id) VALUES (current_setting('app.tenant_id')::uuid, ':branch', ':p2')
+INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, avg_cost_minor) SELECT current_setting('app.tenant_id')::uuid, ':branch', p.id, p.cost_minor FROM retail_products p WHERE p.id = ':p2'
 ON CONFLICT (tenant_id, branch_id, product_id) DO NOTHING;
 SELECT qty FROM retail_stock_balances WHERE branch_id = ':branch' AND product_id = ':p2' FOR UPDATE;
-INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id) VALUES (current_setting('app.tenant_id')::uuid, ':branch', ':p3')
+INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, avg_cost_minor) SELECT current_setting('app.tenant_id')::uuid, ':branch', p.id, p.cost_minor FROM retail_products p WHERE p.id = ':p3'
 ON CONFLICT (tenant_id, branch_id, product_id) DO NOTHING;
 SELECT qty FROM retail_stock_balances WHERE branch_id = ':branch' AND product_id = ':p3' FOR UPDATE;
 INSERT INTO retail_stock_movements (id, tenant_id, occurred_at, business_date, branch_id, product_id, kind, qty,

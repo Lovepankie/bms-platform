@@ -80,7 +80,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
           <th>Item</th>
           {!phone && !grouping && <th>Category</th>}
           <th className="num">In stock</th>
-          {showCost && <th className="num">Cost</th>}
+          {showCost && <th className="num">Average cost</th>}
           <th className="num">Price</th>
         </tr>
       </thead>
@@ -131,7 +131,7 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
           <th>Item</th>
           <th className="num">Total</th>
           {data.branches.map((b) => <th key={b.id} className="num">{branchName(b)}</th>)}
-          {showCost && <th className="num">Cost</th>}
+          {showCost && <th className="num">Average cost</th>}
           <th className="num">Price</th>
         </tr>
       </thead>
@@ -160,7 +160,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
               </span>
               <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></span>
             </div>
-            {r.sell_minor !== undefined && <p className="hint">{showCost && r.cost_minor !== undefined ? `Cost ${money(r.cost_minor)}, price` : 'Price'} {money(r.sell_minor)} each</p>}
+            {r.sell_minor !== undefined && <p className="hint">{showCost && r.cost_minor !== undefined ? `Average cost ${money(r.cost_minor)}, price` : 'Price'} {money(r.sell_minor)} each</p>}
             <button type="button" className="btn-sm" aria-expanded={expanded} onClick={() => setOpen({ ...open, [id]: !expanded })}>
               {expanded ? 'Hide branches' : 'Show branches'}
             </button>

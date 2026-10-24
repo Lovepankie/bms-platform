@@ -12,7 +12,6 @@ import com.rincoltech.bms.kernel.Cursor;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
-import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -374,10 +373,8 @@ class StockService {
                 recount.add(line.code());
                 continue;
             }
-            long cost = catalogue
-                    .find(line.productId())
-                    .map(ProductSnapshot::costMinor)
-                    .orElseThrow();
+            // ADR-079: a count's difference is valued at the branch's average, read under the balance lock just taken.
+            long cost = ledger.averageCost(s.branchId(), line.productId());
             repo.commitLine(id, line.productId(), variance, cost);
             if (variance.signum() == 0) {
                 continue;

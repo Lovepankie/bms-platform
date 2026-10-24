@@ -339,6 +339,15 @@ class SalesService {
         LocalDate dueDate = r.dueDate() != null || account == null ? r.dueDate() : account.dueDate(saleDate);
         String currency = tenant.profile().currency();
         Principal principal = CurrentPrincipal.require();
+        // ADR-079: the balance rows are locked, in product order, before the lines read the branch's average cost, so a
+        // delivery committing meanwhile cannot leave the sale costed at the average it replaced.
+        r.lines().stream()
+                .map(SaleLineRequest::productId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .sorted()
+                .filter(id -> catalogue.find(id).isPresent())
+                .forEach(id -> stock.lock(branch, id));
         Priced priced = priceLines(
                 branch, saleDate, buyer, r.priceListId(), r.lines(), problems, agreements, clashes, pricesAsOf);
         Chosen list = priced.list();
@@ -749,6 +758,8 @@ class SalesService {
                 linePricing =
                         new LinePricing(source, d.listId(), d.breakMinQty(), d.priceMinor(), reason, overriddenBy);
             }
+            // ADR-079: the line keeps the branch's average cost per base unit at the moment of sale.
+            long cost = stock.averageCost(branch, p.id());
             if (pack != null) {
                 BigDecimal baseQty = unit.baseQty();
                 long total = Quantities.value(l.qty(), price);
@@ -765,9 +776,9 @@ class SalesService {
                         p.id(),
                         baseQty,
                         perBase,
-                        p.costMinor(),
+                        cost,
                         total,
-                        Quantities.value(baseQty, p.costMinor()),
+                        Quantities.value(baseQty, cost),
                         pack.unitId(),
                         l.qty(),
                         price,
@@ -781,9 +792,9 @@ class SalesService {
                     p.id(),
                     l.qty(),
                     price,
-                    p.costMinor(),
+                    cost,
                     Quantities.value(l.qty(), price),
-                    Quantities.value(l.qty(), p.costMinor()),
+                    Quantities.value(l.qty(), cost),
                     null,
                     null,
                     null,

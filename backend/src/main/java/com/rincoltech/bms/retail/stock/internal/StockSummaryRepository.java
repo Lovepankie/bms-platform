@@ -51,7 +51,7 @@ class StockSummaryRepository {
         sql.append(" coalesce(sum(round(coalesce(b.qty, 0) * p.sell_minor)), 0) AS value_minor,");
         sql.append(
                 spec.withCost()
-                        ? " coalesce(sum(round(coalesce(b.qty, 0) * p.cost_minor)), 0) AS cost_minor"
+                        ? " coalesce(sum(round(coalesce(b.qty, 0) * coalesce(b.avg_cost_minor, 0))), 0) AS cost_minor"
                         : " 0 AS cost_minor");
         sql.append(" FROM branches br CROSS JOIN retail_products p JOIN retail_categories c ON c.id = p.category_id");
         sql.append(" LEFT JOIN retail_stock_balances b ON b.branch_id = br.id AND b.product_id = p.id");

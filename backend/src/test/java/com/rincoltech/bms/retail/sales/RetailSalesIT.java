@@ -110,8 +110,10 @@ class RetailSalesIT extends IntegrationTest {
         assertThat(sale.get("lines").get(0).get("unit_price_minor").asLong()).isEqualTo(2_000);
         assertThat(sale.get("lines").get(0).get("unit_cost_minor").asLong()).isEqualTo(1_500);
         assertThat(sale.get("profit_minor").asLong()).isEqualTo(500);
+        // ADR-079: the edited cost is the last price paid.
+        // The next sale is costed at the branch's average, still 1,500.
         JsonNode next = api.sell(t.headOffice(), "cash", product, "1").getBody();
-        assertThat(next.get("profit_minor").asLong()).isEqualTo(600);
+        assertThat(next.get("profit_minor").asLong()).isEqualTo(900);
     }
 
     /** Chapter 7 section 7.8: a key is required, a retry replays, a reused key with another body is refused. */

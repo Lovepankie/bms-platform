@@ -72,4 +72,31 @@ public final class Quantities {
                 .divide(baseQty, 0, RoundingMode.HALF_UP)
                 .longValueExact();
     }
+
+    // ---- Moving weighted average cost (ADR-079, issue #523) ------------------------------------ A branch holds each
+    // product at one average cost per base unit, in whole minor units. What does not divide exactly is the remainder:
+    // the value that came in less the value the new average gives the new quantity, posted to purchase rounding.
+
+    /** The average after a movement, and the remainder of the rounding (positive: less is carried than came in). */
+    public record Averaged(long averageMinor, long remainderMinor) {}
+
+    /**
+     * The average after {@code qty} base units (signed; zero for a change of value alone) worth {@code valueMinor} join
+     * {@code onHand} units at {@code averageMinor}: (on hand x average + value) / (on hand + qty), rounded half up. Stock coming
+     * into a branch that holds none (or less than none, from imported history) takes the delivery's own cost per unit; when
+     * nothing is left the average is kept.
+     */
+    public static Averaged average(BigDecimal onHand, long averageMinor, BigDecimal qty, long valueMinor) {
+        BigDecimal after = onHand.add(qty);
+        long total = Math.addExact(value(onHand, averageMinor), valueMinor);
+        long next;
+        if (qty.signum() > 0 && onHand.signum() <= 0) {
+            next = perBase(valueMinor, qty);
+        } else if (after.signum() > 0) {
+            next = perBase(total, after);
+        } else {
+            next = averageMinor;
+        }
+        return new Averaged(next, Math.subtractExact(total, value(after, next)));
+    }
 }

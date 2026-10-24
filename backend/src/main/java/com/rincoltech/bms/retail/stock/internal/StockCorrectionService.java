@@ -103,8 +103,7 @@ class StockCorrectionService {
                             + ". Look at the list again and type the right quantity.");
         }
         // A stock-take that is not committed yet measures its variance from the shelf as it stood when it was made, so
-        // a
-        // correction now would be counted a second time when it is committed.
+        // a correction now would be counted a second time when it is committed.
         if (repo.draftStocktakeCovers(branch, product.id())) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
@@ -124,15 +123,16 @@ class StockCorrectionService {
         String words = ("entry_mistake".equals(r.reasonCode()) ? "Entry mistake" : "Miscount")
                 + (note == null ? "" : ": " + note);
         LocalDate today = clock.today(tenant.profile().timezone());
-        long cost = product.costMinor();
+        // ADR-079: a correction moves stock at the branch's average, so the average stays as it is.
+        // It is read under the balance lock taken above (ledger.lock): no delivery can change it first.
+        long cost = ledger.averageCost(branch, product.id());
         UUID movementId = ledger.record(
                         today,
                         List.of(new Movement(
                                 branch, product.id(), "adjustment", difference, cost, SOURCE, id, null, null, words)))
                 .getFirst();
         // The value moves between inventory and the shrinkage account, as a stock-take's variance does; the app's
-        // reports
-        // read movements by source, so this entry is the only place a correction shares an account with a loss.
+        // reports read movements by source, so this entry is the only place a correction shares an account with a loss.
         long value = Quantities.value(difference.abs(), cost);
         Optional<PostedEntry> entry = books.post(new Posting(
                 branch,

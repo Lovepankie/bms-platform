@@ -54,8 +54,12 @@ class ReportsRepository {
         }
         StringBuilder sql = new StringBuilder(
                 "SELECT q.branch_id, q.product_id, p.code, p.description, p.category_id, c.name AS category,"
-                        + " u.name AS unit, q.qty, p.cost_minor, p.sell_minor FROM (" + quantities + ") q"
+                        + " u.name AS unit, q.qty, coalesce(a.avg_cost_minor, p.cost_minor) AS cost_minor, p.sell_minor"
+                        + " FROM (" + quantities + ") q"
                         + " JOIN retail_products p ON p.id = q.product_id JOIN retail_units u ON u.id = p.unit_id"
+                        // ADR-079: each branch's average cost now; a valuation as of an earlier date reads it too.
+                        + " LEFT JOIN retail_stock_balances a ON a.tenant_id = p.tenant_id AND a.branch_id = q.branch_id"
+                        + " AND a.product_id = q.product_id"
                         + " JOIN retail_categories c ON c.id = p.category_id"
                         + " WHERE q.qty <> 0");
         if (branchIds != null) {

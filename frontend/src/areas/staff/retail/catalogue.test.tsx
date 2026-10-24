@@ -85,10 +85,11 @@ describe('suppliers and credit buyers', () => {
 describe('items and prices', () => {
   it('shows cost on an item card only when asked to', () => {
     const withCost = renderToString(<ul><ProductCard product={bulb} showCost canPrice onEdit={() => undefined} onPrice={() => undefined} /></ul>);
-    expect(withCost).toContain('bought at UGX 3,500');
+    // ADR-079: the item's own buying price is the last one paid; profit uses each shop's average.
+    expect(withCost).toContain('last paid UGX 3,500');
     expect(withCost).toContain('Change price');
     const without = renderToString(<ul><ProductCard product={{ ...bulb, cost_minor: undefined }} showCost={false} canPrice={false} onEdit={() => undefined} onPrice={() => undefined} /></ul>);
-    expect(without).not.toMatch(/cost|bought at/i);
+    expect(without).not.toMatch(/cost|bought at|last paid/i);
     expect(without).not.toContain('Change price');
   });
 
@@ -115,8 +116,8 @@ describe('items and prices', () => {
     const noCost = ['retail.catalogue.manage', 'retail.stock.read', 'retail.price.edit'];
     const html = page('admin', <PriceForm product={{ ...bulb, cost_minor: undefined }} onSaved={() => undefined} onCancel={() => undefined} />, noCost);
     expect(html).toContain('New selling price');
-    expect(html).not.toContain('New buying price');
-    expect(html).not.toMatch(/cost|buying price|bought at/i);
+    expect(html).not.toContain('Last paid');
+    expect(html).not.toMatch(/cost|buying price|bought at|last paid/i);
     // The real server sends null where there is no earlier price (the first price) and no reason.
     const first = { id: 'h0', at: '2026-10-01T05:00:00Z', source: 'initial', old_sell_minor: null, new_sell_minor: 5000, old_cost_minor: null, new_cost_minor: 3500, reason: null } as unknown as PriceChange;
     expect(renderToString(<PriceHistory changes={[first]} />)).toContain('Selling price UGX 5,000, buying price UGX 3,500');
@@ -125,10 +126,11 @@ describe('items and prices', () => {
     expect(list).toContain('Changed by hand');
     expect(list).toContain('Reason: Test supplier increase');
     expect(list).not.toMatch(/cost|buying price|bought at/i);
-    expect(page('admin', <PriceForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />)).toContain('New buying price');
-    expect(html).not.toContain('bought at');
+    expect(page('admin', <PriceForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />)).toContain('Last paid');
+    expect(html).not.toContain('last paid');
     const priced = page('admin', <PriceForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />);
-    expect(priced.indexOf('New buying price')).toBeLessThan(priced.indexOf('New selling price'));
+    expect(priced.indexOf('Last paid')).toBeLessThan(priced.indexOf('New selling price'));
+    expect(priced).toContain('average buying price of the stock in each shop');
   });
 
   it('hints, without blocking, when the price is not above a known cost', () => {

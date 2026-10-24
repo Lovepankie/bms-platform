@@ -1155,4 +1155,98 @@ class RetailLandedCostIT extends LandedCostTestBase {
                         t.tenantId()))
                 .isEqualTo(1);
     }
+
+    /**
+     * ADR-079: a landed cost spread over two branches is taken back on void from exactly the branches that took it, by the
+     * parts recorded when it was posted, so each branch's inventory account still equals its stock at its own average after
+     * the other branch sold some of the product in between.
+     */
+    @Test
+    void aVoidTakesTheLandedCostBackFromTheBranchesThatTookIt() {
+        receive(br2, product, "10", 100);
+        JsonNode lot = receive(hq, product, "10", 100);
+        // 1,000 for the 10 of the lot, spread over what each branch holds: 500 each, both averages 150.
+        JsonNode doc = landed(freight("FWD-SPREAD", 1_000, lineId(lot)));
+        assertThat(doc.get("lines").get(0).get("to_inventory_minor").asLong()).isEqualTo(1_000);
+        assertThat(valuation(hq, product)).isEqualTo(1_500);
+        assertThat(valuation(br2, product)).isEqualTo(1_500);
+        assertThat(api.sell(br2, "cash", product, "3").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        assertThat(voidLanded(uuid(doc, "id")).getStatusCode()).isEqualTo(HttpStatus.OK);
+        // Head office gives back its 500 (10 at 100 again).
+        // Branch two gives back its 500 from the 7 left: 1,050 less 500 is 550, carried as 79 each.
+        assertThat(valuation(hq, product)).isEqualTo(1_000);
+        assertThat(balance("inventory", hq)).isEqualTo(valuation(hq, product));
+        assertThat(valuation(br2, product)).isEqualTo(7 * 79);
+        assertThat(balance("inventory", br2)).isEqualTo(valuation(br2, product));
+        assertBooksBalance();
+    }
+
+    /** ADR-079: when a branch has since sold most of what took the cost, taking its part back is refused in plain words. */
+    @Test
+    void aVoidThatWouldLeaveABranchBelowZeroIsRefused() {
+        receive(br2, product, "10", 100);
+        JsonNode lot = receive(hq, product, "10", 100);
+        JsonNode doc = landed(freight("FWD-SOLD", 1_000, lineId(lot)));
+        assertThat(api.sell(br2, "cash", product, "8").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<JsonNode> refused = voidLanded(uuid(doc, "id"));
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("average_cost_negative");
+        assertThat(refused.getBody().get("detail").asString()).contains("cannot be voided");
+        assertThat(landedCost(uuid(doc, "id")).get("status").asString()).isEqualTo("posted");
+        assertThat(balance("inventory", br2)).isEqualTo(valuation(br2, product));
+        assertBooksBalance();
+    }
+
+    /**
+     * ADR-079: the void of a landed cost over two products racing a transfer of both between the branches that took its
+     * parts. Both take their balance locks in branch and product order, after any product locks, so neither deadlocks: both
+     * succeed, in either order, and each branch's inventory account still equals its stock at its own average.
+     */
+    @Test
+    void aTwoProductVoidRacingATransferOfBothNeitherDeadlocksNorDrifts() throws Exception {
+        List<UUID> prods = new ArrayList<>();
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 5; round++) {
+                UUID p1 = api.product("LC-R1-" + round, 100, 400);
+                UUID p2 = api.product("LC-R2-" + round, 150, 600);
+                prods.add(p1);
+                prods.add(p2);
+                receive(br2, p1, "10", 100);
+                receive(br2, p2, "10", 150);
+                JsonNode a = receive(hq, p1, "10", 100);
+                JsonNode b = receive(hq, p2, "10", 150);
+                JsonNode doc = landed(freight("FWD-RACE-" + round, 1_000, lineId(a), lineId(b)));
+                Map<String, Object> both = new LinkedHashMap<>();
+                both.put("from_branch_id", br2);
+                both.put("to_branch_id", hq);
+                both.put("lines", List.of(Map.of("product_id", p1, "qty", "2"), Map.of("product_id", p2, "qty", "2")));
+                CountDownLatch go = new CountDownLatch(1);
+                Future<ResponseEntity<JsonNode>> voided = pool.submit(() -> {
+                    go.await();
+                    return voidLanded(uuid(doc, "id"));
+                });
+                Future<ResponseEntity<JsonNode>> moved = pool.submit(() -> {
+                    go.await();
+                    return keyed("/transfers", both, ADMIN);
+                });
+                go.countDown();
+                ResponseEntity<JsonNode> v = voided.get(60, TimeUnit.SECONDS);
+                ResponseEntity<JsonNode> m = moved.get(60, TimeUnit.SECONDS);
+                assertThat(v.getStatusCode()).as("%s", v.getBody()).isEqualTo(HttpStatus.OK);
+                assertThat(m.getStatusCode()).as("%s", m.getBody()).isEqualTo(HttpStatus.CREATED);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        for (UUID branch : List.of(hq, br2)) {
+            assertThat(balance("inventory", branch))
+                    .isEqualTo(prods.stream()
+                            .mapToLong(prod -> valuation(branch, prod))
+                            .sum());
+        }
+        assertBooksBalance();
+    }
 }

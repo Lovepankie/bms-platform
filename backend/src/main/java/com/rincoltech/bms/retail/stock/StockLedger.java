@@ -13,6 +13,12 @@ import java.util.UUID;
  * the sum of its movements. Balance rows are locked in branch and product order, so concurrent
  * multi-line events cannot deadlock.
  *
+ * <p>Each balance row also holds the branch's moving weighted average cost per base unit (ADR-079). A movement whose cost is
+ * the average leaves it as it is; any other movement re-averages it under the same lock: (on hand x average + quantity x
+ * cost) / (on hand + quantity), in whole minor units. What the rounding leaves over is posted, per branch, to purchase
+ * rounding against inventory (source {@code retail.average_cost}), so the ledger's inventory follows the valuation. A movement
+ * that would leave the rest of the stock at a cost below zero is refused with 422 {@code average_cost_negative}.
+ *
  * <p>A {@code sale}, {@code usage}, {@code damage}, {@code transfer_out} or {@code return_to_supplier} movement that would take a
  * balance below zero is always refused with 422 {@code insufficient_stock}; there is no setting to allow it (ADR-020
  * decision 4). Imports ({@code legacy_balance}) and stock-take adjustments are not guarded. A guarded movement also may not take a
@@ -80,12 +86,38 @@ public interface StockLedger {
     BigDecimal lock(UUID branchId, UUID productId);
 
     /**
+     * ADR-079: the moving weighted average cost of one base unit of the product at the branch, in minor units, the cost every
+     * movement out of the branch at the average (a sale, usage, damage, a stock correction or count, a transfer out) takes.
+     * For a branch that has never held the product it is the product's last paid cost. Read without a lock; a caller that must
+     * not see it change takes {@link #lock} first.
+     */
+    long averageCost(UUID branchId, UUID productId);
+
+    /**
+     * ADR-079: a change of value with no quantity (a landed cost or a supplier price credit spread over the units a branch
+     * holds) re-averages the branch's cost, under the balance row's lock, in the caller's transaction. The caller posts
+     * {@code valueMinor} to inventory; what the new average does not carry is posted to purchase rounding. A change that would
+     * take the average below zero is refused with 422 {@code average_cost_negative}, in words for the document or, with
+     * {@code reversal}, for its void.
+     */
+    void revalue(
+            LocalDate businessDate,
+            UUID branchId,
+            UUID productId,
+            long valueMinor,
+            String sourceType,
+            UUID sourceId,
+            boolean reversal);
+
+    /**
      * @param kind {@code opening}, {@code purchase}, {@code sale}, {@code usage}, {@code damage},
      *     {@code adjustment}, {@code return}, {@code legacy_balance}, {@code transfer_out}, {@code
      *     transfer_in} or {@code return_to_supplier} (goods sent back against a supplier credit note, negative and
      *     guarded like a sale); a transfer kind is linked to the transfer named by {@code sourceId}
      * @param qty signed: negative for stock leaving the branch
-     * @param unitCostMinor the product's cost when the movement happens (valuation snapshot)
+     * @param unitCostMinor the cost of one base unit the movement carries (valuation snapshot): for a movement out at the
+     *     average, {@link #averageCost}; for stock coming in, what it cost, which re-averages the branch (ADR-079); for the
+     *     undoing of an earlier movement, that movement's cost, which re-averages what stays
      */
     record Movement(
             UUID branchId,

@@ -243,9 +243,15 @@ class RlsIsolationIT {
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), t.headOffice(), retailProduct, openingMovement, user)
                 .update();
-        owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, 2)")
+        owner.sql(
+                        "INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty, avg_cost_minor) VALUES (?, ?, ?, 2, 100)")
                 .params(t.tenantId(), t.headOffice(), retailProduct)
                 .update();
+        // The part of a landed cost line that went into a branch's average (V94, ADR-079).
+        owner.sql("""
+                        INSERT INTO retail_cost_spreads (tenant_id, line_id, branch_id, product_id, inventory_minor)
+                        VALUES (?, gen_random_uuid(), ?, ?, 100)
+                        """).params(t.tenantId(), t.headOffice(), retailProduct).update();
         UUID stocktake = UUID.randomUUID();
         owner.sql(
                         "INSERT INTO retail_stocktakes (id, tenant_id, branch_id, status, created_by) VALUES (?, ?, ?, 'draft', ?)")

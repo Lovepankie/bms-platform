@@ -141,6 +141,7 @@ class LocationService {
         List<ProductTotal> page = ranked.stream().map(Search.Ranked::row).toList();
         List<UUID> productIds = page.stream().map(ProductTotal::id).toList();
         Map<UUID, Map<UUID, BigDecimal>> held = stockRepo.balances(productIds, ids);
+        Map<UUID, Map<UUID, Long>> averages = stockRepo.averages(productIds, ids);
         Map<UUID, OnTheWay> way = repo.onTheWay(productIds, ids);
         List<BranchRole> present =
                 columns.stream().map(b -> role.get(b.id())).distinct().sorted().toList();
@@ -156,7 +157,9 @@ class LocationService {
                 BigDecimal q = mine.getOrDefault(b.id(), BigDecimal.ZERO);
                 bySubtotal.merge(role.get(b.id()), q, BigDecimal::add);
                 boolean mayCost = principal.may(PROFIT_READ, b.id());
-                Long branchValue = mayCost ? Quantities.value(q, p.costMinor()) : null;
+                // ADR-079: each branch's stock at that branch's average cost.
+                long average = averages.getOrDefault(p.id(), Map.of()).getOrDefault(b.id(), p.costMinor());
+                Long branchValue = mayCost ? Quantities.value(q, average) : null;
                 if (branchValue != null) {
                     value = Math.addExact(value, branchValue);
                 }

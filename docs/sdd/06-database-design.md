@@ -1967,7 +1967,7 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | `name_key` | text, generated stored | `bms_name_key(description)` (V63, issue #352): the description folded to lower case without accents (`bms_fold`, V40) with every run of spaces and punctuation collapsed to one space and the ends trimmed. Indexed on `(tenant_id, name_key)`; the application refuses a second product of the same unit with the same key (422 `duplicate_product_name`, ADR-044), it is not a unique index because an administrator may add one anyway |
 | `duplicate_reason` | varchar(300), null | Why an administrator added a product whose name another product of the same unit has (V63); null otherwise |
 | `category_id`, `unit_id` | uuid | Composite FKs to `retail_categories`, `retail_units` |
-| `cost_minor`, `sell_minor` | bigint >= 0 | The current prices. Changed only by the statement that also writes `retail_price_history` (ADR-020 decision 5) |
+| `cost_minor`, `sell_minor` | bigint >= 0 | The current prices; `cost_minor` is the last price paid per base unit (Last paid), used to set prices and as a branch's first average, never to value stock or cost a sale (ADR-079). Changed only by the statement that also writes `retail_price_history` (ADR-020 decision 5) |
 | `currency` | char(3) | The tenant currency at creation |
 | `active` | boolean | Inactive products stay in history and stock views |
 
@@ -2040,7 +2040,7 @@ Imported history (sales, purchases, adjustments, returns, usage, legacy balances
 | `branch_id`, `product_id` | uuid | Composite FKs |
 | `kind` | text | `opening`, `purchase`, `return`, `transfer_in` (positive); `sale`, `usage`, `damage`, `transfer_out` (negative); `adjustment`, `legacy_balance` (either sign). CHECK on the sign |
 | `qty` | numeric(14,3) | Signed, never zero |
-| `unit_cost_minor` | bigint | The product's cost at the time: the valuation snapshot |
+| `unit_cost_minor` | bigint | The cost per base unit the movement carries: the branch's average for stock leaving at the average, what it cost for stock coming in (ADR-079) |
 | `source_type`, `source_id`, `source_line_id` | | The document that wrote it: `retail.sale`, `retail.sale_void`, `retail.stocktake`, the R3 sources, `retail.transfer` and `retail.transfer_void` (source id the transfer, line id its line), `retail.purchase_void` (source id the restock voided, an `adjustment` per movement of the restock, V63, issue #351) and `retail.stock_correction` (source id the correction, one `adjustment`; the reports that count shrinkage read `retail.stocktake` only, ADR-044) |
 | `reverses_movement_id` | uuid | Set on a void's `return`, and on a transfer void's opposite movement; unique, so a movement is reversed at most once |
 | `transfer_id` | uuid | The transfer a `transfer_out` or `transfer_in` belongs to, and only on those kinds (CHECK `retail_stock_movements_transfer_link`, V22); composite FK to `retail_transfers`, checked at commit because the movements are written under their balance locks before the header |
@@ -2055,7 +2055,15 @@ instant range so this index applies (section 6.12); `(tenant_id, transfer_id)` p
 
 ### `retail_stock_balances` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
-Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`. Written only by
+Primary key `(tenant_id, branch_id, product_id)`, `qty numeric(14,3)`, `updated_at`, and (V94, ADR-079, issue #523)
+`avg_cost_minor bigint` (0 to 10^13): the moving weighted average cost of one base unit at the branch. A new row starts at the
+product's `cost_minor`; a movement at another cost than the average re-averages it under the row's lock, a movement at the average
+leaves it, and the rounding remainder posts per branch to purchase rounding (source `retail.average_cost`). V94 set it to the
+product's cost on every row that existed; a row inserted without it starts at the product's `cost_minor` (trigger
+`retail_stock_balances_avg_default`, in place of a default). Every valuation reads a balance times its own row's
+average. The part of a landed cost or supplier price credit line that went into each branch's average is kept in
+`retail_cost_spreads` (`line_id`, `branch_id`, `product_id`, `inventory_minor > 0`; forced RLS, append-only, V94), so the void takes
+back exactly those parts. Written only by
 `StockLedger` in the transaction of each movement, under the row's lock (`SELECT ... FOR UPDATE`,
 taken in branch and product order). Product rows are locked only by restocks and price edits, with
 `FOR NO KEY UPDATE` (see purchases below). The nightly job `retail.stock-reconciliation` compares each row
@@ -2090,7 +2098,7 @@ every role (`reject_mutation`). V22 allowed the void only; V38 replaced the trig
 ### `retail_transfer_lines` (RLS; append-only except one column, `bms_app` SELECT, INSERT, UPDATE of `received_qty`)
 
 `transfer_id`, `line_no`, `product_id`, `qty numeric(14,3)` (positive), `unit_cost_minor` (the
-source's cost when moved, at most 10^13) and `line_cost_minor`. One line per product per transfer
+source branch's average cost when moved, ADR-079, at most 10^13) and `line_cost_minor`. One line per product per transfer
 (`UNIQUE (transfer_id, product_id)`). The quantities that moved are the movements themselves
 (`source_line_id` the line). `received_qty numeric(14,3)` (V38, null until a receipt, then at least
 zero and at most `qty`, CHECK `retail_transfer_lines_received_qty_chk`) is set once, by the receipt,
@@ -2176,7 +2184,8 @@ Indexes: `(tenant_id, branch_id, sale_date, created_at, id)` for a branch's list
 ### `retail_sale_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
 `line_no`, `product_id`, `qty numeric(14,3) > 0`, and the snapshots `unit_price_minor` and
-`unit_cost_minor` with `line_total_minor` and `line_cost_minor` (each rounded half up once). Profit
+`unit_cost_minor` (the branch's average cost per base unit at the moment of sale, ADR-079) with `line_total_minor` and
+`line_cost_minor` (each rounded half up once). Profit
 is computed from these, never from the product's current prices (ADR-020 decision 5). Index
 `(tenant_id, sale_id) INCLUDE (line_total_minor, line_cost_minor)` (V26): a list page loads the lines
 of all its sales in one statement, and the daily profit sums them without reading the heap.
@@ -2206,8 +2215,8 @@ nothing was committed and the idempotency key rolled back, so the same request m
 ### `retail_usage_reports`, `retail_usage_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
 A report: `branch_id`, `kind` (`used`, `damaged`), `reason`, `occurred_on`, `cost_total_minor`,
-`journal_entry_id`. A line: `product_id`, `qty > 0`, `unit_cost_minor` (the product's cost at the
-time) and `line_cost_minor`. Each line writes a `usage` or `damage` movement.
+`journal_entry_id`. A line: `product_id`, `qty > 0`, `unit_cost_minor` (the branch's average cost at the
+time, ADR-079) and `line_cost_minor`. Each line writes a `usage` or `damage` movement.
 
 ### `retail_sale_payments` (RLS; append-only, `bms_app` SELECT, INSERT)
 

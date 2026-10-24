@@ -644,10 +644,12 @@ class RetailUnitsIT extends IntegrationTest {
                         .get("cost_minor")
                         .asLong())
                 .isEqualTo(84);
-        // 1,200 / 12 = 100 exactly: no rounding leg at all.
+        // 1,200 / 12 = 100 exactly: no rounding leg in the restock's entry. ADR-079: the branch's average becomes
+        // (3,024 + 2,400) / 60 = 90.4, carried as 90 (5,400), so the average's own entry puts 24 to purchase rounding.
         ResponseEntity<JsonNode> exact = restock(t.headOffice(), pen, carton, "2", 1_200);
         assertThat(journal(UUID.fromString(exact.getBody().get("id").asString())))
-                .containsExactlyInAnyOrder("inventory 2400 0", "cash_on_hand 0 2400");
+                .containsExactlyInAnyOrder(
+                        "inventory 2400 0", "cash_on_hand 0 2400", "purchase_rounding 24 0", "inventory 0 24");
         assertThat(stock(t.headOffice(), pen)).isEqualTo("60.000");
         // A credit restock owes the amount as entered.
         UUID supplier = RetailTestSupport.id(api.post("/suppliers", Map.of("name", "Test Supplier 01"), ADMIN));
@@ -670,7 +672,13 @@ class RetailUnitsIT extends IntegrationTest {
                 api.postKeyed("/purchases", body, ADMIN, "*", UUID.randomUUID().toString());
         assertThat(credit.getStatusCode()).as("%s", credit.getBody()).isEqualTo(HttpStatus.CREATED);
         assertThat(journal(UUID.fromString(credit.getBody().get("id").asString())))
-                .containsExactlyInAnyOrder("inventory 996 0", "purchase_rounding 4 0", "trade_creditors 0 1000");
+                .containsExactlyInAnyOrder(
+                        "inventory 996 0",
+                        "purchase_rounding 4 0",
+                        "trade_creditors 0 1000",
+                        // ADR-079: (5,400 + 996) / 72 = 88.8, carried as 89 (6,408): 12 more than came in.
+                        "inventory 12 0",
+                        "purchase_rounding 0 12");
     }
 
     @Test

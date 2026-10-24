@@ -64,7 +64,7 @@ class LocationRepository {
     /** Every non-zero balance of the given branches with the product's current cost (never empty). */
     List<Holding> holdings(List<UUID> branchIds) {
         return jdbc.sql("""
-                        SELECT b.branch_id, b.product_id, b.qty, p.cost_minor
+                        SELECT b.branch_id, b.product_id, b.qty, b.avg_cost_minor AS cost_minor
                           FROM retail_stock_balances b JOIN retail_products p ON p.id = b.product_id
                          WHERE b.qty <> 0 AND b.branch_id IN (:branchIds)
                         """)

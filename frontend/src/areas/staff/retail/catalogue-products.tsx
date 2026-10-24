@@ -83,7 +83,7 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extr
       <VariantNote product={product} />
       <p>
         Sells at <strong>{money(product.sell_minor ?? 0)}</strong>
-        {showCost && product.cost_minor !== undefined && <>, bought at {money(product.cost_minor)}</>}
+        {showCost && product.cost_minor !== undefined && <>, last paid {money(product.cost_minor)}</>}
       </p>
       <p className="cluster">
         <button type="button" className="btn-sm" onClick={onEdit} aria-label={`Edit ${product.description}`}>Edit</button>
@@ -313,11 +313,12 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
     <>
       <form onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate(); }}>
         <h2>Change the price of {product.description}</h2>
-        <p>Now sells at <strong>{money(product.sell_minor ?? 0)}</strong>{profit && product.cost_minor !== undefined && <>, bought at {money(product.cost_minor)}</>}.</p>
+        <p>Now sells at <strong>{money(product.sell_minor ?? 0)}</strong>{profit && product.cost_minor !== undefined && <>, last paid {money(product.cost_minor)}</>}.</p>
         {profit && (
           <>
-            <label htmlFor="price-cost">New buying price ({RETAIL_CURRENCY})</label>
+            <label htmlFor="price-cost">Last paid ({RETAIL_CURRENCY})</label>
             <input id="price-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-invalid={costMinor === null} autoComplete="off" />
+            <p className="hint">The last price you paid for one, to help set the selling price. Profit uses the average buying price of the stock in each shop, which restocks keep up to date.</p>
           </>
         )}
         <label htmlFor="price-sell">New selling price ({RETAIL_CURRENCY})</label>

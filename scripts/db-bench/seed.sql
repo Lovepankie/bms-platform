@@ -320,9 +320,10 @@ INSERT INTO retail_stock_movements (id, tenant_id, created_at, occurred_at, busi
                                     transfer_id)
 SELECT * FROM bmove ORDER BY created_at;
 
-INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty, updated_at)
-SELECT tenant_id, branch_id, product_id, sum(qty), max(created_at)
-  FROM bmove GROUP BY tenant_id, branch_id, product_id;
+INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty, updated_at, avg_cost_minor)
+SELECT m.tenant_id, m.branch_id, m.product_id, sum(m.qty), max(m.created_at), min(p.cost_minor)
+  FROM bmove m JOIN retail_products p ON p.tenant_id = m.tenant_id AND p.id = m.product_id
+ GROUP BY m.tenant_id, m.branch_id, m.product_id;
 
 -- Stock-takes: monthly per branch, 100 counted products each.
 INSERT INTO retail_stocktakes (id, tenant_id, created_at, branch_id, status, created_by, committed_by, committed_at)

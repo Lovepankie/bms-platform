@@ -451,7 +451,7 @@ line with the remainder on the line with the largest value, so the parts add exa
 
 - The allocation raises the receipt lines' landed unit cost. The product's cost is set to the
   landed unit cost with a price history row (`source` = `receipt`), by the existing rule that the
-  latest receipt wins (ADR-020 decision 5), under the guard below. Weighted average cost stays pending (pending ADR-021).
+  latest receipt wins (ADR-020 decision 5), under the guard below. Weighted average cost stays pending (pending ADR-021; since settled by ADR-079, issue #523).
 - Posting: debit inventory, credit trade creditors (the carrier or agent as supplier) for the
   allocated amount.
 - **Cost update guard.** The product's cost is changed by the allocation only when this receipt is
@@ -979,7 +979,7 @@ Answers written after one pass looking for what breaks.
 
 ## 16. Deliberately deferred
 
-Weighted average cost (pending ADR-021); spending an unapplied supplier credit on a later invoice and a cash refund from a supplier; tiered or mix-and-match quantity breaks across lines;
+Weighted average cost (pending ADR-021, since built: ADR-079, issue #523); spending an unapplied supplier credit on a later invoice and a cash refund from a supplier; tiered or mix-and-match quantity breaks across lines;
 promotions and coupons; tax and VAT handling on documents (the module has no tax model today);
 unallocated customer deposits; server-side PDFs (documents
 follow-up, issue #120); sending documents by message or email; serial or batch tracking and expiry;

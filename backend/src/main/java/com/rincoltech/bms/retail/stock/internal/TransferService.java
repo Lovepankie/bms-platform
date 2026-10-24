@@ -153,6 +153,21 @@ class TransferService {
         if (on.isAfter(today)) {
             problems.add(new FieldProblem("transfer_date", "invalid", "A transfer cannot be dated in the future."));
         }
+        // ADR-079: the balance rows of both branches are locked in branch and product order, the order the movements
+        // take them, before the source's average is read, so a delivery committing meanwhile cannot leave the transfer
+        // at the average it replaced, and two opposite transfers still cannot deadlock.
+        List<UUID> known = r.lines().stream()
+                .map(TransferLineRequest::productId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .sorted()
+                .filter(id -> catalogue.find(id).isPresent())
+                .toList();
+        UUID toId = to == null ? null : to.id();
+        java.util.stream.Stream.of(from, toId)
+                .filter(java.util.Objects::nonNull)
+                .sorted()
+                .forEach(branch -> known.forEach(product -> stock.lock(branch, product)));
         Set<UUID> seen = new HashSet<>();
         List<NewLine> lines = new ArrayList<>();
         for (int i = 0; i < r.lines().size(); i++) {
@@ -179,13 +194,9 @@ class TransferService {
                 problems.add(new FieldProblem("lines[" + i + "].qty", "invalid", "At most three decimal places."));
                 continue;
             }
-            lines.add(new NewLine(
-                    UUID.randomUUID(),
-                    i + 1,
-                    p.id(),
-                    l.qty(),
-                    p.costMinor(),
-                    Quantities.value(l.qty(), p.costMinor())));
+            // ADR-079: stock leaves at the source's average and that cost re-averages the destination when it arrives.
+            long cost = stock.averageCost(from, p.id());
+            lines.add(new NewLine(UUID.randomUUID(), i + 1, p.id(), l.qty(), cost, Quantities.value(l.qty(), cost)));
         }
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);

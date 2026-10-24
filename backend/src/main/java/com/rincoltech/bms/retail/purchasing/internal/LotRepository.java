@@ -201,6 +201,37 @@ class LotRepository {
         return out;
     }
 
+    /**
+     * ADR-079: records the part of a landed cost or price credit line that went into each branch's inventory, and so into that
+     * branch's average, for its void to take back from the same branches.
+     */
+    void insertSpread(UUID lineId, UUID productId, Map<UUID, Long> byBranch) {
+        // Only positive parts are recorded, as the column's check requires.
+        // spread() makes no other part (ReceiptCostingTest), so a negative one is a bug, refused.
+        byBranch.forEach((branch, part) -> {
+            if (part < 0) {
+                throw new IllegalStateException("a negative part of a cost spread: " + part);
+            }
+            if (part > 0) {
+                jdbc.sql("""
+                        INSERT INTO retail_cost_spreads (tenant_id, line_id, branch_id, product_id, inventory_minor)
+                        VALUES (current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
+                        """).params(lineId, branch, productId, part).update();
+            }
+        });
+    }
+
+    /** The parts {@link #insertSpread} recorded for a line, by branch in branch order; empty for a line recorded before V94. */
+    Map<UUID, Long> spread(UUID lineId) {
+        Map<UUID, Long> out = new java.util.TreeMap<>();
+        jdbc.sql("SELECT branch_id, inventory_minor FROM retail_cost_spreads WHERE line_id = ?")
+                .param(lineId)
+                .query(rs -> {
+                    out.put(rs.getObject("branch_id", UUID.class), rs.getLong("inventory_minor"));
+                });
+        return out;
+    }
+
     /** A line of a receipt held as received and not costed that stands. */
     record HeldLine(String receiptNo, UUID receiptLineId, UUID productId) {}
 

@@ -98,8 +98,9 @@ describe('stock screen', () => {
 
   it('says Price and puts Cost before it (issue #330), and says only Price without the permission', () => {
     const admin = renderToString(<StockTable rows={rows} showCost />);
-    expect(admin.indexOf('>Cost<')).toBeGreaterThan(-1);
-    expect(admin.indexOf('>Cost<')).toBeLessThan(admin.indexOf('>Price<'));
+    // ADR-079: the cost of stock is the shop's average buying price.
+    expect(admin.indexOf('>Average cost<')).toBeGreaterThan(-1);
+    expect(admin.indexOf('>Average cost<')).toBeLessThan(admin.indexOf('>Price<'));
     expect(admin.indexOf('UGX 3,500')).toBeLessThan(admin.indexOf('UGX 6,000'));
     expect(admin).not.toContain('Selling price');
     const sales = renderToString(<StockTable rows={rows} showCost={false} />);
@@ -110,8 +111,8 @@ describe('stock screen', () => {
   it('shows cost then price on the all-branches table and the phone cards', () => {
     const data = { branches: [{ id: 'b1', code: 'BR1', name: 'Test Branch A' }], items: [{ product_id: 'p1', description: 'Test Item 01', unit: 'piece', total_qty: '3.000', sell_minor: 6000, cost_minor: 3500, balances: [{ branch_id: 'b1', qty: '3.000' }] }] } as AllBranchesStock;
     const table = renderToString(<AllBranchesTable data={data} showCost />);
-    expect(table.indexOf('>Cost<')).toBeLessThan(table.indexOf('>Price<'));
-    expect(renderToString(<AllBranchesList data={data} showCost />)).toContain('Cost UGX 3,500, price UGX 6,000 each');
+    expect(table.indexOf('>Average cost<')).toBeLessThan(table.indexOf('>Price<'));
+    expect(renderToString(<AllBranchesList data={data} showCost />)).toContain('Average cost UGX 3,500, price UGX 6,000 each');
     expect(renderToString(<AllBranchesList data={data} showCost={false} />)).toContain('Price UGX 6,000 each');
   });
 
@@ -405,7 +406,7 @@ describe('walk-through fixes (#112)', () => {
     expect(admin).toContain('Restock saved (RP00000042)');
     expect(admin).toContain('From Test Supplier 01, bought on 2026-10-06: 2 items');
     expect(admin).toContain('LED bulb 9W screw: sell price changed from UGX 1,200 to UGX 1,400.');
-    expect(admin).toContain('LED bulb 9W screw: cost changed from UGX 800 to UGX 850.');
+    expect(admin).toContain('LED bulb 9W screw: last paid changed from UGX 800 to UGX 850.');
     expect(admin).not.toContain('LED bulb 15W screw:');
     expect(page('sales', <RestockSaved purchase={purchase} context={context} />)).not.toContain('cost changed');
   });

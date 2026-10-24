@@ -2216,6 +2216,80 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V94 (ADR-079, issue #523) on a database at the migration before it: every stock balance row of every business takes its
+     * product's cost as today's average, so the valuation does not move on the day of the deploy, and the quantity is kept.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates stock balances across the average cost migration.
+     */
+    @Test
+    void averageCostMigrationSetsTodaysAverageFromEachProductsCost() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("94") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            UUID branch = UUID.randomUUID();
+            UUID cheap = UUID.randomUUID();
+            UUID dear = UUID.randomUUID();
+            UUID later = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v94', 'Test Tenant V94', '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            owner.sql(
+                            "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                    .params(branch, tenant)
+                    .update();
+            owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                    .params(tenant, "{retail}")
+                    .query((rs, n) -> 1)
+                    .single();
+            owner.sql("""
+                            WITH c AS (INSERT INTO retail_categories (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'Test')
+                                       RETURNING id),
+                                 u AS (INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'pcs')
+                                       RETURNING id)
+                            INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                         sell_minor, currency)
+                            SELECT x.id, ?, x.code, 'Test item ' || x.code, c.id, u.id, x.cost, x.cost * 2, 'UGX'
+                              FROM c, u, (VALUES (?::uuid, 'A1', 750), (?::uuid, 'A2', 4000), (?::uuid, 'A3', 500))
+                                   AS x (id, code, cost)
+                            """).params(tenant, tenant, tenant, cheap, dear, later).update();
+            owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, 48)")
+                    .params(tenant, branch, cheap)
+                    .update();
+            owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, -2)")
+                    .params(tenant, branch, dear)
+                    .update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.success).isTrue();
+            assertThat(owner.sql("""
+                                    SELECT qty::text || ' ' || avg_cost_minor FROM retail_stock_balances
+                                     WHERE tenant_id = ? ORDER BY qty DESC
+                                    """).param(tenant).query(String.class).list())
+                    .containsExactly("48.000 750", "-2.000 4000");
+            // A writer from before V94 that leaves the average out (an old instance during a deploy) gets the product's
+            // last paid cost, never zero; one that names it keeps it.
+            owner.sql("INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty) VALUES (?, ?, ?, 3)")
+                    .params(tenant, branch, later)
+                    .update();
+            assertThat(owner.sql("SELECT avg_cost_minor FROM retail_stock_balances WHERE product_id = ?")
+                            .param(later)
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(500);
+            assertThat(owner.sql("""
+                                    SELECT convalidated FROM pg_constraint
+                                     WHERE conname = 'retail_stock_balances_avg_cost_range'
+                                    """).query(Boolean.class).single()).isTrue();
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

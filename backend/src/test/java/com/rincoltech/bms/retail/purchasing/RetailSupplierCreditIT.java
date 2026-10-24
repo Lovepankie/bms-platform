@@ -629,4 +629,48 @@ class RetailSupplierCreditIT extends LandedCostTestBase {
                         .has("lines"))
                 .isFalse();
     }
+
+    /**
+     * ADR-079: a price credit spread over two branches lowers each branch's average by its part, and its void gives back
+     * exactly those parts to the same branches, so each branch's inventory account still equals its stock at its own average
+     * after the other branch sold some in between.
+     */
+    @Test
+    void aPriceCreditVoidGivesBackTheBranchesTheirOwnParts() {
+        receive(br2, product, "10", 100);
+        JsonNode r = receive(hq, product, "10", 120);
+        JsonNode bill = billOf("INV-SPREAD", 120, r);
+        // 400 off the 10 of the receipt, spread over what each branch holds: 200 each.
+        JsonNode credit =
+                credited(creditBody(uuid(bill, "id"), "price", "CN-SPREAD", 400, priceLine(billLine(bill, 0), 400)));
+        assertThat(valuation(hq, product)).isEqualTo(1_000);
+        assertThat(valuation(br2, product)).isEqualTo(800);
+        assertThat(api.sell(br2, "cash", product, "3").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        assertThat(voidCredit(uuid(credit, "id")).getStatusCode()).isEqualTo(HttpStatus.OK);
+        // Head office gets its 200 back (10 at 120 again).
+        // Branch two gets its 200 back on the 7 left: 560 and 200 is 760, carried as 109 each.
+        assertThat(valuation(hq, product)).isEqualTo(1_200);
+        assertThat(balance("inventory", hq)).isEqualTo(valuation(hq, product));
+        assertThat(valuation(br2, product)).isEqualTo(7 * 109);
+        assertThat(balance("inventory", br2)).isEqualTo(valuation(br2, product));
+        assertBooksBalance();
+    }
+
+    /** ADR-079: a price credit worth more than a branch's stock is carried at is refused in words about the credit. */
+    @Test
+    void aPriceCreditLargerThanABranchsStockIsWorthIsRefusedInItsOwnWords() {
+        receive(br2, product, "10", 10);
+        JsonNode r = receive(hq, product, "10", 100);
+        JsonNode bill = billOf("INV-BIG", 100, r);
+        // 600 off, 300 for each branch: branch two's 10 are carried at 100 in all.
+        ResponseEntity<JsonNode> refused =
+                creditRaw(creditBody(uuid(bill, "id"), "price", "CN-BIG", 600, priceLine(billLine(bill, 0), 600)));
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("average_cost_negative");
+        assertThat(refused.getBody().get("detail").asString())
+                .contains("this credit would take more off")
+                .doesNotContain("voided");
+        assertBooksBalance();
+    }
 }

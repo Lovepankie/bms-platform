@@ -155,7 +155,7 @@ describe('the stock list in groups', () => {
 
   it('shows the cost column in grouped mode too', () => {
     const out = page(<StockTable showCost rows={[{ ...row(1, 'Pipes'), cost_minor: 700 }]} />);
-    expect(out).toContain('<th class="num">Cost</th>');
+    expect(out).toContain('<th class="num">Average cost</th>');
     expect(out).toContain('UGX 700');
   });
 });

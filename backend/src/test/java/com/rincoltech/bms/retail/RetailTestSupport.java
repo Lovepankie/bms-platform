@@ -128,12 +128,12 @@ public final class RetailTestSupport {
                 .update();
         TestDatabase.owner()
                 .sql("""
-                        INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty)
-                        VALUES (?, ?, ?, CAST(? AS numeric))
+                        INSERT INTO retail_stock_balances (tenant_id, branch_id, product_id, qty, avg_cost_minor)
+                        SELECT ?, ?, p.id, CAST(? AS numeric), p.cost_minor FROM retail_products p WHERE p.id = ?
                         ON CONFLICT (tenant_id, branch_id, product_id)
                         DO UPDATE SET qty = retail_stock_balances.qty + EXCLUDED.qty
                         """)
-                .params(tenant.tenantId(), branchId, productId, qty)
+                .params(tenant.tenantId(), branchId, qty, productId)
                 .update();
     }
 

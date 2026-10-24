@@ -27,7 +27,7 @@ class BranchHoldings implements BranchClosingCheck {
     public List<Finding> findings(UUID branchId) {
         List<Finding> found = new ArrayList<>();
         Finding stock = jdbc.sql("""
-                        SELECT count(*) AS items, coalesce(round(sum(b.qty * p.cost_minor)), 0)::bigint AS value
+                        SELECT count(*) AS items, coalesce(round(sum(b.qty * b.avg_cost_minor)), 0)::bigint AS value
                           FROM retail_stock_balances b JOIN retail_products p ON p.id = b.product_id
                          WHERE b.qty <> 0 AND b.branch_id = ?
                         """)

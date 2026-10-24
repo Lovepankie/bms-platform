@@ -291,15 +291,14 @@ abstract class LandedCostTestBase extends IntegrationTest {
         return 0;
     }
 
-    /** The stock valuation of a product in a branch: what it holds times the product's cost now. */
+    /** The stock valuation of a product in a branch: what it holds times its average cost there (ADR-079). */
     long valuation(UUID branch, UUID prod) {
         return TestDatabase.owner()
                 .sql("""
-                        SELECT coalesce((SELECT sum(b.qty) FROM retail_stock_balances b
-                                          WHERE b.branch_id = ? AND b.product_id = ?), 0) * p.cost_minor
-                          FROM retail_products p WHERE p.id = ?
+                        SELECT coalesce(sum(b.qty * b.avg_cost_minor), 0) FROM retail_stock_balances b
+                         WHERE b.branch_id = ? AND b.product_id = ?
                         """)
-                .params(branch, prod, prod)
+                .params(branch, prod)
                 .query(java.math.BigDecimal.class)
                 .single()
                 .longValueExact();

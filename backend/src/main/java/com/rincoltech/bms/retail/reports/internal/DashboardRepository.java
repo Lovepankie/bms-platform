@@ -121,7 +121,7 @@ class DashboardRepository {
         // it took
         // 1.4 s on the 25x bench, ADR-077).
         return jdbc.sql("WITH x AS MATERIALIZED ("
-                        + "SELECT br.id AS branch_id, p.sell_minor, p.cost_minor, coalesce(b.qty, 0) AS qty,"
+                        + "SELECT br.id AS branch_id, p.sell_minor, coalesce(b.avg_cost_minor, 0) AS cost_minor, coalesce(b.qty, 0) AS qty,"
                         + "       " + LowStockRule.heldSql("p.tenant_id", "p.id", "br.id") + " AS held,"
                         + "       " + LowStockRule.levelSql("p.tenant_id", "p.id", "br.id", ":low") + " AS level"
                         + "  FROM branches br"

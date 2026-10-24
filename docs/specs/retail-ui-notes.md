@@ -1442,3 +1442,14 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
   customers; Oldest due 2 Oct 2026), Top items (Today pressed, Test Sugar 1kg 4 bag 24,000), Each shop today (Test Shop One
   100,000, 5 sales; Test Shop Two, No sales yet), each with its link underneath. On a wide screen they sit side by side in columns
   of at least 280px.
+
+## Last paid and the average buying price (issue #523, ADR-079, FR-RET-69)
+
+- The item's own buying price is the last one paid: the item card says "last paid UGX 750" and the Change price form calls the field
+  **Last paid**, with a hint that profit uses the average buying price of the stock in each shop, which restocks keep up to date. The
+  new item form still asks for the **Buying price**; it becomes the last paid price and the first average of a shop that has none.
+- The stock lists call their cost column **Average cost**: on one shop, that shop's average per smallest unit; on all shops, the
+  average of the shops that hold stock, weighted by what each holds. The phone cards say "Average cost UGX 769, price UGX 1,000 each".
+- A restock line that changes the item's buying price says "Last paid will change from UGX 750 to UGX 800", and the restock's summary
+  "last paid changed from UGX 750 to UGX 800". Nothing else on the screens changes: sale lines, profit and the reports show the cost
+  each sale line kept, which is now the shop's average at the moment of sale.

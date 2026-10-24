@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,11 +95,32 @@ class RetailMarginsIT extends IntegrationTest {
     @Test
     void priceChangeImpactUsesTheSnapshotsAndNeverTheCurrentCost() {
         assertThat(margins("").get("price_changes").get("total").asInt()).isZero();
-        // ANA-1 goes from 1,500 to 2,000 and its cost from 1,000 to 1,800 today; one more is sold at the new price.
-        assertThat(api.editPrices(
-                                d.p1, Map.of("cost_minor", 1_800, "sell_minor", 2_000, "reason", "Test change"), ADMIN)
+        // ANA-1 goes from 1,500 to 2,000 today, and a restock of 18 at 2,600 takes head office's average from 1,000 to
+        // (18 x 1,000 + 18 x 2,600) / 36 = 1,800 (ADR-079); one more is sold at the new price and that cost.
+        assertThat(api.editPrices(d.p1, Map.of("sell_minor", 2_000, "reason", "Test change"), ADMIN)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+        Map<String, Object> restock = Map.of(
+                "purchased_on",
+                AnalyticsData.today().toString(),
+                "payment_method",
+                "cash",
+                "lines",
+                List.of(Map.of(
+                        "product_id",
+                        d.p1,
+                        "cost_minor",
+                        2_600,
+                        "qty_by_branch",
+                        List.of(Map.of("branch_id", t.headOffice(), "qty", "18")))));
+        assertThat(api.postKeyed(
+                                "/purchases",
+                                restock,
+                                ADMIN,
+                                "*",
+                                UUID.randomUUID().toString())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
         d.sell(t.headOffice(), "cash", d.p1, "1", 0);
 
         JsonNode changes = margins("").get("price_changes");
