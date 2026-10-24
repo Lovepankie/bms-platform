@@ -178,7 +178,7 @@ export function TwoStepSetup(props: {
           <a className="btn btn-block" href={props.enrolment.otpauth_uri}>
             Open in authenticator
           </a>
-          <Hint>
+          <Hint full>
             If nothing opens or a store page appears, the app is not installed yet. Install one below, then tap again,
             or use the key instead.
           </Hint>
@@ -227,7 +227,7 @@ export function TwoStepSetup(props: {
           required
         />
       </div>
-      <BusyButton className="btn-primary btn-lg" busy={props.busy} disabled={props.code.length !== 6}>
+      <BusyButton className="btn-primary btn-lg" busy={props.busy} notReady={props.code.length !== 6}>
         Turn on two-step sign-in
       </BusyButton>
       {props.children}

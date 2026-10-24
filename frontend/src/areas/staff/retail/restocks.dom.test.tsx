@@ -119,12 +119,12 @@ describe('the restock card', () => {
 describe('correcting a restock', () => {
   it('needs a reason of at least five characters before either button works', () => {
     screenOf(admin, <CorrectPanel purchase={restock} onDone={() => undefined} onCancel={() => undefined} />);
-    expect(again().getAttribute('data-not-ready')).toBe('true');
+    expect(again().disabled).toBe(true);
     expect(only().disabled).toBe(true);
     fireEvent.change(reason(), { target: { value: 'no' } });
-    expect(again().getAttribute('data-not-ready')).toBe('true');
+    expect(again().disabled).toBe(true);
     fireEvent.change(reason(), { target: { value: 'Entered twenty, there were ten' } });
-    expect(again().getAttribute('data-not-ready')).toBeNull();
+    expect(again().disabled).toBe(false);
     expect(ready(only())).toBe(true);
     expect(voidReasonOf('  abcde ')).toBe('abcde');
     expect(voidReasonOf('abcd')).toBeNull();

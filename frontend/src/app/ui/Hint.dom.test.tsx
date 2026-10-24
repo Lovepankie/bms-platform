@@ -30,4 +30,13 @@ describe('the hint', () => {
     expect(screen.getByRole('button', { name: 'Show less' }).getAttribute('aria-expanded')).toBe('true');
     expect(document.querySelector('[data-tour="restocks-help"]')?.className).toBe('hint-line hint-open');
   });
+
+  // Review of #559: a warning or a consequence is never cut.
+  it('draws a warning whole, with no cut and no button', () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(900);
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
+    render(<Hint full>{LONG}</Hint>);
+    expect(screen.getByText(LONG).parentElement?.className).not.toBe('hint-line');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
 });

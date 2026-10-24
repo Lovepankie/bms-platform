@@ -120,7 +120,7 @@ export function AddPriceForm({ today, busy, error, onSubmit, onCancel }: {
           {problem && form.price !== '' && <Note>{problem}</Note>}
           <Problem error={error} />
           <p className="cluster">
-            <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null}>Save price</BusyButton>
+            <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null}>Save price</BusyButton>
             <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
           </p>
         </form>
@@ -226,7 +226,7 @@ export function PriceLists() {
           <label htmlFor="new-list-name">Name</label>
           <input id="new-list-name" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
           <label><input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} /> Strict: an item that is not in this list cannot be sold to its customers</label>
-          <BusyButton type="submit" className="rt-primary" busy={create.isPending} disabled={name.trim() === ''}>Add price list</BusyButton>
+          <BusyButton type="submit" className="rt-primary" busy={create.isPending} notReady={name.trim() === ''}>Add price list</BusyButton>
 
           <Problem error={create.error} />
         </form>

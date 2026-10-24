@@ -215,7 +215,7 @@ export function TwoStepPolicyScreen() {
             </label>
           )}
           <p className="cluster">
-            <BusyButton type="button" className="rt-primary" busy={busy} disabled={savedState !== null && needsProof(savedState, choice, new Date()) && proof.trim() === ''} onClick={() => void save()}>
+            <BusyButton type="button" className="rt-primary" busy={busy} notReady={savedState !== null && needsProof(savedState, choice, new Date()) && proof.trim() === ''} onClick={() => void save()}>
               {choice.policy === 'off' ? 'Yes, make it optional' : 'Yes, save this'}
             </BusyButton>
             <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={() => setReviewing(false)}>

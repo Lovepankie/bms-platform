@@ -56,7 +56,7 @@ export function PayFormView({ sale, today, form, full, busy, error, todayOnly, o
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
       <p className="cluster">
-        <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null}>{full ? 'Mark as fully paid' : 'Save payment'}</BusyButton>
+        <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null}>{full ? 'Mark as fully paid' : 'Save payment'}</BusyButton>
         <button type="button" /* busy-exempt: cancel waits for the payment */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </p>
     </form>

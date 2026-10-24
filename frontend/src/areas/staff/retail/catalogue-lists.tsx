@@ -137,7 +137,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
                 onChange={(e) => setPrefix(e.target.value)}
               />
             )}
-            <BusyButton busy={add.isPending} type="submit" className="rt-primary" disabled={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
+            <BusyButton busy={add.isPending} type="submit" className="rt-primary" notReady={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
           </form>
           <Problem error={add.error} />
         </AddPanel>

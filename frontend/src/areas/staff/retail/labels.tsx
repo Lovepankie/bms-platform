@@ -80,7 +80,7 @@ export function LabelsPage() {
         My printer cannot print to the edge: keep 4 mm clear inside each label
       </label>
       <ActionBar>
-        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} disabled={rows.length === 0} onClick={() => make.mutate()}>
+        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} notReady={rows.length === 0} onClick={() => make.mutate()}>
           Make the labels
         </BusyButton>
         <button type="button" data-tour="labels-print" disabled={sheet.length === 0} onClick={() => window.print()}>

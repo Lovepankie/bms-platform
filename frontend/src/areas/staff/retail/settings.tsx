@@ -55,7 +55,7 @@ export function FlagList({ draft, saved, disabled, onToggle }: { draft: Draft; s
               <span className="hint"> {c.hint}</span>
             </span>
           </label>
-          {!c.ready && <Hint>The pages for this feature are not released yet. Switching it on changes nothing you can see today.</Hint>}
+          {!c.ready && <Hint full>The pages for this feature are not released yet. Switching it on changes nothing you can see today.</Hint>}
           {draft.flags[c.key] !== saved.flags[c.key] && <p className="badge badge-warning">{draft.flags[c.key] ? 'Will be switched on' : 'Will be switched off'}</p>}
         </li>
       ))}
@@ -73,7 +73,7 @@ export function ChangeReview({ change, busy, onConfirm, onBack }: { change: Chan
           <li key={line}>{line}</li>
         ))}
       </ul>
-      <Hint>The change takes effect on the next page everyone opens. It is recorded with your name.</Hint>
+      <Hint full>The change takes effect on the next page everyone opens. It is recorded with your name.</Hint>
       <p className="cluster">
         <BusyButton type="button" className="rt-primary" busy={busy === true} onClick={onConfirm}>Confirm</BusyButton>
         <button type="button" /* busy-exempt: back waits for the save */ className="btn-ghost" disabled={busy} onClick={onBack}>Back</button>

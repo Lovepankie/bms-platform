@@ -105,7 +105,7 @@ export function ImportPage() {
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
       <ActionBar>
-        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
+        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate()}>
           Check the file
         </BusyButton>
       </ActionBar>

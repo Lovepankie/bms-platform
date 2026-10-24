@@ -90,7 +90,7 @@ export function VoidPanel({ busy, error, onVoid }: { busy?: boolean; error?: unk
     >
       <label htmlFor="void-reason">Why is it voided? (at least {MIN_REASON} characters)</label>
       <input id="void-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-      <Hint>The goods it put back come off the shelf again, and the money or the balance goes back as it was. This only works while those goods are still in stock.</Hint>
+      <Hint full>The goods it put back come off the shelf again, and the money or the balance goes back as it was. This only works while those goods are still in stock.</Hint>
       <Problem error={error} />
       <p className="cluster">
         <BusyButton busy={busy ?? false} type="submit" disabled={reasonOf(reason) === null}>Void it</BusyButton>

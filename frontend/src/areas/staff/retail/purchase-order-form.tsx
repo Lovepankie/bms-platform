@@ -69,7 +69,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
   const setLine = (i: number, line: OrderLineForm) => onChange({ ...form, lines: form.lines.map((l, n) => (n === i ? line : l)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="order-form">
-      <Hint>Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</Hint>
+      <Hint full>Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</Hint>
       <div className="stack" data-tour="order-supplier">
         <SupplierField id="order-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
         {branches.length > 0 && <BranchField id="order-branch" label="Goods are expected at" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />}
@@ -89,7 +89,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
       <p className="rt-total" aria-live="polite" data-testid="order-total">Order total {money(orderTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="order-save">{submitLabel}</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="order-save">{submitLabel}</BusyButton>
 
     </form>
   );

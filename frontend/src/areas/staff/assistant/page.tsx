@@ -97,7 +97,7 @@ export function AssistantCaps({ saved, busy, error, onSave }: { saved: AdvisorSe
         <input id="assistant-token-cap" inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} aria-invalid={!valid} />
         {!valid && <p role="alert" className="field-error">Use a whole number, 0 or more.</p>}
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
-        <p><BusyButton type="submit" className="rt-primary" busy={busy} disabled={!valid}>Save the limit</BusyButton></p>
+        <p><BusyButton type="submit" className="rt-primary" busy={busy} notReady={!valid}>Save the limit</BusyButton></p>
       </form>
     </section>
   );

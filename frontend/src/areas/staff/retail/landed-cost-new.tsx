@@ -124,7 +124,7 @@ export function LandedFormView({ form, suppliers, picker, onChange, onReview }: 
       <div className="stack" data-tour="landed-who">
         <h2>Who is owed</h2>
         <SupplierField id="landed-supplier" label="Who is owed (the forwarder, carrier or agent)" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
-        <Hint>They must be in your list of suppliers. Add them in the Catalogue first if they are not.</Hint>
+        <Hint full>They must be in your list of suppliers. Add them in the Catalogue first if they are not.</Hint>
         <label htmlFor="landed-ref">Their invoice number</label>
         <input id="landed-ref" value={form.supplierRef} maxLength={60} onChange={(e) => onChange({ ...form, supplierRef: e.target.value })} />
         <label htmlFor="landed-date">Date of the charges</label>
@@ -208,7 +208,7 @@ export function ReviewPanel({ form, payee, preview, busy, error, onBack, onSave 
       {preview && <AllocationTable lines={lines} total={preview.total_minor} />}
       <Problem error={error} />
       <p className="cluster">
-        <BusyButton busy={busy ?? false} type="button" className="rt-primary" disabled={!preview || preview.total_mismatch === true} onClick={onSave}>Save landed cost</BusyButton>
+        <BusyButton busy={busy ?? false} type="button" className="rt-primary" notReady={!preview || preview.total_mismatch === true} onClick={onSave}>Save landed cost</BusyButton>
         <button type="button" /* busy-exempt: going back waits for the save */ className="btn-ghost" onClick={onBack} disabled={busy}>Change something</button>
       </p>
     </section>

@@ -174,7 +174,7 @@ export function ExistingLoanForm({ api = existingLoans }: { api?: ExistingLoansA
       <input id="el-ref" maxLength={40} value={draft.registerRef} onChange={(e) => set('registerRef', e.target.value)} aria-invalid={!!error('register_ref')} />
       {error('register_ref') && <p className="field-error" role="alert">{error('register_ref')}</p>}
       <h2>Repayments already received</h2>
-      {draft.repayments.length === 0 && <Hint>None yet. Add each repayment the register shows, in any order.</Hint>}
+      {draft.repayments.length === 0 && <Hint full>None yet. Add each repayment the register shows, in any order.</Hint>}
       {draft.repayments.map((r, i) => (
         <RepaymentRow key={i} r={r} i={i} error={error} onChange={(x) => setRepayment(i, x)}
           onRemove={() => set('repayments', draft.repayments.filter((_, k) => k !== i))} />

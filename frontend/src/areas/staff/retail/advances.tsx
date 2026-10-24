@@ -82,7 +82,7 @@ export function AdvanceForm({ branchId, onSaved }: { branchId: string; onSaved?:
       <input id="advance-purpose" maxLength={300} value={draft.purpose} onChange={(e) => update({ purpose: e.target.value })} />
       <p className="hint">The money is taken out of this shop's till.</p>
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={blocked}>
         Save advance
       </BusyButton>
     </form>
@@ -137,7 +137,7 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
       <DateField id="repay-date" label="Date" value={draft.date} onChange={(date) => update({ date })} />
       <p className="hint">The money goes into this shop's till or account.</p>
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={blocked}>
         Save repayment
       </BusyButton>
     </form>
@@ -201,7 +201,7 @@ export function AdvanceDetailView({ advance, onVoided }: { advance: Advance; onV
       <p className="hint">{enteredBy(advance.by_name, advance.at)}{advance.voided && advance.void_reason ? `. Voided because: ${advance.void_reason}` : ''}</p>
       {voidOffered(advance, mayVoid) && (
         <>
-          {repayments.some((r) => !r.voided) && <Hint>This advance has repayments. Void them first, then the advance.</Hint>}
+          {repayments.some((r) => !r.voided) && <Hint full>This advance has repayments. Void them first, then the advance.</Hint>}
           <VoidAction what="advance" run={(reason, key) => retail.voidAdvance(advance.id ?? '', reason, key)} onVoided={() => onVoided?.('Advance voided.')} />
         </>
       )}

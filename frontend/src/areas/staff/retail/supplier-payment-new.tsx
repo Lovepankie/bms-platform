@@ -107,7 +107,7 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
       )}
       {problem && (form.amount.trim() !== '' || form.supplierId !== '') && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="payment-save">Save payment</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="payment-save">Save payment</BusyButton>
 
     </form>
   );

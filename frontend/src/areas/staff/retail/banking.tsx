@@ -68,7 +68,7 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
       <input id="banking-reference" maxLength={100} value={draft.reference} onChange={(e) => setDraft((d) => ({ ...d, reference: e.target.value }))} />
       <Problem error={save.error} />
       <ActionBar>
-        <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={blocked}>
           Save banking
         </BusyButton>
       </ActionBar>
@@ -212,7 +212,7 @@ export function BankingReportView({ days }: { days: BankingDay[] }) {
       {imported.length > 0 && (
         <section aria-label="Imported days">
           <h2>Days imported from the old app <ImportedBadge /></h2>
-          <Hint>These days are shown for reference. They are not part of the unbanked total above.</Hint>
+          <Hint full>These days are shown for reference. They are not part of the unbanked total above.</Hint>
           <BankingDays days={imported} />
         </section>
       )}

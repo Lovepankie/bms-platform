@@ -49,7 +49,7 @@ export function LiftConfirm({ what, narrow = false, busy, error, onConfirm, onCa
       <p id="sms-lift-hint" className="field-hint">Words about why, not names or phone numbers. {reason.trim().length} of {MAX_REASON} characters.</p>
       {error && <p role="alert" className="field-error">{error}</p>}
       <p className="cluster">
-        <BusyButton type="submit" className="rt-primary" busy={busy} disabled={problem !== null}>
+        <BusyButton type="submit" className="rt-primary" busy={busy} notReady={problem !== null}>
           {narrow ? 'Narrow the opt-out' : 'Lift the opt-out'}
         </BusyButton>
         <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={onCancel}>

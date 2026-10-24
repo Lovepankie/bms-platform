@@ -52,11 +52,11 @@ export function BusyAnnouncer({ modal = false }: { modal?: boolean }) {
   );
 }
 
-// The main action of a screen (issue #526, docs/ui-rules.md rule 6): a primary button never looks off. While its form is not
-// ready (`disabled`) it stays enabled and in the brand fill, and a press, or Enter in a field, sends nothing and takes the
-// person to the first missing or wrong field instead (rule 10); where no field is marked, one line under it says to check the
-// fields above. It carries data-not-ready while so. A secondary button keeps the plain disabled state.
-const PRIMARY = /(^|\s)(rt-primary|btn-primary|btn-brand)(\s|$)/;
+// The main action of a form (issue #526, docs/ui-rules.md rule 6) never looks off while its fields are not yet right: the form
+// passes `notReady` (never `disabled`) for that, and the button stays enabled and in its fill, and a press, or Enter in a field,
+// sends nothing and takes the person to the first missing or wrong field instead (rule 10); where no field is marked, one line
+// under it says to check the fields above. It carries data-not-ready while so. `disabled` keeps its plain meaning, for a block
+// that is not about the fields (another request running, a server not set up, a person who may only look).
 
 /** Scrolls to and focuses the first missing or wrong field around `button` (its form, else the screen it sits in); false when none. */
 function leadToMissing(button: HTMLButtonElement | null): boolean {
@@ -67,13 +67,17 @@ function leadToMissing(button: HTMLButtonElement | null): boolean {
 // The longest a press or submit holds a button whose busy never turns on (an onClick that never settles).
 const HOLD_MAX = 10_000;
 
-export type BusyButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { busy: boolean };
+export type BusyButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  busy: boolean;
+  /** The form's fields are not yet right: a press goes to the first missing or wrong field instead of sending (issue #526). */
+  notReady?: boolean;
+};
 
-export function BusyButton({ busy, disabled, className, onClick, children, ...rest }: BusyButtonProps) {
+export function BusyButton({ busy, disabled, notReady: fieldsNotReady = false, className, onClick, children, ...rest }: BusyButtonProps) {
   const button = useRef<HTMLButtonElement>(null);
   const busyNow = useRef(busy);
   busyNow.current = busy;
-  const notReady = Boolean(disabled) && !busy && PRIMARY.test(className ?? '');
+  const notReady = fieldsNotReady && !busy && !disabled;
   const notReadyNow = useRef(notReady);
   notReadyNow.current = notReady;
   // A press while not ready that found no field to go to: the line under the button says what to do.
@@ -108,7 +112,9 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
     const owner = button.current?.form;
     if (!owner || (rest.type !== undefined && rest.type !== 'submit')) return;
     const drop = (e: SubmitEvent) => {
-      if (notReadyNow.current) {
+      // Only a submit this button sends (a press, or Enter in a field, whose submitter is the form's first submit button) waits
+      // for the fields; another submit button of the form keeps working.
+      if (notReadyNow.current && (!e.submitter || e.submitter === button.current)) {
         e.preventDefault();
         e.stopImmediatePropagation();
         setNudge(!leadToMissing(button.current));
@@ -166,7 +172,7 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
       ref={button}
       {...rest}
       className={className ? `${className} busy-button` : 'busy-button'}
-      disabled={busy || notReady ? undefined : disabled}
+      disabled={busy ? undefined : disabled}
       aria-disabled={busy || rest['aria-disabled'] || undefined}
       aria-busy={busy || undefined}
       data-not-ready={notReady || undefined}

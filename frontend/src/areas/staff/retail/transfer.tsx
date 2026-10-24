@@ -109,7 +109,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       </select>
       </div>
       {destinations.length === 0 && <p>You have no other branch to move stock to.</p>}
-      {sends && <Hint>The stock leaves this branch now. The other branch counts it once they receive it.</Hint>}
+      {sends && <Hint full>The stock leaves this branch now. The other branch counts it once they receive it.</Hint>}
 
       <div data-tour="transfer-search">
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />
@@ -142,7 +142,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       <Problem error={save.error} />
       <ActionBar>
         <span data-tour="transfer-save">
-          <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null}>
+          <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={problem !== null}>
             {sends ? 'Send stock' : 'Move stock'}
           </BusyButton>
 

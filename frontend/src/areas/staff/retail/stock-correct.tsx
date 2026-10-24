@@ -89,12 +89,12 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
       </select>
       <label htmlFor="correct-note">A note (if you like)</label>
       <input id="correct-note" value={draft.note} maxLength={280} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} autoComplete="off" />
-      <Hint>
+      <Hint full>
         The old figure stays in the history, with who changed it, when and why. A correction is not counted as lost or damaged stock, or as usage.
         If the money was entered wrongly too, use Past purchases instead.
       </Hint>
       <Problem error={send.error} />
-      <BusyButton type="submit" className="rt-primary" busy={send.isPending} disabled={!ready}>Save the right quantity</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={send.isPending} notReady={!ready}>Save the right quantity</BusyButton>
     </form>
   );
 }
@@ -139,7 +139,7 @@ function CategoryForm({ row, onDone }: { row: StockRow; onDone: (message: string
       </select>
       <p className="hint">The change is recorded with the old and the new category.</p>
       <Problem error={send.error} />
-      <BusyButton type="submit" className="rt-primary" busy={send.isPending} disabled={!ready}>Move to this category</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={send.isPending} notReady={!ready}>Move to this category</BusyButton>
 
     </form>
   );

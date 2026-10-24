@@ -69,7 +69,7 @@ export function AccountSummary({ account, canManage, busy, error, onSave }: {
           <input id="credit-limit" inputMode="numeric" value={form.limit} onChange={(e) => setForm({ ...form, limit: e.target.value })} aria-invalid={problem !== null} />
           <label htmlFor="credit-terms">Payment terms in days (leave empty for none)</label>
           <input id="credit-terms" inputMode="numeric" value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} aria-invalid={problem !== null} />
-          <Hint>A credit sale to this buyer is refused above the limit unless someone who may override gives a reason. The terms set the date a sale falls due.</Hint>
+          <Hint full>A credit sale to this buyer is refused above the limit unless someone who may override gives a reason. The terms set the date a sale falls due.</Hint>
           {problem && <p role="alert" className="rt-flag">{problem}</p>}
           <p className="cluster">
             <BusyButton busy={busy ?? false} type="submit" disabled={problem !== null}>Save</BusyButton>
@@ -160,7 +160,7 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
           )}
           {problem && amountText !== '' && <p role="alert" className="rt-flag">{problem}</p>}
           <Problem error={error} />
-          <BusyButton busy={busy ?? false} type="submit" className="rt-primary" disabled={problem !== null}>Save payment</BusyButton>
+          <BusyButton busy={busy ?? false} type="submit" className="rt-primary" notReady={problem !== null}>Save payment</BusyButton>
         </form>
       )}
     </section>
@@ -202,7 +202,7 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
             <form className="stack" onSubmit={(e) => { e.preventDefault(); const why = reasonOf(reason); if (why && !busy) { onReverse(r, why); setReversing(null); } }}>
               <label htmlFor={`reverse-${r.id}`}>Why is it reversed? (at least {MIN_REASON} characters)</label>
               <input id={`reverse-${r.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-              <Hint>The sales owe this money again. To pay different sales, take the payment again afterwards.</Hint>
+              <Hint full>The sales owe this money again. To pay different sales, take the payment again afterwards.</Hint>
               <p className="cluster">
                 <BusyButton busy={busy ?? false} type="submit" disabled={reasonOf(reason) === null}>Reverse this payment</BusyButton>
                 <button type="button" className="btn-ghost" onClick={() => setReversing(null)}>Cancel</button>
@@ -247,7 +247,7 @@ export function StatementView({ statement }: { statement: Statement }) {
       {imported && (imported.sales ?? []).length > 0 && (
         <section aria-label="Before system start" data-testid="before-system-start">
           <h3>Before system start</h3>
-          <Hint>These credit sales were brought in from the old records. They are not in the accounts of this system, so they are listed apart and are not in the closing balance above.</Hint>
+          <Hint full>These credit sales were brought in from the old records. They are not in the accounts of this system, so they are listed apart and are not in the closing balance above.</Hint>
           <ul>
             {(imported.sales ?? []).map((s) => <li key={s.sale_id}>{s.sale_no}, {showDate(s.sale_date)}: {money(s.total_minor ?? 0)}</li>)}
           </ul>

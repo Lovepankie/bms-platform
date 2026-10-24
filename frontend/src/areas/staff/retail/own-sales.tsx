@@ -140,7 +140,7 @@ export function OwnSales() {
       <h2>Your sales, {title}</h2>
       <RangePicker value={choice} onChange={pick} today={today} />
       {now.isPending && <p className="loading">Adding up your sales</p>}
-      {now.isError && <Hint>Your figures could not be loaded. Open your sales below.</Hint>}
+      {now.isError && <Hint full>Your figures could not be loaded. Open your sales below.</Hint>}
       {figures && (
         <>
           <div className="rc-headline">

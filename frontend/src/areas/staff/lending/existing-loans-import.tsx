@@ -108,7 +108,7 @@ export function ExistingLoansImport({ api = existingLoans }: { api?: ExistingLoa
       <textarea id="exl-text" data-tour="existing-import-text" rows={8} value={text} spellCheck={false} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="existing-import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
+      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="existing-import-check" notReady={text.trim() === ''} onClick={() => check.mutate()}>
         Check the file
       </BusyButton>
       {current && <LoanImportReport result={current} />}

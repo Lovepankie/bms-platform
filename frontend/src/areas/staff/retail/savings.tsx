@@ -152,7 +152,7 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
       )}
       <Problem error={save.error} />
       <ActionBar>
-        <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={blocked}>
+        <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={blocked}>
           Save savings
         </BusyButton>
       </ActionBar>

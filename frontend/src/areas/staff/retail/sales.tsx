@@ -345,7 +345,7 @@ export function AllSales() {
         <OpenSale id={open} onClose={() => setOpen(null)} />
       ) : (
         <>
-          <PeriodPicker from={from} to={to} tour="sales-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
+          <PeriodPicker from={from} to={to} openStart tour="sales-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
           <SearchBox id="sales-buyer" label="Buyer, phone or sale number" search={search} {...figures} />
           <label htmlFor="sales-method">Paid by</label>
           <select id="sales-method" value={method} onChange={(e) => setMethod(e.target.value as SalePayment | '')}>

@@ -79,7 +79,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       ))}
       <Problem error={save.error} />
       <ActionBar>
-        <BusyButton type="submit" className="rt-primary" data-tour="usage-save" busy={save.isPending} disabled={!valid}>Save</BusyButton>
+        <BusyButton type="submit" className="rt-primary" data-tour="usage-save" busy={save.isPending} notReady={!valid}>Save</BusyButton>
       </ActionBar>
 
       {(lines.length > 0 || reason !== '') && !save.isPending && (

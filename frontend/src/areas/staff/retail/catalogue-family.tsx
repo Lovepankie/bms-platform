@@ -209,7 +209,7 @@ function RenameFamily({ family, onDone }: { family: Family; onDone: (text: strin
       <select id="family-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
         {(categories.data ?? []).filter((c) => c.active !== false || c.id === family.category_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-      <Hint>Every size and colour takes the new name and category. Past sales stay as they were.</Hint>
+      <Hint full>Every size and colour takes the new name and category. Past sales stay as they were.</Hint>
       <Problem error={save.error} />
       <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!changed} onClick={() => save.mutate()}>Save</BusyButton>
       <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
@@ -244,7 +244,7 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
       <label htmlFor="variant-inactive">
         <input id="variant-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
       </label>
-      <Hint>An inactive size is not offered when selling, buying or moving stock. It is never deleted: its history stays.</Hint>
+      <Hint full>An inactive size is not offered when selling, buying or moving stock. It is never deleted: its history stays.</Hint>
       <PhotoEditor
         inputId={product.id ?? 'size'}
         photoId={product.photo_id}
@@ -255,7 +255,7 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
       />
       <Hint>A photo here is for this size alone. Without one, it shows the item's photo.</Hint>
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!ready}>Save changes</BusyButton>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={!ready}>Save changes</BusyButton>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
     </form>
   );

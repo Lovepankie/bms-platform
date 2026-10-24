@@ -139,7 +139,7 @@ export function CreditFormView({ form, bill, loadingLines, busy, error, onChange
       <input id="credit-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && form.billId !== '' && used.length > 0 && <p role="alert" className="rt-flag" data-testid="credit-problem">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="credit-save">Save credit note</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="credit-save">Save credit note</BusyButton>
 
     </form>
   );

@@ -55,9 +55,10 @@ export function SyncStatus() {
   const failed = failedCount(outbox.items);
   const state = dotState(online, outbox.syncing);
   const words = statusWords(state, list.length, failed);
-  // Online with nothing waiting draws no dot (issue #526): the bar stays quiet until the dot has news. The sheet stays mounted,
-  // so one open while the last sale is sent stays open and says nothing is waiting.
-  const news = state !== 'online' || list.length > 0 || failed > 0;
+  // Online with nothing waiting draws no dot for a seller (issue #526): the bar stays quiet until the dot has news. A manager
+  // (retail.offline.resolve) always has it, since its sheet is where other phones' refused sales and the clashes are settled.
+  // The sheet stays mounted, so one open while the last sale is sent stays open and says nothing is waiting.
+  const news = offline.manager || state !== 'online' || list.length > 0 || failed > 0;
   return (
     <div className="sync-status">
       {news && (

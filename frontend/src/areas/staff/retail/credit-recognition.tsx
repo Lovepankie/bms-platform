@@ -113,7 +113,7 @@ export function CreditRecognitionSetting({ read, onSaved }: { read: Capabilities
           <ul>
             {sentences.map((line) => <li key={line}>{line}</li>)}
           </ul>
-          <Hint>It is recorded with your name. Nothing already recorded is deleted or changed.</Hint>
+          <Hint full>It is recorded with your name. Nothing already recorded is deleted or changed.</Hint>
           <p className="cluster">
             <BusyButton busy={save.isPending} type="button" className="rt-primary" onClick={() => save.mutate()}>Confirm</BusyButton>
             <button type="button" /* busy-exempt: back waits for the save */ className="btn-ghost" disabled={save.isPending} onClick={() => setReviewing(false)}>Back</button>

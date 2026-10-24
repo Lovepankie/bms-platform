@@ -272,7 +272,7 @@ export function WordingScreen() {
         Choose the words each text message uses. Without your own words, the default is sent. Placeholders such as <code>{'{amount}'}</code> are filled in for each message.
       </p>
       {notice && <p role="alert" className="alert alert-warning">{notice}</p>}
-      {!canManage && <Hint>You can look at the wording. Only a business administrator can change it.</Hint>}
+      {!canManage && <Hint full>You can look at the wording. Only a business administrator can change it.</Hint>}
       {list.data.map((t, i) => (
         // Keyed by the saved version, so a fresh read after a save or someone else's change starts from what is saved.
         <TemplateEditor key={`${t.event_key}:${t.override?.version ?? 0}`} template={t} canManage={canManage} onNotice={setNotice} tour={i === 0} />

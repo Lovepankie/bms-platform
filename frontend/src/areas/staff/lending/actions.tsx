@@ -127,7 +127,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
       <MethodChoice name="repay-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="repay-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!valid}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={!valid}>
         Record repayment
       </BusyButton>
       {draft.amount !== '' && !save.isPending && (
@@ -174,7 +174,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
       <MethodChoice name="disburse-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="disburse-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!isIsoDate(draft.date)}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={!isIsoDate(draft.date)}>
         Disburse
       </BusyButton>
     </form>

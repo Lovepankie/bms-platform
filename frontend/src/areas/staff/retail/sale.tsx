@@ -177,8 +177,8 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
         </p>
       )}
       {noPrice && <p role="alert" className="rt-flag">This item has no price in the list.</p>}
-      {price && !price.canOverride && <Hint>The price comes from the price list. You do not have permission to change it.</Hint>}
-      {offlinePrice && !offlinePrice.canType && <Hint>Offline, the price saved on this phone is used. You do not have permission to change it.</Hint>}
+      {price && !price.canOverride && <Hint full>The price comes from the price list. You do not have permission to change it.</Hint>}
+      {offlinePrice && !offlinePrice.canType && <Hint full>Offline, the price saved on this phone is used. You do not have permission to change it.</Hint>}
       {changedOffline && !offlinePrice?.canType && onReset && <p><button type="button" className="btn-sm" onClick={onReset}>Use the price saved on this phone</button></p>}
       {(override || (changedOffline && offlinePrice?.canType)) && onReason && (
         <div>
@@ -504,7 +504,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
               <input id="buyer-contact" inputMode="tel" value={draft.newBuyerContact} onChange={(e) => update({ newBuyerContact: e.target.value })} />
               {accountsOn && (
                 <>
-                  <BusyButton type="button" className="rt-primary" busy={addBuyer.isPending} disabled={draft.newBuyerName.trim() === ''} onClick={() => addBuyer.mutate()}>
+                  <BusyButton type="button" className="rt-primary" busy={addBuyer.isPending} notReady={draft.newBuyerName.trim() === ''} onClick={() => addBuyer.mutate()}>
                     Add this buyer
                   </BusyButton>
                   <Problem error={addBuyer.error} />
@@ -536,7 +536,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
             <>
               <label htmlFor="credit-reason">Why is this sale allowed? (at least 5 characters)</label>
               <input id="credit-reason" value={draft.creditReason ?? ''} maxLength={300} onChange={(e) => update({ creditReason: e.target.value })} />
-              <Hint>Save the sale again to sell above the limit. The reason is kept with the sale.</Hint>
+              <Hint full>Save the sale again to sell above the limit. The reason is kept with the sale.</Hint>
             </>
           ) : (
             <p>Ask someone who may allow it, take a payment first, or sell for less.</p>
@@ -549,7 +549,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           {mayKeepOnPhone(draft.sent) ? (
             <>
               <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
-              <Hint>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
+              <Hint full>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
               <BusyButton type="button" busy={keep.isPending} onClick={() => keep.mutate()}>
                 Keep it on this phone
               </BusyButton>
@@ -557,14 +557,14 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           ) : (
             <>
               <p>The server did not answer. The sale may or may not be saved. A credit sale needs the internet: tap Try again when you are online, and it is saved once.</p>
-              <Hint>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
+              <Hint full>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
             </>
           )}
         </div>
       )}
       {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
       <SaleBar>
-        <BusyButton type="submit" className="rt-primary sale-bar-action" busy={save.isPending || keep.isPending} disabled={problem !== null && !locked} data-tour="sale-save">
+        <BusyButton type="submit" className="rt-primary sale-bar-action" busy={save.isPending || keep.isPending} notReady={problem !== null && !locked} data-tour="sale-save">
           {offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : (
             <>
               <span>Record sale</span>

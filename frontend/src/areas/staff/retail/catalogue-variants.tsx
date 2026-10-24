@@ -252,7 +252,7 @@ export function NewFamilyPage() {
         </section>
         {problem && preview.rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
         {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}
-        <BusyButton busy={save.isPending} type="submit" className="rt-primary" data-tour="sizes-save" disabled={!complete}>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" data-tour="sizes-save" notReady={!complete}>
           {preview.rows.length > 0 ? `Make these ${preview.rows.length}` : 'Make them'}
         </BusyButton>
       </form>
@@ -292,7 +292,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
   return (
     <section className="rt-card" aria-label="Give this item sizes and colours">
       <h3>Give this item sizes and colours</h3>
-      <Hint>The stock you hold now becomes one of them. It keeps its code, prices, stock and history. The others start with no stock, at its prices.</Hint>
+      <Hint full>The stock you hold now becomes one of them. It keeps its code, prices, stock and history. The others start with no stock, at its prices.</Hint>
       <label htmlFor="make-size">Size of the stock you hold now</label>
       <input id="make-size" value={size} maxLength={30} onChange={(e) => setSize(e.target.value)} autoComplete="off" placeholder="0-3m" />
       <label htmlFor="make-colour">Colour or print of the stock you hold now</label>
@@ -300,7 +300,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
       <OptionBoxes prefix="make" sizes={sizes} colours={colours} onSizes={setSizes} onColours={setColours} />
       <p>{plan.length === 0 ? 'Nothing else will be made yet.' : `Also made, at ${money(product.sell_minor ?? 0)}: ${plan.map((p) => `${variantLabel(p.size, p.colour)} (${p.code})`).join(', ')}.`}</p>
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!ready} onClick={() => save.mutate()}>Give it sizes and colours</BusyButton>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" notReady={!ready} onClick={() => save.mutate()}>Give it sizes and colours</BusyButton>
       <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
     </section>
   );
@@ -427,7 +427,7 @@ export function JoinPage() {
       </section>
       {problem && rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
       {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}
-      <BusyButton busy={save.isPending} type="button" className="rt-primary" data-tour="join-save" disabled={problem !== null} onClick={() => save.mutate(undefined)}>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" data-tour="join-save" notReady={problem !== null} onClick={() => save.mutate(undefined)}>
         Join them as one item
       </BusyButton>
     </Gate>

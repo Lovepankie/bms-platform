@@ -54,4 +54,26 @@ describe('the picker', () => {
     expect(screen.queryByLabelText('From')).toBeNull();
     expect(screen.getByRole('button', { name: `${showRange(daysBefore(today, 3), today)}. Change the days` })).toBeTruthy();
   });
+
+  // Review of #559: All sales starts with every day, and Show every day goes back to it after a preset.
+  it('shows an open start as every day and goes back to it from the sheet', () => {
+    const today = businessToday();
+    function Open() {
+      const [range, setRange] = useState({ from: '', to: today });
+      return <PeriodPicker from={range.from} to={range.to} onChange={setRange} openStart />;
+    }
+    render(<Open />);
+    expect(screen.getByRole('button', { name: `Every day up to ${showDate(today)}. Change the days` })).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'Today' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show every day' }));
+    expect(screen.getByRole('radio', { name: 'Custom' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('button', { name: `Every day up to ${showDate(today)}. Change the days` })).toBeTruthy();
+  });
+
+  it('keeps This week lit when it covers the same days as Today', () => {
+    render(<Harness start={{ from: '2000-01-01', to: '2000-01-02' }} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'This week' }));
+    expect(screen.getByRole('radio', { name: 'This week' }).getAttribute('aria-checked')).toBe('true');
+  });
 });

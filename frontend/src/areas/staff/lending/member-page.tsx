@@ -73,7 +73,7 @@ function KycPanel({ member, kinCount, hasIdFront }: { member: MemberRecord; kinC
               <label htmlFor="kyc-note">Why are they not accepted</label>
               <textarea id="kyc-note" rows={3} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
               <p className="cluster">
-                <BusyButton busy={decide.isPending} type="button" className="rt-primary" disabled={note.trim() === ''} onClick={() => decide.mutate({ decision: 'rejected', note: note.trim() })}>Not accepted</BusyButton>
+                <BusyButton busy={decide.isPending} type="button" className="rt-primary" notReady={note.trim() === ''} onClick={() => decide.mutate({ decision: 'rejected', note: note.trim() })}>Not accepted</BusyButton>
                 <button type="button" className="btn-ghost" onClick={() => setRejecting(false)}>Cancel</button>
               </p>
             </div>

@@ -121,7 +121,7 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
       {error?.fields.reason && <p role="alert" className="field-error">{error.fields.reason}</p>}
       {add.isSuccess && <p role="status" className="alert alert-success">Added.</p>}
       <p>
-        <BusyButton type="submit" className="rt-primary" busy={add.isPending} disabled={phone.trim() === ''}>
+        <BusyButton type="submit" className="rt-primary" busy={add.isPending} notReady={phone.trim() === ''}>
           Add to the list
         </BusyButton>
       </p>

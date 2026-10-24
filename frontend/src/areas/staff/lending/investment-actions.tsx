@@ -78,7 +78,7 @@ export function FundForm({ inv }: { inv: Investment }) {
       <label htmlFor="fund-ref">Reference (optional)</label>
       <input id="fund-ref" maxLength={100} value={draft.reference} onChange={(e) => update({ reference: e.target.value })} autoComplete="off" />
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!isIsoDate(draft.date)}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={!isIsoDate(draft.date)}>
         Record funding
       </BusyButton>
     </form>

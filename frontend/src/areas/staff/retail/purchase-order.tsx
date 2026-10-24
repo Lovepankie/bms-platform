@@ -140,7 +140,7 @@ export function PurchaseOrderPage() {
 }
             {canReceiveOrder(o) && <Link className="btn rt-primary" to="/staff/retail/purchase-orders/$orderId/receive" params={{ orderId }}>Receive goods</Link>}
           </p>
-          {canSendOrder(o) && <Hint>Sending locks the order. A large order needs a second person to approve it first.</Hint>}
+          {canSendOrder(o) && <Hint full>Sending locks the order. A large order needs a second person to approve it first.</Hint>}
           <Problem error={send.error} />
           {canCancelOrder(o) && (
             <ReasonPanel openLabel="Cancel this order" question="Why is it cancelled?" hint="What was already received stays received. Nothing more can be received against a cancelled order." confirmLabel="Cancel the order" busy={cancel.isPending} error={cancel.error} onSubmit={(reason) => cancel.mutate(reason)} />

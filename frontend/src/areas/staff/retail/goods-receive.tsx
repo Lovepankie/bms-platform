@@ -141,7 +141,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
           <input type="checkbox" checked={form.hold === true} onChange={(e) => onChange({ ...form, hold: e.target.checked })} />
           <span>Hold until the landed cost is in</span>
         </label>
-        <Hint>Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</Hint>
+        <Hint full>Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</Hint>
       </div>
       {picker && <div data-tour="receive-items">{picker}</div>}
       <h2>What arrived</h2>
@@ -154,7 +154,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
       <p className="rt-total" aria-live="polite" data-testid="receive-total">Worth {money(receiveTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton busy={busy ?? false} type="submit" className="rt-primary" disabled={problem !== null} data-tour="receive-save">Save goods received</BusyButton>
+      <BusyButton busy={busy ?? false} type="submit" className="rt-primary" notReady={problem !== null} data-tour="receive-save">Save goods received</BusyButton>
     </form>
   );
 }

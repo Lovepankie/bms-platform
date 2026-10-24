@@ -48,7 +48,7 @@ function OpenAccount({ memberId }: { memberId: string }) {
         <p className="field-hint">The first deposit must be at least {money(chosen.min_opening_balance_minor, chosen.currency)}.</p>
       )}
       <Problem error={open.error} />
-      <BusyButton busy={open.isPending} type="submit" className="rt-primary btn-block" disabled={!productId}>
+      <BusyButton busy={open.isPending} type="submit" className="rt-primary btn-block" notReady={!productId}>
         Open account
       </BusyButton>
     </form>

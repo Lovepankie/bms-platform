@@ -4,9 +4,22 @@ import { icons } from '../../components/icons';
 // The one help line of a screen or a section (issue #526, docs/ui-rules.md rule 17): one line at most on screen. A longer text is
 // cut at the end of its first line, and an info button beside it shows the rest and hides it again. The whole text is always in
 // the page, so a screen reader reads all of it; the cut is only what a sighted person sees. The button is drawn only when the
-// text is cut, measured after layout, so a short hint is a plain line. The look is .hint-line in src/app/ui/kit.css.
+// text is cut, measured after layout, so a short hint is a plain line. A warning or a consequence that changes what the person
+// does next (it cannot be undone, the secret is shown once, damaged goods never go back) is never cut: `full` draws it whole.
+// The look is .hint-line in src/app/ui/kit.css.
 
-export function Hint({ children, tour }: { children: ReactNode; tour?: string }) {
+export function Hint({ children, tour, full = false }: { children: ReactNode; tour?: string; full?: boolean }) {
+  if (full) {
+    return (
+      <p className="hint" data-tour={tour}>
+        {children}
+      </p>
+    );
+  }
+  return <CutHint tour={tour}>{children}</CutHint>;
+}
+
+function CutHint({ children, tour }: { children: ReactNode; tour?: string }) {
   const text = useRef<HTMLParagraphElement>(null);
   const [cut, setCut] = useState(false);
   const [open, setOpen] = useState(false);

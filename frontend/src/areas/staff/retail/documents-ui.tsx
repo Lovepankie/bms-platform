@@ -123,7 +123,7 @@ export function DocumentCard({ doc, branchName, term = '' }: { doc: RetailDocume
         {doc.type === 'quotation' && doc.valid_until ? `, valid until ${showDate(doc.valid_until)}` : ''}
         {branchName ? `, ${branchName}` : ''}
       </p>
-      {doc.status === 'void' && <Hint>Its sale or quotation was cancelled. The PDF stays as it was issued.</Hint>}
+      {doc.status === 'void' && <Hint full>Its sale or quotation was cancelled. The PDF stays as it was issued.</Hint>}
       <PdfButton doc={doc} />
     </li>
   );
@@ -181,7 +181,7 @@ export function SeriesPanel({ series, canEdit, busy, onSave }: { series: Documen
   return (
     <section aria-label="Document numbers" data-tour="document-numbers">
       <h2>Document numbers</h2>
-      <Hint>Each document is numbered in its branch: the prefix, the branch code and a counter that never skips and never repeats. Changing a prefix changes later numbers only.</Hint>
+      <Hint full>Each document is numbered in its branch: the prefix, the branch code and a counter that never skips and never repeats. Changing a prefix changes later numbers only.</Hint>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {shown.map((s) => <SeriesRow key={s.type} series={s} canEdit={canEdit} busy={busy} onSave={onSave} />)}
       </ul>

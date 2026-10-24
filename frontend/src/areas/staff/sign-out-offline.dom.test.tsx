@@ -241,7 +241,7 @@ describe('ending a pending sign-out on a connection that never answers', () => {
     const loginField = screen.getByLabelText('Email or phone') as HTMLInputElement;
     expect(loginField.disabled).toBe(true);
     expect((screen.getByLabelText('Password') as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Sign in' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
+    expect((screen.getByRole('button', { name: 'Sign in' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.submit(loginField.form as HTMLFormElement);
     expect(login).not.toHaveBeenCalled();
 

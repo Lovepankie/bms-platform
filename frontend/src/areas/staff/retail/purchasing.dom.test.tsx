@@ -404,9 +404,9 @@ describe('the purchasing settings', () => {
     expect((screen.getByLabelText(/supplier invoice may differ/) as HTMLInputElement).value).toBe('1.00');
     expect((screen.getByLabelText(/more than the order may be received/) as HTMLInputElement).value).toBe('2.50');
     expect(screen.getByTestId('order-threshold').textContent).toContain('UGX 5,000,000');
-    expect(button('Save purchasing settings').getAttribute('data-not-ready')).toBe('true');
+    expect(button('Save purchasing settings').disabled).toBe(true);
     type(/supplier invoice may differ/, '1.5');
-    expect(button('Save purchasing settings').getAttribute('data-not-ready')).toBeNull();
+    expect(button('Save purchasing settings').disabled).toBe(false);
     fireEvent.click(button('Save purchasing settings'));
     expect(onSave).toHaveBeenCalledWith({ bill_tolerance_bp: 150, over_receipt_bp: 250, require_costing_before_sale: false });
   });
@@ -417,9 +417,9 @@ describe('the purchasing settings', () => {
     const box = screen.getByLabelText(/Do not move goods out until their landed cost is in/) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(screen.getByText(/cannot be moved out of its branch/).textContent).toMatch(/held, not costed/);
-    expect(button('Save purchasing settings').getAttribute('data-not-ready')).toBe('true');
+    expect(button('Save purchasing settings').disabled).toBe(true);
     fireEvent.click(box);
-    expect(button('Save purchasing settings').getAttribute('data-not-ready')).toBeNull();
+    expect(button('Save purchasing settings').disabled).toBe(false);
     fireEvent.click(button('Save purchasing settings'));
     expect(onSave).toHaveBeenCalledWith({ bill_tolerance_bp: 100, over_receipt_bp: 0, require_costing_before_sale: true });
   });
@@ -428,9 +428,9 @@ describe('the purchasing settings', () => {
     render(<PurchasingSettingsForm settings={{ bill_tolerance_bp: 0, over_receipt_bp: 0, version: 1 }} onSave={() => undefined} />);
     expect(screen.getByTestId('order-threshold').textContent).toMatch(/no approval limit/i);
     type(/supplier invoice may differ/, '1.234');
-    expect(button('Save purchasing settings').getAttribute('data-not-ready')).toBe('true');
+    expect(button('Save purchasing settings').disabled).toBe(true);
     expect(screen.getByRole('alert').textContent).toMatch(/0 to 100/);
     type(/supplier invoice may differ/, '101');
-    expect(button('Save purchasing settings').getAttribute('data-not-ready')).toBe('true');
+    expect(button('Save purchasing settings').disabled).toBe(true);
   });
 });

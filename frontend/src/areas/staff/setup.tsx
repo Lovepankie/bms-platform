@@ -378,7 +378,7 @@ export function Setup() {
             <label htmlFor="go-live-date">The day the app became your register (only the Owner of the business changes it)</label>
             <input id="go-live-date" type="date" disabled={busy} defaultValue={current.go_live_date ?? ''}
               onBlur={(e) => { if (e.target.value && e.target.value !== current.go_live_date) setGoLive(e.target.value); }} />
-            <Hint>
+            <Hint full>
               Loans given out before this day can be brought in from your paper register with their real dates. Until it is set, the day an
               administrator first signed in counts.
             </Hint>

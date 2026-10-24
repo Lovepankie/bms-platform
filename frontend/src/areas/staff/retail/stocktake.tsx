@@ -252,7 +252,7 @@ function CountSheet({ branchId }: { branchId: string }) {
           </p>
         </div>
       )}
-      <BusyButton type="button" className="rt-primary" busy={review.isPending} disabled={entered.length === 0 || bad} onClick={finish} data-tour="count-review">
+      <BusyButton type="button" className="rt-primary" busy={review.isPending} notReady={entered.length === 0 || bad} onClick={finish} data-tour="count-review">
         {`Review the difference (${entered.length} counted)`}
       </BusyButton>
 

@@ -25,8 +25,10 @@ export function showDate(iso: string | undefined): string {
   return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1] ?? m[2]} ${m[1]}` : (iso ?? '');
 }
 
-/** The days in words: "24 Oct 2026", "17 Oct to 24 Oct 2026", or both years when they differ. */
+/** The days in words: "24 Oct 2026", "17 Oct to 24 Oct 2026", both years when they differ, or "Every day up to 24 Oct 2026"
+    for an open start (a list that shows every year until days are chosen). */
 export function showRange(from: string, to: string): string {
+  if (from === '') return to === '' ? 'Every day' : `Every day up to ${showDate(to)}`;
   if (from === to) return showDate(to);
   const start = from.slice(0, 4) === to.slice(0, 4) ? showDate(from).replace(/ \d{4}$/, '') : showDate(from);
   return `${start} to ${showDate(to)}`;
@@ -51,8 +53,12 @@ export function periodOf(from: string, to: string, today: string): Period {
   return 'custom';
 }
 
-/** Plain words when two typed days cannot be used, else null. Both ends count; `maxDays` is the server's limit when it has one. */
-export function customProblem(from: string, to: string, today: string, maxDays?: number): string | null {
+/**
+ * Plain words when two typed days cannot be used, else null. Both ends count; `maxDays` is the server's limit when it has one;
+ * `openStart` lets the first day stay empty (every day up to the last).
+ */
+export function customProblem(from: string, to: string, today: string, maxDays?: number, openStart = false): string | null {
+  if (openStart && from === '' && to !== '') return to > today ? 'Choose days up to today.' : null;
   if (!from || !to) return 'Choose both days.';
   if (from > to) return 'The first day must not be after the last.';
   if (to > today) return 'Choose days up to today.';
@@ -61,18 +67,23 @@ export function customProblem(from: string, to: string, today: string, maxDays?:
   return null;
 }
 
-export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDays, tour }: {
+export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDays, openStart = false, tour }: {
   from: string;
   to: string;
   onChange: (range: { from: string; to: string }) => void;
   /** Names the choice for a screen reader. */
   label?: string;
   maxDays?: number;
+  /** The list may show every day (an empty first day), as All sales does to start with; the sheet offers Show every day. */
+  openStart?: boolean;
   tour?: string;
 }) {
   const id = useId();
   const today = businessToday();
-  const period = periodOf(from, to, today);
+  // The preset last tapped wins while it still covers the days, so This week stays lit on a Monday, when it equals Today.
+  const [picked, setPicked] = useState<Exclude<Period, 'custom'> | null>(null);
+  const pickedRange = picked ? presetRange(picked, today) : null;
+  const period = picked && pickedRange?.from === from && pickedRange.to === to ? picked : periodOf(from, to, today);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState({ from, to });
   const [problem, setProblem] = useState<string | null>(null);
@@ -83,7 +94,7 @@ export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDa
     setOpen(true);
   };
   const show = () => {
-    const p = customProblem(draft.from, draft.to, today, maxDays);
+    const p = customProblem(draft.from, draft.to, today, maxDays, openStart);
     setProblem(p);
     if (p) return;
     setOpen(false);
@@ -102,7 +113,10 @@ export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDa
           if (next === null) {
             if (period === 'custom') openSheet();
           } else if (next === 'custom') openSheet();
-          else onChange(presetRange(next, today));
+          else {
+            setPicked(next);
+            onChange(presetRange(next, today));
+          }
         }}
       />
       {period === 'custom' ? (
@@ -117,9 +131,22 @@ export function PeriodPicker({ from, to, onChange, label = 'Days to show', maxDa
         onClose={() => setOpen(false)}
         title="Choose the days"
         actions={
-          <button type="button" className="btn-primary" onClick={show}>
-            Show these days
-          </button>
+          <>
+            <button type="button" className="btn-primary" onClick={show}>
+              Show these days
+            </button>
+            {openStart && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onChange({ from: '', to: today });
+                }}
+              >
+                Show every day
+              </button>
+            )}
+          </>
         }
       >
         <div className="rt-row">

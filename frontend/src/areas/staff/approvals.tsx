@@ -73,7 +73,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
           </>
         )}
         {item.action_type === 'loan_bring_in' && (
-          <Hint>
+          <Hint full>
             Approving puts this loan from the paper register in the books. No arrears SMS goes to the borrower in the 7 days after it comes in, so the business can speak to them first.
           </Hint>
         )}

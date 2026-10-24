@@ -229,7 +229,7 @@ describe('a primary button whose form is not ready (#526)', () => {
       <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSend(); }}>
         <label htmlFor="n">Name</label>
         <input id="n" aria-required="true" value={name} onChange={(e) => setName(e.target.value)} />
-        <BusyButton type="submit" className="rt-primary" busy={false} disabled={name === ''}>Save</BusyButton>
+        <BusyButton type="submit" className="rt-primary" busy={false} notReady={name === ''}>Save</BusyButton>
       </form>
     );
   }
@@ -251,12 +251,32 @@ describe('a primary button whose form is not ready (#526)', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
-  it('says to check the fields when none is marked missing, and a secondary button stays disabled', () => {
+  it('says to check the fields when none is marked missing', () => {
     const onClick = vi.fn();
-    render(<><BusyButton className="btn-primary" busy={false} disabled onClick={onClick}>Review</BusyButton><BusyButton busy={false} disabled>Later</BusyButton></>);
+    render(<BusyButton className="btn-primary" busy={false} notReady onClick={onClick}>Review</BusyButton>);
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(onClick).not.toHaveBeenCalled();
     expect(screen.getByRole('status').textContent).toBe('Fill in or correct the fields above first.');
-    expect((screen.getByRole('button', { name: 'Later' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // Review of #559: disabled keeps its meaning for a block that is not about the fields (a server not set up, another request).
+  it('keeps disabled as disabled, on a primary too, with no message', () => {
+    render(<BusyButton className="rt-primary" busy={false} disabled>Test connection</BusyButton>);
+    const button = screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('data-not-ready')).toBeNull();
+  });
+
+  it('lets another submit button of the form send while the primary waits for its fields', () => {
+    const onSend = vi.fn();
+    render(
+      <form onSubmit={(e) => { e.preventDefault(); onSend((e.nativeEvent as SubmitEvent).submitter?.textContent); }}>
+        <input aria-required="true" defaultValue="" aria-label="Name" />
+        <BusyButton type="submit" className="rt-primary" busy={false} notReady>Save</BusyButton>
+        <button type="submit">Save as draft</button>
+      </form>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }));
+    expect(onSend).toHaveBeenCalledWith('Save as draft');
   });
 });

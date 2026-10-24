@@ -58,7 +58,7 @@ export function ConvertPanel({ form, hasTerms, busy, onChange, onConvert }: { fo
         <input type="checkbox" checked={form.invoice} onChange={(e) => onChange({ ...form, invoice: e.target.checked })} /> Also make the invoice
       </label>
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
-      <BusyButton type="button" className="rt-primary" busy={busy === true} disabled={problem !== null} onClick={onConvert}>
+      <BusyButton type="button" className="rt-primary" busy={busy === true} notReady={problem !== null} onClick={onConvert}>
         Make the sale
       </BusyButton>
     </fieldset>
@@ -125,7 +125,7 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
         {open && canSell && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'convert' ? null : 'convert')}>Make it a sale</button>}
         {open && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'cancel' ? null : 'cancel')}>Cancel</button>}
       </div>
-      {q.expired && <Hint>The last day has passed, so it cannot be made into a sale. Make a new quotation.</Hint>}
+      {q.expired && <Hint full>The last day has passed, so it cannot be made into a sale. Make a new quotation.</Hint>}
       {panel === 'convert' && <ConvertPanel form={form} hasTerms={hasTerms} busy={convert.isPending} onChange={setForm} onConvert={() => convert.mutate()} />}
       {panel === 'cancel' && (
         <fieldset>
@@ -213,10 +213,10 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
         />
       ))}
       <p className="rt-total" aria-live="polite">Total {money(draftTotal(draft.lines))}</p>
-      <Hint>Stock is not reserved. A price list, if the buyer has one, prices the items as it would on a sale.</Hint>
+      <Hint full>Stock is not reserved. A price list, if the buyer has one, prices the items as it would on a sale.</Hint>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       <Problem error={save.error} />
-      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null} data-tour="quotation-save">
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={problem !== null} data-tour="quotation-save">
         Save quotation
       </BusyButton>
 

@@ -150,7 +150,7 @@ export function CollectForm({ target }: { target: CollectTarget }) {
         aria-invalid={draft.phone !== '' && !looksLikeUgandaMobile(draft.phone)}
       />
       <Problem error={start.error} />
-      <BusyButton busy={start.isPending} type="submit" className="rt-primary" disabled={!valid}>
+      <BusyButton busy={start.isPending} type="submit" className="rt-primary" notReady={!valid}>
         Make the payment link
       </BusyButton>
     </form>

@@ -166,7 +166,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
         }}
       >
         <h2>Settings</h2>
-        {!canManage && <Hint>You can look at these settings. Only a business administrator can change them.</Hint>}
+        {!canManage && <Hint full>You can look at these settings. Only a business administrator can change them.</Hint>}
 
         <Field
           id="sms-sender"

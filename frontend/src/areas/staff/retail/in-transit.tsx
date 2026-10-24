@@ -60,7 +60,7 @@ function ReceiveForm({ transfer }: { transfer: InFlightTransfer }) {
       })}
       {problem && <p>{problem}</p>}
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={problem !== null}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={problem !== null}>
         Mark as received
       </BusyButton>
     </form>
