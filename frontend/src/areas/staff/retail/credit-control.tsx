@@ -8,6 +8,7 @@ import { Bars, Choice, DateRange, Empty, Section, ToSales, defaultRange, rangePr
 import { canOpenAccount } from './permissions';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { showDate } from './maths';
+import { KeyFigure } from '../../../app/ui/KeyFigure';
 
 // Credit control (issue #149, step 4): what credit buyers owe, how late it is, and what was paid in a
 // range. The owing and overdue tests are those of the credit sales list (a completed credit sale whose
@@ -40,7 +41,8 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
   const payments = data.payments ?? [];
   return (
     <>
-      <p className="rt-total">Owed by customers {money(totals.owed_minor ?? 0)} <ToSales credit>See the credit sales</ToSales></p>
+      <KeyFigure label="Owed by customers" value={money(totals.owed_minor ?? 0)} />
+      <p><ToSales credit>See the credit sales</ToSales></p>
       <p className="hint">{data.buyer_count ?? 0} {data.buyer_count === 1 ? 'buyer owes' : 'buyers owe'} this, as of {data.as_of}. Days are counted from the due date; a sale with no due date counts as not yet due.</p>
       <Section title="Ageing">
         <Bars label="Owed by age" rows={BUCKETS.map((b) => ({ key: b.key, name: b.label, value: totals[b.key] ?? 0, text: money(totals[b.key] ?? 0) }))} />

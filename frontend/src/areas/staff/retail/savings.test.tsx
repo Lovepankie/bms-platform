@@ -33,7 +33,7 @@ describe('savings form', () => {
 
   it('shows a caller with profit read the suggestion and the profit and lets them type an amount', () => {
     const out = page('admin', <SavingsForm branchId={branch} />, clientWith(withAmounts));
-    expect(out).toContain('Suggested savings UGX 20,000');
+    expect(out).toContain('<span class="key-figure-label">Suggested savings</span><strong class="key-figure-value">UGX 20,000</strong>');
     expect(out).toContain('Profit for the day: <strong>UGX 40,000</strong>');
     expect(out).toContain('for="savings-amount"');
     // The reason field appears only once the typed amount differs from the suggestion.

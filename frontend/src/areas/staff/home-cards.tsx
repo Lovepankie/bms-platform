@@ -14,6 +14,7 @@ import { ALL_SELLERS, branchesWhere, canUse, holds, holdsAt, showRetail } from '
 import { shortDate } from './retail/range-state';
 import { money as retailMoney } from './retail/ui';
 import { RowChevron } from '../../app/ui/ListRow';
+import { KeyFigure, KeyFigureRow } from '../../app/ui/KeyFigure';
 
 // Home's card per module the business uses (issue #471, ADR-072): Shop with today's sales, the items low on stock and the open
 // customer orders; Lending with the loans due today, those in arrears and the lending requests waiting for approval. A business with
@@ -155,18 +156,12 @@ function TakingsCard({ home }: { home: Summary }) {
     >
       {() => (
         <>
-          <dl className="home-figures">
+          {/* The total as the key figure, the cash, mobile money and bank behind it in rows (issue #526). */}
+          <KeyFigure label="Total" value={retailMoney(takings?.total_minor ?? 0)}>
             {(takings?.methods ?? []).map((m) => (
-              <div className="home-figure" key={m.method}>
-                <dt>{METHODS[m.method ?? ''] ?? m.method}</dt>
-                <dd>{retailMoney(m.amount_minor ?? 0)}</dd>
-              </div>
+              <KeyFigureRow key={m.method} label={METHODS[m.method ?? ''] ?? m.method} value={retailMoney(m.amount_minor ?? 0)} />
             ))}
-            <div className="home-figure">
-              <dt>Total</dt>
-              <dd>{retailMoney(takings?.total_minor ?? 0)}</dd>
-            </div>
-          </dl>
+          </KeyFigure>
           {(takings?.methods ?? []).every((m) => !m.sales_minor && !m.payments_minor && !m.fees_minor && !m.out_minor) && (
             <p className="hint">No money taken yet today.</p>
           )}

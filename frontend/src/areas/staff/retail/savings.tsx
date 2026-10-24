@@ -13,6 +13,7 @@ import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './u
 import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { KeyFigure } from '../../../app/ui/KeyFigure';
 
 // Daily savings (FR-RET-18 to FR-RET-20): per shop per day. The server suggests half the day's profit; a
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
@@ -111,7 +112,7 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
               ) : (
                 s.daily_profit_minor !== undefined && <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>
               )}
-              <p className="rt-total" aria-live="polite">Suggested savings {money(s.suggested_minor ?? 0)}</p>
+              <div aria-live="polite"><KeyFigure label="Suggested savings" value={money(s.suggested_minor ?? 0)} /></div>
               <label htmlFor="savings-amount">Amount to save (optional, leave blank to save the suggestion)</label>
               <input
                 id="savings-amount"

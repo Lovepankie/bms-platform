@@ -326,6 +326,20 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(code('areas/staff/home-cards.tsx')).not.toMatch(/<Link to="[^"]*">Open the/);
   });
 
+  // Item 14: every figure in tabular digits, amounts only through formatMinor, and the key figure at the display size.
+  it('draws figures tabular everywhere, formats money in one place, and shows the key figure large', () => {
+    expect(rulesFor(/^\s*body\s*$/).map((r) => r.body).join('')).toMatch(/font-variant-numeric: tabular-nums/);
+    const value = rulesFor(/^\s*\.key-figure-value\s*$/)[0]?.body ?? '';
+    expect(value).toMatch(/font-size: var\(--text-display\)/);
+    expect(value).toMatch(/font-variant-numeric: tabular-nums/);
+    for (const file of components.map((f) => relative(SRC, f)).filter((f) => !/mock/.test(f))) {
+      expect(code(file).match(/`UGX \$\{|Intl\.NumberFormat\([^)]*currency/)?.[0] ?? null, file).toBeNull();
+    }
+    for (const screen of ['areas/staff/home-cards.tsx', 'areas/staff/retail/profit.tsx', 'areas/staff/retail/savings.tsx', 'areas/staff/retail/credit-control.tsx']) {
+      expect(code(screen), screen).toMatch(/<KeyFigure\b/);
+    }
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');

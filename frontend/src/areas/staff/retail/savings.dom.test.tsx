@@ -83,14 +83,14 @@ describe('the savings screen', () => {
     expect(figures.textContent).toContain('UGX 4,000');
     expect(figures.textContent).toContain('Available to save');
     expect(figures.textContent).toContain('UGX 8,000');
-    expect(screen.getByText('Suggested savings UGX 4,000')).toBeTruthy();
+    expect(screen.getByText('UGX 4,000', { selector: '.key-figure-value' })).toBeTruthy();
   });
 
   it('refuses an amount above the available under the field, in plain words, and sends nothing', async () => {
     savingsSuggestion.mockResolvedValue(day);
     listSavings.mockResolvedValue([]);
     open();
-    await screen.findByText('Suggested savings UGX 4,000');
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
     fireEvent.change(amount(), { target: { value: '9000' } });
     // Nothing is said while typing (rule 10); the words come on blur.
     expect(screen.queryByRole('alert')).toBeNull();
@@ -112,7 +112,7 @@ describe('the savings screen', () => {
     listSavings.mockResolvedValue([]);
     createSavings.mockResolvedValue({ ...saved, amount_minor: 6000, overwritten: true });
     open();
-    await screen.findByText('Suggested savings UGX 4,000');
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
     fireEvent.change(amount(), { target: { value: '6000' } });
     expect(screen.getByRole('button', { name: 'Add a reason (optional)' })).toBeTruthy();
     expect(screen.queryByLabelText(/Why are you changing/)).toBeNull();
@@ -136,7 +136,7 @@ describe('the savings screen', () => {
     listSavings.mockResolvedValueOnce([]).mockImplementation(() => new Promise<Savings[]>((r) => { release = r; }));
     createSavings.mockResolvedValue(saved);
     open();
-    await screen.findByText('Suggested savings UGX 4,000');
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
     await screen.findByText('No savings recorded in this period.');
     fireEvent.click(saveButton());
 

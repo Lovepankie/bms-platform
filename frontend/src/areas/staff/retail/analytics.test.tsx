@@ -247,7 +247,7 @@ describe('credit control', () => {
 
   it('shows what is owed with the ageing, the overdue list and the payments by method', () => {
     const html = renderToString(<CreditControlView data={credit} nameOf={nameOf} sort="amount" />);
-    expect(html).toContain('Owed by customers UGX 11,000');
+    expect(html).toContain('<span class="key-figure-label">Owed by customers</span><strong class="key-figure-value">UGX 11,000</strong>');
     expect(html).toContain('Over 90 days late');
     expect(html).toContain('Test Customer Zed');
     expect(html).toContain('S-0001, Head office');
