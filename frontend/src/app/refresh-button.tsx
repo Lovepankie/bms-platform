@@ -41,6 +41,11 @@ const subscribeOnline = (notify: () => void) => {
   };
 };
 
+/** Whether this device has a network now, kept current by the browser's online and offline events. */
+export function useDeviceOnline(): boolean {
+  return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+}
+
 export function RefreshButton() {
   const client = useQueryClient();
   const cache = client.getQueryCache();
@@ -50,7 +55,7 @@ export function RefreshButton() {
   // A refresh that failed, in words a sighted user sees at every width; it stays until a refresh works (or the device is offline and says so).
   const [problem, setProblem] = useState('');
   const [now, setNow] = useState(() => Date.now());
-  const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
+  const online = useDeviceOnline();
   // The oldest load among the queries of the page on screen (pollers aside), so the label never looks fresher than the figures; 0 while none.
   const subscribeCache = useCallback((notify: () => void) => cache.subscribe(notify), [cache]);
   const loadedAt = useSyncExternalStore(subscribeCache, () => oldestLoad(cache.findAll({ type: 'active' })), () => 0);

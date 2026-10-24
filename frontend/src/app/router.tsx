@@ -13,18 +13,31 @@ import { WORDS } from './glossary';
 
 // The root layout is the shared shell (brand bar, theme colour, Powered-by footer): every route
 // below it inherits it, so no area draws its own.
-// The header controls show where there is data to refresh: the staff, member and operator areas, not the public pages.
+// The header controls show where there is data to refresh: the member and operator areas, not the public pages.
 // The operator sign-in and first-run setup sit under /platform but are plain forms with no data, so they get no button.
 const DATA_AREA = /^\/(staff|member|platform)(\/|$)/;
 const NO_DATA = /^\/platform\/(sign-in|setup)\/?$/;
 
-/** Whether the header shows the refresh button on `pathname`. */
-export const showsRefresh = (pathname: string) => DATA_AREA.test(pathname) && !NO_DATA.test(pathname);
+// The staff area draws its own one top bar, which holds Refresh in its menu (issue #526); the Powered-by footer shows there only
+// on More and the settings pages, so a working screen ends at its content.
+const STAFF = /^\/staff(\/|$)/;
+const STAFF_FOOTER = /^\/staff\/(more|setup|retail\/settings)\/?$/;
+
+/** Whether the shell's brand bar shows the refresh button on `pathname`. */
+export const showsRefresh = (pathname: string) => DATA_AREA.test(pathname) && !NO_DATA.test(pathname) && !STAFF.test(pathname);
+
+/** Whether the shell draws the Powered-by footer on `pathname`. */
+export const showsFooter = (pathname: string) => !STAFF.test(pathname) || STAFF_FOOTER.test(pathname);
 
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   return (
-    <Shell brand={useShellBrand()} actions={showsRefresh(pathname) ? <RefreshButton key={pathname} /> : undefined}>
+    <Shell
+      brand={useShellBrand()}
+      actions={showsRefresh(pathname) ? <RefreshButton key={pathname} /> : undefined}
+      bar={!STAFF.test(pathname)}
+      footer={showsFooter(pathname)}
+    >
       <Outlet />
     </Shell>
   );

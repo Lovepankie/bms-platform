@@ -39,7 +39,6 @@ import { StockPage } from '../areas/staff/retail/stock';
 import { AllSales, CreditSales } from '../areas/staff/retail/sales';
 import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
-import { RefreshButton } from '../app/refresh-button';
 import { StaffBar, StaffSideNav } from '../areas/staff/route';
 import { MoneyPage, MorePage } from '../areas/staff/tab-pages';
 import { TabBar } from '../areas/staff/tabs';
@@ -54,8 +53,6 @@ import { BillingScreen } from '../areas/staff/billing/page';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
-import { PLATFORM_BRAND } from '../app/branding';
-import { BrandBar } from '../app/shell';
 import { CORE_TOURS, TOURS } from './tours';
 
 // One test per tour: render the screen each step points at (under the shell's brand bar, the sidebar and the staff bar, as the staff
@@ -217,8 +214,8 @@ function render(me: Me, path: string | undefined): string {
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch, signOut: () => undefined }}>
-          <OfflineProvider value={testOffline(me)}>
-            <BrandBar brand={PLATFORM_BRAND} actions={<RefreshButton />} />
+          {/* Offline, so the Online dot (drawn only when it has news, issue #526) is on the page for its step. */}
+          <OfflineProvider value={testOffline(me, { online: false })}>
             <StaffSideNavForTest />
             <StaffBarForTest />
             <TabBar me={me} />

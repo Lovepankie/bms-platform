@@ -41,7 +41,9 @@ async function signOutOffline() {
     path === '/api/v1/me' ? Promise.resolve({ data: seller, response: new Response() }) : new Promise(() => undefined)) as never);
   vi.spyOn(api, 'POST').mockImplementation((() => Promise.reject(new TypeError('offline'))) as never);
   const router = start();
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }, { timeout: 5000 }));
+  // Sign out is in the top bar's one menu (issue #526).
+  fireEvent.click(await screen.findByRole('button', { name: /^Menu for / }, { timeout: 5000 }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'));
   expect(getAccessToken()).toBeNull();
   expect(logoutPending()).toBe(true);

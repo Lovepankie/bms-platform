@@ -288,6 +288,7 @@ describe('the bottom tabs on a phone (issue #539)', () => {
         </QueryClientProvider>
       </RouterContextProvider>,
     );
+    fireEvent.click(screen.getByRole('button', { name: /^Menu for / }));
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(signOut).toHaveBeenCalledTimes(1);
   });
