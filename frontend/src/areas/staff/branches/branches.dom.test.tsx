@@ -8,6 +8,9 @@ import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // The Branches screen in a browser (issue #329) with the API client replaced: closed branches are hidden until asked for and carry a
 // Closed badge, closing an empty branch asks once, closing over stock shows the server's warning with the stock value and needs a
 // reason before it is sent again, nothing is sent twice by a double tap, a reopen and the stocking switch work, and someone who may only
@@ -117,7 +120,7 @@ describe('closing', () => {
     const anyway = screen.getByRole('button', { name: 'Close it anyway' }) as HTMLButtonElement;
     expect(anyway.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Why are you closing it?'), { target: { value: 'Test shop shut for good' } });
-    expect(anyway.disabled).toBe(false);
+    expect(ready(anyway)).toBe(true);
     fireEvent.click(anyway);
     await waitFor(() => expect(api.close).toHaveBeenCalledTimes(2));
     expect(api.close.mock.calls[1]?.[1]).toBe('Test shop shut for good');

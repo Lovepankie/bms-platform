@@ -122,7 +122,7 @@ describe('an item with sizes and colours', () => {
     await pickItem('Test Cable thin', { typed: 'Cable' });
     fireEvent.change(screen.getByLabelText('Size of Test Cable thin'), { target: { value: 's' } });
     await waitFor(() => expect(screen.getByRole('note').textContent).toContain('Test Romper has one of these sizes and colours already'));
-    expect((screen.getByRole('button', { name: 'Join them as one item' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Join them as one item' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
   });
 
   it('says so when the item picked to join has no sizes, instead of doing nothing', async () => {
@@ -151,6 +151,6 @@ describe('an item with sizes and colours', () => {
     await waitFor(() => expect(screen.getAllByRole('combobox').length).toBe(1));
     await pickItem('Test Cable thin', { typed: 'Cable' });
     await waitFor(() => expect(screen.getByRole('note').textContent).toContain('Test Romper could not be read'));
-    expect((screen.getByRole('button', { name: 'Join them as one item' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Join them as one item' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
   });
 });

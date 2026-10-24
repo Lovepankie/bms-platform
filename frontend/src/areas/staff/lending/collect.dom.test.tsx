@@ -76,11 +76,11 @@ describe('starting a collection', () => {
     expect((screen.getByLabelText(/Amount/) as HTMLInputElement).value).toBe('520000');
     expect(screen.getAllByText(/own payment account/).length).toBeGreaterThan(0);
     const button = screen.getByRole('button', { name: 'Make the payment link' }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText("Payer's mobile number"), { target: { value: '12345' } });
-    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText("Payer's mobile number"), { target: { value: '0700000216' } });
-    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('data-not-ready')).toBeNull();
   });
 
   it('shows a refusal for a business without a verified own account in plain words and makes no link', async () => {

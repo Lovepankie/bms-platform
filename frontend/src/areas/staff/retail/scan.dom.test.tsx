@@ -19,6 +19,9 @@ import { TransferForm } from './transfer';
 import { PACK_UNUSABLE } from './barcode-state';
 import { pickItem } from '../../../test-utils/item-picker';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 /** The count sheet before anything is found or scanned (issue #534). */
 const EMPTY_COUNT = 'No items yet. Find an item above, scan it, or count it in the list below.';
 /** The picker of the barcode assign panel has its own label, so it is told apart from the sale's (review of #535). */
@@ -550,7 +553,7 @@ describe('FR-RET-68 the label sheet', () => {
     expect(drawn[0]?.getAttribute('data-format')).toBe('ean13');
     expect([...(drawn[0]?.querySelectorAll('text') ?? [])].map((t) => t.textContent).join('')).toBe(code);
     expect(labels[0]?.querySelector('.label-code')).toBeNull();
-    expect((screen.getByRole('button', { name: 'Print' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(ready((screen.getByRole('button', { name: 'Print' }) as HTMLButtonElement))).toBe(true);
     expect(screen.getByTestId('label-stock').textContent).toContain('70 by 37 mm');
     expect(screen.getByTestId('label-stock').textContent).toContain('zero margin');
     fireEvent.click(screen.getByRole('checkbox', { name: /keep 4 mm clear inside each label/ }));

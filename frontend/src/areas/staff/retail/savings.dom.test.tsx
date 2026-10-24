@@ -98,13 +98,13 @@ describe('the savings screen', () => {
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toBe('You can save at most UGX 8,000 today (profit UGX 12,000 minus expenses UGX 4,000).');
     expect(amount().getAttribute('aria-describedby')).toBe(alert.id);
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(saveButton());
     expect(createSavings).not.toHaveBeenCalled();
 
     fireEvent.change(amount(), { target: { value: '8000' } });
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(saveButton().disabled).toBe(false);
+    expect(saveButton().getAttribute('data-not-ready')).toBeNull();
   });
 
   it('offers the reason only as an optional pick list, and saves a changed amount without one', async () => {

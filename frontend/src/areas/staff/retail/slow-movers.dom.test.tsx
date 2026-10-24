@@ -125,7 +125,7 @@ describe('slow mover settings', () => {
     change.mockResolvedValue({ capabilities: { profile: 'shop', slow_mover_months: 6, slow_mover_min_sold: 2 }, version: 8 });
     show(<SlowMoverSetting read={read} />);
     const save = screen.getByRole('button', { name: 'Save' });
-    expect((save as HTMLButtonElement).disabled).toBe(true);
+    expect((save as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText(/more than this many months/), { target: { value: '6' } });
     fireEvent.change(screen.getByLabelText(/fewer than this many sold/), { target: { value: '2' } });
     fireEvent.click(save);
@@ -136,7 +136,7 @@ describe('slow mover settings', () => {
     show(<SlowMoverSetting read={read} />);
     fireEvent.change(screen.getByLabelText(/more than this many months/), { target: { value: '25' } });
     expect(screen.getByRole('alert').textContent).toContain('1 to 24');
-    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
   });
 });
 

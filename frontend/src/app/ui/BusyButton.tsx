@@ -1,4 +1,5 @@
-import { useEffect, useRef, useSyncExternalStore, type ButtonHTMLAttributes, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes, type MouseEvent } from 'react';
+import { focusFirstMissing } from './Field';
 
 // The one busy button (#456): every button that writes (a sale, a payment, an invitation, a sign-in)
 // shows a small spinner in its end padding while its request runs and cannot be pressed twice. The label
@@ -51,6 +52,18 @@ export function BusyAnnouncer({ modal = false }: { modal?: boolean }) {
   );
 }
 
+// The main action of a screen (issue #526, docs/ui-rules.md rule 6): a primary button never looks off. While its form is not
+// ready (`disabled`) it stays enabled and in the brand fill, and a press, or Enter in a field, sends nothing and takes the
+// person to the first missing or wrong field instead (rule 10); where no field is marked, one line under it says to check the
+// fields above. It carries data-not-ready while so. A secondary button keeps the plain disabled state.
+const PRIMARY = /(^|\s)(rt-primary|btn-primary|btn-brand)(\s|$)/;
+
+/** Scrolls to and focuses the first missing or wrong field around `button` (its form, else the screen it sits in); false when none. */
+function leadToMissing(button: HTMLButtonElement | null): boolean {
+  const root = button?.form ?? button?.closest('main, section, [role="dialog"]') ?? null;
+  return root ? focusFirstMissing(root) : false;
+}
+
 // The longest a press or submit holds a button whose busy never turns on (an onClick that never settles).
 const HOLD_MAX = 10_000;
 
@@ -60,6 +73,14 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
   const button = useRef<HTMLButtonElement>(null);
   const busyNow = useRef(busy);
   busyNow.current = busy;
+  const notReady = Boolean(disabled) && !busy && PRIMARY.test(className ?? '');
+  const notReadyNow = useRef(notReady);
+  notReadyNow.current = notReady;
+  // A press while not ready that found no field to go to: the line under the button says what to do.
+  const [nudge, setNudge] = useState(false);
+  useEffect(() => {
+    if (!notReady) setNudge(false);
+  }, [notReady]);
   // A second press can land before the pending state renders (a double click is two events in one
   // task), so a press holds the button until busy shows, or until the press's own work is over (an
   // onClick that awaits or throws) and one more task has passed (a form that refused its input). A
@@ -87,7 +108,11 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
     const owner = button.current?.form;
     if (!owner || (rest.type !== undefined && rest.type !== 'submit')) return;
     const drop = (e: SubmitEvent) => {
-      if (busyNow.current || (held.current && e.submitter !== button.current)) {
+      if (notReadyNow.current) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setNudge(!leadToMissing(button.current));
+      } else if (busyNow.current || (held.current && e.submitter !== button.current)) {
         e.preventDefault();
         e.stopImmediatePropagation();
       } else if (!held.current) {
@@ -117,6 +142,11 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
   }
 
   function press(e: MouseEvent<HTMLButtonElement>) {
+    if (notReadyNow.current) {
+      e.preventDefault();
+      setNudge(!leadToMissing(button.current));
+      return;
+    }
     if (busyNow.current || held.current) {
       e.preventDefault();
       return;
@@ -131,18 +161,28 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
     }
   }
 
-  return (
+  const control = (
     <button
       ref={button}
       {...rest}
       className={className ? `${className} busy-button` : 'busy-button'}
-      disabled={busy ? undefined : disabled}
+      disabled={busy || notReady ? undefined : disabled}
       aria-disabled={busy || rest['aria-disabled'] || undefined}
       aria-busy={busy || undefined}
+      data-not-ready={notReady || undefined}
       onClick={press}
     >
       {children}
       {busy && <span className="busy-spinner" aria-hidden="true" />}
     </button>
+  );
+  if (!nudge) return control;
+  return (
+    <>
+      {control}
+      <span className="busy-nudge" role="status">
+        Fill in or correct the fields above first.
+      </span>
+    </>
   );
 }

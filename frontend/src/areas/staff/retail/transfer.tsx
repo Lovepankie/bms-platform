@@ -15,6 +15,7 @@ import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { chosenPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -136,12 +137,14 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
 
       {problem && draft.lines.length > 0 && <p>{problem}</p>}
       <Problem error={save.error} />
-      <span data-tour="transfer-save">
-        <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null}>
-          {sends ? 'Send stock' : 'Move stock'}
-        </BusyButton>
+      <ActionBar>
+        <span data-tour="transfer-save">
+          <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null}>
+            {sends ? 'Send stock' : 'Move stock'}
+          </BusyButton>
 
-      </span>
+        </span>
+      </ActionBar>
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}

@@ -100,7 +100,7 @@ describe('the new member form', () => {
     expect(await screen.findByText(/Someone like this is already registered/, undefined, { timeout: 2000 })).toBeTruthy();
     expect(screen.getByText('M000001')).toBeTruthy();
     expect(screen.getByText(/cannot be saved/i)).toBeTruthy();
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     expect(mock.calls.create).toHaveLength(0);
   });
 
@@ -110,9 +110,9 @@ describe('the new member form', () => {
     mount(<MemberForm onSaved={saved} />, mock.api);
     fill('CM000000000099', '0700 000 001');
     const tick = await screen.findByLabelText(/different person who shares the phone/i, undefined, { timeout: 2000 });
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(tick);
-    expect(save().disabled).toBe(false);
+    expect(save().getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(save());
     await waitFor(() => expect(saved).toHaveBeenCalled());
     expect(mock.calls.create[0]?.body).toMatchObject({ confirmed_not_duplicate: true, phone: '+256700000001' });
@@ -150,7 +150,7 @@ describe('the new member form', () => {
     fireEvent.click(save());
     expect(await screen.findByText(/already saved/i, undefined, { timeout: 2000 })).toBeTruthy();
     expect(mock.members).toHaveLength(1);
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(save());
     expect(mock.calls.create).toHaveLength(1);
   });

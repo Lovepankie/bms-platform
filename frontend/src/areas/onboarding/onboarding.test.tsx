@@ -160,7 +160,7 @@ describe('the applicant page (FR-ONB-02, FR-ONB-04)', () => {
     const html = await page({ view: { ...base, status: 'needs_info', operator_note: 'Which town is the shop in?' } });
     expect(html).toContain('Which town is the shop in?');
     expect(html).toContain('for="reply"');
-    expect(html).toMatch(/disabled="">Send answer/);
+    expect(html).toMatch(/data-not-ready="true">Send answer/);
   });
 
   it('shows loading, an invalid link and the reason of a rejection', async () => {

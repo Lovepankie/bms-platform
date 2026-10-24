@@ -203,3 +203,11 @@ button[aria-disabled='true'],
     animation: rt-busy-pulse 1.6s var(--ease-out) infinite !important;
   }
 }
+
+/* The line under a primary button pressed while its form is not ready and no field could be pointed at (issue #526). */
+.busy-nudge {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

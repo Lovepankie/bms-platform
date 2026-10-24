@@ -12,6 +12,7 @@ import { useToast } from './toast';
 import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Daily savings (FR-RET-18 to FR-RET-20): per shop per day. The server suggests half the day's profit; a
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
@@ -149,9 +150,11 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
         </>
       )}
       <Problem error={save.error} />
-      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={blocked}>
-        Save savings
-      </BusyButton>
+      <ActionBar>
+        <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={blocked}>
+          Save savings
+        </BusyButton>
+      </ActionBar>
 
     </form>
   );

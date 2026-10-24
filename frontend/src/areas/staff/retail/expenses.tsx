@@ -14,6 +14,7 @@ import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Company expenses (FR-RET-24): shop, date, category, then an item of that category, an optional
 // beneficiary, the amount, and an explanation when the item needs one. A receipt photo is not offered yet:
@@ -81,9 +82,11 @@ export function ExpenseForm({ branchId, onSaved }: { branchId: string; onSaved?:
 
       {plan.problem && draft.categoryId !== '' && draft.amount.trim() !== '' && <p role="alert" className="rt-flag">{plan.problem}</p>}
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
-        Save expense
-      </BusyButton>
+      <ActionBar>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+          Save expense
+        </BusyButton>
+      </ActionBar>
     </form>
   );
 }

@@ -20,6 +20,9 @@ import { SupplierCreditPage, SupplierCreditsPage } from './supplier-credits';
 import { blankReceipt, buildReceiptRequest, type ReceiveForm } from './purchasing-state';
 import { screensFor } from './permissions';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // Landed costs and supplier credit notes end to end on the fabricated in-memory API (issue #199): the real pages, their queries,
 // drafts and buttons, against the mock that follows the server's rules in small. Each test mounts one page on a small router that
 // has the page's own route id, so the page finds its address parameters. Fabricated suppliers, items and amounts.
@@ -118,7 +121,7 @@ describe('the new landed cost page', () => {
     fireEvent.click(await screen.findByRole('button', { name: `Add ${receipt.receipt_no}` }, wait));
     const line = (await screen.findByLabelText(/Share over LED bulb 9W screw/, undefined, wait)) as HTMLInputElement;
     expect(line.checked).toBe(true);
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement).disabled).toBe(false), wait);
+    await waitFor(() => expect(ready((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement))).toBe(true), wait);
     click('Review');
     const review = await screen.findByTestId('landed-review', undefined, wait);
     await waitFor(() => expect(within(review).getByTestId('landed-allocation').textContent).toContain('UGX 10,000'), wait);
@@ -156,7 +159,7 @@ describe('the new landed cost page', () => {
     expect((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement).disabled).toBe(true);
     type(/Share of LED bulb 9W screw/, '10000');
     expect(screen.getByTestId('landed-shares-left').textContent).toMatch(/add up to the total/);
-    expect((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(ready((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement))).toBe(true);
   });
 
   it('shows the server\'s refusal in plain words and keeps the form', async () => {
@@ -169,12 +172,12 @@ describe('the new landed cost page', () => {
     type('Due on', '2030-01-01');
     type('Amount of charge 1', '5000');
     type('Invoice total, as printed', '5000');
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement).disabled).toBe(false), wait);
+    await waitFor(() => expect(ready((screen.getByRole('button', { name: 'Review' }) as HTMLButtonElement))).toBe(true), wait);
     // The same invoice number is recorded elsewhere first, so the save is refused.
     await landedFor(receipt, { supplier_ref: 'FWD-79' });
     click('Review');
     await screen.findByTestId('landed-review', undefined, wait);
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Save landed cost' }) as HTMLButtonElement).disabled).toBe(false), wait);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save landed cost' }).getAttribute('data-not-ready')).toBeNull(), wait);
     click('Save landed cost');
     expect((await screen.findByRole('alert', undefined, wait)).textContent).toMatch(/already has an invoice with this number/i);
   });
@@ -290,7 +293,7 @@ describe('the new credit note page', () => {
     // A total that is not the sum of the lines stops the save.
     type('Credit total, as printed', '6000');
     expect(screen.getByTestId('credit-problem').textContent).toMatch(/UGX 6,000 but the lines come to UGX 7,000/);
-    expect((screen.getByRole('button', { name: 'Save credit note' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save credit note' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     type('Credit total, as printed', '7000');
     click('Save credit note');
     await waitFor(() => expect(router.state.location.pathname).toMatch(/\/supplier-credits\/[^/]+$/), wait);

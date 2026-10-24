@@ -89,15 +89,15 @@ describe('amount received on the sale form', () => {
     expect(totalLine()).toBe('Total UGX 15,500');
     type('10000');
     expect(screen.getByRole('alert').textContent).toBe('Enter at least the total, UGX 15,500.');
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     expect(screen.queryByTestId('change-due')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Exact' }));
     expect(field().value).toBe('15500');
     expect(screen.getByTestId('change-due').textContent).toBe('Change to giveUGX 0');
-    expect(saveButton().disabled).toBe(false);
+    expect(saveButton().getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '20,000' }));
     expect(screen.getByTestId('change-due').textContent).toBe('Change to giveUGX 4,500');
-    expect(saveButton().disabled).toBe(false);
+    expect(saveButton().getAttribute('data-not-ready')).toBeNull();
   });
 
   it('refuses a negative, a decimal and a non numeric entry, and a very large one', async () => {
@@ -105,17 +105,17 @@ describe('amount received on the sale form', () => {
     await addBoth();
     type('-5000');
     expect(screen.getByRole('alert').textContent).toMatch(/cannot be negative/);
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     type('20000.50');
     expect(screen.getByRole('alert').textContent).toMatch(/whole shillings/);
     type('twenty');
     expect(screen.getByRole('alert').textContent).toMatch(/numbers only/);
     type('99999999999999999999');
     expect(screen.getByRole('alert').textContent).toMatch(/too large/);
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     type('1,000,000');
     expect(screen.getByTestId('change-due').textContent).toBe('Change to giveUGX 984,500');
-    expect(saveButton().disabled).toBe(false);
+    expect(saveButton().getAttribute('data-not-ready')).toBeNull();
   });
 
   it('saves the sale at its total, keeps the amount out of the request, and shows received and change on the receipt', async () => {

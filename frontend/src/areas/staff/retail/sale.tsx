@@ -29,6 +29,7 @@ import { receivedFor, receivedProblem } from './sale-change-state';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { useToast } from './toast';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -102,34 +103,12 @@ export function tapFeedback() {
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
 }
 
-/**
- * The sale's one primary action (#508, docs/ui-rules.md rule 6): on a phone a bar stuck full width to the bottom of the screen,
- * its button carrying the live total, so the amount and Record sale are always in reach; from 720px it sits under the total.
- */
+/** The sale's one primary action (#508): the kit's ActionBar, its button carrying the live total. */
 export function SaleBar({ children }: { children: ReactNode }) {
-  // While the bar sticks (a phone), its measured height is --bottom-bar on the page, so the toast rises above it and a field
-  // scrolled into view stops above it, without :has() and at any font size; cleared when the bar goes.
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    const root = document.documentElement;
-    if (!el) return;
-    const measure = () => {
-      if (getComputedStyle(el).position === 'sticky') root.style.setProperty('--bottom-bar', `${Math.ceil(el.getBoundingClientRect().height)}px`);
-      else root.style.removeProperty('--bottom-bar');
-    };
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(el);
-    return () => {
-      observer?.disconnect();
-      root.style.removeProperty('--bottom-bar');
-    };
-  }, []);
   return (
-    <div ref={ref} className="sale-bar" data-testid="sale-bar">
+    <ActionBar className="sale-bar" testId="sale-bar">
       {children}
-    </div>
+    </ActionBar>
   );
 }
 

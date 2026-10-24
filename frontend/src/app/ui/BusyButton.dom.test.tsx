@@ -5,6 +5,9 @@ import { useState, type FormEvent } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BusyAnnouncer, BusyButton } from './BusyButton';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 function Save({ send }: { send: () => Promise<void> }) {
   const save = useMutation({ mutationFn: send });
   return (
@@ -35,7 +38,7 @@ describe('the busy button (#456)', () => {
   it('while busy keeps its label, shows the spinner, is aria-disabled and aria-busy, and says Working', () => {
     render(<><BusyButton busy className="btn-primary">Save</BusyButton><BusyAnnouncer /></>);
     const button = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
-    expect(button.disabled).toBe(false);
+    expect(ready(button)).toBe(true);
     expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect(button.textContent).toBe('Save');
@@ -214,5 +217,46 @@ describe('the busy button (#456)', () => {
     fireEvent.click(button);
     fireEvent.click(button);
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Issue #526 (docs/ui-rules.md rules 6 and 10): the main action never looks off. While its form is not ready it stays enabled,
+// sends nothing, and a press or Enter takes the person to the first missing field; a secondary button keeps its disabled state.
+describe('a primary button whose form is not ready (#526)', () => {
+  function Form({ onSend }: { onSend: () => void }) {
+    const [name, setName] = useState('');
+    return (
+      <form onSubmit={(e: FormEvent) => { e.preventDefault(); onSend(); }}>
+        <label htmlFor="n">Name</label>
+        <input id="n" aria-required="true" value={name} onChange={(e) => setName(e.target.value)} />
+        <BusyButton type="submit" className="rt-primary" busy={false} disabled={name === ''}>Save</BusyButton>
+      </form>
+    );
+  }
+
+  it('stays enabled, marked not ready, and a press goes to the missing field and sends nothing', () => {
+    const onSend = vi.fn();
+    render(<Form onSend={onSend} />);
+    const save = screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    expect(save.getAttribute('data-not-ready')).toBe('true');
+    fireEvent.click(save);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
+    fireEvent.submit(save.form as HTMLFormElement);
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Test Person' } });
+    expect(save.getAttribute('data-not-ready')).toBeNull();
+    fireEvent.click(save);
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('says to check the fields when none is marked missing, and a secondary button stays disabled', () => {
+    const onClick = vi.fn();
+    render(<><BusyButton className="btn-primary" busy={false} disabled onClick={onClick}>Review</BusyButton><BusyButton busy={false} disabled>Later</BusyButton></>);
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(screen.getByRole('status').textContent).toBe('Fill in or correct the fields above first.');
+    expect((screen.getByRole('button', { name: 'Later' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

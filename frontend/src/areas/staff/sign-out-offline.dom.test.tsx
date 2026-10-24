@@ -7,6 +7,9 @@ import { api, type Me } from '../../api/client';
 import { router as appRouter } from '../../app/router';
 import { endPendingLogout, getAccessToken, logoutPending, markLogoutPending, refreshSession, setAccessToken } from '../../auth/session';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // ADR-067 decision 9: the refresh cookie is HttpOnly, so only the logout call ends a staff session. A sign-out with no
 // network notes a pending logout; the next start ends that session before anything restores it and stays on sign-in until
 // it has, so a shared phone never hands the next person the last one's session. Every name is invented.
@@ -238,14 +241,14 @@ describe('ending a pending sign-out on a connection that never answers', () => {
     const loginField = screen.getByLabelText('Email or phone') as HTMLInputElement;
     expect(loginField.disabled).toBe(true);
     expect((screen.getByLabelText('Password') as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Sign in' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Sign in' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.submit(loginField.form as HTMLFormElement);
     expect(login).not.toHaveBeenCalled();
 
     // The refresh answers; the logout is refused, so the session is not over and the note stays.
     answerRefresh(new Response(JSON.stringify({ access_token: 'test-token-seller-5' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/auth/logout', expect.anything()));
-    await vi.waitFor(() => expect(loginField.disabled).toBe(false));
+    await vi.waitFor(() => expect(ready(loginField)).toBe(true));
     expect(screen.getByText(notice)).toBeTruthy();
     expect(logoutPending()).toBe(true);
     expect(getAccessToken()).toBeNull();

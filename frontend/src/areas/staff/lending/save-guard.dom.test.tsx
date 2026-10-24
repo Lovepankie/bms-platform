@@ -15,6 +15,9 @@ import { CollateralForm } from './collateral-form';
 import { MemberForm } from './member-form';
 import { usePhotoQueue } from './photo-queue';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // A save whose answer may have been lost (issue #280): the raw failure a dropped connection really gives, a look at what was saved
 // that itself can fail, and no second record in any of those cases. Also the shared phone box when the check did not find anyone,
 // a phone that was not changed, and a photo still being shrunk. Fabricated names, numbers and amounts.
@@ -66,7 +69,7 @@ describe('a member saved while the answer is lost', () => {
     fillMember();
     fireEvent.click(saveButton());
     expect(await screen.findByText(/is already saved\. It was not saved a second time/)).toBeTruthy();
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(saveButton());
     expect(mock.members).toHaveLength(1);
   });
@@ -91,11 +94,11 @@ describe('a member saved while the answer is lost', () => {
     fillMember();
     fireEvent.click(saveButton());
     expect(await screen.findByText(/could not check whether the member was saved/)).toBeTruthy();
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(saveButton());
     expect(mock.calls.create).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    await waitFor(() => expect(saveButton().disabled).toBe(false));
+    await waitFor(() => expect(saveButton().getAttribute('data-not-ready')).toBeNull());
     expect(looks).toBe(2);
   });
 });
@@ -116,12 +119,12 @@ describe('collateral saved while the answer is lost', () => {
     const save = () => screen.getByRole('button', { name: /Register collateral/ }) as HTMLButtonElement;
     fireEvent.click(save());
     expect(await screen.findByText(/item is already saved\. It was not saved a second time/)).toBeTruthy();
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(save());
     expect(mock.items).toHaveLength(1);
     // A person who knows it is a second, different item can say so.
     fireEvent.click(screen.getByRole('button', { name: 'This is a different one, save again' }));
-    expect(save().disabled).toBe(false);
+    expect(save().getAttribute('data-not-ready')).toBeNull();
   });
 });
 
@@ -136,7 +139,7 @@ describe('the shared phone box', () => {
     const save = () => screen.getByRole('button', { name: /Save member/ }) as HTMLButtonElement;
     fireEvent.click(save());
     const tick = await screen.findByLabelText(/different person who shares the phone/i);
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(tick);
     fireEvent.click(save());
     await waitFor(() => expect(mock.calls.create).toHaveLength(2));
@@ -151,7 +154,7 @@ describe('the shared phone box', () => {
     mount(<MemberForm member={holder} onSaved={() => undefined} />, { ...mock.api, duplicateCheck: check }, undefined, updateOnly);
     type(/^Work or business/, 'Test trader');
     const save = screen.getByRole('button', { name: /Save changes/ }) as HTMLButtonElement;
-    expect(save.disabled).toBe(false);
+    expect(ready(save)).toBe(true);
     fireEvent.click(save);
     await waitFor(() => expect(mock.calls.update).toHaveLength(1));
     expect(check).not.toHaveBeenCalled();
@@ -162,7 +165,7 @@ describe('the shared phone box', () => {
     mount(<MemberForm member={holder} onSaved={() => undefined} />, createMembersMock([holder, other]).api);
     type(/^Phone number/, '0700000002');
     expect(await screen.findByLabelText(/different person who shares the phone/i, undefined, { timeout: 2000 })).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Save changes/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /Save changes/ }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
   });
 });
 

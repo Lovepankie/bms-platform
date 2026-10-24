@@ -7,6 +7,9 @@ import type { Product, Purchase } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // Correcting a mistaken restock as a person does it (issue #351): who is offered the button, the reason it needs, one request
 // however often it is pressed, a retry that repeats its Idempotency-Key, "void and enter it again" opening the form with the same
 // lines, a voided restock shown as voided, the hint about a unit, and each refusal in plain words. Fabricated names and amounts.
@@ -116,13 +119,13 @@ describe('the restock card', () => {
 describe('correcting a restock', () => {
   it('needs a reason of at least five characters before either button works', () => {
     screenOf(admin, <CorrectPanel purchase={restock} onDone={() => undefined} onCancel={() => undefined} />);
-    expect(again().disabled).toBe(true);
+    expect(again().getAttribute('data-not-ready')).toBe('true');
     expect(only().disabled).toBe(true);
     fireEvent.change(reason(), { target: { value: 'no' } });
-    expect(again().disabled).toBe(true);
+    expect(again().getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(reason(), { target: { value: 'Entered twenty, there were ten' } });
-    expect(again().disabled).toBe(false);
-    expect(only().disabled).toBe(false);
+    expect(again().getAttribute('data-not-ready')).toBeNull();
+    expect(ready(only())).toBe(true);
     expect(voidReasonOf('  abcde ')).toBe('abcde');
     expect(voidReasonOf('abcd')).toBeNull();
   });

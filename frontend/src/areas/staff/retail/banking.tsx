@@ -13,6 +13,7 @@ import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Cash banked (FR-RET-21 to FR-RET-23). The server works out what to expect: every caller sees "Cash
 // expected" (takings less what was paid out of the till). Only a caller with retail.profit.read also gets
@@ -65,9 +66,11 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
       <label htmlFor="banking-reference">Bank reference (optional)</label>
       <input id="banking-reference" maxLength={100} value={draft.reference} onChange={(e) => setDraft((d) => ({ ...d, reference: e.target.value }))} />
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
-        Save banking
-      </BusyButton>
+      <ActionBar>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
+          Save banking
+        </BusyButton>
+      </ActionBar>
     </form>
   );
 }

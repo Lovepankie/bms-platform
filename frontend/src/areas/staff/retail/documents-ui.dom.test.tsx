@@ -10,6 +10,9 @@ import { PdfButton, SaleDocuments, SeriesRow, openMadePdf } from './documents-ui
 import { blankConvert, type ConvertForm } from './documents-state';
 import { ConvertPanel } from './quotations';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // The documents forms as a person uses them (documents capability, ADR-033, issue #197): a prefix is changed only when it is
 // valid and different, a credit conversion waits for its date, a PDF is rendered first when none was stored and opened in a tab,
 // and a sale's panel makes the documents it does not have yet. Fabricated names and amounts.
@@ -38,7 +41,7 @@ describe('changing a prefix', () => {
     const input = screen.getByLabelText('Prefix') as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'tax' } });
     expect(input.value).toBe('TAX');
-    expect(save.disabled).toBe(false);
+    expect(ready(save)).toBe(true);
     fireEvent.change(input, { target: { value: '1x' } });
     expect(save.disabled).toBe(true);
     expect(screen.getByRole('alert').textContent).toContain('starting with a letter');
@@ -58,12 +61,12 @@ describe('making a quotation into a sale', () => {
   it('is ready for cash, and waits for a date on credit unless the buyer has terms', () => {
     const sent = vi.fn();
     render(<Panel onConvert={sent} />);
-    expect(button().disabled).toBe(false);
+    expect(button().getAttribute('data-not-ready')).toBeNull();
     fireEvent.change(screen.getByLabelText('How is it paid?'), { target: { value: 'credit' } });
-    expect(button().disabled).toBe(true);
+    expect(button().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByRole('alert').textContent).toContain('date');
     fireEvent.change(screen.getByLabelText(/Buyer will pay by/), { target: { value: '2026-11-01' } });
-    expect(button().disabled).toBe(false);
+    expect(button().getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(screen.getByLabelText(/Also make the invoice/));
     fireEvent.click(button());
     expect(sent).toHaveBeenCalledWith({ method: 'credit', dueDate: '2026-11-01', keepPrices: true, invoice: false });
@@ -72,7 +75,7 @@ describe('making a quotation into a sale', () => {
   it('does not wait for a date when the buyer has terms', () => {
     render(<Panel hasTerms />);
     fireEvent.change(screen.getByLabelText('How is it paid?'), { target: { value: 'credit' } });
-    expect(button().disabled).toBe(false);
+    expect(button().getAttribute('data-not-ready')).toBeNull();
   });
 });
 

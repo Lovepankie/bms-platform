@@ -636,3 +636,37 @@ button.list-row:focus-visible {
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
 }
+
+/* ActionBar (issue #526, the sale's bar of #508 made shared): the one primary action. On a phone it sticks full width to the
+   bottom, edge to edge over the page gutter and on top of the bottom tabs, its button full width; from 720px it sits in the form. */
+.action-bar {
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 719px) {
+  .action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-nav);
+    margin: var(--space-3) calc(-1 * var(--space-4)) 0;
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .action-bar > :is(.rt-primary, .btn-primary, .btn-brand) {
+    display: flex;
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .action-bar .rt-primary {
+    margin-top: 0;
+  }
+
+  /* Over the bottom tabs (issue #539): the bar stops on top of them, and they take the home indicator inset. */
+  .has-tab-bar .action-bar {
+    bottom: var(--tab-bar);
+    padding-bottom: var(--space-3);
+  }
+}

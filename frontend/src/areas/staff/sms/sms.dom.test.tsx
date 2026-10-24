@@ -105,12 +105,12 @@ describe('switching SMS on', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Switch SMS on' }));
     expect(screen.getByTestId('sms-notice').textContent).toContain('Every message costs money.');
     const confirm = within(screen.getByRole('form', { name: 'Switch SMS on' })).getByRole('button', { name: 'Switch SMS on' }) as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
+    expect(confirm.getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(confirm);
     expect(api.changeSettings).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByLabelText(/I have read this and accept it/));
-    expect(confirm.disabled).toBe(false);
+    expect(confirm.getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(confirm);
     await waitFor(() => expect(api.changeSettings).toHaveBeenCalledTimes(1));
     expect(api.changeSettings).toHaveBeenCalledWith(3, { enabled: true, acknowledged_text_version: 'sms-1' });
@@ -162,7 +162,7 @@ describe('the settings form', () => {
     shell(<SmsSettingsScreen />);
     fireEvent.change(await screen.findByLabelText('Most messages a day'), { target: { value: '301' } });
     expect(screen.getByText('At most 300. A cap can be lowered, not raised.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Most messages a day'), { target: { value: '2.5' } });
     expect(screen.getByText(/Use a whole number/)).toBeTruthy();
     expect(api.changeSettings).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe('the settings form', () => {
     shell(<SmsSettingsScreen />);
     fireEvent.change(await screen.findByLabelText('From'), { target: { value: '05:00' } });
     expect(screen.getByText('Messages cannot start before 06:00.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '09:30' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(api.changeSettings).toHaveBeenCalledWith(3, { window_start: '09:30' }));
@@ -294,7 +294,7 @@ describe('the wording', () => {
     shell(<WordingScreen />);
     fireEvent.change(await screen.findByLabelText('Message'), { target: { value: 'Paid {unknown} {amount} {account_no}' } });
     expect(await screen.findByText('{unknown} is not a placeholder of this message.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Save my words' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save my words' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     expect(api.saveTemplate).not.toHaveBeenCalled();
   });
 
@@ -425,9 +425,9 @@ describe('the opt-out list', () => {
     // The first click only opens the confirmation: nothing is sent until a reason is given and it is confirmed.
     const confirm = await screen.findByRole('button', { name: 'Lift the opt-out' });
     expect(api.removeOptOut).not.toHaveBeenCalled();
-    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect((confirm as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Why is it lifted?'), { target: { value: 'ab' } });
-    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect((confirm as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Why is it lifted?'), { target: { value: 'Member asked at the counter' } });
     fireEvent.click(confirm);
     await waitFor(() => expect(api.removeOptOut).toHaveBeenCalledWith(row().id, 'Member asked at the counter'));
@@ -476,7 +476,7 @@ describe('the member\'s text-message choice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Change to: stop reminders' }));
     expect(api.setMemberOptOut).not.toHaveBeenCalled();
     const confirm = screen.getByRole('button', { name: 'Narrow the opt-out' }) as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
+    expect(confirm.getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Why is it narrowed?'), { target: { value: 'Member asked for reminders only' } });
     api.setMemberOptOut.mockResolvedValue({ opted_out: true, scope: 'reminders', recipient_masked: null, since: '2031-03-10T07:00:00Z' });
     fireEvent.click(confirm);

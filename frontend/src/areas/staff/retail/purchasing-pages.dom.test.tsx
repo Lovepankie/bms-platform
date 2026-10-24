@@ -215,9 +215,9 @@ describe('the supplier invoice page', () => {
     await waitFor(() => expect(panel.textContent).toContain('UGX 36,000'), wait);
     expect(panel.textContent).toContain('UGX 35,000');
     expect(await screen.findByTestId('bill-reason-required', undefined, wait)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Save supplier invoice' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save supplier invoice' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     type(/Why does the invoice differ/, 'Price rose');
-    await waitFor(() => expect((screen.getByRole('button', { name: 'Save supplier invoice' }) as HTMLButtonElement).disabled).toBe(false), wait);
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Save supplier invoice' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBeNull(), wait);
     click('Save supplier invoice');
     await waitFor(() => expect(router.state.location.pathname).toMatch(/\/supplier-bills\/[^/]+$/), wait);
     const bills = (await retail.listSupplierBills({})).items ?? [];

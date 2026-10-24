@@ -498,7 +498,7 @@ describe('a role on a branch that has closed', () => {
     expect(old.checked).toBe(true);
     expect((within(card).getByRole('checkbox', { name: 'Every shop and store' }) as HTMLInputElement).checked).toBe(false);
     expect(within(card).getByText(/This branch is closed. Take it off/)).toBeTruthy();
-    expect((within(card).getByRole('button', { name: 'Save the roles' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(card).getByRole('button', { name: 'Save the roles' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(old);
     fireEvent.click(within(card).getByRole('checkbox', { name: 'Test Branch Two (KLA)' }));
     expect(within(card).queryByText(/This branch is closed/)).toBeNull();
@@ -613,7 +613,7 @@ describe('Reset sign-in (issue #339)', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Reset sign-in' }));
     fireEvent.change(within(card).getByLabelText('Code from your authenticator app'), { target: { value: '12' } });
     expect(within(card).getByText('Type the 6 digits from your authenticator app.')).toBeTruthy();
-    expect((within(card).getByRole('button', { name: 'Make the link' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(card).getByRole('button', { name: 'Make the link' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(within(card).getByLabelText('Code from your authenticator app'), { target: { value: '123456' } });
     fireEvent.click(within(card).getByRole('button', { name: 'Make the link' }));
 

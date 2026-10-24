@@ -8,6 +8,7 @@ import { parseQty, qtyString } from './maths';
 import { BranchRequired, Gate, Problem, ProductPicker, useStockingBranch } from './ui';
 import { canUse, needsOf } from './permissions';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -77,7 +78,9 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
         </div>
       ))}
       <Problem error={save.error} />
-      <BusyButton type="submit" className="rt-primary" data-tour="usage-save" busy={save.isPending} disabled={!valid}>Save</BusyButton>
+      <ActionBar>
+        <BusyButton type="submit" className="rt-primary" data-tour="usage-save" busy={save.isPending} disabled={!valid}>Save</BusyButton>
+      </ActionBar>
 
       {(lines.length > 0 || reason !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>

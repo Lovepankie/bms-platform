@@ -297,6 +297,18 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(rulesFor(/label:has\(> input:checked\)/)[0]?.body).not.toMatch(/accent-tint|info-tint/);
   });
 
+  // Item 6: the main action is brand filled and never looks off; on a phone it sticks full width at the bottom.
+  it('keeps the main action of the forms of the audit in the sticky ActionBar, and never greys a primary button that is not ready', () => {
+    for (const screen of ['banking', 'expenses', 'savings', 'withdrawals', 'usage', 'transfer', 'catalogue-import', 'labels', 'sale']) {
+      expect(code(`areas/staff/retail/${screen}.tsx`), screen).toMatch(/<ActionBar\b|<SaleBar\b/);
+    }
+    const phone = code('app/ui/kit.css').match(/@media \(max-width: 719px\) \{\s*\.action-bar \{([^}]*)\}/)?.[1] ?? '';
+    expect(phone).toMatch(/position: sticky;\s*bottom: 0;/);
+    const busy = code('app/ui/BusyButton.tsx');
+    expect(busy).toMatch(/disabled=\{busy \|\| notReady \? undefined : disabled\}/);
+    expect(busy).toMatch(/focusFirstMissing/);
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');

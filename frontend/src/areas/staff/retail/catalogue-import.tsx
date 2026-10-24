@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ImportResult } from '../../../api/retail';
 import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Import items from a file (#146), for a new client, administrators only. Paste the rows or choose a
 // CSV file, check it first (nothing is saved), read what would be added, skipped and wrong, then add
@@ -103,9 +104,11 @@ export function ImportPage() {
       <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
-        Check the file
-      </BusyButton>
+      <ActionBar>
+        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
+          Check the file
+        </BusyButton>
+      </ActionBar>
       {current && <ImportReport result={current} />}
       {current && current.errors === 0 && (current.added ?? 0) === 0 && <p className="empty-state">There is nothing new to add.</p>}
       {current && (current.errors ?? 0) > 0 && <p role="alert" className="alert alert-danger">Fix the rows with a problem in your file and check it again. Nothing is added while a row has a problem.</p>}

@@ -7,6 +7,9 @@ import type { Sale } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // The record-payment and void actions as a person uses them (issues #326 and #327): who sees them, what the forms refuse, one
 // request however often the button is pressed, a retry that repeats its Idempotency-Key, and each refusal in plain words.
 // Fabricated names and amounts.
@@ -131,18 +134,18 @@ describe('recording a payment', () => {
     screenOf(admin, <PaySaleAction sale={credit} today={today} />);
     fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
     expect(amount().value).toBe('10000');
-    expect(save().disabled).toBe(false);
+    expect(save().getAttribute('data-not-ready')).toBeNull();
     fireEvent.change(amount(), { target: { value: '10001' } });
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByRole('alert').textContent).toMatch(/owes only UGX 10,000/);
     fireEvent.change(amount(), { target: { value: '' } });
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(amount(), { target: { value: '4000' } });
     fireEvent.change(screen.getByLabelText('Date received'), { target: { value: '2026-10-09' } });
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByRole('alert').textContent).toMatch(/before the sale/i);
     fireEvent.change(screen.getByLabelText('Date received'), { target: { value: today } });
-    expect(save().disabled).toBe(false);
+    expect(save().getAttribute('data-not-ready')).toBeNull();
   });
 
   it('sends one request however many times Save is pressed, then says the sale is paid in part', async () => {
@@ -348,7 +351,7 @@ describe('voiding a sale', () => {
     fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'abcd' } });
     expect(go().disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: '  Rung up twice ' } });
-    expect(go().disabled).toBe(false);
+    expect(ready(go())).toBe(true);
     fireEvent.click(go());
     fireEvent.click(go());
     fireEvent.submit(screen.getByRole('form', { name: 'Void this sale' }));

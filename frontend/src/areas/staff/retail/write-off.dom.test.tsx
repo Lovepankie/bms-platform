@@ -7,6 +7,9 @@ import type { Sale } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // Writing off a debt (issue #340, ADR-043) as a person uses it: who sees the action, what the form refuses, one request however
 // often the button is pressed, the two answers (done, waiting for a second administrator) and the refusals in plain words.
 // Fabricated names and amounts.
@@ -92,7 +95,7 @@ describe('the form', () => {
     fireEvent.change(screen.getByLabelText(/Why will this buyer not pay/), { target: { value: 'abcd' } });
     expect(go().disabled).toBe(true);
     fireEvent.change(screen.getByLabelText(/Why will this buyer not pay/), { target: { value: '  Buyer left town ' } });
-    expect(go().disabled).toBe(false);
+    expect(ready(go())).toBe(true);
     fireEvent.click(go());
     fireEvent.click(go());
     fireEvent.submit(screen.getByRole('form', { name: 'Write off this debt' }));
