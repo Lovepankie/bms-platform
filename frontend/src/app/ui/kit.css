@@ -704,3 +704,66 @@ button.period-days {
   padding-inline: 0;
   color: var(--color-link);
 }
+
+/* A link to another screen (issue #526): a row with its label and a chevron on the plain surface, the whole row the target,
+   never an underlined word. Rows side by side wrap; on a phone each takes the full width. */
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.link-row:hover {
+  background: var(--color-hover);
+  text-decoration: none;
+}
+
+.link-row .list-row-chevron {
+  margin-left: auto;
+}
+
+.link-rows,
+.cluster:has(> .link-row),
+p:has(> .link-row:only-child) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+@media (max-width: 719px) {
+  .link-rows,
+  .cluster:has(> .link-row) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* A figure or a word that opens the rows behind it (issue #526): the link colour and a small chevron, no underline. */
+.figure-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-link);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.figure-link::after {
+  content: '';
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+}

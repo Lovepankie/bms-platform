@@ -251,7 +251,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
   return (
     <>
       <p className="rt-total">{onPayment && atSale === 0 ? 'Profit from money received, for the period' : 'Profit for the period'} {money(report.profit_minor ?? 0)}</p>
-      <p className="hint"><ToSales>See the sales behind it</ToSales></p>
+      <p><ToSales>See the sales behind it</ToSales></p>
       {onPayment && (
         <ul className="an-stats" data-testid="credit-recognition-summary">
           <li className="an-stat"><span className="an-stat-label">Sold</span><strong className="an-stat-value num">{money(report.sold_minor ?? 0)}</strong><span className="hint">Everything sold, credit included</span></li>

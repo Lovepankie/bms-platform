@@ -16,6 +16,7 @@ import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, packPriceMinor } 
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
+import { RowChevron } from '../../../app/ui/ListRow';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -362,7 +363,7 @@ export function RestockPage() {
   const again = (useRouterState({ select: (state) => state.location.search }) as { again?: string }).again;
   return (
     <Gate screen="restock" title={WORDS.buyStock}>
-      <p data-tour="restock-past"><Link to="/staff/retail/restocks">Past purchases, to correct a mistake</Link></p>
+      <Link className="link-row" data-tour="restock-past" to="/staff/retail/restocks">Past purchases, to correct a mistake<RowChevron /></Link>
       {done ? (
         <RestockSaved purchase={done.purchase} context={done.context} onNew={() => { setDone(null); setRound((n) => n + 1); }} />
       ) : typeof again === 'string' && again !== '' ? (

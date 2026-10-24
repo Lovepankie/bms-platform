@@ -17,6 +17,7 @@ import { chosenPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
+import { RowChevron } from '../../../app/ui/ListRow';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -204,7 +205,7 @@ export function MoveStock() {
       ) : (
         <TransferForm key={`${branchId}-${round}`} fromBranchId={branchId} onSaved={setDone} prefill={round === 0 ? prefill : null} />
       )}
-      <p><Link to={'/staff/retail/transfers' as never}>See stock moves</Link></p>
+      <Link className="link-row" to={'/staff/retail/transfers' as never}>See stock moves<RowChevron /></Link>
     </Gate>
   );
 }

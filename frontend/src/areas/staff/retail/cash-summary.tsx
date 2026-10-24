@@ -20,7 +20,7 @@ export function Line({ label, minor, strong = false, to }: { label: string; mino
   if (minor === undefined) return null;
   return (
     <p className="rt-row">
-      <span>{to ? <Link to={to as never} aria-label={`${label}: see the rows`}>{label}</Link> : label}</span>
+      <span>{to ? <Link className="figure-link" to={to as never} aria-label={`${label}: see the rows`}>{label}</Link> : label}</span>
       {strong ? <strong>{money(minor)}</strong> : <span>{money(minor)}</span>}
     </p>
   );

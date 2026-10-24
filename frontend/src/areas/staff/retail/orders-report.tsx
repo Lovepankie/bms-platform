@@ -7,6 +7,7 @@ import { showDate } from './maths';
 import { sourceLabel } from './orders-state';
 import { Gate, Problem, money, useBranchName, useBranchView } from './ui';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { RowChevron } from '../../../app/ui/ListRow';
 
 // The reports of customer orders (issue #385, ADR-052): delivery fees taken on the orders delivered, by day, by where the orders
 // came from or by who delivered them, and the orders cancelled with their reasons. The sales themselves are in the sales reports.
@@ -36,10 +37,10 @@ export function OrdersReportPage() {
   });
   return (
     <Gate screen="ordersReport" title="Delivery fees and cancellations" wide>
-      <p className="rt-row" data-tour="orders-report-links">
-        <Link className="btn-sm" to="/staff/retail/orders">Orders</Link>
-        <Link className="btn-sm" to="/staff/retail/sales">All sales</Link>
-      </p>
+      <div className="link-rows" data-tour="orders-report-links">
+        <Link className="link-row" to="/staff/retail/orders">Orders<RowChevron /></Link>
+        <Link className="link-row" to="/staff/retail/sales">All sales<RowChevron /></Link>
+      </div>
       <PeriodPicker from={from} to={to} label="Which days?" tour="orders-report-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
 
       <section aria-label="Delivery fees" data-tour="orders-report-fees">

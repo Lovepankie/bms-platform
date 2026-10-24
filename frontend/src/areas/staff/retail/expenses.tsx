@@ -203,7 +203,7 @@ export function ExpensesReportScreen() {
   });
   return (
     <Gate screen="expensesReport" title="Expenses report">
-      <p><ScreenLink screen="expenses" to="/staff/retail/expenses" tour="expenses-back-link">Record an expense</ScreenLink></p>
+      <p><ScreenLink screen="expenses" to="/staff/retail/expenses" tour="expenses-back-link" action>Record an expense</ScreenLink></p>
       <div data-tour="expenses-report-window"><WindowFields id="expenses-report" window={window} /></div>
       <Segmented label="Group the expenses" tour="expenses-report-group" options={GROUPS} value={by} onChange={setBy} />
       {report.isError && <Problem error={report.error} />}

@@ -318,6 +318,14 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(code('areas/staff/retail/maths.ts')).toMatch(/export \{ showDate \} from '\.\.\/\.\.\/\.\.\/app\/ui\/PeriodPicker'/);
   });
 
+  // Item 10: a related screen is a row with a chevron, an action a button; never an underlined word.
+  it('draws links to other screens as chevron rows and figures that open rows without an underline', () => {
+    expect(code('areas/staff/retail/screen-link.tsx')).toMatch(/action \? 'btn btn-primary' : 'link-row'/);
+    for (const sel of [/^\s*\.link-row\s*$/, /^\s*\.figure-link\s*$/]) expect(rulesFor(sel)[0]?.body).toMatch(/text-decoration: none/);
+    expect(code('areas/staff/retail/analytics-ui.tsx').match(/<Link className="figure-link"/g)).toHaveLength(2);
+    expect(code('areas/staff/home-cards.tsx')).not.toMatch(/<Link to="[^"]*">Open the/);
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');

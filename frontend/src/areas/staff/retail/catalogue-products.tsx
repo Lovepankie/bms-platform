@@ -451,8 +451,8 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
     <>
       <p className="cluster">
         <button type="button" onClick={onAdd} data-tour="product-add">Add an item</button>
-        <Link className="btn-sm" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>
-        <Link className="btn-sm" to={SIZES_JOIN as never} data-tour="product-join-sizes">Join items as sizes of one item</Link>
+        <Link className="btn" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>
+        <Link className="btn" to={SIZES_JOIN as never} data-tour="product-join-sizes">Join items as sizes of one item</Link>
       </p>
       <div data-tour="product-search"><SearchBox id="items-search" label="Search by name, code or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} /></div>
       <div className="rt-row" data-tour="product-filters">

@@ -228,7 +228,7 @@ export function BankingReportScreen() {
   });
   return (
     <Gate screen="bankingReport" title="Banking report">
-      <p><ScreenLink screen="banking" to="/staff/retail/banking" tour="banking-back-link">Record banking</ScreenLink></p>
+      <p><ScreenLink screen="banking" to="/staff/retail/banking" tour="banking-back-link" action>Record banking</ScreenLink></p>
       <div data-tour="banking-report-window"><WindowFields id="banking-report" window={window} /></div>
       {report.isError && <Problem error={report.error} />}
       {report.isPending && <p className="loading">Loading</p>}

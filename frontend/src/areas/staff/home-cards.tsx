@@ -13,6 +13,7 @@ import { showLending } from './lending/permissions';
 import { ALL_SELLERS, branchesWhere, canUse, holds, holdsAt, showRetail } from './retail/permissions';
 import { shortDate } from './retail/range-state';
 import { money as retailMoney } from './retail/ui';
+import { RowChevron } from '../../app/ui/ListRow';
 
 // Home's card per module the business uses (issue #471, ADR-072): Shop with today's sales, the items low on stock and the open
 // customer orders; Lending with the loans due today, those in arrears and the lending requests waiting for approval. A business with
@@ -124,7 +125,7 @@ function ShopCard({ parts, home }: { parts: Parts; home: Summary }) {
         {parts.lowStock && answered(home, 'low_stock') && <Figure label="Low on stock" query={home}>{() => plural(home.data?.low_stock ?? 0, 'item', 'items')}</Figure>}
         {parts.orders && (!parts.summary || answered(home, 'open_orders')) && <Figure label="Open customer orders" query={ordersFrom}>{() => open}</Figure>}
       </dl>
-      <Link to="/staff/retail">Open the shop</Link>
+      <Link className="link-row" to="/staff/retail">Open the shop<RowChevron /></Link>
     </article>
   );
 }
@@ -150,7 +151,7 @@ function TakingsCard({ home }: { home: Summary }) {
       title="Takings today"
       home={home}
       tour="home-shop-today"
-      link={<Link to="/staff/retail/cash-summary">Open the cash summary</Link>}
+      link={<Link className="link-row" to="/staff/retail/cash-summary">Open the cash summary<RowChevron /></Link>}
     >
       {() => (
         <>
@@ -178,7 +179,7 @@ function TakingsCard({ home }: { home: Summary }) {
 function CreditCard({ home }: { home: Summary }) {
   const owed = home.data?.credit_owed;
   return (
-    <SummaryCard id="home-credit" title="Credit owed" home={home} link={<Link to="/staff/retail/credit-control">Open credit control</Link>}>
+    <SummaryCard id="home-credit" title="Credit owed" home={home} link={<Link className="link-row" to="/staff/retail/credit-control">Open credit control<RowChevron /></Link>}>
       {() =>
         !owed?.owed_minor ? (
           <p className="hint">No customer owes you money.</p>
@@ -205,7 +206,7 @@ function TopItemsCard({ home }: { home: Summary }) {
   const [week, setWeek] = useState(false);
   const items: HomeTopItem[] = (week ? home.data?.top_items?.week : home.data?.top_items?.today) ?? [];
   return (
-    <SummaryCard id="home-top" title="Top items" home={home} link={<Link to="/staff/retail/sales-analysis">Open sales analysis</Link>}>
+    <SummaryCard id="home-top" title="Top items" home={home} link={<Link className="link-row" to="/staff/retail/sales-analysis">Open sales analysis<RowChevron /></Link>}>
       {() => (
         <>
           <div className="cluster" role="group" aria-label="Top items of">
@@ -233,7 +234,7 @@ function TopItemsCard({ home }: { home: Summary }) {
 function BranchesCard({ home }: { home: Summary }) {
   const lines = home.data?.branches ?? [];
   return (
-    <SummaryCard id="home-branches" title="Each shop today" home={home} link={<Link to="/staff/retail">Open the shop dashboard</Link>}>
+    <SummaryCard id="home-branches" title="Each shop today" home={home} link={<Link className="link-row" to="/staff/retail">Open the shop dashboard<RowChevron /></Link>}>
       {() => (
         <ul className="home-list">
           {lines.map((b) => (
@@ -310,7 +311,7 @@ function LendingCard({ parts }: { parts: Parts }) {
           </Figure>
         )}
       </dl>
-      {parts.loans && <Link to="/staff/lending">Open the loans</Link>}
+      {parts.loans && <Link className="link-row" to="/staff/lending">Open the loans<RowChevron /></Link>}
     </article>
   );
 }
