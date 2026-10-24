@@ -18,6 +18,7 @@ import { showQty } from './maths';
 import { Gate, Problem, ProductPicker, money } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
+import { Hint } from '../../../app/ui/Hint';
 
 // Goods received (the purchasing capability, ADR-033, issue #198): what arrived from a supplier, against an order or with none (a
 // "blind" receipt, which needs the supplier). Saving puts the goods into stock at the cost typed and, when a new selling price
@@ -112,7 +113,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
           <input type="checkbox" checked={form.hold === true} onChange={(e) => onChange({ ...form, hold: e.target.checked })} />
           <span>Hold until the landed cost is in</span>
         </label>
-        <p className="hint">Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</p>
+        <Hint>Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</Hint>
       </div>
       {picker && <div data-tour="receive-items">{picker}</div>}
       <h2>What arrived</h2>
@@ -200,7 +201,7 @@ export function ReceiveBlindPage() {
   );
   return (
     <Gate screen="goodsReceived" title="Receive goods without an order">
-      <p className="hint">Use this when goods arrive with no purchase order. Choose the supplier, add what arrived and what it cost.</p>
+      <Hint>Use this when goods arrive with no purchase order. Choose the supplier, add what arrived and what it cost.</Hint>
       <ReceiveFormView form={draft} blind suppliers={suppliers} branches={branches} picker={picker} busy={save.isPending} error={save.error} onChange={(f) => setDraft(() => f)} onSubmit={() => save.mutate()} />
       {draft.lines.length > 0 && !save.isPending && <button type="button" className="btn-ghost" onClick={() => { discard(); save.reset(); }}>Clear this form</button>}
     </Gate>

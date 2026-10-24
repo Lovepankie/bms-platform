@@ -14,6 +14,7 @@ import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
+import { Hint } from '../../../app/ui/Hint';
 
 // Advances to the owner or the company, and their repayments (FR-RET-26). Not the lending module: no
 // schedule, interest or collateral. Recording an advance needs retail.advance.create, a repayment
@@ -200,7 +201,7 @@ export function AdvanceDetailView({ advance, onVoided }: { advance: Advance; onV
       <p className="hint">{enteredBy(advance.by_name, advance.at)}{advance.voided && advance.void_reason ? `. Voided because: ${advance.void_reason}` : ''}</p>
       {voidOffered(advance, mayVoid) && (
         <>
-          {repayments.some((r) => !r.voided) && <p className="hint">This advance has repayments. Void them first, then the advance.</p>}
+          {repayments.some((r) => !r.voided) && <Hint>This advance has repayments. Void them first, then the advance.</Hint>}
           <VoidAction what="advance" run={(reason, key) => retail.voidAdvance(advance.id ?? '', reason, key)} onVoided={() => onVoided?.('Advance voided.')} />
         </>
       )}

@@ -3,6 +3,7 @@ import { encode } from 'uqr';
 import type { MfaEnrolment } from '../../api/client';
 import { BusyButton } from '../../app/ui/BusyButton';
 import { groupSecret, passwordChecks, recoveryCodesText, sixDigits } from '../../auth/codes';
+import { Hint } from '../../app/ui/Hint';
 
 // The pieces of the first-run and sign-in screens (issue #86): a progress line, the password
 // fields with a live checklist, the two-step set-up with a QR code drawn in the browser, and the
@@ -177,10 +178,10 @@ export function TwoStepSetup(props: {
           <a className="btn btn-block" href={props.enrolment.otpauth_uri}>
             Open in authenticator
           </a>
-          <p className="hint">
+          <Hint>
             If nothing opens or a store page appears, the app is not installed yet. Install one below, then tap again,
             or use the key instead.
-          </p>
+          </Hint>
         </>
       )}
       <p className="hint">

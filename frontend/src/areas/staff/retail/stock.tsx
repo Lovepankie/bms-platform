@@ -18,6 +18,7 @@ import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
 import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } from './list-chain-state';
 import { GroupedStock, type StockFilter } from './stock-grouped';
 import { keptWords } from './orders-state';
+import { Hint } from '../../../app/ui/Hint';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
@@ -200,7 +201,7 @@ export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; 
     <>
       <Segmented label="Show" options={LEVELS} value={level} onChange={onChange} />
       {level === 'out' && <p className="hint">Items you have stocked with none left, or less than none.</p>}
-      {level === 'low' && <p className="hint">Items you have stocked that are at or below their minimum, or 5 or fewer without one, including those out of stock.</p>}
+      {level === 'low' && <Hint>Items you have stocked that are at or below their minimum, or 5 or fewer without one, including those out of stock.</Hint>}
     </>
   );
 }

@@ -7,6 +7,7 @@ import { Choice, DateRange, Empty, Section, ToSales, ToStock, defaultRange, perc
 import { showPercent, showQty } from './maths';
 import { Gate, Problem, money, useBranchView, useIsPhone } from './ui';
 import { showDate } from './maths';
+import { Hint } from '../../../app/ui/Hint';
 
 // Margins (issue #149, step 2): profit and margin by item and category for a range, items sold under a
 // target margin, and what a price change did. Cost is the snapshot on each sale line, never today's
@@ -109,7 +110,7 @@ export function MarginsView({ data }: { data: Margins }) {
           <tr><td>Margin (profit over sales)</td><td className="num">{percentOrNone(totals.margin_bp)}</td></tr>
         </tbody>
       </table></div>
-      <p className="hint">Margin is profit as a share of what was sold for. Cost is what each item cost when it was sold, not today's cost.</p>
+      <Hint>Margin is profit as a share of what was sold for. Cost is what each item cost when it was sold, not today's cost.</Hint>
 
       <Section title={`Sold below ${showPercent(data.target_bp)} margin`} hint="Lowest margin first. An item that sold for nothing counts.">
         <MarginTable title="Item" rows={below.items ?? []} flag={data.target_bp} />

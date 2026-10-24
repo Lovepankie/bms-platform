@@ -15,6 +15,7 @@ import { qtyString, showQty } from './maths';
 import { showDate } from './transfers';
 import { Gate, Problem, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Hint } from '../../../app/ui/Hint';
 
 // The supplier credit note form (the purchasing capability, issue #199). Choose the supplier invoice the credit note is against, say
 // whether goods are sent back or a price is adjusted, and type, line by line, how many are sent back (or how much is taken off), then
@@ -182,7 +183,7 @@ export function SupplierCreditNewPage() {
   });
   return (
     <Gate screen="supplierCredits" title="New supplier credit note">
-      <p className="hint">Record a credit note the supplier gave you. Use the number, the date and the total printed on it.</p>
+      <Hint>Record a credit note the supplier gave you. Use the number, the date and the total printed on it.</Hint>
       {billId === '' ? (
         <InvoicePicker onPick={(b) => setDraft((d) => ({ ...d, billId: b.id ?? '', lines: [], total: '' }))} />
       ) : (

@@ -13,6 +13,7 @@ import { showQty } from './maths';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
+import { Hint } from '../../../app/ui/Hint';
 
 // The page of an item with sizes and colours (issue #384, FR-RET-51, FR-RET-52): every size and colour with its code, price and
 // stock, the item's stock per shop and store and in all (every variant together, over the branches the person may see), more
@@ -208,7 +209,7 @@ function RenameFamily({ family, onDone }: { family: Family; onDone: (text: strin
       <select id="family-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
         {(categories.data ?? []).filter((c) => c.active !== false || c.id === family.category_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-      <p className="hint">Every size and colour takes the new name and category. Past sales stay as they were.</p>
+      <Hint>Every size and colour takes the new name and category. Past sales stay as they were.</Hint>
       <Problem error={save.error} />
       <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!changed} onClick={() => save.mutate()}>Save</BusyButton>
       <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
@@ -243,7 +244,7 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
       <label htmlFor="variant-inactive">
         <input id="variant-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
       </label>
-      <p className="hint">An inactive size is not offered when selling, buying or moving stock. It is never deleted: its history stays.</p>
+      <Hint>An inactive size is not offered when selling, buying or moving stock. It is never deleted: its history stays.</Hint>
       <PhotoEditor
         inputId={product.id ?? 'size'}
         photoId={product.photo_id}
@@ -252,7 +253,7 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
         onUpload={(file) => retail.setProductPhoto(product.id ?? '', file)}
         onClear={() => retail.clearProductPhoto(product.id ?? '')}
       />
-      <p className="hint">A photo here is for this size alone. Without one, it shows the item's photo.</p>
+      <Hint>A photo here is for this size alone. Without one, it shows the item's photo.</Hint>
       <Problem error={save.error} />
       <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!ready}>Save changes</BusyButton>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>

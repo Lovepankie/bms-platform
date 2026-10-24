@@ -12,6 +12,7 @@ import {
 } from '../../../api/feedback';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { KIND_WORDS, KINDS, MESSAGE_MAX, SCREENSHOT_TYPES, STATUS_WORDS, messageProblem, pageBeforeFeedback, screenshotProblem } from './feedback-state';
+import { Hint } from '../../../app/ui/Hint';
 
 // Feedback (issue #447, ADR-065): any member of staff tells the BMS team an idea, a problem or a question, with a picture of the
 // screen if it helps. The page they came from, the version of BMS and the browser go with it on their own. Below the form, what
@@ -117,7 +118,7 @@ export function FeedbackForm({ send = sendFeedback, from = pageBeforeFeedback }:
           </p>
         )}
       </div>
-      <p className="hint">The page you came from, the version of BMS and your browser are sent with it, so we can find the problem.</p>
+      <Hint>The page you came from, the version of BMS and your browser are sent with it, so we can find the problem.</Hint>
       {submit.isError && (
         <p role="alert" className="alert alert-danger">
           {messageOf(submit.error)}

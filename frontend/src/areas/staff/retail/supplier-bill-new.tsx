@@ -13,6 +13,7 @@ import {
 import { SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { Gate, Problem, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Hint } from '../../../app/ui/Hint';
 
 // The supplier invoice form (the purchasing capability, ADR-033, issue #198). Choose the supplier and the goods received from them
 // that the invoice is for, then type what the invoice says: its number, dates, the supplier's price and the total as printed. The
@@ -191,7 +192,7 @@ export function SupplierBillNewPage() {
   });
   return (
     <Gate screen="supplierBills" title="New supplier invoice">
-      <p className="hint">Record an invoice against goods you have already received. Use the number, the dates and the total printed on the invoice.</p>
+      <Hint>Record an invoice against goods you have already received. Use the number, the dates and the total printed on the invoice.</Hint>
       <BillFormView
         form={form}
         suppliers={suppliers}

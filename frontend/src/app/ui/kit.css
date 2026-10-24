@@ -767,3 +767,37 @@ p:has(> .link-row:only-child) {
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+
+/* Hint (issue #526): a help text shows one line, cut with an ellipsis, and the info button beside it opens the rest. */
+.hint-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+}
+
+.hint-line > .hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hint-open > .hint {
+  white-space: normal;
+}
+
+.hint-more {
+  flex: none;
+  min-width: var(--tap);
+  margin: calc(-1 * var(--space-3)) 0;
+  padding: 0;
+  color: var(--color-text-muted);
+}
+
+.hint-more svg {
+  width: 20px;
+  height: 20px;
+}

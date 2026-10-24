@@ -17,6 +17,7 @@ import {
   type Draft,
 } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Tenant SMS settings (extras slice B3, issue #218; ADR-036): the switch with its acknowledgement of what SMS costs, the
 // sender id (chosen from the ones the platform approved, never typed), the sending window, the daily and monthly caps (which
@@ -165,7 +166,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
         }}
       >
         <h2>Settings</h2>
-        {!canManage && <p className="hint">You can look at these settings. Only a business administrator can change them.</p>}
+        {!canManage && <Hint>You can look at these settings. Only a business administrator can change them.</Hint>}
 
         <Field
           id="sms-sender"

@@ -15,6 +15,7 @@ import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKey
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Supplier credit notes (the purchasing capability, issue #199): goods sent back to a supplier, or money the supplier takes off an
 // invoice. The list, found by our number, the supplier's credit note number or the supplier, and one credit note with its lines. A
@@ -43,10 +44,10 @@ export function SupplierCreditsPage() {
   const list = useCursorList(['retail', 'supplier-credits', query, status], (cursor, signal) => retail.listSupplierCredits({ query, status, cursor, signal }));
   return (
     <Gate screen="supplierCredits" title="Supplier credit notes">
-      <p className="hint" data-tour="credits-help">
+      <Hint tour="credits-help">
         A credit note is what a supplier gives you when you send goods back, or when an invoice charged too much. It is recorded against the supplier invoice,
         and what it takes comes off what that invoice leaves you to pay. Start from the invoice itself, or from the button below.
-      </p>
+      </Hint>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/supplier-credits/new" data-tour="credit-new">New credit note</Link>
         <Link className="btn-sm" to="/staff/retail/supplier-bills">Supplier invoices</Link>

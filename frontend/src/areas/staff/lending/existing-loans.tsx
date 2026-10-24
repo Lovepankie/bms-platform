@@ -11,6 +11,7 @@ import { canBringIn, emptyDraft, emptyRepayment, goLiveWords, toRequest, type Lo
 import { money, words } from './loan-state';
 import { MemberPicker } from './member-picker';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Record an existing loan (issue #466, FR-EXL-01 to FR-EXL-04, ADR-071), for a business moving off a paper register: the
 // member, the product, the amount lent, the real date it was given out, the term, the product's rate or the amount the
@@ -167,13 +168,13 @@ export function ExistingLoanForm({ api = existingLoans }: { api?: ExistingLoansA
       {error('term_count') && <p className="field-error" role="alert">{error('term_count')}</p>}
       <label htmlFor="el-agreed">Amount the borrower agreed to repay (optional)</label>
       <input id="el-agreed" inputMode="decimal" value={draft.agreedTotal} onChange={(e) => set('agreedTotal', e.target.value)} aria-invalid={!!error('agreed_total_minor')} />
-      <p className="hint">Leave it empty to use the product's rate. When given, the difference is spread as interest.</p>
+      <Hint>Leave it empty to use the product's rate. When given, the difference is spread as interest.</Hint>
       {error('agreed_total_minor') && <p className="field-error" role="alert">{error('agreed_total_minor')}</p>}
       <label htmlFor="el-ref">Number in the register (optional)</label>
       <input id="el-ref" maxLength={40} value={draft.registerRef} onChange={(e) => set('registerRef', e.target.value)} aria-invalid={!!error('register_ref')} />
       {error('register_ref') && <p className="field-error" role="alert">{error('register_ref')}</p>}
       <h2>Repayments already received</h2>
-      {draft.repayments.length === 0 && <p className="hint">None yet. Add each repayment the register shows, in any order.</p>}
+      {draft.repayments.length === 0 && <Hint>None yet. Add each repayment the register shows, in any order.</Hint>}
       {draft.repayments.map((r, i) => (
         <RepaymentRow key={i} r={r} i={i} error={error} onChange={(x) => setRepayment(i, x)}
           onRemove={() => set('repayments', draft.repayments.filter((_, k) => k !== i))} />

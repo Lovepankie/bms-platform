@@ -14,6 +14,7 @@ import { SaleLineCard } from './sale';
 import { withUnit, type DraftLine } from './sale-state';
 import { OpenSale } from './sales';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // One customer order (issue #385, ADR-052): what was ordered, where it stands, who did what and when, the delivery details that
 // can still change, and, once delivered, the sale it became (with its receipt, payments, returns and void like any sale). Its items
@@ -145,7 +146,7 @@ function ChangeItems({ order }: { order: Order }) {
           <input id="items-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
           <label htmlFor="items-note">Why the items changed (optional, it stays in the history)</label>
           <input id="items-note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
-          <p className="hint">Saving keeps the new items aside and puts back on the shelf what was taken off. An item left as it is on the order keeps the price agreed; a new item, or one whose quantity changed, takes today&apos;s price.</p>
+          <Hint>Saving keeps the new items aside and puts back on the shelf what was taken off. An item left as it is on the order keeps the price agreed; a new item, or one whose quantity changed, takes today&apos;s price.</Hint>
           {problem && <Note>{problem}</Note>}
         </>
       )}

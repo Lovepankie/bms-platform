@@ -15,6 +15,7 @@ import { GroupedRestocks } from './restocks-grouped';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { Hint } from '../../../app/ui/Hint';
 
 // Past restocks (issue #351, ADR-044): every restock, newest first, a voided one marked and never deleted. A restock entered with a
 // wrong quantity, price, unit or supplier is corrected here: "Correct this restock" voids it (the stock, the books and the prices go
@@ -136,7 +137,7 @@ export function RestocksPage() {
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   return (
     <Gate screen="restock" title={WORDS.pastPurchases}>
-      <p className="hint">Every purchase is kept. If you entered one wrongly, open Correct this purchase, then enter it again with the right quantity.</p>
+      <Hint>Every purchase is kept. If you entered one wrongly, open Correct this purchase, then enter it again with the right quantity.</Hint>
       {message && <Success>{message}</Success>}
       <div data-tour="restocks-filters">
         <PeriodPicker from={from} to={to} onChange={(range) => { setFrom(range.from); setTo(range.to); }} />

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { businessToday, daysBefore, retail, type CapabilitiesRead } from '../../../api/retail';
 import { Problem, changeFailureText } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // How credit sales count (ADR-043, issue #340): when the sale is made (today's way, the default) or when the buyer pays.
 // A money setting, so a choice is read back in plain words and confirmed before it is saved. The server audits the old and
@@ -112,7 +113,7 @@ export function CreditRecognitionSetting({ read, onSaved }: { read: Capabilities
           <ul>
             {sentences.map((line) => <li key={line}>{line}</li>)}
           </ul>
-          <p className="hint">It is recorded with your name. Nothing already recorded is deleted or changed.</p>
+          <Hint>It is recorded with your name. Nothing already recorded is deleted or changed.</Hint>
           <p className="cluster">
             <BusyButton busy={save.isPending} type="button" className="rt-primary" onClick={() => save.mutate()}>Confirm</BusyButton>
             <button type="button" /* busy-exempt: back waits for the save */ className="btn-ghost" disabled={save.isPending} onClick={() => setReviewing(false)}>Back</button>

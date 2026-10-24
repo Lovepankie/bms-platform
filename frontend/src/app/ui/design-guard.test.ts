@@ -340,6 +340,17 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     }
   });
 
+  // Item 15: a help text is one line on screen, the rest behind the info button of the kit's Hint.
+  it('draws no help paragraph of more than one sentence, or longer than a line, outside the Hint', () => {
+    for (const file of components.map((f) => relative(SRC, f)).filter((f) => f.startsWith('areas/'))) {
+      for (const [, text] of code(file).matchAll(/<p className="hint"(?: data-tour="[^"]*")?>([^<>{}]+)<\/p>/g)) {
+        const long = (text as string).trim().length > 90 || ((text as string).match(/[.!?](\s|$)/g) ?? []).length > 1;
+        expect(long ? `${file}: ${text}` : null).toBeNull();
+      }
+    }
+    expect(rulesFor(/^\s*\.hint-line > \.hint\s*$/)[0]?.body).toMatch(/white-space: nowrap;[\s\S]*text-overflow: ellipsis/);
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');

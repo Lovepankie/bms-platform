@@ -15,6 +15,7 @@ import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKey
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Supplier invoices (the purchasing capability, ADR-033, issue #198), which the supplier's paper calls a bill: the list, found by
 // our number, the supplier's invoice number or the supplier's name, and one invoice with the goods it bills, what was paid and what
@@ -46,9 +47,9 @@ export function SupplierBillsPage() {
   const list = useCursorList(['retail', 'supplier-bills', query, openOnly], (cursor, signal) => retail.listSupplierBills({ query, openOnly, cursor, signal }));
   return (
     <Gate screen="supplierBills" title="Supplier invoices">
-      <p className="hint" data-tour="bills-help">
+      <Hint tour="bills-help">
         A supplier invoice says what a supplier wants to be paid for goods you received. Record it against the goods, and the page checks it against what you ordered and received.
-      </p>
+      </Hint>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/supplier-bills/new" data-tour="bills-new">New supplier invoice</Link>
         <Link className="btn-sm" to="/staff/retail/supplier-payments">Supplier payments</Link>

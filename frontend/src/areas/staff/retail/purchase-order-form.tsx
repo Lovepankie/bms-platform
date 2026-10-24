@@ -15,6 +15,7 @@ import { BranchField, SupplierField, useSuppliers, type SupplierOption } from '.
 import { showQty } from './maths';
 import { Gate, Problem, ProductPicker, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Hint } from '../../../app/ui/Hint';
 
 // The purchase order form (the purchasing capability, ADR-033, issue #198): the supplier, the date it is expected, and the items
 // with how many and what one costs. Saving makes a DRAFT; nothing is ordered and no stock moves until the order is sent. The cost
@@ -68,7 +69,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
   const setLine = (i: number, line: OrderLineForm) => onChange({ ...form, lines: form.lines.map((l, n) => (n === i ? line : l)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="order-form">
-      <p className="hint">Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</p>
+      <Hint>Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</Hint>
       <div className="stack" data-tour="order-supplier">
         <SupplierField id="order-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
         {branches.length > 0 && <BranchField id="order-branch" label="Goods are expected at" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />}

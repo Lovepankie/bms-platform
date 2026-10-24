@@ -6,6 +6,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { STATUS_WORDS, canChangePaymentAccount, codeProblem, credentialProblem, failureWords, nextStep, showReceivePayments } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // "Receive payments" (extras slice A7, issue #233; ADR-035 amendment of 2026-10-18): money owed to the business lands only in
 // the business's own Pesapal account. A business administrator enters the consumer key and secret (the secret is write-only: it
@@ -77,10 +78,10 @@ export function CredentialsForm({ account, busy, error, onSave }: {
   return (
     <section className="rt-card stack" aria-labelledby="receive-form" data-tour="payments-credentials">
       <h2 id="receive-form">{account.credentials_saved ? 'Change the key and secret' : 'Enter the key and secret'}</h2>
-      <p className="hint">
+      <Hint>
         You find both in your own Pesapal account, under the API keys of your business. The secret cannot be shown again after you save it.
         Because this changes where your members' payments go, you are asked for a code from your authenticator app.
-      </p>
+      </Hint>
       <form
         className="stack"
         aria-label="Consumer key and secret"
@@ -218,7 +219,7 @@ export function ReceivePaymentsPage() {
       {account && canChange && account.credentials_saved && account.status !== 'verified' && (
         <section className="rt-card stack" aria-labelledby="receive-test" data-tour="payments-test">
           <h2 id="receive-test">Test the connection</h2>
-          <p className="hint">We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</p>
+          <Hint>We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</Hint>
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}
           <p>
             <BusyButton type="button" className="rt-primary" busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>

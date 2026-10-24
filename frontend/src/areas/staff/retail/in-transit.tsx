@@ -12,6 +12,7 @@ import { buildReceive, everythingArrived, receiveLineHint, receiveLineInvalid, r
 import { useBranchLabel } from './transfer';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useProfitAccess } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // Stock on its way (ADR-033, capability transfer_receipt): the transfers one branch has sent and the
 // other has not yet received, the longest wait first. The destination checks what arrived and marks
@@ -135,9 +136,9 @@ export function InTransitPage() {
   const report = useQuery({ queryKey: ['retail', 'in-flight'], queryFn: () => retail.transfersInFlight() });
   return (
     <Gate screen="inTransit" title="On the way">
-      <p className="hint" data-tour="transit-help">
+      <Hint tour="transit-help">
         Stock that one branch has sent and the other has not yet received. Until it is received it is in neither branch's count.
-      </p>
+      </Hint>
       <div data-tour="transit-list">
         {report.isPending && <SkeletonList label="Loading stock on the way" />}
         <Problem error={report.error} />

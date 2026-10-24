@@ -31,6 +31,7 @@ import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { useToast } from './toast';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
+import { Hint } from '../../../app/ui/Hint';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -176,8 +177,8 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
         </p>
       )}
       {noPrice && <p role="alert" className="rt-flag">This item has no price in the list.</p>}
-      {price && !price.canOverride && <p className="hint">The price comes from the price list. You do not have permission to change it.</p>}
-      {offlinePrice && !offlinePrice.canType && <p className="hint">Offline, the price saved on this phone is used. You do not have permission to change it.</p>}
+      {price && !price.canOverride && <Hint>The price comes from the price list. You do not have permission to change it.</Hint>}
+      {offlinePrice && !offlinePrice.canType && <Hint>Offline, the price saved on this phone is used. You do not have permission to change it.</Hint>}
       {changedOffline && !offlinePrice?.canType && onReset && <p><button type="button" className="btn-sm" onClick={onReset}>Use the price saved on this phone</button></p>}
       {(override || (changedOffline && offlinePrice?.canType)) && onReason && (
         <div>
@@ -535,7 +536,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
             <>
               <label htmlFor="credit-reason">Why is this sale allowed? (at least 5 characters)</label>
               <input id="credit-reason" value={draft.creditReason ?? ''} maxLength={300} onChange={(e) => update({ creditReason: e.target.value })} />
-              <p className="hint">Save the sale again to sell above the limit. The reason is kept with the sale.</p>
+              <Hint>Save the sale again to sell above the limit. The reason is kept with the sale.</Hint>
             </>
           ) : (
             <p>Ask someone who may allow it, take a payment first, or sell for less.</p>
@@ -548,7 +549,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           {mayKeepOnPhone(draft.sent) ? (
             <>
               <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
-              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+              <Hint>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
               <BusyButton type="button" busy={keep.isPending} onClick={() => keep.mutate()}>
                 Keep it on this phone
               </BusyButton>
@@ -556,7 +557,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           ) : (
             <>
               <p>The server did not answer. The sale may or may not be saved. A credit sale needs the internet: tap Try again when you are online, and it is saved once.</p>
-              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+              <Hint>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
             </>
           )}
         </div>

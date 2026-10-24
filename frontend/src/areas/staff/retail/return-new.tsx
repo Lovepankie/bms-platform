@@ -17,6 +17,7 @@ import { showDate } from './transfers';
 import { Problem, Success, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Take goods back against a sale (returns capability, ADR-033, issue #201). Each line of the sale shows what was sold, what has
 // come back already and what can still come back; the person enters a quantity, the reason and where the goods go, then how the
@@ -86,7 +87,7 @@ export function ReturnRow({ line, row, back, branches, onChange }: {
                   </select>
                 </>
               )}
-              {row.disposition === 'write_off' && <p className="hint">Damaged goods never go back into stock. Their cost is written off.</p>}
+              {row.disposition === 'write_off' && <Hint>Damaged goods never go back into stock. Their cost is written off.</Hint>}
             </>
           )}
           {problem && <p role="alert" className="rt-flag">{problem}</p>}

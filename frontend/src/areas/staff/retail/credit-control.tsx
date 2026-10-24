@@ -9,6 +9,7 @@ import { canOpenAccount } from './permissions';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { showDate } from './maths';
 import { KeyFigure } from '../../../app/ui/KeyFigure';
+import { Hint } from '../../../app/ui/Hint';
 
 // Credit control (issue #149, step 4): what credit buyers owe, how late it is, and what was paid in a
 // range. The owing and overdue tests are those of the credit sales list (a completed credit sale whose
@@ -148,7 +149,7 @@ export function CreditControlPage() {
   });
   return (
     <Gate screen="creditControl" title="Credit control" wide>
-      <p className="hint">The dates choose which payments are listed. What is owed is always as of today.</p>
+      <Hint>The dates choose which payments are listed. What is owed is always as of today.</Hint>
       <div data-tour="credit-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="credit-sort">
         <Choice id="cc-sort" label="Overdue list" value={sort} options={[...SORTS]} onChange={setSort} />

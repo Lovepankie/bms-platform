@@ -17,6 +17,7 @@ import { showQty } from './maths';
 import { SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, money } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // The landed cost form (the purchasing capability, issue #199). Choose who is owed (the forwarder or agent, one of your supplier
 // rows) and their invoice, type the charges and the total printed on the invoice, choose how to share them over the goods, find the
@@ -123,7 +124,7 @@ export function LandedFormView({ form, suppliers, picker, onChange, onReview }: 
       <div className="stack" data-tour="landed-who">
         <h2>Who is owed</h2>
         <SupplierField id="landed-supplier" label="Who is owed (the forwarder, carrier or agent)" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
-        <p className="hint">They must be in your list of suppliers. Add them in the Catalogue first if they are not.</p>
+        <Hint>They must be in your list of suppliers. Add them in the Catalogue first if they are not.</Hint>
         <label htmlFor="landed-ref">Their invoice number</label>
         <input id="landed-ref" value={form.supplierRef} maxLength={60} onChange={(e) => onChange({ ...form, supplierRef: e.target.value })} />
         <label htmlFor="landed-date">Date of the charges</label>
@@ -248,7 +249,7 @@ export function LandedCostNewPage() {
   const picker = <GoodsPicker chosen={draft.receipts.map((r) => r.id)} onAdd={(receipt) => setDraft((d) => addReceipt(d, receipt))} />;
   return (
     <Gate screen="landedCosts" title="New landed cost">
-      <p className="hint">Record freight, duty, clearing or insurance for goods you have received. You see the share of every line before anything is saved.</p>
+      <Hint>Record freight, duty, clearing or insurance for goods you have received. You see the share of every line before anything is saved.</Hint>
       {!reviewing ? (
         <LandedFormView form={draft} suppliers={suppliers} picker={picker} onChange={(f) => setDraft(() => f)} onReview={() => { save.reset(); setReviewing(true); }} />
       ) : (

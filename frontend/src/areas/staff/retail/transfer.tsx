@@ -18,6 +18,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
 import { RowChevron } from '../../../app/ui/ListRow';
+import { Hint } from '../../../app/ui/Hint';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -108,7 +109,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       </select>
       </div>
       {destinations.length === 0 && <p>You have no other branch to move stock to.</p>}
-      {sends && <p className="hint">The stock leaves this branch now. The other branch counts it once they receive it.</p>}
+      {sends && <Hint>The stock leaves this branch now. The other branch counts it once they receive it.</Hint>}
 
       <div data-tour="transfer-search">
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />

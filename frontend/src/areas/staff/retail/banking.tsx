@@ -14,6 +14,7 @@ import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { Hint } from '../../../app/ui/Hint';
 
 // Cash banked (FR-RET-21 to FR-RET-23). The server works out what to expect: every caller sees "Cash
 // expected" (takings less what was paid out of the till). Only a caller with retail.profit.read also gets
@@ -29,7 +30,7 @@ export function ExpectedFigures({ expected, date }: { expected: BankingExpected;
         <span>Cash expected</span>
         <strong>{money(expected.cash_expected_minor ?? 0)}</strong>
       </p>
-      <p className="hint">Takings less what was paid out of the till for expenses and advances, plus advance repayments received.</p>
+      <Hint>Takings less what was paid out of the till for expenses and advances, plus advance repayments received.</Hint>
       {expected.cash_purchases_minor !== undefined && <p className="rt-row"><span>Stock bought with cash, at cost</span><strong>{money(expected.cash_purchases_minor)}</strong></p>}
       {expected.savings_minor !== undefined && <p className="rt-row"><span>Savings set aside</span><strong>{money(expected.savings_minor)}</strong></p>}
       {expected.expected_minor !== undefined && <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_minor)}</strong></p>}
@@ -211,7 +212,7 @@ export function BankingReportView({ days }: { days: BankingDay[] }) {
       {imported.length > 0 && (
         <section aria-label="Imported days">
           <h2>Days imported from the old app <ImportedBadge /></h2>
-          <p className="hint">These days are shown for reference. They are not part of the unbanked total above.</p>
+          <Hint>These days are shown for reference. They are not part of the unbanked total above.</Hint>
           <BankingDays days={imported} />
         </section>
       )}

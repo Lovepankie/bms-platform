@@ -18,6 +18,7 @@ import { GroupBy } from './sales-group-by';
 import { OpenSale } from './sales';
 import { Gate, Problem, money, useBranchView } from './ui';
 import { PeriodPicker, periodOf } from '../../../app/ui/PeriodPicker';
+import { Hint } from '../../../app/ui/Hint';
 
 // The Controls page (issue #357, group 1; ADR-047): what deserves a second look, metrics first. Cards for the chosen
 // days with the trend against the days before, then the same numbers by shop, person, day and reason (the "Group by"
@@ -294,7 +295,7 @@ export function ControlsPage() {
         <OpenSale id={openSale} onClose={() => setOpenSale(null)} />
       ) : (
         <>
-          <p className="hint">What deserves a second look: sales cancelled, goods taken back and prices changed. Nothing here changes any record.</p>
+          <Hint>What deserves a second look: sales cancelled, goods taken back and prices changed. Nothing here changes any record.</Hint>
           <div data-tour="controls-period">
             <PeriodPicker
               from={range.from}
@@ -331,7 +332,7 @@ export function ControlsPage() {
                   />
                 </div>
               )}
-              <p className="hint">A rate is the sales with this per 100 sales the person, shop or day entered, so a busy person and a quiet one can be compared. The lists are by name, not a ranking.</p>
+              <Hint>A rate is the sales with this per 100 sales the person, shop or day entered, so a busy person and a quiet one can be compared. The lists are by name, not a ranking.</Hint>
             </div>
           </Section>
 

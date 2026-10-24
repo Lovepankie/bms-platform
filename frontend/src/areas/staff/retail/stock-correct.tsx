@@ -12,6 +12,7 @@ import { Problem, Success } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
 import { WORDS } from '../../../app/glossary';
+import { Hint } from '../../../app/ui/Hint';
 
 // "Correct" on a row of the stock list (issue #351, ADR-044): the owner fixes a mistake where he sees it, with a trail. Four small
 // choices, each opened on its own: the right quantity (a reason, posted as a correction that is not shrinkage), the category, a wrong
@@ -88,10 +89,10 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
       </select>
       <label htmlFor="correct-note">A note (if you like)</label>
       <input id="correct-note" value={draft.note} maxLength={280} onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))} autoComplete="off" />
-      <p className="hint">
+      <Hint>
         The old figure stays in the history, with who changed it, when and why. A correction is not counted as lost or damaged stock, or as usage.
         If the money was entered wrongly too, use Past purchases instead.
-      </p>
+      </Hint>
       <Problem error={send.error} />
       <BusyButton type="submit" className="rt-primary" busy={send.isPending} disabled={!ready}>Save the right quantity</BusyButton>
     </form>

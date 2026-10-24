@@ -5,6 +5,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ExpenseCategory, type ExpenseItem } from '../../../api/retail';
 import { useToast } from './toast';
 import { Gate, Problem } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // The expense lists (FR-RET-17): categories and the items in them, kept by whoever holds
 // retail.expense.manage. Nothing is deleted: a category or item is switched off and stays on old records.
@@ -129,7 +130,7 @@ export function ExpenseListsScreen() {
   });
   return (
     <Gate screen="expenseSetup" title="Expense lists">
-      <p className="hint" data-tour="expense-lists-help">Categories and items are what the expense form offers. Switching one off keeps it on old records.</p>
+      <Hint tour="expense-lists-help">Categories and items are what the expense form offers. Switching one off keeps it on old records.</Hint>
       <div data-tour="expense-lists-body">
         {categories.isError && <Problem error={categories.error} />}
         {categories.isPending && <p className="loading">Loading</p>}

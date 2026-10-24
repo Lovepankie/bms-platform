@@ -6,6 +6,7 @@ import { showPercent } from './maths';
 import { canUse } from './permissions';
 import { money } from './ui';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { Hint } from '../../../app/ui/Hint';
 
 // Shared pieces of the analytics screens (issue #149): a date range with the server's 366 day limit,
 // bars and sparklines drawn as inline SVG (no chart library; the figures are always in the text
@@ -74,7 +75,7 @@ export function Section({ title, hint, children }: { title: string; hint?: strin
   return (
     <section className="an-section">
       <h2>{title}</h2>
-      {hint && <p className="hint">{hint}</p>}
+      {hint && <Hint>{hint}</Hint>}
       {children}
     </section>
   );

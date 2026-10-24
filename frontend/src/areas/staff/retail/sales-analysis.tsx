@@ -6,6 +6,7 @@ import { SkeletonList } from '../../../components/states';
 import { Bars, Choice, DateRange, Empty, Section, Sparkline, ToSales, ToStock, defaultRange, moneyOrNone, percentOrNone, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
 import { Gate, Problem, money, useBranchView, useIsPhone } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // Sales analysis (issue #149, step 1): totals over time and by branch, category, item and seller for a
 // date range, the top ten as bars, and the stock that does not move. Profit columns exist only when the
@@ -89,7 +90,7 @@ export function SalesAnalysisView({ data }: { data: SalesAnalysis }) {
           {profit && <tr><td>Margin (profit over sales)</td><td className="num">{percentOrNone(totals.margin_bp)}</td></tr>}
         </tbody>
       </table></div>
-      {profit && <p className="hint">Profit here is sales less the cost the items had when they were sold. Usage, damage and stock count differences are in Daily profit.</p>}
+      {profit && <Hint>Profit here is sales less the cost the items had when they were sold. Usage, damage and stock count differences are in Daily profit.</Hint>}
 
       <Section title="Over time">
         {series.length === 0 ? <Empty /> : (

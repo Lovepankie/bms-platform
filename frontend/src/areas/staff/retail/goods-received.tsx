@@ -14,6 +14,7 @@ import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKey
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Goods received (the purchasing capability, ADR-033, issue #198): the list of deliveries and one delivery. A delivery can be voided
 // with a reason, which takes the goods out of stock again. It is refused once the delivery is on a supplier invoice (void the
@@ -46,11 +47,11 @@ export function GoodsReceivedPage() {
   const list = useCursorList(['retail', 'goods-receipts', query, status], (cursor, signal) => retail.listGoodsReceipts({ query, status, cursor, signal }));
   return (
     <Gate screen="goodsReceived" title="Goods received">
-      <p className="hint" data-tour="goods-received-help">
+      <Hint tour="goods-received-help">
         Each delivery from a supplier is recorded here. Receive against an order from the order itself, or record a delivery that came with no order.
         A wrong delivery is undone by voiding it and receiving it again correctly. Goods sent back to a supplier are recorded on a supplier credit note.
         A delivery marked held is waiting for its freight and duty to be added as a landed cost.
-      </p>
+      </Hint>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/goods-received/new" data-tour="receipts-new">Receive goods without an order</Link>
         <Link className="btn-sm" to="/staff/retail/purchase-orders">Purchase orders</Link>

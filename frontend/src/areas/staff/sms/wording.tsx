@@ -15,6 +15,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { mayManageWording, mayReadNotifications } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // SMS wording (extras slice B3, issue #218; ADR-036 decision 9): the tenant's own words for each event, built from a short
 // list of placeholders and nothing else (no conditions, no code), with a preview made with fabricated data as you type, the
@@ -271,7 +272,7 @@ export function WordingScreen() {
         Choose the words each text message uses. Without your own words, the default is sent. Placeholders such as <code>{'{amount}'}</code> are filled in for each message.
       </p>
       {notice && <p role="alert" className="alert alert-warning">{notice}</p>}
-      {!canManage && <p className="hint">You can look at the wording. Only a business administrator can change it.</p>}
+      {!canManage && <Hint>You can look at the wording. Only a business administrator can change it.</Hint>}
       {list.data.map((t, i) => (
         // Keyed by the saved version, so a fresh read after a save or someone else's change starts from what is saved.
         <TemplateEditor key={`${t.event_key}:${t.override?.version ?? 0}`} template={t} canManage={canManage} onNotice={setNotice} tour={i === 0} />
