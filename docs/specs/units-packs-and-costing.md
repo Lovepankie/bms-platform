@@ -1,6 +1,6 @@
 # Units, packs, buying and selling in packs, and profit per piece
 
-Status: decided (the owner, 23 and 24 Oct 2026: D14, D16, D22 to D26 and D32 yes). Built so far: average cost (#529, ADR-079, V94) and shop EAN-13 barcodes (#528, V93). It follows the set-up of an electronics shop in the pilot.
+Status: decided (the owner, 23 and 24 Oct 2026: D14, D16, D22 to D26 and D32 yes). Built so far: average cost (#529, ADR-079, V94), shop EAN-13 barcodes (#528, V93) and the pack size per delivery on Buy stock and goods received (#554, ADR-082, no migration). It follows the set-up of an electronics shop in the pilot.
 Applies to every retail business: small shops, wholesalers and the ones in between.
 
 ## 1. The problem, in the shop owner's words

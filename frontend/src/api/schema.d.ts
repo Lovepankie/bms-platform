@@ -13325,6 +13325,11 @@ export interface components {
              */
             order_line_id?: string;
             /**
+             * @description For a line in a pack (D23, issue #554): how many base units each pack held in this delivery, at least 1. Kept on the line only; stock and the cost per base unit use it. Absent means the pack's usual size
+             * @example 30
+             */
+            pack_size?: string;
+            /**
              * Format: uuid
              * @description Required on a blind receipt; on an order line it is the line's own product
              */
@@ -13341,6 +13346,8 @@ export interface components {
              * @description The unit qty and cost are in. On an order line, absent means the unit the line was ordered in; on a blind receipt absent means the base unit. Naming the base unit is the base unit
              */
             unit_id?: string;
+            /** @description With pack_size: also make it the pack's usual size from now on (needs retail.catalogue.manage). Selling always uses the usual size */
+            use_from_now_on?: boolean;
         };
         RetailGoodsReceiptList: {
             items?: components["schemas"]["RetailGoodsReceipt"][];
@@ -14915,6 +14922,11 @@ export interface components {
              * @description Cost per unit_id when one is given, otherwise per base unit; becomes the product's cost per base unit (a pack cost divided by the factor, rounded half up)
              */
             cost_minor: number;
+            /**
+             * @description With unit_id (D23, issue #554): how many base units each pack held in this delivery, at least 1. Kept on the line only; stock and the cost per base unit use it. Absent means the pack's usual size
+             * @example 30
+             */
+            pack_size?: string;
             /** Format: uuid */
             product_id: string;
             qty_by_branch: components["schemas"]["RetailBranchQty"][];
@@ -14928,6 +14940,8 @@ export interface components {
              * @description A pack unit of the product (units capability): the quantities and cost_minor are then in that unit and stock moves in base units. Absent or the base unit: as before
              */
             unit_id?: string;
+            /** @description With pack_size: also make it the pack's usual size from now on (needs retail.catalogue.manage). Selling always uses the usual size */
+            use_from_now_on?: boolean;
         };
         /** @description A purchase order. A list carries no lines */
         RetailPurchaseOrder: {
@@ -14985,6 +14999,8 @@ export interface components {
             reason: string;
         };
         RetailPurchaseOrderLine: {
+            /** @description The unit the item is counted in (piece), whatever unit the line was ordered in */
+            base_unit?: string;
             /**
              * Format: int64
              * @description What the supplier billed for it; present with retail.payable.manage
@@ -15016,6 +15032,8 @@ export interface components {
             received_minor?: number;
             /** @description Received so far on receipts that stand, in base units; present on one order only */
             received_qty?: string;
+            /** @description D23, issue #554: received so far in the line's own unit, for a line ordered in a pack: packs received in it count whatever each held, other units count in packs of the size ordered. The order is received in full when this reaches unit_qty */
+            received_unit_qty?: string;
             unit?: string;
             /**
              * Format: int64

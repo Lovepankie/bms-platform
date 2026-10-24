@@ -9,9 +9,11 @@ import { useOptionalStaff, useStaff } from '../context';
 import { newIdempotencyKey, usePersistedDraft } from './idempotency';
 import { UNITS, canUse, capabilityOn } from './permissions';
 import {
-  blankReceipt, blindLineFor, buildReceiptRequest, isReceived, overOrdered, receiptProblem, receiveFormFor, receiveLineProblem, receiveTotal, withReceiveUnit,
-  type ReceiveForm, type ReceiveLineForm,
+  blankReceipt, blindLineFor, buildReceiptRequest, isReceived, overOrdered, receiptProblem, receiveFactor, receiveFormFor, receiveLineProblem, receiveTotal,
+  sizeDiffers, withReceiveUnit, type ReceiveForm, type ReceiveLineForm,
 } from './purchasing-state';
+import { Field, FieldsNeededNote } from '../../../app/ui/Field';
+import { howManyInEach, useFromNowOn } from '../../../app/glossary';
 import { useOrderBranches } from './purchase-order-form';
 import { BranchField, SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { showQty } from './maths';
@@ -38,6 +40,10 @@ function LineCard({ line, index, order, onChange, onRemove }: {
   // Outside the staff layout (a test of the line alone) the server is the only judge, so the field shows.
   const staff = useOptionalStaff();
   const canPrice = !staff || (staff.me.permissions ?? []).includes('retail.price.edit');
+  // D23 (#554): changing how many usually come in a pack changes the item, so it is offered only to someone who manages items.
+  const canManageItems = !staff || (staff.me.permissions ?? []).includes('retail.catalogue.manage');
+  const factor = receiveFactor(line);
+  const differs = sizeDiffers(line);
   return (
     <li className="rt-card" data-testid={`receive-line-${index}`}>
       <p><strong>{line.description}</strong> ({line.code})</p>
@@ -52,6 +58,27 @@ function LineCard({ line, index, order, onChange, onRemove }: {
             {line.packs.map((k) => <option key={k.unit_id} value={k.unit_id}>{k.unit} ({showQty(k.factor ?? '')} each)</option>)}
           </select>
         </>
+      )}
+      {line.unitId && (
+        <div data-testid={`receive-size-${index}`}>
+          <Field id={`rc-size-${index}`} required inputMode="decimal" label={howManyInEach(line.baseUnit, line.unitLabel)}
+            hint={`${line.orderLineId ? 'Ordered at' : 'Usually'} ${showQty(line.usualSize ?? '')}. Change it when this delivery's ${line.unitLabel} held a different number.`}
+            error={factor === null ? 'Enter 1 or more, with at most three decimals.' : null}
+            value={line.packSize ?? showQty(line.usualSize ?? '')} onChange={(e) => onChange({ ...line, packSize: e.target.value })} />
+          {differs && canManageItems && (
+            <label>
+              <input type="checkbox" checked={line.fromNowOn === true} onChange={(e) => onChange({ ...line, fromNowOn: e.target.checked })} />
+              <span>{useFromNowOn(showQty(factor ?? ''))}</span>
+            </label>
+          )}
+          {differs && (
+            <p className="hint" data-testid={`receive-size-note-${index}`}>
+              {line.fromNowOn && canManageItems
+                ? `Every ${line.unitLabel} bought or sold after this one counts as ${showQty(factor ?? '')}.`
+                : `Only this delivery counts as ${showQty(factor ?? '')} in each ${line.unitLabel}.`}
+            </p>
+          )}
+        </div>
       )}
       <div className="rt-row">
         <div>
@@ -94,6 +121,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
   const setLine = (i: number, line: ReceiveLineForm) => onChange({ ...form, lines: form.lines.map((l, n) => (n === i ? line : l)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="receive-form">
+      {form.lines.some((l) => l.unitId) && <FieldsNeededNote />}
       <div className="stack" data-tour="receive-who">
         {blind ? (
           <SupplierField id="receive-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />

@@ -161,7 +161,7 @@ describe('a blind receipt', () => {
   });
 
   it('refuses a pack quantity that does not convert exactly, and totals what arrives', () => {
-    const l = withReceiveUnit({ ...blindLineFor(product({ packs: [{ ...carton, factor: '0.003' }] }), true, 'k'), qty: '0.5', cost: '10' }, 'u-carton');
+    const l = withReceiveUnit({ ...blindLineFor(product({ packs: [{ ...carton, factor: '1.001' }] }), true, 'k'), qty: '0.5', cost: '10' }, 'u-carton');
     expect(receiveLineProblem(l)).toMatch(/convert exactly/i);
     const ok = { ...blindLineFor(product(), false, 'k'), qty: '4', cost: '3500' };
     expect(receiveLineProblem(ok)).toBeNull();

@@ -3,8 +3,9 @@ import {
   type GoodsReceipt, type GoodsReceiptRequest, type Pack, type Product, type PurchaseOrder, type PurchaseOrderLine, type PurchaseOrderOutcome, type PurchaseOrderRequest,
 } from '../../../api/retail';
 import { parseMinor } from '../../../components/money';
+import { plural } from '../../../app/glossary';
 import { lineTotalMinor, milliOf, parseQty, qtyString, showQty } from './maths';
-import { activePacks, baseQtyMilli, factorMilli, packPriceMinor } from './units-state';
+import { activePacks, baseQtyMilli, deliveredFactor, factorMilli, packPriceMinor, sameFactor } from './units-state';
 
 // Optional purchasing (the purchasing capability, ADR-033, issue #198): the pure rules of the purchase order form and the
 // goods received form. The server decides every rule again (totals, stock, the over-receipt allowance, the numbers); these are
@@ -170,8 +171,14 @@ export function sendOutcomeWords(outcome: PurchaseOrderOutcome): string {
     : `Sent ${outcome.order?.order_no ?? 'the order'}. You can now receive goods against it.`;
 }
 
-/** The quantity on an order line still to come, in base thousandths (never below zero). */
+/**
+ * The quantity on an order line still to come, in base thousandths (never below zero). A line ordered in a pack counts the packs
+ * received whatever each held (D23, #554: received_unit_qty), so ten cartons of 30 fill an order of ten cartons of 24.
+ */
 export function stillToComeMilli(line: PurchaseOrderLine): number {
+  if (line.unit_id && line.unit_qty !== undefined && line.received_unit_qty !== undefined) {
+    return baseQtyMilli(Math.max(0, milliOf(line.unit_qty) - milliOf(line.received_unit_qty)), line.unit_factor) ?? 0;
+  }
   return Math.max(0, milliOf(line.qty ?? '0') - milliOf(line.received_qty ?? '0'));
 }
 
@@ -190,6 +197,12 @@ export interface ReceiveLineForm {
   baseUnit: string;
   packs: Pack[];
   unitId?: string;
+  /** D23 (#554): how many base units each pack held in this delivery, typed; starts at usualSize. */
+  packSize?: string;
+  /** The pack's size before this delivery: the item's usual one, or on an order line the size it was ordered at. */
+  usualSize?: string;
+  /** D23 (#554): make packSize the pack's usual size from now on. */
+  fromNowOn?: boolean;
   /** Received now; blank means none of this line arrives. */
   qty: string;
   cost: string;
@@ -239,10 +252,10 @@ export function receiveFormFor(order: PurchaseOrder, branchId = ''): ReceiveForm
         productId: l.product_id ?? '',
         code: l.code ?? '',
         description: l.description ?? '',
-        unitLabel: l.unit ?? '',
-        baseUnit: l.unit ?? '',
+        unitLabel: l.unit ?? l.base_unit ?? '',
+        baseUnit: l.base_unit ?? l.unit ?? '',
         packs: [],
-        ...(l.unit_id && l.unit_factor && factorMilli(l.unit_factor) !== 1000n ? { unitId: l.unit_id } : {}),
+        ...(l.unit_id && l.unit_factor && factorMilli(l.unit_factor) !== 1000n ? { unitId: l.unit_id, packSize: showQty(l.unit_factor), usualSize: l.unit_factor } : {}),
         qty: qty ? showQty(qty) : '',
         cost: String(l.unit_cost_minor ?? l.cost_minor ?? 0),
         sell: '',
@@ -272,8 +285,27 @@ export function blindLineFor(product: Product, unitsOn: boolean, key: string): R
 /** A blind receipt line in another unit; the cost is left for the person to retype, since the item's cost is per base unit. */
 export function withReceiveUnit(line: ReceiveLineForm, unitId: string): ReceiveLineForm {
   const pack = line.packs.find((k) => k.unit_id === unitId);
-  return { ...line, unitId: pack ? unitId : undefined, unitLabel: pack ? (pack.unit ?? '') : line.baseUnit };
+  const { packSize: _size, usualSize: _usual, fromNowOn: _now, ...rest } = line;
+  return {
+    ...rest,
+    unitId: pack ? unitId : undefined,
+    unitLabel: pack ? (pack.unit ?? '') : line.baseUnit,
+    ...(pack ? { packSize: showQty(pack.factor ?? ''), usualSize: pack.factor } : {}),
+  };
 }
+
+/** The base units in one pack of the line for this delivery: the typed size, else the usual; null when the typed size is wrong. */
+export function receiveFactor(l: ReceiveLineForm): string | null | undefined {
+  if (!l.unitId) return undefined;
+  const usual = l.usualSize ?? l.packs.find((k) => k.unit_id === l.unitId)?.factor;
+  return l.packSize === undefined ? (usual ?? undefined) : deliveredFactor(l.packSize);
+}
+
+/** Whether the size typed differs from the usual one, so "use from now on" is offered. */
+export const sizeDiffers = (l: ReceiveLineForm): boolean => {
+  const f = receiveFactor(l);
+  return typeof f === 'string' && !sameFactor(f, l.usualSize);
+};
 
 /** Whether the line is being received now: it has something typed in its quantity. */
 export const isReceived = (l: ReceiveLineForm): boolean => l.qty.trim() !== '';
@@ -283,8 +315,9 @@ export function receiveLineProblem(l: ReceiveLineForm): string | null {
   if (!isReceived(l)) return null;
   const qty = parseQty(l.qty);
   if (qty === null) return 'Enter how many arrived, as a number above zero with at most three decimals.';
-  const pack = l.unitId ? l.packs.find((k) => k.unit_id === l.unitId) : undefined;
-  if (pack && baseQtyMilli(qty, pack.factor) === null) return `That does not convert exactly to ${l.baseUnit}. Change it.`;
+  const factor = receiveFactor(l);
+  if (factor === null) return `Enter how many ${plural(l.baseUnit)} were in each ${l.unitLabel}: 1 or more.`;
+  if (factor && baseQtyMilli(qty, factor) === null) return `That does not convert exactly to ${l.baseUnit}. Change it.`;
   if (parseMinor(l.cost, RETAIL_CURRENCY) === null) return 'Enter what one cost, in whole shillings.';
   if (l.sell.trim() !== '' && parseMinor(l.sell, RETAIL_CURRENCY) === null) return 'Enter the new selling price in whole shillings, or leave it blank.';
   return null;
@@ -330,11 +363,19 @@ export function buildReceiptRequest(form: ReceiveForm, orderId?: string): GoodsR
     ...(form.hold ? { hold_for_costing: true } : {}),
     lines: form.lines.filter(isReceived).map((l) => ({
       ...(l.orderLineId ? { order_line_id: l.orderLineId } : { product_id: l.productId, ...(l.unitId ? { unit_id: l.unitId } : {}) }),
+      ...packSizeOf(l),
       qty: qtyString(parseQty(l.qty) ?? 0),
       cost_minor: parseMinor(l.cost, RETAIL_CURRENCY) ?? 0,
       ...(l.sell.trim() !== '' ? { sell_minor: parseMinor(l.sell, RETAIL_CURRENCY) ?? 0 } : {}),
     })),
   };
+}
+
+/** D23 (#554): the size each pack held in this delivery, and "use from now on" only when it differs from the usual size. */
+function packSizeOf(l: ReceiveLineForm): { pack_size?: string; use_from_now_on?: boolean } {
+  const factor = receiveFactor(l);
+  if (!factor) return {};
+  return { pack_size: factor, ...(l.fromNowOn && sizeDiffers(l) ? { use_from_now_on: true } : {}) };
 }
 
 /** Whether a receipt can still be voided: it stands. The server refuses a billed one or one whose stock has moved. */

@@ -41,7 +41,8 @@ export function redraftOf(purchase: Purchase, products: Product[], today: string
       cost: String(inPack ? (l.unit_cost_minor ?? l.cost_minor ?? 0) : (l.cost_minor ?? 0)),
       sell: String(l.sell_minor ?? product.sell_minor ?? 0),
       qtyByBranch: Object.fromEntries((l.qty_by_branch ?? []).map((b) => [b.branch_id ?? '', showQty((inPack ? b.unit_qty : undefined) ?? b.qty ?? '0')])),
-      ...(inPack ? { unitId: l.unit_id } : {}),
+      // D23 (#554): the size each pack held in that delivery, as the line kept it.
+      ...(inPack ? { unitId: l.unit_id, ...(l.unit_factor ? { packSize: showQty(l.unit_factor) } : {}) } : {}),
     });
   }
   return {

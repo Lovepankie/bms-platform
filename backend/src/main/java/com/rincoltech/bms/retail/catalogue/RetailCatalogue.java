@@ -101,6 +101,15 @@ public interface RetailCatalogue {
     boolean revertPurchasePrices(UUID productId, UUID purchaseId, String reason, boolean laterPurchase);
 
     /**
+     * D23, issue #554: a delivery whose line ticked "Use 30 from now on" makes {@code factor} the usual size of the
+     * product's pack in {@code unitId}, in the caller's transaction, with an audit row naming the delivery. The caller
+     * holds the product's row lock (ADR-079: product rows before balance rows), which a pack edit also takes, so the two
+     * never interleave. Lines already made keep the size they used. Nothing is written when the size is already the usual
+     * one.
+     */
+    void useBuyingSize(UUID productId, UUID unitId, BigDecimal factor, String sourceType, UUID sourceId);
+
+    /**
      * The one normal form of a product code, for the API and the importer alike (review F9):
      * {@code strip()} and the no-break spaces it keeps are removed at the ends (a no-break space pasted from a
      * spreadsheet), then NFKC folds compatibility forms (full-width letters and digits). A code that

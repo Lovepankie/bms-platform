@@ -46,6 +46,13 @@ class CatalogueLookup implements RetailCatalogue {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void useBuyingSize(
+            UUID productId, UUID unitId, java.math.BigDecimal factor, String sourceType, UUID sourceId) {
+        service.useBuyingSize(productId, unitId, factor, sourceType, sourceId);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public ProductSnapshot applyPurchasePrices(UUID productId, long costMinor, Long sellMinor, UUID purchaseId) {
         CatalogueApi.Product locked = repo.lock(productId).orElseThrow(ApiException::notFound);
         long sell = sellMinor == null ? locked.sellMinor() : sellMinor;

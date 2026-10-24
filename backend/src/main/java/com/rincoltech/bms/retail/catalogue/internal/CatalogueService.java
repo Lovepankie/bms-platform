@@ -797,6 +797,23 @@ class CatalogueService {
         return repo.pack(productId, unitId).orElseThrow();
     }
 
+    /** D23, issue #554: see {@code RetailCatalogue.useBuyingSize}. The caller holds the product's row lock. */
+    void useBuyingSize(UUID productId, UUID unitId, java.math.BigDecimal factor, String sourceType, UUID sourceId) {
+        Pack before = repo.pack(productId, unitId).orElseThrow(ApiException::notFound);
+        String size = factor.setScale(3).toPlainString();
+        if (before.factor().equals(size)) {
+            return;
+        }
+        repo.updatePack(before.id(), factor, before.active(), before.version());
+        Map<String, Object> was = new LinkedHashMap<>();
+        Map<String, Object> now = new LinkedHashMap<>();
+        was.put("factor", before.factor());
+        now.put("factor", size);
+        now.put("source_type", sourceType);
+        now.put("source_id", sourceId);
+        audit.record(new AuditLog.Entry("retail.product_unit.updated", PACK, before.id(), null, was, now));
+    }
+
     /**
      * FR-RET-02: a manual price edit under If-Match, with the product's row lock, its history row
      * and audit. {@code price_unchanged} never depends on a cost the caller may not read (#77): for

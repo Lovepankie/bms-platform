@@ -78,7 +78,22 @@ final class PurchasingApi {
             @Schema(
                     description = "A pack unit of the product (units capability): the quantities and cost_minor are"
                             + " then in that unit and stock moves in base units. Absent or the base unit: as before")
-            UUID unitId) {}
+            UUID unitId,
+
+            @Positive
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    example = "30",
+                    description = "With unit_id (D23, issue #554): how many base units each pack held in this delivery,"
+                            + " at least 1. Kept on the line only; stock and the cost per base unit use it. Absent means"
+                            + " the pack's usual size")
+            BigDecimal packSize,
+
+            @Schema(
+                    description = "With pack_size: also make it the pack's usual size from now on (needs"
+                            + " retail.catalogue.manage). Selling always uses the usual size")
+            Boolean useFromNowOn) {}
 
     @Schema(name = "RetailPurchaseRequest")
     record PurchaseRequest(
