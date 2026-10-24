@@ -111,7 +111,7 @@ class StockService {
             boolean includeInactive,
             Integer limit,
             String cursor) {
-        Long atMost = atMostOf(level);
+        String stockLevel = levelOf(level);
         Principal principal = CurrentPrincipal.require();
         // A closed branch that still holds stock is a column only when asked for (issue #329, ADR-041); the default
         // list
@@ -137,7 +137,7 @@ class StockService {
                 negativeOnly,
                 includeInactive,
                 false,
-                atMost,
+                stockLevel,
                 position.rank(),
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
@@ -189,7 +189,7 @@ class StockService {
             boolean includeInactive,
             Integer limit,
             String cursor) {
-        Long atMost = atMostOf(level);
+        String stockLevel = levelOf(level);
         UUID branch = branches.resolve("retail.stock.read", branchId);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
         Search.Query search = Search.parse(query);
@@ -201,7 +201,7 @@ class StockService {
                 categoryId,
                 negativeOnly,
                 includeInactive,
-                atMost,
+                stockLevel,
                 position.rank(),
                 after == null ? null : after.sortKey(),
                 after == null ? null : after.id(),
@@ -456,18 +456,21 @@ class StockService {
      * Cost on a branch-bound row needs {@code retail.profit.read} in that row's branch, not in any
      * branch (ADR-017; review F5).
      */
-    private static BigDecimal lowStock() {
+    static BigDecimal lowStock() {
         return BigDecimal.valueOf(LOW_STOCK_MILLI, 3);
     }
 
-    /** The quantity a level filter keeps at or below, in thousandths; null for no level (#145). */
-    static Long atMostOf(String level) {
+    /**
+     * The level filter, {@code out} or {@code low}; null for none (#145). Either keeps only the items a branch has
+     * held, low at or below the branch's minimum, else the fixed threshold (issue #490, {@link
+     * com.rincoltech.bms.retail.stock.LowStockRule#atBranchSql}).
+     */
+    static String levelOf(String level) {
         if (level == null || level.isBlank()) {
             return null;
         }
         return switch (level) {
-            case LEVEL_OUT -> 0L;
-            case LEVEL_LOW -> LOW_STOCK_MILLI;
+            case LEVEL_OUT, LEVEL_LOW -> level;
             default ->
                 throw ApiException.validation(
                         List.of(new FieldProblem("stock_level", "invalid", "stock_level is out or low.")));

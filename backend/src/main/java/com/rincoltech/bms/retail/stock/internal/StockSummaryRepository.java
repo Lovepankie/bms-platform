@@ -1,8 +1,8 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.stock.LowStockRule;
 import com.rincoltech.bms.retail.stock.internal.StockSummaryApi.Group;
-import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +35,7 @@ class StockSummaryRepository {
             UUID categoryId,
             boolean negativeOnly,
             boolean includeInactive,
-            Long atMostMilli,
+            String stockLevel,
             int offset,
             int limit) {}
 
@@ -77,9 +77,18 @@ class StockSummaryRepository {
                             : " AND EXISTS (SELECT 1 FROM retail_stock_balances t WHERE t.product_id = p.id"
                                     + " AND t.branch_id IN (:branchIds) AND t.qty < 0)");
         }
-        if (spec.atMostMilli() != null) {
-            sql.append(" AND ").append(perRow ? "coalesce(b.qty, 0)" : held).append(" <= :atMost");
-            params.put("atMost", BigDecimal.valueOf(spec.atMostMilli(), 3));
+        if (spec.stockLevel() != null) {
+            // As the stock lists judge it (issue #490): only an item held where it is judged, low at or below its
+            // minimum.
+            boolean low = spec.stockLevel().equals(StockService.LEVEL_LOW);
+            sql.append(" AND ")
+                    .append(
+                            perRow
+                                    ? LowStockRule.atBranchSql(
+                                            low, "p.tenant_id", "p.id", "br.id", "coalesce(b.qty, 0)", ":low")
+                                    : LowStockRule.overBranchesSql(
+                                            low, "p.tenant_id", "p.id", "lb.id IN (:branchIds)", held, ":low"));
+            params.put("low", StockService.lowStock());
         }
         sql.append(" GROUP BY 1");
         String names = level.equals("branch")

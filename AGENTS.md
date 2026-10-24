@@ -901,6 +901,10 @@ Accepted (this list is the ADR index):
   any other way, credit owed with the oldest due date, the top five items today and this week, a line per shop over two or more, the
   low stock count and the open orders, the money parts left out without `retail.sale.all_sellers` (proposed, #485; FR-UXN-06;
   supersedes ADR-072 decision 2; no migration; renumbered at merge if needed)
+- ADR-077 Low and out of stock count only items a branch has held (a balance row or a movement there), low at or below the
+  branch's minimum, else the item's, else the fixed 5; over several branches low at any of them, out on the summed balance; one
+  SQL rule in `LowStockRule` for Home, the dashboard and the Stock tabs (proposed, #490; amends ADR-029; no migration; renumbered
+  at merge if needed)
 - ADR-067 Retail sales work offline: the sale catalogue and an outbox per business and person on the device, synced one at a
   time oldest first, sent once by the Idempotency-Key and a client sale id stored on the sale; dated when they happened; stock,
   price and item clashes recorded and flagged, other refusals kept on the device for a manager to resend or discard; a dot in

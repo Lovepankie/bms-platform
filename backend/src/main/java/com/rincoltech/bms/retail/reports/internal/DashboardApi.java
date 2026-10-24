@@ -34,15 +34,14 @@ final class DashboardApi {
             Long grossProfitMinor,
 
             @Schema(
-                    description =
-                            "Only with on_payment: money recorded as collected today, by any method, for sales paid at the sale and"
-                                    + " for payments on credit sales, less money paid back (Received). sales_minor is then Sold,"
-                                    + " everything sold today")
+                    description = "Only with on_payment: money recorded as collected today, by any method, for "
+                            + "sales paid at the sale and for payments on credit sales, less money paid back "
+                            + "(Received). sales_minor is then Sold, everything sold today")
             Long receivedMinor,
 
             @Schema(
-                    description =
-                            "Only with on_payment: what buyers still owe on the credit sales counted when the buyer pays, all dates (On credit)")
+                    description = "Only with on_payment: what buyers still owe on the credit sales counted when "
+                            + "the buyer pays, all dates (On credit)")
             Long onCreditMinor,
 
             @Schema(description = "Only with on_payment: the number of credit sales still owing")
@@ -70,13 +69,15 @@ final class DashboardApi {
             Long valueAtCostMinor,
 
             @Schema(
-                    description =
-                            "Active items whose balance is zero or less, as the stock list judges it: a branch alone, or the sum over the branches reported")
+                    description = "Active items whose balance is zero or less, as the stock list judges it: a "
+                            + "branch alone, or the sum over the branches reported; only items one of them "
+                            + "has held (a balance row or a movement, issue #490)")
             int outOfStock,
 
             @Schema(
-                    description =
-                            "Active items at or below low_stock_threshold (ADR-029), out of stock ones included, as the stock list's low tab counts them")
+                    description = "Active items at or below their minimum at a branch, else low_stock_threshold "
+                            + "(ADR-029), at a branch that has held them (issue #490), out of stock ones "
+                            + "included, as the stock list's low tab counts them")
             int lowStock,
 
             String lowStockThreshold) {}
@@ -106,8 +107,8 @@ final class DashboardApi {
             @Schema(description = STOCK_ONLY) Integer lowStock,
 
             @Schema(
-                    description =
-                            "Only with on_payment, and with retail.sale.read in this branch: money collected today in this shop")
+                    description = "Only with on_payment, and with retail.sale.read in this branch: money "
+                            + "collected today in this shop")
             Long todayReceivedMinor,
 
             @Schema(description = "With a range (issue #428) and " + SALES_ONLY + ": sales in the range")
@@ -189,16 +190,16 @@ final class DashboardApi {
             LocalDate to,
 
             @Schema(
-                    description =
-                            "The period before, as long as the range (This year: the same days of last year); absent for all")
+                    description = "The period before, as long as the range (This year: the same days of last "
+                            + "year); absent for all")
             LocalDate previousFrom,
 
             LocalDate previousTo,
 
             @Schema(
                     allowableValues = {"day", "week", "month"},
-                    description =
-                            "A step of the chart: a day up to 62 days, seven days from the first day up to a year, else a month")
+                    description = "A step of the chart: a day up to 62 days, seven days from the first day up to "
+                            + "a year, else a month")
             String group,
 
             Figures current,
@@ -215,8 +216,8 @@ final class DashboardApi {
             Leader bestSeller,
 
             @Schema(
-                    description =
-                            "The person with the most sales; only with retail.profit.read in every branch covered, as the salesperson level of the sales summary")
+                    description = "The person with the most sales; only with retail.profit.read in every branch "
+                            + "covered, as the salesperson level of the sales summary")
             Leader topSalesperson) {}
 
     @Schema(name = "RetailDashboard")
@@ -242,8 +243,8 @@ final class DashboardApi {
 
             @Schema(
                     allowableValues = {"on_sale", "on_payment"},
-                    description =
-                            "How credit sales are counted (ADR-043): on_sale when they are made, on_payment when the buyer pays")
+                    description = "How credit sales are counted (ADR-043): on_sale when they are made, "
+                            + "on_payment when the buyer pays")
             String creditSaleRecognition,
 
             @Schema(description = "Only with on_payment: money collected in the last 7 days")
@@ -253,9 +254,8 @@ final class DashboardApi {
             Long last30ReceivedMinor,
 
             @Schema(
-                    description =
-                            "The first business day of the rule on_payment, when it was chosen; it can lie in the future."
-                                    + " credit_sale_recognition is on_payment once that day has come")
+                    description = "The first business day of the rule on_payment, when it was chosen; it can lie "
+                            + "in the future. credit_sale_recognition is on_payment once that day has come")
             LocalDate creditRecognitionStartsOn,
 
             @Schema(description = "Only when a period or dates were asked for (issue #428)")

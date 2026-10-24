@@ -244,7 +244,7 @@ export function DashboardView({ data, nameOf, choice = DEFAULT_RANGE, onChoice, 
             {stock.value_at_cost_minor !== undefined && <Stat label="Stock at cost" value={money(stock.value_at_cost_minor)} />}
             {stock.value_at_price_minor !== undefined && <Stat label="Stock at price" value={money(stock.value_at_price_minor)} />}
             <Stat label="Out of stock" value={stock.out_of_stock ?? 0} hint="items at zero or less" />
-            <Stat label="Low stock" value={stock.low_stock ?? 0} hint={`${showQty(stock.low_stock_threshold ?? '5')} or fewer left`} />
+            <Stat label="Low stock" value={stock.low_stock ?? 0} hint={`at their minimum, or ${showQty(stock.low_stock_threshold ?? '5')} or fewer without one`} />
           </ul>
           <p className="hint">Stock is counted as it is now, whatever days are picked.</p>
           {stockLink}

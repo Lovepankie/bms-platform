@@ -138,7 +138,7 @@ describe('low stock and out of stock tabs', () => {
     expect(html).toContain('>Out of stock<');
     expect(html).toContain('aria-pressed="true">Low stock<');
     expect(html).toContain('aria-pressed="false">Out of stock<');
-    expect(html).toContain('including those that are out of stock');
+    expect(html).toContain('at or below their minimum, or 5 or fewer without one, including those out of stock');
   });
 
   it('the Stock page starts on all items', () => {

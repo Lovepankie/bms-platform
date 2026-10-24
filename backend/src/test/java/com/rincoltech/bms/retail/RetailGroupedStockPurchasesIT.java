@@ -308,10 +308,10 @@ class RetailGroupedStockPurchasesIT extends IntegrationTest {
         JsonNode cats = body(api.get("/stock/summary?group_by=branch,category&level=category&branch_id=" + hq, ADMIN));
         assertThat(cats.get("items")).hasSize(2);
 
+        // GP-2 is listed at the head office but was never carried there, so nothing is out there (issue #490).
         JsonNode out = body(api.get(
                 "/stock/summary?group_by=branch,category&level=category&branch_id=" + hq + "&stock_level=out", ADMIN));
-        assertThat(out.get("items")).hasSize(1);
-        assertThat(out.get("items").get(0).get("value_minor").asLong()).isZero();
+        assertThat(out.get("items")).isEmpty();
     }
 
     @Test

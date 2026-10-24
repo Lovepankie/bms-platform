@@ -11442,7 +11442,7 @@ export interface components {
              */
             closed_branches?: number;
             items?: components["schemas"]["RetailAllBranchesRow"][];
-            /** @description A total at or below this is low stock; the same for every branch */
+            /** @description A balance at or below this is low stock for an item with no minimum set; the same for every branch */
             low_stock_threshold?: string;
             next_cursor?: string;
         };
@@ -12787,13 +12787,13 @@ export interface components {
         RetailDashboardStock: {
             /**
              * Format: int32
-             * @description Active items at or below low_stock_threshold (ADR-029), out of stock ones included, as the stock list's low tab counts them
+             * @description Active items at or below their minimum at a branch, else low_stock_threshold (ADR-029), at a branch that has held them (issue #490), out of stock ones included, as the stock list's low tab counts them
              */
             low_stock?: number;
             low_stock_threshold?: string;
             /**
              * Format: int32
-             * @description Active items whose balance is zero or less, as the stock list judges it: a branch alone, or the sum over the branches reported
+             * @description Active items whose balance is zero or less, as the stock list judges it: a branch alone, or the sum over the branches reported; only items one of them has held (a balance row or a movement, issue #490)
              */
             out_of_stock?: number;
             /**
@@ -13395,7 +13395,7 @@ export interface components {
             date?: string;
             /**
              * Format: int32
-             * @description Present only with retail.stock.read: active items at or below the dashboard's low stock threshold
+             * @description Present only with retail.stock.read: active items low as the dashboard counts them, at or below their minimum or else the low stock threshold, at a branch that has held them (issue #490)
              */
             low_stock?: number;
             /**
@@ -16461,7 +16461,7 @@ export interface components {
             /** Format: uuid */
             branch_id?: string;
             items?: components["schemas"]["RetailStockRow"][];
-            /** @description A quantity at or below this is low stock (FR-RET-03); the same for every branch */
+            /** @description A quantity at or below this is low stock (FR-RET-03) for an item with no minimum set; the same for every branch */
             low_stock_threshold?: string;
             next_cursor?: string;
         };

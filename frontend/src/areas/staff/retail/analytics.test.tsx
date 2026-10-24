@@ -402,6 +402,19 @@ describe('owner dashboard', () => {
     expect(html).not.toContain('UGX 0');
   });
 
+  it('leaves the stock cell blank for a shop that has held no goods, next to one that has (issue #490)', () => {
+    const shops = [
+      { branch_id: 'b1', range_sales_minor: 5100, previous_sales_minor: 4000, out_of_stock: 1, low_stock: 3 },
+      { branch_id: 'b2', range_sales_minor: 700, previous_sales_minor: 0 },
+    ];
+    const html = renderToString(<DashboardView data={{ ...seller(), shops }} nameOf={nameOf} choice={{ period: '7d' }} />);
+    expect(html).toContain('Out / low now');
+    expect(html).toContain('1 / 3');
+    expect(html).not.toContain('0 / 0');
+    expect(html).not.toMatch(/undefined|NaN/);
+    expect(html).not.toContain('0 out');
+  });
+
   it('shows only the sales parts when stock is not readable', () => {
     const html = renderToString(<DashboardView data={{ ...seller(), stock: undefined, shops: [{ branch_id: 'b1', range_sales_minor: 5100, previous_sales_minor: 4000 }] }} nameOf={nameOf} choice={{ period: '7d' }} />);
     expect(html).toContain('Number of sales');

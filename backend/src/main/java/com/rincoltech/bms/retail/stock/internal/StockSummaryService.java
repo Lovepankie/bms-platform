@@ -67,7 +67,7 @@ class StockSummaryService {
         if (q.offset() != null && q.offset() < 0) {
             throw ApiException.validation(List.of(new FieldProblem("offset", "invalid", "offset is zero or more.")));
         }
-        Long atMost = StockService.atMostOf(q.stockLevel());
+        String stockLevel = StockService.levelOf(q.stockLevel());
         Set<UUID> closedHolding = stock.branchesHoldingBalance(branches.inactiveInScope("retail.stock.read"));
         List<UUID> ids = branches.visible("retail.stock.read", q.includeClosed() ? closedHolding : Set.of()).stream()
                 .map(Branch::id)
@@ -91,7 +91,7 @@ class StockSummaryService {
                 q.categoryId(),
                 q.negativeOnly(),
                 q.includeInactive(),
-                atMost,
+                stockLevel,
                 offset,
                 BOUND + 1));
         boolean more = rows.size() > BOUND;

@@ -526,6 +526,17 @@ SELECT s.tenant_id, bt.users[2], 'bench-' || s.id, 'POST', '/api/v1/retail/sales
   FROM bsale s JOIN bt ON bt.id = s.tenant_id
  WHERE s.created_at > timestamptz '2026-09-23';
 
+-- Low-stock minimums (issue #412, measured for issue #490): an item level on one product in three and a branch level on one
+-- branch and product in eight, between 2 and 20, so the minimum probes of the low-stock rule find rows.
+INSERT INTO retail_stock_minimums (id, tenant_id, product_id, branch_id, min_qty)
+SELECT gen_random_uuid(), p.tenant_id, p.id, NULL, 2 + abs(hashtext(p.id::text)) % 19
+  FROM retail_products p
+ WHERE abs(hashtext(p.id::text)) % 3 = 0
+UNION ALL
+SELECT gen_random_uuid(), p.tenant_id, p.id, b.id, 2 + abs(hashtext(b.id::text || p.id::text)) % 19
+  FROM retail_products p JOIN branches b ON b.tenant_id = p.tenant_id
+ WHERE abs(hashtext(b.id::text || p.id::text)) % 8 = 0;
+
 INSERT INTO tenant_sequences (tenant_id, sequence_key, next_value)
 SELECT tenant_id, 'retail_sale_no', max(i) + 1 FROM bsale GROUP BY tenant_id
 UNION ALL

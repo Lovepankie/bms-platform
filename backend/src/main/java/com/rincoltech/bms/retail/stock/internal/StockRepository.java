@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.stock.LowStockRule;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Correction;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementCorrection;
@@ -49,7 +50,7 @@ class StockRepository {
             UUID categoryId,
             boolean negativeOnly,
             boolean includeInactive,
-            Long atMostMilli,
+            String level,
             int afterRank,
             String afterCode,
             UUID afterId,
@@ -61,7 +62,8 @@ class StockRepository {
                   FROM retail_products p
                   JOIN retail_units u ON u.id = p.unit_id
                   JOIN retail_categories c ON c.id = p.category_id
-                  LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branch
+                  LEFT JOIN retail_stock_balances b ON b.tenant_id = p.tenant_id AND b.product_id = p.id
+                       AND b.branch_id = :branch
                  WHERE (p.active OR :includeInactive)
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
@@ -79,9 +81,16 @@ class StockRepository {
         if (negativeOnly) {
             sql.append(" AND coalesce(b.qty, 0) < 0");
         }
-        if (atMostMilli != null) {
-            sql.append(" AND coalesce(b.qty, 0) <= :atMost");
-            params.put("atMost", java.math.BigDecimal.valueOf(atMostMilli, 3));
+        if (level != null) {
+            sql.append(" AND ")
+                    .append(LowStockRule.atBranchSql(
+                            level.equals(StockService.LEVEL_LOW),
+                            "p.tenant_id",
+                            "p.id",
+                            ":branch",
+                            "coalesce(b.qty, 0)",
+                            ":low"));
+            params.put("low", StockService.lowStock());
         }
         String statement;
         if (match == null) {
@@ -150,7 +159,7 @@ class StockRepository {
             boolean negativeOnly,
             boolean includeInactive,
             boolean keepHeldInactive,
-            Long atMostMilli,
+            String level,
             int afterRank,
             String afterCode,
             UUID afterId,
@@ -184,9 +193,17 @@ class StockRepository {
         if (negativeOnly) {
             sql.append(" AND coalesce(t.negs, 0) > 0");
         }
-        if (atMostMilli != null) {
-            sql.append(" AND coalesce(t.total, 0) <= :atMost");
-            params.put("atMost", java.math.BigDecimal.valueOf(atMostMilli, 3));
+        if (level != null) {
+            // Over the listed branches together: out on the summed balance, low at any one of them (issue #490).
+            sql.append(" AND ")
+                    .append(LowStockRule.overBranchesSql(
+                            level.equals(StockService.LEVEL_LOW),
+                            "p.tenant_id",
+                            "p.id",
+                            "lb.id IN (:branchIds)",
+                            "coalesce(t.total, 0)",
+                            ":low"));
+            params.put("low", StockService.lowStock());
         }
         String statement;
         if (match == null) {

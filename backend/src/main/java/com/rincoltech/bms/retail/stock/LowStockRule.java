@@ -15,8 +15,8 @@ import java.util.Optional;
  *       that time has no pace rule.
  * </ul>
  *
- * The low-stock push and the Stock health page both use this rule, the page through the same comparison in its query. The
- * minimum is named first when both trip, because it is the number the owner chose.
+ * The low-stock push and the Stock health page both use this rule, the page through the same comparison in its query.
+ * The minimum is named first when both trip, because it is the number the owner chose.
  */
 public final class LowStockRule {
 
@@ -85,6 +85,60 @@ public final class LowStockRule {
             return Optional.of(new RunningOut(days, left.signum() == 0));
         }
         return Optional.empty();
+    }
+
+    /*
+     * The counts of Home and the dashboard and the Out and Low filters of the stock lists (issue #490, ADR-077) judge
+     * an item only where it has been held: a balance row or a movement at the branch. A catalogue item a branch never
+     * carried is neither out nor low there. Low at a branch is at or below its level: the branch's own minimum, else
+     * the item's minimum for every branch, else the fixed threshold the caller binds. Over several branches together,
+     * as All branches lists them, an item is low when it is low at one of them, and out when the balances summed over
+     * them are at zero or below and one of them has held it. The SQL below is that one rule, shared so the figures and
+     * the filters agree. Every subquery is correlated on {@code tenant} (the outer row's tenant column) as well, so it
+     * seeks the (tenant_id, branch_id, product_id) indexes whatever the row-level security policy adds.
+     */
+
+    /** SQL: true when the branch has held the item, a balance row or a movement there. */
+    public static String heldSql(String tenant, String product, String branch) {
+        return "(EXISTS (SELECT 1 FROM retail_stock_balances held_b WHERE held_b.tenant_id = " + tenant
+                + " AND held_b.branch_id = " + branch + " AND held_b.product_id = " + product + ")"
+                + " OR EXISTS (SELECT 1 FROM retail_stock_movements held_m WHERE held_m.tenant_id = " + tenant
+                + " AND held_m.branch_id = " + branch + " AND held_m.product_id = " + product + "))";
+    }
+
+    /**
+     * SQL: the level at or below which the item is low at the branch: its own minimum, else the item's, else {@code
+     * threshold}.
+     */
+    public static String levelSql(String tenant, String product, String branch, String threshold) {
+        return "coalesce((SELECT min_b.min_qty FROM retail_stock_minimums min_b WHERE min_b.tenant_id = " + tenant
+                + " AND min_b.product_id = " + product + " AND min_b.branch_id = " + branch + "),"
+                + " (SELECT min_a.min_qty FROM retail_stock_minimums min_a WHERE min_a.tenant_id = " + tenant
+                + " AND min_a.product_id = " + product + " AND min_a.branch_id IS NULL), " + threshold + ")";
+    }
+
+    /** SQL: true when the item is out ({@code low} false) or low at the branch, {@code qty} being its balance there. */
+    public static String atBranchSql(
+            boolean low, String tenant, String product, String branch, String qty, String threshold) {
+        return "(" + qty + " <= " + (low ? levelSql(tenant, product, branch, threshold) : "0") + " AND "
+                + heldSql(tenant, product, branch) + ")";
+    }
+
+    /**
+     * SQL: true when the item is out or low over the branches of {@code scope} (a condition on the branch {@code lb})
+     * together: out when {@code total}, their summed balance, is at zero or below and one of them has held it; low when
+     * it is low at one of them.
+     */
+    public static String overBranchesSql(
+            boolean low, String tenant, String product, String scope, String total, String threshold) {
+        if (!low) {
+            return "(" + total + " <= 0 AND EXISTS (SELECT 1 FROM branches lb WHERE lb.tenant_id = " + tenant + " AND "
+                    + scope + " AND " + heldSql(tenant, product, "lb.id") + "))";
+        }
+        return "EXISTS (SELECT 1 FROM branches lb LEFT JOIN retail_stock_balances lq ON lq.tenant_id = lb.tenant_id"
+                + " AND lq.branch_id = lb.id AND lq.product_id = " + product + " WHERE lb.tenant_id = " + tenant
+                + " AND "
+                + scope + " AND " + atBranchSql(true, tenant, product, "lb.id", "coalesce(lq.qty, 0)", threshold) + ")";
     }
 
     /** A quantity without trailing zeros: 10, 2.5. */

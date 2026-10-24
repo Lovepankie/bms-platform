@@ -42,13 +42,14 @@ final class HomeApi {
             List<BranchLine> branches,
 
             @Schema(
-                    description =
-                            "Present only with retail.stock.read: active items at or below the dashboard's low stock threshold")
+                    description = "Present only with retail.stock.read: active items low as the dashboard counts "
+                            + "them, at or below their minimum or else the low stock threshold, at a branch "
+                            + "that has held them (issue #490)")
             Integer lowStock,
 
             @Schema(
-                    description =
-                            "Present only with retail.order.manage: customer orders ordered, packed or out for delivery")
+                    description = "Present only with retail.order.manage: customer orders ordered, packed or out "
+                            + "for delivery")
             Integer openOrders) {}
 
     @Schema(name = "RetailHomeSales")
@@ -84,8 +85,9 @@ final class HomeApi {
             long feesMinor,
 
             @Schema(
-                    description =
-                            "Money given back today: sales cancelled, payments on account reversed, refunds on goods taken back (a return cancelled today counts back in), door fees of cancelled orders")
+                    description = "Money given back today: sales cancelled, payments on account reversed, "
+                            + "refunds on goods taken back (a return cancelled today counts back in), door "
+                            + "fees of cancelled orders")
             long outMinor) {}
 
     @Schema(name = "RetailHomeCreditOwed", description = "What buyers owe on credit sales, as Credit control counts it")
