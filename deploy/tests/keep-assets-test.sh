@@ -80,6 +80,17 @@ R2_DOCUMENTS_SECRET_ACCESS_KEY=test-placeholder
 R2_DOCUMENTS_BUCKET=test-placeholder
 EOF
 
+# The staging Pi runs Compose 2.26, which has no `run --pull` (it failed the first real deploy of
+# ADR-078); never pulling is the service's pull_policy instead.
+if grep -nE '^[^#]*run .*--pull' "$REPO/deploy/deploy.sh"; then
+    echo "FAIL deploy.sh uses run --pull, which Compose 2.26 on the staging Pi does not have"
+    exit 1
+fi
+for file in compose.yml compose.pi-staging.yml; do
+    grep -A3 '^  keep-assets:' "$REPO/deploy/$file" | grep -q 'pull_policy: never' \
+        || { echo "FAIL $file: keep-assets must have pull_policy: never"; exit 1; }
+done
+
 # The two functions under test, exactly as deploy.sh defines them.
 eval "$(sed -n '/^keep_outgoing_assets() {/,/^}/p; /^switch_to() {/,/^}/p' "$REPO/deploy/deploy.sh")"
 if ! declare -F keep_outgoing_assets > /dev/null || ! declare -F switch_to > /dev/null; then

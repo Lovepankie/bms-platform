@@ -27,7 +27,7 @@ every load so the update is found quickly. They already do: everything outside t
    No new long-running container; the web container stays read-only on staging and keeps its memory limit.
 2. **`deploy.sh` tops it up before every switch.** `switch_to` first runs `keep_outgoing_assets`: it reads the local image ID
    of the running `web` container (`.Image`, not the reference string it was created with) and runs that image once as the profile
-   service `keep-assets` with `--pull never`, so only the image its own deploy verified can run, never a pull of a tag that moved.
+   service `keep-assets` with `pull_policy: never` on the service, so only the image its own deploy verified can run, never a pull of a tag that moved.
    It copies every file under `/srv/assets` (subfolders included) and `/srv/workbox-*.js` into the volume. A name already there is
    not copied again, only its date refreshed; a new file is written under a `.part` name and renamed, so a half-copied file is
    never served, and a failed copy fails the run. The same step runs before a rollback's switch, so the files of a release that went

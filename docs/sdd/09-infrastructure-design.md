@@ -174,7 +174,7 @@ worker that has not yet taken the new build, still runs the previous `index.html
 screens lazily by hashed names the new image does not carry. So `web` mounts the named volume
 `web_assets` read-only at `/srv/previous`, and the Caddyfile tries a hashed path there after
 `/srv`; `/previous` itself answers 404. `deploy.sh` fills it just before every switch, rollbacks
-included: it runs the outgoing web image, by its local image ID with `--pull never`, once as the
+included: it runs the outgoing web image, by its local image ID with `pull_policy: never` on the service, once as the
 one-shot `keep-assets` service (no network, no capability, read-only root, 32 MB). That run first
 deletes files whose date is more than `BMS_KEEP_ASSETS_DAYS` (default 14) days old, that is files
 that left the live build more than 14 days ago, then copies that build's `/assets` tree and

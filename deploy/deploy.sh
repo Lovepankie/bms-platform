@@ -150,8 +150,9 @@ if [ -n "$EDGE_SERVICES" ]; then
 fi
 
 # ADR-078: run the outgoing web image once as keep-assets, which copies its hashed files into the
-# web_assets volume and prunes the old ones. It runs by local image ID with --pull never, so only the
-# image web was created from (verified by its own deploy) can run, never a pull of a moved tag. A
+# web_assets volume and prunes the old ones. It runs by local image ID, and its service has
+# pull_policy: never (Compose 2.26 on the staging Pi has no run --pull), so only the image web was
+# created from (verified by its own deploy) can run, never a pull of a moved tag. A
 # failure or a run past the time limit (the first argument, seconds) costs a phone on the old copy a
 # reload, never the deploy or the rollback.
 keep_outgoing_assets() {
@@ -164,7 +165,7 @@ keep_outgoing_assets() {
         return 0
     fi
     if ! KEEP_ASSETS_IMAGE="$image" timeout --kill-after=5 "$limit" "${COMPOSE[@]}" --profile keep-assets \
-            run --rm -T --pull never --name "$name" keep-assets < /dev/null; then
+            run --rm -T --name "$name" keep-assets < /dev/null; then
         docker rm --force "$name" > /dev/null 2>&1 || true
         log "warning: the outgoing web files were not kept; a phone on that build may need a reload"
     fi

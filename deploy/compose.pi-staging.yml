@@ -262,6 +262,8 @@ services:
   # left the live build more than BMS_KEEP_ASSETS_DAYS days ago, then copies, refreshing the date of a
   # file it already holds. Hashed names never clash, so nothing is ever overwritten.
   keep-assets:
+    # Never pulled: only the outgoing image already on the host, which its own deploy verified.
+    pull_policy: never
     cgroup_parent: bms.slice
     security_opt:
       - no-new-privileges:true
