@@ -121,7 +121,7 @@ two fabricated tenants.
 ## 8. The ARM64 staging host (shared, behind a Cloudflare Tunnel)
 
 **Host:** the existing Raspberry Pi 4 (8 GB, Debian 13, `linux/arm64`, SD card) at the Rincol home
-site, shared with other workloads. BMS gets about 900 MB of memory, hard-capped by `bms.slice`.
+site, shared with other workloads. BMS gets about 1.6 GB of memory, hard-capped by `bms.slice` (900 MB until 24 Oct 2026; raised for no-gap deploys, pending ADR-083).
 No inbound port is opened, now or later (ADR-018, chapter 9 section 9.13). Run everything below
 as root unless it says otherwise.
 

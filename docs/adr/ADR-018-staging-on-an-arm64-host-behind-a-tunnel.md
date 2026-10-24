@@ -335,3 +335,7 @@ self-hosted runner can run a pull request's code; outside contributors' pull req
 runs; the deploy runner group admits the public repository but still only `deploy.yml` on `main`; and the rootless Docker
 check is skipped on GitHub-hosted runners, which are throwaway single-tenant VMs. When the repository goes private again,
 all of these are reversed and the self-hosted rule above applies unchanged.
+
+## Amendment, 24 Oct 2026 (owner decision D37)
+
+The `bms.slice` cap is raised from MemoryHigh 860M / MemoryMax 900M to 1500M / 1600M. Measured that day: the stack used 790 MB of the old cap and the api peaked at about 380 MB, so a deploy could never start a second api beside the old one without the slice reclaiming or OOM-killing (pending ADR-083, #496). The host has 7.8 GB with user.slice (the CI runner) capped at 5500M, so 1600M for BMS still fits. Where this record says 900 MB, read 1.6 GB from this date.

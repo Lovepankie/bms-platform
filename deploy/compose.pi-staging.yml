@@ -15,9 +15,9 @@
 # the api's management port, so a wrong tunnel ingress rule or a leaked onboarding token cannot
 # expose the database or the actuator directly.
 #
-# Memory budget: about 900 MB for all of BMS staging on a host it shares with other workloads.
+# Memory budget: about 1.6 GB for all of BMS staging (was 900 MB until 24 Oct 2026, D37) on a host it shares with other workloads.
 # Every container runs under the systemd slice bms.slice (deploy/systemd/bms.slice), whose
-# MemoryMax=900M is the hard cap for the whole stack, including the one-shot migrate container.
+# MemoryMax=1600M is the hard cap for the whole stack, including the one-shot migrate container.
 # The per-container limits below add up to 736 MB steady, 896 MB while a migration runs:
 #
 #   postgres 176  api 448  web 32  proxy 32  cloudflared 48  (migrate 160, only during a deploy;

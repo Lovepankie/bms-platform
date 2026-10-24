@@ -24,7 +24,7 @@ setting, and a change to them goes through a pull request.
    ```
 
 4. On the staging host, watch the stack's memory for a day: `systemctl status bms.slice` shows
-   `Memory:` against `MemoryMax=900M`, and `docker stats --no-stream` per container. PostgreSQL's
+   `Memory:` against `MemoryMax=1600M`, and `docker stats --no-stream` per container. PostgreSQL's
    container must stay under its 176 MB limit through a nightly backup and an autovacuum of the
    largest table.
 

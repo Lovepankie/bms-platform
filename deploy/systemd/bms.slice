@@ -9,7 +9,10 @@ Before=slices.target
 
 [Slice]
 MemoryAccounting=yes
-MemoryHigh=860M
-MemoryMax=900M
+# Raised from 860M/900M on 24 Oct 2026 (owner decision D37) so a deploy can start the new api beside the
+# old one (pending ADR-083, #496): the api peaks at about 380 MB and the stack used 790 MB of the old cap. The host
+# also caps user.slice (the CI runner) at 5500M, so 1600M here still leaves the host its headroom.
+MemoryHigh=1500M
+MemoryMax=1600M
 MemorySwapMax=0
 CPUQuota=250%
