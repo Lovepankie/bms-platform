@@ -157,6 +157,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   inventory and purchase price variance) or a price adjustment, never above what the invoice leaves to pay. Both are voidable with the guards of
   a bill. The Landed costs and Supplier credit notes pages, the hold on a receipt and the costing switch show while `module_capabilities` lists
   `purchasing`. Unapplied credits to spend later and a cash refund from a supplier are deferred.
+- **Spec (units and packs, issue #512):** `docs/specs/units-packs-and-costing.md` sets the model for packs, buying and selling in packs, profit per piece, the glossary, item codes from the category and shop barcodes, with the owner's decisions (D14, D16, D22 to D26, D32) and the build order. Read it before changing units, packs, costing, item codes or barcodes.
 - **Built (profit from the average buying price per piece, issue #523, owner decision D22, ADR-079):** migration `V94`
   (`retail_stock_balances.avg_cost_minor`, backfilled from each product's cost, a row inserted without one starting at the product's cost by trigger; `retail_cost_spreads`, the part of
   a landed cost or price credit line each branch's average took, so its void takes back the same parts). `StockLedger` keeps each branch's moving weighted
