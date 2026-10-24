@@ -97,7 +97,7 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
             Long dailyProfitMinor,
 
-            UUID existingId) {}
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID existingId) {}
 
     @Schema(name = "RetailSavingsRequest")
     record SavingsRequest(

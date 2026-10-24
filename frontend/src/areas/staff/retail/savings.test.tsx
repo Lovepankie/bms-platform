@@ -44,6 +44,15 @@ describe('savings form', () => {
     expect(out).toContain('already recorded');
   });
 
+  it('treats existing_id null (what the API sends when nothing is saved) as no savings yet', () => {
+    // The API writes every field (default-property-inclusion: always), so an empty day comes back
+    // as existing_id: null, not as a missing field (HATS Gayaza, 24 Oct 2026).
+    const out = page('admin', <SavingsForm branchId={branch} />, clientWith({ ...withAmounts, existing_id: null as unknown as undefined }));
+    expect(out).not.toContain('already recorded');
+    expect(out).toContain('Save savings');
+    expect(out).not.toMatch(/<button[^>]*disabled[^>]*>Save savings/);
+  });
+
   it('offers the Branch buttons instead of the form with All branches', () => {
     const out = pageAs(sessionOf('admin'), <BranchRequired permissions={['retail.savings.record']} />, new QueryClient(), ALL_BRANCHES);
     expect(out).toContain('Choose a branch to continue');

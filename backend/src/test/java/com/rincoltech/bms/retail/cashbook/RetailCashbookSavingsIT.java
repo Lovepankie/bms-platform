@@ -80,7 +80,8 @@ class RetailCashbookSavingsIT extends IntegrationTest {
         assertThat(s.get("suggested_minor").asLong()).isEqualTo(2_500);
         assertThat(s.get("daily_profit_minor").asLong()).isEqualTo(5_000);
         assertThat(s.get("total_sold_minor").asLong()).isEqualTo(15_000);
-        assertThat(s.get("existing_id").isNull()).isTrue();
+        // Absent, not null, when the day has no savings (#536): the form reads absence as "none yet".
+        assertThat(s.has("existing_id")).isFalse();
 
         ResponseEntity<JsonNode> r = cb.post("/savings", body(s, null, null), PROFIT_RECORDER);
 

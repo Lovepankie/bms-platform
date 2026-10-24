@@ -51,7 +51,7 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
     },
   });
 
-  const blocked = !s || !plan || plan.problem !== null || s.existing_id !== undefined || save.isPending;
+  const blocked = !s || !plan || plan.problem !== null || s.existing_id != null || save.isPending;
   const update = (patch: Partial<SavingsDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
   return (
@@ -64,7 +64,7 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
           <p>
             Sold on {showDate(s.business_date ?? draft.date)}: <strong>{money(s.total_sold_minor ?? 0)}</strong>
           </p>
-          {s.existing_id !== undefined && <Note>Savings are already recorded for this shop on this day. If that record is wrong, void it in the records below, then save again.</Note>}
+          {s.existing_id != null && <Note>Savings are already recorded for this shop on this day. If that record is wrong, void it in the records below, then save again.</Note>}
           {profitView ? (
             <>
               {s.daily_profit_minor !== undefined && <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>}
