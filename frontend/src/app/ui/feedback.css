@@ -30,10 +30,24 @@
   color: var(--color-success);
 }
 
+/* An information note (issue #526): neutral grey with the info icon, never a lavender or brand tint, since it is not a status.
+   The icon is the info circle of components/icons.tsx drawn as a mask, so it takes the text colour and needs no markup: every
+   note of the app, a Note or a bare .alert-info, gets it at once. */
 .alert-info {
-  background: var(--color-info-tint);
-  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-surface));
+  background: var(--color-neutral-tint);
+  border-color: var(--color-border);
   color: var(--color-text);
+}
+
+.alert-info::before {
+  content: '';
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5.5M12 7.5v.01'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5.5M12 7.5v.01'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 .badge {

@@ -287,6 +287,16 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(kitFile).toMatch(/Go to Home/);
   });
 
+  // Item 13: an information note is neutral grey with the info icon: no lavender, indigo or brand tint, which reads as a status.
+  it('draws the info note neutral, with its icon, and no chosen row in a tint', () => {
+    const info = rulesFor(/^\s*\.alert-info\s*$/);
+    expect(info).toHaveLength(1);
+    expect(info[0]?.body).toMatch(/background: var\(--color-neutral-tint\)/);
+    expect(info[0]?.body).not.toMatch(/accent|primary|brand|info-tint/);
+    expect(rulesFor(/\.alert-info::before/)[0]?.body).toMatch(/mask:/);
+    expect(rulesFor(/label:has\(> input:checked\)/)[0]?.body).not.toMatch(/accent-tint|info-tint/);
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');
