@@ -10,7 +10,7 @@ import type { Me } from '../../api/client';
 import { mockMe } from '../../api/retail-mock';
 import { router as appRouter } from '../../app/router';
 import { StaffContext } from './context';
-import { HomeCards, LENDING_APPROVALS } from './home-cards';
+import { HomeCards, LENDING_APPROVALS, homeParts, homeSummaryQuery } from './home-cards';
 import { STAFF_SECTIONS } from './menu';
 
 // Home's card per module (issue #471): Shop and Lending for a business with both, only its own card for a business with one, and
@@ -434,5 +434,12 @@ describe('the shop summary cards (issue #485)', () => {
     const takings = await screen.findByRole('article', { name: 'Takings today' });
     expect(await within(takings).findByText('Could not load')).toBeTruthy();
     expect(text('Credit owed')).toContain('Could not load');
+  });
+});
+
+describe('Home summary freshness', () => {
+  it('has no freshness window, so Home reads again on every visit and shows a sale just recorded (#544)', () => {
+    const me = mockMe('admin');
+    expect(homeSummaryQuery(homeParts(me, null), null)).not.toHaveProperty('staleTime');
   });
 });

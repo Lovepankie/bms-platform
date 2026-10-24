@@ -80,7 +80,8 @@ export const homeSummaryKey = (branchId: string | undefined) => ['retail', 'home
 
 /**
  * The options of the Home summary read, shared by Home and the phone's My stock badge (#539) so both use one cache entry,
- * one gate and one freshness: a session Home never asks for is never asked for by the badge either.
+ * one gate: a session Home never asks for is never asked for by the badge either. Home keeps no freshness window, so it
+ * reads again each time it opens and shows a sale just recorded; only the badge waits a minute between reads.
  */
 export function homeSummaryQuery(parts: Parts, branch: string | null) {
   const branchId = branch && branch !== ALL_BRANCHES ? branch : undefined;
@@ -88,7 +89,6 @@ export function homeSummaryQuery(parts: Parts, branch: string | null) {
     queryKey: homeSummaryKey(branchId),
     queryFn: ({ signal }: { signal: AbortSignal }) => retailAnalytics.home(branchId, signal),
     enabled: parts.summary && (parts.sales || parts.lowStock || parts.orders) && branch !== null,
-    staleTime: 60_000,
   };
 }
 

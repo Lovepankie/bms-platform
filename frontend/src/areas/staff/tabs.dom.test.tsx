@@ -103,7 +103,7 @@ describe('the bottom tabs on a phone (issue #539)', () => {
 
   it('marks the current tab with aria-current on its page and the pages under it, and none on Home', () => {
     show(admin, { at: '/staff/retail/stocktake' });
-    const current = () => within(bar()).getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.textContent);
+    const current = () => within(bar()).getAllByRole('link').filter((a) => a.getAttribute('aria-current') === 'page').map((a) => a.querySelector('.tab-label')?.textContent);
     expect(current()).toEqual(['My stock']);
     cleanup();
     show(admin, { at: '/staff/retail/banking' });
