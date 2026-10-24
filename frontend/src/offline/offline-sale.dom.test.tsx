@@ -63,6 +63,20 @@ afterEach(() => {
 });
 
 describe('Record a sale offline', () => {
+  it('says what the phone holds when no item on it matches, and when nothing is saved on it yet', async () => {
+    const withCopy = testOffline(seller, { online: false, catalogue });
+    if (!withCopy) throw new Error('a seller sells offline');
+    screenWith(withCopy);
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'fridge' } });
+    expect(await screen.findByText('No item on this phone matches "fridge". Items are saved while the phone is online.', { selector: '.cb-empty' })).toBeTruthy();
+    cleanup();
+    const empty = testOffline(seller, { online: false, catalogue: null });
+    if (!empty) throw new Error('a seller sells offline');
+    screenWith(empty);
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
+    expect(await screen.findByText('No items are saved on this phone yet. Items are saved while the phone is online.', { selector: '.cb-empty' })).toBeTruthy();
+  });
+
   it('saves a sale on the phone from the copy and shows a provisional receipt, then the server number', async () => {
     const send = vi.fn(async () => ({ status: 201, body: { id: 'sale-1', sale_no: 'RS00000042' } }));
     const offline = testOffline(seller, { online: false, catalogue, deps: { send } });
@@ -73,8 +87,8 @@ describe('Record a sale offline', () => {
     expect(screen.getByText(/Prices as of/)).toBeTruthy();
     expect((screen.getByLabelText('Credit (pay later)') as HTMLInputElement).disabled).toBe(true);
 
-    fireEvent.change(screen.getByLabelText('Find an item by name, code or category'), { target: { value: 'bulb' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Test Bulb 9W' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
+    fireEvent.click(await screen.findByRole('option', { name: /^Test Bulb 9W/ }));
     // Two on a shelf the copy says holds one: the server flags it, the phone does not stop the sale.
     const qty = screen.getAllByRole('textbox').find((i) => (i as HTMLInputElement).value === '1') as HTMLInputElement;
     fireEvent.change(qty, { target: { value: '2' } });
@@ -123,8 +137,8 @@ describe('Record a sale offline', () => {
         </StaffContext.Provider>
       </QueryClientProvider>,
     );
-    fireEvent.change(await screen.findByLabelText('Find an item by name, code or category'), { target: { value: 'bulb' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Test Bulb 9W' }));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
+    fireEvent.click(await screen.findByRole('option', { name: /^Test Bulb 9W/ }));
     const price = screen.getByLabelText('Unit price') as HTMLInputElement;
     expect(price.readOnly).toBe(true);
     expect(screen.getByText('Offline, the price saved on this phone is used. You do not have permission to change it.')).toBeTruthy();
@@ -140,8 +154,8 @@ describe('Record a sale offline', () => {
     if (!offline) throw new Error('a seller sells offline');
     screenWith(offline);
 
-    fireEvent.change(screen.getByLabelText('Find an item by name, code or category'), { target: { value: 'bulb' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Add Test Bulb 9W' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
+    fireEvent.click(await screen.findByRole('option', { name: /^Test Bulb 9W/ }));
     const save = screen.getByRole('button', { name: /^Record sale/ }) as HTMLButtonElement;
     await waitFor(() => expect(save.disabled).toBe(false));
     fireEvent.click(save);

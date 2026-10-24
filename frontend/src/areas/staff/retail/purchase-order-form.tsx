@@ -79,7 +79,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
       <input id="order-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       <div data-tour="order-items">{picker}</div>
       <h2>Items</h2>
-      {form.lines.length === 0 && <p className="empty-state">No items yet.</p>}
+      {form.lines.length === 0 && <p className="empty-state">No items yet. Type an item above and tap it in the list.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }} data-tour="order-lines">
         {form.lines.map((l, i) => (
           <OrderLineCard key={`${l.productId}-${i}`} line={l} index={i} onChange={(line) => setLine(i, line)} onRemove={() => onChange({ ...form, lines: form.lines.filter((_, n) => n !== i) })} />

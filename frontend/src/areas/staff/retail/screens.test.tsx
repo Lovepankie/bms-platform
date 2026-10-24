@@ -54,12 +54,14 @@ describe('sale screen', () => {
   const client = new QueryClient();
   client.setQueryData(['retail', 'products', branch, ''], products);
 
-  it('lists items with the branch balance and a negative flag, labelled inputs', () => {
+  // The items show only while something is typed (issue #534); ItemCombobox.dom.test.tsx and item-picker.dom.test.tsx draws the matches.
+  it('shows a labelled item search with no list of items until something is typed', () => {
     const html = page('sales', <SaleForm branchId={branch} />, client);
-    expect(html).toContain('LED bulb 9W screw');
-    expect(html).toContain('in stock here');
-    expect(html).toContain('(negative)');
+    expect(html).not.toContain('LED bulb 9W screw');
+    expect(html).not.toContain('in stock here');
+    expect(html).not.toContain('Group by category');
     expect(html).toContain('for="sale-search"');
+    expect(html).toMatch(/id="sale-search"[^>]*role="combobox"[^>]*aria-expanded="false"/);
     expect(html).toContain('<span>Total</span> <span class="rt-total-amount">UGX 0</span>');
     expect(html).not.toMatch(/cost|profit/i);
   });
@@ -150,11 +152,11 @@ describe('low stock and out of stock tabs', () => {
 });
 
 describe('category in the pickers', () => {
-  it('shows the category as a small grey label in the sale picker and the usage picker', () => {
+  it('lists no items in the sale picker and the usage picker before a search, even with the whole catalogue loaded', () => {
     const client = new QueryClient();
     client.setQueryData(['retail', 'products', branch, ''], products.map((p) => ({ ...p, category: 'Lighting' })));
-    expect(page('sales', <SaleForm branchId={branch} />, client)).toContain('<span class="hint">Lighting</span>');
-    expect(page('sales', <UsageForm branchId={branch} />, client)).toContain('<span class="hint">Lighting</span>');
+    expect(page('sales', <SaleForm branchId={branch} />, client)).not.toContain('Lighting');
+    expect(page('sales', <UsageForm branchId={branch} />, client)).not.toContain('Lighting');
   });
 });
 
@@ -305,7 +307,7 @@ describe('stock moves', () => {
     expect(html).toContain('for="transfer-to"');
     expect(html).toContain('Test Branch B');
     expect(html).not.toContain('>BR1 Test Branch A</option>');
-    expect(html).toContain('in stock here');
+    expect(html).not.toContain('in stock here');
     expect(html).toContain('for="transfer-search"');
     expect(html).not.toMatch(/each,/);
   });

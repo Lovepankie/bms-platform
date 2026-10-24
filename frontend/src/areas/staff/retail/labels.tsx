@@ -56,7 +56,7 @@ export function LabelsPage() {
         <ProductPicker id="labels-search" showPrice showStock={false} onAdd={(p) => { setReady(false); setRows((rs) => (rs.some((r) => r.product.id === p.id) ? rs : [...rs, { product: p, count: '1' }])); }} />
       </div>
       <h2>Labels to print</h2>
-      {rows.length === 0 && <p className="empty-state">No items yet. Find an item above and tap Add.</p>}
+      {rows.length === 0 && <p className="empty-state">No items yet. Type an item above and tap it in the list.</p>}
       {rows.map((r, i) => (
         <div key={r.product.id} className="rt-card rt-row">
           <span>

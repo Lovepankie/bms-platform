@@ -79,3 +79,89 @@
     transition: none;
   }
 }
+
+/*
+ * The item picker (frontend/src/app/ui/ItemCombobox.tsx, #534): a short list of matches that opens
+ * under the box only while something is typed, over the page like a dropdown, and closes on a pick.
+ * Each option is a full width row of at least 48px; the highlighted one is tinted, with no stripe.
+ */
+.cb-anchor {
+  position: relative;
+}
+
+.cb-pop {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: var(--z-dropdown);
+  max-height: min(360px, 55vh);
+  /* The visible height where the browser knows it, so the list stays above a phone's keyboard more often. */
+  max-height: min(360px, 55dvh);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  animation: cb-in 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.cb-list {
+  margin: 0;
+  padding: var(--space-1) 0;
+  list-style: none;
+}
+
+.cb-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.cb-option[aria-selected='true'] {
+  background: var(--color-accent-tint);
+}
+
+.cb-option + .cb-option {
+  border-top: 1px solid var(--color-border);
+}
+
+.cb-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cb-meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.cb-verb {
+  flex: none;
+  color: var(--color-link);
+  font-weight: var(--weight-semibold);
+}
+
+.cb-empty {
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+@keyframes cb-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-pop {
+    animation: none;
+  }
+}

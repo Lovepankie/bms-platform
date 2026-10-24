@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { pickItem } from '../../../test-utils/item-picker';
 
 // Money first on the sale screen (#508, docs/ui-rules.md rules 6, 8 and 13): the total at the display size, one primary action
 // in a bar that sticks to the bottom of a phone and carries the live total, and feedback when an item goes on. Fabricated items.
@@ -36,7 +37,7 @@ function open() {
   );
 }
 
-const addItem = async (name: string) => fireEvent.click(await screen.findByRole('button', { name: `Add ${name}` }));
+const addItem = (name: string) => pickItem(name);
 
 afterEach(() => {
   cleanup();

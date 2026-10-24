@@ -202,7 +202,7 @@ export function ScanBar({ id, branchId, onFound, autoFocus = false }: { id: stri
                   <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={asPrinted} onChange={(e) => setAsPrinted(e.target.checked)} /> This code is exactly as printed (Code 128)
                 </label>
               )}
-              <ProductPicker id={`${id}-assign`} branchId={branchId} addLabel="Choose" onAdd={(p) => void assign(p)} />
+              <ProductPicker id={`${id}-assign`} label="Find the item this barcode belongs to" branchId={branchId} addLabel="Choose" onAdd={(p) => void assign(p)} />
               <Problem error={assignError} />
             </>
           )}

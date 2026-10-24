@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
+import { pickItem } from '../../../test-utils/item-picker';
 
 // The screen that makes an item with sizes and colours (issue #384): the sizes and prints typed once give the list of what will
 // be made, each with its code and price the owner may change, and Save sends exactly that list. Fabricated items.
@@ -102,10 +103,10 @@ describe('an item with sizes and colours', () => {
   it('joins items into an item that exists, sending only the items and not a name', async () => {
     joinFamily.mockResolvedValue({ id: 'f9', name: 'Test Romper', variants: [] });
     screenOf(<JoinPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Join this item Test Romper (S)' }));
+    await pickItem('Test Romper (S)', { nth: 0, typed: 'Romper' });
     expect(await screen.findByText('Test Romper', { selector: 'strong' })).toBeTruthy();
     expect(screen.queryByLabelText('What is the item called?')).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: 'Add as a size Test Cable thin' }));
+    await pickItem('Test Cable thin', { typed: 'Cable' });
     fireEvent.change(screen.getByLabelText('Size of Test Cable thin'), { target: { value: 'M' } });
     fireEvent.click(screen.getByRole('button', { name: 'Join them as one item' }));
     await waitFor(() => expect(joinFamily).toHaveBeenCalledTimes(1));
@@ -115,10 +116,10 @@ describe('an item with sizes and colours', () => {
 
   it('warns before sending a size the item has already', async () => {
     screenOf(<JoinPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Join this item Test Romper (S)' }));
+    await pickItem('Test Romper (S)', { nth: 0, typed: 'Romper' });
     await screen.findByText('Test Romper', { selector: 'strong' });
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Add as a size Test Cable thin' }).length).toBe(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Add as a size Test Cable thin' }));
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBe(1));
+    await pickItem('Test Cable thin', { typed: 'Cable' });
     fireEvent.change(screen.getByLabelText('Size of Test Cable thin'), { target: { value: 's' } });
     await waitFor(() => expect(screen.getByRole('note').textContent).toContain('Test Romper has one of these sizes and colours already'));
     expect((screen.getByRole('button', { name: 'Join them as one item' }) as HTMLButtonElement).disabled).toBe(true);
@@ -126,7 +127,7 @@ describe('an item with sizes and colours', () => {
 
   it('says so when the item picked to join has no sizes, instead of doing nothing', async () => {
     screenOf(<JoinPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Join this item Test Cable thin' }));
+    await pickItem('Test Cable thin', { nth: 0, typed: 'Cable' });
     expect(screen.getByRole('note').textContent).toContain('Test Cable thin has no sizes yet');
     expect(screen.getByLabelText('What is the item called?')).toBeTruthy();
   });
@@ -134,10 +135,10 @@ describe('an item with sizes and colours', () => {
   it('waits for the item it joins before judging the units, and says when it could not be read', async () => {
     getFamily.mockImplementation(() => new Promise(() => {}));
     screenOf(<JoinPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Join this item Test Romper (S)' }));
+    await pickItem('Test Romper (S)', { nth: 0, typed: 'Romper' });
     await screen.findByText('Test Romper', { selector: 'strong' });
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Add as a size Test Cable thin' }).length).toBe(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Add as a size Test Cable thin' }));
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBe(1));
+    await pickItem('Test Cable thin', { typed: 'Cable' });
     fireEvent.change(screen.getByLabelText('Size of Test Cable thin'), { target: { value: 'M' } });
     expect(screen.getByRole('note').textContent).toContain('Reading Test Romper');
     expect(screen.getByRole('note').textContent).not.toContain('one unit');
@@ -145,10 +146,10 @@ describe('an item with sizes and colours', () => {
 
     getFamily.mockImplementation(() => Promise.reject(new Error('offline')));
     screenOf(<JoinPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Join this item Test Romper (S)' }));
+    await pickItem('Test Romper (S)', { nth: 0, typed: 'Romper' });
     await screen.findByText('Test Romper', { selector: 'strong' });
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Add as a size Test Cable thin' }).length).toBe(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Add as a size Test Cable thin' }));
+    await waitFor(() => expect(screen.getAllByRole('combobox').length).toBe(1));
+    await pickItem('Test Cable thin', { typed: 'Cable' });
     await waitFor(() => expect(screen.getByRole('note').textContent).toContain('Test Romper could not be read'));
     expect((screen.getByRole('button', { name: 'Join them as one item' }) as HTMLButtonElement).disabled).toBe(true);
   });

@@ -268,7 +268,7 @@ export function OrderForm({ branchId, onSaved }: { branchId: string; onSaved: (o
         <ProductPicker id="order-search" branchId={branchId} showPrice onAdd={add} />
       </div>
       <h2>Items</h2>
-      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Search above and tap Add.</EmptyState>}
+      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
       {draft.lines.map((l, i) => (
         <SaleLineCard
           key={`${l.product.id}-${i}`}

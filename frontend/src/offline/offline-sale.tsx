@@ -1,5 +1,6 @@
 import type { Product } from '../api/retail';
-import { SearchBox } from '../app/ui/SearchBox';
+import { ItemCombobox } from '../app/ui/ItemCombobox';
+import { Highlight } from '../app/ui/SearchBox';
 import { useLiveSearch } from '../app/ui/useLiveSearch';
 import { showQty } from '../areas/staff/retail/maths';
 import { money } from '../areas/staff/retail/ui';
@@ -27,29 +28,31 @@ export function OfflineNote() {
 export function OfflineProductPicker({ branchId, onAdd }: { branchId: string; onAdd: (p: Product) => void }) {
   const offline = useOffline();
   const search = useLiveSearch();
-  const found = searchCatalogue(offline?.catalogue ?? null, branchId, search.term);
+  const catalogue = offline?.catalogue ?? null;
+  const found = search.term === '' ? undefined : searchCatalogue(catalogue, branchId, search.term);
   return (
-    <>
-      <SearchBox id="sale-search" label="Find an item by name, code or category" search={search} fetching={false} count={found.length} />
-      {found.length === 0 && <p className="muted">No item on this phone matches. Items are saved while the phone is online.</p>}
-      <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>
-        {found.slice(0, 20).map((p) => (
-          <li key={p.id} className="rt-card">
-            <div className="rt-row">
-              <span>
-                <strong>{p.description}</strong> ({p.code})
-                <br />
-                {p.sell_minor !== undefined && `${money(p.sell_minor)} each, `}
-                in stock when saved: {showQty(p.qty ?? '0')} {p.unit}
-              </span>
-              <button type="button" onClick={() => onAdd(p)} aria-label={`Add ${p.description}`}>
-                Add
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </>
+    <ItemCombobox
+      id="sale-search"
+      label="Find an item by name, code or category"
+      search={search}
+      results={found}
+      hint="Only the items saved on this phone show. Items are saved while the phone is online."
+      emptyText={(term) => (catalogue ? `No item on this phone matches "${term}". Items are saved while the phone is online.` : 'No items are saved on this phone yet. Items are saved while the phone is online.')}
+      optionKey={(p) => p.id ?? p.code ?? ''}
+      onPick={onAdd}
+      renderOption={(p) => (
+        <>
+          <span className="cb-text">
+            <strong><Highlight text={p.description ?? ''} term={search.term} /></strong> (<Highlight text={p.code ?? ''} term={search.term} />)
+            <span className="cb-meta">
+              {p.sell_minor !== undefined && `${money(p.sell_minor)} each, `}
+              in stock when saved: {showQty(p.qty ?? '0')} {p.unit}
+            </span>
+          </span>
+          <span className="cb-verb" aria-hidden="true">Add</span>
+        </>
+      )}
+    />
   );
 }
 

@@ -1,7 +1,8 @@
 import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
 import { milliOf, qtyString, showQty } from './maths';
 
-// Item lists grouped by category as expandable sections (stock, catalogue items, the product pickers).
+// Item lists grouped by category as expandable sections (the stock list and the catalogue items; the item pickers
+// list matches only while something is typed and are never grouped, issue #534).
 // The grouping works on the items the screen already holds, after the server filtered them: it never
 // asks for more, so on a paged list it groups the loaded page and the hint says so. The pure part
 // (groupByCategory, defaultOpen, sameUnitQty, the stored choice) is tested on its own; the hook keeps
@@ -178,10 +179,10 @@ export function GroupedBodies<T>({ state, colSpan, renderRow }: { state: Categor
 }
 
 /** The groups of a card list: a heading with its button and the group's list. */
-export function GroupedCards<T>({ state, renderItem, scroll }: { state: CategoryGroups<T>; renderItem: (item: T) => ReactNode; scroll?: boolean }) {
+export function GroupedCards<T>({ state, renderItem }: { state: CategoryGroups<T>; renderItem: (item: T) => ReactNode }) {
   const base = useId();
   return (
-    <div className={scroll ? 'cat-scroll' : undefined}>
+    <div>
       {state.groups.map((g, i) => {
         const open = state.isOpen(g.key);
         const id = `${base}-${i}`;

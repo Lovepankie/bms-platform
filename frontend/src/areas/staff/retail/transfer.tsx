@@ -113,7 +113,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       <ScanBar id="transfer-scan" branchId={fromBranchId} onFound={scanAdd} autoFocus />
 
       <h2 data-tour="transfer-items">Items to move</h2>
-      {draft.lines.length === 0 && <p>No items yet. Search above and tap Add.</p>}
+      {draft.lines.length === 0 && <p>No items yet. Type an item above and tap it in the list, or scan it.</p>}
       {draft.lines.map((l, i) => {
         const hint = transferLineHint(l);
         return (

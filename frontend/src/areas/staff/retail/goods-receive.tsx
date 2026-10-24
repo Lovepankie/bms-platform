@@ -116,7 +116,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
       </div>
       {picker && <div data-tour="receive-items">{picker}</div>}
       <h2>What arrived</h2>
-      {form.lines.length === 0 && <p className="empty-state">{blind ? 'No items yet. Find an item above and add it.' : 'Everything on this order has arrived.'}</p>}
+      {form.lines.length === 0 && <p className="empty-state">{blind ? 'No items yet. Type an item above and tap it in the list, or scan it.' : 'Everything on this order has arrived.'}</p>}
       <ul style={{ listStyle: 'none', padding: 0 }} data-tour="receive-lines">
         {form.lines.map((l, i) => (
           <LineCard key={l.key} line={l} index={i} order={order} onChange={(line) => setLine(i, line)} onRemove={blind ? () => onChange({ ...form, lines: form.lines.filter((_, n) => n !== i) }) : undefined} />

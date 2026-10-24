@@ -12,6 +12,7 @@ import { PurchaseOrderPage } from './purchase-order';
 import { PurchaseOrderEditPage, PurchaseOrderNewPage } from './purchase-order-form';
 import { SupplierBillNewPage } from './supplier-bill-new';
 import { SupplierPaymentNewPage } from './supplier-payment-new';
+import { pickItem } from '../../../test-utils/item-picker';
 
 // The purchasing pages end to end on the fabricated in-memory API (issue #198): the real pages, their queries, drafts and
 // buttons, against the mock that follows the server's rules in small. Each test mounts one page on a small router that has the
@@ -73,7 +74,7 @@ async function sentOrder(qty = '10', cost = 3500) {
 describe('the purchase order pages', () => {
   it('saves a new order as a draft from the items found, the supplier and the quantities', async () => {
     const { router } = mount('/purchase-orders/new', PurchaseOrderNewPage, '/staff/retail/purchase-orders/new');
-    fireEvent.click(await screen.findByRole('button', { name: 'Add LED bulb 9W screw' }, wait));
+    await pickItem('LED bulb 9W screw');
     await screen.findByRole('option', { name: 'Test Supplier 01' }, wait);
     type('Supplier', SUPPLIER);
     type(/How many LED bulb 9W screw/, '10');

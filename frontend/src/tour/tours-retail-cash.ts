@@ -69,14 +69,15 @@ export const sizesNewPage: Tour = {
 /** Issue #384: items kept apart, one per size, joined as the sizes of one item. */
 export const sizesJoinPage: Tour = {
   id: 'page-sizes-join',
-  version: 1,
+  // Version 2 words the Pick step for the picker that lists items only while you type (issue #534).
+  version: 2,
   title: 'This page: join items as sizes',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products/sizes/join',
   steps: [
     step({ id: 'name', target: 'join-name', title: 'Name the item', body: 'Type what the item is called, such as Twin cable. Each size gets this name with its size.' }),
-    step({ id: 'pick', target: 'join-pick', title: 'Pick the items', body: 'Find each item that is one size or colour, and tap Add as a size.' }),
+    step({ id: 'pick', target: 'join-pick', title: 'Pick the items', body: 'Type the name of each item that is one size or colour. Tap it in the list under the box.' }),
     step({ id: 'list', target: 'join-list', title: 'Say which size', body: 'Type the size or the colour of each one. They keep their codes, prices and stock.' }),
     step({ id: 'save', target: 'join-save', title: 'Join them', body: 'Tap here. They now show together as one item, and sell and restock as before.' }),
   ],
@@ -169,13 +170,14 @@ export const importPage: Tour = {
 
 export const labelsPage: Tour = {
   id: 'page-labels',
-  version: 1,
+  // Version 2 words the Choose step for the picker that lists items only while you type (issue #534).
+  version: 2,
   title: 'This page: barcode labels',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/labels',
   steps: [
-    step({ id: 'pick', target: 'labels-pick', title: 'Choose the items', body: 'Find each item and tap Add. Set how many labels you want of each.' }),
+    step({ id: 'pick', target: 'labels-pick', title: 'Choose the items', body: 'Type part of the name of each item and tap it in the list under the box. Set how many labels you want of each.' }),
     step({ id: 'make', target: 'labels-make', title: 'Items without a barcode', body: 'An item with no barcode gets one made for it when you tap Make the labels. A scan then finds it.' }),
     step({ id: 'print', target: 'labels-print', title: 'Print', body: 'Tap Print and choose A4. The sheet has 24 labels, each with the name, the price and the barcode.' }),
   ],

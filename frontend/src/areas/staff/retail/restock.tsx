@@ -1,8 +1,6 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, useRouterState } from '@tanstack/react-router';
 import { useState } from 'react';
-import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
-import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { RETAIL_CURRENCY, businessToday, retail, type Product, type Supplier, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { parseMinor } from '../../../components/money';
@@ -10,7 +8,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { lineTotalMinor, parseQty, qtyString, showDate, showQty } from './maths';
 import { chosenUnitHint, redraftOf } from './restock-correct-state';
-import { CategoryLabel, Gate, Note, Problem, money, useProfitAccess } from './ui';
+import { Gate, Note, Problem, ProductPicker, money, useProfitAccess } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { UNITS, capabilityOn } from './permissions';
@@ -126,14 +124,6 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const setPurchasedOn = field('purchasedOn');
   const setMethod = field('method');
   const setLines = (f: (ls: RestockLine[]) => RestockLine[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
-  const search = useLiveSearch();
-
-  const products = useQuery({
-    queryKey: ['retail', 'products', 'all', search.term],
-    queryFn: ({ signal }) => retail.listProducts({ query: search.term, signal }),
-    placeholderData: keepPreviousData,
-  });
-  const finding = products.isPlaceholderData || products.isFetching;
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
 
   const save = useMutation({
@@ -210,23 +200,12 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       )}
 
       <div data-tour="restock-search">
-      <SearchBox id="restock-search" label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
+      <ProductPicker id="restock-search" showStock={false} onAdd={add} />
       </div>
       <ScanBar id="restock-scan" onFound={scanAdd} autoFocus />
-      {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
-      <SearchResults fetching={finding}>
-      <ul style={{ listStyle: 'none', padding: 0, maxHeight: 180, overflowY: 'auto' }}>
-        {(products.data ?? []).slice(0, 20).map((p) => (
-          <li key={p.id} className="rt-card rt-row">
-            <span><strong>{p.description}</strong> ({p.code})<br /><CategoryLabel category={p.category} /></span>
-            <button type="button" onClick={() => add(p)} aria-label={`Add ${p.description}`}>Add</button>
-          </li>
-        ))}
-      </ul>
-      </SearchResults>
 
       <h2>Items</h2>
-      {lines.length === 0 && <p className="empty-state">No items yet.</p>}
+      {lines.length === 0 && <p className="empty-state">No items yet. Type an item above and tap it in the list, or scan it.</p>}
       {lines.map((l, i) => {
         const newSell = parseMinor(l.sell, RETAIL_CURRENCY);
         const enteredCost = parseMinor(l.cost, RETAIL_CURRENCY);

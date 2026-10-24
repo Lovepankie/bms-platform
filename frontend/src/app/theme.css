@@ -253,6 +253,7 @@ body {
   --shadow-lg: 0 12px 32px -8px rgba(16, 24, 40, 0.18), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
 
   /* Layers */
+  --z-dropdown: 50; /* the item picker's list (#534): over the page, under the menu, the tour and toasts */
   --z-nav: 100;
   --z-overlay: 200;
   --z-modal: 300;

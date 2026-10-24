@@ -473,11 +473,6 @@ th[scope='rowgroup'] .cat-head {
   border-width: 0;
 }
 
-.cat-scroll {
-  max-height: 220px;
-  overflow-y: auto;
-}
-
 @media (max-width: 719px) {
   .cat-meta {
     flex-basis: 100%;
@@ -1003,4 +998,29 @@ th[scope='rowgroup'] .cat-head {
     size: A4;
     margin: 0;
   }
+}
+
+/* The next step after a finished task, under its main action (issue #534: New sale under Share receipt). */
+.rt-next {
+  width: 100%;
+  min-height: 48px;
+  margin-top: var(--space-4);
+}
+
+/* A stock-take line (#534): the count box and its 0 button on one row, the button a full 48px tap. */
+.count-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.count-entry input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.count-entry button {
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
 }

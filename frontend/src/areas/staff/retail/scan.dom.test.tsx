@@ -17,6 +17,12 @@ import { OfflineProvider, type Offline } from '../../../offline/offline-context'
 import type { Product } from '../../../api/retail';
 import { TransferForm } from './transfer';
 import { PACK_UNUSABLE } from './barcode-state';
+import { pickItem } from '../../../test-utils/item-picker';
+
+/** The count sheet before anything is found or scanned (issue #534). */
+const EMPTY_COUNT = 'No items yet. Find an item above, scan it, or count it in the list below.';
+/** The picker of the barcode assign panel has its own label, so it is told apart from the sale's (review of #535). */
+const ASSIGN = 'Find the item this barcode belongs to';
 
 // Scanning on the forms and the label sheet (ADR-070, issue #345; FR-RET-68): a scan into the Scan box adds the item at 1
 // and the next scan of it adds one more, an unknown code says so (with Add this barcode to a product for an
@@ -151,8 +157,7 @@ describe('FR-RET-68 scanning on the sale form', () => {
     scan('TEST-UNKNOWN');
     await waitFor(() => expect(screen.getByTestId('scan-unknown').textContent).toContain('No item has the barcode TEST-UNKNOWN.'));
     fireEvent.click(screen.getByRole('button', { name: 'Add this barcode to a product' }));
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' }).length).toBeGreaterThan(0));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' })[0] as HTMLElement);
+    await pickItem('LED bulb 9W screw', { typed: 'bulb', box: ASSIGN });
     await waitFor(() => expect(qtyOf(0)).toBe('1'));
     expect((await retail.findByBarcode('TEST-UNKNOWN'))?.product?.id).toBe(LAMP);
   });
@@ -173,8 +178,7 @@ describe('FR-RET-68 scanning on the sale form', () => {
     await waitFor(() => expect(screen.getByTestId('scan-unknown').textContent).toContain(`No item has the barcode ${GTIN}.`));
     fireEvent.click(screen.getByRole('button', { name: 'Add this barcode to a product' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: /This code is exactly as printed \(Code 128\)/ }));
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' }).length).toBeGreaterThan(0));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' })[0] as HTMLElement);
+    await pickItem('LED bulb 9W screw', { typed: 'bulb', box: ASSIGN });
     await waitFor(() => expect(qtyOf(0)).toBe('1'));
     expect((await retail.findByBarcode(GTIN))?.barcode?.format).toBe('code128');
   });
@@ -183,7 +187,8 @@ describe('FR-RET-68 scanning on the sale form', () => {
     screenOf(<SaleForm branchId={BRANCH} />);
     scan('TEST-UNKNOWN');
     fireEvent.click(await screen.findByRole('button', { name: 'Add this barcode to a product' }));
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Choose LED bulb 9W screw' }).length).toBeGreaterThan(0));
+    expect(await screen.findByRole('combobox', { name: ASSIGN })).toBeTruthy();
+    expect(screen.getAllByRole('combobox', { name: 'Find an item by name, code or category' })).toHaveLength(1);
     expect(screen.queryByRole('checkbox', { name: /exactly as printed/ })).toBeNull();
   });
 
@@ -222,10 +227,9 @@ describe('FR-RET-68 scanning on the stock count', () => {
   it('clears the search so the counted item shows, and counts one more on each scan', async () => {
     await retail.addBarcode(LAMP, { code: EAN });
     screenOf(<StocktakePage />);
-    const search = await screen.findByLabelText('Search by name, code or category');
-    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).not.toBeNull());
+    const search = await screen.findByRole('combobox', { name: 'Find an item by name, code or category' });
+    await screen.findByText(EMPTY_COUNT);
     fireEvent.change(search, { target: { value: 'solar' } });
-    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).toBeNull());
     scan(EAN);
     await waitFor(() => expect(document.querySelector('.scan-bar')?.textContent).toContain('Added'));
     await waitFor(() => expect((document.getElementById(`count-${LAMP}`) as HTMLInputElement | null)?.value).toBe('1'));
@@ -237,8 +241,7 @@ describe('FR-RET-68 scanning on the stock count', () => {
     const all = await retail.listStock({ branchId: BRANCH });
     retail.listStock = async () => all.filter((r) => r.product_id !== LAMP);
     screenOf(<StocktakePage />);
-    await screen.findByLabelText('Search by name, code or category');
-    await waitFor(() => expect(document.querySelectorAll('[id^="count-"]').length).toBeGreaterThan(1));
+    await screen.findByText(EMPTY_COUNT);
     scan(EAN);
     await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('is not on the count sheet of this branch'));
     expect(document.getElementById(`count-${LAMP}`)).toBeNull();
@@ -249,8 +252,7 @@ describe('FR-RET-68 scanning on the stock count', () => {
     await retail.addPack(LAMP, { unit_id: ROLL, factor: '10.000' });
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
     screenOf(<StocktakePage />);
-    await screen.findByLabelText('Search by name, code or category');
-    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).not.toBeNull());
+    await screen.findByText(EMPTY_COUNT);
     scan('TEST-LAMP-BOX');
     await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
     expect((document.getElementById(`count-${LAMP}`) as HTMLInputElement).value).toBe('');
@@ -325,7 +327,7 @@ describe('FR-RET-68 the Scan box', () => {
   it('marks the count line a scan counted on the stock count', async () => {
     await retail.addBarcode(LAMP, { code: EAN });
     screenOf(<StocktakePage />);
-    await waitFor(() => expect(document.getElementById(`count-${LAMP}`)).not.toBeNull());
+    await screen.findByText(EMPTY_COUNT);
     scan(EAN);
     await waitFor(() => expect(screen.getByTestId('scan-hit').querySelector('input')?.id).toBe(`count-${LAMP}`));
     expect(document.activeElement?.id).toBe('count-scan');
@@ -342,9 +344,10 @@ describe('FR-RET-68 typing in a quantity, price or count field is never a scan',
     return [document.getElementById('qty-0') as HTMLInputElement, document.getElementById('price-0') as HTMLInputElement];
   }
 
-  /** The first count box of the count sheet. */
+  /** The count box of an item found on the count sheet. */
   async function countField(): Promise<HTMLInputElement> {
     screenOf(<StocktakePage />);
+    await pickItem('LED bulb 9W screw', { typed: 'bulb' });
     await waitFor(() => expect(document.querySelector('.rt-card input[id^="count-"]')).not.toBeNull());
     return document.querySelector('.rt-card input[id^="count-"]') as HTMLInputElement;
   }
@@ -532,8 +535,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
 describe('FR-RET-68 the label sheet', () => {
   it('makes a code for an item without one and draws a barcode on each label', async () => {
     screenOf(<LabelsPage />);
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Add LED bulb 9W screw' }).length).toBeGreaterThan(0));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add LED bulb 9W screw' })[0] as HTMLElement);
+    await pickItem('LED bulb 9W screw', { typed: 'bulb' });
     fireEvent.change(screen.getByLabelText('Labels'), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Make the labels' }));
     await waitFor(() => expect(screen.getByTestId('label-sheet')).toBeTruthy());

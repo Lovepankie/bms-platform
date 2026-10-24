@@ -1,7 +1,8 @@
-import { keepPreviousData, useQuery, type QueryClient } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { TOAST_MS, useToast as useToastOf } from './toast';
-import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { Highlight } from '../../../app/ui/SearchBox';
+import { ItemCombobox } from '../../../app/ui/ItemCombobox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import type { Me } from '../../../api/client';
 import { RETAIL_CURRENCY, RetailError, retail, type BranchRole, type Product } from '../../../api/retail';
@@ -9,7 +10,6 @@ import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
-import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { ItemPhoto, shownPhoto } from './item-photo';
 import { showQty } from './maths';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
@@ -228,10 +228,14 @@ export function useProfitAccess(): boolean {
 
 /**
  * Search the catalogue and add an item, each with what `branchId` holds (negative flagged). The
- * sale screen shows the selling price too; the stock move screen shows the source branch's stock.
+ * sale screen shows the price too; the stock move screen shows the source branch's stock. The matches
+ * show only while something is typed and close once one is picked (ItemCombobox, issue #534): there is
+ * no browsable list here, the Stock page has the whole list.
  */
-export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStock = true, addLabel = 'Add' }: {
+export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStock = true, addLabel = 'Add', label = 'Find an item by name, code or category' }: {
   id: string;
+  /** The box's label; a second picker on a screen has its own, so the two are told apart. */
+  label?: string;
   /** Absent for a screen that is about an item and not a branch's stock (the price list editor), which also sets showStock false. */
   branchId?: string;
   onAdd: (p: Product) => void;
@@ -243,46 +247,44 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
   const products = useQuery({
     queryKey: ['retail', 'products', branchId, search.term],
     queryFn: ({ signal }) => retail.listProducts({ query: search.term, branchId, signal }),
-    placeholderData: keepPreviousData,
+    enabled: search.term !== '',
   });
-  const finding = products.isPlaceholderData || products.isFetching;
-  // The first 20 matches, in category groups when there is more than one category (category-groups.tsx).
-  const shown = (products.data ?? []).slice(0, 20);
-  const g = useCategoryGroups({ screen: 'picker', items: shown, categoryOf: (p) => p.category, resetKey: `${branchId ?? ''}|${search.term}`, searching: search.term !== '', pending: products.isPlaceholderData, minGroups: 2 });
-  const card = (p: Product) => (
-    <li key={p.id} className="rt-card">
-      <div className="rt-row">
-        <ItemPhoto photoId={shownPhoto(p)} label={p.description ?? ''} size={44} />
-        <span>
-          <strong>{p.description}</strong> ({p.code})
-          <br />
-          {!g.active && <CategoryLabel category={p.category} />}
-          {!g.active && p.category && <br />}
-          {showPrice && p.sell_minor !== undefined && `${money(p.sell_minor)} each${showStock ? ', ' : ''}`}
-          {showStock && (
-            <>
-              in stock here:{' '}
-              {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
-              {p.unit}
-              {keptWords(p.qty, p.reserved_qty) && <> ({keptWords(p.qty, p.reserved_qty)})</>}
-            </>
-          )}
-        </span>
-        <button type="button" onClick={() => onAdd(p)} aria-label={`${addLabel} ${p.description}`}>
-          {addLabel}
-        </button>
-      </div>
-    </li>
-  );
   return (
-    <>
-      <SearchBox id={id} label="Find an item by name, code or category" search={search} fetching={finding} count={products.data ? Math.min(products.data.length, 20) : undefined} more={(products.data?.length ?? 0) > 20} />
-      {products.isError && <Problem error={products.error} />}
-      {products.data && products.data.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="items" />}
-      <SearchResults fetching={finding}>
-      {shown.length > 0 && <GroupControls state={g} />}
-      {g.active ? <GroupedCards state={g} renderItem={card} scroll /> : <ul style={{ listStyle: 'none', padding: 0, maxHeight: 220, overflowY: 'auto' }}>{shown.map(card)}</ul>}
-      </SearchResults>
-    </>
+    <ItemCombobox
+      id={id}
+      label={label}
+      search={search}
+      // Only the answer to the term in the box: an earlier term's matches are never shown, so never picked.
+      results={search.term === '' ? undefined : products.data}
+      // Waiting only for a term with no answer yet: a background refresh of a cached answer keeps its options in view.
+      fetching={products.isPending}
+      error={products.isError ? <Problem error={products.error} /> : undefined}
+      optionKey={(p) => p.id ?? p.code ?? ''}
+      onPick={onAdd}
+      renderOption={(p) => {
+        const facts = [p.category, showPrice && p.sell_minor !== undefined ? `${money(p.sell_minor)} each` : null].filter(Boolean).join(', ');
+        return (
+          <>
+            <ItemPhoto photoId={shownPhoto(p)} label={p.description ?? ''} size={40} />
+            <span className="cb-text">
+              <strong><Highlight text={p.description ?? ''} term={search.term} /></strong> (<Highlight text={p.code ?? ''} term={search.term} />)
+              <span className="cb-meta">
+                {facts}
+                {showStock && (
+                  <>
+                    {facts && ', '}
+                    in stock here:{' '}
+                    {p.qty !== undefined && p.qty.startsWith('-') ? <span className="rt-flag">{showQty(p.qty)} (negative)</span> : showQty(p.qty ?? '0')}{' '}
+                    {p.unit}
+                    {keptWords(p.qty, p.reserved_qty) && <> ({keptWords(p.qty, p.reserved_qty)})</>}
+                  </>
+                )}
+              </span>
+            </span>
+            <span className="cb-verb" aria-hidden="true">{addLabel}</span>
+          </>
+        );
+      }}
+    />
   );
 }
