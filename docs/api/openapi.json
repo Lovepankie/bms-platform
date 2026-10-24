@@ -2143,7 +2143,7 @@
             "type" : "string"
           },
           "code" : {
-            "description" : "Unique ignoring case and surrounding spaces",
+            "description" : "Unique ignoring case and surrounding spaces. Left out or blank, the app gives the category's next code, such as BLB-0001 (issue #493)",
             "maxLength" : 40,
             "minLength" : 0,
             "type" : "string"
@@ -2176,7 +2176,7 @@
             "type" : "string"
           }
         },
-        "required" : [ "category_id", "code", "cost_minor", "description", "sell_minor", "unit_id" ]
+        "required" : [ "category_id", "cost_minor", "description", "sell_minor", "unit_id" ]
       },
       "CreateSavingsProductRequest" : {
         "properties" : {
@@ -9956,11 +9956,19 @@
           "active" : {
             "type" : "boolean"
           },
+          "code_prefix" : {
+            "description" : "Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001.",
+            "type" : "string"
+          },
           "id" : {
             "format" : "uuid",
             "type" : "string"
           },
           "name" : {
+            "type" : "string"
+          },
+          "next_code" : {
+            "description" : "The code the next item added here without a typed code would get now, such as BLB-0004; a hint only (issue #493)",
             "type" : "string"
           },
           "product_count" : {
@@ -9985,8 +9993,21 @@
           }
         }
       },
+      "RetailCategoryPrefixSuggestion" : {
+        "properties" : {
+          "code_prefix" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailCategoryRequest" : {
         "properties" : {
+          "code_prefix" : {
+            "description" : "Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001. Left out or blank, the app suggests one from the name.",
+            "maxLength" : 4,
+            "minLength" : 0,
+            "type" : "string"
+          },
           "name" : {
             "maxLength" : 100,
             "minLength" : 0,
@@ -10000,6 +10021,12 @@
         "properties" : {
           "active" : {
             "type" : "boolean"
+          },
+          "code_prefix" : {
+            "description" : "Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001. Items made before keep their codes.",
+            "maxLength" : 4,
+            "minLength" : 2,
+            "type" : "string"
           },
           "name" : {
             "maxLength" : 100,
@@ -15310,6 +15337,7 @@
       "RetailProductImportRow" : {
         "properties" : {
           "code" : {
+            "description" : "Empty on a dry run for a row whose code the category makes; the made code once applied (issue #493)",
             "type" : "string"
           },
           "description" : {
@@ -34229,6 +34257,33 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/categories/prefix-suggestion" : {
+      "get" : {
+        "operationId" : "suggestRetailCategoryPrefix",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailCategoryPrefixSuggestion"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The code start a new category of this name would get, free in the business (issue #493)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/categories/{category_id}" : {
       "patch" : {
         "operationId" : "updateRetailCategory",
@@ -34270,7 +34325,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Rename or deactivate a category (#146); never deleted",
+        "summary" : "Rename, change the code start of, or deactivate a category (#146, #493); never deleted",
         "tags" : [ "retail-catalogue" ]
       }
     },

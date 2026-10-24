@@ -52,11 +52,11 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
 }
 
 async function fillIn(description: string) {
-  fireEvent.change(screen.getByLabelText('Code'), { target: { value: 'NEW-1' } });
-  fireEvent.change(screen.getByLabelText('Description'), { target: { value: description } });
+  fireEvent.change(screen.getByLabelText('Item code'), { target: { value: 'NEW-1' } });
+  fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: description } });
   await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
-  fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
-  fireEvent.change(screen.getByLabelText('Counted in'), { target: { value: 'u1' } });
+  fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: 'c1' } });
+  fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
   fireEvent.change(screen.getByLabelText(/Selling price/), { target: { value: '12000' } });
 }
 
@@ -135,7 +135,7 @@ describe('a close name', () => {
     await screen.findByTestId('name-similar');
     fireEvent.click(screen.getByRole('button', { name: 'Change the name' }));
     expect(screen.queryByTestId('name-similar')).toBeNull();
-    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Triple socket 13B' } });
+    fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Triple socket 13B' } });
     similarProducts.mockResolvedValue({ exact: [], similar: [] });
     createProduct.mockResolvedValue({ id: 'new', code: 'NEW-1', description: 'Triple socket 13B', version: 1 });
     fireEvent.click(addButton());

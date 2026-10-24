@@ -8,6 +8,7 @@ import { NO_SUPPLIER, RetailError, businessToday, daysBefore } from './retail';
 import { summariseChain } from './retail-chain-mock';
 import { summarisePurchases, summariseStock } from './retail-grouping-mock';
 import { retailMessage } from './retail-errors';
+import { foldText } from '../app/ui/fold';
 import type { Me } from './client';
 import { createCashbookMock } from './retail-cashbook-mock';
 import { createPricingMock } from './retail-pricing-mock';
@@ -161,6 +162,56 @@ const editDistance = (a: string, b: string): number => {
 const MOCK_FLAGS = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'documents', 'purchasing', 'transfer_receipt', 'returns'] as const;
 const MOCK_TRADE_PRESET: readonly string[] = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'returns', 'transfer_receipt'];
 
+/** Issue #493: PREFIX-0001, at least four digits, as bms_next_item_code makes it (V96). */
+export function itemCode(prefix: string, n: number): string {
+  return `${prefix}-${String(n).padStart(4, '0')}`;
+}
+
+/** The code start a name suggests, the rule of bms_category_prefix_base (V96): Bulbs BLB, TVs TV, Phone accessories PHA. */
+export function prefixBase(name: string): string {
+  const raw = name.split(/[^\p{L}]+/u).filter((w) => w !== '');
+  const words: string[] = [];
+  const acronyms: (string | null)[] = [];
+  for (const w of raw) {
+    const letters = foldText(w).toUpperCase().replace(/[^A-Z]/g, '');
+    if (letters === '' || ['AND', 'OF', 'THE', 'FOR', 'WITH', 'NA'].includes(letters)) continue;
+    const caps = w.replace(/[^A-Z]/g, '');
+    words.push(letters);
+    acronyms.push(caps.length >= 2 && (/[a-z]/.test(w) || w.length <= 3) ? caps : null);
+  }
+  if (words.length === 0) return 'CAT';
+  let result: string;
+  const first = words[0] ?? '';
+  if (words.length === 1) {
+    result = acronyms[0] ? acronyms[0].slice(0, 4) : first.slice(0, 1) + first.slice(1).replace(/[AEIOU]/g, '').slice(0, 2);
+    if (result.length < 2) result = first.slice(0, 2);
+  } else {
+    result = acronyms[0]?.slice(0, 3) ?? first.slice(0, 2);
+    for (const w of words.slice(1)) {
+      if (result.length >= 4) break;
+      result += w.slice(0, 1);
+    }
+  }
+  return result.padEnd(2, 'X');
+}
+
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+/** The suggested code start, free among these categories, as bms_suggest_category_prefix tries them. */
+function freePrefix(rows: { id: string; code_prefix: string }[], name: string, self = ''): string {
+  const base = prefixBase(name);
+  const taken = (p: string) => rows.some((r) => r.code_prefix === p && r.id !== self);
+  const tries = [base, ...LETTERS.map((a) => base.slice(0, 3) + a), ...LETTERS.flatMap((a) => LETTERS.map((b) => base.slice(0, 2) + a + b))];
+  return tries.find((p) => !taken(p)) ?? base;
+}
+
+function checkedPrefix(rows: { id: string; code_prefix: string }[], self: string, raw: string): string {
+  const p = raw.trim().toUpperCase();
+  if (!/^[A-Z]{2,4}$/.test(p)) refuse(422, 'validation_failed', 'The code start must be 2 to 4 letters, A to Z, such as BLB.');
+  if (rows.some((r) => r.code_prefix === p && r.id !== self)) refuse(409, 'duplicate_category_prefix', 'Another category already uses this code start. Choose other letters.');
+  return p;
+}
+
 export function createMockRetail(): RetailApi {
   // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off.
   const roles = new Map<string, 'store' | 'shop' | 'both'>();
@@ -175,7 +226,9 @@ export function createMockRetail(): RetailApi {
   });
   const products = new Map<string, MockProduct>(PRODUCTS.map((p) => [p.id, { ...p, active: true, version: 1 }]));
   // Categories and units of this mock instance: renamed and switched off by the management screens (#146).
-  const cats: { id: string; name: string; active: boolean; version: number }[] = CATEGORIES.map((c) => ({ id: c.id ?? '', name: c.name ?? '', active: true, version: 1 }));
+  // Issue #493: each has its code start and the next number to try, as V96 keeps them.
+  const cats: { id: string; name: string; active: boolean; version: number; code_prefix: string; next: number }[] = [];
+  for (const c of CATEGORIES) cats.push({ id: c.id ?? '', name: c.name ?? '', active: true, version: 1, code_prefix: freePrefix(cats, c.name ?? ''), next: 1 });
   const unitNames = [...new Set(PRODUCTS.map((p) => p.unit))];
   const unitRows: { id: string; name: string; active: boolean; version: number }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true, version: 1 }));
   const categoryId = (name: string): string => cats.find((c) => c.name === name)?.id ?? '';
@@ -187,6 +240,16 @@ export function createMockRetail(): RetailApi {
   const barcodesOf = (id: string) => ((barcodes.get(id) ?? []).length > 0 ? { barcodes: barcodes.get(id) } : {});
   const used = <K extends 'category' | 'unit'>(key: K, name: string) => [...products.values()].filter((p) => p[key] === name).length;
   const refreshed = <T extends { name?: string }>(row: T, key: 'category' | 'unit') => ({ ...row, product_count: used(key, row.name ?? '') });
+  const codeTaken = (code: string) => [...products.values()].some((x) => x.code.toLowerCase() === code.toLowerCase());
+  const freeCode = (c: { code_prefix: string; next: number }): [string, number] => {
+    let n = c.next;
+    while (codeTaken(itemCode(c.code_prefix, n))) n += 1;
+    return [itemCode(c.code_prefix, n), n];
+  };
+  const categoryRow = (c: (typeof cats)[number]): Category => {
+    const { next: _next, ...row } = c;
+    return { ...refreshed(row, 'category'), next_code: freeCode(c)[0] } as Category;
+  };
   // Items with sizes and colours of this mock instance (issue #384): the item's own row; its variants are products.
   const families = new Map<string, { id: string; name: string; baseCode: string; category: string; unit: string; version: number; createdAt: string; photoId?: string }>();
   // Item photos of this mock instance (issue #384): kept as blobs by their id.
@@ -409,7 +472,7 @@ export function createMockRetail(): RetailApi {
         return cost(row, { cost_minor: p.costMinor });
       })),
 
-    listCategories: () => delay(cats.map((c) => refreshed(c, 'category') as Category)),
+    listCategories: () => delay(cats.map(categoryRow)),
 
     listCatalogue: ({ query, categoryId: category, active, cursor }) => {
       const wanted = [...products.values()]
@@ -446,13 +509,20 @@ export function createMockRetail(): RetailApi {
 
     createProduct: (body) =>
       run(() => {
-        const code = (body.code ?? '').trim();
-        if ([...products.values()].some((x) => x.code.toLowerCase() === code.toLowerCase())) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
+        const typed = (body.code ?? '').trim();
+        if (typed && codeTaken(typed)) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
         const category = cats.find((c) => c.id === body.category_id);
         const unit = unitRows.find((u) => u.id === body.unit_id);
         if (!category || !unit) return refuse(422, 'validation_failed', 'Choose a category and a unit.');
         if (!category.active || !unit.active) refuse(422, 'inactive_category', 'This category or unit is switched off. Choose another one.');
         sameNameCheck(body.description ?? '', unit.name, undefined, body.duplicate_reason);
+        // Issue #493: without a typed code the category gives its next free number.
+        let code = typed;
+        if (!code) {
+          const [made, n] = freeCode(category);
+          code = made;
+          category.next = n + 1;
+        }
         const p: MockProduct = { id: nextId('b'), code, description: (body.description ?? '').trim(), category: category.name, unit: unit.name, costMinor: body.cost_minor ?? 0, sellMinor: body.sell_minor ?? 0, active: true, version: 1 };
         products.set(p.id, p);
         history.set(p.id, [{ id: nextId('h'), at: new Date().toISOString(), source: 'initial', new_sell_minor: p.sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: p.costMinor } : {}) }]);
@@ -730,13 +800,16 @@ export function createMockRetail(): RetailApi {
         return { dry_run: dryRun, rows_read: rows.length, added: count('added'), skipped: count('skipped'), errors: count('error'), categories_created: [], units_created: [], rows };
       }),
 
-    createCategory: (name) =>
+    createCategory: (name, codePrefix) =>
       run(() => {
         clash(cats, '', name, 'duplicate_category', 'category');
-        const c = { id: nextId('c'), name: name.trim(), active: true, version: 1 };
+        const prefix = codePrefix?.trim() ? checkedPrefix(cats, '', codePrefix) : freePrefix(cats, name);
+        const c = { id: nextId('c'), name: name.trim(), active: true, version: 1, code_prefix: prefix, next: 1 };
         cats.push(c);
-        return refreshed(c, 'category') as Category;
+        return categoryRow(c);
       }),
+
+    suggestCategoryPrefix: (name) => delay(freePrefix(cats, name)),
 
     updateCategory: (id, version, body) =>
       run(() => {
@@ -748,9 +821,10 @@ export function createMockRetail(): RetailApi {
           for (const p of products.values()) if (p.category === c.name) p.category = body.name.trim();
           c.name = body.name.trim();
         }
+        if (body.code_prefix !== undefined) c.code_prefix = checkedPrefix(cats, id, body.code_prefix);
         c.active = body.active ?? c.active;
         c.version += 1;
-        return refreshed(c, 'category') as Category;
+        return categoryRow(c);
       }),
 
     listUnits: () => delay(unitRows.map((u) => refreshed(u, 'unit') as Unit)),

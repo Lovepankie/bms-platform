@@ -44,7 +44,7 @@ export function ImportReport({ result }: { result: ImportResult }) {
           const w = WORDS[r.outcome ?? ''] ?? { label: r.outcome ?? '', tone: 'info' };
           return (
             <li key={r.line} className="rt-card">
-              <p><strong>{r.code || 'No code'}</strong> <span className={`badge badge-${w.tone}`}>{w.label}</span></p>
+              <p><strong>{r.code || 'Code from its category'}</strong> <span className={`badge badge-${w.tone}`}>{w.label}</span></p>
               <p className="hint">Row {r.line}{r.description ? `, ${r.description}` : ''}</p>
               <p>{r.message}</p>
             </li>
@@ -95,7 +95,7 @@ export function ImportPage() {
       <BackToCatalogue />
       <div data-tour="import-note">
         <Note>
-          The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row.
+          The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row. Leave a code empty, or leave out the code column, and the app gives the item the next code of its category, such as BLB-0001.
           {profit ? '' : ' Leave the buying price out.'} Check the file first: nothing is saved until you add the items.
         </Note>
       </div>

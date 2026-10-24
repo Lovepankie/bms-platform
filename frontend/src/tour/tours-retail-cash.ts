@@ -32,19 +32,20 @@ const step = (s: Omit<TourStep, 'module'>): TourStep => ({ module: 'retail', ...
 
 export const productsPage: Tour = {
   id: 'page-products',
-  // Version 5 says what an item is counted in, as the item form now does (issue #547).
-  version: 5,
+  // Version 5 says what an item is counted in, as the item form now does (issue #547); version 6 that the category comes first and
+  // the item code is made from it (issue #493).
+  version: 6,
   title: 'This page: items',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products',
   steps: [
-    step({ id: 'add', target: 'product-add', title: 'Add an item', body: 'Tap here to add something you sell. Type the code, the name, pick the category and what it is counted in, then the price.' }),
+    step({ id: 'add', target: 'product-add', title: 'Add an item', body: 'Tap here to add something you sell. Pick the category first, then type the name, what it is counted in and the price. Leave Item code empty and the app gives it the next code of the category, such as BLB-0001. Adding from the category\'s own page saves picking the category.' }),
     step({ id: 'sizes', target: 'product-add-sizes', title: 'Sizes and colours', body: 'Sell one design in several sizes or prints? Tap here, type the sizes and the colours once, and each one gets its own code, price and stock.' }),
     step({ id: 'join', target: 'product-join-sizes', title: 'One item per size?', body: 'If you typed each size as its own item, tap here to join them. Each keeps its stock and history.' }),
     step({ id: 'search', target: 'product-search', title: 'Find an item', body: 'Type a name, a code or a category. The list narrows as you type.' }),
     step({ id: 'filters', target: 'product-filters', title: 'Narrow the list', body: 'Pick a category, or choose Switched off to see items you no longer sell.' }),
-    step({ id: 'edit', target: 'product-list', title: 'Change an item', body: 'Tap Edit on an item to change its name, category or what it is counted in. Tap Stock to see how much of it you hold.' }),
+    step({ id: 'edit', target: 'product-list', title: 'Change an item', body: 'Tap Edit on an item to change its name, category or what it is counted in. Moving it to another category keeps its item code. Tap Stock to see how much of it you hold.' }),
     // Issue #412: the low-stock level is on the item's page, under Edit.
     step({ id: 'minimum', target: 'product-list', title: 'Warn me when stock is below', body: 'Tap Edit on an item to set when you are told it is running low. Set one level for every shop and store, or a different one for a shop. With no level, you are told when it would run out within 14 days.' }),
     step({ id: 'price', target: 'product-list', needs: [PRICE_EDIT], optional: true, title: 'Change a price', body: 'Tap Change price on an item. The old price stays in its history, so earlier sales keep the price they were made at.' }),
@@ -106,14 +107,30 @@ export const sizesPage: Tour = {
 
 export const categoriesPage: Tour = {
   id: 'page-categories',
-  version: 1,
+  version: 2,
   title: 'This page: categories',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/categories',
   steps: [
-    step({ id: 'add', target: 'named-add', title: 'Add a category', body: 'Tap here and type a name, such as Lighting. Items are grouped by their category.' }),
-    step({ id: 'list', target: 'named-list', title: 'Rename or switch off', body: 'Tap Rename to fix a name. Tap Switch off to stop new items using it. Old items keep it. Tap Items to see them.' }),
+    step({ id: 'add', target: 'named-add', title: 'Add a category', body: 'Tap here and type a name, such as Bulbs. The app suggests a code start from the name, such as BLB, or type your own 2 to 4 letters.' }),
+    step({ id: 'list', target: 'named-list', title: 'Open a category', body: 'Tap Open to see its items and add new ones there. Tap Rename to fix a name. Tap Switch off to stop new items using it. Old items keep it.' }),
+  ],
+};
+
+/** Issue #493: one category, its items and Add an item there; the item code is made from the category. */
+export const categoryPage: Tour = {
+  id: 'page-category',
+  version: 1,
+  title: 'This page: one category',
+  audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
+  autoStart: false,
+  page: '/staff/retail/catalogue/categories/$categoryId',
+  steps: [
+    step({ id: 'codes', target: 'category-codes', title: 'Item codes', body: 'Every item added here gets a code that starts with the category\'s letters, such as BLB-0001, BLB-0002. You never have to make one up.' }),
+    step({ id: 'add', target: 'category-add-item', title: 'Add an item here', body: 'Tap here to add an item to this category. There is no category to pick: it goes here. Leave Item code empty for the next number, or type your own.' }),
+    step({ id: 'prefix', target: 'category-prefix', title: 'Change the letters', body: 'Tap here to change the code start. New items use the new letters. Items made before keep their codes.' }),
+    step({ id: 'items', target: 'category-items', title: 'Its items', body: 'These are the items in this category. Tap Edit on one to change it, or to move it to another category. It keeps its code.' }),
   ],
 };
 
@@ -161,13 +178,13 @@ export const buyersPage: Tour = {
 
 export const importPage: Tour = {
   id: 'page-import',
-  version: 1,
+  version: 2,
   title: 'This page: import items',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ) && held(me, SETTINGS),
   autoStart: false,
   page: '/staff/retail/catalogue/import',
   steps: [
-    step({ id: 'format', target: 'import-note', title: 'Get the file ready', body: 'The first row names the columns. Then put one item on each row. Nothing is saved until you add the items.' }),
+    step({ id: 'format', target: 'import-note', title: 'Get the file ready', body: 'The first row names the columns. Then put one item on each row. Leave a code empty and the app gives the next code of its category. Nothing is saved until you add the items.' }),
     step({ id: 'file', target: 'import-file', title: 'Choose your file', body: 'Tap here and pick a CSV file saved as UTF-8.' }),
     step({ id: 'paste', target: 'import-text', title: 'Or paste the rows', body: 'You can also paste the rows straight into this box.' }),
     step({ id: 'check', target: 'import-check', title: 'Check it first', body: 'Tap Check the file. You see what would be added and which rows have a problem. When all is well, an Add button appears.' }),
@@ -357,7 +374,7 @@ export const customerAgeingPage: Tour = {
 };
 
 export const RETAIL_CASH_TOURS: readonly Tour[] = [
-  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, unitsPage, suppliersPage, buyersPage, importPage, labelsPage,
+  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, categoryPage, unitsPage, suppliersPage, buyersPage, importPage, labelsPage,
   bankingPage, bankingReportPage, expensesPage, expensesReportPage, expenseListsPage, withdrawalsPage, advancesPage, cashSummaryPage, savingsPage,
   branchRolesPage, customerGroupsPage, customerAgeingPage,
 ];

@@ -138,6 +138,8 @@ const retailSizesNewRoute = retailScreen('/catalogue/products/sizes/new', 'Add a
 const retailSizesJoinRoute = retailScreen('/catalogue/products/sizes/join', 'Join items as sizes').lazy(() => import('../areas/staff/retail/catalogue-variants').then((m) => m.JoinRoute));
 const retailSizesRoute = retailScreen('/catalogue/products/sizes/$familyId', 'Sizes and colours').lazy(() => import('../areas/staff/retail/catalogue-family').then((m) => m.FamilyRoute));
 const retailCategoriesRoute = retailScreen('/catalogue/categories', 'Categories').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.CategoriesRoute));
+// One category with its items and Add an item there (issue #493): under Categories, so the trail reads Catalogue, Categories, then the category.
+const retailCategoryRoute = retailScreen('/catalogue/categories/$categoryId', 'Category').lazy(() => import('../areas/staff/retail/catalogue-category').then((m) => m.CategoryRoute));
 const retailUnitsRoute = retailScreen('/catalogue/units', 'Units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
 const retailImportRoute = retailScreen('/catalogue/import', 'Import items').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
@@ -377,6 +379,7 @@ export const router = createRouter({
         retailSizesJoinRoute,
         retailSizesRoute,
         retailCategoriesRoute,
+        retailCategoryRoute,
         retailUnitsRoute,
         retailSuppliersRoute,
         retailBuyersRoute,

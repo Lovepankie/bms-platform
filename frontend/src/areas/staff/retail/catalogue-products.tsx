@@ -4,7 +4,8 @@ import { useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
-import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
+import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type Category, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
+import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Field';
 import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
@@ -21,7 +22,8 @@ import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 
 // Items (#146): list with search, category and active filters; add and edit an item's code,
-// description, category, unit and whether it is on sale; and change prices only through the price
+// description, category, unit and whether it is on sale (issue #493: added inside a category, the item
+// takes that category and no dropdown is shown; an empty Item code is made by the server as PREFIX-0001); and change prices only through the price
 // form, which keeps the history. Cost shows only with retail.profit.read (the server never sends it
 // otherwise). A price at or below cost is saved with a warning: the price floor is enforced when a sale
 // is made (price_below_cost, unless the seller holds retail.price.below_cost).
@@ -101,7 +103,21 @@ export function inactiveWarning(stockOnHand: string | undefined, branches: numbe
   return `This item still has stock in the branches you can see (${stockOnHand} in all). Inactive items cannot be sold, bought or moved, so that stock stays put until you correct it on the Stock page or switch the item on again.`;
 }
 
-export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: Product; onSaved: (text: string) => void; onCancel: () => void; onOpen?: (id: string) => void }) {
+/** The hint under Item code: what the app gives an item left without one (issue #493, owner decision D16). */
+export function itemCodeHint(category: Category | undefined): string {
+  if (!category) return 'Leave it empty and the app gives the next code of the category you choose.';
+  const next = category.next_code ?? `${category.code_prefix ?? ''}-0001`;
+  return `Leave it empty and the app gives it the next code of ${category.name}, ${next}. Or type your own.`;
+}
+
+export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpen }: {
+  product?: Product;
+  /** Issue #493: the category the item is added in; the form then has no category dropdown. */
+  category?: Category;
+  onSaved: (text: string) => void;
+  onCancel: () => void;
+  onOpen?: (id: string) => void;
+}) {
   const { me } = useStaff();
   const profit = useProfitAccess();
   const queryClient = useQueryClient();
@@ -109,7 +125,8 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
   const units = useQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits() });
   const [code, setCode] = useState(product?.code ?? '');
   const [description, setDescription] = useState(product?.description ?? '');
-  const [categoryId, setCategoryId] = useState(product?.category_id ?? '');
+  const [categoryId, setCategoryId] = useState(product?.category_id ?? fixed?.id ?? '');
+  const [showErrors, setShowErrors] = useState(false);
   const [unitId, setUnitId] = useState(product?.unit_id ?? '');
   const [active, setActive] = useState(product?.active !== false);
   const canManage = (me.permissions ?? []).includes('retail.catalogue.manage');
@@ -124,8 +141,11 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
   // A switched-off category or unit is offered only when it is the item's own.
   const categoryChoices = (categories.data ?? []).filter((c) => c.active !== false || c.id === product?.category_id);
   const unitChoices = (units.data ?? []).filter((u) => u.active !== false || u.id === product?.unit_id);
-  const complete = code.trim() !== '' && description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null)
+  // A new item may leave the code empty: the server makes it from the category (issue #493). A saved item keeps one.
+  const complete = (!product || code.trim() !== '') && description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null)
     && (!variant || size.trim() !== '' || colour.trim() !== '');
+  const chosen = fixed ?? (categories.data ?? []).find((c) => c.id === categoryId);
+  const movedFrom = product && !variant && categoryId !== product.category_id ? product.category : null;
   // The name is kept once per unit (issue #352): a close name is a warning, the same name is refused, an administrator may add it anyway.
   const [similar, setSimilar] = useState<SimilarProduct[] | null>(null);
   const [exists, setExists] = useState<ExistingItem | null>(null);
@@ -141,7 +161,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
       if (product && variant) return retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), active, variant_size: size.trim(), variant_colour: colour.trim() });
       return product
         ? retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason })
-        : retail.createProduct({ code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
+        : retail.createProduct({ ...(code.trim() ? { code: code.trim() } : {}), description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
     },
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
@@ -168,18 +188,55 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
     onError: () => { sending.current = false; },
   });
   const busy = save.isPending || check.isPending;
+  const form = useRef<HTMLFormElement>(null);
   const submit = () => {
-    if (!complete || busy || sending.current) return;
+    if (!complete) {
+      // The send button stays enabled (docs/ui-rules.md rule 10): a press shows what is missing and goes to it.
+      setShowErrors(true);
+      if (form.current) focusFirstMissing(form.current);
+      return;
+    }
+    if (busy || sending.current) return;
     sending.current = true;
     if (nameChanged && acceptedKey !== nameKey) check.mutate();
     else save.mutate(undefined);
   };
   const forget = () => { setExists(null); setSimilar(null); save.reset(); };
   return (
-    <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
-      <h2>{product ? 'Change this item' : 'Add an item'}</h2>
-      <label htmlFor="item-code">Code</label>
-      <input id="item-code" value={code} maxLength={40} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
+    <form ref={form} noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <h2>{product ? 'Change this item' : fixed ? `Add an item to ${fixed.name}` : 'Add an item'}</h2>
+      <FieldsNeededNote />
+      {fixed ? (
+        <p data-tour="item-category-fixed">Category: <strong>{fixed.name}</strong></p>
+      ) : !variant && (
+        // Hatibu, 23 Oct 2026: the category comes first, before the description, so the code can follow from it.
+        <Field
+          id="item-category"
+          label="Category"
+          required
+          error={categoryId === '' ? 'Choose a category.' : null}
+          showError={showErrors}
+          hint={movedFrom ? `Moving it from ${movedFrom} keeps its item code.` : undefined}
+          control={(props) => (
+            <select {...props} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              <option value="">Choose a category</option>
+              {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
+            </select>
+          )}
+        />
+      )}
+      <Field
+        id="item-code"
+        label={WORDS.itemCode}
+        required={product !== undefined}
+        error={product && code.trim() === '' ? 'An item keeps its code. Type one.' : null}
+        showError={showErrors}
+        hint={product ? undefined : itemCodeHint(chosen)}
+        value={code}
+        maxLength={40}
+        onChange={(e) => setCode(e.target.value)}
+        autoComplete="off"
+      />
       {variant ? (
         <>
           <p>
@@ -194,18 +251,30 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
         </>
       ) : (
         <>
-          <label htmlFor="item-description">Description</label>
-          <input id="item-description" value={description} maxLength={300} onChange={(e) => { setDescription(e.target.value); forget(); }} autoComplete="off" />
-          <label htmlFor="item-category">Category</label>
-          <select id="item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Choose a category</option>
-            {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
-          </select>
-          <label htmlFor="item-unit">{WORDS.countedIn}</label>
-          <select id="item-unit" value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
-            <option value="">Choose a unit</option>
-            {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
-          </select>
+          <Field
+            id="item-description"
+            label="Description"
+            required
+            error={description.trim() === '' ? 'Type what the item is.' : null}
+            showError={showErrors}
+            value={description}
+            maxLength={300}
+            onChange={(e) => { setDescription(e.target.value); forget(); }}
+            autoComplete="off"
+          />
+          <Field
+            id="item-unit"
+            label={WORDS.countedIn}
+            required
+            error={unitId === '' ? 'Choose a unit.' : null}
+            showError={showErrors}
+            control={(props) => (
+              <select {...props} value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
+                <option value="">Choose a unit</option>
+                {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
+              </select>
+            )}
+          />
         </>
       )}
       {product ? (
@@ -246,8 +315,17 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
               <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</p>
             </>
           ) : null}
-          <label htmlFor="item-sell">Selling price ({RETAIL_CURRENCY})</label>
-          <input id="item-sell" inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} aria-invalid={sell.trim() !== '' && sellMinor === null} autoComplete="off" />
+          <Field
+            id="item-sell"
+            label={`Selling price (${RETAIL_CURRENCY})`}
+            required
+            error={sellMinor === null ? `Type the price you sell one at, in ${RETAIL_CURRENCY}.` : null}
+            showError={showErrors}
+            inputMode="numeric"
+            value={sell}
+            onChange={(e) => setSell(e.target.value)}
+            autoComplete="off"
+          />
           {!profit && <p className="hint">The buying price is set when you buy stock.</p>}
         </>
       )}
@@ -271,7 +349,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
         />
       )}
       {!exists && <Problem error={save.error ?? check.error} />}
-      <BusyButton busy={busy} type="submit" className="rt-primary" disabled={!complete || exists !== null || similar !== null}>{product ? 'Save changes' : 'Add item'}</BusyButton>
+      <BusyButton busy={busy} type="submit" className="rt-primary" disabled={exists !== null || similar !== null}>{product ? 'Save changes' : 'Add item'}</BusyButton>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
     </form>
   );
@@ -341,7 +419,7 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
 
 type View = { mode: 'list' } | { mode: 'new' } | { mode: 'edit' | 'price'; id: string };
 
-function Editing({ id, mode, onSaved, onCancel, onOpen }: { id: string; mode: 'edit' | 'price'; onSaved: (text: string) => void; onCancel: () => void; onOpen: (id: string) => void }) {
+export function Editing({ id, mode, onSaved, onCancel, onOpen }: { id: string; mode: 'edit' | 'price'; onSaved: (text: string) => void; onCancel: () => void; onOpen: (id: string) => void }) {
   const product = useQuery({ queryKey: ['retail', 'product', id], queryFn: () => retail.getProduct(id), gcTime: 0 });
   useCrumbTail(product.data?.description, onCancel);
   if (product.isPending) return <p className="loading">Loading</p>;

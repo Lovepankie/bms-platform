@@ -411,8 +411,11 @@ export interface RetailApi {
   removeBarcode(productId: string, barcodeId: string): Promise<void>;
   /** A Code 128 label code for each item that has no made one yet; an item keeps the one it has. */
   generateBarcodes(productIds: string[]): Promise<Barcode[]>;
-  createCategory(name: string): Promise<Category>;
-  updateCategory(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Category>;
+  /** A blank code start is suggested from the name by the server (issue #493). */
+  createCategory(name: string, codePrefix?: string): Promise<Category>;
+  updateCategory(id: string, version: number, body: { name?: string; active?: boolean; code_prefix?: string }): Promise<Category>;
+  /** The code start a new category of this name would get, free in the business (issue #493). */
+  suggestCategoryPrefix(name: string): Promise<string>;
   listUnits(): Promise<Unit[]>;
   createUnit(name: string): Promise<Unit>;
   updateUnit(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Unit>;
@@ -825,8 +828,12 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/products/barcodes/generate', { body: { product_ids: productIds } })).items ?? [];
   },
 
-  async createCategory(name) {
-    return unwrap(await api.POST('/api/v1/retail/categories', { body: { name } }));
+  async createCategory(name, codePrefix) {
+    return unwrap(await api.POST('/api/v1/retail/categories', { body: { name, ...(codePrefix?.trim() ? { code_prefix: codePrefix.trim() } : {}) } }));
+  },
+
+  async suggestCategoryPrefix(name) {
+    return unwrap(await api.GET('/api/v1/retail/categories/prefix-suggestion', { params: { query: { name } } })).code_prefix ?? '';
   },
 
   async updateCategory(id, version, body) {

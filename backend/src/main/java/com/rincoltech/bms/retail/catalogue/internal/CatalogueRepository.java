@@ -45,13 +45,23 @@ class CatalogueRepository {
 
     List<Category> categories() {
         return jdbc.sql("""
-                        SELECT c.id, c.name, c.active, c.version, (SELECT count(*) FROM retail_products p WHERE p.category_id = c.id) AS used
+                        SELECT c.id, c.name, c.active, c.version, c.code_prefix,
+                               (SELECT count(*) FROM retail_products p WHERE p.category_id = c.id) AS used,
+                               (SELECT c.code_prefix || '-' || CASE WHEN n < 10000 THEN lpad(n::text, 4, '0') ELSE n::text END
+                                  FROM generate_series(c.code_next, c.code_next + 10000) n
+                                 WHERE NOT EXISTS (SELECT 1 FROM retail_products p
+                                                    WHERE p.tenant_id = c.tenant_id
+                                                      AND lower(p.code) = lower(c.code_prefix || '-'
+                                                          || CASE WHEN n < 10000 THEN lpad(n::text, 4, '0') ELSE n::text END))
+                                 ORDER BY n LIMIT 1) AS next_code
                           FROM retail_categories c ORDER BY lower(c.name), c.id
                         """)
                 .query((rs, n) -> new Category(
                         rs.getObject("id", UUID.class),
                         rs.getString("name"),
                         rs.getBoolean("active"),
+                        rs.getString("code_prefix"),
+                        rs.getString("next_code"),
                         rs.getInt("used"),
                         rs.getInt("version")))
                 .list();
@@ -80,11 +90,41 @@ class CatalogueRepository {
     }
 
     /** Rows changed: 0 when the version moved since it was read (the predicate is the optimistic lock). */
-    int updateCategory(UUID id, String name, boolean active, int expectedVersion) {
+    int updateCategory(UUID id, String name, boolean active, String codePrefix, int expectedVersion) {
         return jdbc.sql(
-                        "UPDATE retail_categories SET name = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
-                .params(name, active, id, expectedVersion)
+                        "UPDATE retail_categories SET name = ?, active = ?, code_prefix = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
+                .params(name, active, codePrefix, id, expectedVersion)
                 .update();
+    }
+
+    /** Issue #493: the prefix a new category of this name would get, free in the business (V96). */
+    String suggestPrefix(String name, UUID self) {
+        return jdbc.sql("SELECT bms_suggest_category_prefix(current_setting('app.tenant_id')::uuid, ?, ?)")
+                .params(name, self)
+                .query(String.class)
+                .single();
+    }
+
+    /**
+     * Issue #493: the category row, locked to the commit, before the import makes codes in it; the lock of {@link
+     * #nextItemCode}, which leaves the foreign key checks of item inserts free.
+     */
+    void lockCategory(UUID categoryId) {
+        jdbc.sql("SELECT id FROM retail_categories WHERE id = ? FOR NO KEY UPDATE")
+                .param(categoryId)
+                .query(UUID.class)
+                .optional();
+    }
+
+    /**
+     * Issue #493, ADR-081: the category's next item code, such as BLB-0001, under the category row's lock to the commit, so a
+     * second add in the same category waits and takes the next number (V96).
+     */
+    String nextItemCode(UUID categoryId) {
+        return jdbc.sql("SELECT bms_next_item_code(?)")
+                .param(categoryId)
+                .query(String.class)
+                .single();
     }
 
     int updateUnit(UUID id, String name, boolean active, int expectedVersion) {
@@ -110,11 +150,12 @@ class CatalogueRepository {
                 > 0;
     }
 
-    void insertCategory(UUID id, String name, UUID createdBy) {
+    /** A null prefix is filled from the name by the V96 trigger. */
+    void insertCategory(UUID id, String name, String codePrefix, UUID createdBy) {
         jdbc.sql("""
-                        INSERT INTO retail_categories (id, tenant_id, name, created_by)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?)
-                        """).params(id, name, createdBy).update();
+                        INSERT INTO retail_categories (id, tenant_id, name, code_prefix, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?)
+                        """).params(id, name, codePrefix, createdBy).update();
     }
 
     void insertUnit(UUID id, String name, UUID createdBy) {

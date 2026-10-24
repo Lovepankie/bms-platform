@@ -117,6 +117,7 @@ const BY_CODE: Record<string, string> = {
   price_unchanged: 'The new prices are the same as the current ones. Change at least one.',
   duplicate_product_code: 'An item with this code already exists. Codes ignore capital letters and spaces at the ends. Use another code.',
   duplicate_category: 'A category with this name already exists.',
+  duplicate_category_prefix: 'Another category already uses this code start. Choose other letters.',
   duplicate_unit: 'A unit with this name already exists.',
   duplicate_supplier: 'A supplier with this name already exists.',
   inactive_category: 'This category is switched off. Choose another one, or switch it on first.',

@@ -360,7 +360,7 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
 /** The screens under Catalogue, in the order the Catalogue home lists them. */
 export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [
   { screen: 'products', path: '/staff/retail/catalogue/products', label: 'Items', hint: 'Add or change an item, change its price' },
-  { screen: 'categories', path: '/staff/retail/catalogue/categories', label: 'Categories', hint: 'Group your items' },
+  { screen: 'categories', path: '/staff/retail/catalogue/categories', label: 'Categories', hint: 'Group your items and add new ones inside a category' },
   { screen: 'units', path: '/staff/retail/catalogue/units', label: 'Units', hint: 'Piece, roll, kilogram and so on' },
   { screen: 'suppliers', path: '/staff/retail/catalogue/suppliers', label: 'Suppliers', hint: 'Who you buy from' },
   { screen: 'buyers', path: '/staff/retail/catalogue/buyers', label: WORDS.customersWhoOwe, hint: 'Who buys on credit' },

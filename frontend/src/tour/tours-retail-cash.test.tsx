@@ -8,6 +8,7 @@ import { CashSummary } from '../areas/staff/retail/cash-summary';
 import { ImportPage } from '../areas/staff/retail/catalogue-import';
 import { LabelsPage } from '../areas/staff/retail/labels';
 import { CategoriesPage, UnitsPage } from '../areas/staff/retail/catalogue-lists';
+import { CategoryPage } from '../areas/staff/retail/catalogue-category';
 import { BuyersPage, SuppliersPage } from '../areas/staff/retail/catalogue-people';
 import { ProductsPage } from '../areas/staff/retail/catalogue-products';
 import { FamilyScreen } from '../areas/staff/retail/catalogue-family';
@@ -36,6 +37,7 @@ function screen(path: string): ReactElement {
     case '/staff/retail/catalogue/products/sizes/join': return <JoinPage />;
     case '/staff/retail/catalogue/products/sizes/$familyId': return <FamilyScreen familyId="f0000000-0000-4000-8000-000000000001" />;
     case '/staff/retail/catalogue/categories': return <CategoriesPage />;
+    case '/staff/retail/catalogue/categories/$categoryId': return <CategoryPage categoryId="00000000-0000-4000-8000-0000000c0001" />;
     case '/staff/retail/catalogue/units': return <UnitsPage />;
     case '/staff/retail/catalogue/suppliers': return <SuppliersPage />;
     case '/staff/retail/catalogue/buyers': return <BuyersPage />;
@@ -66,6 +68,7 @@ describeTours(
     'page-sizes-join': [ADMIN],
     'page-sizes': [ADMIN],
     'page-categories': [ADMIN],
+    'page-category': [ADMIN],
     'page-units': [ADMIN],
     'page-suppliers': [ADMIN],
     'page-buyers': [ADMIN],

@@ -40,7 +40,7 @@ class JdbcCatalogueHistory implements CatalogueHistory {
             return new Ensured(existing, false, false);
         }
         UUID id = UUID.randomUUID();
-        repo.insertCategory(id, name, IMPORT_ACTOR);
+        repo.insertCategory(id, name, null, IMPORT_ACTOR);
         return new Ensured(id, true, false);
     }
 

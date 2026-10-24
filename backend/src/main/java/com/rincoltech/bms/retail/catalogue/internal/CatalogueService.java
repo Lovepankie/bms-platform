@@ -142,17 +142,51 @@ class CatalogueService {
         return new UnitList(repo.units());
     }
 
+    /** Issue #493: the prefix a new category of this name would get now; the form shows it before saving. */
+    @Transactional(readOnly = true)
+    CatalogueApi.PrefixSuggestion suggestPrefix(String name) {
+        // A category name is at most 100 characters, so nothing longer is ever worth reading.
+        String n = name == null ? "" : name.trim();
+        return new CatalogueApi.PrefixSuggestion(repo.suggestPrefix(n.length() > 100 ? n.substring(0, 100) : n, null));
+    }
+
     @Transactional
     Category createCategory(CategoryRequest r) {
-        Category c = new Category(UUID.randomUUID(), r.name().trim(), true, 0, 1);
+        UUID id = UUID.randomUUID();
+        String name = r.name().trim();
+        String prefix = r.codePrefix() == null || r.codePrefix().isBlank() ? null : prefix(r.codePrefix());
         try {
-            repo.insertCategory(c.id(), c.name(), CurrentPrincipal.require().userId());
+            repo.insertCategory(id, name, prefix, CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
-            throw duplicate("duplicate_category", "A category with this name exists.");
+            throw duplicateCategory(e);
         }
+        Category c = repo.category(id).orElseThrow();
         audit.record(AuditLog.Entry.created(
-                "retail.category.created", "retail.category", c.id(), null, Map.of("name", c.name())));
+                "retail.category.created",
+                "retail.category",
+                c.id(),
+                null,
+                Map.of("name", c.name(), "code_prefix", c.codePrefix())));
         return c;
+    }
+
+    /** Issue #493, ADR-081: 2 to 4 letters A to Z, kept in capitals. */
+    static String prefix(String raw) {
+        String p = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!p.matches("[A-Z]{2,4}")) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "code_prefix", "invalid", "The code start must be 2 to 4 letters, A to Z, such as BLB.")));
+        }
+        return p;
+    }
+
+    /** Which unique index refused the category: its name or its code start. */
+    static ApiException duplicateCategory(DuplicateKeyException e) {
+        return String.valueOf(e.getMessage()).contains("retail_categories_code_prefix")
+                ? duplicate(
+                        "duplicate_category_prefix",
+                        "Another category already uses this code start. Choose other letters.")
+                : duplicate("duplicate_category", "A category with this name exists.");
     }
 
     @Transactional
@@ -181,19 +215,22 @@ class CatalogueService {
         if (name.isEmpty()) {
             throw ApiException.validation(List.of(new FieldProblem("name", "invalid", "The name must not be blank.")));
         }
+        // Issue #493: a new code start is used for items added from now on; items made before keep their codes.
+        String codePrefix = r.codePrefix() == null ? before.codePrefix() : prefix(r.codePrefix());
         Map<String, Object> was = new LinkedHashMap<>();
         Map<String, Object> now = new LinkedHashMap<>();
         diff(was, now, "name", before.name(), name);
         diff(was, now, "active", before.active(), active);
+        diff(was, now, "code_prefix", before.codePrefix(), codePrefix);
         if (now.isEmpty()) {
             return before;
         }
         try {
-            if (repo.updateCategory(id, name, active, expected) == 0) {
+            if (repo.updateCategory(id, name, active, codePrefix, expected) == 0) {
                 throw staleCategory(id);
             }
         } catch (DuplicateKeyException e) {
-            throw duplicate("duplicate_category", "A category with this name exists.");
+            throw duplicateCategory(e);
         }
         audit.record(new AuditLog.Entry("retail.category.updated", "retail.category", id, null, was, now));
         return repo.category(id).orElseThrow();
@@ -250,9 +287,11 @@ class CatalogueService {
         requireCategoryAndUnit(r.categoryId(), r.unitId(), null, null);
         String duplicateReason = acceptName(r.description().trim(), r.unitId(), null, r.duplicateReason());
         UUID by = CurrentPrincipal.require().userId();
+        // Issue #493, ADR-081: a typed code is kept; without one the category gives its next, such as BLB-0001.
+        boolean typed = r.code() != null && !r.code().isBlank();
         Product p = new Product(
                 UUID.randomUUID(),
-                code(r.code()),
+                typed ? code(r.code()) : repo.nextItemCode(r.categoryId()),
                 r.description().trim(),
                 r.categoryId(),
                 null,
@@ -292,6 +331,9 @@ class CatalogueService {
         after.put("category_id", p.categoryId());
         after.put("unit_id", p.unitId());
         after.put("sell_minor", p.sellMinor());
+        if (!typed) {
+            after.put("code_source", "category");
+        }
         if (duplicateReason != null) {
             after.put("duplicate_reason", duplicateReason);
         }

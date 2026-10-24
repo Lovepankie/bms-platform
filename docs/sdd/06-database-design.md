@@ -1956,6 +1956,8 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | `name` | varchar(100) for categories, varchar(30) for units | Unique per tenant ignoring case (FR-RET-01) |
 | `active`, `updated_at` | boolean default true, timestamptz | V28: a row in use is switched off, never deleted |
 | `version` | integer default 1 | V28: bumped by every update; the `If-Match` value. `retail_suppliers` and `retail_customers` carry it too |
+| `code_prefix` | varchar(4), categories only | V96 (issue #493, ADR-081): 2 to 4 capital letters (CHECK `retail_categories_code_prefix_letters`), unique per tenant (`retail_categories_code_prefix`); suggested from the name by `bms_category_prefix_base` and `bms_suggest_category_prefix`, backfilled oldest first, and filled by the trigger `retail_categories_prefix_default` when an insert leaves it out |
+| `code_next` | integer default 1, categories only | V96: the next number `bms_next_item_code(category_id)` tries; that function locks the row, steps over codes items already hold (ignoring case) and returns `PREFIX-0001`. Not part of `version` |
 
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 

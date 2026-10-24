@@ -71,9 +71,20 @@ class CatalogueController {
                 .body(created);
     }
 
+    @GetMapping("/categories/prefix-suggestion")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary = "The code start a new category of this name would get, free in the business (issue #493)",
+            operationId = "suggestRetailCategoryPrefix")
+    CatalogueApi.PrefixSuggestion suggestPrefix(@RequestParam(name = "name") String name) {
+        return service.suggestPrefix(name);
+    }
+
     @PatchMapping("/categories/{category_id}")
     @RequiresPermission("retail.catalogue.manage")
-    @Operation(summary = "Rename or deactivate a category (#146); never deleted", operationId = "updateRetailCategory")
+    @Operation(
+            summary = "Rename, change the code start of, or deactivate a category (#146, #493); never deleted",
+            operationId = "updateRetailCategory")
     ResponseEntity<Category> updateCategory(
             @PathVariable("category_id") UUID id,
             @RequestHeader(name = "If-Match", required = false) String ifMatch,

@@ -31,7 +31,8 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/evaluation` | Business evaluation: profit to date, expected profit of the stock at today's prices, a 30 day pace (#149) | `retail.profit.read` |
 | `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
 | `/staff/retail/catalogue/products` | Items: list with search, category and on sale filters; add, edit, change price, price history (#146) | `retail.catalogue.manage` and `retail.stock.read` (Change price: `retail.price.edit`; cost: `retail.profit.read`) |
-| `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each | `retail.catalogue.manage` and `retail.stock.read` |
+| `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each; a category shows its code start and next code and opens the category page (issue #493) | `retail.catalogue.manage` and `retail.stock.read` |
+| `/staff/retail/catalogue/categories/$categoryId` | One category (issue #493, ADR-081): how its item codes are made, its items, Add an item with the category fixed (no dropdown; an empty Item code gets the next code, such as BLB-0001), Change the code start (items made before keep their codes) | `retail.catalogue.manage` and `retail.stock.read` |
 | `/staff/retail/catalogue/suppliers` | Add, edit, switch off or on | `retail.catalogue.manage` and `retail.purchase.create` |
 | `/staff/retail/catalogue/buyers` | Credit buyers with what each owes; add, edit name and contact | `retail.customer.manage` and `retail.sale.read` |
 | `/staff/retail/catalogue/import` | Import items from a CSV file or pasted rows: check first, then add (#146) | `retail.catalogue.manage`, `retail.stock.read` and `core.settings.manage` (administrators) |

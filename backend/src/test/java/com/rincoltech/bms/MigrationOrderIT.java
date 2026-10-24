@@ -2290,6 +2290,76 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V96 (ADR-081, issue #493) on a database at the migration before it: every category of every business gets a code start
+     * suggested from its name and free in that business, the oldest first, and no item's code changes. A writer that leaves the
+     * code start out (an old instance during a deploy) gets a suggested one.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates categories across the item codes migration.
+     */
+    @Test
+    void itemCodesMigrationGivesEveryCategoryACodeStartAndLeavesItemCodes() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("96") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            UUID other = UUID.randomUUID();
+            for (UUID id : List.of(tenant, other)) {
+                owner.sql("INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, ?, 'Test Tenant V96', "
+                                + "'00000000-0000-4000-8000-000000000001')")
+                        .params(id, "test-v96-" + id.toString().substring(0, 8))
+                        .update();
+            }
+            owner.sql("""
+                            WITH c AS (INSERT INTO retail_categories (id, tenant_id, name, created_at)
+                                       VALUES (gen_random_uuid(), ?, 'Bulbs', now() - interval '2 days'),
+                                              (gen_random_uuid(), ?, 'Blub', now() - interval '1 day'),
+                                              (gen_random_uuid(), ?, 'Phone accessories', now())
+                                       RETURNING id, name),
+                                 u AS (INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'pcs')
+                                       RETURNING id)
+                            INSERT INTO retail_products (id, tenant_id, code, description, category_id, unit_id, cost_minor,
+                                                         sell_minor, currency)
+                            SELECT gen_random_uuid(), ?, 'OLD-' || c.name, 'Test item ' || c.name, c.id, u.id, 100, 200, 'UGX'
+                              FROM c, u
+                            """).params(tenant, tenant, tenant, tenant, tenant).update();
+            owner.sql("INSERT INTO retail_categories (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'Bulbs')")
+                    .param(other)
+                    .update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.success).isTrue();
+            assertThat(owner.sql(
+                                    "SELECT name || ' ' || code_prefix FROM retail_categories WHERE tenant_id = ? ORDER BY name")
+                            .param(tenant)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("Blub BLBA", "Bulbs BLB", "Phone accessories PHA");
+            assertThat(owner.sql("SELECT code_prefix FROM retail_categories WHERE tenant_id = ?")
+                            .param(other)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("BLB");
+            assertThat(owner.sql("SELECT code FROM retail_products WHERE tenant_id = ? ORDER BY code")
+                            .param(tenant)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("OLD-Blub", "OLD-Bulbs", "OLD-Phone accessories");
+            owner.sql("INSERT INTO retail_categories (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'TVs')")
+                    .param(tenant)
+                    .update();
+            assertThat(owner.sql("SELECT code_prefix FROM retail_categories WHERE tenant_id = ? AND name = 'TVs'")
+                            .param(tenant)
+                            .query(String.class)
+                            .single())
+                    .isEqualTo("TV");
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

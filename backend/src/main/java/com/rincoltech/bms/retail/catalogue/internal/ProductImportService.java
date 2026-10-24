@@ -14,6 +14,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.ImportRow;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -31,10 +32,12 @@ import org.springframework.transaction.annotation.Transactional;
  * Importing a new client's items from CSV (#146). A dry run reads the file and reports, row by row,
  * what would be added, what would be skipped (a code that exists already, or repeats in the file)
  * and what is wrong; an apply does the same and adds the rows that are fine, in one transaction.
- * Applying is idempotent on the product code: run twice, the second run skips every row. An apply
+ * Applying is idempotent on the product code, and a row without a code on its name and unit (issue #352's name rule, which
+ * skips a name already held in that unit): run twice, the second run skips every row. An apply
  * with any error row adds nothing, so a half-read file never lands. Codes are normalised by
  * {@link RetailCatalogue#normaliseCode} as the pilot importer does; categories and units are created
- * on demand, matched by name ignoring case. Allowed for an administrator only, and the cost column
+ * on demand, matched by name ignoring case. A row with a blank code, or a file without the code column,
+ * gets the next code of its category on apply, such as BLB-0001 (issue #493, ADR-081); rows with a code keep it. Allowed for an administrator only, and the cost column
  * only for a caller holding {@code retail.profit.read}. Cost is never written to the audit log.
  */
 @Service
@@ -80,13 +83,14 @@ class ProductImportService {
             throw problem("csv", "The file is empty.");
         }
         Map<String, Integer> columns = columns(table.getFirst());
-        for (String required : List.of("code", "description", "category", "unit", "sell_price")) {
+        for (String required : List.of("description", "category", "unit", "sell_price")) {
             if (!columns.containsKey(required)) {
                 throw problem(
                         "csv",
                         "The file needs a column called "
                                 + shown(required)
-                                + ". The columns are: code, description, category, unit, "
+                                + ". The columns are: code (leave it empty and the app makes one from the category),"
+                                + " description, category, unit, "
                                 + (principal.hasPermission("retail.profit.read")
                                         ? "buying price (if you wish) and "
                                         : "")
@@ -136,7 +140,9 @@ class ProductImportService {
             if (cells.stream().allMatch(String::isBlank)) {
                 continue;
             }
-            String rawCode = cell(cells, columns, "code");
+            String rawCode = columns.containsKey("code") ? cell(cells, columns, "code") : "";
+            // Issue #493: a blank code is made from the row's category on apply.
+            boolean auto = rawCode.isBlank();
             String description = cell(cells, columns, "description");
             String shown = rawCode.strip();
             String problem = null;
@@ -151,9 +157,9 @@ class ProductImportService {
             Long sell = CsvTable.amountMinor(cell(cells, columns, "sell_price"), exponent);
             Long cost = withCost ? CsvTable.amountMinor(cell(cells, columns, "cost_price"), exponent) : Long.valueOf(0);
             boolean costBlank = withCost && cell(cells, columns, "cost_price").isBlank();
-            if (code == null) {
-                problem = "The code is empty or holds a special character.";
-            } else if (code.length() > 40) {
+            if (code == null && !auto) {
+                problem = "The code holds a special character.";
+            } else if (code != null && code.length() > 40) {
                 problem = "The code is longer than 40 characters.";
             } else if (description.isBlank() || description.strip().length() > 300) {
                 problem = "The description is empty or longer than 300 characters.";
@@ -185,14 +191,16 @@ class ProductImportService {
                 report.add(new ImportRow(line, shown, description.strip(), "error", problem));
                 continue;
             }
-            String key = code.toLowerCase(Locale.ROOT);
-            if (existing.contains(key)) {
+            String key = auto ? null : code.toLowerCase(Locale.ROOT);
+            if (auto) {
+                code = "";
+            } else if (existing.contains(key)) {
                 skipped++;
                 report.add(new ImportRow(
                         line, code, description.strip(), "skipped", "An item with this code exists already."));
                 continue;
             }
-            if (!seen.add(key)) {
+            if (!auto && !seen.add(key)) {
                 skipped++;
                 report.add(new ImportRow(
                         line,
@@ -289,10 +297,12 @@ class ProductImportService {
                     description.strip(),
                     "added",
                     (dryRun ? "Would be added." : "Added.")
+                            + (auto ? " The app gives it the next code of " + category + "." : "")
                             + packNote
                             + movedNote(rowCodes, rowPackCodes, rowFormat, heldCodes)));
             pending.add(new Pending(
-                    code,
+                    report.size() - 1,
+                    auto ? null : code,
                     description.strip(),
                     category,
                     unit,
@@ -312,7 +322,12 @@ class ProductImportService {
                                 + " a problem. Nothing was added. Run the check to see which rows, fix them and try again.");
             }
             try {
-                apply(pending, categories, units, newCategories, newUnits, added, skipped, principal.userId());
+                Map<Integer, String> made =
+                        apply(pending, categories, units, newCategories, newUnits, added, skipped, principal.userId());
+                made.forEach((row, code) -> {
+                    ImportRow r = report.get(row);
+                    report.set(row, new ImportRow(r.line(), code, r.description(), r.outcome(), r.message()));
+                });
             } catch (DuplicateKeyException e) {
                 throw new ApiException(
                         HttpStatus.CONFLICT,
@@ -332,7 +347,8 @@ class ProductImportService {
                 report);
     }
 
-    private void apply(
+    /** Adds the rows; returns the code made for each row that had none, by its place in the report. */
+    private Map<Integer, String> apply(
             List<Pending> pending,
             Map<String, UUID> categories,
             Map<String, UUID> units,
@@ -360,7 +376,7 @@ class ProductImportService {
         for (Map.Entry<String, String> e : newCategories.entrySet()) {
             String name = e.getValue();
             UUID id = UUID.randomUUID();
-            repo.insertCategory(id, name, by);
+            repo.insertCategory(id, name, null, by);
             categoryIds.put(e.getKey(), id);
             audit.record(AuditLog.Entry.created(
                     "retail.category.created", "retail.category", id, null, Map.of("name", name)));
@@ -373,12 +389,28 @@ class ProductImportService {
             audit.record(AuditLog.Entry.created("retail.unit.created", "retail.unit", id, null, Map.of("name", name)));
         }
         String currency = tenant.profile().currency();
-        for (Pending p : pending) {
+        // Issue #493: rows with a typed code go in first, so a made code steps over them; the categories that make
+        // codes are
+        // locked in a fixed order first, so two imports at once queue rather than deadlock.
+        List<Pending> ordered = new ArrayList<>(pending);
+        ordered.sort(Comparator.comparing((Pending p) -> p.code() == null));
+        ordered.stream()
+                .filter(p -> p.code() == null)
+                .map(p -> categoryIds.get(p.category().toLowerCase(Locale.ROOT)))
+                .distinct()
+                .sorted()
+                .forEach(repo::lockCategory);
+        Map<Integer, String> made = new HashMap<>();
+        for (Pending p : ordered) {
             UUID categoryId = categoryIds.get(p.category().toLowerCase(Locale.ROOT));
             UUID unitId = unitIds.get(p.unit().toLowerCase(Locale.ROOT));
+            String code = p.code() == null ? repo.nextItemCode(categoryId) : p.code();
+            if (p.code() == null) {
+                made.put(p.row(), code);
+            }
             Product product = new Product(
                     UUID.randomUUID(),
-                    p.code(),
+                    code,
                     p.description(),
                     categoryId,
                     null,
@@ -435,7 +467,7 @@ class ProductImportService {
                 addBarcode(product.id(), packUnitId, c, p.barcodeFormat(), by);
             }
             Map<String, Object> after = new LinkedHashMap<>();
-            after.put("code", p.code());
+            after.put("code", code);
             after.put("description", p.description());
             after.put("category_id", categoryId);
             after.put("unit_id", unitId);
@@ -449,6 +481,7 @@ class ProductImportService {
         summary.put("categories_created", newCategories.size());
         summary.put("units_created", newUnits.size());
         audit.record(AuditLog.Entry.created("retail.product.imported", PRODUCT, null, null, summary));
+        return made;
     }
 
     /** One imported barcode; a code an item that is switched off held is released to it first, as the screen does. */
@@ -493,7 +526,9 @@ class ProductImportService {
                         + " on an item while this file was being applied. Nothing was added. Run the check again and apply the file again.");
     }
 
+    /** {@code code} is null for a row whose code the category makes on apply; {@code row} is its place in the report. */
     private record Pending(
+            int row,
             String code,
             String description,
             String category,

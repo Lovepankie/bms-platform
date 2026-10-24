@@ -25,16 +25,29 @@ final class CatalogueApi {
 
     static final String COST_ONLY = "Present only with retail.profit.read";
 
+    static final String CODE_PREFIX =
+            "Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001.";
+
     private CatalogueApi() {}
 
     @Schema(name = "RetailCategoryRequest")
-    record CategoryRequest(@NotBlank @Size(max = 100) String name) {}
+    record CategoryRequest(
+            @NotBlank @Size(max = 100) String name,
+
+            @Size(max = 4)
+            @Schema(description = CODE_PREFIX + " Left out or blank, the app suggests one from the name.")
+            String codePrefix) {}
 
     @Schema(name = "RetailUnitRequest")
     record UnitRequest(@NotBlank @Size(max = 30) String name) {}
 
     @Schema(name = "RetailCategoryUpdate", description = "Omitted fields are unchanged; a category is never deleted")
-    record UpdateCategoryRequest(@Size(min = 1, max = 100) String name, Boolean active) {}
+    record UpdateCategoryRequest(
+            @Size(min = 1, max = 100) String name,
+            Boolean active,
+
+            @Size(min = 2, max = 4) @Schema(description = CODE_PREFIX + " Items made before keep their codes.")
+            String codePrefix) {}
 
     @Schema(name = "RetailUnitUpdate", description = "Omitted fields are unchanged; a unit is never deleted")
     record UpdateUnitRequest(@Size(min = 1, max = 30) String name, Boolean active) {}
@@ -44,6 +57,13 @@ final class CatalogueApi {
             UUID id,
             String name,
             boolean active,
+
+            @Schema(description = CODE_PREFIX) String codePrefix,
+
+            @Schema(
+                    description =
+                            "The code the next item added here without a typed code would get now, such as BLB-0004; a hint only (issue #493)")
+            String nextCode,
 
             @Schema(description = "Products (active or not) that use this category")
             int productCount,
@@ -63,6 +83,9 @@ final class CatalogueApi {
             @Schema(description = "Send as If-Match when updating")
             int version) {}
 
+    @Schema(name = "RetailCategoryPrefixSuggestion")
+    record PrefixSuggestion(String codePrefix) {}
+
     @Schema(name = "RetailCategoryList")
     record CategoryList(List<Category> items) {}
 
@@ -71,7 +94,10 @@ final class CatalogueApi {
 
     @Schema(name = "CreateRetailProductRequest")
     record CreateProductRequest(
-            @NotBlank @Size(max = 40) @Schema(description = "Unique ignoring case and surrounding spaces")
+            @Size(max = 40)
+            @Schema(
+                    description =
+                            "Unique ignoring case and surrounding spaces. Left out or blank, the app gives the category's next code, such as BLB-0001 (issue #493)")
             String code,
 
             @NotBlank @Size(max = 300) String description,
@@ -1059,7 +1085,12 @@ final class CatalogueApi {
     @Schema(name = "RetailProductImportRow")
     record ImportRow(
             int line,
+
+            @Schema(
+                    description =
+                            "Empty on a dry run for a row whose code the category makes; the made code once applied (issue #493)")
             String code,
+
             String description,
 
             @Schema(description = "added, skipped (the code exists already or repeats in the file) or error")

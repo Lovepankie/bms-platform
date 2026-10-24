@@ -4251,6 +4251,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/categories/prefix-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The code start a new category of this name would get, free in the business (issue #493) */
+        get: operations["suggestRetailCategoryPrefix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/categories/{category_id}": {
         parameters: {
             query?: never;
@@ -4264,7 +4281,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename or deactivate a category (#146); never deleted */
+        /** Rename, change the code start of, or deactivate a category (#146, #493); never deleted */
         patch: operations["updateRetailCategory"];
         trace?: never;
     };
@@ -8418,8 +8435,8 @@ export interface components {
         CreateRetailProductRequest: {
             /** Format: uuid */
             category_id: string;
-            /** @description Unique ignoring case and surrounding spaces */
-            code: string;
+            /** @description Unique ignoring case and surrounding spaces. Left out or blank, the app gives the category's next code, such as BLB-0001 (issue #493) */
+            code?: string;
             /** Format: int64 */
             cost_minor: number;
             description: string;
@@ -11911,9 +11928,13 @@ export interface components {
         };
         RetailCategory: {
             active?: boolean;
+            /** @description Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001. */
+            code_prefix?: string;
             /** Format: uuid */
             id?: string;
             name?: string;
+            /** @description The code the next item added here without a typed code would get now, such as BLB-0004; a hint only (issue #493) */
+            next_code?: string;
             /**
              * Format: int32
              * @description Products (active or not) that use this category
@@ -11928,12 +11949,19 @@ export interface components {
         RetailCategoryList: {
             items?: components["schemas"]["RetailCategory"][];
         };
+        RetailCategoryPrefixSuggestion: {
+            code_prefix?: string;
+        };
         RetailCategoryRequest: {
+            /** @description Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001. Left out or blank, the app suggests one from the name. */
+            code_prefix?: string;
             name: string;
         };
         /** @description Omitted fields are unchanged; a category is never deleted */
         RetailCategoryUpdate: {
             active?: boolean;
+            /** @description Issue #493, ADR-081: 2 to 4 letters, unique in the business, that start the item codes the app makes in this category, such as BLB for BLB-0001. Items made before keep their codes. */
+            code_prefix?: string;
             name?: string;
         };
         RetailControls: {
@@ -14772,6 +14800,7 @@ export interface components {
             units_created?: string[];
         };
         RetailProductImportRow: {
+            /** @description Empty on a dry run for a row whose code the category makes; the made code once applied (issue #493) */
             code?: string;
             description?: string;
             /** Format: int32 */
@@ -26173,6 +26202,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailCategory"];
+                };
+            };
+        };
+    };
+    suggestRetailCategoryPrefix: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailCategoryPrefixSuggestion"];
                 };
             };
         };
