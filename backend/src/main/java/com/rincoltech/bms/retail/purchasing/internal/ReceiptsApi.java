@@ -57,7 +57,22 @@ final class ReceiptsApi {
             @Schema(
                     description =
                             "A new selling price per base unit, set on the product with this receipt; absent keeps it")
-            Long sellMinor) {}
+            Long sellMinor,
+
+            @Positive
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    example = "30",
+                    description = "For a line in a pack (D23, issue #554): how many base units each pack held in this"
+                            + " delivery, at least 1. Kept on the line only; stock and the cost per base unit use it."
+                            + " Absent means the pack's usual size")
+            BigDecimal packSize,
+
+            @Schema(
+                    description = "With pack_size: also make it the pack's usual size from now on (needs"
+                            + " retail.catalogue.manage). Selling always uses the usual size")
+            Boolean useFromNowOn) {}
 
     @Schema(name = "RetailGoodsReceiptRequest")
     record ReceiptRequest(

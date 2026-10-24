@@ -418,6 +418,23 @@ describe('FR-RET-68 scanning on the restock form', () => {
   });
 });
 
+describe('D23 (#554) a carton barcode on Buy stock', () => {
+  it('fills the carton and its usual size, which stays editable for this delivery', async () => {
+    const ROLL = '00000000-0000-4000-8000-0000000d0001';
+    await retail.addPack(LAMP, { unit_id: ROLL, factor: '24.000' });
+    await retail.addBarcode(LAMP, { code: 'TEST-LAMP-CARTON', unit_id: ROLL });
+    screenOf(<RestockForm />, 'admin', BRANCH, ['units']);
+    scan('TEST-LAMP-CARTON');
+    await waitFor(() => expect((document.getElementById('unit-0') as HTMLSelectElement | null)?.value).toBe(ROLL));
+    const size = document.getElementById('size-0') as HTMLInputElement;
+    expect(size.value).toBe('24');
+    expect(size.getAttribute('aria-required')).toBe('true');
+    fireEvent.change(size, { target: { value: '30' } });
+    expect((document.getElementById('size-0') as HTMLInputElement).value).toBe('30');
+    expect(screen.getByLabelText('Use 30 from now on')).toBeTruthy();
+  });
+});
+
 describe('FR-RET-68 scanning on the move stock form', () => {
   it('adds the scanned item and bumps it on the next scan', async () => {
     await retail.addBarcode(LAMP, { code: EAN });

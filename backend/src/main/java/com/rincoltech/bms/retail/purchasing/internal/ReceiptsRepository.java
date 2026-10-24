@@ -301,17 +301,20 @@ class ReceiptsRepository {
         return out;
     }
 
-    /** Received so far on the receipts that stand, per line of an order, in base units. */
+    /** Received so far on the receipts that stand, per line of an order, in the line's own unit (D23, issue #554). */
     Map<UUID, BigDecimal> receivedByOrderLine(UUID orderId) {
         Map<UUID, BigDecimal> out = new HashMap<>();
         jdbc.sql("""
-                        SELECT l.order_line_id, sum(l.qty) AS qty FROM retail_goods_receipt_lines l
-                          JOIN retail_goods_receipts r ON r.tenant_id = l.tenant_id AND r.id = l.receipt_id
-                         WHERE r.order_id = ? AND r.status = 'posted' AND l.order_line_id IS NOT NULL
-                         GROUP BY l.order_line_id
-                        """).param(orderId).query(rs -> {
-            out.put(rs.getObject("order_line_id", UUID.class), rs.getBigDecimal("qty"));
-        });
+                        SELECT rl.order_line_id, sum(%s) AS qty FROM retail_goods_receipt_lines rl
+                          JOIN retail_goods_receipts r ON r.tenant_id = rl.tenant_id AND r.id = rl.receipt_id
+                          JOIN retail_purchase_order_lines ol ON ol.tenant_id = rl.tenant_id AND ol.id = rl.order_line_id
+                         WHERE r.order_id = ? AND r.status = 'posted'
+                         GROUP BY rl.order_line_id
+                        """.formatted(OrdersRepository.RECEIVED_IN_ORDER_UNIT))
+                .param(orderId)
+                .query(rs -> {
+                    out.put(rs.getObject("order_line_id", UUID.class), rs.getBigDecimal("qty"));
+                });
         return out;
     }
 

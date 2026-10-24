@@ -26,6 +26,22 @@ export function chosenPack(product: Product, unitId: string | undefined): Pack |
   return unitId ? activePacks(product).find((k) => k.unit_id === unitId) : undefined;
 }
 
+/**
+ * D23 (#554): the size typed for a buying pack in this delivery ("30"), as the factor the maths take; null when it is not a
+ * number of at least 1 with at most three decimals. The server keeps it on the line only.
+ */
+export function deliveredFactor(size: string): string | null {
+  const text = size.trim();
+  const f = factorMilli(text);
+  return f !== null && f >= 1000n ? text : null;
+}
+
+/** Whether two sizes are the same number: "30" and "30.000". */
+export function sameFactor(a: string | undefined, b: string | undefined): boolean {
+  const x = factorMilli(a);
+  return x !== null && x === factorMilli(b);
+}
+
 /** The price of one pack from the price of one base unit: base x factor, rounded half up once. */
 export function packPriceMinor(baseMinor: number, factor: string | undefined): number {
   const f = factorMilli(factor);

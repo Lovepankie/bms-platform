@@ -179,6 +179,14 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (`/staff/retail/catalogue/categories/$categoryId`, tour `page-category`): its items, Add an item with the category fixed (no dropdown) and Change the
   code start; the field is Item code everywhere (D16); on the Items page the category comes first. No permission added. Tests: `RetailItemCodesIT`,
   `MigrationOrderIT`, `catalogue-category.dom.test.tsx`, `catalogue-names.dom.test.tsx`, `tours-retail-cash.test.tsx`.
+- **Built (a buying pack's size per delivery, issue #554, owner decision D23, ADR-082, FR-RET-72):** no migration. A restock line and a
+  goods received line in a pack take `pack_size` (how many base units each pack held in this delivery, at least 1), kept in the line's existing
+  `unit_factor`; stock, the cost per base unit and the branch's average (ADR-079) use it, and every later reading of the line (voids, supplier
+  invoices, goods sent back) already converts with it. `use_from_now_on` also makes it the pack's usual size, audited, under the product row lock
+  before any balance row, and needs `retail.catalogue.manage`. Goods received against an order line in a pack count packs whatever each held
+  (`received_unit_qty` and `base_unit` on the order line). Selling and scanning keep the usual size. Screens: How many pieces in each carton? on Buy
+  stock and Goods received, required, with Use 30 from now on. Tests: `RetailPackSizePerDeliveryIT`, `pack-size-per-delivery.dom.test.tsx`,
+  `scan.dom.test.tsx`.
 - **Self-onboarding, build step 1 (issue #89, ADR-024):** migration `V23` with
   `onboarding_applications` and `notification_outbox`, reached only through definer functions;
   the public sign-up and applicant page; the operator portal on the platform host (operator
@@ -955,6 +963,9 @@ Accepted (this list is the ADR index):
   next number no item holds, under the category row's lock; typed codes are kept, existing codes never change, a moved item keeps its
   code, the import fills blank codes; items are added inside a category, whose form has no category dropdown; the field is Item code
   (proposed, #493, owner decisions D14 and D16; FR-RET-70; migration `V96`, the next number after `V95`)
+- ADR-082 A buying pack's size is kept per delivery: a restock or goods received line in a pack says how many pieces each pack held,
+  kept in its `unit_factor` and used for stock and the average; "use from now on" (with `retail.catalogue.manage`) changes the usual size;
+  selling packs keep their size; an order counts packs whatever each held (proposed, #554, owner decision D23; FR-RET-72; no migration)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared

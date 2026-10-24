@@ -12,7 +12,7 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 |---|---|---|
 | `/staff/retail` | Landing: one tile per screen the user may use | any `retail.*` permission |
 | `/staff/retail/sale` | Record a sale, then the receipt summary | `retail.sale.create` |
-| `/staff/retail/restock` | Buy stock: supplier, lines, per-branch quantities; under the item search, Not in the list? Add it here (issue #505): Item code filled in from the category, Category, Description, Counted in, Buying price, Selling price and the quantity at this branch, one Save that makes the item and puts it on the purchase | `retail.purchase.create` (Add it here: `retail.catalogue.manage`, others read Ask your manager to add this item) |
+| `/staff/retail/restock` | Buy stock: supplier, lines, per-branch quantities; under the item search, Not in the list? Add it here (issue #505): Item code filled in from the category, Category, Description, Counted in, Buying price, Selling price and the quantity at this branch, one Save that makes the item and puts it on the purchase; a line bought in a pack asks How many pieces in each carton? (issue #554, ADR-082: required, filled with the usual size or by a scanned carton barcode, and Use 30 from now on for a different size, offered with `retail.catalogue.manage`) | `retail.purchase.create` (Add it here: `retail.catalogue.manage`, others read Ask your manager to add this item) |
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
 | `/staff/retail/credit-sales` | Credit sales, grouped by a chain of levels the user chooses (issues #328, #341): buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
 | `/staff/retail/sales` | All sales, grouped by a chain of levels the user chooses (issues #328, #341): filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
@@ -627,7 +627,7 @@ need `core.settings.manage`. Each page has a breadcrumb and a live search where 
 - **Receive goods** (`/purchase-orders/$orderId/receive`) and **Receive without an order** (`/goods-received/new`) are one form: the branch or store
   the goods go into (only branches in scope), the quantity of each line (pre-filled with what is still to come), its cost (pre-filled from the order)
   and an optional new selling price, the delivery note number and a note. The server's refusals are shown in plain words (more than ordered, not a
-  whole number of base units). **Goods received** (`/goods-received`) lists the deliveries; a delivery (`/goods-received/$receiptId`, crumb "Delivery")
+  whole number of base units). A line in a pack asks How many pieces in each carton? (issue #554, ADR-082), as Buy stock does. **Goods received** (`/goods-received`) lists the deliveries; a delivery (`/goods-received/$receiptId`, crumb "Delivery")
   shows its lines and what is billed, and voids with a reason, with the two refusals (an invoice bills it; some of it is sold) explained.
 - **Supplier invoices** (`/supplier-bills`, open-only toggle) and **New supplier invoice** (`/supplier-bills/new`): choose the supplier, tick the goods
   received and not yet invoiced that the invoice is for, type the invoice number, dates, the supplier's price and the total as printed. The page asks

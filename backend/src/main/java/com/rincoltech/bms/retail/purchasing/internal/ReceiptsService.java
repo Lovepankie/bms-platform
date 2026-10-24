@@ -42,9 +42,11 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -241,7 +243,7 @@ class ReceiptsService {
                     continue;
                 }
             }
-            Planned p = lines.plan(field, productId, unitId, l.qty(), cost, problems, ol != null);
+            Planned p = lines.plan(field, productId, unitId, l.qty(), cost, problems, ol != null, l.packSize());
             if (p != null) {
                 items.add(new Item(i, ol, l, p));
             }
@@ -253,12 +255,15 @@ class ReceiptsService {
             overReceipt(order, items, orderLines);
         }
         limitUnauthorised(order, items);
+        PurchaseLines.requireUseFromNowOn(items.stream().anyMatch(x -> usesFromNowOn(x.request())));
         new TreeSet<>(items.stream().map(x -> x.planned().product().id()).toList()).forEach(catalogue::lock);
 
         UUID id = UUID.randomUUID();
         UUID by = CurrentPrincipal.require().userId();
         Numbered no = lines.next("GR", "retail_goods_receipt_no", branch);
         List<NewLine> newLines = new ArrayList<>();
+        // D23, issue #554: the lines whose size becomes the pack's usual size, by the line's own id.
+        Set<UUID> fromNowOn = new HashSet<>();
         List<Movement> movements = new ArrayList<>();
         long total = 0;
         long stocked = 0;
@@ -284,6 +289,9 @@ class ReceiptsService {
                     p.stocked()));
             movements.add(new Movement(
                     branch, p.product().id(), "purchase", p.baseQty(), p.costBase(), RECEIPT, id, lineId, null, null));
+            if (usesFromNowOn(item.request())) {
+                fromNowOn.add(lineId);
+            }
         }
         // Lines are applied in request order, so when two lines name one product the later line's cost is the product's
         // cost afterwards (latest receipt wins, ADR-020 decision 5), each change with its own history row.
@@ -303,6 +311,10 @@ class ReceiptsService {
         }
         for (NewLine l : newLines) {
             catalogue.applyPurchasePrices(l.productId(), l.costMinor(), l.sellMinor(), id);
+            if (fromNowOn.contains(l.id())) {
+                // D23, issue #554: under the product lock taken above, before any balance row (ADR-079 lock order).
+                catalogue.useBuyingSize(l.productId(), l.unitId(), l.unitFactor(), RECEIPT, id);
+            }
         }
         stock.record(on, movements);
         // Goods received not invoiced is owed as entered; inventory carries the movements' value; the difference, which
@@ -353,6 +365,11 @@ class ReceiptsService {
         }
         audit.record(AuditLog.Entry.created("retail.goods_receipt.created", RECEIPT, id, branch, after));
         return view(repo.find(id, false).orElseThrow(), true);
+    }
+
+    /** D23, issue #554: the line asks for its size to become the pack's usual size. */
+    private static boolean usesFromNowOn(ReceiptLineRequest l) {
+        return Boolean.TRUE.equals(l.useFromNowOn()) && l.packSize() != null;
     }
 
     /** True when the unit being received is the unit the line was ordered in (naming the base unit is the base unit). */
@@ -412,23 +429,39 @@ class ReceiptsService {
         int bp = settings.current().overReceiptBp();
         Map<UUID, BigDecimal> already = repo.receivedByOrderLine(order.id());
         Map<UUID, BigDecimal> now = new HashMap<>();
-        items.forEach(x -> now.merge(x.orderLine().id(), x.planned().baseQty(), BigDecimal::add));
+        items.forEach(x -> now.merge(x.orderLine().id(), inOrderUnit(x), BigDecimal::add));
         for (Map.Entry<UUID, BigDecimal> e : now.entrySet()) {
             OrdersRepository.LineRow ol = orderLines.get(e.getKey());
             BigDecimal had = already.getOrDefault(e.getKey(), BigDecimal.ZERO);
-            BigDecimal limit =
-                    ol.qty().multiply(BigDecimal.valueOf(10000L + bp)).movePointLeft(4);
+            BigDecimal ordered = OrdersService.orderedInUnit(ol);
+            BigDecimal limit = ordered.multiply(BigDecimal.valueOf(10000L + bp)).movePointLeft(4);
             if (had.add(e.getValue()).compareTo(limit) > 0) {
                 BigDecimal room = limit.subtract(had).max(BigDecimal.ZERO);
                 throw ApiException.rule(
                         "receipt_exceeds_order",
-                        "Line " + ol.lineNo() + " of " + order.orderNo() + " ordered " + Quantities.format(ol.qty())
+                        "Line " + ol.lineNo() + " of " + order.orderNo() + " ordered " + Quantities.format(ordered)
                                 + " and " + Quantities.format(had) + " has been received, so at most "
                                 + room.setScale(Quantities.SCALE, java.math.RoundingMode.DOWN)
                                         .toPlainString()
                                 + " more can be received.");
             }
         }
+    }
+
+    /**
+     * D23, issue #554: what a line receives, in its order line's own unit, as {@code OrdersRepository.RECEIVED_IN_ORDER_UNIT}
+     * counts it: packs of the order's unit count as packs whatever each held this time.
+     */
+    private static BigDecimal inOrderUnit(Item x) {
+        OrdersRepository.LineRow ol = x.orderLine();
+        Planned p = x.planned();
+        if (ol.unitId() == null) {
+            return p.baseQty();
+        }
+        if (p.pack() != null && p.pack().unitId().equals(ol.unitId())) {
+            return p.unitQty();
+        }
+        return p.baseQty().divide(ol.unitFactor(), Quantities.SCALE, java.math.RoundingMode.HALF_UP);
     }
 
     // ---- Void ------------------------------------------------------------------------------

@@ -12418,6 +12418,11 @@
             "format" : "uuid",
             "type" : "string"
           },
+          "pack_size" : {
+            "description" : "For a line in a pack (D23, issue #554): how many base units each pack held in this delivery, at least 1. Kept on the line only; stock and the cost per base unit use it. Absent means the pack's usual size",
+            "example" : "30",
+            "type" : "string"
+          },
           "product_id" : {
             "description" : "Required on a blind receipt; on an order line it is the line's own product",
             "format" : "uuid",
@@ -12438,6 +12443,10 @@
             "description" : "The unit qty and cost are in. On an order line, absent means the unit the line was ordered in; on a blind receipt absent means the base unit. Naming the base unit is the base unit",
             "format" : "uuid",
             "type" : "string"
+          },
+          "use_from_now_on" : {
+            "description" : "With pack_size: also make it the pack's usual size from now on (needs retail.catalogue.manage). Selling always uses the usual size",
+            "type" : "boolean"
           }
         },
         "required" : [ "qty" ]
@@ -15558,6 +15567,11 @@
             "minimum" : 0,
             "type" : "integer"
           },
+          "pack_size" : {
+            "description" : "With unit_id (D23, issue #554): how many base units each pack held in this delivery, at least 1. Kept on the line only; stock and the cost per base unit use it. Absent means the pack's usual size",
+            "example" : "30",
+            "type" : "string"
+          },
           "product_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -15581,6 +15595,10 @@
             "description" : "A pack unit of the product (units capability): the quantities and cost_minor are then in that unit and stock moves in base units. Absent or the base unit: as before",
             "format" : "uuid",
             "type" : "string"
+          },
+          "use_from_now_on" : {
+            "description" : "With pack_size: also make it the pack's usual size from now on (needs retail.catalogue.manage). Selling always uses the usual size",
+            "type" : "boolean"
           }
         },
         "required" : [ "cost_minor", "product_id", "qty_by_branch" ]
@@ -15703,6 +15721,10 @@
       },
       "RetailPurchaseOrderLine" : {
         "properties" : {
+          "base_unit" : {
+            "description" : "The unit the item is counted in (piece), whatever unit the line was ordered in",
+            "type" : "string"
+          },
           "billed_minor" : {
             "description" : "What the supplier billed for it; present with retail.payable.manage",
             "format" : "int64",
@@ -15750,6 +15772,10 @@
           },
           "received_qty" : {
             "description" : "Received so far on receipts that stand, in base units; present on one order only",
+            "type" : "string"
+          },
+          "received_unit_qty" : {
+            "description" : "D23, issue #554: received so far in the line's own unit, for a line ordered in a pack: packs received in it count whatever each held, other units count in packs of the size ordered. The order is received in full when this reaches unit_qty",
             "type" : "string"
           },
           "unit" : {

@@ -12,9 +12,10 @@ import { Gate, Note, Problem, ProductPicker, money, useProfitAccess } from './ui
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { UNITS, capabilityOn } from './permissions';
-import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, packPriceMinor } from './units-state';
+import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, deliveredFactor, packPriceMinor, sameFactor } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { WORDS } from '../../../app/glossary';
+import { Field, FieldsNeededNote } from '../../../app/ui/Field';
+import { WORDS, howManyInEach, plural, useFromNowOn } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
@@ -27,13 +28,33 @@ export interface RestockLine {
   qtyByBranch: Record<string, string>;
   /** A pack unit of the product (ADR-033, units capability): cost and quantities are then in that unit. Absent means the base unit. */
   unitId?: string;
+  /** D23 (#554): how many base units each pack held in this delivery, typed; starts at the pack's usual size. */
+  packSize?: string;
+  /** D23 (#554): make packSize the pack's usual size from now on. */
+  fromNowOn?: boolean;
 }
 
-/** The line in another unit: the cost goes to that unit's equivalent of the current cost (a pack costs factor times a piece). */
+/**
+ * The line in another unit: the cost goes to that unit's equivalent of the current cost (a pack costs factor times a piece),
+ * and the size each pack held starts at the pack's usual size, which the person changes when this delivery's differs (D23).
+ */
 export function withUnit(line: RestockLine, unitId: string): RestockLine {
   const pack = chosenPack(line.product, unitId || undefined);
   const base = line.product.cost_minor;
-  return { ...line, unitId: pack ? unitId : undefined, cost: base === undefined ? '' : String(pack ? packPriceMinor(base, pack.factor) : base) };
+  const { packSize: _size, fromNowOn: _now, ...rest } = line;
+  return {
+    ...rest,
+    unitId: pack ? unitId : undefined,
+    ...(pack ? { packSize: showQty(pack.factor ?? '') } : {}),
+    cost: base === undefined ? '' : String(pack ? packPriceMinor(base, pack.factor) : base),
+  };
+}
+
+/** The base units in one pack of the line for this delivery: the typed size, else the usual; null when the typed size is wrong. */
+export function lineFactor(l: RestockLine): string | null | undefined {
+  const pack = chosenPack(l.product, l.unitId);
+  if (!pack) return undefined;
+  return l.packSize === undefined ? (pack.factor ?? null) : deliveredFactor(l.packSize);
 }
 
 /** The quantity entered for a branch, as thousandths; blank or zero counts as none, bad text as null. */
@@ -49,7 +70,9 @@ export function restockLineProblem(l: RestockLine): string | null {
   if (qtys.some((q) => q === null)) return 'Check the quantities.';
   if (!qtys.some((q) => q !== null && q > 0)) return 'Enter a quantity for at least one branch.';
   const pack = chosenPack(l.product, l.unitId);
-  if (pack && qtys.some((q) => q !== null && baseQtyMilli(q, pack.factor) === null)) {
+  const factor = lineFactor(l);
+  if (pack && factor === null) return `Enter how many ${plural(l.product.unit ?? 'item')} were in each ${pack.unit}: 1 or more.`;
+  if (pack && qtys.some((q) => q !== null && baseQtyMilli(q, factor ?? undefined) === null)) {
     return `A quantity does not convert exactly to ${l.product.unit ?? 'items'}. Change it.`;
   }
   return null;
@@ -69,7 +92,7 @@ export function buildPurchase(input: { supplierId: string; purchasedOn: string; 
     payment_method: input.method,
     lines: input.lines.map((l) => ({
       product_id: l.product.id ?? '',
-      ...(chosenPack(l.product, l.unitId) ? { unit_id: l.unitId } : {}),
+      ...(chosenPack(l.product, l.unitId) ? { unit_id: l.unitId, ...packSizeOf(l) } : {}),
       cost_minor: parseMinor(l.cost, RETAIL_CURRENCY) ?? 0,
       // ADR-055: no price is sent when none is known (someone who may not see prices); the item keeps its price.
       ...((parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor) !== undefined ? { sell_minor: parseMinor(l.sell, RETAIL_CURRENCY) ?? l.product.sell_minor } : {}),
@@ -79,6 +102,14 @@ export function buildPurchase(input: { supplierId: string; purchasedOn: string; 
         .map((q) => ({ branch_id: q.branchId, qty: qtyString(q.milli) })),
     })),
   };
+}
+
+/** D23 (#554): the size each pack held in this delivery, and "use from now on" only when it differs from the usual size. */
+function packSizeOf(l: RestockLine): { pack_size?: string; use_from_now_on?: boolean } {
+  const factor = lineFactor(l);
+  if (!factor) return {};
+  const usual = chosenPack(l.product, l.unitId)?.factor;
+  return { pack_size: factor, ...(l.fromNowOn && !sameFactor(factor, usual) ? { use_from_now_on: true } : {}) };
 }
 
 const METHODS: { value: PurchasePayment; label: string }[] = [
@@ -113,6 +144,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   // A new selling price applies in every shop, so only someone who may change prices sets it here (ADR-055); Purchasing given
   // to a seller keeps the item's price, which the form sends back unchanged.
   const canPrice = (me.permissions ?? []).includes('retail.price.edit');
+  // Changing how many usually come in a pack changes the item, so only someone who manages items is offered it (D23).
+  const canManageItems = (me.permissions ?? []).includes('retail.catalogue.manage');
   const queryClient = useQueryClient();
   const branches = (me.branches ?? []).filter((b) => b.id && b.stocks_goods !== false);
   // A restock entered again after a void (issue #351) has a draft of its own, so a restock in progress is never overwritten.
@@ -183,6 +216,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending) save.mutate(); }}>
       <Note>Saving a purchase changes the buying and selling price of every item below to the values you enter. The change is recorded in the price history.</Note>
+      <FieldsNeededNote />
 
       <div data-tour="restock-supplier">
       <label htmlFor="supplier">Supplier</label>
@@ -220,8 +254,10 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
         const enteredCost = parseMinor(l.cost, RETAIL_CURRENCY);
         const packs = unitsOn ? activePacks(l.product) : [];
         const pack = unitsOn ? chosenPack(l.product, l.unitId) : undefined;
-        // The product's cost is per base unit: a pack cost is divided by the factor, rounded half up, as the server does.
-        const newCost = enteredCost !== null && pack ? baseCostMinor(enteredCost, pack.factor) : enteredCost;
+        // The product's cost is per base unit: a pack cost is divided by this delivery's size, rounded half up, as the server does.
+        const factor = lineFactor(l);
+        const newCost = enteredCost !== null && pack ? (factor ? baseCostMinor(enteredCost, factor) : null) : enteredCost;
+        const sizeDiffers = pack !== undefined && factor !== null && factor !== undefined && !sameFactor(factor, pack.factor);
         return (
           <div key={`${l.product.id}-${i}`} className="rt-card">
             <strong>{l.product.description}</strong>
@@ -235,16 +271,31 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
               </div>
             )}
             {pack && chosenUnitHint(pack.unit, l.product.unit) && <p className="hint" data-testid="unit-hint">{chosenUnitHint(pack.unit, l.product.unit)}</p>}
+            {pack && (
+              <div data-testid={`pack-size-${i}`}>
+                <Field id={`size-${i}`} required inputMode="decimal" label={howManyInEach(l.product.unit ?? 'item', pack.unit ?? 'pack')}
+                  hint={`Usually ${showQty(pack.factor ?? '')}. Change it when this delivery's ${pack.unit} held a different number.`}
+                  error={factor === null ? 'Enter 1 or more, with at most three decimals.' : null}
+                  value={l.packSize ?? showQty(pack.factor ?? '')} onChange={(e) => patch(i, { packSize: e.target.value })} />
+                {sizeDiffers && canManageItems && (
+                  <label>
+                    <input type="checkbox" checked={l.fromNowOn === true} onChange={(e) => patch(i, { fromNowOn: e.target.checked })} />
+                    <span>{useFromNowOn(showQty(factor ?? ''))}</span>
+                  </label>
+                )}
+                {sizeDiffers && (
+                  <p className="hint" data-testid={`pack-size-note-${i}`}>
+                    {l.fromNowOn && canManageItems
+                      ? `Every ${pack.unit} bought or sold after this one counts as ${showQty(factor ?? '')}.`
+                      : `Only this delivery counts as ${showQty(factor ?? '')} in each ${pack.unit}. A ${pack.unit} sold is still ${showQty(pack.factor ?? '')}.`}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="rt-row">
-              <div>
-                <label htmlFor={`cost-${i}`}>Cost each{pack ? ` (per ${pack.unit})` : ''}</label>
-                <input id={`cost-${i}`} inputMode="numeric" value={l.cost} onChange={(e) => patch(i, { cost: e.target.value })} />
-              </div>
-              <div>
-                <label htmlFor={`sell-${i}`}>Sell price each{pack ? ` (per ${l.product.unit})` : ''}</label>
-                <input id={`sell-${i}`} inputMode="numeric" value={l.sell} disabled={!canPrice} onChange={(e) => patch(i, { sell: e.target.value })} />
-                {!canPrice && <p className="hint">Only the owner changes selling prices.</p>}
-              </div>
+              <Field id={`cost-${i}`} required inputMode="numeric" label={`Cost each${pack ? ` (per ${pack.unit})` : ''}`} value={l.cost} onChange={(e) => patch(i, { cost: e.target.value })} />
+              <Field id={`sell-${i}`} required={canPrice} inputMode="numeric" label={`Sell price each${pack ? ` (per ${l.product.unit})` : ''}`} value={l.sell} disabled={!canPrice}
+                hint={canPrice ? undefined : 'Only the owner changes selling prices.'} onChange={(e) => patch(i, { sell: e.target.value })} />
             </div>
             <fieldset>
               <legend>Quantity bought per branch ({pack?.unit ?? l.product.unit})</legend>

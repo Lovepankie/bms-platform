@@ -5,6 +5,7 @@ import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.TenantSequences;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
+import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.PackUnit;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
@@ -13,6 +14,7 @@ import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
@@ -83,6 +85,19 @@ class PurchaseLines {
             long enteredCost,
             List<FieldProblem> problems,
             boolean allowInactive) {
+        return plan(field, productId, unitId, qty, enteredCost, problems, allowInactive, null);
+    }
+
+    /** As above, with {@code packSize}, how many base units each pack held in this delivery (D23, issue #554). */
+    Planned plan(
+            String field,
+            UUID productId,
+            UUID unitId,
+            BigDecimal qty,
+            long enteredCost,
+            List<FieldProblem> problems,
+            boolean allowInactive,
+            BigDecimal packSize) {
         ProductSnapshot p = catalogue.find(productId).orElse(null);
         if (p == null) {
             problems.add(new FieldProblem(field + ".product_id", "unknown_product", "No such product."));
@@ -118,6 +133,12 @@ class PurchaseLines {
                 return null;
             }
         }
+        if (packSize != null) {
+            pack = delivered(field, pack, packSize, problems);
+            if (pack == null) {
+                return null;
+            }
+        }
         long costBase = pack == null ? enteredCost : Quantities.baseCost(enteredCost, pack.factor());
         if (costBase > RetailCatalogue.MAX_AMOUNT_MINOR || enteredCost > RetailCatalogue.MAX_AMOUNT_MINOR) {
             throw ApiException.rule("amount_out_of_range", "The cost on " + field + " is too large to compute.");
@@ -125,15 +146,65 @@ class PurchaseLines {
         BigDecimal base = qty;
         if (pack != null) {
             PackUnit packed = pack;
-            base = Quantities.toBase(qty, pack.factor())
-                    .orElseThrow(() -> ApiException.rule(
-                            "quantity_not_representable",
-                            qty + " " + packed.unit() + " does not convert exactly to thousandths of the item's unit."
-                                    + " Change the quantity."));
+            base = Quantities.toBase(qty, pack.factor()).orElseThrow(() -> notInBase(qty, packed));
         }
         long total = value(qty, enteredCost);
         long stocked = pack == null ? total : value(base, costBase);
         return new Planned(p, pack, base, pack == null ? null : qty, enteredCost, costBase, total, stocked);
+    }
+
+    /**
+     * D23, issue #554: a buying pack's size may change per delivery (a carton of 30 where it usually holds 24). The pack as
+     * this delivery's line uses it: {@code packSize} base units in each, kept on the line only, while selling and the item
+     * keep the usual size. Null with a problem added for a line not in a pack or a size below one base unit.
+     */
+    static PackUnit delivered(String field, PackUnit pack, BigDecimal packSize, List<FieldProblem> problems) {
+        if (pack == null) {
+            problems.add(new FieldProblem(
+                    field + ".pack_size", "invalid", "Say how many are in each pack only on a line bought in a pack."));
+            return null;
+        }
+        if (packSize.compareTo(BigDecimal.ONE) < 0 || !Quantities.exact(packSize)) {
+            problems.add(new FieldProblem(
+                    field + ".pack_size",
+                    "invalid",
+                    "Each " + pack.unit() + " holds at least one, with at most three decimal places."));
+            return null;
+        }
+        return new PackUnit(pack.unitId(), pack.unit(), packSize, pack.active());
+    }
+
+    /**
+     * Why {@code qty} packs have no base quantity: more than the quantity columns hold (a size per delivery may be large,
+     * issue #554), or not exact in thousandths.
+     */
+    static ApiException notInBase(BigDecimal qty, PackUnit pack) {
+        if (qty.multiply(pack.factor()).compareTo(Quantities.MAX_QTY) > 0) {
+            return ApiException.rule(
+                    "quantity_out_of_range",
+                    qty.stripTrailingZeros().toPlainString() + " " + pack.unit() + " of "
+                            + pack.factor().stripTrailingZeros().toPlainString()
+                            + " each is more than can be recorded. Check the quantity and how many are in each "
+                            + pack.unit() + ".");
+        }
+        return ApiException.rule(
+                "quantity_not_representable",
+                qty + " " + pack.unit() + " does not convert exactly to thousandths of the item's unit."
+                        + " Change the quantity.");
+    }
+
+    /**
+     * D23, issue #554: "Use 30 from now on" changes the item, so it needs the permission that edits packs. Refused before
+     * anything is written.
+     */
+    static void requireUseFromNowOn(boolean asked) {
+        if (asked && !CurrentPrincipal.require().hasPermission("retail.catalogue.manage")) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Only someone who manages the items changes how many usually come in a pack. Untick Use from now on.");
+        }
     }
 
     /** {@code qty x unitMinor} rounded half up once, refused when it does not fit the money columns. */

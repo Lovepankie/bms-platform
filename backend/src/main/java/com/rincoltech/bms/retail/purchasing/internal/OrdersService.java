@@ -32,6 +32,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchaseLines.Planned;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -260,8 +261,13 @@ class OrdersService {
         List<LineRow> all = repo.lines(orderId);
         boolean any = all.stream().anyMatch(l -> l.receivedQty().signum() > 0);
         boolean full =
-                !all.isEmpty() && all.stream().allMatch(l -> l.receivedQty().compareTo(l.qty()) >= 0);
+                !all.isEmpty() && all.stream().allMatch(l -> l.receivedUnitQty().compareTo(orderedInUnit(l)) >= 0);
         repo.setStatus(orderId, full ? "received" : any ? "partly_received" : "sent");
+    }
+
+    /** D23, issue #554: what a line ordered, in its own unit (packs for a pack line), as receipts are counted. */
+    static BigDecimal orderedInUnit(LineRow l) {
+        return l.unitQty() != null ? l.unitQty() : l.qty();
     }
 
     // ---- Reads -----------------------------------------------------------------------------
@@ -440,6 +446,8 @@ class OrdersService {
                 Quantities.format(l.receivedQty()),
                 l.receivedMinor(),
                 billed ? Quantities.format(l.billedQty()) : null,
-                billed ? l.billedMinor() : null);
+                billed ? l.billedMinor() : null,
+                l.unitId() == null ? null : Quantities.format(l.receivedUnitQty()),
+                l.baseUnit());
     }
 }

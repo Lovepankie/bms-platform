@@ -33,6 +33,23 @@ export const WORDS = {
   itemCode: 'Item code',
 } as const;
 
+/** "piece" to "pieces", "box" to "boxes": the plural of a unit's name, for the questions below. */
+export function plural(unit: string): string {
+  if (/(s|x|z|ch|sh)$/i.test(unit)) return `${unit}es`;
+  if (/[^aeiou]y$/i.test(unit)) return `${unit.slice(0, -1)}ies`;
+  return `${unit}s`;
+}
+
+/** D23 (#554): what a line bought in a pack asks on Buy stock and Goods received: "How many pieces in each carton?". */
+export function howManyInEach(unit: string, pack: string): string {
+  return `How many ${plural(unit)} in each ${pack}?`;
+}
+
+/** D23 (#554): the tick that makes this delivery's size the pack's usual one: "Use 30 from now on". */
+export function useFromNowOn(size: string): string {
+  return `Use ${size} from now on`;
+}
+
 /** Words that never show to a person, in any case: the test fails on each. */
 export const BANNED_WORDS = ['SKU', 'variance', 'shrinkage', 'UOM', 'restock'] as const;
 
