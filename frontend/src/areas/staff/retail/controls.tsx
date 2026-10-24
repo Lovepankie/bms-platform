@@ -257,7 +257,7 @@ function Patterns({ base }: { base: Base }) {
 
 export function ControlsPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const today = businessToday();
   const [kind, setKind] = useState<PeriodKind>('week');
   const [custom, setCustom] = useState({ from: periodRange('month', today, { from: today, to: today }).from, to: today });
@@ -294,7 +294,6 @@ export function ControlsPage() {
       ) : (
         <>
           <p className="hint">What deserves a second look: sales cancelled, goods taken back and prices changed. Nothing here changes any record.</p>
-          <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           <div data-tour="controls-period">
             <div className="rt-periods" role="group" aria-label="Days to look at">
               {PERIODS.map((p) => (

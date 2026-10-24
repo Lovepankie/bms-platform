@@ -3,7 +3,6 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ImportResult } from '../../../api/retail';
-import { BackToCatalogue } from './catalogue';
 import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
 
 // Import items from a file (#146), for a new client, administrators only. Paste the rows or choose a
@@ -92,7 +91,6 @@ export function ImportPage() {
   };
   return (
     <Gate screen="importer" title="Import items">
-      <BackToCatalogue />
       <div data-tour="import-note">
         <Note>
           The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row. Leave a code empty, or leave out the code column, and the app gives the item the next code of its category, such as BLB-0001.

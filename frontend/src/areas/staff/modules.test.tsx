@@ -111,7 +111,7 @@ describe('capabilities and branch roles (ADR-033)', () => {
   it('shows the sale form at a shop', () => {
     const html = sale(admin(['retail'], { retail: ['branch_roles'] }), B, roles);
     expect(html).not.toContain('does not sell');
-    expect(html).toContain('Branch:');
+    expect(html).toContain('class="sale-form"');
   });
 
   it('ignores roles while the capability is off', () => {

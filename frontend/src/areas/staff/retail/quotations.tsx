@@ -227,7 +227,7 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
 type Status = 'all' | 'open' | 'converted' | 'cancelled';
 
 export function QuotationsPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const single = useSingleBranch();
   const { me } = useStaff();
@@ -249,7 +249,6 @@ export function QuotationsPage() {
   const fetching = list.isPlaceholderData || (list.isFetching && !list.isFetchingNextPage && list.fetchStatus !== 'idle');
   return (
     <Gate screen="quotations" title="Quotations" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint" data-tour="quotations-help">A quotation offers prices until a date. It reserves no stock and posts nothing. When the buyer says yes, make it a sale here.</p>
       {atStore && <p className="hint">{single.branchName} is a store, and a store does not sell or quote. Choose a shop to make a quotation.</p>}
       {!making && !atStore && (

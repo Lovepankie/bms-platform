@@ -213,7 +213,6 @@ export function SavingsScreen() {
         </Saved>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <SavingsForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s) => { setSaved(s); show(savedWords(s), 'success'); }} />
         </>
       )}

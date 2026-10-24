@@ -141,7 +141,6 @@ export function BankingScreen() {
         </Saved>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(b) => { setSaved(b); show('Banking recorded.', 'success'); }} />
         </>
       )}

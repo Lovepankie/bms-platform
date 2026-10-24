@@ -185,7 +185,6 @@ export function GoodsReceiptPage() {
   return (
     <main className="rt rt-wide">
       <h1>{r?.receipt_no ?? 'Goods received'}</h1>
-      <p><Link to="/staff/retail/goods-received">Back to goods received</Link></p>
       {receipt.isPending && <SkeletonList label="Loading the delivery" />}
       <Problem error={receipt.error} />
       {message && <Success>{message}</Success>}

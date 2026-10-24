@@ -126,7 +126,6 @@ export function PurchaseOrderPage() {
   return (
     <main className="rt rt-wide">
       <h1>{o?.order_no ?? 'Purchase order'}</h1>
-      <p><Link to="/staff/retail/purchase-orders">Back to purchase orders</Link></p>
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {message && <Success>{message}</Success>}

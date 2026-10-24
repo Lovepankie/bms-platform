@@ -9,7 +9,6 @@ import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Fiel
 import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
-import { BackToCatalogue } from './catalogue';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
 import { BarcodeEditor } from './catalogue-barcodes';
@@ -450,7 +449,6 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink>} />;
   return (
     <>
-      <BackToCatalogue />
       <p className="cluster">
         <button type="button" onClick={onAdd} data-tour="product-add">Add an item</button>
         <Link className="btn-sm" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>

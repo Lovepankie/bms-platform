@@ -1,4 +1,4 @@
-import { Link, createLazyRoute } from '@tanstack/react-router';
+import { createLazyRoute } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import type { Me } from '../../../api/client';
 import { useStaff } from '../context';
@@ -9,10 +9,6 @@ import { Gate } from './ui';
 
 // Catalogue (#146): the lists a shop keeps for itself, so it needs no operator to add an item or a
 // supplier. Each link shows only when the session holds the permissions of its screen.
-
-export function BackToCatalogue() {
-  return <p><Link to={'/staff/retail/catalogue' as never}>Back to Catalogue</Link></p>;
-}
 
 /** The catalogue screens a session may use, in the order the Catalogue home lists them. */
 export function catalogueLinksFor(me: Pick<Me, 'permissions'>) {

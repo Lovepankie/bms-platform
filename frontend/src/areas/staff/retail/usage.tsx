@@ -88,7 +88,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
 
 export function UsagePage() {
   const { me } = useStaff();
-  const { branchId, branchName } = useStockingBranch();
+  const { branchId } = useStockingBranch();
   const [done, setDone] = useState<Usage | null>(null);
   const [round, setRound] = useState(0);
   return (
@@ -103,7 +103,6 @@ export function UsagePage() {
         </section>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <UsageForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setDone} />
         </>
       )}

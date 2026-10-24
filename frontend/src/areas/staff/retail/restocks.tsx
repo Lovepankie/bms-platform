@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { businessToday, daysBefore, retail, type Purchase } from '../../../api/retail';
 import { useStaff } from '../context';
@@ -135,7 +135,6 @@ export function RestocksPage() {
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   return (
     <Gate screen="restock" title={WORDS.pastPurchases}>
-      <p><Link to="/staff/retail/restock">Back to Buy stock</Link></p>
       <p className="hint">Every purchase is kept. If you entered one wrongly, open Correct this purchase, then enter it again with the right quantity.</p>
       {message && <Success>{message}</Success>}
       <div className="rt-row" data-tour="restocks-filters">

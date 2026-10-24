@@ -226,8 +226,8 @@ describe('valuation and profit', () => {
 
   it('shows expected profit and its percent over cost in the total, per item and by category', () => {
     const html = renderToString(<ValuationTable valuation={v} />);
-    expect(html).toContain('<td>Expected profit</td><td class="num">UGX 5,000</td>');
-    expect(html).toContain('<td>Expected profit % (over cost)</td><td class="num">71.43%</td>');
+    expect(html).toContain('<dt>Expected profit</dt><dd>UGX 5,000</dd>');
+    expect(html).toContain('<dt>Expected profit % (over cost)</dt><dd>71.43%</dd>');
     expect(html).toContain('<h2>By category</h2>');
     expect(html).toContain('<td>Lighting</td>');
     expect((html.match(/71\.43%/g) ?? []).length).toBe(3);
@@ -263,7 +263,7 @@ describe('valuation and profit', () => {
     expect(html).toContain('UGX 5,000');
     expect((html.match(/71\.43%/g) ?? []).length).toBe(2);
     // The overall total has no cost, so the headline shows none; the row without cost stays blank.
-    expect(html).not.toContain('<td>Expected profit</td>');
+    expect(html).not.toContain('<dt>Expected profit</dt>');
     expect(html).toContain('UGX 9,000');
   });
 
@@ -464,7 +464,7 @@ describe('All branches (#144)', () => {
     const client = new QueryClient();
     client.setQueryData(['retail', 'stock', 'all-branches', '', '', false, '', false, false], data);
     const html = inAll(<StockPage />, 'admin', client);
-    expect(html).toContain('All branches');
+    expect(html).toContain('Test Branch B (BR2)');
     expect(html).toContain('LED bulb 9W screw');
     expect(html).not.toContain('Choose a branch');
   });
@@ -535,7 +535,7 @@ describe('All branches (#144)', () => {
     expect(html).toContain('Test Branch A');
     expect(html).toContain('UGX 12,000');
     expect(html).toContain('UGX 6,000');
-    expect(html).toContain('<td>At price</td><td class="num">UGX 18,000</td>');
+    expect(html).toContain('<span class="key-figure-label">Stock at price</span><strong class="key-figure-value">UGX 18,000</strong>');
   });
 
   it('Daily profit shows each branch and the total of every branch per day', () => {

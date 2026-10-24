@@ -147,7 +147,6 @@ export function ExpensesScreen() {
         </Saved>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.', 'success'); }} />
         </>
       )}

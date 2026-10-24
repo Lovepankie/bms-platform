@@ -164,7 +164,6 @@ export function SupplierCreditPage() {
   return (
     <main className="rt rt-wide">
       <h1>{c?.credit_no ?? 'Supplier credit note'}</h1>
-      <p><Link to="/staff/retail/supplier-credits">Back to supplier credit notes</Link></p>
       {credit.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={credit.error} />
       {message && <Success>{message}</Success>}

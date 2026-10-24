@@ -13,7 +13,7 @@ import { Gate, Problem, money, useBranchName, useBranchView } from './ui';
 type GroupBy = 'day' | 'source' | 'rider';
 
 export function OrdersReportPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const today = businessToday();
   const [from, setFrom] = useState(daysBefore(today, 29));
@@ -35,7 +35,6 @@ export function OrdersReportPage() {
   });
   return (
     <Gate screen="ordersReport" title="Delivery fees and cancellations" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="rt-row" data-tour="orders-report-links">
         <Link className="btn-sm" to="/staff/retail/orders">Orders</Link>
         <Link className="btn-sm" to="/staff/retail/sales">All sales</Link>

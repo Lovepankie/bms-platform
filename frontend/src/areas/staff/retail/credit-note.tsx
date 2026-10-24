@@ -132,7 +132,6 @@ export function CreditNotePage() {
   return (
     <main className="rt rt-wide">
       <h1>{note.data?.credit_note_no ?? 'Credit note'}</h1>
-      <p><Link to="/staff/retail/returns">Back to customer returns</Link></p>
       {note.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={note.error} />
       {message && <Success>{message}</Success>}

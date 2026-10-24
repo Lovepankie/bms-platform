@@ -155,7 +155,6 @@ export function SupplierPaymentPage() {
   return (
     <main className="rt rt-wide">
       <h1>{p?.payment_no ?? 'Supplier payment'}</h1>
-      <p><Link to="/staff/retail/supplier-payments">Back to supplier payments</Link></p>
       {payment.isPending && <SkeletonList label="Loading the payment" />}
       <Problem error={payment.error} />
       {message && <Success>{message}</Success>}

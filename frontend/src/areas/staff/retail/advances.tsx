@@ -302,7 +302,6 @@ export function AdvancesScreen() {
         </Saved>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <AdvanceForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(a) => { setSavedAdvance(a); show('Advance recorded.', 'success'); }} />
         </>
       ))}

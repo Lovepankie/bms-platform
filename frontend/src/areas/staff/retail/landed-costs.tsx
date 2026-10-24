@@ -213,7 +213,6 @@ export function LandedCostPage() {
   return (
     <main className="rt rt-wide">
       <h1>{c?.landed_no ?? 'Landed cost'}</h1>
-      <p><Link to="/staff/retail/landed-costs">Back to landed costs</Link></p>
       {cost.isPending && <SkeletonList label="Loading the landed cost" />}
       <Problem error={cost.error} />
       {message && <Success>{message}</Success>}

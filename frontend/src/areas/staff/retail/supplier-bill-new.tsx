@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, useNavigate } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { businessToday, retail, type SupplierBillMatch } from '../../../api/retail';
 import { useStaff } from '../context';
@@ -191,7 +191,6 @@ export function SupplierBillNewPage() {
   });
   return (
     <Gate screen="supplierBills" title="New supplier invoice">
-      <p><Link to="/staff/retail/supplier-bills">Back to supplier invoices</Link></p>
       <p className="hint">Record an invoice against goods you have already received. Use the number, the dates and the total printed on the invoice.</p>
       <BillFormView
         form={form}

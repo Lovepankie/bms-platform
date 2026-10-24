@@ -268,7 +268,7 @@ const OWING: { value: Owing; label: string }[] = [
 ];
 
 export function CreditSales() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const search = useLiveSearch();
   const [owing, setOwing] = useState<Owing>('all');
@@ -291,7 +291,6 @@ export function CreditSales() {
         <OpenSale id={open} onClose={() => setOpen(null)} />
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           <SearchBox id="credit-buyer" label="Buyer, phone or sale number" search={search} {...figures} />
           <label htmlFor="credit-owing">Show</label>
           <select id="credit-owing" data-tour="credit-owing" value={owing} onChange={(e) => setOwing(e.target.value as Owing)}>
@@ -316,7 +315,7 @@ export function CreditSales() {
 }
 
 export function AllSales() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const today = businessToday();
   // Empty to start with: every year shows, grouped by the chain the person chose, with nothing open (issues #328, #341).
@@ -345,7 +344,6 @@ export function AllSales() {
         <OpenSale id={open} onClose={() => setOpen(null)} />
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           <div className="rt-row" data-tour="sales-range">
             <div><label htmlFor="sales-from">From</label><input id="sales-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div><label htmlFor="sales-to">To</label><input id="sales-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>

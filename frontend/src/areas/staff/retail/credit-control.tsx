@@ -130,7 +130,7 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
 
 export function CreditControlPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
@@ -145,7 +145,6 @@ export function CreditControlPage() {
   });
   return (
     <Gate screen="creditControl" title="Credit control" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint">The dates choose which payments are listed. What is owed is always as of today.</p>
       <div data-tour="credit-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="credit-sort">

@@ -213,7 +213,6 @@ export function NewFamilyPage() {
   };
   return (
     <Gate screen="products" title="Add an item with sizes and colours">
-      <p><Link to={'/staff/retail/catalogue/products' as never}>Back to Items</Link></p>
       <p>Use this for something you sell in several sizes, colours or prints, such as a romper in 0-3m, 3-6m and 6-12m. Each size and colour gets its own code, price and stock, and you choose them once here.</p>
       <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <div data-tour="sizes-name">
@@ -365,7 +364,6 @@ export function JoinPage() {
   const change = (i: number, patch: Partial<JoinRow>) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <Gate screen="products" title="Join items as sizes of one item">
-      <p><Link to={'/staff/retail/catalogue/products' as never}>Back to Items</Link></p>
       <p>Use this when you already have one item per size or colour, such as Cable 1.5mm and Cable 2.5mm. Each keeps its code, price, stock and history, and they show together as one item.</p>
       {target ? (
         <section data-tour="join-target" aria-label="The item they join">

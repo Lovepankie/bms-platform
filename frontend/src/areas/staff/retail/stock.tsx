@@ -237,7 +237,7 @@ function StockRows({ sel, filter, all, branchId }: { sel: ListSelection; filter:
 
 export function StockPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName: name } = useBranchView();
+  const { all, branchId } = useBranchView();
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
   const list = useListView(listUser(me), 'stock', STOCK_ORDER);
@@ -274,7 +274,6 @@ export function StockPage() {
   const narrowing = { pending: result.isPlaceholderData, searching: query !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level, showInactive].join('|') };
   return (
     <Gate screen="stock" title="Stock">
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
       <ViewSwitch view={list.view} onChange={list.setView} />
       <StockLevelFilter level={level} onChange={setLevel} />

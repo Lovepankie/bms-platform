@@ -323,7 +323,7 @@ const queryOf = (view: View): Pick<OrderQuery, 'status' | 'due'> =>
   view === 'today' ? { due: 'today' } : view === 'overdue' ? { due: 'overdue' } : view === 'all' ? {} : { status: view };
 
 export function OrdersPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const single = useSingleBranch();
   const { me } = useStaff();
@@ -357,7 +357,6 @@ export function OrdersPage() {
   ];
   return (
     <Gate screen="orders" title="Orders" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint" data-tour="orders-help">Orders that come by WhatsApp, Instagram, Facebook, a phone call or at the counter. Saving an order keeps its items aside. The money is taken when it is delivered, and then it is a normal sale.</p>
       <div className="rt-row" data-tour="orders-board" aria-label="Orders at each step">
         {tiles.map((t) => (

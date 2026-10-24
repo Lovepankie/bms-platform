@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { retail, type SupplierOpenItem } from '../../../api/retail';
 import { useStaff } from '../context';
@@ -143,7 +143,6 @@ export function SupplierPaymentNewPage() {
   });
   return (
     <Gate screen="supplierPayments" title="Pay a supplier">
-      <p><Link to="/staff/retail/supplier-payments">Back to supplier payments</Link></p>
       <PaymentFormView
         form={draft}
         suppliers={suppliers}

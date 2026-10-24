@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRow, type Valuation } from '../../../api/retail';
 import { showPercent, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
+import { KeyFigure, KeyFigureRow } from '../../../app/ui/KeyFigure';
 import { ToSales, ToStock } from './analytics-ui';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { needsOf } from './permissions';
@@ -18,17 +19,19 @@ const hasCost = (x: { value_at_cost_minor?: number; expected_profit_minor?: numb
 type Sums = { sales?: number; cost?: number; profit?: number; bp?: number };
 
 /** The headline figures of a valuation as a small two column table, so no figure wraps on a phone. */
+/** The stock at price as the key figure (issue #526), with the cost and the profit expected under it for a reader of costs. */
 function Headline({ sums }: { sums: Sums }) {
   const withCost = sums.cost !== undefined;
   return (
-    <div className="table-wrap"><table>
-      <tbody>
-        {withCost && <tr><td>At cost</td><td className="num">{money(sums.cost ?? 0)}</td></tr>}
-        <tr><td>At price</td><td className="num">{money(sums.sales ?? 0)}</td></tr>
-        {withCost && <tr><td>Expected profit</td><td className="num">{money(sums.profit ?? 0)}</td></tr>}
-        {withCost && <tr><td>Expected profit % (over cost)</td><td className="num">{showPercent(sums.bp)}</td></tr>}
-      </tbody>
-    </table></div>
+    <KeyFigure label="Stock at price" value={money(sums.sales ?? 0)} tour="valuation-total">
+      {withCost && (
+        <>
+          <KeyFigureRow label="At cost" value={money(sums.cost ?? 0)} />
+          <KeyFigureRow label="Expected profit" value={money(sums.profit ?? 0)} />
+          <KeyFigureRow label="Expected profit % (over cost)" value={showPercent(sums.bp)} />
+        </>
+      )}
+    </KeyFigure>
   );
 }
 
@@ -151,7 +154,7 @@ export function BranchTotals({ valuation, nameOf }: { valuation: Valuation; name
 }
 
 export function ValuationPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const valuation = useQuery({
     queryKey: ['retail', 'valuation', all ? 'all' : branchId],
@@ -162,9 +165,9 @@ export function ValuationPage() {
     <Gate screen="valuation" title="Stock value">
       {!all && branchId === null ? <BranchRequired permissions={needsOf('valuation')} /> : (
         <>
-          <p className="branch-line" data-tour="valuation-branch">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
+          {/* The key figure carries valuation-total once loaded; until then the skeleton holds its place for the tour. */}
+          {valuation.isPending && <div data-tour="valuation-total"><SkeletonList label="Loading stock value" /></div>}
           <div data-tour="valuation-figures">
-          {valuation.isPending && <SkeletonList label="Loading stock value" />}
           <Problem error={valuation.error} />
           {valuation.data && (
             <>
@@ -278,7 +281,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
 }
 
 export function ProfitPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   // The last seven days in the business's timezone, the server's own business date (#112 item 9).
   const [to, setTo] = useState(() => businessToday());
@@ -292,7 +295,6 @@ export function ProfitPage() {
     <Gate screen="profit" title="Daily profit" wide>
       {!all && branchId === null ? <BranchRequired permissions={needsOf('profit')} /> : (
         <>
-          <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
           <div className="rt-row" data-tour="profit-range">
             <div><label htmlFor="from">From</label><input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div><label htmlFor="to">To</label><input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>

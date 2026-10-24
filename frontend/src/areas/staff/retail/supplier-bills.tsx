@@ -183,7 +183,6 @@ export function SupplierBillPage() {
   return (
     <main className="rt rt-wide">
       <h1>{b?.bill_no ?? 'Supplier invoice'}</h1>
-      <p><Link to="/staff/retail/supplier-bills">Back to supplier invoices</Link></p>
       {bill.isPending && <SkeletonList label="Loading the invoice" />}
       <Problem error={bill.error} />
       {message && <Success>{message}</Success>}

@@ -8,7 +8,7 @@ import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
 import { BuyerAccount } from './buyer-account';
 import { BuyerPricing } from './buyer-pricing';
-import { AddPanel, BackToCatalogue } from './catalogue';
+import { AddPanel } from './catalogue';
 import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
@@ -130,7 +130,6 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   });
   return (
     <>
-      <BackToCatalogue />
       {note && <p className="hint">{note}</p>}
       {canAdd && (
         <div data-tour="person-add">

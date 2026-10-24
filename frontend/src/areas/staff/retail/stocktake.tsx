@@ -261,14 +261,13 @@ function CountSheet({ branchId }: { branchId: string }) {
 }
 
 export function StocktakePage() {
-  const { branchId, branchName } = useStockingBranch();
+  const { branchId } = useStockingBranch();
   return (
     <Gate screen="stocktake" title={WORDS.countStock}>
       {branchId === null ? (
         <BranchRequired permissions={needsOf('stocktake')} stocking />
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <CountSheet key={branchId} branchId={branchId} />
         </>
       )}

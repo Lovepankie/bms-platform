@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Field } from '../../../app/ui/Field';
 import { retail, type Category, type Unit } from '../../../api/retail';
-import { AddPanel, BackToCatalogue } from './catalogue';
+import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
 
@@ -108,7 +108,6 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   });
   return (
     <>
-      <BackToCatalogue />
       <div data-tour="named-add">
         <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setPrefix(''); setSuggested(''); }}>
           <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>

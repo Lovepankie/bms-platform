@@ -188,7 +188,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
 }
 
 export function StockHealthPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
@@ -204,7 +204,6 @@ export function StockHealthPage() {
   });
   return (
     <Gate screen="stockHealth" title="Stock health" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <div data-tour="health-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="health-buy">
         <Choice id="sh-lead" label="Buy when cover is under" value={lead} options={LEADS} onChange={setLead} />

@@ -125,7 +125,7 @@ export function MarginsView({ data }: { data: Margins }) {
 }
 
 export function MarginsPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -139,7 +139,6 @@ export function MarginsPage() {
   });
   return (
     <Gate screen="margins" title="Margins" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <div data-tour="margins-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="margins-target">
         <Choice id="mg-target" label="Margin target" value={target} options={TARGETS} onChange={setTarget} />

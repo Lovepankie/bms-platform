@@ -207,7 +207,6 @@ export function ReturnNewPage() {
   return (
     <main className="rt rt-wide">
       <h1>Take goods back</h1>
-      <p><Link to="/staff/retail/returns">Back to customer returns</Link></p>
       {(sale.isPending || earlier.isPending) && <SkeletonList label="Loading the sale" />}
       <Problem error={sale.error ?? earlier.error} />
       {outcome?.executed && outcome.sale_return && (

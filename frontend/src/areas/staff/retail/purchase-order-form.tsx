@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
+import { createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { retail, type Product } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
@@ -132,7 +132,6 @@ export function PurchaseOrderNewPage() {
   const picker = useItemPicker((line) => setDraft((d) => ({ ...d, lines: [...d.lines, line] })));
   return (
     <Gate screen="purchaseOrders" title="New purchase order">
-      <p><Link to="/staff/retail/purchase-orders">Back to purchase orders</Link></p>
       <OrderFormView form={draft} suppliers={suppliers} branches={branches} picker={picker} busy={save.isPending} error={save.error} onChange={(f) => setDraft(() => f)} onSubmit={() => save.mutate()} />
       {draft.lines.length > 0 && !save.isPending && <button type="button" className="btn-ghost" onClick={() => { discard(); save.reset(); }}>Clear this order</button>}
     </Gate>
@@ -187,7 +186,6 @@ export function PurchaseOrderEditPage() {
   const picker = useItemPicker((line) => setForm((f) => (f ? { ...f, lines: [...f.lines, line] } : f)));
   return (
     <Gate screen="purchaseOrders" title={order.data?.order_no ? `Change ${order.data.order_no}` : 'Change purchase order'}>
-      <p><Link to="/staff/retail/purchase-orders/$orderId" params={{ orderId }}>Back to the order</Link></p>
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {order.data && order.data.status !== 'draft' && <p className="empty-state">This order has been sent, so it can no longer be changed.</p>}

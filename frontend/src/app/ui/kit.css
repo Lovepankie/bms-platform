@@ -591,3 +591,48 @@ button.list-row:focus-visible {
 .kit-example > button {
   margin-bottom: var(--space-3);
 }
+
+/* KeyFigure (issue #526): the one key amount of a screen. The label small and muted above it, the amount at the display size in
+   tabular figures, the rows behind it plain, label left and amount right. No card, no tint: it sits on the page. */
+.key-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-5);
+}
+
+.key-figure-label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.key-figure-value {
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.key-figure-rows {
+  margin: var(--space-3) 0 0;
+}
+
+.key-figure-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.key-figure-row dt {
+  color: var(--color-text-muted);
+}
+
+.key-figure-row dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}

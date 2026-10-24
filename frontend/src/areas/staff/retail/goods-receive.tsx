@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
+import { createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type GoodsReceiptRequest, type Product, type PurchaseOrder } from '../../../api/retail';
@@ -160,7 +160,6 @@ export function ReceiveAgainstOrderPage() {
   const open = order.data?.status === 'sent' || order.data?.status === 'partly_received';
   return (
     <Gate screen="goodsReceived" title={order.data?.order_no ? `Receive goods for ${order.data.order_no}` : 'Receive goods'}>
-      <p><Link to="/staff/retail/purchase-orders/$orderId" params={{ orderId }}>Back to the order</Link></p>
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {order.data && !open && <p className="empty-state">Goods can be received only against an order that has been sent and is not yet complete.</p>}
@@ -201,7 +200,6 @@ export function ReceiveBlindPage() {
   );
   return (
     <Gate screen="goodsReceived" title="Receive goods without an order">
-      <p><Link to="/staff/retail/goods-received">Back to goods received</Link></p>
       <p className="hint">Use this when goods arrive with no purchase order. Choose the supplier, add what arrived and what it cost.</p>
       <ReceiveFormView form={draft} blind suppliers={suppliers} branches={branches} picker={picker} busy={save.isPending} error={save.error} onChange={(f) => setDraft(() => f)} onSubmit={() => save.mutate()} />
       {draft.lines.length > 0 && !save.isPending && <button type="button" className="btn-ghost" onClick={() => { discard(); save.reset(); }}>Clear this form</button>}

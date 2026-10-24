@@ -100,7 +100,6 @@ export function WithdrawalsScreen() {
         </Saved>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <WithdrawalForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(w) => { setSaved(w); show('Withdrawal recorded.', 'success'); }} />
         </>
       )}

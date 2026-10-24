@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SearchBox, SearchResults } from '../../../app/ui/SearchBox';
@@ -248,7 +248,6 @@ export function LandedCostNewPage() {
   const picker = <GoodsPicker chosen={draft.receipts.map((r) => r.id)} onAdd={(receipt) => setDraft((d) => addReceipt(d, receipt))} />;
   return (
     <Gate screen="landedCosts" title="New landed cost">
-      <p><Link to="/staff/retail/landed-costs">Back to landed costs</Link></p>
       <p className="hint">Record freight, duty, clearing or insurance for goods you have received. You see the share of every line before anything is saved.</p>
       {!reviewing ? (
         <LandedFormView form={draft} suppliers={suppliers} picker={picker} onChange={(f) => setDraft(() => f)} onReview={() => { save.reset(); setReviewing(true); }} />

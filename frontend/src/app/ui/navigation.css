@@ -427,8 +427,8 @@ body.side-menu-open {
 
 /*
  * Breadcrumbs (components/breadcrumbs.tsx): one trail under the staff bar. Long labels cut off with an
- * ellipsis (the full text is the link's title). On a phone only the parent, as "Back to <parent>", and
- * the current page stay.
+ * ellipsis (the full text is the link's title). On a phone only the parent stays, as a back chevron and
+ * "Back to <parent>", with no slash before or after it: the page's heading names the page (issue #526).
  */
 .breadcrumbs {
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
@@ -491,24 +491,45 @@ body.side-menu-open {
   font-weight: var(--weight-semibold);
 }
 
-.breadcrumbs .crumb-back {
+.breadcrumbs .crumb-back,
+.breadcrumbs .crumb-chevron {
   display: none;
   white-space: pre;
 }
 
+.breadcrumbs .crumb-chevron svg {
+  width: 18px;
+  height: 18px;
+  transform: scaleX(-1);
+}
+
 @media (max-width: 719px) {
-  .breadcrumbs li:not(.crumb-parent):not(:last-child) {
+  .breadcrumbs li:not(.crumb-parent) {
     display: none;
+  }
+
+  .breadcrumbs li.crumb-parent::before {
+    content: none;
   }
 
   .breadcrumbs li.crumb-parent .crumb-back {
     display: inline;
   }
 
+  .breadcrumbs li.crumb-parent .crumb-chevron {
+    display: inline-flex;
+    margin-right: var(--space-1);
+  }
+
+  .breadcrumbs a,
+  .breadcrumbs .crumb-link {
+    text-decoration: none;
+  }
+
   .breadcrumbs a,
   .breadcrumbs .crumb-link,
   .breadcrumbs [aria-current='page'] {
-    max-width: 11rem;
+    max-width: 100%;
   }
 }
 

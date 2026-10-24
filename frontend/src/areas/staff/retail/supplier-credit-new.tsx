@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -182,7 +182,6 @@ export function SupplierCreditNewPage() {
   });
   return (
     <Gate screen="supplierCredits" title="New supplier credit note">
-      <p><Link to="/staff/retail/supplier-credits">Back to supplier credit notes</Link></p>
       <p className="hint">Record a credit note the supplier gave you. Use the number, the date and the total printed on it.</p>
       {billId === '' ? (
         <InvoicePicker onPick={(b) => setDraft((d) => ({ ...d, billId: b.id ?? '', lines: [], total: '' }))} />

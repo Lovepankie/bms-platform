@@ -1,5 +1,6 @@
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { icons } from './icons';
 
 // Breadcrumbs for the staff area. The trail is not a second map of the app: every staff route carries
 // a `crumb` label in its static data (app/router.tsx) and the trail is the routes whose path is a
@@ -74,7 +75,11 @@ export function useCrumbTail(label: string | undefined, onBack?: () => void) {
   }, [patch, label, goes]);
 }
 
-/** The list itself: a nav with an ordered list, the last item the current page. Wide screens show every crumb; a phone shows Back to the parent and the current page (CSS). */
+/**
+ * The list itself: a nav with an ordered list, the last item the current page. Wide screens show every crumb with a slash between
+ * them; a phone shows only a back chevron and "Back to" the parent, with no slash, since the page's own title is the heading under
+ * it (CSS, issue #526).
+ */
 export function Breadcrumbs({ items }: { items: Crumb[] }) {
   if (items.length < 2) return null;
   const parent = items.length - 2;
@@ -83,7 +88,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
       <ol>
         {items.map((c, i) => {
           const current = i === items.length - 1;
-          const prefix = i === parent ? <span className="crumb-back">Back to </span> : null;
+          const prefix = i === parent ? <><span className="crumb-chevron" aria-hidden="true">{icons.chevron}</span><span className="crumb-back">Back to </span></> : null;
           return (
             <li key={`${i}-${c.label}`} className={i === parent ? 'crumb-parent' : undefined}>
               {current ? (

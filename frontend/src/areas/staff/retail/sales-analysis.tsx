@@ -138,7 +138,7 @@ export function SalesAnalysisView({ data }: { data: SalesAnalysis }) {
 }
 
 export function SalesAnalysisPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -153,7 +153,6 @@ export function SalesAnalysisPage() {
   });
   return (
     <Gate screen="salesAnalysis" title="Sales analysis" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <div data-tour="analysis-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="analysis-options">
         <Choice id="an-group" label="Group the days" value={group} options={[...GROUPS]} onChange={setGroup} />

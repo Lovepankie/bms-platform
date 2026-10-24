@@ -11,7 +11,6 @@ import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../
 import type { OutboxItem } from '../../../offline/outbox';
 import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
-import { ShopLogo } from '../branch-picker';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
@@ -686,9 +685,6 @@ export function RecordSale() {
         </>
       ) : (
         <>
-          <p className="branch-line">
-            <ShopLogo url={(me.branches ?? []).find((b) => b.id === branchId)?.logo_url} name={branchName} /> Branch: <strong>{branchName}</strong>
-          </p>
           <NoStockHere branchId={branchId} />
           <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued} />
         </>
