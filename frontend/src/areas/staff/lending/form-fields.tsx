@@ -175,7 +175,7 @@ export function SaveBar({ label, busy, blocked, cancel, tourId }: { label: strin
       {blocked && <p className="mf-savebar-note" role="status">{blocked}</p>}
       <div className="mf-savebar-row">
         {cancel}
-        <BusyButton busy={busy} type="submit" className="rt-primary" notReady={!!blocked} aria-disabled={busy || !!blocked}>
+        <BusyButton busy={busy} type="submit" className="rt-primary" disabled={!!blocked} aria-disabled={busy || !!blocked}>
           {label}
         </BusyButton>
       </div>

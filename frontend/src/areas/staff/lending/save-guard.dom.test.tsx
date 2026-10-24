@@ -69,7 +69,7 @@ describe('a member saved while the answer is lost', () => {
     fillMember();
     fireEvent.click(saveButton());
     expect(await screen.findByText(/is already saved\. It was not saved a second time/)).toBeTruthy();
-    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
+    expect(saveButton().disabled).toBe(true);
     fireEvent.click(saveButton());
     expect(mock.members).toHaveLength(1);
   });
@@ -94,11 +94,11 @@ describe('a member saved while the answer is lost', () => {
     fillMember();
     fireEvent.click(saveButton());
     expect(await screen.findByText(/could not check whether the member was saved/)).toBeTruthy();
-    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
+    expect(saveButton().disabled).toBe(true);
     fireEvent.click(saveButton());
     expect(mock.calls.create).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    await waitFor(() => expect(saveButton().getAttribute('data-not-ready')).toBeNull());
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
     expect(looks).toBe(2);
   });
 });
@@ -119,12 +119,12 @@ describe('collateral saved while the answer is lost', () => {
     const save = () => screen.getByRole('button', { name: /Register collateral/ }) as HTMLButtonElement;
     fireEvent.click(save());
     expect(await screen.findByText(/item is already saved\. It was not saved a second time/)).toBeTruthy();
-    expect(save().getAttribute('data-not-ready')).toBe('true');
+    expect(save().disabled).toBe(true);
     fireEvent.click(save());
     expect(mock.items).toHaveLength(1);
     // A person who knows it is a second, different item can say so.
     fireEvent.click(screen.getByRole('button', { name: 'This is a different one, save again' }));
-    expect(save().getAttribute('data-not-ready')).toBeNull();
+    expect(save().disabled).toBe(false);
   });
 });
 
@@ -139,7 +139,7 @@ describe('the shared phone box', () => {
     const save = () => screen.getByRole('button', { name: /Save member/ }) as HTMLButtonElement;
     fireEvent.click(save());
     const tick = await screen.findByLabelText(/different person who shares the phone/i);
-    expect(save().getAttribute('data-not-ready')).toBe('true');
+    expect(save().disabled).toBe(true);
     fireEvent.click(tick);
     fireEvent.click(save());
     await waitFor(() => expect(mock.calls.create).toHaveLength(2));
@@ -165,7 +165,7 @@ describe('the shared phone box', () => {
     mount(<MemberForm member={holder} onSaved={() => undefined} />, createMembersMock([holder, other]).api);
     type(/^Phone number/, '0700000002');
     expect(await screen.findByLabelText(/different person who shares the phone/i, undefined, { timeout: 2000 })).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Save changes/ }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
+    expect((screen.getByRole('button', { name: /Save changes/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

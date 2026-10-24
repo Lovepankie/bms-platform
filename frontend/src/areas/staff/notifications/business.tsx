@@ -111,7 +111,7 @@ export function BusinessNotificationsScreen() {
               type="button"
               className="rt-primary"
               busy={busy}
-              notReady={!QUARTER_HOUR.test(shownTime) || shownTime === current.daily_summary_time}
+              disabled={!QUARTER_HOUR.test(shownTime) || shownTime === current.daily_summary_time}
               onClick={() => void save({ daily_summary_time: shownTime }, `The daily summary now goes at ${shownTime}.`)}
             >
               Save the time

@@ -349,7 +349,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
         />
       )}
       {!exists && <Problem error={save.error ?? check.error} />}
-      <BusyButton busy={busy} type="submit" className="rt-primary" notReady={exists !== null || similar !== null}>{product ? 'Save changes' : 'Add item'}</BusyButton>
+      <BusyButton busy={busy} type="submit" className="rt-primary" disabled={exists !== null || similar !== null}>{product ? 'Save changes' : 'Add item'}</BusyButton>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
     </form>
   );

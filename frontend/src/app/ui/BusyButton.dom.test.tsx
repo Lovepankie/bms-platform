@@ -279,4 +279,17 @@ describe('a primary button whose form is not ready (#526)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }));
     expect(onSend).toHaveBeenCalledWith('Save as draft');
   });
+
+  // Review of #559, round 2: a primary outside a form never jumps to an unrelated field elsewhere on the page.
+  it('looks for the missing field only in its own form', () => {
+    render(
+      <main>
+        <input aria-required="true" defaultValue="" aria-label="Elsewhere" />
+        <BusyButton type="button" className="rt-primary" busy={false} notReady>Make the labels</BusyButton>
+      </main>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Make the labels' }));
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Elsewhere'));
+    expect(screen.getByRole('status').textContent).toBe('Fill in or correct the fields above first.');
+  });
 });

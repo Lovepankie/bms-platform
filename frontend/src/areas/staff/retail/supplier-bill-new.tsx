@@ -146,7 +146,7 @@ export function BillFormView({ form, suppliers, loadingLines, match, checking, m
       <input id="bill-note" value={form.note} maxLength={300} onChange={(e) => onChange({ ...form, note: e.target.value })} />
       {problem && ticked(form).length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null || checking} data-tour="bill-save">Save supplier invoice</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={checking} notReady={problem !== null} data-tour="bill-save">Save supplier invoice</BusyButton>
 
     </form>
   );

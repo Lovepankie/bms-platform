@@ -177,7 +177,7 @@ describe('the new landed cost page', () => {
     await landedFor(receipt, { supplier_ref: 'FWD-79' });
     click('Review');
     await screen.findByTestId('landed-review', undefined, wait);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save landed cost' }).getAttribute('data-not-ready')).toBeNull(), wait);
+    await waitFor(() => expect(ready(screen.getByRole('button', { name: 'Save landed cost' }))).toBe(true), wait);
     click('Save landed cost');
     expect((await screen.findByRole('alert', undefined, wait)).textContent).toMatch(/already has an invoice with this number/i);
   });

@@ -58,9 +58,12 @@ export function BusyAnnouncer({ modal = false }: { modal?: boolean }) {
 // under it says to check the fields above. It carries data-not-ready while so. `disabled` keeps its plain meaning, for a block
 // that is not about the fields (another request running, a server not set up, a person who may only look).
 
-/** Scrolls to and focuses the first missing or wrong field around `button` (its form, else the screen it sits in); false when none. */
+/**
+ * Scrolls to and focuses the first missing or wrong field of the button's own form; false when none, or when the button sits in
+ * no form, so a press never jumps to an unrelated field elsewhere on the page.
+ */
 function leadToMissing(button: HTMLButtonElement | null): boolean {
-  const root = button?.form ?? button?.closest('main, section, [role="dialog"]') ?? null;
+  const root = button?.form ?? null;
   return root ? focusFirstMissing(root) : false;
 }
 

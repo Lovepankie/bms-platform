@@ -222,7 +222,7 @@ export function ReceivePaymentsPage() {
           <Hint>We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</Hint>
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}
           <p>
-            <BusyButton type="button" className="rt-primary" busy={test.isPending} notReady={busy || !account.host_ready} onClick={() => test.mutate()}>
+            <BusyButton type="button" className="rt-primary" busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>
               Test connection
             </BusyButton>
           </p>

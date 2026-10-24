@@ -137,7 +137,7 @@ describe('testing the connection', () => {
     api.account.mockResolvedValue({ ...saved, host_ready: false });
     shell(<ReceivePaymentsPage />);
     expect(await screen.findAllByText(/not set up on this system yet/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
+    expect((screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
