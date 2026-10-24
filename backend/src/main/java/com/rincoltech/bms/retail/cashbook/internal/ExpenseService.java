@@ -77,6 +77,8 @@ class ExpenseService {
     private Expense record(ExpenseRequest r) {
         UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, r.branchId());
         LocalDate date = support.businessDate(r.businessDate(), "business_date");
+        // The savings cap reads the day's expenses under the same lock (ADR-080 decision 3).
+        repo.lockBranchDay(branch, date);
         CategoryRow category = repo.category(r.categoryId(), false)
                 .orElseThrow(() -> ApiException.validation(
                         List.of(new FieldProblem("category_id", "unknown_category", "No such expense category."))));
@@ -208,6 +210,8 @@ class ExpenseService {
             if (row.historical()) {
                 throw CashbookSupport.historicalRecord();
             }
+            // The same branch-day lock as the savings create and the expense create (ADR-080 decision 3).
+            repo.lockBranchDay(row.branchId(), row.businessDate());
             String reason = CashbookSupport.reason(r);
             Instant at = support.now();
             if (row.journalEntryId() != null) {

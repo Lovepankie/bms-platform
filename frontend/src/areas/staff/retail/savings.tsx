@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, retail, type Savings } from '../../../api/retail';
@@ -6,7 +6,7 @@ import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, SAVINGS_OVERWRITE, SAVINGS_RECORD, holds } from './permissions';
-import { afterSavingsConflict, planSavings, seesAmounts } from './savings-state';
+import { SAVINGS_REASONS, afterSavingsConflict, nowAboveWords, planSavings, reasonText, savedWords, seesAmounts } from './savings-state';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './ui';
@@ -17,19 +17,48 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
 // the standard amount is recorded for them. Every save echoes the suggestion token the form was shown; if
 // sales changed since, the server answers 409 suggestion_changed with the new token and writes nothing.
+// The day may save at most its profit less its expenses (ADR-080): the screen shows the three figures and
+// says so under the amount before anything is sent. The reason for a changed amount is optional (#538).
 
-interface SavingsDraft { date: string; amount: string; reason: string }
+interface SavingsDraft { date: string; amount: string; reason: string; other: string }
+
+const EMPTY = { amount: '', reason: '', other: '' };
+
+/**
+ * Put a new record at the top of the savings lists already loaded that would show it: their key is
+ * ['retail', 'savings', scope, from, to] (SavingsRecords), the scope lists branch ids or is empty for all, and the
+ * window holds the day. Anything else under the prefix is left alone; the refetch that follows settles every list.
+ */
+export function showInRecords(client: QueryClient, saved: Savings) {
+  const day = saved.business_date ?? '';
+  // Only the records list itself: exactly five parts, the branch ids (undefined for all) and a from and to date.
+  const holds = (key: readonly unknown[]): boolean => {
+    if (key.length !== 5) return false;
+    const [, , scope, from, to] = key;
+    if ((scope !== undefined && !Array.isArray(scope)) || typeof from !== 'string' || typeof to !== 'string') return false;
+    const inScope = scope === undefined || scope.length === 0 || scope.includes(saved.branch_id);
+    return inScope && (from === '' || day >= from) && (to === '' || day <= to);
+  };
+  for (const [key, rows] of client.getQueriesData<unknown>({ queryKey: ['retail', 'savings'] })) {
+    if (!Array.isArray(rows) || !holds(key) || rows.some((r: Savings) => r.id === saved.id)) continue;
+    client.setQueryData(key, [saved, ...(rows as Savings[])]);
+  }
+}
 
 export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Savings) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const canOverwrite = holds(me, SAVINGS_OVERWRITE);
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: '', reason: '' });
+  const { key, draft, setDraft, finish, discard } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
+  // A draft restored with an amount shows its problem at once; a fresh form waits for blur (rule 10).
+  const [touched, setTouched] = useState(() => draft.amount.trim() !== '');
+  const [reasonOpen, setReasonOpen] = useState(false);
   const suggestionKey = ['retail', 'savings-suggestion', branchId, draft.date];
   const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: draft.date }) });
   const s = suggestion.data;
   const profitView = seesAmounts(s);
-  const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason: draft.reason, canOverwrite }) : null;
+  const reason = reasonText(draft.reason, draft.other ?? '');
+  const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
   const save = useMutation({
     mutationFn: () => {
@@ -38,6 +67,8 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
     },
     onSuccess: (saved) => {
       finish();
+      showInRecords(queryClient, saved);
+      queryClient.setQueryData(suggestionKey, (old: typeof s) => (old ? { ...old, existing_id: saved.id } : old));
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(saved);
     },
@@ -46,17 +77,19 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
       // and, when the figures changed, start a fresh key and ask the person to look again before saving.
       if (afterSavingsConflict(queryClient, suggestionKey, error) === 'look_again') {
         discard();
-        setDraft({ date: draft.date, amount: '', reason: '' });
+        setDraft({ date: draft.date, ...EMPTY });
       }
     },
   });
 
   const blocked = !s || !plan || plan.problem !== null || s.existing_id != null || save.isPending;
   const update = (patch: Partial<SavingsDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  // Validation shows on blur (docs/ui-rules.md rule 10) or when Save is pressed; the cap never waits for the server.
+  const showProblem = touched && plan?.problem != null && draft.amount.trim() !== '' && !(plan.overwrite && !canOverwrite);
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
-      <DateField id="savings-date" label="Date" value={draft.date} onChange={(date) => update({ date, amount: '', reason: '' })} />
+    <form onSubmit={(e) => { e.preventDefault(); setTouched(true); if (!blocked) save.mutate(); }}>
+      <DateField id="savings-date" label="Date" value={draft.date} onChange={(date) => { update({ date, ...EMPTY }); setTouched(false); }} />
       {suggestion.isError && <Problem error={suggestion.error} />}
       {suggestion.isPending && <p className="loading">Loading</p>}
       {s && (
@@ -65,20 +98,50 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
             Sold on {showDate(s.business_date ?? draft.date)}: <strong>{money(s.total_sold_minor ?? 0)}</strong>
           </p>
           {s.existing_id != null && <Note>Savings are already recorded for this shop on this day. If that record is wrong, void it in the records below, then save again.</Note>}
+          {nowAboveWords(s) && <Note>{nowAboveWords(s)}</Note>}
           {profitView ? (
             <>
-              {s.daily_profit_minor !== undefined && <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>}
+              {s.available_minor !== undefined ? (
+                <dl className="rt-figures" aria-label="The day's figures">
+                  <div><dt>Profit for the day</dt><dd>{money(s.daily_profit_minor ?? 0)}</dd></div>
+                  <div><dt>Expenses for the day</dt><dd>{money(s.day_expenses_minor ?? 0)}</dd></div>
+                  <div><dt>Available to save</dt><dd><strong>{money(s.available_minor)}</strong></dd></div>
+                </dl>
+              ) : (
+                s.daily_profit_minor !== undefined && <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>
+              )}
               <p className="rt-total" aria-live="polite">Suggested savings {money(s.suggested_minor ?? 0)}</p>
-              <label htmlFor="savings-amount">Amount to save (leave blank to save the suggestion)</label>
-              <input id="savings-amount" inputMode="numeric" value={draft.amount} onChange={(e) => update({ amount: e.target.value })} aria-invalid={plan?.problem != null && draft.amount.trim() !== ''} />
+              <label htmlFor="savings-amount">Amount to save (optional, leave blank to save the suggestion)</label>
+              <input
+                id="savings-amount"
+                inputMode="numeric"
+                value={draft.amount}
+                onChange={(e) => update({ amount: e.target.value })}
+                onBlur={() => setTouched(true)}
+                aria-invalid={showProblem}
+                aria-describedby={showProblem ? 'savings-amount-problem' : undefined}
+              />
+              {showProblem && <p id="savings-amount-problem" role="alert" className="rt-flag">{plan?.problem}</p>}
               {plan?.overwrite && canOverwrite && (
-                <>
-                  <label htmlFor="savings-reason">Why are you changing the amount? (at least 5 characters)</label>
-                  <input id="savings-reason" maxLength={300} value={draft.reason} onChange={(e) => update({ reason: e.target.value })} />
-                </>
+                reasonOpen || draft.reason !== '' ? (
+                  <>
+                    <label htmlFor="savings-reason">Reason (optional)</label>
+                    <select id="savings-reason" value={draft.reason} onChange={(e) => update({ reason: e.target.value })}>
+                      <option value="">No reason</option>
+                      {SAVINGS_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    {draft.reason === 'Other' && (
+                      <>
+                        <label htmlFor="savings-reason-other">Say it in a few words (optional)</label>
+                        <input id="savings-reason-other" maxLength={300} value={draft.other ?? ''} onChange={(e) => update({ other: e.target.value })} />
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p><button type="button" className="btn-ghost" onClick={() => setReasonOpen(true)}>Add a reason (optional)</button></p>
+                )
               )}
               {plan?.overwrite && !canOverwrite && <Note>Only an administrator can change the amount. Clear the amount to save the suggested one.</Note>}
-              {plan?.problem && draft.amount.trim() !== '' && !(plan.overwrite && !canOverwrite) && <p role="alert" className="rt-flag">{plan.problem}</p>}
             </>
           ) : (
             <Note>Savings will be recorded using the standard amount.</Note>
@@ -151,7 +214,7 @@ export function SavingsScreen() {
       ) : (
         <>
           <p className="branch-line">Branch: <strong>{branchName}</strong></p>
-          <SavingsForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s) => { setSaved(s); show('Savings recorded.', 'success'); }} />
+          <SavingsForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s) => { setSaved(s); show(savedWords(s), 'success'); }} />
         </>
       )}
       </div>

@@ -7,7 +7,8 @@ It becomes Accepted on merge of the pull request that carries it, and the accoun
 decisions 3 to 7 stays provisional until the Owner confirms it (open questions 1, 2 and 4 at the end are the build gate; the rest have a stated default).
 Decisions 4, 5, 6 and 13 name their open questions where they depend on one.
 Completes the cash book that ADR-020 left out of the first release ("pending ADR-022"). Amends
-nothing in ADR-020.
+nothing in ADR-020. Decision 11 is amended by ADR-080 (issue #538): the suggestion is worked out from the day's profit less its
+expenses, a savings amount may not exceed that, and the overwrite reason is optional.
 
 ## Context
 

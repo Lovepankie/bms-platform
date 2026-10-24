@@ -496,6 +496,32 @@ class CashbookRepository {
                 .optional();
     }
 
+    /**
+     * Serialises a savings create with an expense create for one branch and business date, until commit (ADR-080
+     * decision 3): the savings cap reads the day's expenses after this lock, so an expense committing in between cannot
+     * leave savings above the day's available amount. An expense void takes it too, so every change to the day's
+     * expenses is ordered with the savings create. This relies on READ COMMITTED (the database default; no service here
+     * raises it): each statement after the lock reads what committed before it. Under REPEATABLE READ the snapshot taken
+     * by an earlier statement would hide an expense that committed while this waited.
+     */
+    void lockBranchDay(UUID branch, LocalDate date) {
+        jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(current_setting('app.tenant_id') || ':retail.cash_day:'"
+                        + " || CAST(? AS text) || ':' || CAST(? AS text), 0))")
+                .params(branch, Date.valueOf(date))
+                .query(rs -> {});
+    }
+
+    /** The branch's expenses dated that day that are not voided, for the savings cap (ADR-080). */
+    long activeExpensesMinor(UUID branch, LocalDate date) {
+        return jdbc.sql("""
+                        SELECT coalesce(sum(amount_minor), 0) FROM retail_expenses
+                         WHERE branch_id = ? AND business_date = ? AND voided_at IS NULL
+                        """)
+                .params(branch, Date.valueOf(date))
+                .query(Long.class)
+                .single();
+    }
+
     List<SavingsRow> savingsPage(
             List<UUID> branches,
             LocalDate from,

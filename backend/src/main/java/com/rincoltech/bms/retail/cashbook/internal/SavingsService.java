@@ -24,8 +24,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
@@ -34,10 +36,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Daily savings (FR-RET-18 to FR-RET-20; ADR-022 decisions 11 and 12). The suggestion is the day's
- * profit times the tenant rate; a savings amount is half the profit, so every figure that carries
- * it is absent without {@code retail.profit.read}, the audit row carries flags only, and a caller
- * without that permission cannot send an amount at all (no equality oracle).
+ * Daily savings (FR-RET-18 to FR-RET-20; ADR-022 decisions 11 and 12). The day's available amount is
+ * its profit less its recorded expenses, never below zero, and no record may save more (ADR-080). The
+ * suggestion is that amount times the tenant rate; a savings amount is half the profit, so every figure
+ * that carries it is absent without {@code retail.profit.read}, the audit row carries flags only, and a
+ * caller without that permission cannot send an amount at all (no equality oracle).
  */
 @Service("retailSavingsService")
 class SavingsService {
@@ -88,21 +91,43 @@ class SavingsService {
                 .longValueExact();
     }
 
+    /** The day's profit less its expenses, never below zero: the most the day may save (ADR-080). */
+    static long available(long profitMinor, long expensesMinor) {
+        return Math.max(0, profitMinor - expensesMinor);
+    }
+
+    /** The day's figures the suggestion and the cap rest on. */
+    private record Day(long profit, long expenses, long available, long suggested) {}
+
+    private Day day(UUID branch, LocalDate on) {
+        long profit = profits.profitMinor(branch, on);
+        long expenses = repo.activeExpensesMinor(branch, on);
+        long available = available(profit, expenses);
+        return new Day(profit, expenses, available, Math.min(available, suggested(available)));
+    }
+
     @Transactional(readOnly = true)
     SavingsSuggestion suggestion(UUID branchId, LocalDate date) {
         UUID branch = branchContext.resolve(CashbookSupport.SAVINGS_RECORD, branchId);
         LocalDate on = support.businessDate(date, "date");
-        long profit = profits.profitMinor(branch, on);
-        long suggested = suggested(profit);
+        Day d = day(branch, on);
         boolean gate = mayProfit(branch);
+        UUID existing = repo.activeSavings(branch, on).orElse(null);
         return new SavingsSuggestion(
                 branch,
                 on,
                 figures.day(branch, on).totalSold(),
-                support.suggestionToken(branch, on, suggested),
-                gate ? suggested : null,
-                gate ? profit : null,
-                repo.activeSavings(branch, on).orElse(null));
+                support.suggestionToken(branch, on, d.suggested()),
+                gate ? d.suggested() : null,
+                gate ? d.profit() : null,
+                gate ? d.expenses() : null,
+                gate ? d.available() : null,
+                existing,
+                gate && existing != null
+                        ? repo.savings(existing, false)
+                                .map(SavingsRow::amountMinor)
+                                .orElse(null)
+                        : null);
     }
 
     @Transactional
@@ -132,7 +157,9 @@ class SavingsService {
                             "amount_requires_profit_access",
                             "Only the default can be recorded without profit access.")));
         }
-        long suggested = suggested(profits.profitMinor(branch, date));
+        repo.lockBranchDay(branch, date);
+        Day d = day(branch, date);
+        long suggested = d.suggested();
         if (!support.tokenMatches(branch, date, suggested, r.suggestionToken())) {
             Map<String, Object> extra = new LinkedHashMap<>();
             extra.put("suggestion_token", support.suggestionToken(branch, date, suggested));
@@ -149,6 +176,9 @@ class SavingsService {
         }
         boolean typed = r.amountMinor() != null;
         long amount = typed ? r.amountMinor() : suggested;
+        if (amount > d.available()) {
+            throw aboveAvailable(d, date);
+        }
         boolean overwritten = typed && amount != suggested;
         String reason = null;
         Principal principal = CurrentPrincipal.require();
@@ -160,11 +190,8 @@ class SavingsService {
                         "Permission denied",
                         "You do not have permission to change the suggested savings amount.");
             }
+            // Optional since #538: a short pick or nothing at all.
             reason = CashbookSupport.blankToNull(r.overwriteReason());
-            if (reason == null || reason.length() < 5) {
-                throw ApiException.rule(
-                        "reason_required", "Give a reason of at least 5 characters for changing the amount.");
-            }
         }
         if (repo.activeSavings(branch, date).isPresent()) {
             throw savingsExist();
@@ -198,11 +225,43 @@ class SavingsService {
         after.put("business_date", date.toString());
         after.put("overwritten", overwritten);
         after.put("default_applied", !typed);
-        if (overwritten) {
+        if (reason != null) {
             after.put("reason", reason);
         }
         audit.record(AuditLog.Entry.created("retail.savings.created", "retail.savings", id, branch, after));
         return view(repo.savings(id, false).orElseThrow());
+    }
+
+    /**
+     * A typed amount above the day's available amount (ADR-080). Only a caller with profit read can type one,
+     * so the profit and expenses in the words reveal nothing new.
+     */
+    private ApiException aboveAvailable(Day d, LocalDate date) {
+        String when = date.equals(support.today()) ? "today" : "for " + date.format(DAY);
+        String detail = "You can save at most " + money(d.available()) + " " + when + " (profit " + money(d.profit())
+                + " minus expenses " + money(d.expenses()) + ").";
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("available_minor", d.available());
+        extra.put("daily_profit_minor", d.profit());
+        extra.put("day_expenses_minor", d.expenses());
+        return new ApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "savings_above_available",
+                "More than the day allows",
+                detail,
+                List.of(new FieldProblem("amount_minor", "savings_above_available", detail)),
+                extra);
+    }
+
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
+
+    /** An amount as people write it: "UGX 4,000"; a currency with cents shows two decimals. */
+    private String money(long minor) {
+        String currency = support.currency();
+        if ("UGX".equals(currency)) {
+            return String.format(Locale.ROOT, "UGX %,d", minor);
+        }
+        return String.format(Locale.ROOT, "%s %,.2f", currency, minor / 100.0);
     }
 
     private static ApiException savingsExist() {

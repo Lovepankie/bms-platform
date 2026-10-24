@@ -97,7 +97,19 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = PROFIT_ONLY)
             Long dailyProfitMinor,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) UUID existingId) {}
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = PROFIT_ONLY + "; the branch's expenses recorded for the day, voided ones left out")
+            Long dayExpensesMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = PROFIT_ONLY + "; profit less expenses, never below 0, the most the day may save")
+            Long availableMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) UUID existingId,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = PROFIT_ONLY + "; the amount of the active record for the day, if any")
+            Long existingAmountMinor) {}
 
     @Schema(name = "RetailSavingsRequest")
     record SavingsRequest(
@@ -110,7 +122,8 @@ final class CashbookApi {
             @PositiveOrZero @Max(MAX_MINOR) @Schema(description = "Needs retail.profit.read; omit to take the default")
             Long amountMinor,
 
-            @Size(max = 300) String overwriteReason) {}
+            @Size(max = 300) @Schema(description = "Optional, even when the amount differs from the suggestion")
+            String overwriteReason) {}
 
     @Schema(name = "RetailSavings")
     record Savings(

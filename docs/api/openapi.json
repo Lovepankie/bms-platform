@@ -17880,6 +17880,7 @@
             "type" : "string"
           },
           "overwrite_reason" : {
+            "description" : "Optional, even when the amount differs from the suggestion",
             "maxLength" : 300,
             "minLength" : 0,
             "type" : "string"
@@ -17892,6 +17893,11 @@
       },
       "RetailSavingsSuggestion" : {
         "properties" : {
+          "available_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch; profit less expenses, never below 0, the most the day may save",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -17902,6 +17908,16 @@
           },
           "daily_profit_minor" : {
             "description" : "Present only with retail.profit.read in the record's branch",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "day_expenses_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch; the branch's expenses recorded for the day, voided ones left out",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "existing_amount_minor" : {
+            "description" : "Present only with retail.profit.read in the record's branch; the amount of the active record for the day, if any",
             "format" : "int64",
             "type" : "integer"
           },

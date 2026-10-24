@@ -16122,10 +16122,16 @@ export interface components {
             branch_id?: string;
             /** Format: date */
             business_date?: string;
+            /** @description Optional, even when the amount differs from the suggestion */
             overwrite_reason?: string;
             suggestion_token: string;
         };
         RetailSavingsSuggestion: {
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch; profit less expenses, never below 0, the most the day may save
+             */
+            available_minor?: number;
             /** Format: uuid */
             branch_id?: string;
             /** Format: date */
@@ -16135,6 +16141,16 @@ export interface components {
              * @description Present only with retail.profit.read in the record's branch
              */
             daily_profit_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch; the branch's expenses recorded for the day, voided ones left out
+             */
+            day_expenses_minor?: number;
+            /**
+             * Format: int64
+             * @description Present only with retail.profit.read in the record's branch; the amount of the active record for the day, if any
+             */
+            existing_amount_minor?: number;
             /** Format: uuid */
             existing_id?: string;
             /**

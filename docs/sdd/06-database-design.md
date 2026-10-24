@@ -2469,7 +2469,7 @@ record refers to it is blocked, because records snapshot the names they were wri
 | `amount_minor`, `currency` | bigint, text | The amount set aside, `>= 0` |
 | `suggested_minor` | bigint | The server's suggestion when written (day's profit times `savings_rate_bp`, half up, zero for a loss). Readable only with `retail.profit.read` (as is `amount_minor`, a savings amount being half the profit, ADR-022 decision 13; the API omits both without it) |
 | `overwritten` | boolean | CHECK `(suggested_minor IS NULL AND NOT overwritten) OR (suggested_minor IS NOT NULL AND overwritten = (amount_minor <> suggested_minor))`: a historical row has no suggestion (the pilot never stored one) so it is never `overwritten`, and the reason rule below does not apply to it |
-| `overwrite_reason` | text | CHECK: not null and at least 5 characters when `overwritten` |
+| `overwrite_reason` | text | Optional (issue #538, ADR-080); CHECK `retail_daily_savings_overwrite_reason_chk`: on an overwritten record, not blank when present (`V95` replaced the `V34` check that required at least 5 characters when `overwritten`) |
 | `total_sold_minor` | bigint | Snapshot of the day's completed sales total, shown on the screen (a read-only column in the pilot) |
 | `occurred_at`, `recorded_by` | | Kernel clock instant, user |
 | `journal_entry_id` | uuid | Null when the amount is zero or the row is historical |
