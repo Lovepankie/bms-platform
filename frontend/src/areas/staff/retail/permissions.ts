@@ -1,5 +1,6 @@
 import type { Me } from '../../../api/client';
 import type { BranchRole } from '../../../api/retail';
+import { WORDS } from '../../../app/glossary';
 
 // Which retail screens a session may use. The API is the authority; this only decides what the
 // menu and the routes offer, from the same /me permissions the rest of the app reads. Cost,
@@ -312,10 +313,10 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'salesHistory', path: '/staff/retail/sales', label: 'All sales', hint: 'Every sale, with filters' },
   { screen: 'orders', path: '/staff/retail/orders', label: 'Orders', hint: 'Orders by WhatsApp, Instagram, Facebook or phone, packed, delivered and paid' },
   { screen: 'ordersReport', path: '/staff/retail/orders-report', label: 'Delivery fees and cancellations', hint: 'Delivery fees taken, and orders cancelled and why' },
-  { screen: 'restock', path: '/staff/retail/restock', label: 'Restock', hint: 'Record stock bought from a supplier' },
+  { screen: 'restock', path: '/staff/retail/restock', label: WORDS.buyStock, hint: 'Record stock bought from a supplier' },
   { screen: 'usage', path: '/staff/retail/usage', label: 'Usage and damage', hint: 'Items used or damaged' },
   { screen: 'stock', path: '/staff/retail/stock', label: 'Stock', hint: 'What is on the shelf' },
-  { screen: 'stocktake', path: '/staff/retail/stocktake', label: 'Stock-take', hint: 'Count and correct stock' },
+  { screen: 'stocktake', path: '/staff/retail/stocktake', label: WORDS.countStock, hint: 'Count and correct stock' },
   { screen: 'transfer', path: '/staff/retail/transfer', label: 'Move stock', hint: 'Send stock to another branch' },
   { screen: 'stockByLocation', path: '/staff/retail/stock-by-location', label: 'Stores and shops', hint: 'Stock in each store and shop, and on the way' },
   { screen: 'transfers', path: '/staff/retail/transfers', label: 'Stock moves', hint: 'Stock sent between branches' },
@@ -324,11 +325,11 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'profit', path: '/staff/retail/profit', label: 'Daily profit', hint: 'Profit per day' },
   { screen: 'salesAnalysis', path: '/staff/retail/sales-analysis', label: 'Sales analysis', hint: 'Sales by day, shop, item and seller' },
   { screen: 'margins', path: '/staff/retail/margins', label: 'Margins', hint: 'Profit by item, low margins, price changes' },
-  { screen: 'stockHealth', path: '/staff/retail/stock-health', label: 'Stock health', hint: 'Days of cover, reorder, dead stock, shrinkage' },
+  { screen: 'stockHealth', path: '/staff/retail/stock-health', label: 'Stock health', hint: 'Days of cover, reorder, dead stock, lost or damaged stock' },
   { screen: 'creditControl', path: '/staff/retail/credit-control', label: 'Credit control', hint: 'Who owes, how late, payments received' },
   { screen: 'evaluation', path: '/staff/retail/evaluation', label: 'Business evaluation', hint: 'Profit to date and what the stock is worth' },
   { screen: 'controls', path: '/staff/retail/controls', label: 'Controls', hint: 'Sales cancelled, goods taken back and prices changed, by shop and person' },
-  { screen: 'catalogue', path: '/staff/retail/catalogue', label: 'Catalogue', hint: 'Items, categories, units, suppliers and credit buyers' },
+  { screen: 'catalogue', path: '/staff/retail/catalogue', label: 'Catalogue', hint: 'Items, categories, units, suppliers and customers who owe' },
   { screen: 'banking', path: '/staff/retail/banking', label: 'Banking', hint: 'Cash banked, and what to expect' },
   { screen: 'savings', path: '/staff/retail/savings', label: 'Savings', hint: 'Set money aside for the day' },
   { screen: 'expenses', path: '/staff/retail/expenses', label: 'Expenses', hint: 'Money spent, by category' },
@@ -341,7 +342,7 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'priceLists', path: '/staff/retail/price-lists', label: 'Price lists', hint: 'Different prices for different customers, with quantity discounts' },
   { screen: 'customerGroups', path: '/staff/retail/customer-groups', label: 'Customer groups', hint: 'Group customers that share a price list' },
   { screen: 'customerAccounts', path: '/staff/retail/accounts', label: 'Customer accounts', hint: 'Credit limits, statements and payments from customers' },
-  { screen: 'customerAgeing', path: '/staff/retail/customer-ageing', label: 'Customer ageing', hint: 'What each credit buyer owes, by how late it is' },
+  { screen: 'customerAgeing', path: '/staff/retail/customer-ageing', label: 'Customer ageing', hint: 'What each customer who owes has to pay, by how late it is' },
   { screen: 'documents', path: '/staff/retail/documents', label: 'Documents', hint: 'Invoices, delivery notes and quotations, with their numbers' },
   { screen: 'quotations', path: '/staff/retail/quotations', label: 'Quotations', hint: 'Prices offered to a buyer until a date' },
   { screen: 'returns', path: '/staff/retail/returns', label: 'Customer returns', hint: 'Goods taken back from customers, and their credit notes' },
@@ -362,7 +363,7 @@ export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: strin
   { screen: 'categories', path: '/staff/retail/catalogue/categories', label: 'Categories', hint: 'Group your items' },
   { screen: 'units', path: '/staff/retail/catalogue/units', label: 'Units', hint: 'Piece, roll, kilogram and so on' },
   { screen: 'suppliers', path: '/staff/retail/catalogue/suppliers', label: 'Suppliers', hint: 'Who you buy from' },
-  { screen: 'buyers', path: '/staff/retail/catalogue/buyers', label: 'Credit buyers', hint: 'Who buys on credit' },
+  { screen: 'buyers', path: '/staff/retail/catalogue/buyers', label: WORDS.customersWhoOwe, hint: 'Who buys on credit' },
   { screen: 'labels', path: '/staff/retail/catalogue/labels', label: 'Barcode labels', hint: 'Print labels with a barcode for your items' },
 ];
 

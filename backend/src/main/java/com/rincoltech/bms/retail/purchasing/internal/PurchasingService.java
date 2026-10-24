@@ -218,7 +218,7 @@ class PurchasingService {
                         new FieldProblem(
                                 field + ".product_id",
                                 "product_inactive",
-                                "This item is inactive, so it cannot be restocked. Switch it on again on the Items screen first."));
+                                "This item is inactive, so it cannot be bought. Switch it on again on the Items screen first."));
                 continue;
             }
             if (l.unitId() != null && !l.unitId().equals(p.unitId())) {
@@ -514,7 +514,7 @@ class PurchasingService {
                     HttpStatus.FORBIDDEN,
                     "permission_denied",
                     "Permission denied",
-                    "This restock added stock at a branch you do not manage, so only someone who manages every branch it"
+                    "This purchase added stock at a branch you do not manage, so only someone who manages every branch it"
                             + " touched can void it.");
         }
         repo.lockPurchase(id);
@@ -525,19 +525,22 @@ class PurchasingService {
         }
         if (repo.voidOf(id).isPresent()) {
             throw new ApiException(
-                    HttpStatus.CONFLICT, "purchase_voided", "Restock voided", "This restock has been voided already.");
+                    HttpStatus.CONFLICT,
+                    "purchase_voided",
+                    "Purchase voided",
+                    "This purchase has been voided already.");
         }
         if (repo.historical(id)) {
             throw ApiException.rule(
                     "purchase_historical",
-                    "This restock was imported from the old records, so it cannot be voided here. Use Correct the quantity"
+                    "This purchase was imported from the old records, so it cannot be voided here. Use Correct the quantity"
                             + " on the stock list instead.");
         }
         if (repo.paidAgainst(id)) {
             throw ApiException.rule(
                     "purchase_paid",
-                    "A payment to the supplier has been recorded against this restock. Reverse that payment first, then"
-                            + " void the restock.");
+                    "A payment to the supplier has been recorded against this purchase. Reverse that payment first, then"
+                            + " void the purchase.");
         }
         moved.stream().map(Recorded::productId).distinct().sorted().forEach(catalogue::lock);
         Map<UUID, Map<UUID, BigDecimal>> added = new TreeMap<>();
@@ -551,7 +554,7 @@ class PurchasingService {
                     ProductSnapshot p = catalogue.find(product.getKey()).orElseThrow();
                     throw ApiException.rule(
                             "purchase_stock_moved",
-                            p.description() + ": this restock added " + plain(product.getValue()) + " " + p.unit()
+                            p.description() + ": this purchase added " + plain(product.getValue()) + " " + p.unit()
                                     + " but only " + plain(onHand) + " are in stock there now, because some were sold,"
                                     + " used or moved. It cannot be voided. Use Correct the quantity on the stock list,"
                                     + " or count the stock.");

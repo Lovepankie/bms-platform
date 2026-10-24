@@ -98,7 +98,7 @@ export function createAccountsMock(env: AccountsEnv): AccountsMock {
 
     forSale: (body, total, saleDate) => {
       if (!env.on() || body.payment_method !== 'credit') return {};
-      if (!body.customer_id) env.refuse(422, 'customer_required', 'A credit sale names a credit buyer from the list.');
+      if (!body.customer_id) env.refuse(422, 'customer_required', 'A credit sale names a customer from the list.');
       const t = terms.get(body.customer_id ?? '') ?? {};
       if (t.limit !== undefined) {
         const exceeded = owed(body.customer_id ?? '') + total - t.limit;

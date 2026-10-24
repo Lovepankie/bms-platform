@@ -433,7 +433,7 @@ class BranchClosingIT extends IntegrationTest {
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(code(refused)).isEqualTo("branch_still_has_stock");
         assertThat(refused.getBody().get("open_stocktakes").asInt()).isEqualTo(1);
-        assertThat(refused.getBody().get("detail").asString()).contains("stock-take");
+        assertThat(refused.getBody().get("detail").asString()).contains("stock count");
         assertThat(retail.post("/stocktakes/" + draft + "/commit", Map.of(), ADMIN)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);

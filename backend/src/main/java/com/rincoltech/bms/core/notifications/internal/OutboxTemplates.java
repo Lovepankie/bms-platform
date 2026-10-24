@@ -664,7 +664,7 @@ class OutboxTemplates {
                                     + " date: tell support.")),
             Map.entry(
                     "retail.low_stock",
-                    new Template("Stock is running low", "{item_name} at {branch_name} is {reason}. Restock it soon.")),
+                    new Template("Stock is running low", "{item_name} at {branch_name} is {reason}. Buy more soon.")),
             Map.entry(
                     "retail.credit_due",
                     new Template(

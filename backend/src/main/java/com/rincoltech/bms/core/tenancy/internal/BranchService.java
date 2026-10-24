@@ -256,7 +256,7 @@ class BranchService implements BranchProvisioning {
                         "branch_close_needs_reason",
                         "Confirm closing this branch",
                         describe(before, findings)
-                                + " Closing keeps all of it on record and posts nothing, but nobody can sell, restock"
+                                + " Closing keeps all of it on record and posts nothing, but nobody can sell, buy stock"
                                 + " or transfer there afterwards. To close it anyway, say why.",
                         List.of(),
                         facts);
@@ -320,7 +320,7 @@ class BranchService implements BranchProvisioning {
                 "branch_still_has_stock",
                 "This branch still has goods",
                 describe(branch, findings)
-                        + " Move the stock to a shop, receive or cancel the transfers and finish the stock-takes first,"
+                        + " Move the stock to a shop, receive or cancel the transfers and finish the stock counts first,"
                         + " then mark it as not stocking.",
                 List.of(),
                 facts(findings));
@@ -396,7 +396,7 @@ class BranchService implements BranchProvisioning {
             } else if (f.kind().equals("open_stocktakes")) {
                 words.append("has ")
                         .append(f.count())
-                        .append(f.count() == 1 ? " stock-take" : " stock-takes")
+                        .append(f.count() == 1 ? " stock count" : " stock counts")
                         .append(" started and not finished");
             } else {
                 words.append("has ")

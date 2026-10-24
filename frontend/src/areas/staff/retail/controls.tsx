@@ -137,7 +137,7 @@ function RecordRow({ record: r, metric, onOpenSale }: { record: ControlsRecord; 
         <span className="rt-group-title">{r.sale_no ?? (metric === 'quantity_corrections' ? 'Stock correction' : '')}{r.reference ? `, credit note ${r.reference}` : ''}</span>
         <span className="rt-group-total">{money(r.value_minor ?? 0)}</span>
       </div>
-      <span className="rt-group-meta">{whenWords(r.at)}. {metric === 'restock_voids' ? 'Restock entered by' : metric === 'quantity_corrections' ? 'Corrected by' : 'Sale by'} {whoWords(r)}{r.branch_name ? ` at ${r.branch_name}` : ''}.{approverWords(r, metric) ? ` ${approverWords(r, metric)}.` : ''}</span>
+      <span className="rt-group-meta">{whenWords(r.at)}. {metric === 'restock_voids' ? 'Purchase entered by' : metric === 'quantity_corrections' ? 'Corrected by' : 'Sale by'} {whoWords(r)}{r.branch_name ? ` at ${r.branch_name}` : ''}.{approverWords(r, metric) ? ` ${approverWords(r, metric)}.` : ''}</span>
       <span className="rt-group-meta">{r.reason ? `Reason: ${r.reason}` : 'No reason recorded'}{r.item ? `. Item: ${r.item}` : ''}</span>
       {onOpenSale && r.sale_id && !isStockMetric(metric) && <button type="button" className="btn-sm" onClick={() => onOpenSale(r.sale_id as string)}>Open sale {r.sale_no}</button>}
     </li>

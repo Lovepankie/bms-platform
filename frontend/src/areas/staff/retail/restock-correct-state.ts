@@ -17,7 +17,7 @@ export function voidReasonOf(text: string): string | null {
 /** "Entered in metres but this item is kept in rolls?" for a line entered in a unit that is not the item's usual one. */
 export function unitHint(line: { unit?: string; base_unit?: string }): string | null {
   if (!line.unit || !line.base_unit || line.unit === line.base_unit) return null;
-  return `Entered in ${line.unit} but this item is kept in ${line.base_unit}? If that is wrong, correct this restock and enter it again in the right unit.`;
+  return `Entered in ${line.unit} but this item is kept in ${line.base_unit}? If that is wrong, correct this purchase and enter it again in the right unit.`;
 }
 
 /** The same hint on the restock form, where the unit is the one chosen for the line. */

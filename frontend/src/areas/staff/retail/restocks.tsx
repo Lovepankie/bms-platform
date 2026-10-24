@@ -13,6 +13,7 @@ import { PURCHASE_ALL, PURCHASE_NAMES, PURCHASE_ORDER, listUser } from './list-c
 import { useRestockVariantLevel } from './catalogue-variants';
 import { GroupedRestocks } from './restocks-grouped';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { WORDS } from '../../../app/glossary';
 
 // Past restocks (issue #351, ADR-044): every restock, newest first, a voided one marked and never deleted. A restock entered with a
 // wrong quantity, price, unit or supplier is corrected here: "Correct this restock" voids it (the stock, the books and the prices go
@@ -42,11 +43,11 @@ export function CorrectPanel({ purchase, onDone, onCancel }: { purchase: Purchas
       discard();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       if (again) void navigate({ to: '/staff/retail/restock', search: { again: id } as never });
-      else onDone(`Restock ${purchase.purchase_no ?? ''} is voided. Its stock, its entries and its prices are back as they were.`);
+      else onDone(`Purchase ${purchase.purchase_no ?? ''} is voided. Its stock, its entries and its prices are back as they were.`);
     },
     onError: (error) => {
       if (listIsStale(error)) void queryClient.invalidateQueries({ queryKey: ['retail'] });
-      if (alreadyVoided(error)) onDone(`Restock ${purchase.purchase_no ?? ''} was voided already.`);
+      if (alreadyVoided(error)) onDone(`Purchase ${purchase.purchase_no ?? ''} was voided already.`);
     },
     onSettled: () => { sending.current = false; },
   });
@@ -56,10 +57,10 @@ export function CorrectPanel({ purchase, onDone, onCancel }: { purchase: Purchas
     send.mutate(again);
   };
   return (
-    <form className="stack" aria-label="Correct this restock" onSubmit={(e) => { e.preventDefault(); press(true); }}>
+    <form className="stack" aria-label="Correct this purchase" onSubmit={(e) => { e.preventDefault(); press(true); }}>
       <p className="hint" data-testid="void-warning">
-        Voiding takes the stock this restock added back out, reverses what it posted and puts the prices back if nothing has changed them since.
-        The restock stays in this list, marked Voided. If fewer than its quantity are left at a branch it cannot be voided: use Correct the quantity on the Stock page instead.
+        Voiding takes the stock this purchase added back out, reverses what it posted and puts the prices back if nothing has changed them since.
+        The purchase stays in this list, marked Voided. If fewer than its quantity are left at a branch it cannot be voided: use Correct the quantity on the Stock page instead.
       </p>
       <label htmlFor={`void-${id}`}>Why is it being corrected? (at least {MIN_VOID_REASON} characters)</label>
       <input id={`void-${id}`} value={draft.reason} maxLength={300} onChange={(e) => setDraft({ reason: e.target.value })} autoComplete="off" />
@@ -67,7 +68,7 @@ export function CorrectPanel({ purchase, onDone, onCancel }: { purchase: Purchas
       <p className="cluster">
         <BusyButton type="submit" className="rt-primary" busy={send.isPending && send.variables === true} disabled={ready === null || send.isPending}>Void and enter it again</BusyButton>
         <BusyButton type="button" busy={send.isPending && send.variables === false} disabled={ready === null || send.isPending} onClick={() => press(false)}>Void only</BusyButton>
-        <button type="button" /* busy-exempt: keep waits for the void */ className="btn-ghost" disabled={send.isPending} onClick={onCancel}>Keep the restock</button>
+        <button type="button" /* busy-exempt: keep waits for the void */ className="btn-ghost" disabled={send.isPending} onClick={onCancel}>Keep the purchase</button>
 
       </p>
     </form>
@@ -101,8 +102,8 @@ export function RestockCard({ purchase, supplier, onDone }: { purchase: Purchase
           Voided {showDate(purchase.voided_on)}. Reason: {purchase.void_reason}
         </p>
       )}
-      {!voided && !open && mayVoid && <p><button type="button" className="btn-sm" onClick={() => setOpen(true)} aria-label={`Correct restock ${purchase.purchase_no}`}>Correct this restock</button></p>}
-      {!voided && !mayVoid && <p className="hint">Only someone who manages every branch this restock touched can correct it.</p>}
+      {!voided && !open && mayVoid && <p><button type="button" className="btn-sm" onClick={() => setOpen(true)} aria-label={`Correct purchase ${purchase.purchase_no}`}>Correct this purchase</button></p>}
+      {!voided && !mayVoid && <p className="hint">Only someone who manages every branch this purchase touched can correct it.</p>}
       {!voided && open && <CorrectPanel purchase={purchase} onDone={(m) => { setOpen(false); onDone(m); }} onCancel={() => setOpen(false)} />}
     </li>
   );
@@ -133,9 +134,9 @@ export function RestocksPage() {
   const names = new Map((suppliers.data ?? []).map((s) => [s.id, s.name]));
   const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
   return (
-    <Gate screen="restock" title="Past restocks">
-      <p><Link to="/staff/retail/restock">Back to Restock</Link></p>
-      <p className="hint">Every restock is kept. If you entered one wrongly, open Correct this restock, then enter it again with the right quantity.</p>
+    <Gate screen="restock" title={WORDS.pastPurchases}>
+      <p><Link to="/staff/retail/restock">Back to Buy stock</Link></p>
+      <p className="hint">Every purchase is kept. If you entered one wrongly, open Correct this purchase, then enter it again with the right quantity.</p>
       {message && <Success>{message}</Success>}
       <div className="rt-row" data-tour="restocks-filters">
         <div>
@@ -149,7 +150,7 @@ export function RestocksPage() {
         <div>
           <label htmlFor="restocks-status">Show</label>
           <select id="restocks-status" value={status} onChange={(e) => setStatus(e.target.value as 'all' | 'posted' | 'voided')}>
-            <option value="all">All restocks</option>
+            <option value="all">All purchases</option>
             <option value="posted">Not voided</option>
             <option value="voided">Voided</option>
           </select>
@@ -165,13 +166,13 @@ export function RestocksPage() {
       )}
       {!grouped && page.isPending && <p className="loading">Loading</p>}
       {!grouped && <Problem error={page.error} />}
-      {!grouped && page.data && items.length === 0 && <p className="empty-state">No restocks in these dates.</p>}
+      {!grouped && page.data && items.length === 0 && <p className="empty-state">No purchases in these dates.</p>}
       {!grouped && (
         <ul style={{ listStyle: 'none', padding: 0 }} data-tour="restocks-list">
           {items.map((p) => <RestockCard key={p.id} purchase={p} supplier={names.get(p.supplier_id)} onDone={setMessage} />)}
         </ul>
       )}
-      {!grouped && page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older restocks'}</button>}
+      {!grouped && page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older purchases'}</button>}
     </Gate>
   );
 }

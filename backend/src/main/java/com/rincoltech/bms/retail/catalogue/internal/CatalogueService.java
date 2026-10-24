@@ -476,7 +476,7 @@ class CatalogueService {
                     "unit_in_use_by_stock",
                     "This item has stock or stock history counted in " + before.unit() + ", so its unit cannot change: "
                             + "the numbers would only be relabelled, not converted. Add a new item with the right unit, "
-                            + "correct this one to none on the Stock page, and restock the new one.");
+                            + "correct this one to none on the Stock page, and buy stock of the new one.");
         }
         String duplicateReason = null;
         // A new name or unit settles the question again: the reason of an earlier add-anyway goes unless this one needs
@@ -834,7 +834,7 @@ class CatalogueService {
                     locked,
                     purchaseId,
                     reason
-                            + ". The prices were left as they are: later stock came in or they changed after the restock.");
+                            + ". The prices were left as they are: later stock came in or they changed after the purchase.");
             return false;
         }
         PriceChange first = mine.getFirst();

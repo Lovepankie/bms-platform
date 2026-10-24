@@ -59,7 +59,7 @@ class ReceiptCosting {
             String note) {}
 
     static final String NEWER =
-            "A newer receipt, restock or price change set the cost after this receipt, so the cost was left as it is.";
+            "A newer receipt, purchase or price change set the cost after this receipt, so the cost was left as it is.";
     static final String TINY =
             "The charge is under one minor unit per unit, so the cost did not move and it was expensed.";
 

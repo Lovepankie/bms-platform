@@ -38,7 +38,7 @@ describe('catalogue permission gating', () => {
     const open = CATALOGUE_LINKS.filter((l) => canUse(sales, l.screen)).map((l) => l.screen);
     expect(open).toEqual(['buyers']);
     expect(CATALOGUE_LINKS.every((l) => canUse(mockMe('admin'), l.screen))).toBe(true);
-    expect(catalogueLinksFor(sales).map((l) => l.label)).toEqual(['Credit buyers']);
+    expect(catalogueLinksFor(sales).map((l) => l.label)).toEqual(['Customers who owe']);
   });
 
   it('refuses the item screens to a user without retail.catalogue.manage', () => {
@@ -101,7 +101,7 @@ describe('items and prices', () => {
     const sales = ['retail.catalogue.manage', 'retail.stock.read'];
     const html = page('admin', <ProductForm onSaved={() => undefined} onCancel={() => undefined} />, sales);
     expect(html).not.toContain('Buying price');
-    expect(html).toContain('The buying price is set when you record a restock.');
+    expect(html).toContain('The buying price is set when you buy stock.');
   });
 
   it('edits the item fields but sends the user to the price form for prices', () => {

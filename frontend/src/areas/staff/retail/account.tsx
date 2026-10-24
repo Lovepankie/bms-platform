@@ -310,7 +310,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   return (
     <main className="rt rt-wide">
       <h1>{account.data?.name ?? 'Customer account'}</h1>
-      <p><Link to="/staff/retail/catalogue/buyers">Back to credit buyers</Link></p>
+      <p><Link to="/staff/retail/catalogue/buyers">Back to customers who owe</Link></p>
       {account.isPending && <SkeletonList label="Loading the account" />}
       <Problem error={account.error} />
       {message && <Success>{message}</Success>}

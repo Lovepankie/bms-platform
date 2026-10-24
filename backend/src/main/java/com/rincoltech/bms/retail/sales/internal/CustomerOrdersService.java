@@ -810,7 +810,7 @@ class CustomerOrdersService {
                     "fee_on_account_not_allowed",
                     fee == 0
                             ? "This order has no delivery fee."
-                            : "Only a credit buyer on the list can have the delivery fee put on the account.");
+                            : "Only a customer from the list can have the delivery fee put on the account.");
         }
         if (credit && paidNow >= items + fee) {
             throw ApiException.rule(
@@ -821,7 +821,7 @@ class CustomerOrdersService {
             throw ApiException.rule(
                     "delivery_fee_unpaid",
                     "The delivery fee of " + fee + " is paid when the goods arrive. Take at least that now; the rest"
-                            + " of the order can go on credit. A credit buyer on the list can have the fee put on the account.");
+                            + " of the order can go on credit. A customer from the list can have the fee put on the account.");
         }
         if (feeOnAccount && paidNow > items) {
             throw ApiException.rule(

@@ -164,7 +164,7 @@ describe('category in the pickers', () => {
 describe('restock screen', () => {
   it('says that saving updates the product prices', () => {
     const html = page('admin', <RestockForm />);
-    expect(html).toMatch(/changes the cost and sell price/);
+    expect(html).toMatch(/changes the buying and selling price/);
     expect(html).toContain('for="supplier"');
   });
 
@@ -283,7 +283,7 @@ describe('valuation and profit', () => {
       rows: [{ branch_id: branch, date: '2026-10-05', sales_minor: 3000, cost_of_sales_minor: 1000, gross_profit_minor: 2000, usage_cost_minor: 0, stocktake_difference_minor: -600, profit_minor: 1400 }],
     };
     const html = renderToString(<ProfitTable report={report} />);
-    expect(html).toContain('Stock-take<br/>difference');
+    expect(html).toContain('Stock count<br/>difference');
     expect(html).toContain('-UGX 600');
     expect(html).toContain('UGX 1,400');
   });
@@ -403,7 +403,7 @@ describe('walk-through fixes (#112)', () => {
     };
     const context = { supplierName: 'Test Supplier 01', before: { p1: { sell: 1200, cost: 800 }, p2: { sell: 9500, cost: 6000 } } };
     const admin = page('admin', <RestockSaved purchase={purchase} context={context} />);
-    expect(admin).toContain('Restock saved (RP00000042)');
+    expect(admin).toContain('Purchase saved (RP00000042)');
     expect(admin).toContain('From Test Supplier 01, bought on 2026-10-06: 2 items');
     expect(admin).toContain('LED bulb 9W screw: sell price changed from UGX 1,200 to UGX 1,400.');
     expect(admin).toContain('LED bulb 9W screw: last paid changed from UGX 800 to UGX 850.');

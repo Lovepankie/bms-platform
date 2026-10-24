@@ -44,7 +44,7 @@ function AccountsPage() {
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />
       <SearchBox id="search-accounts" label="Search by name or phone" search={search} fetching={finding} count={rows.data ? people.length : undefined} more={rows.hasNextPage} />
-      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="credit buyers" /> : <p className="empty-state">No credit buyers yet.</p>)}
+      {rows.data && people.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="customers who owe" /> : <p className="empty-state">No customers who owe yet.</p>)}
       <SearchResults fetching={finding}>
         <ul style={{ listStyle: 'none', padding: 0 }} data-tour="accounts-list">
           {people.map((r) => <AccountRow key={r.id} row={r} />)}
@@ -52,7 +52,7 @@ function AccountsPage() {
       </SearchResults>
       {rows.hasNextPage && (
         <button type="button" onClick={() => void rows.fetchNextPage()} disabled={rows.isFetchingNextPage || rows.isPlaceholderData}>
-          {rows.isFetchingNextPage ? 'Loading' : 'Show more credit buyers'}
+          {rows.isFetchingNextPage ? 'Loading' : 'Show more customers who owe'}
         </button>
       )}
     </Gate>

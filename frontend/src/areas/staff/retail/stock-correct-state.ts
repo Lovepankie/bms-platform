@@ -41,7 +41,7 @@ export function correctionRequest(branchId: string, productId: string, typed: st
 }
 
 const KIND: Record<string, string> = {
-  purchase: 'Restock',
+  purchase: 'Purchase',
   sale: 'Sale',
   usage: 'Used',
   damage: 'Damaged',
@@ -56,8 +56,8 @@ const KIND: Record<string, string> = {
 /** What a line of the stock history is, in words: a correction and a voided restock say so, a stock-take is a count. */
 export function movementTitle(m: StockMovement): string {
   if (m.correction || m.source_type === 'retail.stock_correction') return 'Quantity corrected';
-  if (m.source_type === 'retail.purchase_void') return 'Restock voided';
-  if (m.source_type === 'retail.stocktake') return 'Stock-take';
+  if (m.source_type === 'retail.purchase_void') return 'Purchase voided';
+  if (m.source_type === 'retail.stocktake') return 'Stock count';
   if (m.kind === 'adjustment') return 'Adjustment';
   return KIND[m.kind ?? ''] ?? (m.kind ?? '');
 }

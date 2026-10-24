@@ -132,7 +132,7 @@ export function BranchesScreen() {
       <h1>Branches</h1>
       <p data-tour="branches-intro">
         Your shops, stores and head office. Close a branch you no longer use: its sales and stock records stay for your reports,
-        and it leaves the branch lists and the sale, restock and move-stock screens.
+        and it leaves the branch lists and the sale, buy stock and move stock screens.
       </p>
       {!canManage && <p className="hint">Only an administrator can close or reopen a branch.</p>}
       {notice && <p role="status" className="alert alert-success">{notice}</p>}
@@ -245,7 +245,7 @@ export function BranchesScreen() {
                     {open && panel && panel.kind === 'nostock' && (
                       <div className="alert alert-warning stack" role="group" aria-label={`Mark ${branchLabel(b)} as keeping no goods`}>
                         <p>
-                          Mark <strong>{branchLabel(b)}</strong> as keeping no goods? Nothing can be sold, restocked, received or counted there afterwards.
+                          Mark <strong>{branchLabel(b)}</strong> as keeping no goods? Nothing can be sold, bought in, received or counted there afterwards.
                           Cash records still work, and goods left there can still be moved out. You can switch it back at any time.
                         </p>
                         <p className="cluster">
@@ -259,7 +259,7 @@ export function BranchesScreen() {
                     {open && panel && panel.kind === 'store' && (
                       <div className="alert alert-warning stack" role="group" aria-label={`Mark ${branchLabel(b)} as a store`}>
                         <p>
-                          Mark <strong>{branchLabel(b)}</strong> as a store? It keeps its stock and still takes purchases, restocks and transfers in and out, but
+                          Mark <strong>{branchLabel(b)}</strong> as a store? It keeps its stock and still takes purchases and transfers in and out, but
                           nothing can be sold there afterwards. No takings, savings, banking or repayments here; expenses can still be paid from it. It
                           leaves the sale screen and the till. You can make it a shop again at any time.
                         </p>
@@ -289,7 +289,7 @@ export function BranchesScreen() {
                         ) : (
                           <p>
                             Close <strong>{branchLabel(b)}</strong>? Its sales, stock records and history are kept and still show in your reports. It will no
-                            longer appear in branch lists, sales, restocks or stock moves. You can reopen it later.
+                            longer appear in branch lists, sales, purchases or stock moves. You can reopen it later.
                           </p>
                         )}
                         <p className="cluster">

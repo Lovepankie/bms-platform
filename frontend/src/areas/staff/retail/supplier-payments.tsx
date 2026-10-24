@@ -46,7 +46,7 @@ export function SupplierPaymentsPage() {
   return (
     <Gate screen="supplierPayments" title="Supplier payments">
       <p className="hint" data-tour="payments-help">
-        Money paid to suppliers. A payment clears the oldest supplier invoices and credit restocks first, unless you choose what it pays.
+        Money paid to suppliers. A payment clears the oldest supplier invoices and stock bought on credit first, unless you choose what it pays.
       </p>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/supplier-payments/new" data-tour="payments-new">Pay a supplier</Link>
@@ -106,7 +106,7 @@ export function SupplierPaymentView({ payment, nameOf, payable }: { payment: Sup
                   {a.bill_id ? (
                     <Link to="/staff/retail/supplier-bills/$billId" params={{ billId: a.bill_id }}>{a.bill_no}</Link>
                   ) : (
-                    <>Credit restock {a.purchase_no}</>
+                    <>Stock bought on credit {a.purchase_no}</>
                   )}
                 </td>
                 <td>{a.supplier_ref ?? ''}</td>

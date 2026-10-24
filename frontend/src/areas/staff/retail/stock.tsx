@@ -43,7 +43,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
   const [corrected, setCorrected] = useState<string | null>(null);
   const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching, pending });
   const grouping = g.active && !flat;
-  if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
+  if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const showCategory = !grouping && phone;
   const columns = 3 + (!phone && !grouping ? 1 : 0) + (showCost ? 1 : 0);
   const row = (r: StockRow) => (
@@ -110,7 +110,7 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
   const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
   const grouping = g.active && !flat;
-  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
+  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const row = (r: AllBranchesStock['items'][number]) => (
     <tr key={r.product_id}>
       <td>{r.description}{!grouping && <><br /><CategoryLabel category={r.category} /></>}</td>
@@ -146,7 +146,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
   const grouping = g.active && !flat;
-  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or restock to add items.</EmptyState>;
+  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const names = Object.fromEntries(data.branches.map((b) => [b.id ?? '', branchName(b)]));
   const card = (r: AllBranchesStock['items'][number]) => {
         const id = r.product_id ?? '';

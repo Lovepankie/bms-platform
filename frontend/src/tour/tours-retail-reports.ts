@@ -21,7 +21,8 @@ const rangeStep = (target: string, what: string): TourStep =>
 
 export const retailHomePage: Tour = {
   id: 'page-retail-home',
-  version: 3,
+  // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 4,
   title: 'This page: Retail',
   audience: (me) => (me.permissions ?? []).some((p) => p.startsWith('retail.')),
   autoStart: false,
@@ -29,7 +30,7 @@ export const retailHomePage: Tour = {
   steps: [
     retail({ id: 'tiles', target: 'retail-tiles', title: 'One button for each job', body: 'Tap a button to open that page. You only see the pages you may use.' }),
     retail({ id: 'sale', target: 'retail-sale', needs: [SELL], optional: true, title: 'Record a sale', body: 'Tap here when a customer pays. Pick the items, then save the sale.' }),
-    retail({ id: 'restock', target: 'retail-restock', needs: [RESTOCK], optional: true, title: 'Restock', body: 'Tap here when new goods arrive. Stock goes up and the cost is saved.' }),
+    retail({ id: 'restock', target: 'retail-restock', needs: [RESTOCK], optional: true, title: 'Buy stock', body: 'Tap here when new goods arrive. Stock goes up and the cost is saved.' }),
     retail({ id: 'stock', target: 'retail-stock', needs: [STOCK_READ], optional: true, title: 'Check your stock', body: 'Tap here to see how much of each item you hold, shop by shop.' }),
     // ADR-055: a seller sees their own figures; everybody's sales, profit and the value of the stock are the owner's.
     // Issue #428: every figure on the page follows the days picked here, set against the days before.
@@ -42,8 +43,9 @@ export const restockPage: Tour = {
   id: 'page-restock',
   // Version 2 adds the Scan here step (issue #345, ADR-070).
   // Version 3 words the Add the items step for the picker that lists items only while you type (issue #534).
-  version: 3,
-  title: 'This page: restock',
+  // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 4,
+  title: 'This page: buy stock',
   audience: (me) => held(me, RESTOCK),
   autoStart: false,
   page: '/staff/retail/restock',
@@ -52,7 +54,7 @@ export const restockPage: Tour = {
     retail({ id: 'search', target: 'restock-search', title: 'Add the items', body: 'Type part of the name or code, and tap each item you bought in the list under the box. Then fill in the cost, the sell price and how many went to each branch.' }),
     retail({ id: 'scan', target: 'scan-bar', title: 'Scan here', body: 'Or scan each item in the Scan box. It is added for the branch at the top, and a second scan adds one more.' }),
     retail({ id: 'paid', target: 'restock-paid', title: 'How you paid', body: 'Choose Cash, Bank or Credit. Credit means you pay the supplier later.' }),
-    retail({ id: 'save', target: 'restock-save', title: 'Save the restock', body: 'Tap Save restock. Stock goes up, and the cost and sell price of each item change to what you typed.' }),
+    retail({ id: 'save', target: 'restock-save', title: 'Save the purchase', body: 'Tap Save the purchase. Stock goes up, and the buying and selling price of each item change to what you typed.' }),
   ],
 };
 
@@ -118,14 +120,15 @@ export const valuationPage: Tour = {
 
 export const profitPage: Tour = {
   id: 'page-profit',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'This page: daily profit',
   audience: (me) => held(me, PROFIT),
   autoStart: false,
   page: '/staff/retail/profit',
   steps: [
     rangeStep('profit-range', 'The report shows each day in between.'),
-    retail({ id: 'figures', target: 'profit-figures', title: 'Profit for the period', body: 'See sales, cost, usage and the stock-take difference for each day. The total is at the top. Tap the link under it to see the sales.' }),
+    retail({ id: 'figures', target: 'profit-figures', title: 'Profit for the period', body: 'See sales, cost, usage and the stock count difference for each day. The total is at the top. Tap the link under it to see the sales.' }),
   ],
 };
 
@@ -177,7 +180,8 @@ export const stockHealthPage: Tour = {
 
 export const creditControlPage: Tour = {
   id: 'page-credit-control',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'This page: credit control',
   audience: (me) => held(me, SALES_READ),
   autoStart: false,
@@ -185,7 +189,7 @@ export const creditControlPage: Tour = {
   steps: [
     rangeStep('credit-range', 'It chooses which payments are listed. What is owed is always as of today.'),
     retail({ id: 'sort', target: 'credit-sort', title: 'Order the overdue list', body: 'Show the biggest amounts first, or the oldest first.' }),
-    retail({ id: 'results', target: 'credit-results', title: 'Who owes you', body: 'See what credit buyers owe and how late it is. Tap a buyer to open their account, or the link at the top to see the credit sales.' }),
+    retail({ id: 'results', target: 'credit-results', title: 'Who owes you', body: 'See what customers who owe have to pay and how late it is. Tap a buyer to open their account, or the link at the top to see the credit sales.' }),
   ],
 };
 

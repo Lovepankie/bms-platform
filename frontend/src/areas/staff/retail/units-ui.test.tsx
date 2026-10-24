@@ -37,7 +37,7 @@ describe('pack sizes on the item', () => {
 
   it('is offered to a catalogue manager once the capability is on', () => {
     const html = page(withUnits, <PackEditor product={pen} />);
-    expect(html).toContain('Pack sizes');
+    expect(html).toContain('Cartons, boxes and other packs');
     expect(html).toContain('Add pack');
     expect(html).toContain('for="pack-factor"');
   });

@@ -30,7 +30,7 @@ const ROLE_WORDS: Record<string, { title: string; about: string }> = {
   auditor: { title: 'Auditor', about: 'Can look at everything but change nothing.' },
   retail_sales: { title: 'Sales person', about: 'Sells in their shops, checks stock and takes buyers\' payments. Sees their own sales only, and no costs, profit or cash book.' },
   retail_storekeeper: { title: 'Storekeeper', about: 'Moves stock between the stores and shops, receives it, counts it and reports damage. Sees no prices and no money, and does not sell.' },
-  retail_purchasing: { title: 'Purchasing', about: 'Records purchases and restocks at their shops and stores, and sees the buying prices of what they buy. Give it on top of another role.' },
+  retail_purchasing: { title: 'Purchasing', about: 'Buys stock and records purchases, from orders to supplier payments, at their shops and stores, and sees the buying prices of what they buy. Give it on top of another role.' },
   retail_till: { title: 'Can close the till and do the banking', about: 'Sees the cash book of their shops: the day\'s takings, the savings and the banking. Give it on top of another role.' },
   retail_supervisor: { title: 'Supervisor', about: 'Sees every seller\'s sales and totals, the dashboard and the sales analysis at their shops. No profit, costs, staff or Controls.' },
 };

@@ -5,6 +5,7 @@ import { PURCHASE_PLURALS, offersRestocks, restocksWord, wholeRestocksNote, type
 import { showQty } from './maths';
 import { periodTitle } from './sales-grouped-state';
 import { Problem, money } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // Past restocks grouped by a chain of levels (issue #350): shop, year, month, supplier, day, category, item, with a summary at every
 // level. The groups are the server's figures (GET /retail/purchases/summary); the restocks of an opened group are the screen's own
@@ -30,7 +31,7 @@ const kindFor = (status: 'all' | 'posted' | 'voided'): TreeKind<PurchaseLevel, P
       </span>
     </>
   ),
-  nothing: 'No restocks here.',
+  nothing: 'No purchases here.',
 });
 
 /** The restocks of an opened group, with the screen's own cards: a group of a category or an item lists whole restocks that include it. */
@@ -52,9 +53,9 @@ function RestockRows({ sel, status, render }: { sel: ListSelection; status: 'all
       {note && <p className="rt-group-note">{note}</p>}
       {page.isPending && <p className="loading">Loading</p>}
       <Problem error={page.error} />
-      {page.data && items.length === 0 && <p className="empty-state">No restocks here.</p>}
+      {page.data && items.length === 0 && <p className="empty-state">No purchases here.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>{items.map(render)}</ul>
-      {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older restocks'}</button>}
+      {page.hasNextPage && <button type="button" onClick={() => void page.fetchNextPage()} disabled={page.isFetchingNextPage}>{page.isFetchingNextPage ? 'Loading' : 'Show older purchases'}</button>}
     </>
   );
 }
@@ -67,8 +68,8 @@ export function GroupedRestocks({ view, range, status, render }: {
 }) {
   return (
     <ListChain<PurchaseLevel, PurchasesSummaryGroup>
-      kind={kindFor(status)} filterKey={status} chain={view.chain} enabled={range.from <= range.to} view={view} rootLabel="Past restocks" range={range}
-      offersRows={(i) => offersRestocks(view.chain, i)} rowsWord="restocks"
+      kind={kindFor(status)} filterKey={status} chain={view.chain} enabled={range.from <= range.to} view={view} rootLabel={WORDS.pastPurchases} range={range}
+      offersRows={(i) => offersRestocks(view.chain, i)} rowsWord={WORDS.purchases}
       renderRows={(sel) => <RestockRows sel={sel} status={status} render={render} />}
     />
   );

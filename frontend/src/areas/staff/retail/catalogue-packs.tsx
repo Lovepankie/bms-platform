@@ -7,6 +7,7 @@ import { showQty } from './maths';
 import { Problem } from './ui';
 import { UNITS, capabilityOn, holds } from './permissions';
 import { factorMilli } from './units-state';
+import { WORDS } from '../../../app/glossary';
 
 // Pack sizes of an item (ADR-033, issue #194): a unit and the number of base units in one pack, for
 // example a carton of twelve pieces. Offered only while /me lists the units capability and the user may
@@ -80,13 +81,13 @@ export function PackEditor({ product }: { product: Product }) {
   const problem = factorProblem(factor);
   return (
     <fieldset data-testid="pack-editor" onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
-      <legend>Pack sizes</legend>
+      <legend>{WORDS.packs}</legend>
       <p className="hint">
         Sell or buy this item by the pack, for example a carton of 12 {product.unit}. Stock is always counted in {product.unit}.
       </p>
       {packs.isPending && <p className="loading">Loading</p>}
       <Problem error={packs.error} />
-      {packs.data && packs.data.length === 0 && <p className="empty-state">No pack sizes yet.</p>}
+      {packs.data && packs.data.length === 0 && <p className="empty-state">No cartons, boxes or other packs yet.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {(packs.data ?? []).map((k) => <PackRow key={`${k.unit_id}-${k.version}`} productId={id} pack={k} />)}
       </ul>

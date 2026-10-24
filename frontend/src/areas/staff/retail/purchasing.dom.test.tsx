@@ -335,11 +335,11 @@ describe('the supplier payment form', () => {
     type(/Pay on Supplier invoice SB-000001/, '8000');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('UGX 12,000 is left to give out');
     expect(save().disabled).toBe(true);
-    type(/Pay on Credit restock P-000009/, '13000');
+    type(/Pay on Stock bought on credit P-000009/, '13000');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('UGX 1,000 too much');
     expect(screen.getAllByRole('alert')[0]?.textContent).toMatch(/at most UGX 12,000/i);
     expect(save().disabled).toBe(true);
-    type(/Pay on Credit restock P-000009/, '12000');
+    type(/Pay on Stock bought on credit P-000009/, '12000');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('Nothing is left to give out');
     expect(save().disabled).toBe(false);
     fireEvent.click(save());

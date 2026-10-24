@@ -496,7 +496,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
 
       {draft.method === 'credit' && (
         <fieldset>
-          <legend>Credit buyer</legend>
+          <legend>Customer from the list</legend>
           {!addingBuyer && (
             <>
               <label htmlFor="buyer">Buyer</label>

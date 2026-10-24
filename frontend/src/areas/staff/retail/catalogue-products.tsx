@@ -18,6 +18,7 @@ import { ScreenLink } from './screen-link';
 import { StockMinimumEditor } from './stock-minimum';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // Items (#146): list with search, category and active filters; add and edit an item's code,
 // description, category, unit and whether it is on sale; and change prices only through the price
@@ -37,7 +38,7 @@ export function showWhen(iso: string | undefined): string {
   return `${d}, ${t}`;
 }
 
-const SOURCES: Record<string, string> = { initial: 'First price', manual: 'Changed by hand', purchase: 'Restock', import: 'Import' };
+const SOURCES: Record<string, string> = { initial: 'First price', manual: 'Changed by hand', purchase: 'Purchase', import: 'Import' };
 
 /** One price change in words: the old and new selling price, and the cost too when the server sent it. */
 export function ChangeLine({ change }: { change: PriceChange }) {
@@ -97,7 +98,7 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extr
 /** The plain warning shown while an item that still has stock in a branch you can see is marked inactive (issue #342). */
 export function inactiveWarning(stockOnHand: string | undefined, branches: number | undefined): string {
   if (!branches) return '';
-  return `This item still has stock in the branches you can see (${stockOnHand} in all). Inactive items cannot be sold, restocked or moved, so that stock stays put until you correct it on the Stock page or switch the item on again.`;
+  return `This item still has stock in the branches you can see (${stockOnHand} in all). Inactive items cannot be sold, bought or moved, so that stock stays put until you correct it on the Stock page or switch the item on again.`;
 }
 
 export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: Product; onSaved: (text: string) => void; onCancel: () => void; onOpen?: (id: string) => void }) {
@@ -200,7 +201,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
             <option value="">Choose a category</option>
             {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
           </select>
-          <label htmlFor="item-unit">Unit</label>
+          <label htmlFor="item-unit">{WORDS.countedIn}</label>
           <select id="item-unit" value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
             <option value="">Choose a unit</option>
             {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
@@ -214,7 +215,7 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
               <label htmlFor="item-inactive">
                 <input id="item-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
               </label>
-              <p className="hint">An inactive item is not offered when selling, restocking or moving stock, and leaves the stock list unless you ask for inactive items. It is never deleted: its history and reports stay.</p>
+              <p className="hint">An inactive item is not offered when selling, buying or moving stock, and leaves the stock list unless you ask for inactive items. It is never deleted: its history and reports stay.</p>
               {!active && (product.stock_branches ?? 0) > 0 && (
                 <p role="note" className="alert alert-warning">{inactiveWarning(product.stock_on_hand, product.stock_branches)}</p>
               )}
@@ -242,12 +243,12 @@ export function ProductForm({ product, onSaved, onCancel, onOpen }: { product?: 
             <>
               <label htmlFor="item-cost">Buying price ({RETAIL_CURRENCY})</label>
               <input id="item-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-invalid={costMinor === null} autoComplete="off" />
-              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; a restock sets it.</p>
+              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</p>
             </>
           ) : null}
           <label htmlFor="item-sell">Selling price ({RETAIL_CURRENCY})</label>
           <input id="item-sell" inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} aria-invalid={sell.trim() !== '' && sellMinor === null} autoComplete="off" />
-          {!profit && <p className="hint">The buying price is set when you record a restock.</p>}
+          {!profit && <p className="hint">The buying price is set when you buy stock.</p>}
         </>
       )}
       {exists && (
@@ -318,7 +319,7 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
           <>
             <label htmlFor="price-cost">Last paid ({RETAIL_CURRENCY})</label>
             <input id="price-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-invalid={costMinor === null} autoComplete="off" />
-            <p className="hint">The last price you paid for one, to help set the selling price. Profit uses the average buying price of the stock in each shop, which restocks keep up to date.</p>
+            <p className="hint">The last price you paid for one, to help set the selling price. Profit uses the average buying price of the stock in each shop, which every purchase keeps up to date.</p>
           </>
         )}
         <label htmlFor="price-sell">New selling price ({RETAIL_CURRENCY})</label>

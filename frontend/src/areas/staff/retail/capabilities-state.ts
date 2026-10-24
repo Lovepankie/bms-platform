@@ -1,4 +1,5 @@
 import type { CapabilityChange, RetailCapabilities } from '../../../api/retail';
+import { WORDS } from '../../../app/glossary';
 
 // The retail capabilities and the shop or trade profile (ADR-033, docs/specs/trade-capabilities.md
 // section 1). A profile is a preset that writes a bundle of the flags; the flags stay individually
@@ -24,11 +25,11 @@ export interface CapabilityInfo {
 
 export const CAPABILITIES: readonly CapabilityInfo[] = [
   { key: 'branch_roles', label: 'Branch roles', hint: 'Mark each branch as a store, a shop or both. Only shops sell to customers.', ready: true },
-  { key: 'units', label: 'Pack sizes', hint: 'Sell and buy in packs, like a box or a roll, as well as single pieces.', ready: true },
+  { key: 'units', label: WORDS.packs, hint: 'Sell and buy in packs, like a box or a roll, as well as single pieces.', ready: true },
   { key: 'price_lists', label: 'Price lists', hint: 'Different prices for different customers, with discounts for larger quantities.', ready: true },
   { key: 'customer_accounts', label: 'Customer accounts', hint: 'Credit limits, payment terms, ageing and a statement for each customer.', ready: true },
   { key: 'documents', label: 'Invoices and quotations', hint: 'Quotations, invoices and delivery notes, numbered for each branch. The till receipt stays the default.', ready: true },
-  { key: 'purchasing', label: 'Purchase orders', hint: 'Purchase orders, goods received, supplier invoices, payments, landed costs such as freight and duty, and supplier credit notes. Restock stays as it is.', ready: true },
+  { key: 'purchasing', label: 'Purchase orders', hint: 'Purchase orders, goods received, supplier invoices, payments, landed costs such as freight and duty, and supplier credit notes. Buy stock stays as it is.', ready: true },
   { key: 'transfer_receipt', label: 'Receive transfers', hint: 'A stock move is sent first and received after, so stock can be on the way.', ready: true },
   { key: 'returns', label: 'Customer returns', hint: 'Take goods back from a customer and give a credit note.', ready: true },
 ];

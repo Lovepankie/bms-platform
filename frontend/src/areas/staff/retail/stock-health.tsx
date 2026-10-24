@@ -144,7 +144,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
           </>
         )}
       </Section>
-      <Section title="Used, damaged and found missing" hint="In the date range. Usage and damage reports, and the differences stock-takes found.">
+      <Section title="Used, damaged and found missing" hint="In the date range. Usage and damage reports, and the differences stock counts found.">
         {shrink.length === 0 ? <Empty /> : phone ? (
           <ul className="an-cards">
             {shrink.map((x) => (

@@ -108,8 +108,8 @@ class StockCorrectionService {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "stocktake_in_progress",
-                    "Stock-take in progress",
-                    "A stock-take of this branch that counts " + product.description()
+                    "Stock count in progress",
+                    "A stock count of this branch that counts " + product.description()
                             + " is not finished. Finish it first (commit it), then correct the quantity.");
         }
         BigDecimal difference = r.newQty().subtract(old);

@@ -72,13 +72,13 @@ const only = () => screen.getByRole('button', { name: 'Void only' }) as HTMLButt
 describe('the restock card', () => {
   it('offers Correct this restock to someone who manages every branch it touched, and to nobody else', () => {
     screenOf(admin, <ul><RestockCard purchase={restock} supplier="Test Supplier 01" onDone={() => undefined} /></ul>);
-    expect(screen.getByRole('button', { name: 'Correct restock RP00000001' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Correct purchase RP00000001' })).toBeTruthy();
     expect(screen.getByText(/Test Supplier 01/)).toBeTruthy();
     cleanup();
     const twoBranches: Purchase = { ...restock, lines: [{ ...(restock.lines?.[0] ?? {}), qty_by_branch: [{ branch_id: branch, qty: '10.000' }, { branch_id: other, qty: '10.000' }] }] };
     const oneBranch = { ...admin, permission_scopes: { ...admin.permission_scopes, 'retail.purchase.create': { all_branches: false, branch_ids: [branch] } } };
     screenOf(oneBranch, <ul><RestockCard purchase={twoBranches} onDone={() => undefined} /></ul>);
-    expect(screen.queryByRole('button', { name: 'Correct restock RP00000001' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Correct purchase RP00000001' })).toBeNull();
     expect(screen.getByText(/Only someone who manages every branch/)).toBeTruthy();
     cleanup();
     screenOf(seller, <ul><RestockCard purchase={restock} onDone={() => undefined} /></ul>);
@@ -107,7 +107,7 @@ describe('the restock card', () => {
     expect(unitHint({ unit: 'roll', base_unit: 'roll' })).toBeNull();
     expect(unitHint({ base_unit: 'roll' })).toBeNull();
     // The same words on the restock form, where the unit is the one chosen for the line.
-    expect(chosenUnitHint('metre', 'roll')).toBe('Entered in metre but this item is kept in roll? If that is wrong, correct this restock and enter it again in the right unit.');
+    expect(chosenUnitHint('metre', 'roll')).toBe('Entered in metre but this item is kept in roll? If that is wrong, correct this purchase and enter it again in the right unit.');
     expect(chosenUnitHint(undefined, 'roll')).toBeNull();
     expect(chosenUnitHint('roll', 'roll')).toBeNull();
   });
@@ -135,7 +135,7 @@ describe('correcting a restock', () => {
     fireEvent.change(reason(), { target: { value: 'Entered twenty, there were ten' } });
     fireEvent.click(only());
     fireEvent.click(only());
-    fireEvent.submit(screen.getByRole('form', { name: 'Correct this restock' }));
+    fireEvent.submit(screen.getByRole('form', { name: 'Correct this purchase' }));
     await waitFor(() => expect(voidPurchase).toHaveBeenCalledTimes(1));
     expect(voidPurchase.mock.calls[0]?.slice(0, 2)).toEqual(['r1', 'Entered twenty, there were ten']);
     const firstKey = voidPurchase.mock.calls[0]?.[2];

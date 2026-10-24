@@ -254,7 +254,7 @@ describe('FR-RET-68 scanning on the stock count', () => {
     screenOf(<StocktakePage />);
     await screen.findByText(EMPTY_COUNT);
     scan('TEST-LAMP-BOX');
-    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack that is switched off'));
     expect((document.getElementById(`count-${LAMP}`) as HTMLInputElement).value).toBe('');
   });
 });
@@ -437,7 +437,7 @@ describe('FR-RET-68 a pack barcode the sale cannot use', () => {
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
     screenOf(<SaleForm branchId={BRANCH} />);
     scan('TEST-LAMP-BOX');
-    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack that is switched off'));
     expect(document.querySelectorAll('[id^="qty-"]')).toHaveLength(0);
     // A refusal is a warning on the form, never the green check toast of an add (#508, docs/ui-rules.md rule 16).
     expect(document.querySelector('.toast-success')).toBeNull();
@@ -462,7 +462,7 @@ describe('FR-RET-68 a pack barcode the restock and goods received cannot use', (
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
     screenOf(<RestockForm />);
     scan('TEST-LAMP-BOX');
-    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack that is switched off'));
     expect(document.getElementById(`q-0-${BRANCH}`)).toBeNull();
   });
 
@@ -475,7 +475,7 @@ describe('FR-RET-68 a pack barcode the restock and goods received cannot use', (
     screenOf(<ReceiveBlindPage />, 'admin', BRANCH, ['purchasing']);
     await screen.findByLabelText('Scan here');
     scan('TEST-LAMP-BOX');
-    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack that is switched off'));
     expect(screen.queryByText(/^Added /)).toBeNull();
     // The item's own barcode is still received, at 1.
     scan(EAN);
@@ -527,7 +527,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     await retail.addBarcode(LAMP, { code: 'TEST-LAMP-BOX', unit_id: ROLL });
     screenOf(<TransferForm fromBranchId={BRANCH} />);
     scan('TEST-LAMP-BOX');
-    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack size'));
+    await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack that is switched off'));
     expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
   });
 });

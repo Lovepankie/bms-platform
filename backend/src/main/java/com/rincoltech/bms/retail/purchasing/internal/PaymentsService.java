@@ -144,7 +144,7 @@ class PaymentsService {
                 AllocationRequest a = r.allocations().get(i);
                 String field = "allocations[" + i + "]";
                 if ((a.billId() == null) == (a.purchaseId() == null)) {
-                    problems.add(new FieldProblem(field, "invalid", "Name an invoice or a restock, not both."));
+                    problems.add(new FieldProblem(field, "invalid", "Name an invoice or a purchase, not both."));
                     continue;
                 }
                 Target t = a.billId() != null ? new Target("bill", a.billId()) : new Target("restock", a.purchaseId());
@@ -195,7 +195,8 @@ class PaymentsService {
                 long owed = open.values().stream().mapToLong(Open::openMinor).sum();
                 throw ApiException.rule(
                         "payment_exceeds_open",
-                        "This supplier is owed " + owed + " on open invoices and credit restocks, so " + r.amountMinor()
+                        "This supplier is owed " + owed + " on open invoices and stock bought on credit, so "
+                                + r.amountMinor()
                                 + " cannot be paid. A payment is always allocated to something that is owed.");
             }
         }

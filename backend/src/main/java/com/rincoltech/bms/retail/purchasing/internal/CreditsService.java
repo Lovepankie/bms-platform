@@ -290,7 +290,7 @@ class CreditsService {
                 } else {
                     inventory = 0;
                     onHand = costing.onHand(p.lot());
-                    note = "The whole credit corrects the invoice's price variance, so the cost did not move.";
+                    note = "The whole credit corrects the invoice's price difference, so the cost did not move.";
                 }
             }
             long[] sums = byBranch.computeIfAbsent(p.lot().branchId(), k -> new long[3]);

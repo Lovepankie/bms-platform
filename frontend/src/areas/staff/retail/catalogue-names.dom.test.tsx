@@ -56,7 +56,7 @@ async function fillIn(description: string) {
   fireEvent.change(screen.getByLabelText('Description'), { target: { value: description } });
   await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
   fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
-  fireEvent.change(screen.getByLabelText('Unit'), { target: { value: 'u1' } });
+  fireEvent.change(screen.getByLabelText('Counted in'), { target: { value: 'u1' } });
   fireEvent.change(screen.getByLabelText(/Selling price/), { target: { value: '12000' } });
 }
 

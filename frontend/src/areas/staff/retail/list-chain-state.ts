@@ -157,13 +157,13 @@ export type { OpenGroups };
 
 /** The words under a restock group that is a category or an item: whole restocks, so their totals can be more than the line above. */
 export function wholeRestocksNote(sel: ListSelection): string | null {
-  if (sel.itemId) return 'Whole restocks that include this item.';
-  if (sel.categoryId) return 'Whole restocks that include this category.';
+  if (sel.itemId) return 'Whole purchases that include this item.';
+  if (sel.categoryId) return 'Whole purchases that include this category.';
   return null;
 }
 
-/** "3 restocks" or "1 restock". */
-export const restocksWord = (n: number) => (n === 1 ? '1 restock' : `${n} restocks`);
+/** "3 purchases" or "1 purchase". */
+export const restocksWord = (n: number) => (n === 1 ? '1 purchase' : `${n} purchases`);
 
 /** "3 items" or "1 item". */
 export const itemsWord = (n: number) => (n === 1 ? '1 item' : `${n} items`);

@@ -90,7 +90,7 @@ export function SupplierPayablesPage() {
   return (
     <Gate screen="supplierPayables" title="What you owe suppliers" wide>
       <p className="hint" data-tour="payables-help">
-        Everything you owe suppliers, by how late it is. It counts supplier invoices and stock bought on credit in Restock.
+        Everything you owe suppliers, by how late it is. It counts supplier invoices and stock bought on credit in Buy stock.
       </p>
       <p className="cluster" data-tour="payables-links">
         <Link className="btn-sm" to="/staff/retail/supplier-payments">Supplier payments</Link>

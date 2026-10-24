@@ -69,3 +69,11 @@ back to what opened it.
 ## Words
 
 17. Copy is plain and concrete. No dashes.
+18. Words come from the glossary, `frontend/src/app/glossary.ts` (issue #547, D24): Buy stock (a record of it is a
+    purchase), Count stock (a stock count), Difference, Lost or damaged stock, Customers who owe, Counted in for the
+    smallest unit of an item, and Cartons, boxes and other packs. `glossary.test.ts` reads the source strings of the
+    frontend (string and template literals, and all JSX text) and every tour and menu hint, and fails on a banned word
+    (SKU, variance, shrinkage, UOM, restock, in any case) or a retired label (stock-take, credit buyer, pack size). It
+    reads source, not the rendered page: words built at run time and the backend's refusals are not checked by it, so a
+    new backend message a person reads is worded from this list by hand. Routes, API fields, permission names and error codes
+    keep their old names; only words a person sees change. A tour whose words change takes a new version.

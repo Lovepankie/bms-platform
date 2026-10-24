@@ -137,7 +137,7 @@ export function InviteScreen() {
         {purchasingOffered(draft.roleKey, roleChoices(roles.data ?? [], me.modules)) && (
           <label className="check">
             <input type="checkbox" checked={draft.purchasing} onChange={(e) => set({ purchasing: e.target.checked })} />
-            Can also record purchases and restocks (with the buying prices), in the same shops and stores
+            Can also buy stock and record purchases (with the buying prices), in the same shops and stores
           </label>
         )}
         {purchasingOffered(draft.roleKey, roleChoices(roles.data ?? [], me.modules), TILL) && (

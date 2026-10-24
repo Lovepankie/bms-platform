@@ -8,6 +8,7 @@ import { parseMinor } from '../../../components/money';
 import { useStaff } from '../context';
 import { duplicateReasonOf, existingOf } from './catalogue-names';
 import { Gate, ProductPicker, Problem, money, useProfitAccess } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // Items with sizes and colours (issue #384, ADR-051): the owner of a baby clothes shop chooses the sizes and the prints once and
 // every combination becomes a variant with its own code, price and stock. A variant is an item of its own everywhere else (sale,
@@ -226,7 +227,7 @@ export function NewFamilyPage() {
             <option value="">Choose a category</option>
             {(categories.data ?? []).filter((c) => c.active !== false).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <label htmlFor="sizes-item-unit">Unit</label>
+          <label htmlFor="sizes-item-unit">{WORDS.countedIn}</label>
           <select id="sizes-item-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
             <option value="">Choose a unit</option>
             {(units.data ?? []).filter((u) => u.active !== false).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -235,7 +236,7 @@ export function NewFamilyPage() {
             <>
               <label htmlFor="sizes-item-cost">Buying price ({RETAIL_CURRENCY})</label>
               <input id="sizes-item-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} autoComplete="off" aria-invalid={costMinor === null} />
-              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; a restock sets it.</p>
+              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</p>
             </>
           )}
           <label htmlFor="sizes-item-sell">Selling price ({RETAIL_CURRENCY})</label>

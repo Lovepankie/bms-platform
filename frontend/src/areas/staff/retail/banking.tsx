@@ -29,7 +29,7 @@ export function ExpectedFigures({ expected, date }: { expected: BankingExpected;
         <strong>{money(expected.cash_expected_minor ?? 0)}</strong>
       </p>
       <p className="hint">Takings less what was paid out of the till for expenses and advances, plus advance repayments received.</p>
-      {expected.cash_purchases_minor !== undefined && <p className="rt-row"><span>Cash restocks, at cost</span><strong>{money(expected.cash_purchases_minor)}</strong></p>}
+      {expected.cash_purchases_minor !== undefined && <p className="rt-row"><span>Stock bought with cash, at cost</span><strong>{money(expected.cash_purchases_minor)}</strong></p>}
       {expected.savings_minor !== undefined && <p className="rt-row"><span>Savings set aside</span><strong>{money(expected.savings_minor)}</strong></p>}
       {expected.expected_minor !== undefined && <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_minor)}</strong></p>}
       <p className="rt-row"><span>{alreadyBankedLabel(date ?? expected.business_date, businessToday())}</span><strong>{money(expected.banked_so_far_minor ?? 0)}</strong></p>

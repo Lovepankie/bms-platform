@@ -12,6 +12,7 @@ import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
 import { showQty } from './maths';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // The page of an item with sizes and colours (issue #384, FR-RET-51, FR-RET-52): every size and colour with its code, price and
 // stock, the item's stock per shop and store and in all (every variant together, over the branches the person may see), more
@@ -47,12 +48,12 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
       <p className="cluster" data-tour="family-links">
         <Link className="btn-sm" to={'/staff/retail/catalogue/products' as never}>Items</Link>
         <ScreenLink screen="sale" to="/staff/retail/sale">Record a sale</ScreenLink>
-        <ScreenLink screen="restock" to="/staff/retail/restock">Restock</ScreenLink>
+        <ScreenLink screen="restock" to="/staff/retail/restock">{WORDS.buyStock}</ScreenLink>
         <ScreenLink screen="transfer" to="/staff/retail/transfer">Move stock</ScreenLink>
         <ScreenLink screen="stock" to="/staff/retail/stock">Stock</ScreenLink>
         <ScreenLink screen="salesHistory" to="/staff/retail/sales">Sales</ScreenLink>
       </p>
-      <p className="hint">Each size and colour is an item of its own when you sell, restock, move or count stock: look for its name with the size and colour, such as {f?.variants?.[0]?.description ?? 'Baby romper (0-3m, Blue)'}.</p>
+      <p className="hint">Each size and colour is an item of its own when you sell, buy, move or count stock: look for its name with the size and colour, such as {f?.variants?.[0]?.description ?? 'Baby romper (0-3m, Blue)'}.</p>
       {message && <Success>{message}</Success>}
       {family.isPending && <p className="loading">Loading</p>}
       <Problem error={family.error} />
@@ -129,7 +130,7 @@ function StockOf({ family }: { family: Family }) {
     <>
       <p>In all: <strong>{showQty(family.stock_on_hand ?? '0')} {family.unit}</strong></p>
       {rows.length === 0 ? (
-        <p className="empty-state">No stock of this item yet. Restock it, and each size and colour shows its own count.</p>
+        <p className="empty-state">No stock of this item yet. Buy stock of it, and each size and colour shows its own count.</p>
       ) : (
         <ul>
           {rows.map((b) => <li key={b.branch_id}>{nameOf(b.branch_id)}: {showQty(b.qty ?? '0')}</li>)}
@@ -242,7 +243,7 @@ function VariantForm({ product, onSaved, onCancel }: { product: Product; onSaved
       <label htmlFor="variant-inactive">
         <input id="variant-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
       </label>
-      <p className="hint">An inactive size is not offered when selling, restocking or moving stock. It is never deleted: its history stays.</p>
+      <p className="hint">An inactive size is not offered when selling, buying or moving stock. It is never deleted: its history stays.</p>
       <PhotoEditor
         inputId={product.id ?? 'size'}
         photoId={product.photo_id}

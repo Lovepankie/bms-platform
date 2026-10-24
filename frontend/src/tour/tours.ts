@@ -146,7 +146,8 @@ export const adminWelcome: Tour = {
   // Version 18 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
   // Version 19 adds the Download my data step (issue #334): the whole business as one Excel workbook, and the weekly copy by email.
   // Version 20 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
-  version: 20,
+  // Version 21 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 21,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -265,7 +266,7 @@ export const adminWelcome: Tour = {
       target: 'retail-tiles',
       module: 'retail',
       title: 'Your shop each day',
-      body: 'Record sales, check stock and restock from here. One big button for each job.',
+      body: 'Record sales, check stock and buy stock from here. One big button for each job.',
     },
     {
       id: 'sale-change',
@@ -335,7 +336,7 @@ export const adminWelcome: Tour = {
       needs: STOCKTAKE,
       optional: true,
       title: 'Fix a wrong quantity',
-      body: 'On Stock, tap Correct on an item. Give the right quantity and the reason: an entry mistake or a miscount. The old figure stays in its history and does not count as shrinkage. If you may change items, you can fix the category there too.',
+      body: 'On Stock, tap Correct on an item. Give the right quantity and the reason: an entry mistake or a miscount. The old figure stays in its history and does not count as lost or damaged stock. If you may change items, you can fix the category there too.',
     },
     {
       id: 'void-restock',
@@ -344,8 +345,8 @@ export const adminWelcome: Tour = {
       module: 'retail',
       needs: [RESTOCK],
       optional: true,
-      title: 'Fix a restock entered wrongly',
-      body: 'Open Past restocks, tap Correct this restock and give the reason. The stock, the books and the prices go back. The restock stays in the list as Voided. Then enter it again with the right quantity.',
+      title: 'Fix a purchase entered wrongly',
+      body: 'Open Past purchases, tap Correct this purchase and give the reason. The stock, the books and the prices go back. The purchase stays in the list as Voided. Then enter it again with the right quantity.',
     },
     {
       id: 'controls',
@@ -355,7 +356,7 @@ export const adminWelcome: Tour = {
       needs: ['retail.controls.read'],
       optional: true,
       title: 'What deserves a second look',
-      body: 'Open Controls to see sales cancelled, goods taken back, prices changed, restocks cancelled and quantities corrected, by shop and by person. Items about sales are shown per 100 sales, so a busy person and a quiet one can be compared fairly.',
+      body: 'Open Controls to see sales cancelled, goods taken back, prices changed, purchases cancelled and quantities corrected, by shop and by person. Items about sales are shown per 100 sales, so a busy person and a quiet one can be compared fairly.',
     },
     {
       id: 'catalogue',
@@ -365,7 +366,7 @@ export const adminWelcome: Tour = {
       needsAny: CATALOGUE,
       optional: true,
       title: 'Your items and prices',
-      body: 'Add items, change prices, and keep your suppliers and credit buyers here.',
+      body: 'Add items, change prices, and keep your suppliers and customers who owe here.',
     },
     {
       id: 'lending',
@@ -411,7 +412,8 @@ export const retailSales: Tour = {
   // Version 15 makes it the Scan here step (ADR-070 decision 11): a scanner types only into the Scan box.
   // Version 16 words the Find the item step for the picker that lists items only while you type (issue #534).
   // Version 17 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
-  version: 17,
+  // Version 18 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 18,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -419,7 +421,7 @@ export const retailSales: Tour = {
     {
       id: 'welcome',
       title: 'Welcome',
-      body: 'Here is how to sell, check stock and restock. It takes about a minute.',
+      body: 'Here is how to sell, check stock and buy stock. It takes about a minute.',
     },
     { ...branch, optional: true, body: 'Sales and stock are counted per branch. Check that this shows the shop you are in.' },
     tabs,
@@ -540,7 +542,7 @@ export const retailSales: Tour = {
       target: 'retail-restock',
       module: 'retail',
       needs: [RESTOCK],
-      title: 'Restock',
+      title: 'Buy stock',
       body: 'When new stock comes from a supplier, record it here. The counts stay right.',
     },
     {
@@ -673,15 +675,16 @@ export const stockPage: Tour = {
 export const restocksPage: Tour = {
   id: 'page-restocks',
   // Version 2 adds the grouped view (issue #350).
-  version: 2,
-  title: 'This page: past restocks',
+  // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 3,
+  title: 'This page: past purchases',
   audience: (me) => held(me, RESTOCK),
   autoStart: false,
   page: '/staff/retail/restocks',
   steps: [
-    { id: 'restocks-filters', target: 'restocks-filters', module: 'retail', title: 'Find the restock', body: 'Choose the first and last day, or show only the voided ones. Every restock is kept, even a voided one.' },
-    { id: 'restocks-list', target: 'restocks-list', module: 'retail', optional: true, title: 'Correct this restock', body: 'Tap Correct this restock, give the reason, then enter it again with the right quantity or unit. If less than its quantity is left, use Correct on the Stock page instead.' },
-    groupedViewStep('your restocks in groups, with how many in each', 'shop, year, month, supplier, day, category and item'),
+    { id: 'restocks-filters', target: 'restocks-filters', module: 'retail', title: 'Find the purchase', body: 'Choose the first and last day, or show only the voided ones. Every purchase is kept, even a voided one.' },
+    { id: 'restocks-list', target: 'restocks-list', module: 'retail', optional: true, title: 'Correct this purchase', body: 'Tap Correct this purchase, give the reason, then enter it again with the right quantity or unit. If less than its quantity is left, use Correct on the Stock page instead.' },
+    groupedViewStep('your purchases in groups, with how many in each', 'shop, year, month, supplier, day, category and item'),
   ],
 };
 
@@ -827,7 +830,8 @@ export const loanPage: Tour = {
 // Version 2 adds the inactive items step (issue #342), so whoever finished version 1 sees it once.
 export const cataloguePage: Tour = {
   id: 'page-catalogue',
-  version: 2,
+  // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 3,
   title: 'This page: catalogue',
   audience: (me) => CATALOGUE.some((p) => held(me, p)),
   autoStart: false,
@@ -852,7 +856,7 @@ export const cataloguePage: Tour = {
       needs: ['retail.catalogue.manage'],
       optional: true,
       title: 'Items you stopped selling',
-      body: 'Open an item and tick Inactive. It is never deleted: it leaves the sale, restock and move lists, and its history and reports stay. Show inactive items on the Stock page brings it back into view.',
+      body: 'Open an item and tick Inactive. It is never deleted: it leaves the sale, buy stock and move lists, and its history and reports stay. Show inactive items on the Stock page brings it back into view.',
     },
     {
       id: 'importer',
@@ -869,8 +873,9 @@ export const stocktakePage: Tour = {
   id: 'page-stocktake',
   // Version 2 adds the Scan here step (issue #345, ADR-070).
   // Version 3 words the Count step for the search on top and the list Not counted yet below it (issue #534).
-  version: 3,
-  title: 'This page: stock-take',
+  // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 4,
+  title: 'This page: count stock',
   audience: (me) => STOCKTAKE.every((p) => held(me, p)),
   autoStart: false,
   page: '/staff/retail/stocktake',
@@ -1147,7 +1152,8 @@ export const feedbackPage: Tour = {
 export const branchesPage: Tour = {
   id: 'page-branches',
   // Version 2 adds the Store step (issue #366): a branch that holds stock but does not sell.
-  version: 2,
+  // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 3,
   title: 'This page: branches',
   audience: (me) => held(me, 'core.branches.read'),
   autoStart: false,
@@ -1157,7 +1163,7 @@ export const branchesPage: Tour = {
       id: 'intro',
       target: 'branches-intro',
       title: 'Closing a branch keeps its history',
-      body: 'A closed branch keeps its sales and stock records for your reports. It only leaves the branch lists and the sale, restock and move-stock screens.',
+      body: 'A closed branch keeps its sales and stock records for your reports. It only leaves the branch lists and the sale, buy stock and move stock screens.',
     },
     {
       id: 'list',
@@ -1169,7 +1175,7 @@ export const branchesPage: Tour = {
       id: 'store',
       target: 'branches-list',
       title: 'A store holds stock but does not sell',
-      body: 'Tap Mark as a store (does not sell) for a branch that only keeps stock. It still takes restocks and stock moves, but it leaves the sale screen and the till. Tap Sells again to make it a shop.',
+      body: 'Tap Mark as a store (does not sell) for a branch that only keeps stock. It still takes purchases and stock moves, but it leaves the sale screen and the till. Tap Sells again to make it a shop.',
     },
   ],
 };
@@ -1382,16 +1388,17 @@ export const transferReceiptCapability: Tour = {
 // catalogue, when first enabled. Pack sizes are set on each item and chosen on the sale and restock forms.
 export const unitsCapability: Tour = {
   id: 'capability-units',
-  version: 1,
-  title: 'New: pack sizes',
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
+  title: 'New: cartons, boxes and other packs',
   audience: (me) => held(me, 'retail.catalogue.manage'),
   autoStart: true,
   capability: { module: 'retail', key: 'units' },
   steps: [
     {
       id: 'intro',
-      title: 'Pack sizes are on',
-      body: 'An item can now have packs, like a carton of 12. Stock is still counted in single items; a sale or a restock can be entered by the pack.',
+      title: 'Packs are on',
+      body: 'An item can now have packs, like a carton of 12. Stock is still counted in single items; a sale or a purchase can be entered by the pack.',
     },
     {
       id: 'tile',
@@ -1400,7 +1407,7 @@ export const unitsCapability: Tour = {
       module: 'retail',
       optional: true,
       title: 'Add the packs',
-      body: 'Open Catalogue, then Items. Choose Edit on an item and add its pack sizes. Then the sale and restock screens offer them.',
+      body: 'Open Catalogue, then Items. Choose Edit on an item and add its cartons, boxes and other packs. Then the sale and buy stock screens offer them.',
     },
   ],
 };
@@ -1469,7 +1476,8 @@ export const priceListsPage: Tour = {
 // enabled. A seller meets the same feature on Credit buyers (a limit refuses a credit sale), which the intro says.
 export const customerAccountsCapability: Tour = {
   id: 'capability-customer-accounts',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'New: customer accounts',
   audience: (me) => held(me, 'retail.credit.manage'),
   autoStart: true,
@@ -1478,7 +1486,7 @@ export const customerAccountsCapability: Tour = {
     {
       id: 'intro',
       title: 'Customer accounts are on',
-      body: 'Each credit buyer can now have a credit limit and payment terms. A credit sale needs a buyer from the list. It is refused above their limit, unless someone you allow gives a reason.',
+      body: 'Each customer on the list can now have a credit limit and payment terms. A credit sale needs a customer from the list. It is refused above their limit, unless someone you allow gives a reason.',
     },
     {
       id: 'tile',
@@ -1494,8 +1502,8 @@ export const customerAccountsCapability: Tour = {
       route: '/staff/retail/accounts',
       target: 'accounts-list',
       module: 'retail',
-      title: 'Your credit buyers',
-      body: 'Each buyer shows what they owe, their limit and their terms. Tap Open account to work on one. Sellers reach this page from Credit buyers.',
+      title: 'Your customers who owe',
+      body: 'Each buyer shows what they owe, their limit and their terms. Tap Open account to work on one. Sellers reach this page from Customers who owe.',
     },
   ],
 };
@@ -1674,7 +1682,8 @@ export const quotationsPage: Tour = {
 export const purchasingCapability: Tour = {
   id: 'capability-purchasing',
   // Version 2 adds the landed cost and credit note steps (issue #199), so whoever finished version 1 sees them once.
-  version: 2,
+  // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 3,
   title: 'New: purchase orders',
   audience: (me) => held(me, 'retail.purchase.create'),
   autoStart: true,
@@ -1683,7 +1692,7 @@ export const purchasingCapability: Tour = {
     {
       id: 'intro',
       title: 'Purchase orders are on',
-      body: 'You can order from a supplier, receive what arrives, record the supplier\'s invoice and pay it. You can also add freight and duty to what goods cost, and record credit notes from suppliers. Restock still works as before for buying without an order.',
+      body: 'You can order from a supplier, receive what arrives, record the supplier\'s invoice and pay it. You can also add freight and duty to what goods cost, and record credit notes from suppliers. Buy stock still works as before for buying without an order.',
     },
     {
       id: 'tile',

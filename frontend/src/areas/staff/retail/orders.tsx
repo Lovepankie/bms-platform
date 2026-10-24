@@ -247,7 +247,7 @@ export function OrderForm({ branchId, onSaved }: { branchId: string; onSaved: (o
         <input id="order-name" value={draft.name} maxLength={200} onChange={(e) => update({ name: e.target.value })} />
         {(customers.data ?? []).length > 0 && (
           <>
-            <label htmlFor="order-buyer">Credit buyer on the list (optional, needed to sell to them on credit when customer accounts are on)</label>
+            <label htmlFor="order-buyer">Customer from the list (optional, needed to sell to them on credit when customer accounts are on)</label>
             <select id="order-buyer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
               <option value="">Not on the list</option>
               {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

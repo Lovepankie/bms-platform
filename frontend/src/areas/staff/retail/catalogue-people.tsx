@@ -12,6 +12,7 @@ import { AddPanel, BackToCatalogue } from './catalogue';
 import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // Suppliers and Credit buyers (#146): a name and a contact, added and edited by the shop. A supplier
 // can be switched off (it stays on its past restocks); a credit buyer is never removed. The contact
@@ -175,7 +176,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
                       version: r.version,
                       body: { active: 'active' in r && r.active === false },
                       text: (x) => ('active' in x && x.active === false
-                        ? `"${x.name}" is switched off. It stays on past restocks; new restocks cannot choose it.`
+                        ? `"${x.name}" is switched off. It stays on past purchases; new purchases cannot choose it.`
                         : `"${x.name}" is switched on again.`),
                     }),
                 }
@@ -207,10 +208,10 @@ export function SuppliersPage() {
 
 export function BuyersPage() {
   return (
-    <Gate screen="buyers" title="Credit buyers">
+    <Gate screen="buyers" title={WORDS.customersWhoOwe}>
       <PeopleList
         note="What each buyer owes is counted over all the branches you may read, whichever branch is chosen."
-        noun="credit buyer" plural="credit buyers" queryKey="buyers"
+        noun="customer" plural="customers who owe" queryKey="buyers"
         list={(q) => retail.listCustomerPage(q)} create={(b) => retail.createCustomer(b)}
         update={(id, v, b) => retail.updateCustomer(id, v, b)}
         canAdd canSwitch={false} searchable

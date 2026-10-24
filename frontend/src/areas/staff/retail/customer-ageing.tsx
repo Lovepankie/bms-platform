@@ -44,7 +44,7 @@ export function CustomerAgeingView({ data, rows, accounts = false }: { data: Cus
   const shown = rows ?? data.customers ?? [];
   return (
     <>
-      <p className="rt-total">Owed by credit buyers with a record {money(totals.owed_minor ?? 0)}</p>
+      <p className="rt-total">Owed by customers with a record {money(totals.owed_minor ?? 0)}</p>
       <p className="hint">{data.customer_count ?? 0} {data.customer_count === 1 ? 'buyer owes' : 'buyers owe'} this, as of {data.as_of}. Days are counted from the due date; a sale with no due date counts as not yet due.</p>
       <Section title="Ageing">
         <Bars label="Owed by age" rows={BUCKETS.map((b) => ({ key: b.key, name: b.label, value: totals[b.key] ?? 0, text: money(totals[b.key] ?? 0) }))} />
@@ -100,7 +100,7 @@ export function CustomerAgeingPage() {
   return (
     <Gate screen="customerAgeing" title="Customer ageing" wide>
       <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <p className="hint" data-tour="ageing-help">What each credit buyer owes, as of today, by how late it is.</p>
+      <p className="hint" data-tour="ageing-help">What each customer who owes has to pay, as of today, by how late it is.</p>
       <p><ScreenLink screen="creditSales" to="/staff/retail/credit-sales">Credit sales</ScreenLink></p>
       <div className="rt-row" data-tour="ageing-top">
         <Choice id="ca-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} />
@@ -112,7 +112,7 @@ export function CustomerAgeingPage() {
       <Problem error={report.error} />
       <div data-tour="ageing-report">
         {report.data && search.term !== '' && rows.length === 0 ? (
-          <NoResults term={search.term} onClear={search.clear} noun="credit buyers" />
+          <NoResults term={search.term} onClear={search.clear} noun="customers who owe" />
         ) : (
           report.data && <SearchResults fetching={false}><CustomerAgeingView data={report.data} rows={rows} accounts={canOpenAccount(me)} /></SearchResults>
         )}

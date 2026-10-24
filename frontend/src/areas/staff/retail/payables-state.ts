@@ -240,7 +240,7 @@ export function lateWords(days: number | undefined): string {
   return d === 1 ? '1 day late' : `${d} days late`;
 }
 
-export const KIND_WORDS: Record<string, string> = { bill: 'Supplier invoice', restock: 'Credit restock' };
+export const KIND_WORDS: Record<string, string> = { bill: 'Supplier invoice', restock: 'Stock bought on credit' };
 
 // ---- The payables report ---------------------------------------------------------------------------------------------
 

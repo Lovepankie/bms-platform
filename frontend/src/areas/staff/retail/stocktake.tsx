@@ -14,6 +14,7 @@ import { UNITS, capabilityOn, needsOf } from './permissions';
 import { chosenPack } from './units-state';
 import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { WORDS } from '../../../app/glossary';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -24,8 +25,8 @@ const variance = (l: StocktakeLine): string => l.committed_variance_qty ?? l.var
 export function StocktakeReview({ stocktake, onCommit, busy }: { stocktake: Stocktake; onCommit?: () => void; busy?: boolean }) {
   const changed = (stocktake.lines ?? []).filter((l) => milliOf(variance(l)) !== 0);
   return (
-    <section aria-label="Stock-take review">
-      <h2>{stocktake.status === 'committed' ? 'Stock-take committed' : 'Review the variance'}</h2>
+    <section aria-label="Stock count review">
+      <h2>{stocktake.status === 'committed' ? 'Stock count committed' : 'Review the difference'}</h2>
       {changed.length === 0 ? (
         <p>Every counted item matches the system.</p>
       ) : (
@@ -107,7 +108,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   const scanAdd = (p: Product, unitId?: string) => {
     const id = p.id ?? '';
     if (!stock.data) return 'The count sheet is still loading. Scan again in a moment.';
-    if (!stock.data.some((r) => r.product_id === id)) return `${p.description ?? p.code ?? 'This item'} is not on the count sheet of this branch. Restock it first, or count it at its own branch.`;
+    if (!stock.data.some((r) => r.product_id === id)) return `${p.description ?? p.code ?? 'This item'} is not on the count sheet of this branch. Buy stock of it first, or count it at its own branch.`;
     const pack = unitsOn ? chosenPack(p, unitId) : undefined;
     if (unitId && !pack) return PACK_UNUSABLE;
     search.clear();
@@ -235,7 +236,7 @@ function CountSheet({ branchId }: { branchId: string }) {
         </div>
       )}
       <BusyButton type="button" className="rt-primary" busy={review.isPending} disabled={entered.length === 0 || bad} onClick={finish} data-tour="count-review">
-        {`Review variance (${entered.length} counted)`}
+        {`Review the difference (${entered.length} counted)`}
       </BusyButton>
 
     </>
@@ -245,7 +246,7 @@ function CountSheet({ branchId }: { branchId: string }) {
 export function StocktakePage() {
   const { branchId, branchName } = useStockingBranch();
   return (
-    <Gate screen="stocktake" title="Stock-take">
+    <Gate screen="stocktake" title={WORDS.countStock}>
       {branchId === null ? (
         <BranchRequired permissions={needsOf('stocktake')} stocking />
       ) : (

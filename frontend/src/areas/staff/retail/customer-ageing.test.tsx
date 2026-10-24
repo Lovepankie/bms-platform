@@ -38,7 +38,7 @@ const view = (report: CustomerAgeing, accounts = true, shown?: readonly AgeingCu
 describe('the customer ageing report', () => {
   it('lists each buyer with what they owe, the limit, the terms and the days late', () => {
     const html = view(data);
-    expect(html).toContain('Owed by credit buyers with a record UGX 6,800');
+    expect(html).toContain('Owed by customers with a record UGX 6,800');
     expect(html).toContain('2 buyers owe this, as of 2026-10-08');
     expect(html).toContain('Test Buyer 01');
     expect(html).toContain('UGX 6,000');

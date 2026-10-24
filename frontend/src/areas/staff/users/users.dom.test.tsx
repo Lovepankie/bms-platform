@@ -167,7 +167,7 @@ describe('the invite form', () => {
     expect(screen.queryByRole('option', { name: 'Purchasing' })).toBeNull();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Test Branch Two (KLA)' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Test Store (ST), a store' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /Can also record purchases and restocks/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Can also buy stock and record purchases/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
     await waitFor(() => expect(api.invite).toHaveBeenCalledWith({
       full_name: 'Test Cashier 05',

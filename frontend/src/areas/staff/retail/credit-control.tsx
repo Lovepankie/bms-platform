@@ -39,7 +39,7 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
   const payments = data.payments ?? [];
   return (
     <>
-      <p className="rt-total">Owed by credit buyers {money(totals.owed_minor ?? 0)} <ToSales credit>See the credit sales</ToSales></p>
+      <p className="rt-total">Owed by customers {money(totals.owed_minor ?? 0)} <ToSales credit>See the credit sales</ToSales></p>
       <p className="hint">{data.buyer_count ?? 0} {data.buyer_count === 1 ? 'buyer owes' : 'buyers owe'} this, as of {data.as_of}. Days are counted from the due date; a sale with no due date counts as not yet due.</p>
       <Section title="Ageing">
         <Bars label="Owed by age" rows={BUCKETS.map((b) => ({ key: b.key, name: b.label, value: totals[b.key] ?? 0, text: money(totals[b.key] ?? 0) }))} />

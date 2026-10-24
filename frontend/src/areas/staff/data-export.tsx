@@ -28,7 +28,7 @@ export function exportWording(modules: string[] | null | undefined): string {
   const retail = !modules || modules.includes('retail');
   const lending = !modules || modules.includes('lending');
   const tables = [
-    ...(retail ? ['sales, stock, restocks, credit buyers, the cash book, customers and products'] : []),
+    ...(retail ? ['sales, stock, purchases, customers who owe, the cash book, customers and products'] : []),
     ...(lending ? ['members, loans, repayments and arrears'] : []),
   ];
   return tables.length === 0 ? 'your branches' : tables.join('; ');

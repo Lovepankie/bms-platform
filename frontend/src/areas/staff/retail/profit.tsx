@@ -203,14 +203,14 @@ function FiguresTable({ label, rows, onPayment }: { label: string; rows: { key: 
           {!phone && <th className="num">Cost</th>}
           {!phone && <th className="num">Usage</th>}
           {withBad && !phone && <th className="num">Debts<br />written off</th>}
-          {!phone && <th className="num">Stock-take<br />difference</th>}
+          {!phone && <th className="num">Stock count<br />difference</th>}
           <th className="num">Profit</th>
         </tr>
       </thead>
       <tbody>
         {rows.map(({ key, name, f }) => (
           <tr key={key}>
-            <td>{name}{phone && <><br /><span className="hint">{onPayment && <>Sold {money(f.sold)}<br /></>}Cost {money(f.cost)}<br />Usage {money(f.usage)}<br />{withBad && <>Debts written off {money(f.bad)}<br /></>}Stock-take difference {money(f.difference)}</span></>}</td>
+            <td>{name}{phone && <><br /><span className="hint">{onPayment && <>Sold {money(f.sold)}<br /></>}Cost {money(f.cost)}<br />Usage {money(f.usage)}<br />{withBad && <>Debts written off {money(f.bad)}<br /></>}Stock count difference {money(f.difference)}</span></>}</td>
             {onPayment && !phone && <td className="num">{money(f.sold)}</td>}
             {onPayment && <td className="num">{money(f.received)}</td>}
             <td className="num">{money(f.sales)}</td>
@@ -272,7 +272,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
             : `From ${report.credit_recognition_starts_on}, credit sales will count when the buyer pays.`}
         </p>
       )}
-      <p className="hint">Usage and damage reports count here. A debt written off is a loss on the day it was written off. The stock-take difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
+      <p className="hint">Usage and damage reports count here. A debt written off is a loss on the day it was written off. The stock count difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
     </>
   );
 }

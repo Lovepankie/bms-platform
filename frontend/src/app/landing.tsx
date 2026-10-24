@@ -29,7 +29,7 @@ export function landingCopy(modules: readonly string[]): LandingCopy {
   const lending = modules.includes('lending');
   const cards: LandingCard[] = [];
   if (retail) {
-    cards.push({ key: 'retail', icon: 'sale', title: 'Sales and stock', text: 'Record sales, restock and count stock at every branch, with the profit of each day.' });
+    cards.push({ key: 'retail', icon: 'sale', title: 'Sales and stock', text: 'Record sales, buy stock and count stock at every branch, with the profit of each day.' });
   }
   if (lending) {
     cards.push({ key: 'lending', icon: 'calendar', title: 'Members and loans', text: 'Member records, loans, schedules and repayments, with approvals built in.' });

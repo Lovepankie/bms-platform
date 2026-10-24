@@ -208,7 +208,7 @@ export function BranchRequired({ permissions, stocking = false }: { permissions:
   return (
     <div role="note" className="alert alert-info">
       <div className="stack">
-        {chosen && <p><strong>{branchLabel(chosen)}</strong> keeps no goods, so nothing is sold, restocked, moved or counted there.</p>}
+        {chosen && <p><strong>{branchLabel(chosen)}</strong> keeps no goods, so nothing is sold, bought in, moved or counted there.</p>}
         <p>Choose a branch to continue:</p>
         <p className="cluster">
           {branches.map((b) => (

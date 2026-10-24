@@ -154,7 +154,7 @@ describe('reopening and the stocking switch', () => {
     await screen.findByText('Test Shop Two (KLA)');
     fireEvent.click(screen.getAllByRole('button', { name: 'Mark as keeping no goods' })[0] as HTMLElement);
     // One tap only asks: nothing is sent until the person confirms in plain words.
-    expect(screen.getByText(/Nothing can be sold, restocked, received or counted there afterwards/)).toBeTruthy();
+    expect(screen.getByText(/Nothing can be sold, bought in, received or counted there afterwards/)).toBeTruthy();
     expect(api.setStocking).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Yes, mark it' }));
     expect(await screen.findByText(/still holds stock worth UGX 3,000/)).toBeTruthy();

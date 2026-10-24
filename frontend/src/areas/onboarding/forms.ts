@@ -12,7 +12,7 @@ export const COUNTRIES = [
 
 /** The module keys the API knows (the vertical manifests), with plain descriptions. */
 export const MODULES = [
-  { key: 'retail', label: 'Shop: sales, stock and restocking' },
+  { key: 'retail', label: 'Shop: sales, stock and buying stock' },
   { key: 'lending', label: 'Lending: members, loans and savings' },
 ] as const;
 

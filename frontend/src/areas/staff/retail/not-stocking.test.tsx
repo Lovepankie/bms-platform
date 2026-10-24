@@ -57,7 +57,7 @@ describe('a branch that keeps no goods', () => {
     const me = meWithHeadNotStocking();
     const first = me.branches?.[0]?.id ?? '';
     const asked = on(me, first, <BranchRequired permissions={needsOf('stocktake')} stocking />);
-    expect(asked).toContain('keeps no goods, so nothing is sold, restocked, moved or counted there');
+    expect(asked).toContain('keeps no goods, so nothing is sold, bought in, moved or counted there');
     expect(asked).toContain('Test Branch B (BR2)');
     expect(asked).not.toContain('<button type="button" class="btn-sm" disabled="">Test Branch A');
     expect(asked).not.toMatch(/<button[^>]*>Test Branch A/);

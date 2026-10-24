@@ -127,7 +127,7 @@ public class RetailBranchContext {
                     "branch_not_stocking",
                     "This branch does not stock goods",
                     found.name()
-                            + " is marked as not stocking goods, so nothing can be sold, restocked, received or counted"
+                            + " is marked as not stocking goods, so nothing can be sold, bought in, received or counted"
                             + " there. Choose a shop or a store.",
                     List.of(new FieldProblem(field, "branch_not_stocking", "This branch does not stock goods.")));
         }

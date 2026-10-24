@@ -1053,13 +1053,13 @@ export function createMockRetail(): RetailApi {
       run(() => once(`void-purchase|${key}`, { id, reason }, (): Purchase => {
         const found = purchases.find((p) => p.id === id);
         if (!found) return refuse(404, 'not_found', 'The resource does not exist.');
-        if (found.status === 'voided') refuse(409, 'purchase_voided', 'This restock has been voided already.');
+        if (found.status === 'voided') refuse(409, 'purchase_voided', 'This purchase has been voided already.');
         if (reason.trim().length < 5) refuse(422, 'validation_failed', 'Give a reason of at least 5 characters.');
         for (const l of found.lines ?? []) {
           for (const b of l.qty_by_branch ?? []) {
             const have = bal(b.branch_id ?? '', l.product_id ?? '');
             if (have < toMilli(b.qty ?? '0')) {
-              refuse(422, 'purchase_stock_moved', `${l.description}: this restock added ${plainQty(b.qty ?? '0')} ${l.base_unit ?? ''} but only ${plainQty(fromMilli(have))} are in stock there now, because some were sold, used or moved. It cannot be voided. Use Correct the quantity on the stock list, or count the stock.`);
+              refuse(422, 'purchase_stock_moved', `${l.description}: this purchase added ${plainQty(b.qty ?? '0')} ${l.base_unit ?? ''} but only ${plainQty(fromMilli(have))} are in stock there now, because some were sold, used or moved. It cannot be voided. Use Correct the quantity on the stock list, or count the stock.`);
             }
           }
         }

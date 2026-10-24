@@ -32,18 +32,19 @@ const step = (s: Omit<TourStep, 'module'>): TourStep => ({ module: 'retail', ...
 
 export const productsPage: Tour = {
   id: 'page-products',
-  version: 4,
+  // Version 5 says what an item is counted in, as the item form now does (issue #547).
+  version: 5,
   title: 'This page: items',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products',
   steps: [
-    step({ id: 'add', target: 'product-add', title: 'Add an item', body: 'Tap here to add something you sell. Type the code, the name, pick the category and the unit, then the price.' }),
+    step({ id: 'add', target: 'product-add', title: 'Add an item', body: 'Tap here to add something you sell. Type the code, the name, pick the category and what it is counted in, then the price.' }),
     step({ id: 'sizes', target: 'product-add-sizes', title: 'Sizes and colours', body: 'Sell one design in several sizes or prints? Tap here, type the sizes and the colours once, and each one gets its own code, price and stock.' }),
     step({ id: 'join', target: 'product-join-sizes', title: 'One item per size?', body: 'If you typed each size as its own item, tap here to join them. Each keeps its stock and history.' }),
     step({ id: 'search', target: 'product-search', title: 'Find an item', body: 'Type a name, a code or a category. The list narrows as you type.' }),
     step({ id: 'filters', target: 'product-filters', title: 'Narrow the list', body: 'Pick a category, or choose Switched off to see items you no longer sell.' }),
-    step({ id: 'edit', target: 'product-list', title: 'Change an item', body: 'Tap Edit on an item to change its name, category or unit. Tap Stock to see how much of it you hold.' }),
+    step({ id: 'edit', target: 'product-list', title: 'Change an item', body: 'Tap Edit on an item to change its name, category or what it is counted in. Tap Stock to see how much of it you hold.' }),
     // Issue #412: the low-stock level is on the item's page, under Edit.
     step({ id: 'minimum', target: 'product-list', title: 'Warn me when stock is below', body: 'Tap Edit on an item to set when you are told it is running low. Set one level for every shop and store, or a different one for a shop. With no level, you are told when it would run out within 14 days.' }),
     step({ id: 'price', target: 'product-list', needs: [PRICE_EDIT], optional: true, title: 'Change a price', body: 'Tap Change price on an item. The old price stays in its history, so earlier sales keep the price they were made at.' }),
@@ -53,16 +54,17 @@ export const productsPage: Tour = {
 /** Issue #384: making an item with sizes and colours. */
 export const sizesNewPage: Tour = {
   id: 'page-sizes-new',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'This page: an item with sizes and colours',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products/sizes/new',
   steps: [
-    step({ id: 'name', target: 'sizes-name', title: 'Name it once', body: 'Type what it is called, a short code, the category, the unit and the price. Every size and colour starts from these.' }),
+    step({ id: 'name', target: 'sizes-name', title: 'Name it once', body: 'Type what it is called, a short code, the category, what it is counted in and the price. Every size and colour starts from these.' }),
     step({ id: 'options', target: 'sizes-options', title: 'Sizes and colours', body: 'Type the sizes, then the colours or prints, each list separated by commas. Every size comes in every colour.' }),
     step({ id: 'preview', target: 'sizes-preview', title: 'Check the list', body: 'Each one shows its code and price. Change a price here if a bigger size costs more.' }),
-    step({ id: 'save', target: 'sizes-save', title: 'Make them', body: 'Tap here. Each size and colour is then an item you can sell, restock, move and count on its own.' }),
+    step({ id: 'save', target: 'sizes-save', title: 'Make them', body: 'Tap here. Each size and colour is then an item you can sell, buy, move and count on its own.' }),
   ],
 };
 
@@ -70,7 +72,8 @@ export const sizesNewPage: Tour = {
 export const sizesJoinPage: Tour = {
   id: 'page-sizes-join',
   // Version 2 words the Pick step for the picker that lists items only while you type (issue #534).
-  version: 2,
+  // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 3,
   title: 'This page: join items as sizes',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
@@ -79,14 +82,15 @@ export const sizesJoinPage: Tour = {
     step({ id: 'name', target: 'join-name', title: 'Name the item', body: 'Type what the item is called, such as Twin cable. Each size gets this name with its size.' }),
     step({ id: 'pick', target: 'join-pick', title: 'Pick the items', body: 'Type the name of each item that is one size or colour. Tap it in the list under the box.' }),
     step({ id: 'list', target: 'join-list', title: 'Say which size', body: 'Type the size or the colour of each one. They keep their codes, prices and stock.' }),
-    step({ id: 'save', target: 'join-save', title: 'Join them', body: 'Tap here. They now show together as one item, and sell and restock as before.' }),
+    step({ id: 'save', target: 'join-save', title: 'Join them', body: 'Tap here. They now show together as one item, and sell and buy as before.' }),
   ],
 };
 
 /** Issue #384: the page of an item with sizes and colours. */
 export const sizesPage: Tour = {
   id: 'page-sizes',
-  version: 2,
+  // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 3,
   title: 'This page: sizes and colours',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
@@ -96,7 +100,7 @@ export const sizesPage: Tour = {
     step({ id: 'stock', target: 'family-stock', title: 'All its stock', body: 'This is the stock of every size and colour together, in each shop and store you can see.' }),
     step({ id: 'variants', target: 'family-variants', title: 'Each size and colour', body: 'Each one has its own code, price and stock. Tap Change price for one size, or Change to fix its size, colour or code.' }),
     step({ id: 'add', target: 'family-add', title: 'Add more', body: 'Type a new size or a new print. It is made in every colour or size the item has, at the price of the first one.' }),
-    step({ id: 'links', target: 'family-links', title: 'Sell and restock', body: 'Record a sale, restock or move stock as usual: look for the name with the size and colour.' }),
+    step({ id: 'links', target: 'family-links', title: 'Sell and buy stock', body: 'Record a sale, buy stock or move stock as usual: look for the name with the size and colour.' }),
   ],
 };
 
@@ -128,26 +132,28 @@ export const unitsPage: Tour = {
 
 export const suppliersPage: Tour = {
   id: 'page-suppliers',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'This page: suppliers',
   audience: (me) => held(me, CATALOGUE) && held(me, PURCHASE),
   autoStart: false,
   page: '/staff/retail/catalogue/suppliers',
   steps: [
-    step({ id: 'add', target: 'person-add', optional: true, title: 'Add a supplier', body: 'Tap here and type the name and a phone number. You pick a supplier when you restock.' }),
-    step({ id: 'list', target: 'person-list', title: 'Your suppliers', body: 'Tap Edit to fix a name or phone. Tap Switch off for a supplier you no longer use. Past restocks keep it.' }),
+    step({ id: 'add', target: 'person-add', optional: true, title: 'Add a supplier', body: 'Tap here and type the name and a phone number. You pick a supplier when you buy stock.' }),
+    step({ id: 'list', target: 'person-list', title: 'Your suppliers', body: 'Tap Edit to fix a name or phone. Tap Switch off for a supplier you no longer use. Past purchases keep it.' }),
   ],
 };
 
 export const buyersPage: Tour = {
   id: 'page-buyers',
-  version: 1,
-  title: 'This page: credit buyers',
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
+  title: 'This page: customers who owe',
   audience: (me) => held(me, CUSTOMER) && held(me, SALE_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/buyers',
   steps: [
-    step({ id: 'add', target: 'person-add', optional: true, title: 'Add a credit buyer', body: 'Tap here and type the name and a phone number. A credit sale needs a buyer from this list.' }),
+    step({ id: 'add', target: 'person-add', optional: true, title: 'Add a customer', body: 'Tap here and type the name and a phone number. A credit sale needs a customer from this list.' }),
     step({ id: 'search', target: 'person-search', title: 'Find a buyer', body: 'Type a name or a phone number. The list narrows as you type.' }),
     step({ id: 'list', target: 'person-list', title: 'What each buyer owes', body: 'Each card shows what the buyer owes. Tap Edit to fix a name or phone. If customer accounts are on, tap Open account to see their limit, take a payment or read their statement.' }),
   ],
@@ -321,7 +327,8 @@ export const branchRolesPage: Tour = {
 
 export const customerGroupsPage: Tour = {
   id: 'page-customer-groups',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'This page: customer groups',
   audience: (me) => held(me, PRICELIST) && capable(me, 'price_lists'),
   autoStart: false,
@@ -329,19 +336,20 @@ export const customerGroupsPage: Tour = {
   steps: [
     step({ id: 'help', target: 'customer-groups-help', title: 'Why groups', body: 'Customers in one group share a price list. A customer\'s own price list wins over the group\'s.' }),
     step({ id: 'add', target: 'customer-groups-add', title: 'Add a group', body: 'Tap here, type a name and pick a price list. You can pick none, and then the retail price applies.' }),
-    step({ id: 'list', target: 'customer-groups-list', title: 'Change a group', body: 'Tap Edit to rename it or pick another price list. Tap Credit buyers to put a buyer in a group.' }),
+    step({ id: 'list', target: 'customer-groups-list', title: 'Change a group', body: 'Tap Edit to rename it or pick another price list. Tap Customers who owe to put a customer in a group.' }),
   ],
 };
 
 export const customerAgeingPage: Tour = {
   id: 'page-customer-ageing',
-  version: 1,
+  // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
+  version: 2,
   title: 'This page: customer ageing',
   audience: (me) => held(me, CREDIT_MANAGE) && held(me, SALE_READ) && capable(me, 'customer_accounts'),
   autoStart: false,
   page: '/staff/retail/customer-ageing',
   steps: [
-    step({ id: 'help', target: 'ageing-help', title: 'Who owes and how late', body: 'Every credit buyer who owes money, by how many days late. Tap Credit sales to see the sales behind it.' }),
+    step({ id: 'help', target: 'ageing-help', title: 'Who owes and how late', body: 'Every customer who owes money, by how many days late. Tap Credit sales to see the sales behind it.' }),
     step({ id: 'top', target: 'ageing-top', title: 'How many rows', body: 'Choose Top 10, 20, 50 or 100 buyers, the ones who owe the most first.' }),
     step({ id: 'search', target: 'ageing-search', title: 'Find a buyer', body: 'Type a name to narrow the rows already on the page.' }),
     step({ id: 'report', target: 'ageing-report', title: 'Read the table', body: 'The total is at the top. Tap a buyer\'s name to open their account and take a payment.' }),

@@ -117,7 +117,7 @@ export function draftProblem(draft: Draft, pricing?: Pricing, accounts?: Account
   if (draft.method === 'credit') {
     if (accounts) {
       // Customer accounts: a buyer from the list, and a date unless the buyer's terms give one.
-      if (draft.customerId === '') return 'Choose the credit buyer from the list, or add them first.';
+      if (draft.customerId === '') return 'Choose the customer from the list, or add them first.';
       if (draft.dueDate === '' && accounts.termsDays === undefined) return 'Enter the date the buyer will pay.';
       return null;
     }

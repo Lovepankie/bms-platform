@@ -4,6 +4,7 @@ import { Landing } from './landing';
 import { RefreshButton } from './refresh-button';
 import { Shell } from './shell';
 import { RouteError } from './stale-app';
+import { WORDS } from './glossary';
 
 // Route-level split (ADR-009): /staff and /member are separate lazily loaded route trees, so a
 // member never downloads staff code; sign-in and invitation acceptance are small chunks of their
@@ -113,11 +114,11 @@ const retailSalesRoute = retailScreen('/sales', 'All sales').lazy(() => import('
 const retailOrdersRoute = retailScreen('/orders', 'Orders').lazy(() => import('../areas/staff/retail/orders').then((m) => m.Route));
 const retailOrderRoute = retailScreen('/orders/$orderId', 'Order').lazy(() => import('../areas/staff/retail/order').then((m) => m.Route));
 const retailOrdersReportRoute = retailScreen('/orders-report', 'Delivery fees and cancellations').lazy(() => import('../areas/staff/retail/orders-report').then((m) => m.Route));
-const retailRestockRoute = retailScreen('/restock', 'Restock').lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
-const retailRestocksRoute = retailScreen('/restocks', 'Past restocks').lazy(() => import('../areas/staff/retail/restocks').then((m) => m.Route));
+const retailRestockRoute = retailScreen('/restock', WORDS.buyStock).lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
+const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(() => import('../areas/staff/retail/restocks').then((m) => m.Route));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
-const retailStocktakeRoute = retailScreen('/stocktake', 'Stock-take').lazy(() => import('../areas/staff/retail/stocktake').then((m) => m.Route));
+const retailStocktakeRoute = retailScreen('/stocktake', WORDS.countStock).lazy(() => import('../areas/staff/retail/stocktake').then((m) => m.Route));
 const retailTransferRoute = retailScreen('/transfer', 'Move stock').lazy(() => import('../areas/staff/retail/transfer').then((m) => m.Route));
 const retailTransfersRoute = retailScreen('/transfers', 'Stock moves').lazy(() => import('../areas/staff/retail/transfers').then((m) => m.Route));
 const retailStockByLocationRoute = retailScreen('/stock-by-location', 'Stores and shops').lazy(() => import('../areas/staff/retail/stock-by-location').then((m) => m.Route));
@@ -142,7 +143,7 @@ const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').l
 const retailImportRoute = retailScreen('/catalogue/import', 'Import items').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
 // Barcode labels (issue #345): an A4 sheet of labels with the name, the price and the barcode.
 const retailLabelsRoute = retailScreen('/catalogue/labels', 'Barcode labels').lazy(() => import('../areas/staff/retail/labels').then((m) => m.LabelsRoute));
-const retailBuyersRoute = retailScreen('/catalogue/buyers', 'Credit buyers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
+const retailBuyersRoute = retailScreen('/catalogue/buyers', WORDS.customersWhoOwe).lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.BuyersRoute));
 const retailBankingRoute = retailScreen('/banking', 'Banking').lazy(() => import('../areas/staff/retail/banking').then((m) => m.Route));
 const retailBankingReportRoute = retailScreen('/banking-report', 'Banking report').lazy(() => import('../areas/staff/retail/banking').then((m) => m.ReportRoute));
 const retailExpensesRoute = retailScreen('/expenses', 'Expenses').lazy(() => import('../areas/staff/retail/expenses').then((m) => m.Route));

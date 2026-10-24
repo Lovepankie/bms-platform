@@ -1454,3 +1454,16 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
 - A restock line that changes the item's buying price says "Last paid will change from UGX 750 to UGX 800", and the restock's summary
   "last paid changed from UGX 750 to UGX 800". Nothing else on the screens changes: sale lines, profit and the reports show the cost
   each sale line kept, which is now the shop's average at the moment of sale.
+
+## One glossary of shop words (issue #547, D24)
+
+- The words a person sees come from `frontend/src/app/glossary.ts` (spec `units-packs-and-costing.md` section 5, PR #513).
+  Restock is now **Buy stock** (the screen) and a record of it is a **purchase** (Past purchases, Save the purchase,
+  Correct this purchase, Stock bought on credit); Stock-take is **Count stock** (a stock count); Variance is
+  **Difference**; Shrinkage is **Lost or damaged stock**; Credit buyers is **Customers who owe**; the Unit of an item is
+  **Counted in**; Pack sizes is **Cartons, boxes and other packs**.
+- Routes (`/staff/retail/restock`, `/restocks`, `/stocktake`, `/catalogue/buyers`), API fields, permission names and error
+  codes are unchanged. The backend's plain-words refusals that a person reads use the same words.
+- `glossary.test.ts` fails when SKU, variance, shrinkage, UOM or restock (any case), or a retired label, shows in the
+  source strings or JSX text of a screen, in a tour or in the menu help. It reads source, not the rendered page: words
+  built at run time and the backend's refusals are worded by hand. The tours whose words changed took a new version.

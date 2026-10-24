@@ -178,7 +178,7 @@ describe('the past restocks, grouped', () => {
     listPurchases.mockClear();
     fireEvent.click(grouped);
     const y = await head(/2026/);
-    expect(y.textContent).toContain('2 restocks');
+    expect(y.textContent).toContain('2 purchases');
     expect(y.textContent).toContain('1 voided (not counted)');
     expect(y.textContent).toContain('20,000');
     expect(purchasesSummary.mock.calls.map((c) => c[0]).find((q) => q.level === 'year')).toMatchObject({ level: 'year', chain: ['year', 'supplier'] });
@@ -201,8 +201,8 @@ describe('the past restocks, grouped', () => {
     fireEvent.click(await head(/Test Supplier 01/));
     expect(await screen.findByText('RP00000001')).toBeTruthy();
     expect(listPurchases).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 's1' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Correct restock RP00000001' }));
-    expect(screen.getByRole('form', { name: 'Correct this restock' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Correct purchase RP00000001' }));
+    expect(screen.getByRole('form', { name: 'Correct this purchase' })).toBeTruthy();
   });
 
   it('passes what was opened above to the next level and to the restocks', async () => {

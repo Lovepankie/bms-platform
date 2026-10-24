@@ -89,7 +89,7 @@ export function SalesAnalysisView({ data }: { data: SalesAnalysis }) {
           {profit && <tr><td>Margin (profit over sales)</td><td className="num">{percentOrNone(totals.margin_bp)}</td></tr>}
         </tbody>
       </table></div>
-      {profit && <p className="hint">Profit here is sales less the cost the items had when they were sold. Usage, damage and stock-take differences are in Daily profit.</p>}
+      {profit && <p className="hint">Profit here is sales less the cost the items had when they were sold. Usage, damage and stock count differences are in Daily profit.</p>}
 
       <Section title="Over time">
         {series.length === 0 ? <Empty /> : (

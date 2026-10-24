@@ -6,6 +6,7 @@ import { retail, type CustomerGroup, type PriceList } from '../../../api/retail'
 import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, changeFailureText, requireVersion } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // Customer groups (ADR-033, issue #195): customers that share a price list. A buyer's own list wins over the list of
 // the group; a buyer is put in a group on the Credit buyers page. A group is switched off, never deleted. Each group
@@ -106,7 +107,7 @@ export function CustomerGroups() {
             onSave={(body) => change.mutate({ group: g, body })}
             extra={(
               <p className="cluster">
-                <ScreenLink screen="buyers" to="/staff/retail/catalogue/buyers" label={`See the credit buyers of ${g.name}`}>Credit buyers</ScreenLink>
+                <ScreenLink screen="buyers" to="/staff/retail/catalogue/buyers" label={`See the customers who owe in ${g.name}`}>{WORDS.customersWhoOwe}</ScreenLink>
                 {g.price_list && <ScreenLink screen="priceLists" to="/staff/retail/price-lists" label={`See the price list ${g.price_list}`}>Price lists</ScreenLink>}
               </p>
             )}

@@ -3,6 +3,7 @@ import { icons } from '../../../components/icons';
 import { MenuItemLink } from '../../../components/side-menu';
 import { SCREENS, branchesWhere, canUse, sellingBranches, showRetail, type RetailScreen } from './permissions';
 import { useBranchRolesRead } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // The retail shortcuts (#95): the first retail screens the session may use, with short names. The pilot's order comes first (Sales,
 // Banked, Savings, Expenses, Advances, FR-RET-31), with customer orders right after Sale (issue #385), then the stock shortcuts.
@@ -10,7 +11,7 @@ import { useBranchRolesRead } from './ui';
 // one-tap Sell button in the staff bar for anyone who can sell.
 
 export const SHORTCUTS: Partial<Record<RetailScreen, string>> = {
-  sale: 'Sale', orders: 'Orders', banking: 'Banked', savings: 'Savings', expenses: 'Expenses', advances: 'Advances', stock: 'Stock', restock: 'Restock', stocktake: 'Count', usage: 'Usage',
+  sale: 'Sale', orders: 'Orders', banking: 'Banked', savings: 'Savings', expenses: 'Expenses', advances: 'Advances', stock: 'Stock', restock: WORDS.buyStock, stocktake: 'Count', usage: 'Usage',
 };
 const MAX_SHORTCUTS = 5;
 

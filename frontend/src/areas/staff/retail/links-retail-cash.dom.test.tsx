@@ -61,7 +61,7 @@ describe('a customer group', () => {
     show(<CustomerGroups />, (client) =>
       client.setQueryData(['retail', 'customer-groups'], [{ id: 'g-1', name: 'Test Group 01', price_list: 'Test List 01', price_list_id: 'l-1', customer_count: 2, active: true, version: 1 }]),
     );
-    expect(href('See the credit buyers of Test Group 01')).toBe('/staff/retail/catalogue/buyers');
+    expect(href('See the customers who owe in Test Group 01')).toBe('/staff/retail/catalogue/buyers');
     expect(href('See the price list Test List 01')).toBe('/staff/retail/price-lists');
   });
 });

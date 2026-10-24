@@ -354,8 +354,8 @@ class StockService {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "stocktake_committed",
-                    "Stock-take committed",
-                    "This stock-take has been committed already.");
+                    "Stock count committed",
+                    "This stock count has been committed already.");
         }
         // A draft made before the branch was closed or marked as not stocking must not write stock there (issue #329,
         // ADR-041).
@@ -395,7 +395,7 @@ class StockService {
                     "Stock moved since the count",
                     "Stock of " + String.join(", ", recount)
                             + " has moved since it was counted, so the count no longer matches the shelf."
-                            + " Please recount these lines in a new stock-take.");
+                            + " Please recount these lines in a new stock count.");
         }
         LocalDate today = clock.today(tenant.profile().timezone());
         ledger.record(today, movements);

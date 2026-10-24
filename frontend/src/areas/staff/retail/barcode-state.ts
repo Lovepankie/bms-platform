@@ -90,7 +90,7 @@ export function scanInto<L extends { product: Product; unitId?: string }>(lines:
 }
 
 /** What a form says when a scanned barcode is on a pack it cannot use; it never adds one base unit in its place. */
-export const PACK_UNUSABLE = 'This barcode is on a pack size that is switched off or not offered here. Scan the item\'s own barcode, or find the item by name.';
+export const PACK_UNUSABLE = 'This barcode is on a pack that is switched off or not offered here. Scan the item\'s own barcode, or find the item by name.';
 
 /** The item among `products` with this barcode, for a scan while the server cannot be reached. */
 export function findByBarcodeIn(products: Product[], code: string): { product: Product; unitId?: string } | null {

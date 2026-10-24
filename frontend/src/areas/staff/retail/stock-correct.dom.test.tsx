@@ -95,7 +95,7 @@ describe('the Correct button on a stock row', () => {
     expect(screen.queryByRole('radio', { name: 'The quantity is wrong' })).toBeNull();
     expect(screen.queryByRole('radio', { name: 'The category is wrong' })).toBeNull();
     open('The unit, name or price is wrong');
-    expect(screen.getByTestId('correct-other').textContent).toContain('Past restocks');
+    expect(screen.getByTestId('correct-other').textContent).toContain('Past purchases');
     expect(screen.getByTestId('correct-other').textContent).toContain('Items');
   });
 });
@@ -143,7 +143,7 @@ describe('the right quantity', () => {
 
 
     expect(done.textContent).toContain('Cable 2.5mm is now 6 roll (it was 10)');
-    expect(done.textContent).toContain('does not count as shrinkage');
+    expect(done.textContent).toContain('does not count as lost or damaged stock');
   });
 
   it('says a refusal in plain words and a retry keeps the same key', async () => {
@@ -294,7 +294,7 @@ describe('the history', () => {
     expect(shown[0]?.textContent).toContain('By you');
     expect(shown[1]?.textContent).toContain('Sale');
     expect(shown[1]?.textContent).toContain('By a colleague');
-    expect(shown[2]?.textContent).toContain('Restock');
+    expect(shown[2]?.textContent).toContain('Purchase');
     expect(shown[2]?.textContent).toContain('+10 roll');
   });
 
@@ -309,8 +309,8 @@ describe('the history', () => {
 describe('the words', () => {
   it('names the kinds of movement', () => {
     const m = (over: Partial<StockMovement>): StockMovement => ({ kind: 'adjustment', qty: '1.000', ...over });
-    expect(movementTitle(m({ source_type: 'retail.stocktake' }))).toBe('Stock-take');
-    expect(movementTitle(m({ source_type: 'retail.purchase_void' }))).toBe('Restock voided');
+    expect(movementTitle(m({ source_type: 'retail.stocktake' }))).toBe('Stock count');
+    expect(movementTitle(m({ source_type: 'retail.purchase_void' }))).toBe('Purchase voided');
     expect(movementTitle(m({ kind: 'usage', qty: '-1.000' }))).toBe('Used');
     expect(signedQty(m({ qty: '2.500' }))).toBe('+2.5');
     expect(signedQty(m({ qty: '-2.000' }))).toBe('-2');

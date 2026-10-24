@@ -121,7 +121,7 @@ describe('roles in plain words', () => {
 
   it('names the Storekeeper and Purchasing roles in plain words, and leaves retail roles out of a business without retail', () => {
     expect(roleChoice({ key: 'retail_storekeeper', name: 'Storekeeper' }).about).toMatch(/Sees no prices and no money, and does not sell/);
-    expect(roleChoice({ key: 'retail_purchasing', name: 'Purchasing' }).about).toMatch(/purchases and restocks/);
+    expect(roleChoice({ key: 'retail_purchasing', name: 'Purchasing' }).about).toMatch(/Buys stock and records purchases/);
     const all = [{ key: 'tenant_admin' }, { key: 'loan_officer' }, { key: 'retail_sales' }, { key: 'retail_storekeeper' }];
     expect(roleChoices(all, ['lending']).map((c) => c.key)).toEqual(['tenant_admin', 'loan_officer']);
     expect(roleChoices(all, ['retail']).map((c) => c.key)).toHaveLength(4);

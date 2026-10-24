@@ -131,7 +131,7 @@ describe('counting the sheet', () => {
     open();
     await screen.findByText(EMPTY);
     fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Inactive Held' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review variance (1 counted)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
     expect(screen.getByTestId('count-not-done').textContent).toContain('1 item not counted. Finish anyway?');
     expect(createStocktake).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Finish anyway' }));
@@ -160,7 +160,7 @@ describe('counting the sheet', () => {
     await screen.findByText(EMPTY);
     const held = document.getElementById('count-I-1') as HTMLInputElement;
     fireEvent.change(held, { target: { value: '3' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Review variance (1 counted)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
     expect(screen.getByTestId('count-not-done')).toBeTruthy();
     fireEvent.change(document.getElementById('count-I-1') as HTMLInputElement, { target: { value: '4x' } });
     expect(screen.queryByTestId('count-not-done')).toBeNull();
@@ -174,7 +174,7 @@ describe('counting the sheet', () => {
     open();
     await screen.findByText(EMPTY);
     fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Inactive Held' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review variance (1 counted)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
     const go = screen.getByRole('button', { name: 'Finish anyway' });
     fireEvent.click(go);
     fireEvent.click(go);
@@ -188,7 +188,7 @@ describe('counting the sheet', () => {
     open();
     await screen.findByText(EMPTY);
     fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Inactive Held' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review variance (1 counted)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Keep counting' }));
     expect(screen.queryByTestId('count-not-done')).toBeNull();
     expect(createStocktake).not.toHaveBeenCalled();
@@ -200,7 +200,7 @@ describe('counting the sheet', () => {
     open();
     await screen.findByText(EMPTY);
     fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Active' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review variance (1 counted)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
     await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('count-not-done')).toBeNull();
   });

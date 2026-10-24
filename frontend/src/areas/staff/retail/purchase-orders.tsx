@@ -7,6 +7,7 @@ import { orderStatusWords } from './purchasing-state';
 import { MoreButton, StatusBadge, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, money } from './ui';
+import { WORDS } from '../../../app/glossary';
 
 // Purchase orders (the purchasing capability, ADR-033, issue #198): the orders to suppliers, newest first, found by their number
 // or the supplier's name. Restock is still there for buying without an order. The search is the shared live search: the term is
@@ -49,7 +50,7 @@ export function PurchaseOrdersPage() {
     <Gate screen="purchaseOrders" title="Purchase orders">
       <p className="hint" data-tour="purchase-orders-help">
         An order tells a supplier what you want and at what cost. When the goods arrive, open the order and choose Receive goods. Buying without an order is still done in{' '}
-        <Link to="/staff/retail/restock">Restock</Link>, or with Goods received.
+        <Link to="/staff/retail/restock">{WORDS.buyStock}</Link>, or with Goods received.
       </p>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/purchase-orders/new" data-tour="purchase-orders-new">New purchase order</Link>

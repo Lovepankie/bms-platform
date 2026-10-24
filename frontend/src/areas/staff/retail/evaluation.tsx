@@ -43,7 +43,7 @@ export function EvaluationView({ data, nameOf }: { data: Evaluation; nameOf: (id
   return (
     <>
       <p role="note" className="alert alert-info">{data.note}</p>
-      <Section title="All shops together" hint="Profit is sales less the cost the items had when sold; usage, damage and stock-take differences are in Daily profit.">
+      <Section title="All shops together" hint="Profit is sales less the cost the items had when sold; usage, damage and stock count differences are in Daily profit.">
         <PositionTable p={data.total ?? {}} />
       </Section>
       {(data.branches ?? []).length === 0 && <Empty>No stock and no sales to evaluate.</Empty>}

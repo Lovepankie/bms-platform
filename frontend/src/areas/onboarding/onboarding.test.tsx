@@ -142,7 +142,7 @@ describe('the applicant page (FR-ONB-02, FR-ONB-04)', () => {
     const html = await page({});
     expect(html).toContain('A-TEST0001');
     expect(html).toContain('Waiting for review');
-    expect(html).toContain('Shop: sales, stock and restocking');
+    expect(html).toContain('Shop: sales, stock and buying stock');
   });
 
   it('confirms the email only on the button, never on opening the link (review N4)', async () => {

@@ -175,7 +175,7 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
     >
       <fieldset data-tour="quotation-buyer">
         <legend>Who is it for?</legend>
-        <label htmlFor="quote-customer">Credit buyer</label>
+        <label htmlFor="quote-customer">Customer from the list</label>
         <select id="quote-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value, buyerName: '', buyerContact: '' })}>
           <option value="">Not on the list: type their name</option>
           {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

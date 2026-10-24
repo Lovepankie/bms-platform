@@ -27,7 +27,7 @@ describe('banking form', () => {
 
   it('shows the components and the net expected amount only when the server sent them', () => {
     const out = html(<ExpectedFigures expected={adminView} />);
-    expect(out).toContain('Cash restocks, at cost');
+    expect(out).toContain('Stock bought with cash, at cost');
     expect(out).toContain('UGX 30,000');
     expect(out).toContain('Savings set aside');
     expect(out).toContain('Expected to bank');

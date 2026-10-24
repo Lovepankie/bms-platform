@@ -89,7 +89,7 @@ export function BarcodeEditor({ product }: { product: Product }) {
   return (
     <fieldset data-testid="barcode-editor" data-tour="item-barcodes" onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
       <legend>Barcodes</legend>
-      <p className="hint">Scan the barcode on the item into the box, or type it. A scan when selling, restocking or counting then finds this item.</p>
+      <p className="hint">Scan the barcode on the item into the box, or type it. A scan when selling, buying stock or counting then finds this item.</p>
       {list.length === 0 && <p className="empty-state">No barcode yet.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {list.map((b) => (

@@ -77,7 +77,7 @@ describe('an item with sizes and colours', () => {
     fireEvent.change(screen.getByLabelText('Short code'), { target: { value: 'ROMP' } });
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
-    fireEvent.change(screen.getByLabelText('Unit'), { target: { value: 'u1' } });
+    fireEvent.change(screen.getByLabelText('Counted in'), { target: { value: 'u1' } });
     fireEvent.change(screen.getByLabelText(/^Selling price/), { target: { value: '9000' } });
     fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m, 3-6m' } });
     fireEvent.change(screen.getByLabelText('Colours or prints'), { target: { value: 'Blue, Pink' } });

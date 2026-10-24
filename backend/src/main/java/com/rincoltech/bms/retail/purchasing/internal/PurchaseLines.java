@@ -93,7 +93,7 @@ class PurchaseLines {
                     new FieldProblem(
                             field + ".product_id",
                             "product_inactive",
-                            "This item is inactive, so it cannot be ordered or restocked. Switch it on again on the Items screen first."));
+                            "This item is inactive, so it cannot be ordered or bought. Switch it on again on the Items screen first."));
             return null;
         }
         if (!p.currency().equals(tenant.profile().currency())) {
