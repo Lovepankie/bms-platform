@@ -82,7 +82,7 @@ export function Members() {
           {items.length === 0 && search.term ? (
             <NoResults term={search.term} onClear={search.clear} noun="members" />
           ) : items.length === 0 ? (
-            <EmptyState art="noApplications" title="No members yet." action={add ? <Link to="/staff/lending/members/new" className="btn">Add the first member</Link> : undefined}>
+            <EmptyState title="No members yet." action={add ? <Link to="/staff/lending/members/new" className="btn">Add the first member</Link> : undefined}>
               Members of this branch appear here once they are added.
             </EmptyState>
           ) : (

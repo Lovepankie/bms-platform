@@ -117,7 +117,7 @@ export function InTransitList({ report }: { report: InFlightReport }) {
   const profit = useProfitAccess();
   const mayAct = branchesWhere(me, TRANSFER).map((b) => b.id);
   const items = report.items ?? [];
-  if (items.length === 0) return <EmptyState art="noProducts" title="Nothing is on the way.">Stock you send to another branch shows here until it is received.</EmptyState>;
+  if (items.length === 0) return <EmptyState title="Nothing is on the way.">Stock you send to another branch shows here until it is received.</EmptyState>;
   return (
     <>
       {profit && report.in_transit_value_minor !== undefined && <p>On the way, at cost: <strong>{money(report.in_transit_value_minor)}</strong></p>}

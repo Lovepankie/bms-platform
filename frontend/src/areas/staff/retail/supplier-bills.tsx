@@ -14,6 +14,7 @@ import { varianceWords } from './payables-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Supplier invoices (the purchasing capability, ADR-033, issue #198), which the supplier's paper calls a bill: the list, found by
 // our number, the supplier's invoice number or the supplier's name, and one invoice with the goods it bills, what was paid and what
@@ -175,7 +176,7 @@ export function SupplierBillPage() {
     return (
       <main className="rt">
         <h1>Supplier invoice</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

@@ -21,6 +21,7 @@ import { showLending } from '../lending/permissions';
 import { showInvestments } from '../lending/investment-state';
 import { canExport, canManageDigest, canUseAdvisor, ownPortfolioOnly, showInsights } from './permissions';
 import { MetricCard, MetricGrid, drillOf, type DrillTarget } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Insights (#153, expectation 7): the morning brief, the loan portfolio, revenue from the ledger
 // and member activity, for the branch chosen in the staff bar and the filters here. Numbers are
@@ -55,7 +56,7 @@ export function Insights() {
     return (
       <main className="rt ln iv">
         <h1>Insights</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

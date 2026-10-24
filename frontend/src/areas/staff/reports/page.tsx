@@ -14,6 +14,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { showReports } from './permissions';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Reports (extras slice D1, issue #214; ADR-038): the catalogue of the reports this user may run, a run per click,
 // and the user's own runs with their status. A run is queued and executed by a job, so the list refreshes every
@@ -70,7 +71,7 @@ export function Reports() {
     return (
       <main className="rt ln">
         <h1>Reports</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

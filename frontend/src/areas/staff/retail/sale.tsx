@@ -412,7 +412,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           </span>
         )}
       </h2>
-      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Type an item above and tap it in the list, or scan it.</EmptyState>}
+      {draft.lines.length === 0 && <EmptyState title="No items yet.">Search or scan to add.</EmptyState>}
       {pricesOn && resolution.data?.price_list && !checking && (
         <p className="hint" data-tour="sale-price-list" data-testid="price-list-in-force">
           Priced from the list {resolution.data.price_list}{resolution.data.origin === 'customer_group' ? ' (the customer group)' : resolution.data.origin === 'customer' ? ' (the customer)' : ''}.

@@ -284,7 +284,7 @@ describe('the CSV of what is on screen', () => {
 describe('who may open the page', () => {
   it('shuts it to a sales person', () => {
     show(mockMe('sales'));
-    expect(screen.getByText('You do not have access to this page.')).toBeTruthy();
+    expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     expect(summary).not.toHaveBeenCalled();
   });
 });

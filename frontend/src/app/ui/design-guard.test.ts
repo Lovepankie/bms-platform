@@ -261,3 +261,38 @@ describe('design guard, the rules the kit holds every screen to', () => {
     expect([...kit.matchAll(/animation:\s*[\w-]+\s+400ms/g)]).toHaveLength(2);
   });
 });
+
+// Phase 3a of the UI rework (issue #526): the cross-cutting fixes, each held here so a screen cannot bring the old look back.
+describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
+  /** The declarations of every rule whose selector matches `selector`, across the design layer. */
+  const rulesFor = (selector: RegExp) =>
+    stylesheets.flatMap((f) => [...code(relative(SRC, f)).matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel]) => selector.test(sel as string)).map(([, sel, body]) => ({ file: relative(SRC, f), sel: (sel as string).trim(), body: body as string })));
+
+  // Item 5: an empty list, a "nothing in range" and a no-access line are one plain line, never a dashed box.
+  it('draws no empty state as a box: no dashed edge, and no border at all', () => {
+    const empty = rulesFor(/empty/);
+    expect(empty.length).toBeGreaterThan(1);
+    for (const { file, sel, body } of empty) {
+      expect(body, `${file}: ${sel}`).not.toMatch(/dashed/);
+      expect(body, `${file}: ${sel}`).not.toMatch(/(^|[;\s])border(-style|-width)?\s*:\s*(?!0|none)/);
+    }
+  });
+
+  it('keeps every no-access line on the one NoAccess, which says who can give access and links Home', () => {
+    for (const file of components.map((f) => relative(SRC, f))) {
+      expect(code(file), file).not.toMatch(/<p className="empty-state">You do not have access/);
+    }
+    const kitFile = code('app/ui/EmptyState.tsx');
+    expect(kitFile).toMatch(/The owner or an administrator of the business can give it to you/);
+    expect(kitFile).toMatch(/Go to Home/);
+  });
+
+  // Item 3: on a phone the crumb is one back link with no slash before it.
+  it('draws no slash before the one crumb a phone shows', () => {
+    const nav = code('app/ui/navigation.css');
+    const phone = nav.slice(nav.indexOf('.breadcrumbs li:not(.crumb-parent)'));
+    expect(phone).toMatch(/\.breadcrumbs li\.crumb-parent::before \{\s*content: none;/);
+    expect(nav).toMatch(/\.breadcrumbs li \+ li::before/);
+    expect(nav).not.toMatch(/\.breadcrumbs li::before/);
+  });
+});

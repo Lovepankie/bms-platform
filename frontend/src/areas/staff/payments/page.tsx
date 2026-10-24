@@ -5,6 +5,7 @@ import { type MerchantAccount, payments } from '../../../api/payments';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { STATUS_WORDS, canChangePaymentAccount, codeProblem, credentialProblem, failureWords, nextStep, showReceivePayments } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // "Receive payments" (extras slice A7, issue #233; ADR-035 amendment of 2026-10-18): money owed to the business lands only in
 // the business's own Pesapal account. A business administrator enters the consumer key and secret (the secret is write-only: it
@@ -198,7 +199,7 @@ export function ReceivePaymentsPage() {
     return (
       <main className="rt ln">
         <h1>Receive payments</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

@@ -15,6 +15,7 @@ import { usePersistedDraft, newIdempotencyKey } from './idempotency';
 import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt, sellingBranches } from './permissions';
 import { openMadePdf } from './documents-ui';
 import { Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // One credit buyer's account (customer_accounts capability, ADR-033, issue #196): the limit and the terms, what is owed,
 // payment on account, the payments taken, and the statement. A seller opens it from Credit buyers or Credit control; the
@@ -303,7 +304,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
     return (
       <main className="rt">
         <h1>Customer account</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

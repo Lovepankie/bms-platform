@@ -156,7 +156,7 @@ describe('recording an existing loan', () => {
 
   it('is only for those who may bring loans in, and says the go-live date', async () => {
     mount(<ExistingLoansPage api={fakeApi()} />, officer);
-    expect(screen.getByText('You do not have access to this page.')).toBeTruthy();
+    expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     cleanup();
     mount(<ExistingLoansPage api={fakeApi()} />);
     await screen.findByText(/The go-live date is 2026-04-01/);

@@ -12,6 +12,7 @@ import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Landed costs (the purchasing capability, issue #199): the freight, duty, clearing and insurance of a delivery, owed to someone
 // other than the supplier and spread over the goods received so each item's cost includes them. The list, found by our number, the
@@ -205,7 +206,7 @@ export function LandedCostPage() {
     return (
       <main className="rt">
         <h1>Landed cost</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

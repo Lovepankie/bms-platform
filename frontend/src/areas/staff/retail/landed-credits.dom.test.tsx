@@ -243,16 +243,16 @@ describe('no access without the permission', () => {
 
   it('shows the no-access state on every new route, and offers no tile or tour step', async () => {
     mount('/landed-costs', LandedCostsPage, '/staff/retail/landed-costs', buyer);
-    expect(await screen.findByText('You do not have access to this page.')).toBeTruthy();
+    expect(await screen.findByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     cleanup();
     mount('/supplier-credits', SupplierCreditsPage, '/staff/retail/supplier-credits', buyer);
-    expect(await screen.findByText('You do not have access to this page.')).toBeTruthy();
+    expect(await screen.findByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     cleanup();
     mount('/landed-costs/new', LandedCostNewPage, '/staff/retail/landed-costs/new', buyer);
-    expect(await screen.findByText('You do not have access to this page.')).toBeTruthy();
+    expect(await screen.findByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     cleanup();
     mount('/supplier-credits/new', SupplierCreditNewPage, '/staff/retail/supplier-credits/new', buyer);
-    expect(await screen.findByText('You do not have access to this page.')).toBeTruthy();
+    expect(await screen.findByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     const tiles = screensFor(buyer).map((s) => s.screen);
     expect(tiles).toContain('purchaseOrders');
     expect(tiles).not.toContain('landedCosts');

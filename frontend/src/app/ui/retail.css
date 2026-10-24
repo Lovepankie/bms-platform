@@ -257,11 +257,6 @@
   overflow-wrap: anywhere;
 }
 
-.an-placeholder {
-  border-style: dashed;
-  background: var(--color-surface-muted);
-}
-
 .an-sparks {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

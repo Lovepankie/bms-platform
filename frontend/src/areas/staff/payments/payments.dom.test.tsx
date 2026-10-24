@@ -178,7 +178,7 @@ describe('who sees what', () => {
 
   it('opens nothing for someone without settings access', () => {
     shell(<ReceivePaymentsPage />, ['core.approvals.read']);
-    expect(screen.getByText('You do not have access to this page.')).toBeTruthy();
+    expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     expect(api.account).not.toHaveBeenCalled();
   });
 });

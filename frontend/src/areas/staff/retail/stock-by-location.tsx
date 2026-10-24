@@ -45,7 +45,7 @@ export function LocationTable({ report }: { report: StockByLocation }) {
   const groups = groupsOf(report.branches ?? []);
   const items = report.items ?? [];
   const cost = items.some((r) => r.value_minor !== undefined);
-  if (items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code.</EmptyState>;
+  if (items.length === 0) return <EmptyState title="No items found.">Try another name or code.</EmptyState>;
   const columnsOf = (g: { branches: LocationBranch[] }) => g.branches.length + (g.branches.length > 1 ? 1 : 0);
   return (
     <div className="table-wrap" tabIndex={0}>
@@ -91,7 +91,7 @@ export function LocationTable({ report }: { report: StockByLocation }) {
 export function LocationList({ report }: { report: StockByLocation }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const items = report.items ?? [];
-  if (items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code.</EmptyState>;
+  if (items.length === 0) return <EmptyState title="No items found.">Try another name or code.</EmptyState>;
   const groups = groupsOf(report.branches ?? []);
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>

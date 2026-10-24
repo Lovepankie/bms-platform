@@ -14,6 +14,7 @@ import { formatMinor } from '../../../components/money';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { mayManageWording, mayReadNotifications } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // SMS wording (extras slice B3, issue #218; ADR-036 decision 9): the tenant's own words for each event, built from a short
 // list of placeholders and nothing else (no conditions, no code), with a preview made with fabricated data as you type, the
@@ -258,7 +259,7 @@ export function WordingScreen() {
   const list = useQuery({ queryKey: ['sms', 'templates'], queryFn: sms.templates, enabled: mayReadNotifications(me), retry: false });
   // Held here, not in an editor, which starts afresh from every new version (a save, or someone else's change, is one).
   const [notice, setNotice] = useState<string | null>(null);
-  if (!mayReadNotifications(me)) return <p className="empty-state">You do not have access to the SMS wording.</p>;
+  if (!mayReadNotifications(me)) return <NoAccess what="the SMS wording" />;
   if (list.isPending) return <p className="loading">Loading the wording</p>;
   if (list.isError || !list.data) {
     return <p role="alert" className="alert alert-danger">{list.error instanceof Error ? list.error.message : 'Could not load the wording.'}</p>;

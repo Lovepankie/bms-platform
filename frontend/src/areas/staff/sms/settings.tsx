@@ -16,6 +16,7 @@ import {
   problemsOf,
   type Draft,
 } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Tenant SMS settings (extras slice B3, issue #218; ADR-036): the switch with its acknowledgement of what SMS costs, the
 // sender id (chosen from the ones the platform approved, never typed), the sending window, the daily and monthly caps (which
@@ -265,7 +266,7 @@ export function SmsSettingsScreen() {
   const settings = useQuery({ queryKey: ['sms', 'settings'], queryFn: sms.settings, enabled: mayReadSettings(me), retry: false });
   // Held here, not in the editor, which starts afresh from every new version (a save is one).
   const [notice, setNotice] = useState<Notice | null>(null);
-  if (!mayReadSettings(me)) return <p className="empty-state">You do not have access to the SMS settings.</p>;
+  if (!mayReadSettings(me)) return <NoAccess what="the SMS settings" />;
   if (settings.isPending) return <p className="loading">Loading the SMS settings</p>;
   if (settings.isError || !settings.data) {
     return <p role="alert" className="alert alert-danger">{settings.error instanceof Error ? settings.error.message : 'Could not load the SMS settings.'}</p>;

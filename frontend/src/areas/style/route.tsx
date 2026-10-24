@@ -250,10 +250,10 @@ function StylePage() {
 
       <Section title="Empty, success and error states">
         <div className="grid-auto">
-          <EmptyState art="noSales" title="No sales yet.">Sales appear here as they are recorded.</EmptyState>
-          <EmptyState art="noProducts" title="No products yet.">Add a product or buy stock to start.</EmptyState>
-          <EmptyState art="noApplications" title="No applications yet.">New applications appear here.</EmptyState>
-          <EmptyState art="nothingWaiting" title="Nothing waiting.">Requests for your approval appear here.</EmptyState>
+          <EmptyState title="No sales yet.">Sales appear here as they are recorded.</EmptyState>
+          <EmptyState title="No products yet.">Add a product or buy stock to start.</EmptyState>
+          <EmptyState title="No applications yet.">New applications appear here.</EmptyState>
+          <EmptyState title="Nothing waiting.">Requests for your approval appear here.</EmptyState>
           <StatusPanel tone="success" title="Saved.">The step is done.</StatusPanel>
           <StatusPanel tone="error" title="That did not work.">Say what went wrong and what to try.</StatusPanel>
         </div>

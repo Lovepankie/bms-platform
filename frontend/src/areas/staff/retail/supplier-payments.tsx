@@ -12,6 +12,7 @@ import { methodWords } from './payables-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Supplier payments (the purchasing capability, ADR-033, issue #198): the money paid to suppliers, newest first, and one payment with
 // what it cleared. A payment pays supplier invoices and credit restocks (stock bought on credit in Restock), oldest first or as
@@ -147,7 +148,7 @@ export function SupplierPaymentPage() {
     return (
       <main className="rt">
         <h1>Supplier payment</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

@@ -14,6 +14,7 @@ import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Supplier credit notes (the purchasing capability, issue #199): goods sent back to a supplier, or money the supplier takes off an
 // invoice. The list, found by our number, the supplier's credit note number or the supplier, and one credit note with its lines. A
@@ -156,7 +157,7 @@ export function SupplierCreditPage() {
     return (
       <main className="rt">
         <h1>Supplier credit note</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

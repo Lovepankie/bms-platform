@@ -13,6 +13,7 @@ import { SALE_RETURN, canOpenAccount, canUse, holdsAt } from './permissions';
 import { DISPOSITION_WORDS, reasonWords, returnedWords, settledWords, type Disposition } from './returns-state';
 import { showDate } from './transfers';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // One credit note (returns capability, ADR-033, issue #201), on screen: the goods that came back, what each was credited,
 // where they went, and how the credit was settled. The printable credit note (a PDF under this number) shows while the documents capability is on. A
@@ -125,7 +126,7 @@ export function CreditNotePage() {
     return (
       <main className="rt">
         <h1>Credit note</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

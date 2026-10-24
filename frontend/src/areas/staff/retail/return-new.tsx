@@ -16,6 +16,7 @@ import {
 import { showDate } from './transfers';
 import { Problem, Success, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Take goods back against a sale (returns capability, ADR-033, issue #201). Each line of the sale shows what was sold, what has
 // come back already and what can still come back; the person enters a quantity, the reason and where the goods go, then how the
@@ -199,7 +200,7 @@ export function ReturnNewPage() {
     return (
       <main className="rt">
         <h1>Take goods back</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

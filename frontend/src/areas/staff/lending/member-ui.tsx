@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useOptionalStaff, useStaff } from '../context';
 import { showCollateral, showMembers } from './member-permissions';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // The frame of the member and collateral screens (issue #280): the page heading, the access check and the small menu
 // between Members and Collateral. Same page classes as the loan screens.
@@ -18,7 +19,7 @@ export function MembersGate({ title, children, tourId }: { title: string; childr
   return (
     <main className="rt ln" data-tour={tourId}>
       <h1>{title}</h1>
-      {showMembers(me) ? children : <p className="empty-state">You do not have access to this page.</p>}
+      {showMembers(me) ? children : <NoAccess />}
     </main>
   );
 }
@@ -28,7 +29,7 @@ export function CollateralGate({ title, children, tourId }: { title: string; chi
   return (
     <main className="rt ln" data-tour={tourId}>
       <h1>{title}</h1>
-      {showCollateral(me) ? children : <p className="empty-state">You do not have access to this page.</p>}
+      {showCollateral(me) ? children : <NoAccess />}
     </main>
   );
 }

@@ -94,7 +94,6 @@
   margin: 0 auto var(--space-3);
 }
 
-.empty-state-art,
 .status-panel {
   display: grid;
   justify-items: center;
@@ -102,10 +101,6 @@
   padding: var(--space-5) var(--space-4);
   text-align: center;
   animation: rt-rise var(--motion-slow) var(--ease-out);
-}
-
-.empty-state-art {
-  border-style: dashed;
 }
 
 .status-panel {

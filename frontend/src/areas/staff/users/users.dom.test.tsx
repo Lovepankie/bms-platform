@@ -477,7 +477,7 @@ describe('who sees what', () => {
 
   it('sends someone without the permission away from both pages, with no request', () => {
     shell(<UsersScreen />, ['core.settings.manage']);
-    expect(screen.getByText('You do not have access to this page.')).toBeTruthy();
+    expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     cleanup();
     shell(<InviteScreen />, READER);
     expect(screen.getByText(/Only an administrator can invite staff/)).toBeTruthy();

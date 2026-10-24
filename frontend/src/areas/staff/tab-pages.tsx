@@ -8,6 +8,7 @@ import { FeatureSearch } from './feature-search';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { useSells } from './retail/nav';
 import { moneyLinks } from './tabs';
+import { NoAccess } from '../../app/ui/EmptyState';
 
 // The two pages the bottom tabs open that are not a screen of their own (issue #539): Money lists the money pages the session may
 // use, and More lists every staff area the side menu lists on a laptop, by the same permissions (menu.tsx), with who is signed in,
@@ -26,7 +27,7 @@ export function MoneyPage() {
         </div>
       </div>
       {links.length === 0 ? (
-        <p className="empty-state">You do not have access to any money pages.</p>
+        <NoAccess what="any money pages" />
       ) : (
         <div data-tour="money-list">
           <Card>

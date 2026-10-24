@@ -14,6 +14,7 @@ import { ItemPhoto, shownPhoto } from './item-photo';
 import { showQty } from './maths';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
 import { keptWords } from './orders-state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -84,7 +85,7 @@ export function Gate({ screen, title, children, wide }: { screen: RetailScreen; 
     return (
       <main className="rt">
         <h1>{title}</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

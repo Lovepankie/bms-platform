@@ -7,6 +7,7 @@ import { useStaff } from '../context';
 import { NOT_UTF8, readCsvText } from '../retail/catalogue-import';
 import { Note, Problem, Success } from '../retail/ui';
 import { IMPORT_COLUMNS, IMPORT_TEMPLATE, canBringIn } from './existing-loans-state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Import existing loans from a CSV file (issue #466, FR-EXL-06, ADR-071), on the pattern of the item import (#146): download
 // the template, choose or paste the file, check it (nothing is saved), read what would come in, what is skipped and what is
@@ -87,7 +88,7 @@ export function ExistingLoansImport({ api = existingLoans }: { api?: ExistingLoa
     return (
       <main className="rt ln">
         <h1>Import existing loans</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

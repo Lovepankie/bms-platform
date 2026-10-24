@@ -15,6 +15,7 @@ import { mayManageCollateral } from './member-permissions';
 import { MemberPicker } from './member-picker';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Register or change a collateral item (issue #280, FR-COL-01, FR-COL-05): the member it belongs to (found by searching), the
 // kind, a description, the title, logbook or plate number, who owns it, what it is worth, whether the owner keeps it or we
@@ -152,7 +153,7 @@ function NewCollateral() {
   const { memberId } = newRoute.useSearch();
   return (
     <CollateralGate title="Register collateral" tourId="collateral-new">
-      {mayManageCollateral(me) ? <CollateralForm memberId={memberId} /> : <p className="empty-state">You do not have access to register collateral.</p>}
+      {mayManageCollateral(me) ? <CollateralForm memberId={memberId} /> : <NoAccess what="register collateral" />}
     </CollateralGate>
   );
 }
@@ -169,7 +170,7 @@ function EditCollateral() {
     <CollateralGate title="Change collateral" tourId="collateral-edit">
       {detail.isPending && <p className="loading">Loading the item</p>}
       <Problem error={detail.error} />
-      {item && (mayManageCollateral(me, item.branch_id) ? <CollateralForm item={item} /> : <p className="empty-state">You do not have access to change this item.</p>)}
+      {item && (mayManageCollateral(me, item.branch_id) ? <CollateralForm item={item} /> : <NoAccess what="change this item" />)}
     </CollateralGate>
   );
 }

@@ -13,6 +13,7 @@ import { showDate } from './transfers';
 import type { ToastTone } from './toast';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // One purchase order (the purchasing capability, ADR-033, issue #198): its lines with ordered, received and (for whoever manages
 // supplier invoices) billed, its status and its receipts, and what may be done next: change a draft, send it, cancel it, or
@@ -117,7 +118,7 @@ export function PurchaseOrderPage() {
     return (
       <main className="rt">
         <h1>Purchase order</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

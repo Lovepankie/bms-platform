@@ -198,7 +198,7 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
         <ProductPicker id="quote-search" showPrice showStock={false} onAdd={add} />
       </div>
       <h2>Items</h2>
-      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
+      {draft.lines.length === 0 && <EmptyState title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
       {draft.lines.map((l, i) => (
         <SaleLineCard
           key={`${l.product.id}-${i}`}

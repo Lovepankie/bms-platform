@@ -13,6 +13,7 @@ import { RECEIPT_STATUS_WORDS, canVoidReceipt, inLineUnit } from './purchasing-s
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Goods received (the purchasing capability, ADR-033, issue #198): the list of deliveries and one delivery. A delivery can be voided
 // with a reason, which takes the goods out of stock again. It is refused once the delivery is on a supplier invoice (void the
@@ -177,7 +178,7 @@ export function GoodsReceiptPage() {
     return (
       <main className="rt">
         <h1>Goods received</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

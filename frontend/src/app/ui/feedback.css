@@ -76,12 +76,11 @@
   font-weight: var(--weight-bold);
 }
 
+/* An empty list, a "nothing in this range" and a no-access line (issue #526): one plain muted line, centred, with no border,
+   box or fill, the same look as the kit's EmptyState (.empty-line in kit.css). A dashed box read as an unfinished wireframe. */
 .empty-state {
   margin: var(--space-4) 0;
-  padding: var(--space-6) var(--space-4);
-  border: 1px dashed var(--color-border-strong);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: var(--space-5) var(--space-4);
   color: var(--color-text-muted);
   text-align: center;
 }

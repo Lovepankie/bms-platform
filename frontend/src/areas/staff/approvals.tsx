@@ -127,7 +127,7 @@ export function Approvals() {
       <div data-tour="approvals-list">
       {pending.isPending && <SkeletonList label="Loading approvals" />}
       {pending.isError && <p role="alert" className="alert alert-danger">Could not load approvals.</p>}
-      {pending.data && items.length === 0 && <EmptyState art="nothingWaiting" title="Nothing waiting.">Requests for your approval appear here.</EmptyState>}
+      {pending.data && items.length === 0 && <EmptyState title="Nothing waiting.">Requests for your approval appear here.</EmptyState>}
       {items.length > 0 && (
         <div className="table-wrap table-cards" tabIndex={0}>
           <table>

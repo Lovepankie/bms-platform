@@ -9,6 +9,7 @@ import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { money, words } from './loan-state';
 import { mayManageProducts, showSavings } from './savings-permissions';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Savings accounts (FR-SAV-02): find an account by its number, the member's number, name or phone, filter
 // by status, and open it. The list follows the branch chosen at the top of the page and pages with
@@ -45,7 +46,7 @@ export function SavingsGate({ title, children }: { title: string; children: Reac
           {children}
         </>
       ) : (
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       )}
     </main>
   );

@@ -201,7 +201,7 @@ describe('the policy screen', () => {
 
   it('shows no choices to someone who may not change the settings', () => {
     shell(['core.settings.read']);
-    expect(screen.getByText('You do not have access to this page.')).toBeTruthy();
+    expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     expect(screen.queryByRole('radio')).toBeNull();
     expect(twoStepApi.settings).not.toHaveBeenCalled();
   });

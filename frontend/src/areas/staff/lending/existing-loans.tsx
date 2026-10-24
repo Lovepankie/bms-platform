@@ -10,6 +10,7 @@ import { Note, Problem, Success } from '../retail/ui';
 import { canBringIn, emptyDraft, emptyRepayment, goLiveWords, toRequest, type LoanDraft, type RepaymentDraft } from './existing-loans-state';
 import { money, words } from './loan-state';
 import { MemberPicker } from './member-picker';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Record an existing loan (issue #466, FR-EXL-01 to FR-EXL-04, ADR-071), for a business moving off a paper register: the
 // member, the product, the amount lent, the real date it was given out, the term, the product's rate or the amount the
@@ -241,7 +242,7 @@ export function ExistingLoansPage({ api = existingLoans }: { api?: ExistingLoans
     <main className="rt ln">
       <h1>Existing loans</h1>
       {!canBringIn(me) ? (
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       ) : (
         <>
           <div data-tour="existing-go-live">
