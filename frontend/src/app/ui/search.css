@@ -165,3 +165,27 @@
     animation: none;
   }
 }
+
+/*
+ * Feature search (issue #551, src/areas/staff/feature-search.tsx): the Search button in the staff bar, an icon alone on a phone,
+ * the full width button at the top of the More page, and the picker inside its sheet, where the list sits in the flow of the
+ * sheet rather than over it, so the sheet scrolls it and nothing is cut off.
+ */
+.find-open {
+  flex: none;
+  min-width: var(--tap);
+  min-height: var(--tap);
+}
+
+.find-open-more {
+  justify-content: flex-start;
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.find-screen .cb-pop {
+  position: static;
+  max-height: none;
+  box-shadow: none;
+}

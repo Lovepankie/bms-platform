@@ -4,13 +4,15 @@ import { Card, ListRow, RowList } from '../../app/ui/ListRow';
 import type { MenuLink } from '../../components/side-menu';
 import { CurrentShop } from './branch-picker';
 import { useStaff } from './context';
+import { FeatureSearch } from './feature-search';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { useSells } from './retail/nav';
 import { moneyLinks } from './tabs';
 
 // The two pages the bottom tabs open that are not a screen of their own (issue #539): Money lists the money pages the session may
 // use, and More lists every staff area the side menu lists on a laptop, by the same permissions (menu.tsx), with who is signed in,
-// the shop in use and Sign out, which on a phone have no other place now the drawer is gone.
+// the shop in use and Sign out, which on a phone have no other place now the drawer is gone. More starts with the feature search
+// (issue #551), the same one as the Search button in the staff bar.
 
 export function MoneyPage() {
   const { me } = useStaff();
@@ -69,6 +71,7 @@ export function MorePage() {
           <p>Everything else you can open.</p>
         </div>
       </div>
+      <FeatureSearch me={me} place="more" />
       <div data-tour="more-list">
         {headed ? (
           <>

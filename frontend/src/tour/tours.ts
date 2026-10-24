@@ -110,6 +110,14 @@ const loanApplications: TourStep = {
   body: 'Pick Submitted or Appraised to see applications waiting for a decision. Pick Approved to see loans ready to pay out.',
 };
 
+// Feature search (issue #551): the Search button in the staff bar finds any screen by what you want to do. Everyone signed in has it.
+const search: TourStep = {
+  id: 'search',
+  target: 'feature-search',
+  title: 'Find any screen',
+  body: 'Tap Search at the top and type what you want to do, like sell, buy stock, expenses or owe. Tap the screen to open it. On a laptop, press / or Ctrl and K (Cmd and K on a Mac). On a phone it is also at the top of More.',
+};
+
 // The bottom tabs on a phone (issue #539): the daily jobs one tap away. On a laptop there is no bar and the step is skipped.
 const tabs: TourStep = {
   id: 'tabs',
@@ -147,7 +155,8 @@ export const adminWelcome: Tour = {
   // Version 19 adds the Download my data step (issue #334): the whole business as one Excel workbook, and the weekly copy by email.
   // Version 20 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
   // Version 21 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 21,
+  // Version 22 adds the Find any screen step (issue #551): the Search button at the top.
+  version: 22,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -387,6 +396,7 @@ export const adminWelcome: Tour = {
       body: 'Some actions need a second person to agree. They wait for you here.',
     },
     insights,
+    search,
     notifications,
     feedback,
     refresh,
@@ -413,7 +423,8 @@ export const retailSales: Tour = {
   // Version 16 words the Find the item step for the picker that lists items only while you type (issue #534).
   // Version 17 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
   // Version 18 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 18,
+  // Version 19 adds the Find any screen step (issue #551): the Search button at the top.
+  version: 19,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -574,6 +585,7 @@ export const retailSales: Tour = {
       title: 'Shortcuts',
       body: 'Your most used retail pages are listed under Retail in the menu. On a phone they are the tabs at the bottom: Sell, My stock, Buy and Money.',
     },
+    search,
     notifications,
     feedback,
     refresh,
@@ -589,7 +601,8 @@ export const staffWelcome: Tour = {
   // Version 5 adds the Refresh step (issue #430): the button at the top that gets the latest figures.
   // Version 6 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
   // Version 7 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
-  version: 7,
+  // Version 8 adds the Find any screen step (issue #551): the Search button at the top.
+  version: 8,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -629,6 +642,7 @@ export const staffWelcome: Tour = {
       title: 'Retail',
       body: 'Sales and stock live here.',
     },
+    search,
     notifications,
     feedback,
     refresh,
@@ -1084,12 +1098,19 @@ export const moneyPage: Tour = {
 
 export const morePage: Tour = {
   id: 'page-more',
-  version: 1,
+  // Version 2 adds the Search step (issue #551): find any screen by what you want to do.
+  version: 2,
   title: 'This page: more',
   audience: () => true,
   autoStart: false,
   page: '/staff/more',
   steps: [
+    {
+      id: 'search',
+      target: 'more-search',
+      title: 'Find any screen',
+      body: 'Tap Search and type what you want to do, like sell, buy stock or owe. Only the screens your role allows show.',
+    },
     {
       id: 'list',
       target: 'more-list',

@@ -20,6 +20,7 @@ import { BrandLoader } from '../../components/states';
 import { BillingBanner } from './billing/banner';
 import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
 import { StaffContext, useOptionalStaff } from './context';
+import { FeatureSearch } from './feature-search';
 import { PlanNotice } from './plan';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { useSells } from './retail/nav';
@@ -200,7 +201,7 @@ export function StaffSideNav({ me }: { me: Me }) {
 }
 
 /**
- * Who is signed in, Help, the branch switcher and Sign out. Below 720px Sign out moves to the More tab's page (it stays here while
+ * Who is signed in, Search (issue #551), Help, the branch switcher and Sign out. Below 720px Sign out moves to the More tab's page (it stays here while
  * two-step set-up blocks the page, which has no tabs) and Sell is the first bottom tab (issue #539, which replaced the phone's menu button and one-tap Sell of issue #455). With StaffSideNav and the tab bar it
  * carries the data-tour anchors the first-run tours light up (tour/tours.ts).
  */
@@ -230,6 +231,7 @@ export function StaffBar({
           <span className="staff-user-name">{me.full_name}</span>
         </span>
         <SyncStatus />
+        <FeatureSearch me={me} />
         <HelpMenu feedback />
         <BranchPicker me={me} branch={branch} onChoose={onBranch} />
         {(!phone || signOutInBar) && (

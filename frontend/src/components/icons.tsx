@@ -595,6 +595,13 @@ export const icons = {
       <path d="M14 8l4 4-4 4M18 12H9" />
     </Svg>
   ),
+  // A magnifying glass: the feature search in the staff bar (issue #551).
+  search: (
+    <Svg>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4.5 4.5" />
+    </Svg>
+  ),
 } as const;
 
 export type IconName = keyof typeof icons;

@@ -13,18 +13,27 @@ export const PICKER_LIMIT = 10;
 /** The words for no match, unless the screen gives its own (the offline picker says what the phone holds). */
 export const noMatch = (term: string) => `No item matches "${term}".`;
 
+/** What the matches are called in the status line: items, or the screens of the feature search (issue #551). */
+export interface Noun {
+  one: string;
+  many: string;
+}
+
+const ITEMS: Noun = { one: 'item', many: 'items' };
+
 /**
  * What the status line says, and a screen reader announces. Nothing while a search is on its way, so a reader hears the
  * answer once per pause and not "Searching" before it; the list itself says Searching.
  */
-export function pickerStatus(s: { text: string; term: string; settled: boolean; count: number | undefined; more: boolean; empty?: string }): string {
+export function pickerStatus(s: { text: string; term: string; settled: boolean; count: number | undefined; more: boolean; empty?: string; noun?: Noun }): string {
   if (s.text.trim() === '' || !s.settled || s.count === undefined) return '';
   if (s.count === 0) return s.empty ?? noMatch(s.term);
-  const n = s.count === 1 ? '1 item' : `${s.count} items`;
+  const noun = s.noun ?? ITEMS;
+  const n = s.count === 1 ? `1 ${noun.one}` : `${s.count} ${noun.many}`;
   return s.more ? `First ${n} shown. Type more to narrow.` : `${n} found`;
 }
 
-export function ItemCombobox<T>({ id, label, search, results, fetching = false, error, optionKey, renderOption, onPick, hint, emptyText }: {
+export function ItemCombobox<T>({ id, label, search, results, fetching = false, error, optionKey, renderOption, onPick, hint, emptyText, noun }: {
   id: string;
   label: string;
   search: LiveSearch;
@@ -40,6 +49,8 @@ export function ItemCombobox<T>({ id, label, search, results, fetching = false, 
   hint?: string;
   /** What no match says, in place of noMatch(term). */
   emptyText?: (term: string) => string;
+  /** What the status line calls the matches; items unless the screen says otherwise. */
+  noun?: Noun;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const listId = `${id}-list`;
@@ -57,7 +68,7 @@ export function ItemCombobox<T>({ id, label, search, results, fetching = false, 
   const typed = search.text.trim() !== '';
   const expanded = open && typed;
   const empty = emptyText?.(search.term);
-  const status = pickerStatus({ text: search.text, term: search.term, settled, count: settled ? shown.length : undefined, more: (results?.length ?? 0) > PICKER_LIMIT, empty });
+  const status = pickerStatus({ text: search.text, term: search.term, settled, count: settled ? shown.length : undefined, more: (results?.length ?? 0) > PICKER_LIMIT, empty, noun });
 
   useEffect(() => {
     if (active >= 0) document.getElementById(`${optionId}-${active}`)?.scrollIntoView?.({ block: 'nearest' });

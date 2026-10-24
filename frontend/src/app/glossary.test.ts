@@ -29,6 +29,13 @@ const CODE_ATTRIBUTES = new Set(['to', 'href', 'className', 'id', 'htmlFor', 'ke
 // Properties and attributes whose value is words for a person even when it is one lower case word ('purchases').
 const COPY_NAMES = new Set(['noun', 'plural', 'rowsWord', 'label', 'title', 'hint', 'rootLabel', 'aria-label', 'placeholder']);
 
+// Words that are only matched, never shown: the feature search's SYNONYMS table and its `synonyms` properties (issue #551), where
+// a person may type an old word ('restock') and still find the screen under its glossary name. feature-search.dom.test.tsx proves
+// they never render. Only that one file has the exemption; a `synonyms` anywhere else is read as usual, and so is the rest of it.
+const MATCH_ONLY_FILE = /(^|[\\/])areas[\\/]staff[\\/]feature-search-state\.ts$/;
+const MATCH_ONLY = new Set(['SYNONYMS', 'synonyms']);
+const isMatchOnly = (node: ts.Node) => (ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node)) && MATCH_ONLY.has(node.name.getText());
+
 /** A string a person may read: words with a space, or one capitalised word (Stock-take too); a route, a code or a key is not. */
 const isCopy = (text: string) => !text.startsWith('/') && (/\S\s+\S/.test(text) || /^[A-Z][a-z'-]+[.!?]?$/.test(text.trim()));
 
@@ -64,7 +71,9 @@ function copyOfSource(path: string, text: string): { line: number; text: string 
   const add = (node: ts.Node, text: string) => {
     if (isCopy(text) || isNamedCopy(node)) found.push({ line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, text });
   };
+  const matchOnlyFile = MATCH_ONLY_FILE.test(path);
   const visit = (node: ts.Node) => {
+    if (matchOnlyFile && isMatchOnly(node)) return;
     if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && !isCodeName(node)) add(node, node.text);
     else if (ts.isTemplateExpression(node)) add(node, [node.head.text, ...node.templateSpans.map((s) => s.literal.text)].join('X'));
     else if (ts.isJsxText(node) && node.text.trim() !== '') found.push({ line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, text: node.text.trim() });
@@ -75,7 +84,8 @@ function copyOfSource(path: string, text: string): { line: number; text: string 
 }
 
 const copyOf = (path: string) => copyOfSource(path, readFileSync(path, 'utf8'));
-const offencesIn = (text: string) => copyOfSource('fixture.tsx', text).flatMap((c) => offendingWords(c.text));
+const offencesIn = (text: string, path = 'fixture.tsx') => copyOfSource(path, text).flatMap((c) => offendingWords(c.text));
+const SEARCH_FILE = join(SRC, 'areas/staff/feature-search-state.ts');
 
 describe('glossary (issue #547)', () => {
   it('holds the renamed words', () => {
@@ -120,6 +130,20 @@ describe('glossary (issue #547)', () => {
     expect(offencesIn("export const A = () => <Link label={'restocks'} to=\"/staff/retail/restocks\">Buy stock</Link>;")).toEqual(['restock']);
     expect(offencesIn("export const A = () => <Link to=\"/staff/retail/restock\" data-tour=\"restock-save\">Buy stock</Link>;")).toEqual([]);
     expect(offencesIn("const code = 'restock_voids'; const kind = 'restock'; type K = 'restock';")).toEqual([]);
+  });
+
+  it('leaves the match-only synonyms of the feature search alone, and nothing else', () => {
+    expect(offencesIn("export const SYNONYMS = { '/x': ['restock goods', 'Restock'] };", SEARCH_FILE)).toEqual([]);
+    expect(offencesIn("const ACTIONS = [{ label: 'Buy stock', synonyms: ['restock goods'] }];", SEARCH_FILE)).toEqual([]);
+    expect(offencesIn("const ACTIONS = [{ label: 'Restock', hint: 'Save the restock', synonyms: ['buy'] }];", SEARCH_FILE)).toEqual(['restock', 'restock']);
+    expect(offencesIn("export const WORDS_TO_MATCH = ['restock goods'];", SEARCH_FILE)).toEqual(['restock']);
+  });
+
+  it('reads a SYNONYMS table or a synonyms property in any other file as copy', () => {
+    expect(offencesIn("export const SYNONYMS = { '/x': ['restock goods'] };")).toEqual(['restock']);
+    expect(offencesIn("const ITEMS = [{ label: 'Buy stock', synonyms: ['restock goods'] }];", join(SRC, 'areas/staff/retail/other.tsx'))).toEqual(['restock']);
+    expect(offencesIn("const ITEMS = [{ synonyms: ['restock goods'] }];", join(SRC, 'areas/staff/feature-search.tsx'))).toEqual(['restock']);
+    expect(offencesIn("const ITEMS = [{ synonyms: ['restock goods'] }];", join(SRC, 'areas/staff/not-feature-search-state.ts'))).toEqual(['restock']);
   });
 
   it('finds no banned or retired word in the copy of any screen', () => {
