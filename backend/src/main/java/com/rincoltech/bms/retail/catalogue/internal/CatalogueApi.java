@@ -1146,7 +1146,9 @@ final class CatalogueApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = "The name of that pack's unit")
             String unit,
 
-            @Schema(description = "True for a Code 128 code the system made for the product's labels")
+            @Schema(
+                    description = "True for a code the system made for the product's labels: a shop EAN-13 from 210"
+                            + " (#524), or a Code 128 IN code made before")
             boolean generated) {}
 
     @Schema(name = "RetailBarcodeRequest", description = "Issue #345: add a barcode to a product")

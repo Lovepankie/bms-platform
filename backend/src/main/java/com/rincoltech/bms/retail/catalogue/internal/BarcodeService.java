@@ -163,8 +163,9 @@ class BarcodeService {
     }
 
     /**
-     * A Code 128 code made by the system for each product, for its labels (IN and eight digits from the tenant's
-     * sequence); a product that has a made code already keeps it, so a second run makes nothing new.
+     * An EAN-13 made by the system for each product, for its labels (210, nine digits from the tenant's sequence and the
+     * GS1 check digit; issue #524); a product that has a made code already keeps it, an IN code of before included, so a
+     * second run makes nothing new.
      */
     @Transactional
     BarcodeList generate(List<UUID> productIds) {
@@ -174,22 +175,28 @@ class BarcodeService {
         }
         UUID by = CurrentPrincipal.require().userId();
         List<Barcode> made = new ArrayList<>();
-        // Locked in a fixed order, so two runs over overlapping lists never deadlock.
-        for (UUID productId : productIds.stream().distinct().sorted().toList()) {
+        // Every item is locked first, in a fixed order, and the sequence only after: two runs over overlapping lists
+        // never deadlock, since none waits for an item while it holds the sequence.
+        List<UUID> ids = productIds.stream().distinct().sorted().toList();
+        for (UUID productId : ids) {
             catalogue.lock(productId).orElseThrow(ApiException::notFound);
+        }
+        for (UUID productId : ids) {
             Barcode existing = repo.generatedOf(productId).orElse(null);
             if (existing != null) {
                 made.add(existing);
                 continue;
             }
-            // A person may have typed a code of the same shape by hand, or typed it a moment ago in another session;
-            // the sequence then moves past it and the next number is tried.
+            // The sequence row is locked until this transaction ends, so two runs never draw one number. A person may
+            // have typed a code of the same shape by hand (a scale's label, say), or typed it a moment ago in another
+            // session; the sequence then moves past it and the next number is tried. A brand's GTIN never starts
+            // with 2.
             UUID id = UUID.randomUUID();
             String code;
             do {
                 code = Barcodes.generated(sequences.next(SEQUENCE));
             } while (repo.byKey(code).isPresent()
-                    || !repo.insertGenerated(id, productId, code, Barcodes.Format.CODE128.key, by));
+                    || !repo.insertGenerated(id, productId, code, Barcodes.Format.EAN13.key, by));
             audit.record(AuditLog.Entry.created(
                     "retail.barcode.generated", BARCODE, id, null, Map.of("product_id", productId, "code", code)));
             made.add(repo.generatedOf(productId).orElseThrow());

@@ -91,7 +91,9 @@ class BarcodeController {
     @PostMapping("/products/barcodes/generate")
     @RequiresPermission("retail.catalogue.manage")
     @Operation(
-            summary = "Make a Code 128 label code for each item that has no made code yet; idempotent (#345)",
+            summary =
+                    "Make a shop EAN-13 label code (210, nine digits, check digit) for each item that has no made code yet;"
+                            + " idempotent (#345, #524)",
             operationId = "generateRetailBarcodes")
     BarcodeList generate(@Valid @RequestBody GenerateRequest request) {
         return service.generate(request.productIds());

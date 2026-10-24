@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { retail } from '../../../api/retail';
 import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
-import { LabelsPage } from './labels';
+import { LabelsPage, labelCode, sheetOf } from './labels';
+import { BarcodeSvg } from './catalogue-barcodes';
 import { ReceiveBlindPage } from './goods-receive';
 import { RestockForm } from './restock';
 import { SaleForm } from './sale';
@@ -540,12 +541,34 @@ describe('FR-RET-68 the label sheet', () => {
     expect(labels).toHaveLength(3);
     expect(labels[0]?.textContent).toContain('LED bulb 9W screw');
     expect(labels[0]?.querySelector('svg rect')).not.toBeNull();
-    expect(screen.getAllByRole('img', { name: /^Barcode IN\d{8}$/ })).toHaveLength(3);
+    // A made code is the shop's own EAN-13 (#524), drawn to the GS1 layout with its thirteen digits under the bars.
+    const drawn = screen.getAllByRole('img', { name: /^Barcode 210\d{10}$/ });
+    expect(drawn).toHaveLength(3);
+    const code = (drawn[0]?.getAttribute('aria-label') ?? '').replace('Barcode ', '');
+    expect(drawn[0]?.getAttribute('data-format')).toBe('ean13');
+    expect([...(drawn[0]?.querySelectorAll('text') ?? [])].map((t) => t.textContent).join('')).toBe(code);
+    expect(labels[0]?.querySelector('.label-code')).toBeNull();
     expect((screen.getByRole('button', { name: 'Print' }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByTestId('label-stock').textContent).toContain('70 by 37 mm');
     expect(screen.getByTestId('label-stock').textContent).toContain('zero margin');
     fireEvent.click(screen.getByRole('checkbox', { name: /keep 4 mm clear inside each label/ }));
     expect(screen.getByTestId('label-sheet').classList.contains('label-safe')).toBe(true);
+  });
+});
+
+describe('#524 an item labelled before keeps its IN code', () => {
+  it('prints the Code 128 IN code it has, so no new code is made for it', async () => {
+    const old: Product = { id: 'p-old', code: 'P-OLD', description: 'Test old label', unit: 'piece', active: true, sell_minor: 1500, barcodes: [{ id: 'b-old', product_id: 'p-old', code: 'IN00004242', format: 'code128', generated: true }] };
+    const sheet = sheetOf([{ product: old, count: '2' }], []);
+    expect(sheet).toEqual([
+      { product: old, code: 'IN00004242', format: 'code128' },
+      { product: old, code: 'IN00004242', format: 'code128' },
+    ]);
+    render(<BarcodeSvg text="IN00004242" format="code128" />);
+    const svg = screen.getByRole('img', { name: 'Barcode IN00004242' });
+    expect(svg.getAttribute('data-format')).toBeNull();
+    expect(svg.querySelectorAll('rect').length).toBeGreaterThan(10);
+    expect(labelCode(old)).toBe('IN00004242');
   });
 });
 

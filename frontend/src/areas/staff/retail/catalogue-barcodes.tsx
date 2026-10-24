@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Product } from '../../../api/retail';
 import { useStaff } from '../context';
-import { checkBarcode, code128Widths, formatName } from './barcode-state';
+import { checkBarcode, code128Widths, ean13Modules, formatName, isEan13 } from './barcode-state';
 import { UNITS, capabilityOn, holds } from './permissions';
 import { Problem } from './ui';
 import { activePacks } from './units-state';
@@ -11,8 +11,13 @@ import { activePacks } from './units-state';
 // The barcodes of an item on its edit form (ADR-070, issue #345; FR-RET-68): several per item, each for the item's own
 // unit or one of its pack sizes. The format is read from the code and its check digit checked here, as the server does.
 
-/** A Code 128 barcode of `text` as bars, black on white whatever the theme; read back by any scanner or the camera. */
-export function BarcodeSvg({ text }: { text: string }) {
+/**
+ * A barcode of `text` as bars, black on white whatever the theme; read back by any scanner or the camera. An EAN-13
+ * (`format` ean13, the shop's own label codes of issue #524) is drawn to the GS1 layout with its digits under the bars;
+ * anything else as Code 128.
+ */
+export function BarcodeSvg({ text, format }: { text: string; format?: string }) {
+  if (format === 'ean13' && isEan13(text)) return <Ean13Svg code={text} />;
   const widths = code128Widths(text);
   const quiet = 10;
   const total = widths.reduce((a, b) => a + b, 0) + quiet * 2;
@@ -25,6 +30,33 @@ export function BarcodeSvg({ text }: { text: string }) {
   return (
     <svg viewBox={`0 0 ${total} 50`} preserveAspectRatio="none" shapeRendering="crispEdges" role="img" aria-label={`Barcode ${text}`} fill="currentColor">
       {bars}
+    </svg>
+  );
+}
+
+/** The guard bars (start, centre, end), which reach below the others to the digits' line. */
+const GUARDS = new Set([0, 2, 46, 48, 92, 94]);
+
+/**
+ * An EAN-13 in modules of one unit: 11 clear on the left (the first digit is printed there) and 7 on the right, bars
+ * 32 high and the guards 37, the digits beneath. Kept to its own proportions (no stretching), so on a 70 by 37 mm label
+ * a module is about 0.33 mm, GS1's nominal size.
+ */
+function Ean13Svg({ code }: { code: string }) {
+  const modules = ean13Modules(code);
+  const left = 11;
+  const bars = [...modules].map((m, i) => (m === '1' ? <rect key={i} x={left + i} y={0} width={1} height={GUARDS.has(i) ? 37 : 32} /> : null));
+  const digit = (ch: string, x: number, i: number) => (
+    <text key={`d${i}`} x={x} y={42.5} fontSize={8} textAnchor="middle" fontFamily="monospace">
+      {ch}
+    </text>
+  );
+  const digits = [...code].map((ch, i) => (i === 0 ? digit(ch, 5, i) : digit(ch, left + (i <= 6 ? 3 + (i - 1) * 7 : 50 + (i - 7) * 7) + 3.5, i)));
+  return (
+    <svg viewBox="0 0 113 44" preserveAspectRatio="xMidYMid meet" shapeRendering="crispEdges" role="img" aria-label={`Barcode ${code}`} style={{ fill: 'var(--rt-black)' }} data-format="ean13">
+      <rect x={0} y={0} width={113} height={44} style={{ fill: 'var(--rt-white)' }} />
+      {bars}
+      {digits}
     </svg>
   );
 }

@@ -1,7 +1,9 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
+import com.rincoltech.bms.kernel.ApiException;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.http.HttpStatus;
 
 /**
  * The barcode formats a product accepts (ADR-070, issue #345; FR-RET-68): EAN-13, EAN-8 and UPC-A, whose last digit is
@@ -12,8 +14,18 @@ final class Barcodes {
 
     static final int MAX_LENGTH = 48;
 
-    /** The prefix of a Code 128 code the system makes for a product that has none (its labels). */
+    /** The prefix of the Code 128 label codes the system made before issue #524; they keep working. */
     static final String GENERATED_PREFIX = "IN";
+
+    /**
+     * The start of an EAN-13 the system makes for a product that has none (its labels; issue #524, ADR-070 decision
+     * 12): GS1 prefix 21, inside the restricted-circulation range 20 to 29 that GS1 never gives to a brand, then a 0
+     * kept so a later kind of shop code (a weighed item, say) can take 1 to 9 without meeting these.
+     */
+    static final String SHOP_EAN_PREFIX = "210";
+
+    /** The largest number the nine digits of a made EAN-13 hold. */
+    static final long SHOP_EAN_MAX = 999_999_999L;
 
     /**
      * Why an all-digit code of an unusual length, or a number in scientific notation, is refused unless Code 128 is
@@ -144,12 +156,8 @@ final class Barcodes {
      * and 1 alternate; the check digit brings the sum to a multiple of ten.
      */
     static boolean checkDigitOk(String digits) {
-        int sum = 0;
         int n = digits.length();
-        for (int i = n - 2, w = 3; i >= 0; i--, w = 4 - w) {
-            sum += (digits.charAt(i) - '0') * w;
-        }
-        return (10 - sum % 10) % 10 == digits.charAt(n - 1) - '0';
+        return checkDigit(digits.substring(0, n - 1)) == digits.charAt(n - 1) - '0';
     }
 
     /**
@@ -175,8 +183,26 @@ final class Barcodes {
         return c.length() == 12 && c.chars().allMatch(Character::isDigit) ? List.of("0" + c, c) : List.of(c);
     }
 
+    /** The shop's own EAN-13 for number {@code n} of the business's sequence: 210, nine digits, the GS1 check digit. */
     static String generated(long n) {
-        return GENERATED_PREFIX + String.format("%08d", n);
+        if (n < 1 || n > SHOP_EAN_MAX) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "barcode_numbers_used_up",
+                    "No barcode numbers left",
+                    "This business has used every shop barcode number. Add the item's own barcode instead.");
+        }
+        String body = SHOP_EAN_PREFIX + String.format("%09d", n);
+        return body + checkDigit(body);
+    }
+
+    /** The GS1 check digit that ends {@code body} (the digits before it), as {@link #checkDigitOk} reads it. */
+    static int checkDigit(String body) {
+        int sum = 0;
+        for (int i = body.length() - 1, w = 3; i >= 0; i--, w = 4 - w) {
+            sum += (body.charAt(i) - '0') * w;
+        }
+        return (10 - sum % 10) % 10;
     }
 
     private static String name(Format f) {

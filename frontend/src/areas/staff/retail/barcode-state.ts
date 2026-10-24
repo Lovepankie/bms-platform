@@ -137,6 +137,44 @@ export function code128Widths(text: string): number[] {
   return code128Values(text).flatMap((v) => [...(CODE128[v] ?? '')].map(Number));
 }
 
+// ---- EAN-13 (the shop's own label codes, issue #524) ---------------------------------------------------------
+
+/** The seven modules of each digit in the L set; the G set is L reversed and inverted, the R set L inverted. */
+const EAN_L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+
+/** Which of L and G each of the six left digits takes, chosen by the first digit (which has no bars of its own). */
+const EAN_PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+
+const invert = (bits: string) => [...bits].map((b) => (b === '1' ? '0' : '1')).join('');
+
+/** True for thirteen digits whose last is the GS1 check digit of the others. */
+export function isEan13(code: string): boolean {
+  return /^\d{13}$/.test(code) && checkDigitOk(code);
+}
+
+/** The shop's own EAN-13 for number `n` of the business's sequence, as the server makes it: 210, nine digits, check. */
+export function shopEan(n: number): string {
+  const body = `210${String(n).padStart(9, '0')}`;
+  for (let c = 0; c <= 9; c++) if (checkDigitOk(`${body}${c}`)) return `${body}${c}`;
+  throw new Error('unreachable');
+}
+
+/**
+ * The 95 modules of an EAN-13 (1 a bar, 0 a space): the start guard, six left digits in the L and G sets the first
+ * digit picks, the centre guard, six right digits in the R set, and the end guard; without the quiet zones.
+ */
+export function ean13Modules(code: string): string {
+  if (!isEan13(code)) throw new Error('An EAN-13 is thirteen digits with a valid check digit');
+  const d = [...code].map(Number);
+  const parity = EAN_PARITY[d[0] ?? 0] ?? '';
+  const left = d.slice(1, 7).map((n, i) => {
+    const l = EAN_L[n] ?? '';
+    return parity[i] === 'G' ? [...invert(l)].reverse().join('') : l;
+  });
+  const right = d.slice(7).map((n) => invert(EAN_L[n] ?? ''));
+  return `101${left.join('')}01010${right.join('')}101`;
+}
+
 /** Which line an add or a scan touched: the new last line, or the first line that changed; -1 when nothing did. */
 export function touchedLine<L>(before: L[], after: L[]): { index: number; created: boolean } {
   if (after.length > before.length) return { index: after.length - 1, created: true };

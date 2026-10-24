@@ -15,7 +15,7 @@ import { createAccountsMock } from './retail-accounts-mock';
 import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
 import { createPurchasingMock } from './retail-purchasing-mock';
-import { barcodeKey, checkBarcode, scanKeys } from '../areas/staff/retail/barcode-state';
+import { barcodeKey, checkBarcode, scanKeys, shopEan } from '../areas/staff/retail/barcode-state';
 import { MAX_VARIANTS, cleanOption, planVariants, variantDescription, variantKey, variantLabel } from './retail-variants';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
@@ -689,7 +689,7 @@ export function createMockRetail(): RetailApi {
         [...new Set(productIds)].sort().map((id) => {
           const own = (barcodes.get(id) ?? []).find((b) => b.generated);
           if (own) return own;
-          const row: Barcode = { id: nextId('bc'), product_id: find(id).id, code: `IN${String((made += 1)).padStart(8, '0')}`, format: 'code128', generated: true };
+          const row: Barcode = { id: nextId('bc'), product_id: find(id).id, code: shopEan((made += 1)), format: 'ean13', generated: true };
           barcodes.set(id, [...(barcodes.get(id) ?? []), row]);
           return row;
         }),

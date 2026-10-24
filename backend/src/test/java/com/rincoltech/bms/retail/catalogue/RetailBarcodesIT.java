@@ -7,9 +7,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -281,7 +289,8 @@ class RetailBarcodesIT extends IntegrationTest {
         assertThat(made.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(made.getBody().get("items")).hasSize(2);
         String code = made.getBody().get("items").get(0).get("code").asString();
-        assertThat(code).matches("IN\\d{8}");
+        assertThat(code).matches("210\\d{10}");
+        assertThat(made.getBody().get("items").get(0).get("format").asString()).isEqualTo("ean13");
         assertThat(made.getBody().get("items").get(0).get("generated").asBoolean())
                 .isTrue();
         JsonNode again = api.post("/products/barcodes/generate", Map.of("product_ids", List.of(one, two)), ADMIN)
@@ -318,19 +327,105 @@ class RetailBarcodesIT extends IntegrationTest {
     }
 
     @Test
-    void frRet68AMadeLabelCodeStepsPastAnInCodeTypedByHand() {
+    void issue524AMadeLabelCodeStepsPastAShopCodeTypedByHand() {
+        // The next two numbers of this business's sequence, typed by hand on another item first (a scale's label, say).
+        long next = TestDatabase.owner()
+                .sql("SELECT coalesce(max(next_value), 1) FROM tenant_sequences WHERE tenant_id = ?"
+                        + " AND sequence_key = 'retail_barcode'")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
         UUID typed = api.product("BC-HT", 100, 200);
-        assertThat(add(typed, "IN00000001").getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(add(typed, "IN00000002").getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String first = ean(next);
+        String second = ean(next + 1);
+        assertThat(add(typed, first).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(add(typed, second).getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UUID item = api.product("BC-HT2", 100, 200);
         ResponseEntity<JsonNode> made =
                 api.post("/products/barcodes/generate", Map.of("product_ids", List.of(item)), ADMIN);
         assertThat(made.getStatusCode()).as("%s", made.getBody()).isEqualTo(HttpStatus.OK);
         String code = made.getBody().get("items").get(0).get("code").asString();
-        assertThat(code).matches("IN\\d{8}").isNotIn("IN00000001", "IN00000002");
+        // tenant_sequences.next_value is the number the next call hands out, so the run lands exactly past the two.
+        assertThat(code).isEqualTo(ean(next + 2));
         assertThat(lookup(code).getBody().get("product").get("id").asString()).isEqualTo(item.toString());
-        assertThat(lookup("IN00000001").getBody().get("product").get("id").asString())
-                .isEqualTo(typed.toString());
+        assertThat(lookup(first).getBody().get("product").get("id").asString()).isEqualTo(typed.toString());
+    }
+
+    /** The shop EAN-13 of number {@code n}, worked out here by the GS1 rule rather than by the code under test. */
+    static String ean(long n) {
+        String body = "210" + String.format("%09d", n);
+        int sum = 0;
+        for (int i = 0; i < 12; i++) {
+            sum += (body.charAt(i) - '0') * (i % 2 == 0 ? 1 : 3);
+        }
+        return body + (10 - sum % 10) % 10;
+    }
+
+    @Test
+    void issue524AnInCodeMadeBeforeStillScansAndKeepsItsLabel() {
+        UUID item = api.product("BC-OLD", 100, 200);
+        UUID by = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("INSERT INTO retail_product_barcodes (id, tenant_id, product_id, code, format, generated)"
+                        + " VALUES (?, ?, ?, 'IN00004242', 'code128', true)")
+                .params(by, t.tenantId(), item)
+                .update();
+        ResponseEntity<JsonNode> found = lookup("IN00004242");
+        assertThat(found.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(found.getBody().get("product").get("id").asString()).isEqualTo(item.toString());
+        JsonNode kept = api.post("/products/barcodes/generate", Map.of("product_ids", List.of(item)), ADMIN)
+                .getBody()
+                .get("items")
+                .get(0);
+        assertThat(kept.get("code").asString()).isEqualTo("IN00004242");
+        assertThat(kept.get("format").asString()).isEqualTo("code128");
+        assertThat(api.get("/products/" + item, ADMIN).getBody().get("barcodes"))
+                .hasSize(1);
+    }
+
+    @Test
+    void issue524TwoGenerationsAtOnceNeverMakeOneCodeTwice() throws Exception {
+        List<UUID> items = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            items.add(api.product("BC-CC" + i, 100, 200));
+        }
+        // Two runs over overlapping lists, started together: each item gets one code, no code is on two items, and
+        // neither run deadlocks on the other.
+        List<List<UUID>> runs = List.of(items.subList(0, 4), items.subList(2, 6).reversed());
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<ResponseEntity<JsonNode>>> calls = new ArrayList<>();
+        for (List<UUID> run : runs) {
+            calls.add(pool.submit(() -> {
+                start.await();
+                return api.post("/products/barcodes/generate", Map.of("product_ids", run), ADMIN);
+            }));
+        }
+        start.countDown();
+        Map<String, String> codeOf = new HashMap<>();
+        for (Future<ResponseEntity<JsonNode>> call : calls) {
+            ResponseEntity<JsonNode> r = call.get(60, TimeUnit.SECONDS);
+            assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+            for (JsonNode b : r.getBody().get("items")) {
+                String product = b.get("product_id").asString();
+                String code = b.get("code").asString();
+                assertThat(code).matches("210\\d{10}");
+                assertThat(codeOf.putIfAbsent(product, code)).isIn(null, code);
+            }
+        }
+        pool.shutdown();
+        assertThat(codeOf).hasSize(6);
+        assertThat(new HashSet<>(codeOf.values())).hasSize(6);
+        long rows = TestDatabase.owner()
+                .sql("SELECT count(*) FROM retail_product_barcodes WHERE tenant_id = ? AND generated")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+        assertThat(rows).isEqualTo(6);
+        for (Map.Entry<String, String> e : codeOf.entrySet()) {
+            assertThat(lookup(e.getValue()).getBody().get("product").get("id").asString())
+                    .isEqualTo(e.getKey());
+        }
     }
 
     @Test

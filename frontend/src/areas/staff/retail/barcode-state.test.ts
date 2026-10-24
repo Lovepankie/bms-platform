@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Product } from '../../../api/retail';
-import { CODE128, barcodeKey, checkBarcode, code128Values, code128Widths, findByBarcodeIn, plusOne, scanInto, touchedLine } from './barcode-state';
+import { CODE128, barcodeKey, checkBarcode, checkDigitOk, code128Values, code128Widths, ean13Modules, findByBarcodeIn, isEan13, plusOne, scanInto, shopEan, touchedLine } from './barcode-state';
 
 // Barcodes (ADR-070, issue #345; FR-RET-68): the same format rules as the server, the line a scan
 // adds or bumps, and the Code 128 bars of a label. Fabricated codes and items.
@@ -90,6 +90,61 @@ describe('Code 128 labels', () => {
     // Start B (104) + 'A' (33) at 1 + 'B' (34) at 2: 104 + 33 + 68 = 205, and 205 mod 103 = 102.
     expect(code128Values('AB')).toEqual([104, 33, 34, 102, 106]);
     expect(code128Widths('IN00000001').reduce((a, b) => a + b, 0)).toBe(13 * 11 + 2);
+  });
+});
+
+describe('EAN-13 shop labels (#524)', () => {
+  // The space, bar, space, bar widths of each digit in the L set, from the GS1 table; G is the same read backwards and
+  // R the same starting with a bar. Written as widths here so the test does not share the code's bit table.
+  const WIDTHS = ['3211', '2221', '2122', '1411', '1132', '1231', '1114', '1312', '1213', '3112'];
+  const PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+  const runs = (bits: string) => (bits.match(/0+|1+/g) ?? []).map((r) => r.length).join('');
+
+  /** Reads the digits back out of the modules, by bar widths and the left half's L and G pattern. */
+  function decode(modules: string): string {
+    let parity = '';
+    let left = '';
+    for (let i = 0; i < 6; i++) {
+      const group = modules.slice(3 + i * 7, 10 + i * 7);
+      const w = runs(group);
+      const odd = isL(group);
+      parity += odd ? 'L' : 'G';
+      left += String(odd ? WIDTHS.indexOf(w) : WIDTHS.indexOf([...w].reverse().join('')));
+    }
+    let right = '';
+    for (let i = 0; i < 6; i++) right += String(WIDTHS.indexOf(runs(modules.slice(50 + i * 7, 57 + i * 7))));
+    return `${PARITY.indexOf(parity)}${left}${right}`;
+  }
+  // An L digit has an odd number of bar modules, a G digit an even number.
+  const isL = (group: string) => [...group].filter((b) => b === '1').length % 2 === 1;
+
+  it('makes the shop code 210, nine digits and the GS1 check digit', () => {
+    expect(shopEan(42)).toBe('2100000000425');
+    expect(shopEan(1)).toBe('2100000000012');
+    for (const n of [1, 7, 42, 123456789, 999999999]) {
+      const code = shopEan(n);
+      expect(code).toMatch(/^210\d{10}$/);
+      expect(checkDigitOk(code)).toBe(true);
+      expect(checkBarcode(code)).toMatchObject({ ok: true, format: 'ean13' });
+    }
+  });
+
+  it('draws 95 modules with the start, centre and end guards', () => {
+    const m = ean13Modules('2100000000425');
+    expect(m).toHaveLength(95);
+    expect(m.slice(0, 3)).toBe('101');
+    expect(m.slice(45, 50)).toBe('01010');
+    expect(m.slice(92)).toBe('101');
+  });
+
+  it('encodes every digit so it reads back, the first by the left half pattern', () => {
+    for (const code of ['2100000000425', '4006381333931', '5901234123457', shopEan(987654321)]) expect(decode(ean13Modules(code))).toBe(code);
+  });
+
+  it('refuses a code that is not an EAN-13', () => {
+    expect(isEan13('2100000000426')).toBe(false);
+    expect(isEan13('IN00000001')).toBe(false);
+    expect(() => ean13Modules('2100000000426')).toThrow();
   });
 });
 

@@ -5413,7 +5413,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Make a Code 128 label code for each item that has no made code yet; idempotent (#345) */
+        /** Make a shop EAN-13 label code (210, nine digits, check digit) for each item that has no made code yet; idempotent (#345, #524) */
         post: operations["generateRetailBarcodes"];
         delete?: never;
         options?: never;
@@ -11608,7 +11608,7 @@ export interface components {
             code?: string;
             /** @description ean13, ean8, upca or code128 */
             format?: string;
-            /** @description True for a Code 128 code the system made for the product's labels */
+            /** @description True for a code the system made for the product's labels: a shop EAN-13 from 210 (#524), or a Code 128 IN code made before */
             generated?: boolean;
             /** Format: uuid */
             id?: string;

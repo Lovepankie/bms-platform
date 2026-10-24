@@ -6,7 +6,9 @@ Accepted (approved by the dev lead on 22 Oct 2026; issue #345, FR-RET-68; migrat
 vertical), ADR-033 (pack sizes, the `units` capability) and ADR-009 (the PWA). Numbered ADR-070 because ADR-067 (offline sales) and ADR-068 (shop
 logos) are taken and pending ADR-069 is claimed by an open pull request; renumbered at merge if needed. Amended on 23 Oct 2026 by
 the owner's decision D7 (decision 11): a scanner is read only through a dedicated Scan box; this replaces the screen-wide
-keyboard-wedge reading first written in decision 5.
+keyboard-wedge reading first written in decision 5. Amended on 24 Oct 2026 by the owner's decision D25 (decision 12, issue #524,
+migration `V93`): the codes the system makes are GS1 EAN-13 in the restricted-circulation range; this replaces the Code 128 `IN`
+codes of decision 7 for new labels.
 
 ## Context
 
@@ -52,10 +54,11 @@ or Bluetooth scanner at the till, many have only phones.
    A code counts only once two frames in a row read the same code, so one misread frame never adds the wrong item.
    The Scan button shows only where the browser has `getUserMedia`; on a plain http address the scan bar says the camera works only on the secure (https) address instead; a blocked, missing or busy camera is explained in plain words. The
    `Permissions-Policy` already allows `camera=(self)`.
-7. **Labels for items without a code.** `POST /retail/products/barcodes/generate` makes a Code 128 code `IN` plus eight digits from the
+7. **Labels for items without a code.** `POST /retail/products/barcodes/generate` makes a code from the
    business's sequence (`tenant_sequences`, key `retail_barcode`) for each item that has no made code; an item keeps the one it has.
+   It was a Code 128 code `IN` plus eight digits; since decision 12 it is an EAN-13 from `210`.
    The Barcode labels page prints an A4 sheet of 3 by 8 labels of 70 by 37 mm with the name, the price and the barcode, drawn in the
-   browser as SVG (Code 128 set B) and printed with the browser's print dialog at zero margin (the page states the stock, and a 4 mm safe margin inside each label is an option for a printer that cannot print to the edge); no PDF is stored.
+   browser as SVG (a made EAN-13 in the GS1 layout since decision 12, an `IN` code of before in Code 128 set B) and printed with the browser's print dialog at zero margin (the page states the stock, and a 4 mm safe margin inside each label is an option for a printer that cannot print to the edge); no PDF is stored.
 8. **Who may do what.** Reading and scanning need `retail.stock.read` (every seller, storekeeper and administrator holds it). Adding,
    removing and making barcodes, and the labels page, need `retail.catalogue.manage` (administrators). No new permission.
 9. **The import file** takes the optional columns `barcode` (synonyms `barcodes`, `ean`, `upc`) and `pack barcode`, several codes in a
@@ -79,6 +82,26 @@ or Bluetooth scanner at the till, many have only phones.
    speed, and what lands anywhere else is typing. The cost is one habit, keeping the cursor in the Scan box, which the box helps
    by taking the cursor back after each scan; a scan with the cursor in another field types into that field, and the person sees it.
 
+12. **The shop's own codes are EAN-13 in GS1's restricted-circulation range (owner decision D25, 24 Oct 2026, issue #524).** A
+   made code is `21` (GS1 sets 20 to 29 aside for numbers used only inside one business and never gives them to a brand, so a made
+   code can never be a real product's GTIN), then `0`, then nine digits from the same sequence key `retail_barcode` (no new key; the
+   numbers simply go on from the last `IN` code), then the GS1 check digit: `2100000000425` for number 42. The `0` keeps the codes
+   of `21` followed by 1 to 9 free for a later kind of shop code, such as a weighed item whose price is in the code. The issue's
+   `21` plus nine digits plus a check digit is twelve digits, one short of an EAN-13; the `0` is that digit (pending the owner's
+   confirmation). The spec `docs/specs/units-packs-and-costing.md` (pull request #513, not yet merged) says only `21`; when it lands,
+   its section 7 takes this layout: made codes `210`, weighed items and any other kind from `211` to `219`, never `210`. Nine digits
+   hold 999,999,999 codes per business; the generator refuses past that rather than wrap. Two runs never draw one number: the
+   sequence row stays locked until the run's transaction ends, and every item of a run is locked, in a fixed order, before the
+   sequence is touched, so two runs over overlapping lists queue rather than deadlock. A number whose code another item already
+   holds (typed by hand, or a scale's label) is skipped and the next one tried, as before. Migration `V93` replaces the V87 check
+   that let a made code be only Code 128 with one that allows `code128` or an `ean13` starting with 2. **Existing codes keep
+   working:** an item that has an `IN` code keeps it, the generator returns it and makes nothing new, the lookup finds it and its
+   label still prints it as Code 128. The label sheet draws an EAN-13 to the GS1 layout (start, centre and end guards reaching
+   below the bars, the six left digits in the L and G sets chosen by the first digit, the right six in the R set) with the
+   thirteen digits beneath, the first digit left of the bars, and at its own proportions, so a module on the 70 by 37 mm label is
+   about 0.33 mm, the nominal size. Why: an EAN-13 reads on every scanner and till with its default settings, where Code 128 is
+   switched off on some, and it looks like any product's barcode.
+
 ## Consequences
 
 **Better:** a shop with a cheap USB scanner sells at supermarket speed with no setup; a shop with only phones scans with the camera;
@@ -91,6 +114,10 @@ with its own `sharp`, native libvips binaries) add about 72 MB to `node_modules`
 203 MB and 5 s on main, 280 MB and 7 s here); the web image is unchanged, since it carries only `dist`, and the bundle never loads
 them. They are not removed: npm `overrides` cannot drop a dependency, a `file:` stub in `overrides` makes npm 10's `npm ci` refuse
 the lockfile, and `--omit=optional` would also drop the native binaries Rollup and esbuild need to build. A code holding `% ; ? # / \` cannot be stored.
+
+**Watch for (decision 12):** a scale or another system that also prints prefix 21 codes inside the same shop (its codes are skipped
+by the generator only once typed in); a label printer that cannot hold the 0.33 mm module (the bars are 32 modules high, shorter than GS1's
+full height, to fit the label).
 
 **Watch for:** a scanner configured to send Tab instead of Enter (the Scan box needs Enter); a scan made with the cursor in
 another field types the code into that field, as any typing would (the box takes the cursor back after each scan, and on a till it

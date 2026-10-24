@@ -6,28 +6,33 @@ import { retail, type Barcode, type Product } from '../../../api/retail';
 import { BarcodeSvg } from './catalogue-barcodes';
 import { Gate, Problem, ProductPicker, money } from './ui';
 
-// Barcode labels (ADR-070, issue #345; FR-RET-68): choose items and how many labels of each, make a Code 128 code for
-// an item that has none, and print an A4 sheet of 3 by 8 labels with the name, the price and the barcode.
+// Barcode labels (ADR-070, issue #345; FR-RET-68): choose items and how many labels of each, make a shop code for an
+// item that has none (an EAN-13 from 210 since issue #524), and print an A4 sheet of 3 by 8 labels with the name, the
+// price and the barcode.
 
 export interface LabelRow {
   product: Product;
   count: string;
 }
 
-/** The barcode a label prints: the item's own IN label code (not a pack's); or none yet. */
+/** The barcode a label prints: the item's own made code (not a pack's); or none yet. */
+export function labelBarcode(product: Product, made: Barcode[] = []): Barcode | undefined {
+  // Always the system's own label code, drawn in its own format: an EAN-13 from 210 (issue #524), or the Code 128 IN
+  // code of an item that got one before. An item without one gets one made.
+  return [...(product.barcodes ?? []), ...made.filter((b) => b.product_id === product.id)].find((b) => b.generated && !b.unit_id);
+}
+
 export function labelCode(product: Product, made: Barcode[] = []): string | undefined {
-  // Always the system's own Code 128 label code: an EAN or UPC drawn as Code 128 bars would not scan on a scanner with
-  // Code 128 switched off, while every scanner that reads the labels reads them all. An item without one gets one made.
-  const own = [...(product.barcodes ?? []), ...made.filter((b) => b.product_id === product.id)].find((b) => b.generated && !b.unit_id);
-  return own?.code;
+  return labelBarcode(product, made)?.code;
 }
 
 /** The labels to print, in the order chosen: each row as many times as asked (1 to 99, an unreadable count is 1). */
-export function sheetOf(rows: LabelRow[], made: Barcode[]): { product: Product; code: string }[] {
+export function sheetOf(rows: LabelRow[], made: Barcode[]): { product: Product; code: string; format?: string }[] {
   return rows.flatMap((r) => {
-    const code = labelCode(r.product, made);
+    const own = labelBarcode(r.product, made);
     const n = Math.min(99, Math.max(1, Number.parseInt(r.count, 10) || 1));
-    return code ? Array.from({ length: n }, () => ({ product: r.product, code })) : [];
+    const code = own?.code;
+    return code ? Array.from({ length: n }, () => ({ product: r.product, code, ...(own?.format ? { format: own.format } : {}) })) : [];
   });
 }
 
@@ -87,8 +92,8 @@ export function LabelsPage() {
             <div key={`${l.product.id}-${i}`} className="label">
               <span className="label-name">{l.product.description}</span>
               {l.product.sell_minor !== undefined && <strong>{money(l.product.sell_minor)}</strong>}
-              <BarcodeSvg text={l.code} />
-              <span className="label-code">{l.code}</span>
+              <BarcodeSvg text={l.code} format={l.format} />
+              {l.format !== 'ean13' && <span className="label-code">{l.code}</span>}
             </div>
           ))}
         </div>
