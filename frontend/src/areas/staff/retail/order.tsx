@@ -151,7 +151,7 @@ function ChangeItems({ order }: { order: Order }) {
         </>
       )}
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="button" className="rt-primary" notReady={!shown || problem !== null} onClick={() => save.mutate()}>Save the new items</BusyButton>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!shown} notReady={problem !== null} onClick={() => save.mutate()}>Save the new items</BusyButton>
       <button type="button" onClick={() => { setOpen(false); setLines(null); save.reset(); }}>Close</button>
     </fieldset>
   );

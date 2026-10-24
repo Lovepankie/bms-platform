@@ -292,4 +292,19 @@ describe('a primary button whose form is not ready (#526)', () => {
     expect(document.activeElement).not.toBe(screen.getByLabelText('Elsewhere'));
     expect(screen.getByRole('status').textContent).toBe('Fill in or correct the fields above first.');
   });
+
+  // Review of #559, round 3: the nudge never remounts the button, so a keyboard press keeps focus on it, and its live region is
+  // already in the page, empty, before the words come.
+  it('keeps focus on the button when the nudge shows, with its status line mounted before', () => {
+    render(<BusyButton type="button" className="rt-primary" busy={false} notReady>Make the labels</BusyButton>);
+    const button = screen.getByRole('button', { name: 'Make the labels' });
+    const status = screen.getByRole('status');
+    expect(status.textContent).toBe('');
+    button.focus();
+    fireEvent.click(button);
+    expect(screen.getByRole('button', { name: 'Make the labels' })).toBe(button);
+    expect(document.activeElement).toBe(button);
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('Fill in or correct the fields above first.');
+  });
 });

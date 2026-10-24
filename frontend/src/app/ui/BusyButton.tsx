@@ -76,11 +76,15 @@ export type BusyButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   notReady?: boolean;
 };
 
-export function BusyButton({ busy, disabled, notReady: fieldsNotReady = false, className, onClick, children, ...rest }: BusyButtonProps) {
+export function BusyButton({ busy, disabled, notReady: fieldsNotReadyProp, className, onClick, children, ...rest }: BusyButtonProps) {
+  const fieldsNotReadyGiven = fieldsNotReadyProp !== undefined;
+  const fieldsNotReady = fieldsNotReadyProp === true;
   const button = useRef<HTMLButtonElement>(null);
   const busyNow = useRef(busy);
   busyNow.current = busy;
   const notReady = fieldsNotReady && !busy && !disabled;
+  // A button whose form passes notReady at all (true or false) may need to say why a press sent nothing.
+  const canNudge = fieldsNotReadyGiven;
   const notReadyNow = useRef(notReady);
   notReadyNow.current = notReady;
   // A press while not ready that found no field to go to: the line under the button says what to do.
@@ -185,13 +189,16 @@ export function BusyButton({ busy, disabled, notReady: fieldsNotReady = false, c
       {busy && <span className="busy-spinner" aria-hidden="true" />}
     </button>
   );
-  if (!nudge) return control;
+  // One shape always, so the nudge never remounts the button (focus stays on it); a button that may nudge keeps its status line
+  // mounted and empty until there is something to say, so a screen reader hears the words when they come.
   return (
     <>
       {control}
-      <span className="busy-nudge" role="status">
-        Fill in or correct the fields above first.
-      </span>
+      {canNudge && (
+        <span className={nudge ? 'busy-nudge' : 'busy-nudge busy-nudge-empty'} role="status">
+          {nudge ? 'Fill in or correct the fields above first.' : ''}
+        </span>
+      )}
     </>
   );
 }

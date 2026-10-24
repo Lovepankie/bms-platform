@@ -141,12 +141,9 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       {problem && draft.lines.length > 0 && <p>{problem}</p>}
       <Problem error={save.error} />
       <ActionBar>
-        <span data-tour="transfer-save">
-          <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={problem !== null}>
-            {sends ? 'Send stock' : 'Move stock'}
-          </BusyButton>
-
-        </span>
+        <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={problem !== null} data-tour="transfer-save">
+          {sends ? 'Send stock' : 'Move stock'}
+        </BusyButton>
       </ActionBar>
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>

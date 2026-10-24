@@ -211,3 +211,8 @@ button[aria-disabled='true'],
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* Empty until a press needs it: still in the page (never display: none), so the live region is there when the words come. */
+.busy-nudge-empty {
+  margin: 0;
+}

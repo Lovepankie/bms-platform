@@ -352,7 +352,7 @@ describe('walk-through fixes (#112)', () => {
     vi.stubGlobal('sessionStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: () => undefined, removeItem: () => undefined });
     const html = page('admin', <TransferForm fromBranchId={branch} />);
     expect(html).toContain('Only 12 piece in stock at this branch.');
-    expect(html).toMatch(/<button type="submit" class="rt-primary busy-button" data-not-ready="true">Move stock<\/button>/);
+    expect(html).toMatch(/<button type="submit" data-tour="transfer-save" class="rt-primary busy-button" data-not-ready="true">Move stock<\/button>/);
 
   });
 

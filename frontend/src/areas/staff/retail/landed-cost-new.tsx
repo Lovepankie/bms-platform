@@ -208,7 +208,7 @@ export function ReviewPanel({ form, payee, preview, busy, error, onBack, onSave 
       {preview && <AllocationTable lines={lines} total={preview.total_minor} />}
       <Problem error={error} />
       <p className="cluster">
-        <BusyButton busy={busy ?? false} type="button" className="rt-primary" disabled={!preview} notReady={preview?.total_mismatch === true} onClick={onSave}>Save landed cost</BusyButton>
+        <BusyButton busy={busy ?? false} type="button" className="rt-primary" disabled={!preview || preview.total_mismatch === true} onClick={onSave}>Save landed cost</BusyButton>
         <button type="button" /* busy-exempt: going back waits for the save */ className="btn-ghost" onClick={onBack} disabled={busy}>Change something</button>
       </p>
     </section>

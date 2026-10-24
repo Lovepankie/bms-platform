@@ -137,7 +137,12 @@ describe('testing the connection', () => {
     api.account.mockResolvedValue({ ...saved, host_ready: false });
     shell(<ReceivePaymentsPage />);
     expect(await screen.findAllByText(/not set up on this system yet/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).disabled).toBe(true);
+    // Review of #559: a server not set up is a plain disabled button, never the fields nudge (there are no fields to fill).
+    const test = screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement;
+    expect(test.disabled).toBe(true);
+    expect(test.getAttribute('data-not-ready')).toBeNull();
+    fireEvent.click(test);
+    expect(screen.queryByText('Fill in or correct the fields above first.')).toBeNull();
   });
 });
 
