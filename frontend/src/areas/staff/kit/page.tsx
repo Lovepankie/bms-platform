@@ -1,7 +1,11 @@
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Card, ListRow, RowList } from '../../../app/ui/ListRow';
-import { EmptyState } from '../../../app/ui/EmptyState';
+import { ActionBar } from '../../../app/ui/ActionBar';
+import { EmptyState, NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
+import { KeyFigure, KeyFigureRow } from '../../../app/ui/KeyFigure';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Field';
 import { MoneyInput } from '../../../app/ui/MoneyInput';
 import { Segmented } from '../../../app/ui/Segmented';
@@ -83,6 +87,7 @@ export function KitPage() {
   const [buyer, setBuyer] = useState('');
   const [sent, setSent] = useState(false);
   const [paid, setPaid] = useState<number | null>(null);
+  const [days, setDays] = useState({ from: '2026-10-01', to: '2026-10-24' });
   const [picking, setPicking] = useState(false);
   const [method, setMethod] = useState('Cash');
   const [done, setDone] = useState(0);
@@ -179,6 +184,33 @@ export function KitPage() {
         <Card>
           <EmptyState text="No sales today yet." action={{ label: 'Record a sale', to: '/staff/retail/sale' }} />
         </Card>
+      </Example>
+
+      <Example title="NoAccess" about="A page you may not open: who can give access, and a way Home.">
+        <Card>
+          <NoAccess />
+        </Card>
+      </Example>
+
+      <Example title="KeyFigure" about="The one key amount of a screen, large, with its label above and its parts under it.">
+        <KeyFigure label="Takings today" value={ugx(232500)}>
+          <KeyFigureRow label="Cash" value={ugx(150000)} />
+          <KeyFigureRow label="Mobile money" value={ugx(82500)} />
+        </KeyFigure>
+      </Example>
+
+      <Example title="PeriodPicker" about="Today, This week, This month or Custom. Custom opens a sheet with the two days.">
+        <PeriodPicker from={days.from} to={days.to} onChange={setDays} />
+      </Example>
+
+      <Example title="Hint" about="A help text on one line. The info button shows the rest when it does not fit.">
+        <Hint>Every purchase is kept. If you entered one wrongly, open Correct this purchase, then enter it again with the right quantity.</Hint>
+      </Example>
+
+      <Example title="ActionBar" about="The main action: brand filled, and on a phone stuck full width to the bottom of the form.">
+        <ActionBar>
+          <button type="button" className="rt-primary">Save expense</button>
+        </ActionBar>
       </Example>
 
       <Example title="Skeleton" about="Nothing for the first second, then grey rows. A reload keeps the list on the screen.">
