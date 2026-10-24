@@ -123,6 +123,37 @@ describe('loading the fresh app', () => {
     expect(stuck).toHaveBeenCalledTimes(1);
   });
 
+  it('stops waiting and reloads when the new worker fails to install', async () => {
+    const { reg } = phone();
+    let change: (() => void) | undefined;
+    const worker = { state: 'installing', addEventListener: (_: string, fn: () => void) => (change = fn) };
+    reg.update = vi.fn(async () => {
+      reg.installing = worker;
+    });
+    const reload = vi.fn();
+    const done = loadFreshApp(reload, 60_000);
+    await vi.waitFor(() => expect(change).toBeDefined());
+    expect(reload).not.toHaveBeenCalled();
+    worker.state = 'redundant';
+    change?.();
+    await done;
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits far longer than 3 s by default, for a phone saving a whole new app', async () => {
+    vi.useFakeTimers();
+    const { takeOver, listening } = phone({ next: 'installing' });
+    const reload = vi.fn();
+    const done = loadFreshApp(reload);
+    await vi.waitFor(() => expect(listening()).toBe(1));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(reload).not.toHaveBeenCalled();
+    takeOver();
+    await done;
+    expect(reload).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('still reloads when the browser refuses', async () => {
     vi.stubGlobal('navigator', { serviceWorker: { getRegistrations: async () => { throw new Error('denied'); } } });
     const reload = vi.fn();

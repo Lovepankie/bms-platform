@@ -42,8 +42,14 @@ export function claimReload(now = Date.now(), storage: Storage | null = sessionS
   }
 }
 
-/** How long the new app may take to arrive before the page reloads anyway. */
-const UPDATE_LIMIT_MS = 3_000;
+/**
+ * How long the new app may take to arrive before the page reloads anyway. An iPhone saving the ~230 files of a new
+ * app over mobile data needs far more than the 3 s first chosen, and a reload stops the download, so every tap of
+ * "Load the page again" started it over and the phone never got the new app (Hillary's iPhone, 24 Oct 2026).
+ */
+const UPDATE_LIMIT_MS = 45_000;
+/** How long asking the server for a newer worker may take; a hung request must not hold the page for the full limit. */
+const CHECK_LIMIT_MS = 5_000;
 
 export const OFFLINE_MESSAGE = 'You are offline. The app will update when you are back online.';
 
@@ -55,14 +61,21 @@ const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine ===
  * over. The worker is generated with skipWaiting and clientsClaim on (vite.config.ts, registerType autoUpdate), so a
  * new worker takes over by itself as soon as it has saved the new app files.
  */
-async function updateWorker(): Promise<void> {
+async function updateWorker(checkMs: number): Promise<void> {
   const sw = typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined;
   if (!sw) return;
   const regs = await sw.getRegistrations();
-  await Promise.all(regs.map((r) => r.update().catch(() => undefined)));
-  if (!regs.some((r) => r.installing || r.waiting)) return;
-  await new Promise<void>((resolve) => sw.addEventListener('controllerchange', () => resolve(), { once: true }));
+  await Promise.race([Promise.all(regs.map((r) => r.update().catch(() => undefined))), wait(checkMs)]);
+  const next = regs.map((r) => r.installing ?? r.waiting).find((w) => w);
+  if (!next) return;
+  await new Promise<void>((resolve) => {
+    sw.addEventListener('controllerchange', () => resolve(), { once: true });
+    // A worker whose install failed never takes over: stop waiting and reload, rather than sit out the limit.
+    next.addEventListener?.('statechange', () => next.state === 'redundant' && resolve());
+  });
 }
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Loads the newest app, also when the phone's offline copy (the service worker) still holds the old one
@@ -82,7 +95,7 @@ export async function loadFreshApp(
     timer = setTimeout(resolve, limitMs);
   });
   // A browser that refuses any of this still gets the plain reload.
-  await Promise.race([updateWorker().catch(() => undefined), limit]);
+  await Promise.race([updateWorker(Math.min(CHECK_LIMIT_MS, limitMs)).catch(() => undefined), limit]);
   clearTimeout(timer);
   reload();
   return 'reloaded';
@@ -101,7 +114,15 @@ export function RouteError({ error }: ErrorComponentProps) {
   // The decision is made once, at the first render; the reload itself runs after rendering.
   const [offline, setOffline] = useState(() => stale && isOffline());
   const [reloading] = useState(() => stale && !offline && claimReload());
-  const load = () => void loadFreshApp().then((r) => setOffline(r === 'offline'));
+  // While the new app downloads the page must not be reloaded again, so a tap shows progress instead of the button.
+  const [getting, setGetting] = useState(false);
+  const load = () => {
+    setGetting(true);
+    void loadFreshApp().then((r) => {
+      setOffline(r === 'offline');
+      setGetting(false);
+    });
+  };
   useEffect(() => {
     if (reloading) void loadFreshApp();
     else if (!stale) console.error('Screen error', error);
@@ -113,7 +134,7 @@ export function RouteError({ error }: ErrorComponentProps) {
     window.addEventListener('online', back, { once: true });
     return () => window.removeEventListener('online', back);
   }, [offline]);
-  if (reloading) return <p role="status">Getting the new version of the app…</p>;
+  if (reloading || getting) return <p role="status">Getting the new version of the app… This can take a minute on a phone.</p>;
   return (
     <div role="alert" className={stale ? 'alert alert-info' : 'alert alert-danger'}>
       <p>{offline ? OFFLINE_MESSAGE : stale ? 'A new version of the app is ready.' : 'This screen could not open.'}</p>
