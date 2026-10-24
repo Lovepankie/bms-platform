@@ -404,7 +404,7 @@ describe('walk-through fixes (#112)', () => {
     const context = { supplierName: 'Test Supplier 01', before: { p1: { sell: 1200, cost: 800 }, p2: { sell: 9500, cost: 6000 } } };
     const admin = page('admin', <RestockSaved purchase={purchase} context={context} />);
     expect(admin).toContain('Purchase saved (RP00000042)');
-    expect(admin).toContain('From Test Supplier 01, bought on 2026-10-06: 2 items');
+    expect(admin).toContain('From Test Supplier 01, bought on 6 Oct 2026: 2 items');
     expect(admin).toContain('LED bulb 9W screw: sell price changed from UGX 1,200 to UGX 1,400.');
     expect(admin).toContain('LED bulb 9W screw: last paid changed from UGX 800 to UGX 850.');
     expect(admin).not.toContain('LED bulb 15W screw:');
@@ -551,7 +551,7 @@ describe('All branches (#144)', () => {
     expect(html).toContain('<h2>By branch</h2>');
     expect(html).toContain('<td>Test Branch A</td>');
     expect(html).toContain('<td>Test Branch B</td>');
-    expect(html).toContain('<td>2026-10-05</td>');
+    expect(html).toContain('<td>5 Oct 2026</td>');
     expect(html).toContain('UGX 3,000');
     expect(html).toContain('UGX 1,200');
   });

@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRow, type Valuation } from '../../../api/retail';
-import { showPercent, showQty } from './maths';
+import { showDate, showPercent, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
 import { KeyFigure, KeyFigureRow } from '../../../app/ui/KeyFigure';
 import { ToSales, ToStock } from './analytics-ui';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { needsOf } from './permissions';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
 // Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
@@ -241,7 +242,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
     byDay.set(r.date ?? '', add(byDay.get(r.date ?? '') ?? none(), r));
     byBranch.set(r.branch_id ?? '', add(byBranch.get(r.branch_id ?? '') ?? none(), r));
   }
-  const days = [...byDay.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([date, f]) => ({ key: date, name: date, f }));
+  const days = [...byDay.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([date, f]) => ({ key: date, name: showDate(date), f }));
   // ADR-043: with credit sales counted when the buyer pays, Sales becomes Received (money collected) and the profit is that of
   // the money received; what was sold, and what is still owed, come beside it.
   const onPayment = report.credit_sale_recognition === 'on_payment';
@@ -271,8 +272,8 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
       {report.credit_recognition_starts_on && (
         <p className="hint" data-testid="credit-starts-on">
           {onPayment
-            ? `Credit sales entered and dated before ${report.credit_recognition_starts_on} count as they did, on the day of the sale.`
-            : `From ${report.credit_recognition_starts_on}, credit sales will count when the buyer pays.`}
+            ? `Credit sales entered and dated before ${showDate(report.credit_recognition_starts_on)} count as they did, on the day of the sale.`
+            : `From ${showDate(report.credit_recognition_starts_on)}, credit sales will count when the buyer pays.`}
         </p>
       )}
       <p className="hint">Usage and damage reports count here. A debt written off is a loss on the day it was written off. The stock count difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
@@ -295,10 +296,7 @@ export function ProfitPage() {
     <Gate screen="profit" title="Daily profit" wide>
       {!all && branchId === null ? <BranchRequired permissions={needsOf('profit')} /> : (
         <>
-          <div className="rt-row" data-tour="profit-range">
-            <div><label htmlFor="from">From</label><input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div><label htmlFor="to">To</label><input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-          </div>
+          <PeriodPicker from={from} to={to} tour="profit-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
           <div data-tour="profit-figures">
           {profit.isPending && from <= to && <SkeletonList label="Loading profit" />}

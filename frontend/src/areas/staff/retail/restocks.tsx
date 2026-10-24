@@ -14,6 +14,7 @@ import { useRestockVariantLevel } from './catalogue-variants';
 import { GroupedRestocks } from './restocks-grouped';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // Past restocks (issue #351, ADR-044): every restock, newest first, a voided one marked and never deleted. A restock entered with a
 // wrong quantity, price, unit or supplier is corrected here: "Correct this restock" voids it (the stock, the books and the prices go
@@ -137,15 +138,8 @@ export function RestocksPage() {
     <Gate screen="restock" title={WORDS.pastPurchases}>
       <p className="hint">Every purchase is kept. If you entered one wrongly, open Correct this purchase, then enter it again with the right quantity.</p>
       {message && <Success>{message}</Success>}
-      <div className="rt-row" data-tour="restocks-filters">
-        <div>
-          <label htmlFor="restocks-from">From</label>
-          <input id="restocks-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div>
-          <label htmlFor="restocks-to">To</label>
-          <input id="restocks-to" type="date" value={to} min={from} max={today} onChange={(e) => setTo(e.target.value)} />
-        </div>
+      <div data-tour="restocks-filters">
+        <PeriodPicker from={from} to={to} onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
         <div>
           <label htmlFor="restocks-status">Show</label>
           <select id="restocks-status" value={status} onChange={(e) => setStatus(e.target.value as 'all' | 'posted' | 'voided')}>

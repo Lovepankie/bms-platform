@@ -30,6 +30,7 @@ import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { useToast } from './toast';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { showDate } from './maths';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -59,7 +60,7 @@ export function Receipt({ sale, received }: { sale: Sale; /** Cash the customer 
     <section aria-label="Sale receipt">
       <h2>Sale saved</h2>
       <p>
-        Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {sale.sale_date}
+        Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {showDate(sale.sale_date)}
         {sale.buyer_name ? `, buyer ${sale.buyer_name}` : ''}
       </p>
       <div className="table-wrap" tabIndex={0}><table>
@@ -90,7 +91,7 @@ export function Receipt({ sale, received }: { sale: Sale; /** Cash the customer 
       {(sale.balance_minor ?? 0) > 0 && (
         <p>
           Still to pay: <strong>{money(sale.balance_minor ?? 0)}</strong>
-          {sale.due_date ? ` by ${sale.due_date}` : ''}
+          {sale.due_date ? ` by ${showDate(sale.due_date)}` : ''}
         </p>
       )}
       {canProfit && sale.profit_minor !== undefined && <p>Profit on this sale: {money(sale.profit_minor)}</p>}

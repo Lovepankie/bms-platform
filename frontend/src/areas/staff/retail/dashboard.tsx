@@ -11,6 +11,7 @@ import { ChangeLine, ChartLegend, RangeChart, RangePicker } from './range-ui';
 import { DEFAULT_RANGE, daysBetween, previousWords, rangeQuery, rangeTitle, readRange, shortDate, writeRange, type RangeChoice } from './range-state';
 import { ScreenLink } from './screen-link';
 import { Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
+import { showDate } from './maths';
 
 // The owner dashboard on the retail home (issue #149, the range of issue #428). It shows only what the server sent: profit
 // figures need retail.profit.read, stock figures retail.stock.read, and what neither permission allows is simply not drawn.
@@ -118,8 +119,8 @@ export function DashboardView({ data, nameOf, choice = DEFAULT_RANGE, onChoice, 
       {data.credit_recognition_starts_on && (
         <p className="hint" data-testid="credit-starts-on">
           {onPayment
-            ? `Credit sales entered and dated before ${data.credit_recognition_starts_on} count as they did, on the day of the sale.`
-            : `From ${data.credit_recognition_starts_on}, credit sales will count when the buyer pays.`}
+            ? `Credit sales entered and dated before ${showDate(data.credit_recognition_starts_on)} count as they did, on the day of the sale.`
+            : `From ${showDate(data.credit_recognition_starts_on)}, credit sales will count when the buyer pays.`}
         </p>
       )}
     </>

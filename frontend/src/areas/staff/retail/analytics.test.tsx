@@ -144,7 +144,7 @@ describe('margins', () => {
     expect(html).toContain('29.69%');
     expect(html).toContain('Test Product ANA-5');
     expect(html).toContain('10%');
-    expect(html).toContain('UGX 1,500 to UGX 2,000 on 2026-10-07');
+    expect(html).toContain('UGX 1,500 to UGX 2,000 on 7 Oct 2026');
     expect(html).toContain('33.33%');
     expect(html).toContain('Showing 1 of 2');
   });

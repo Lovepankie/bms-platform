@@ -98,11 +98,11 @@ describe('taking a payment on account', () => {
     fireEvent.click(screen.getByLabelText('Choose which sales it pays'));
     expect(screen.getByTestId('pay-manual')).toBeTruthy();
     expect(saveButton().getAttribute('data-not-ready')).toBe('true');
-    type(/RS-c, 2026-02-05/, '600');
-    type(/RS-b, 2026-01-05/, '200');
+    type(/RS-c, 5 Feb 2026/, '600');
+    type(/RS-b, 5 Jan 2026/, '200');
     expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByRole('alert').textContent).toMatch(/add up/i);
-    type(/RS-b, 2026-01-05/, '300');
+    type(/RS-b, 5 Jan 2026/, '300');
     expect(saveButton().getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(saveButton());
     expect(buildPaymentRequest(sent.mock.calls[0]?.[0] as PaymentForm).allocations).toEqual([

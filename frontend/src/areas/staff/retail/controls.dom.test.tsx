@@ -126,7 +126,8 @@ describe('the cards', () => {
     const first = summary.mock.calls[0]?.[0];
     expect(first?.withinMinutes).toBe(10);
     expect((first?.from ?? '') <= (first?.to ?? '')).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    // The days are the one PeriodPicker (issue #526): a Segmented, whose options are radios.
+    fireEvent.click(screen.getByRole('radio', { name: 'Today' }));
     await waitFor(() => {
       const last = summary.mock.calls.at(-1)?.[0];
       expect(last?.from).toBe(last?.to);

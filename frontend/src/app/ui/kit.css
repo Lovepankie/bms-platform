@@ -670,3 +670,37 @@ button.list-row:focus-visible {
     padding-bottom: var(--space-3);
   }
 }
+
+/* PeriodPicker (issue #526): the Segmented of Today, This week, This month and Custom, and the days in force under it in words.
+   On Custom the days are a quiet button that opens the sheet again. */
+.period-picker {
+  margin: 0 0 var(--space-4);
+}
+
+.period-picker .segmented {
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 0 0 var(--space-2);
+}
+
+/* The four choices stay on one row at 360px: equal widths, the small text size, no wrap inside a choice. */
+.period-picker .segmented > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px var(--space-1);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.period-days {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+button.period-days {
+  min-height: var(--tap);
+  padding-inline: 0;
+  color: var(--color-link);
+}

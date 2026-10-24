@@ -20,6 +20,7 @@ import { chainUser, effectiveChain, usableChain, usableLevels, type Selection } 
 import { GroupBy } from './sales-group-by';
 import { useSalesVariantLevel } from './catalogue-variants';
 import { PaySaleAction, VoidSaleAction, WriteOffSaleAction } from './sale-actions';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // Credit sales and All sales (#145): the lists the pilot's app has, 'Credit sales' and the sales
 // history, read from the sales list API in the branch chosen at the top of the page (every branch the
@@ -344,11 +345,7 @@ export function AllSales() {
         <OpenSale id={open} onClose={() => setOpen(null)} />
       ) : (
         <>
-          <div className="rt-row" data-tour="sales-range">
-            <div><label htmlFor="sales-from">From</label><input id="sales-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div><label htmlFor="sales-to">To</label><input id="sales-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-          </div>
-          {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
+          <PeriodPicker from={from} to={to} tour="sales-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
           <SearchBox id="sales-buyer" label="Buyer, phone or sale number" search={search} {...figures} />
           <label htmlFor="sales-method">Paid by</label>
           <select id="sales-method" value={method} onChange={(e) => setMethod(e.target.value as SalePayment | '')}>

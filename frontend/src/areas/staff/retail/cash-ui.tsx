@@ -7,6 +7,7 @@ import { enteredBy, groupByShopMonth, savedFor, voidOffered } from './cash-state
 import { newIdempotencyKey } from './idempotency';
 import { CASHBOOK_VOID, branchesWhere, holds } from './permissions';
 import { Problem, useBranchName, useBranchView } from './ui';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // Pieces shared by the cash book screens (ADR-022): a date field that cannot be in the future, the
 // date window of a list or report, the success message, the Void action and the records grouped by
@@ -35,16 +36,17 @@ export function useWindow(days: number = 30): { from: string; to: string; setFro
   return { from, to, setFrom, setTo, query: { from, to } };
 }
 
-export function WindowFields({ id, window }: { id: string; window: ReturnType<typeof useWindow> }) {
+/** The days of a list or report: the one PeriodPicker (issue #526), Today, This week, This month or Custom. */
+export function WindowFields({ window }: { id?: string; window: ReturnType<typeof useWindow> }) {
   return (
-    <div className="rt-row">
-      <div>
-        <DateField id={`${id}-from`} label="From" value={window.from} onChange={window.setFrom} />
-      </div>
-      <div>
-        <DateField id={`${id}-to`} label="To" value={window.to} onChange={window.setTo} />
-      </div>
-    </div>
+    <PeriodPicker
+      from={window.from}
+      to={window.to}
+      onChange={(range) => {
+        window.setFrom(range.from);
+        window.setTo(range.to);
+      }}
+    />
   );
 }
 

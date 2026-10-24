@@ -309,6 +309,15 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(busy).toMatch(/focusFirstMissing/);
   });
 
+  // Item 8: a date range is the one PeriodPicker (Today, This week, This month, Custom in a sheet), never two bare date fields,
+  // and dates read "23 Oct 2026" through the one formatter, showDate.
+  it('draws every date range with the PeriodPicker and formats dates in one place', () => {
+    for (const file of components.map((f) => relative(SRC, f)).filter((f) => f !== 'app/ui/PeriodPicker.tsx')) {
+      expect(code(file).match(/>From<\/label>[^\n]{0,40}\n?[^\n]{0,200}type="date"|>From<\/label><input [^>]*type="date"/)?.[0] ?? null, file).toBeNull();
+    }
+    expect(code('areas/staff/retail/maths.ts')).toMatch(/export \{ showDate \} from '\.\.\/\.\.\/\.\.\/app\/ui\/PeriodPicker'/);
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');

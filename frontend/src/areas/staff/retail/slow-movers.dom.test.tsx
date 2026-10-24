@@ -76,7 +76,7 @@ describe('slow movers section', () => {
     expect(screen.getByRole('heading', { name: 'Slow movers: more than 4 months of stock' })).toBeTruthy();
     expect(screen.getByText('40.0')).toBeTruthy();
     expect(screen.getByText('over 120.0')).toBeTruthy();
-    expect(screen.getAllByText('2026-10-11').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('11 Oct 2026').length).toBeGreaterThan(0);
     expect(screen.getByText('Money tied up')).toBeTruthy();
     expect(screen.getByText('UGX 4,000')).toBeTruthy();
     expect(screen.getByText(/Money tied up in slow stock: UGX 6,000/)).toBeTruthy();

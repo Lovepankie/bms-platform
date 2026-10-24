@@ -5,9 +5,9 @@ import { businessToday } from '../../../api/retail';
 import { retailControls, type ControlsCard, type ControlsGroup, type ControlsNarrowedRange, type ControlsRecord, type ControlsSummary, type Metric } from '../../../api/retail-controls';
 import { SkeletonList } from '../../../components/states';
 import { useStaff } from '../context';
-import { DateRange, Choice, Empty, Section, rangeProblem } from './analytics-ui';
+import { Choice, Empty, MAX_RANGE_DAYS, Section, rangeProblem } from './analytics-ui';
 import {
-  CONTROLS_LEVELS, LEVEL_NAMES, LEVEL_PLURALS, PERIODS, WITHIN_CHOICES, approverWords, canOpen, chainFor, csvOf, daysIn, dayWords, groupLine, groupTitle, groupsCsv, isLineMetric, isStockMetric, orderedCards,
+  CONTROLS_LEVELS, LEVEL_NAMES, LEVEL_PLURALS, WITHIN_CHOICES, approverWords, canOpen, chainFor, csvOf, daysIn, dayWords, groupLine, groupTitle, groupsCsv, isLineMetric, isStockMetric, orderedCards,
   patternSentence, periodRange, previousWords, rateWords, readControlsChain, recordsCsv, selectGroup, shareWords, trendWords, whenWords, whoWords, wordsOf, writeControlsChain,
   type ControlsLevel, type Narrow, type PeriodKind,
 } from './controls-state';
@@ -17,6 +17,7 @@ import { chainUser, effectiveChain, pathKey, shutGroup, toggleGroup, type OpenGr
 import { GroupBy } from './sales-group-by';
 import { OpenSale } from './sales';
 import { Gate, Problem, money, useBranchView } from './ui';
+import { PeriodPicker, periodOf } from '../../../app/ui/PeriodPicker';
 
 // The Controls page (issue #357, group 1; ADR-047): what deserves a second look, metrics first. Cards for the chosen
 // days with the trend against the days before, then the same numbers by shop, person, day and reason (the "Group by"
@@ -295,12 +296,18 @@ export function ControlsPage() {
         <>
           <p className="hint">What deserves a second look: sales cancelled, goods taken back and prices changed. Nothing here changes any record.</p>
           <div data-tour="controls-period">
-            <div className="rt-periods" role="group" aria-label="Days to look at">
-              {PERIODS.map((p) => (
-                <button key={p.kind} type="button" aria-pressed={kind === p.kind} className={kind === p.kind ? 'btn-sm ctl-period-on' : 'btn-sm'} onClick={() => { setKind(p.kind); setOpen(new Map()); }}>{p.label}</button>
-              ))}
-            </div>
-            {kind === 'custom' && <DateRange from={custom.from} to={custom.to} onFrom={(from) => setCustom({ ...custom, from })} onTo={(to) => setCustom({ ...custom, to })} />}
+            <PeriodPicker
+              from={range.from}
+              to={range.to}
+              label="Days to look at"
+              maxDays={MAX_RANGE_DAYS}
+              onChange={(next) => {
+                const k = periodOf(next.from, next.to, today);
+                setKind(k);
+                if (k === 'custom') setCustom(next);
+                setOpen(new Map());
+              }}
+            />
             <Choice id="ctl-within" label="Cancelled at once means within" value={within} options={WITHIN_CHOICES.map((n) => ({ value: n, label: `${n} minutes` }))} onChange={setWithin} />
           </div>
 

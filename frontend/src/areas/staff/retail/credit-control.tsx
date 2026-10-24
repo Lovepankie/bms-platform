@@ -7,6 +7,7 @@ import { useStaff } from '../context';
 import { Bars, Choice, DateRange, Empty, Section, ToSales, defaultRange, rangeProblem } from './analytics-ui';
 import { canOpenAccount } from './permissions';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
+import { showDate } from './maths';
 
 // Credit control (issue #149, step 4): what credit buyers owe, how late it is, and what was paid in a
 // range. The owing and overdue tests are those of the credit sales list (a completed credit sale whose
@@ -87,8 +88,8 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
               <tbody>
                 {overdue.map((o) => (
                   <tr key={o.sale_id}>
-                    <td>{accounts && o.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: o.customer_id }} aria-label={`Open the account of ${o.buyer_name}`}>{o.buyer_name}</Link> : o.buyer_name}<br /><span className="hint">{o.sale_no}, {nameOf(o.branch_id)}{phone ? `, due ${o.due_date}` : ''}</span></td>
-                    {!phone && <td>{o.due_date}</td>}
+                    <td>{accounts && o.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: o.customer_id }} aria-label={`Open the account of ${o.buyer_name}`}>{o.buyer_name}</Link> : o.buyer_name}<br /><span className="hint">{o.sale_no}, {nameOf(o.branch_id)}{phone ? `, due ${showDate(o.due_date)}` : ''}</span></td>
+                    {!phone && <td>{showDate(o.due_date)}</td>}
                     <td className="num">{o.days_overdue} days</td>
                     <td className="num">{money(o.outstanding_minor ?? 0)}</td>
                   </tr>

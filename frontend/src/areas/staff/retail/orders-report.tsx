@@ -6,6 +6,7 @@ import { retailOrders } from '../../../api/retail-orders';
 import { showDate } from './maths';
 import { sourceLabel } from './orders-state';
 import { Gate, Problem, money, useBranchName, useBranchView } from './ui';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // The reports of customer orders (issue #385, ADR-052): delivery fees taken on the orders delivered, by day, by where the orders
 // came from or by who delivered them, and the orders cancelled with their reasons. The sales themselves are in the sales reports.
@@ -39,14 +40,7 @@ export function OrdersReportPage() {
         <Link className="btn-sm" to="/staff/retail/orders">Orders</Link>
         <Link className="btn-sm" to="/staff/retail/sales">All sales</Link>
       </p>
-      <fieldset data-tour="orders-report-range">
-        <legend>Which days?</legend>
-        <label htmlFor="orders-from">From</label>
-        <input id="orders-from" type="date" max={today} value={from} onChange={(e) => setFrom(e.target.value)} />
-        <label htmlFor="orders-to">To</label>
-        <input id="orders-to" type="date" max={today} value={to} onChange={(e) => setTo(e.target.value)} />
-        {!valid && <p role="alert" className="rt-flag">The first day must be on or before the last day.</p>}
-      </fieldset>
+      <PeriodPicker from={from} to={to} label="Which days?" tour="orders-report-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
 
       <section aria-label="Delivery fees" data-tour="orders-report-fees">
         <h2>Delivery fees taken</h2>

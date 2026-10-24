@@ -309,7 +309,7 @@ export function RestockSaved({ purchase, context, onNew }: { purchase: Purchase;
     <section aria-label="Purchase saved">
       <h2>Purchase saved{purchase.purchase_no ? ` (${purchase.purchase_no})` : ''}</h2>
       <p>
-        From {context.supplierName || 'no supplier'}, bought on {purchase.purchased_on}: {count} {count === 1 ? 'item' : 'items'}, total cost{' '}
+        From {context.supplierName || 'no supplier'}, bought on {showDate(purchase.purchased_on)}: {count} {count === 1 ? 'item' : 'items'}, total cost{' '}
         {money(purchase.total_minor ?? 0)}.
       </p>
       {(purchase.lines ?? []).some((l) => l.unit) && (

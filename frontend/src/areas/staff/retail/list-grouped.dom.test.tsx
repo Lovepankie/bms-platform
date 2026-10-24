@@ -177,7 +177,7 @@ describe('the past restocks, grouped', () => {
     const grouped = await screen.findByRole('radio', { name: 'Grouped' });
     listPurchases.mockClear();
     fireEvent.click(grouped);
-    const y = await head(/2026/);
+    const y = await head(/^2026/);
     expect(y.textContent).toContain('2 purchases');
     expect(y.textContent).toContain('1 voided (not counted)');
     expect(y.textContent).toContain('20,000');
@@ -190,7 +190,7 @@ describe('the past restocks, grouped', () => {
     purchasesSummary.mockImplementation(purchaseAnswer(false));
     show(<RestocksPage />);
     fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
-    const y = await head(/2026/);
+    const y = await head(/^2026/);
     expect(y.textContent).not.toContain('20,000');
   });
 
@@ -209,7 +209,7 @@ describe('the past restocks, grouped', () => {
     writeChainOf(user, 'restocks', ['year', 'supplier']);
     show(<RestocksPage />);
     fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
-    fireEvent.click(await head(/2026/));
+    fireEvent.click(await head(/^2026/));
     fireEvent.click(await head(/Test Supplier 01/));
     // The group's year is narrowed by the page's own dates, so a restock outside them is never asked for.
     const asked = purchasesSummary.mock.calls.map((c) => c[0]).find((q) => q.level === 'supplier');

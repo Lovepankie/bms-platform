@@ -5,6 +5,7 @@ import { StaffContext } from '../context';
 import { showPercent } from './maths';
 import { canUse } from './permissions';
 import { money } from './ui';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // Shared pieces of the analytics screens (issue #149): a date range with the server's 366 day limit,
 // bars and sparklines drawn as inline SVG (no chart library; the figures are always in the text
@@ -41,16 +42,18 @@ export function rangeProblem(from: string, to: string): string | null {
   return null;
 }
 
+/** The days of a report: the one PeriodPicker (issue #526), within the server's 366 day limit. */
 export function DateRange({ from, to, onFrom, onTo }: { from: string; to: string; onFrom: (v: string) => void; onTo: (v: string) => void }) {
-  const problem = rangeProblem(from, to);
   return (
-    <>
-      <div className="rt-row">
-        <div><label htmlFor="range-from">From</label><input id="range-from" type="date" value={from} onChange={(e) => onFrom(e.target.value)} /></div>
-        <div><label htmlFor="range-to">To</label><input id="range-to" type="date" value={to} onChange={(e) => onTo(e.target.value)} /></div>
-      </div>
-      {problem && <p role="alert" className="rt-flag">{problem}</p>}
-    </>
+    <PeriodPicker
+      from={from}
+      to={to}
+      maxDays={MAX_RANGE_DAYS}
+      onChange={(range) => {
+        onFrom(range.from);
+        onTo(range.to);
+      }}
+    />
   );
 }
 

@@ -5,6 +5,7 @@ import { savings, type SavingsStatement } from '../../../api/savings';
 import { Problem } from '../retail/ui';
 import { isIsoDate, localDate, money } from './loan-state';
 import { SavingsGate } from './savings';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 
 // The account statement (FR-SAV-04): opening balance, every movement in the range by value date
 // with its running balance, and the closing balance. Three months to today unless changed.
@@ -101,16 +102,7 @@ export function StatementBody({ accountId }: { accountId: string }) {
       <Link to="/staff/lending/savings/accounts/$accountId" params={{ accountId }} className="btn btn-ghost" data-tour="statement-back">
         Back to the account
       </Link>
-      <form className="sv-range" data-tour="statement-range" onSubmit={(e) => e.preventDefault()}>
-        <div>
-          <label htmlFor="sv-from">From</label>
-          <input id="sv-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div>
-          <label htmlFor="sv-to">To</label>
-          <input id="sv-to" type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} />
-        </div>
-      </form>
+      <PeriodPicker from={from} to={to} label="Days of the statement" tour="statement-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
       {!valid && <p className="alert alert-warning">Choose a start date on or before the end date.</p>}
       {statement.isFetching && <p className="loading">Loading the statement</p>}
       <Problem error={statement.error} />
