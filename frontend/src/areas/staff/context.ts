@@ -7,6 +7,10 @@ export interface StaffContextValue {
   branch: string | null;
   /** Switches the active branch, as the picker in the staff bar does (#103). */
   chooseBranch?: (selection: string) => void;
+  /** Signs out, asking first while sales wait on this phone; More offers it on a phone (issue #539). */
+  signOut?: () => void;
+  /** True while signing out runs. */
+  signingOut?: boolean;
 }
 
 export const StaffContext = createContext<StaffContextValue | null>(null);

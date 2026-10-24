@@ -85,3 +85,10 @@ The `28` captures (2026-10-22, issue #455) show the side menu, the one navigatio
 (360x740, the drawer open). They were taken from `npm run dev` with `VITE_RETAIL_MOCK=1` (fabricated session, no backend,
 so the retail home shows its error notice) in headless Chromium with reduced motion. The older desktop captures above
 predate #455 and still show the area tabs and the retail bar.
+
+The bottom tabs captures (2026-10-24, issue #539) are in `docs/ui/bottom-tabs/`: Home, Sell, My stock and More at 412x900
+(`412-*.png`) and 360x780 (`360-*.png`), at 2x. They were taken from `npm run dev` with `VITE_RETAIL_MOCK=1` (fabricated
+session, no backend) in headless Chromium with reduced motion and touch, the Home summary answered by Playwright with
+fabricated figures (3 items low on stock, so My stock shows its badge) and every other API read refused, so Home says the API
+is down. The same walk checked that no page scrolls sideways, that every tab is at least 48px each way, and that the sale's
+sticky Record sale bar ends where the tab bar begins. The older captures above predate #539 and show the phone drawer.

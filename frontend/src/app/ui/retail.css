@@ -354,12 +354,18 @@
     margin-top: 0;
   }
 
+  /* Over the bottom tabs (issue #539): the bar stops on top of them, and they take the home indicator inset. */
+  .has-tab-bar .sale-bar {
+    bottom: var(--tab-bar);
+    padding-bottom: var(--space-3);
+  }
+
 }
 
 /* SaleBar sets --bottom-bar to its measured height while it sticks. A field scrolled into view, by a tap that opens the keyboard
    or by Tab or Next, stops above the bar, and the form ends with room for it, so the bar never covers a field. */
 :root {
-  scroll-padding-bottom: calc(var(--bottom-bar, 0px) + var(--space-4));
+  scroll-padding-bottom: calc(var(--bottom-bar, 0px) + var(--tab-bar, 0px) + var(--space-4));
 }
 
 .sale-form {

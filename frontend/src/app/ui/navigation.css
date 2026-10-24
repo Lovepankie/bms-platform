@@ -54,15 +54,6 @@
   flex: none;
 }
 
-/* The phone's one-tap Sell beside the menu button (issue #455): the sale screen without opening the menu. */
-.staff-sell {
-  flex: none;
-}
-
-.staff-sell svg {
-  width: 18px;
-  height: 18px;
-}
 
 .branch-picker {
   display: flex;
@@ -682,4 +673,146 @@ body.side-menu-open {
     min-height: 152px;
     padding: var(--space-5);
   }
+}
+
+/*
+ * The bottom tabs on a phone (issue #539, areas/staff/tabs.tsx): five daily jobs fixed to the bottom, each an icon above its label
+ * on a target taller than 48px. The current tab is in the brand colour, its label semibold, and its icon sits on a tinted pill that
+ * fades and widens in by opacity and transform: no stripe, no glow. The bar takes the iPhone's home indicator and side insets. While
+ * it shows, the root has the class has-tab-bar and --tab-bar is its full height, edge included, so the page ends above it, a sticky action bar
+ * stops on top of it (retail.css, lending.css) and a toast rises above both (feedback.css).
+ */
+/* The tabs' 64px and the hairline above them. */
+.has-tab-bar {
+  --tab-bar: calc(65px + env(safe-area-inset-bottom));
+}
+
+.has-tab-bar body {
+  padding-bottom: var(--tab-bar);
+}
+
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-nav);
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+
+.tab-bar ul {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tab-bar li {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 64px;
+  min-width: var(--tap);
+  padding: var(--space-1) 2px;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tab:hover {
+  text-decoration: none;
+}
+
+.tab:active .tab-icon {
+  transform: scale(var(--press-scale));
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -4px;
+  border-radius: var(--radius);
+}
+
+.tab-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 32px;
+  transition: transform var(--motion-fast) var(--ease-out);
+}
+
+.tab-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-tint);
+  opacity: 0;
+  transform: scaleX(0.6);
+  transition: opacity var(--motion) var(--ease-out), transform var(--motion) var(--ease-out);
+}
+
+.tab-icon svg {
+  position: relative;
+}
+
+.tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab[aria-current='page'] {
+  color: var(--color-link);
+  font-weight: var(--weight-semibold);
+}
+
+.tab[aria-current='page'] .tab-icon::before {
+  opacity: 1;
+  transform: none;
+}
+
+/* Only where it means something: the count of items low on stock on My stock. The number is read out with the label instead. */
+.tab-badge {
+  position: absolute;
+  top: -2px;
+  left: calc(50% + 6px);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-fill);
+  color: var(--rt-white);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The pages the Money and More tabs open: the account card's shop, name and Sign out. */
+.more-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.more-name {
+  margin: 0;
+  font-weight: var(--weight-semibold);
 }

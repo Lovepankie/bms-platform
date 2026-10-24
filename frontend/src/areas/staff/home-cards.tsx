@@ -75,15 +75,27 @@ const METHODS: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile mo
 type Parts = ReturnType<typeof homeParts>;
 type Summary = ReturnType<typeof useHomeSummary>;
 
+/** The cache key of the Home summary of a branch (undefined for all of them); the phone's My stock badge reads the same entry (#539). */
+export const homeSummaryKey = (branchId: string | undefined) => ['retail', 'home', branchId ?? 'all'];
+
+/**
+ * The options of the Home summary read, shared by Home and the phone's My stock badge (#539) so both use one cache entry,
+ * one gate and one freshness: a session Home never asks for is never asked for by the badge either.
+ */
+export function homeSummaryQuery(parts: Parts, branch: string | null) {
+  const branchId = branch && branch !== ALL_BRANCHES ? branch : undefined;
+  return {
+    queryKey: homeSummaryKey(branchId),
+    queryFn: ({ signal }: { signal: AbortSignal }) => retailAnalytics.home(branchId, signal),
+    enabled: parts.summary && (parts.sales || parts.lowStock || parts.orders) && branch !== null,
+    staleTime: 60_000,
+  };
+}
+
 /** The one read behind every shop figure on Home, under the branch chosen in the header. */
 function useHomeSummary(parts: Parts) {
   const { branch } = useStaff();
-  const branchId = branch && branch !== ALL_BRANCHES ? branch : undefined;
-  return useQuery({
-    queryKey: ['retail', 'home', branchId ?? 'all'],
-    queryFn: ({ signal }) => retailAnalytics.home(branchId, signal),
-    enabled: parts.summary && (parts.sales || parts.lowStock || parts.orders) && branch !== null,
-  });
+  return useQuery(homeSummaryQuery(parts, branch));
 }
 
 function ShopCard({ parts, home }: { parts: Parts; home: Summary }) {

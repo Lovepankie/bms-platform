@@ -62,8 +62,11 @@ export function useTour(): TourApi {
   return useContext(TourContext);
 }
 
+// An element answers for its own data-tour id and for the ids in its data-tour-also list: on a phone the More tab stands for the
+// menu links it holds, since the drawer that drew them is gone (issue #539). The element's own id wins.
 function query(target: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`[data-tour="${CSS.escape(target)}"]`);
+  const id = CSS.escape(target);
+  return document.querySelector<HTMLElement>(`[data-tour="${id}"]`) ?? document.querySelector<HTMLElement>(`[data-tour-also~="${id}"]`);
 }
 
 export function TourProvider({ me, saveProgress = true, children }: { me: Me; saveProgress?: boolean; children: ReactNode }) {

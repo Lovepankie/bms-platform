@@ -41,6 +41,8 @@ import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { RefreshButton } from '../app/refresh-button';
 import { StaffBar, StaffSideNav } from '../areas/staff/route';
+import { MoneyPage, MorePage } from '../areas/staff/tab-pages';
+import { TabBar } from '../areas/staff/tabs';
 import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
@@ -98,6 +100,10 @@ function screen(path: string | undefined): ReactElement {
       return <NotificationsPage />;
     case '/staff/feedback':
       return <FeedbackPage />;
+    case '/staff/money':
+      return <MoneyPage />;
+    case '/staff/more':
+      return <MorePage />;
     case '/staff/setup/referrals':
       return <ReferralsPage />;
     case '/staff/setup/two-step':
@@ -210,11 +216,12 @@ function render(me: Me, path: string | undefined): string {
   return renderToString(
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
-        <StaffContext.Provider value={{ me, branch }}>
+        <StaffContext.Provider value={{ me, branch, signOut: () => undefined }}>
           <OfflineProvider value={testOffline(me)}>
             <BrandBar brand={PLATFORM_BRAND} actions={<RefreshButton />} />
             <StaffSideNavForTest />
             <StaffBarForTest />
+            <TabBar me={me} />
             {screen(path)}
           </OfflineProvider>
         </StaffContext.Provider>
@@ -296,6 +303,8 @@ const ASSISTANT: Me = { ...ADMIN, full_name: 'Test Assistant Admin 01', permissi
 const REFERRER: Me = { ...ADMIN, full_name: 'Test Referrer 01', permissions: [...(ADMIN.permissions ?? []), 'core.referrals.read'] } as Me;
 
 const AUDIENCE: Record<string, Me[]> = {
+  'page-money': [ADMIN, SELLER],
+  'page-more': [ADMIN, SELLER, OFFICER],
   'page-assistant': [ASSISTANT],
   'page-users': [ADMIN],
   'page-branches': [ADMIN],

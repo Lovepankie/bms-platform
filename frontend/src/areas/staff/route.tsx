@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Outlet, createLazyRoute, useNavigate, useRouterState } from '@tanstack/react-router';
+import { Outlet, createLazyRoute, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
@@ -15,7 +15,7 @@ import { TurnOnCard } from '../../push/TurnOnCard';
 import { HelpMenu, TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
 import { icons } from '../../components/icons';
-import { SideMenu, SideNav, useIsPhone } from '../../components/side-menu';
+import { SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
 import { BillingBanner } from './billing/banner';
 import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
@@ -23,6 +23,7 @@ import { StaffContext, useOptionalStaff } from './context';
 import { PlanNotice } from './plan';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { useSells } from './retail/nav';
+import { StaffTabBar } from './tabs';
 import { canSeeProfit } from './retail/permissions';
 import { rememberPage } from './feedback/feedback-state';
 import { TwoStepNotices } from './two-step/notices';
@@ -148,14 +149,14 @@ function StaffLayout() {
   const recoveryCodesLeft = profile.unused_recovery_codes ?? 0;
 
   return (
-    <StaffContext.Provider value={{ me: profile, branch, chooseBranch: choose }}>
+    <StaffContext.Provider value={{ me: profile, branch, chooseBranch: choose, signOut: () => void signOut(), signingOut }}>
       <OfflineProvider value={offline}>
       <TourProvider me={profile} saveProgress={!mock}>
         <CrumbProvider>
           <div className="nav-layout">
             <StaffSideNav me={profile} />
             <div className="nav-layout-main">
-              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} />
+              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} signOutInBar={mustSetUp(profile)} />
               <InstallPrompt />
               <OthersWaitingNote />
               {!mock && <NewLogoCard />}
@@ -177,6 +178,7 @@ function StaffLayout() {
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
               <SignOutWarning ask={askSignOut} onSignOut={() => void signOut(true)} />
             </div>
+            {!mustSetUp(profile) && <StaffTabBar me={profile} />}
           </div>
         </CrumbProvider>
       </TourProvider>
@@ -186,8 +188,8 @@ function StaffLayout() {
 }
 
 /**
- * The sidebar at the left from 720px (issue #455), the shop in use above it (issue #461); nothing on a phone, where the staff bar's
- * menu button opens the same list.
+ * The sidebar at the left from 720px (issue #455), the shop in use above it (issue #461); nothing on a phone, where the bottom tabs
+ * and their More page hold the same list (issue #539).
  */
 export function StaffSideNav({ me }: { me: Me }) {
   const phone = useIsPhone();
@@ -198,10 +200,9 @@ export function StaffSideNav({ me }: { me: Me }) {
 }
 
 /**
- * Who is signed in, Help, the branch switcher and Sign out; below 720px also the menu button of the side menu, which then holds
- * Sign out, and a one-tap Sell for anyone who can sell (issue #455), only while the business has retail; with Lending too the Sale
- * shortcut also stays in the menu's Shop section (issue #471). With StaffSideNav it carries the data-tour anchors the
- * first-run tours light up (tour/tours.ts).
+ * Who is signed in, Help, the branch switcher and Sign out. Below 720px Sign out moves to the More tab's page (it stays here while
+ * two-step set-up blocks the page, which has no tabs) and Sell is the first bottom tab (issue #539, which replaced the phone's menu button and one-tap Sell of issue #455). With StaffSideNav and the tab bar it
+ * carries the data-tour anchors the first-run tours light up (tour/tours.ts).
  */
 export function StaffBar({
   me,
@@ -209,6 +210,7 @@ export function StaffBar({
   onBranch,
   onSignOut,
   busy = false,
+  signOutInBar = false,
 }: {
   me: Me;
   branch: string | null;
@@ -216,32 +218,13 @@ export function StaffBar({
   onSignOut: () => void;
   /** True while signing out runs: Sign out shows its spinner and takes no second press. */
   busy?: boolean;
+  /** Sign out in the bar on a phone too: while two-step set-up blocks the page there are no tabs and no More page to reach it. */
+  signOutInBar?: boolean;
 }) {
   const phone = useIsPhone();
-  const sells = useSells(me);
   return (
     <header className="staff-bar">
       <div className="staff-bar-top">
-        {phone && (
-          <SideMenu
-            label="Staff areas"
-            tour="nav-areas"
-            links={staffAreas(me, { sells })}
-            tours={['retail-nav']}
-            name={me.full_name}
-            busy={busy}
-            onSignOut={onSignOut}
-            sections={STAFF_SECTIONS}
-            person={me.user_id}
-            head={<CurrentShop me={me} branch={branch} />}
-          />
-        )}
-        {phone && sells && (
-          <Link to="/staff/retail/sale" className="btn btn-primary btn-sm staff-sell">
-            {icons.sale}
-            <span>Sell</span>
-          </Link>
-        )}
         <span className="staff-user">
           <span className="avatar">{icons.user}</span>
           <span className="staff-user-name">{me.full_name}</span>
@@ -249,7 +232,7 @@ export function StaffBar({
         <SyncStatus />
         <HelpMenu feedback />
         <BranchPicker me={me} branch={branch} onChoose={onBranch} />
-        {!phone && (
+        {(!phone || signOutInBar) && (
           <BusyButton type="button" className="btn-ghost btn-sm" busy={busy} onClick={onSignOut}>
             Sign out
           </BusyButton>

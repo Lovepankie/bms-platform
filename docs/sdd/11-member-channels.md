@@ -133,16 +133,18 @@ their areas in a side menu, each item with an inline SVG icon, the current one m
 separate retail bar are gone. From 720px the menu is a sidebar at the left of the page (about 240px,
 folding to 64px of icons, folded at first below 1024px and unfolded from there until the person
 chooses, the choice kept on the device, each folded item keeping its label as its accessible name and
-tooltip), and the content takes the remaining width. Below 720px a menu
-button at the top left of the staff bar opens the same list in a side drawer from the left (85% of
-the width, at most 320px, over a dimmed backdrop) with the person's name and Sign out at the bottom.
-The drawer is a modal dialog: focus moves in, stays in, and returns to the menu button; the page
-behind does not scroll; it closes on the backdrop, Escape, a left swipe, a chosen link or any change
-of page. On a phone a primary Sell button beside the menu button opens the sale screen in one tap for
-anyone who can sell. Both are
-built from one list per layout, so the items and permission checks cannot drift apart, and both
-follow the theme and reduced motion. A guided tour step that points at a menu item finds it in the
-sidebar, unfolding it if folded, or opens the drawer on a phone. The member area has no area list
+tooltip), and the content takes the remaining width. Below 720px the staff area has bottom tabs
+(issue #539, FR-UXN-08): Sell, My stock, Buy, Money and More, fixed to the bottom over the iPhone's
+safe-area insets, each shown only while its module is on and the session may use its page; More
+lists the same areas as the sidebar, from the same list and permission checks, with the shop in use
+and Sign out, and the sticky primary action bar sits on top of the tabs. The operator portal keeps a
+menu button at the top left that opens its list in a side drawer from the left (85% of the width, at
+most 320px, over a dimmed backdrop) with the person's name and Sign out at the bottom; the drawer is
+a modal dialog: focus moves in, stays in, and returns to the menu button; the page behind does not
+scroll; it closes on the backdrop, Escape, a left swipe, a chosen link or any change of page. Each
+layout builds its areas from one list, so the items and permission checks cannot drift apart, and
+all of it follows the theme and reduced motion. A guided tour step that points at a menu item finds
+it in the sidebar, unfolding it if folded, or on a phone the More tab that holds it. The member area has no area list
 and keeps its layout. Details in `docs/ui/design-system.md`, "Navigation".
 
 ## 11.3 SMS

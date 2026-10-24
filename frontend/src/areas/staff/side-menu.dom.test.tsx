@@ -5,23 +5,26 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { type ReactNode, useEffect, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, type Me } from '../../api/client';
-import { retail } from '../../api/retail';
 import { mockMe } from '../../api/retail-mock';
 import { router as appRouter } from '../../app/router';
 import { BusyAnnouncer } from '../../app/ui/BusyButton';
 import { setAccessToken } from '../../auth/session';
 import { TourProvider, useTour } from '../../tour/host';
 import type { Tour } from '../../tour/model';
+import { SideMenu, useIsPhone } from '../../components/side-menu';
+import { CurrentShop } from './branch-picker';
 import { StaffContext } from './context';
 import { PortalFrame } from '../platform/route';
-import { staffAreas } from './menu';
+import { STAFF_SECTIONS, staffAreas } from './menu';
+import { useSells } from './retail/nav';
 import { StaffBar, StaffSideNav } from './route';
 
-// The side menu of the staff area (issue #455), one list of areas on every screen size. Below 720px a menu button opens a drawer
-// from the left with the areas the session may open, the current one marked, the retail shortcuts as a group under Retail, and the
-// name and Sign out at the bottom. It closes on Escape, the backdrop, a left swipe or a chosen link and gives focus back to the
-// button. From 720px the same list is a sidebar that folds to its icons, the choice kept on the device. A tour step that points at
-// a menu item opens the drawer or unfolds the sidebar. A phone has a one-tap Sell beside the menu button. Every name is invented.
+// The side menu of the staff area (issue #455). From 720px it is a sidebar that folds to its icons, the choice kept on the device,
+// and a tour step that points at a menu item unfolds it. Below 720px the staff area has bottom tabs instead (issue #539,
+// tabs.dom.test.tsx), and the drawer is the operator portal's; its own behaviour is still tested here on the staff areas, drawn as the
+// staff bar drew it before #539: the areas the session may open, the current one marked, the retail shortcuts as a group under
+// Retail, and the name and Sign out at the bottom. It closes on Escape, the backdrop, a left swipe or a chosen link and gives focus
+// back to the button, and a tour step that points at a menu item opens it. Every name is invented.
 
 const TOURS_OFF = { 'tours-off': { status: 'dismissed', version: 1 } };
 
@@ -62,21 +65,40 @@ function resize(px: number) {
   });
 }
 
+// The drawer on a phone, fed the staff areas as the staff bar fed it before the bottom tabs (issue #539).
+function PhoneDrawer({ me, busy = false, onSignOut }: { me: Me; busy?: boolean; onSignOut: () => void }) {
+  const phone = useIsPhone();
+  const sells = useSells(me);
+  if (!phone) return null;
+  return (
+    <SideMenu
+      label="Staff areas"
+      tour="nav-areas"
+      links={staffAreas(me, { sells })}
+      tours={['retail-nav']}
+      name={me.full_name}
+      busy={busy}
+      onSignOut={onSignOut}
+      sections={STAFF_SECTIONS}
+      person={me.user_id}
+      head={<CurrentShop me={me} branch={me.branches?.[0]?.id ?? null} />}
+    />
+  );
+}
+
 // The staff bar as the staff route draws it: Sign out is busy from the press until signing out is over.
 function SigningOutBar({ me, signOut, done }: { me: Me; signOut: () => void; done: Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const onSignOut = () => {
+    setBusy(true);
+    signOut();
+    void done.then(() => setBusy(false));
+  };
   return (
-    <StaffBar
-      me={me}
-      branch={null}
-      onBranch={() => undefined}
-      busy={busy}
-      onSignOut={() => {
-        setBusy(true);
-        signOut();
-        void done.then(() => setBusy(false));
-      }}
-    />
+    <>
+      <PhoneDrawer me={me} busy={busy} onSignOut={onSignOut} />
+      <StaffBar me={me} branch={null} onBranch={() => undefined} busy={busy} onSignOut={onSignOut} />
+    </>
   );
 }
 
@@ -90,7 +112,14 @@ function show(me: Me, { at = '/staff', children = null as ReactNode, signingOut 
         <StaffContext.Provider value={{ me: who, branch: who.branches?.[0]?.id ?? null }}>
           <TourProvider me={who} saveProgress={false}>
             <StaffSideNav me={who} />
-            {signingOut ? <SigningOutBar me={who} signOut={signOut} done={signingOut} /> : <StaffBar me={who} branch={null} onBranch={() => undefined} onSignOut={signOut} />}
+            {signingOut ? (
+              <SigningOutBar me={who} signOut={signOut} done={signingOut} />
+            ) : (
+              <>
+                <PhoneDrawer me={who} onSignOut={signOut} />
+                <StaffBar me={who} branch={null} onBranch={() => undefined} onSignOut={signOut} />
+              </>
+            )}
             {children}
           </TourProvider>
         </StaffContext.Provider>
@@ -132,7 +161,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-describe('the staff side menu on a phone (issue #455)', () => {
+describe('the drawer on a phone, with the staff areas (issue #455)', () => {
   it('shows a menu button instead of the tabs, and the button opens the drawer as a modal dialog', () => {
     show(officer);
     expect(screen.queryByRole('navigation', { name: 'Staff areas' })).toBeNull();
@@ -370,40 +399,6 @@ describe('the staff side menu on a phone (issue #455)', () => {
     resize(360);
     expect(document.querySelector('.side-nav')).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(menuButton()));
-  });
-
-  it('has a one-tap Sell beside the menu button for anyone who can sell, straight to the sale screen', async () => {
-    const { router } = show(admin);
-    const sell = screen.getByRole('link', { name: 'Sell' });
-    expect(sell.getAttribute('href')).toBe('/staff/retail/sale');
-    expect(menuButton().nextElementSibling).toBe(sell);
-    fireEvent.click(sell);
-    await waitFor(() => expect(router.history.location.pathname).toBe('/staff/retail/sale'));
-    cleanup();
-    show(officer);
-    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
-    cleanup();
-    show({ ...admin, permissions: (admin.permissions ?? []).filter((p) => p !== 'retail.sale.create') } as Me);
-    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
-  });
-
-  it('shows Sell only once the branch roles are read, and never when every branch is a store', async () => {
-    const withRoles = { ...admin, module_capabilities: { ...admin.module_capabilities, retail: [...(admin.module_capabilities?.retail ?? []), 'branch_roles'] } } as Me;
-    const roles = (role: 'store' | 'shop') =>
-      (withRoles.branches ?? []).map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role, can_sell: role !== 'store' }));
-    let answer: (value: ReturnType<typeof roles>) => void = () => undefined;
-    const read = vi.spyOn(retail, 'branchRoles').mockImplementation(() => new Promise((resolve) => (answer = resolve as typeof answer)));
-    show(withRoles);
-    await waitFor(() => expect(read).toHaveBeenCalled());
-    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
-    await act(async () => answer(roles('store')));
-    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
-    cleanup();
-    read.mockResolvedValue(roles('shop') as never);
-    show(withRoles);
-    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
-    expect(await screen.findByRole('link', { name: 'Sell' })).toBeTruthy();
-    read.mockRestore();
   });
 
   it('keeps the tour anchors in the page while closed, so optional tour steps are not skipped', () => {
@@ -908,16 +903,6 @@ describe('a business with both Shop and Lending (issue #471)', () => {
     expect(document.activeElement).toBe(heading);
   });
 
-  it('keeps the one-tap Sell on a 360px phone and Sale in the Shop section', () => {
-    show(both);
-    expect(screen.getByRole('link', { name: 'Sell' }).getAttribute('href')).toBe('/staff/retail/sale');
-    const dialog = openMenu();
-    expect(sectionLinks(dialog, 'Shop')).toContain('Sale');
-    expect(sectionLinks(dialog, 'Lending')).not.toContain('Sale');
-    cleanup();
-    show({ ...both, modules: ['lending'] } as Me);
-    expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
-  });
 });
 
 describe('the operator portal side menu (issue #455)', () => {

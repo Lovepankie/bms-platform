@@ -10,8 +10,9 @@ import { ALL_BRANCHES } from '../../auth/branch';
 import { TourProvider } from '../../tour/host';
 import { StaffContext } from './context';
 import { StaffBar, StaffSideNav } from './route';
+import { MorePage } from './tab-pages';
 
-// The shop in use at the top of the side menu and the phone drawer (issue #461, ADR-068): its own logo, small and rounded, beside
+// The shop in use at the top of the side menu and, on a phone, on the More page (issues #461 and #539, ADR-068): its own logo, small and rounded, beside
 // its name; a shop without one shows the business logo, and with no business logo either, only the name. The folded sidebar keeps
 // the image with the name as its tooltip. Every name below is invented.
 
@@ -142,24 +143,33 @@ describe('the shop in use in the sidebar (issue #461)', () => {
   });
 });
 
-describe('the shop in use in the phone drawer (issue #461)', () => {
+describe('the shop in use on a phone, on the More page (issues #461, #539)', () => {
   beforeEach(() => widthIs(360));
 
-  it('shows the shop logo beside the name above the areas', async () => {
-    show('b-two');
-    expect(document.querySelector('.side-nav')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
-    const dialog = screen.getByRole('dialog', { name: 'Menu' });
-    const image = (await within(dialog).findByAltText('Logo of Test Shop Two (KLA)')) as HTMLImageElement;
+  function more(branch: string) {
+    const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/more'] }) });
+    render(
+      <RouterContextProvider router={router}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })}>
+          <StaffContext.Provider value={{ me, branch, signOut: () => undefined }}>
+            <MorePage />
+          </StaffContext.Provider>
+        </QueryClientProvider>
+      </RouterContextProvider>,
+    );
+  }
+
+  it('shows the shop logo beside the name above Sign out', async () => {
+    more('b-two');
+    const image = (await screen.findByAltText('Logo of Test Shop Two (KLA)')) as HTMLImageElement;
     expect(image.getAttribute('src')).toBe(LOGO);
-    expect(within(dialog).getByText('Test Shop Two (KLA)')).toBeTruthy();
+    expect(screen.getByText('Test Shop Two (KLA)')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
   });
 
   it('falls back to the business logo for a shop without its own', async () => {
     brand = { name: 'Test Traders', logoSrc: BUSINESS, themePrimary: null, themeText: null };
-    show('b-one');
-    fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
-    const dialog = screen.getByRole('dialog', { name: 'Menu' });
-    expect((await within(dialog).findByAltText('Logo of Test Shop One (HQ)')).getAttribute('src')).toBe(BUSINESS);
+    more('b-one');
+    expect((await screen.findByAltText('Logo of Test Shop One (HQ)')).getAttribute('src')).toBe(BUSINESS);
   });
 });
