@@ -552,6 +552,22 @@ export const icons = {
       <path d="M5 12.5l4.5 4.5L19 7.5" />
     </Svg>
   ),
+  // The component kit (#520): the Stepper's minus and plus, and the chevron at the end of a row that opens something.
+  minus: (
+    <Svg>
+      <path d="M5 12h14" />
+    </Svg>
+  ),
+  plus: (
+    <Svg>
+      <path d="M12 5v14M5 12h14" />
+    </Svg>
+  ),
+  chevron: (
+    <Svg>
+      <path d="M9 6l6 6-6 6" />
+    </Svg>
+  ),
   // A circle with an exclamation mark: a toast that says something failed (#508).
   error: (
     <Svg>

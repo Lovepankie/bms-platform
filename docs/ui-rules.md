@@ -5,6 +5,13 @@ who said it looked generated and did not feel smooth. The aim is the calm, quick
 that carry them live in `frontend/src/app/theme.css`; `frontend/src/app/ui/design-guard.test.ts` checks the ones a test can
 check. The fuller design system is `docs/ui/design-system.md`.
 
+The component kit (issue #520) carries these rules: `Segmented`, `Stepper`, `Field`, `MoneyInput`, `ListRow` and `Card`,
+`Sheet`, `EmptyState`, `Skeleton` and `SuccessScreen` in `frontend/src/app/ui`, styled in `kit.css` and shown together on
+`/staff/kit` (administrators only). A new screen is built from them. Dialogs and sheets use `@radix-ui/react-dialog`
+(the kit's `Sheet`) and the pick-one control uses `@radix-ui/react-toggle-group` (`Segmented`), both styled only with our
+token CSS: no shadcn, no Tailwind. The sheet keeps live regions audible, closes by a swipe only on touch, and gives focus
+back to what opened it.
+
 ## Look
 
 1. No coloured stripe on any edge of a card, alert, toast or tile.
@@ -27,8 +34,13 @@ check. The fuller design system is `docs/ui/design-system.md`.
 
 ## Forms
 
-10. Every input has a visible label. Validation runs on blur, not on every key.
-11. Amounts open the numeric keypad (`inputmode="numeric"`), quantities use steppers, and a choice of 2 to 4 options is a
+10. Every input has a visible label. Validation runs on blur, not on every key, and the error shows under the field with an
+    icon. A required field shows `Label *`: the asterisk is red and `aria-hidden`, and the control keeps
+    `aria-required="true"`. A form with a required field starts with the line "Fields marked * are needed." A form where
+    most fields are required may mark the few optional ones "(optional)" instead, never both styles on one form. The
+    asterisk is the one allowed use of red on a normal screen. The send button stays enabled and takes the person to the
+    first missing field. The kit's `Field` does all of this, and the lending forms (`form-fields.tsx`) follow it.
+11. Amounts open the numeric keypad (`inputmode="numeric"`), quantities use steppers, and a choice of 2 to 5 options is a
     segmented control.
 12. Touch targets are at least 48px.
 
@@ -40,6 +52,10 @@ check. The fuller design system is `docs/ui/design-system.md`.
     (so animates all), and `ease-in` or `ease-in-out`. Its short exception list names each colour or background fade with
     its reason: a button's fill and edge, a field's and a link card's edge, and the skeleton shimmer. So the tour spotlight
     glides by `transform`, the side menu folds without animating its width, and shadows and focus rings change at once.
+    The one longer motion is the sale-complete check, drawn in 400ms (issue #520), still by `transform` only. A skeleton may
+    shimmer for 1.2s as the existing one in `feedback.css` does (accepted, 24 Oct 2026), since the global reduced-motion
+    block stops it; the kit's own Skeleton is still grey rows. `frontend/src/app/ui/kit.css` also stops each of its
+    animations under reduced motion.
 
 ## Feedback
 

@@ -73,7 +73,7 @@ describe('advance list, detail and outstanding report', () => {
     const out = page('admin', <AdvanceList onOpen={() => undefined} />, client, null);
     expect(out).toContain('owes UGX 400,000');
     expect(out).toContain('fully repaid');
-    expect(out).toContain('aria-pressed="true">All advances<');
+    expect(out).toMatch(/aria-checked="true"[^>]*>All advances</);
     expect(out).toContain('>Still owing<');
   });
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Segmented } from '../../../app/ui/Segmented';
 import { businessToday, retail, type Expense, type ExpenseGroup } from '../../../api/retail';
 import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
@@ -202,13 +203,7 @@ export function ExpensesReportScreen() {
     <Gate screen="expensesReport" title="Expenses report">
       <p><ScreenLink screen="expenses" to="/staff/retail/expenses" tour="expenses-back-link">Record an expense</ScreenLink></p>
       <div data-tour="expenses-report-window"><WindowFields id="expenses-report" window={window} /></div>
-      <div className="cluster filters" role="group" aria-label="Group the expenses" data-tour="expenses-report-group">
-        {GROUPS.map((g) => (
-          <button key={g.value} type="button" className="btn-sm" aria-pressed={by === g.value} onClick={() => setBy(g.value)}>
-            {g.label}
-          </button>
-        ))}
-      </div>
+      <Segmented label="Group the expenses" tour="expenses-report-group" options={GROUPS} value={by} onChange={setBy} />
       {report.isError && <Problem error={report.error} />}
       {report.isPending && <p className="loading">Loading</p>}
       <div data-tour="expenses-report-rows">

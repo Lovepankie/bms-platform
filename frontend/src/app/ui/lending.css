@@ -303,11 +303,6 @@
   margin-bottom: var(--space-3);
 }
 
-.mf-req {
-  font-weight: var(--weight-regular);
-  color: var(--color-text-muted);
-}
-
 .mf-group {
   margin: 0;
 }

@@ -1,0 +1,593 @@
+/*
+ * The component kit (#520, docs/ui-rules.md): the shared controls every screen moves onto in phase 3, one section each. Each
+ * reads the tokens of ../theme.css only, keeps to the two radii (--radius, --radius-lg) and the two shadows (--shadow-sm,
+ * --shadow-lg), gives every target 48px (--tap), and moves only by transform and opacity on the one ease-out curve. The
+ * components are in this folder (Segmented.tsx and the rest) and are shown together on /staff/kit.
+ */
+
+/* Segmented: one neutral tray, the chosen option raised on the surface, with room around the tray so two of them never touch
+   (the look of #519, which drew it on the old .cluster.filters rows). No brand fill, so it never competes with the one primary
+   action of the screen. On a phone the tray takes the full width and the options share it. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1);
+  margin: 0 var(--space-3) var(--space-4) 0;
+  border-radius: var(--radius);
+  background: var(--color-neutral-tint);
+}
+
+.segmented > button {
+  flex: 1 1 auto;
+  min-height: var(--tap);
+  padding: 8px 16px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  .segmented > button:hover:not([data-state='on']):not(:disabled) {
+    background: var(--color-hover);
+  }
+}
+
+.segmented > button[data-state='on'],
+.segmented > button[data-state='on']:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* The keyboard ring is the global button ring (an outline plus --focus-ring); the shadow resets above would hide its shadow half,
+   so it is put back here, raised or not. */
+.segmented > button:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.segmented > button[data-state='on']:focus-visible {
+  box-shadow: var(--shadow-sm), var(--focus-ring);
+}
+
+/* In a row that already spaces its children (Correct an item puts Close beside it), the row's gap is the only space. */
+.cluster > .segmented {
+  margin: 0;
+}
+
+@media (max-width: 719px) {
+  .segmented {
+    display: flex;
+    margin-right: 0;
+  }
+}
+
+/* Stepper: minus and plus as 48px squares either side of the number, which is centred and tabular so it does not jitter as
+   it changes. In a row of fields (the Sale screen's .rt-row) it keeps its own width and the next field wraps under it when the
+   two do not fit, so on a 360px phone the price never covers the plus. */
+.stepper-field {
+  flex: 0 0 auto;
+}
+
+.stepper {
+  display: inline-grid;
+  grid-template-columns: var(--tap) minmax(4.5rem, 7rem) var(--tap);
+  gap: var(--space-2);
+  margin-top: 6px;
+}
+
+.stepper > button {
+  width: var(--tap);
+  padding: 0;
+  box-shadow: none;
+}
+
+.stepper > input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Field: the label above, the control 6px under it, then one line of hint or error (.field-hint and .field-error in
+   forms.css), the error led by its icon. A needed field has a red asterisk; "(optional)" is muted. */
+.field {
+  margin-bottom: var(--space-4);
+}
+
+.field-star {
+  color: var(--color-danger);
+}
+
+.field-optional {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.fields-needed {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.field > .field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.field > .field-error > svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.field > input,
+.field > select,
+.field > textarea,
+.field > .money-input {
+  margin-top: 6px;
+}
+
+/* MoneyInput: UGX sits inside the field's left edge, the figures in tabular digits at the body size and semibold. */
+.money-input {
+  position: relative;
+  display: block;
+}
+
+.money-input-currency {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  pointer-events: none;
+}
+
+.money-input > input {
+  padding-left: 52px;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card: the one surface, white on the page grey with a hairline edge and the small shadow. A list inside runs to its edges. */
+.ui-card {
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.ui-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.ui-card-title {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.ui-card > :not(.ui-card-head, .row-list) {
+  margin: var(--space-4);
+}
+
+/* ListRow: title and one muted line on the left, the amount on the right, rows parted by a hairline. The whole row is the
+   target, at least 64px tall, and a press tints it at once. */
+.row-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row-list > li + li {
+  border-top: 1px solid var(--color-border);
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: var(--weight-regular);
+  text-align: left;
+  text-decoration: none;
+  box-shadow: none;
+}
+
+a.list-row:hover,
+button.list-row:hover:not(:disabled) {
+  background: var(--color-hover);
+  text-decoration: none;
+}
+
+a.list-row:active,
+button.list-row:active:not(:disabled) {
+  transform: none;
+  background: var(--color-neutral-tint);
+}
+
+a.list-row:focus-visible,
+button.list-row:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.list-row-text {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.list-row-title {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.list-row-meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.list-row-amount {
+  flex: none;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.list-row-chevron {
+  display: inline-flex;
+  flex: none;
+  margin-right: calc(var(--space-2) * -1);
+  color: var(--color-text-muted);
+}
+
+.list-row-chevron > svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Sheet: a centred dialog over the dimmed page on a wider screen; under 720px a sheet that rises from the bottom edge with a
+   grab bar on top. It arrives in 200ms by transform and opacity, and leaves at once. */
+.sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--color-scrim);
+  animation: kit-fade var(--motion) var(--ease-out);
+}
+
+.sheet-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 520px);
+  max-height: 85vh;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-lg);
+  animation: kit-rise var(--motion) var(--ease-out);
+}
+
+.sheet-panel:focus {
+  outline: none;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) 0 var(--space-5);
+}
+
+.sheet-head > h2 {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.sheet-grab {
+  display: none;
+}
+
+.sheet-close {
+  width: var(--tap);
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sheet-body {
+  padding: var(--space-4) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A list in a sheet runs to its edges, as in a card. */
+.sheet-body > .row-list {
+  margin: 0 calc(var(--space-5) * -1);
+}
+
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+@media (max-width: 719px) {
+  .sheet-layer {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .sheet-panel {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    animation-name: kit-sheet-up;
+  }
+
+  /* The top of the sheet is where a thumb drags it down. */
+  .sheet-head {
+    position: relative;
+    padding-top: var(--space-5);
+    touch-action: none;
+  }
+
+  .sheet-grab {
+    position: absolute;
+    top: var(--space-2);
+    left: 50%;
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: var(--radius);
+    background: var(--color-border-strong);
+    transform: translateX(-50%);
+  }
+
+  .sheet-actions {
+    flex-direction: column;
+  }
+
+  .sheet-actions > * {
+    width: 100%;
+  }
+}
+
+@keyframes kit-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes kit-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kit-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* EmptyState: one muted line and one action, centred in the space the list would take. */
+.empty-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.empty-line > p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* Skeleton: still grey rows in the shape of a list, faded in once over 200ms. No loop: motion on this page stays short (owner
+   rule, 24 Oct 2026). */
+.skeleton-rows {
+  animation: kit-fade var(--motion) var(--ease-out);
+}
+
+.skeleton-row {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.skeleton-row + .skeleton-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.skeleton-bar {
+  display: block;
+  width: 60%;
+  height: 14px;
+  border-radius: var(--radius);
+  background: var(--color-neutral-tint);
+}
+
+.skeleton-bar-short {
+  width: 35%;
+}
+
+/* SuccessScreen: centred, the ring arriving in 200ms and the check drawn left to right in 400ms (a wipe of two opposite
+   transforms, so only transform moves), then the amount at the display size. */
+.success-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+  text-align: center;
+}
+
+.success-title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xl);
+}
+
+.success-title:focus {
+  outline: none;
+}
+
+.success-mark {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.success-mark svg {
+  display: block;
+  width: 72px;
+  height: 72px;
+}
+
+.success-ring {
+  fill: var(--color-success-tint);
+  animation: kit-pop var(--motion) var(--ease-out) both;
+}
+
+.success-tick {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  animation: kit-wipe 400ms var(--ease-out) var(--motion-fast) both;
+}
+
+.success-tick-inner {
+  display: block;
+  animation: kit-unwipe 400ms var(--ease-out) var(--motion-fast) both;
+}
+
+.success-tick path {
+  fill: none;
+  stroke: var(--color-success);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.success-amount {
+  margin: 0;
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+.success-detail {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.success-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(100%, 360px);
+  margin-top: var(--space-4);
+}
+
+@keyframes kit-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kit-wipe {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes kit-unwipe {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* Reduced motion: nothing in the kit moves. base.css already ends every animation after 1ms; this names the kit's own so the
+   sheet does not slide, the ring does not pop, the check is not wiped in and the skeleton does not fade. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet-scrim,
+  .sheet-panel,
+  .skeleton-rows,
+  .success-ring,
+  .success-tick,
+  .success-tick-inner {
+    animation: none;
+  }
+}
+
+/* The kit page (/staff/kit): one example under another, each under its heading. */
+.kit-example {
+  margin-bottom: var(--space-6);
+}
+
+.kit-example > h2 {
+  margin-bottom: var(--space-1);
+}
+
+.kit-example > .cluster,
+.kit-example > button {
+  margin-bottom: var(--space-3);
+}

@@ -10,6 +10,7 @@ import { Problem } from '../retail/ui';
 import { blankCollateral, collateralProblems, createBody, CUSTODY, draftOf, OWNERS, referenceLabel, TYPES, updateBody, type CollateralDraft } from './collateral-state';
 import { CollateralGate } from './member-ui';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
+import { FieldsNeededNote } from '../../../app/ui/Field';
 import { mayManageCollateral } from './member-permissions';
 import { MemberPicker } from './member-picker';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
@@ -101,6 +102,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
   const owned = draft.ownerRelationship !== 'self';
   return (
     <form className="mf" onSubmit={(e) => void submit(e)} noValidate aria-label={editing ? 'Change collateral' : 'Register collateral'} data-tour="collateral-form">
+      <FieldsNeededNote />
       {form.count(ORDER) > 0 && <p role="alert" className="alert alert-danger">Some entries need a look. They are marked below.</p>}
       {stale && (
         <div role="alert" className="alert alert-warning">

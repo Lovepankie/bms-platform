@@ -136,15 +136,15 @@ describe('low stock and out of stock tabs', () => {
     const html = renderToString(<StockLevelFilter level="low" onChange={() => undefined} />);
     expect(html).toContain('>All items<');
     expect(html).toContain('>Out of stock<');
-    expect(html).toContain('aria-pressed="true">Low stock<');
-    expect(html).toContain('aria-pressed="false">Out of stock<');
+    expect(html).toMatch(/aria-checked="true"[^>]*>Low stock</);
+    expect(html).toMatch(/aria-checked="false"[^>]*>Out of stock</);
     expect(html).toContain('at or below their minimum, or 5 or fewer without one, including those out of stock');
   });
 
   it('the Stock page starts on all items', () => {
     const client = new QueryClient();
     const html = page('sales', <StockPage />, client);
-    expect(html).toContain('aria-pressed="true">All items<');
+    expect(html).toMatch(/aria-checked="true"[^>]*>All items</);
     expect(html).not.toContain('including those that are out of stock');
   });
 });

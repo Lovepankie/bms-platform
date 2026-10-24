@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
+import { Segmented } from '../../app/ui/Segmented';
 import { type Application, APPLICATION_STATUSES, type ApplicationStatus, listApplications, statusLabel } from '../../api/onboarding';
 
 // The applications queue (FR-ONB-05): newest first, filtered by status, with the count per status.
@@ -19,16 +20,12 @@ export function ApplicationsTable({
   const open = (counts.submitted ?? 0) + (counts.needs_info ?? 0) + (counts.verified ?? 0);
   return (
     <>
-      <div role="group" aria-label="Filter by status" className="cluster filters">
-        <button type="button" aria-pressed={filter === 'open'} onClick={() => onFilter('open')}>
-          Open ({open})
-        </button>
-        {APPLICATION_STATUSES.map((s) => (
-          <button key={s} type="button" aria-pressed={filter === s} onClick={() => onFilter(s)}>
-            {statusLabel(s)} ({counts[s] ?? 0})
-          </button>
-        ))}
-      </div>
+      <Segmented
+        label="Filter by status"
+        options={[{ value: 'open', label: `Open (${open})` }, ...APPLICATION_STATUSES.map((s) => ({ value: s, label: `${statusLabel(s)} (${counts[s] ?? 0})` }))]}
+        value={filter}
+        onChange={onFilter}
+      />
       {items.length === 0 ? (
         <p>No applications here.</p>
       ) : (

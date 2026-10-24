@@ -113,6 +113,20 @@ describe('the collateral item page', () => {
     expect(screen.getByRole('button', { name: 'Ask to give it back' })).toBeTruthy();
   });
 
+  it('shows "Fields marked * are needed." on Record a change only while a field is starred, for every kind of change', () => {
+    mount(<CollateralView detail={detail} collateralId="c1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record a change' }));
+    const form = screen.getByRole('form', { name: 'Record a change' });
+    const kind = screen.getByLabelText(/^What happened/) as HTMLSelectElement;
+    const kinds = [...kind.options].map((o) => o.value);
+    expect(kinds.length).toBeGreaterThan(1);
+    for (const value of kinds) {
+      fireEvent.change(kind, { target: { value } });
+      const starred = form.querySelector('label .field-star') !== null;
+      expect(form.querySelector('.fields-needed') !== null, value).toBe(starred);
+    }
+  });
+
   it('checks the branch scope of the permission, not only the permission', () => {
     const scoped = officer([], { 'lending.collateral.manage': { all_branches: false, branch_ids: [OTHER] }, 'lending.collateral.read': { all_branches: true, branch_ids: [] } });
     mount(<CollateralView detail={detail} collateralId="c1" />, { me: scoped });

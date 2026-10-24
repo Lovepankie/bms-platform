@@ -67,7 +67,7 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
   );
 }
 
-const open = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+const open = (name: string) => fireEvent.click(screen.getByRole('radio', { name }));
 const qty = () => screen.getByLabelText(/Right quantity/) as HTMLInputElement;
 const reason = () => screen.getByLabelText('Why is it being corrected?') as HTMLSelectElement;
 const save = () => screen.getByRole('button', { name: /Save the right quantity/ }) as HTMLButtonElement;
@@ -79,7 +79,7 @@ describe('the Correct button on a stock row', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Correct Cable 2.5mm' }));
     expect(screen.getByTestId('correct-item')).toBeTruthy();
     for (const label of ['The quantity is wrong', 'The category is wrong', 'The unit, name or price is wrong', 'See its history']) {
-      expect(screen.getByRole('button', { name: label })).toBeTruthy();
+      expect(screen.getByRole('radio', { name: label })).toBeTruthy();
     }
     fireEvent.click(screen.getByRole('button', { name: 'Correct Cable 2.5mm' }));
     expect(screen.queryByTestId('correct-item')).toBeNull();
@@ -92,8 +92,8 @@ describe('the Correct button on a stock row', () => {
 
   it('offers a seller the history and the pointers but not the quantity or the category', () => {
     screenOf(seller, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
-    expect(screen.queryByRole('button', { name: 'The quantity is wrong' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'The category is wrong' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'The quantity is wrong' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'The category is wrong' })).toBeNull();
     open('The unit, name or price is wrong');
     expect(screen.getByTestId('correct-other').textContent).toContain('Past restocks');
     expect(screen.getByTestId('correct-other').textContent).toContain('Items');

@@ -5,6 +5,7 @@ import { useMembersApi } from '../../../api/lending-context';
 import type { NextOfKin } from '../../../api/members';
 import { Problem } from '../retail/ui';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
+import { FieldsNeededNote } from '../../../app/ui/Field';
 import { blankKin, kinBody, kinProblems, RELATIONSHIPS, relationshipWords, type KinDraft } from './member-state';
 import { normaliseUganda, showPhone } from './member-state';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
@@ -52,6 +53,7 @@ function KinForm({ kin, memberId, onDone }: { kin?: NextOfKin; memberId: string;
   };
   return (
     <form onSubmit={submit} noValidate aria-label={kin ? 'Change next of kin' : 'Add a next of kin'} className="mf" data-tour="kin-form">
+      <FieldsNeededNote />
       <Group title={kin ? 'Change next of kin' : 'Add a next of kin'}>
         <TextField name="full_name" label="Full name" form={form} required value={draft.fullName} onChange={(v) => setDraft((d) => ({ ...d, fullName: v }))} maxLength={200} />
         <SelectField name="relationship" label="Who they are to the member" form={form} value={draft.relationship} onChange={(v) => setDraft((d) => ({ ...d, relationship: v }))} options={RELATIONSHIPS} />

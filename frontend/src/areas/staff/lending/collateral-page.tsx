@@ -12,6 +12,7 @@ import {
   valuationBody, valuationProblems, type EventType,
 } from './collateral-state';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
+import { FieldsNeededNote } from '../../../app/ui/Field';
 import { localDate, money } from './loan-state';
 import { mayManageCollateral, mayReleaseCollateral } from './member-permissions';
 import { CollateralGate } from './member-ui';
@@ -138,6 +139,7 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
       {canAdd && !open && <button type="button" className="btn-block" onClick={() => setOpen(true)}>Add a valuation</button>}
       {open && (
         <form onSubmit={(e) => void submit(e)} noValidate aria-label="Add a valuation" className="mf">
+          <FieldsNeededNote />
           <Group title="Add a valuation">
             <TextField name="valued_on" label="Date of the valuation" form={form} required type="date" value={d.valuedOn} onChange={(v) => setD((x) => ({ ...x, valuedOn: v }))} max={today} />
             <TextField name="valuer" label="Who valued it" form={form} value={d.valuer} onChange={(v) => setD((x) => ({ ...x, valuer: v }))} maxLength={200} />
@@ -186,6 +188,7 @@ function CustodyChange({ id, version, custody, onDone }: { id: string; version: 
   }
   return (
     <form onSubmit={(e) => void submit(e)} noValidate aria-label="Record a change" className="mf">
+      {(type === 'received_into_custody' || type === 'moved' || type === 'note') && <FieldsNeededNote />}
       <Group title="Record a change">
         <SelectField name="event_type" label="What happened" form={form} value={type} onChange={(v) => setType(v as EventType)} options={options.map((o) => ({ value: o, label: EVENT_WORDS[o] }))} />
         {(type === 'received_into_custody' || type === 'moved') && <TextField name="location" label="Where it is kept now" form={form} required value={location} onChange={setLocation} maxLength={200} />}

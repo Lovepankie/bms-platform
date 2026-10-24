@@ -130,6 +130,12 @@ API stays the authority.
 sessions, and the field messages of `validation_failed`. A code it does not know shows the server's own message,
 so a new refusal (for example a price floor code spelled differently) is never hidden.
 
+A sale line's quantity is the kit's Stepper (issue #520): minus and plus either side of the number, from 1 up, and the
+number can still be typed (1.5 for a part of a kilo). Minus and ArrowDown never go below 1, so on 1.5 kg minus gives 1, and
+below 1 (a typed 0.5 kg) minus is greyed out and ArrowDown does nothing: a part below 1 is typed, never stepped to. This is on
+purpose, not a fault. The Stock screen's All items, Out of stock and Low stock, and every other
+row of pick-one buttons in the retail screens, is the kit's Segmented control.
+
 The sale form also gives early hints that only save a round trip: a quantity above the branch balance, and a
 price not above cost when the cost is known (only with `retail.profit.read`; for anyone else only the server can
 refuse a price). The server refuses both itself, always: overselling is refused with `insufficient_stock` (there is

@@ -9,6 +9,7 @@ import { useStaff } from '../context';
 import { newIdempotencyKey } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
+import { FieldsNeededNote } from '../../../app/ui/Field';
 import { localDate } from './loan-state';
 import { MembersGate } from './member-ui';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
@@ -202,6 +203,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
 
   return (
     <form className="mf" onSubmit={(e) => void submit(e)} noValidate aria-label={editing ? 'Change member details' : 'Add a member'} data-tour="member-form">
+      <FieldsNeededNote />
       {form.count(ORDER) > 0 && (
         <p role="alert" className="alert alert-danger">Some entries need a look. They are marked below.</p>
       )}

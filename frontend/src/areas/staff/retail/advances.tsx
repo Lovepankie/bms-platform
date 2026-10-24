@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Segmented } from '../../../app/ui/Segmented';
 import { businessToday, retail, type Advance, type AdvanceReport, type Repayment } from '../../../api/retail';
 import { useStaff } from '../context';
 import { amountOrNull, enteredBy, voidOffered } from './cash-state';
@@ -142,16 +143,15 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
   );
 }
 
+const SHOW = [{ value: 'all', label: 'All advances' }, { value: 'owing', label: 'Still owing' }] as const;
+
 export function AdvanceList({ onOpen }: { onOpen: (id: string) => void }) {
   const scope = useReadScope();
   const [openOnly, setOpenOnly] = useState(false);
   const rows = useQuery({ queryKey: ['retail', 'advances', scope, openOnly], queryFn: () => retail.listAdvances({ branchIds: scope, openOnly }) });
   return (
     <section aria-label="Advances">
-      <div className="cluster filters" role="group" aria-label="Show">
-        <button type="button" className="btn-sm" aria-pressed={!openOnly} onClick={() => setOpenOnly(false)}>All advances</button>
-        <button type="button" className="btn-sm" aria-pressed={openOnly} onClick={() => setOpenOnly(true)}>Still owing</button>
-      </div>
+      <Segmented label="Show" options={SHOW} value={openOnly ? 'owing' : 'all'} onChange={(v) => setOpenOnly(v === 'owing')} />
       {rows.isError && <Problem error={rows.error} />}
       {rows.isPending && <p className="loading">Loading</p>}
       {rows.data && (
@@ -290,11 +290,7 @@ export function AdvancesScreen() {
   return (
     <Gate screen="advances" title="Advances">
       <p><ScreenLink screen="cashSummary" to="/staff/retail/cash-summary">Cash summary</ScreenLink></p>
-      <div className="cluster filters" role="group" aria-label="Advances" data-tour="advance-modes">
-        {modes.map((m) => (
-          <button key={m.mode} type="button" className="btn-sm" aria-pressed={mode === m.mode} onClick={() => choose(m.mode)}>{m.label}</button>
-        ))}
-      </div>
+      <Segmented label="Advances" tour="advance-modes" options={modes.map((m) => ({ value: m.mode, label: m.label }))} value={mode} onChange={choose} />
       <div data-tour="advance-body">
 
       {mode === 'list' && canRead && (open ? <AdvanceDetail id={open} onClose={() => setOpen(null)} onVoided={(text) => show(text, 'success')} /> : <AdvanceList onOpen={setOpen} />)}

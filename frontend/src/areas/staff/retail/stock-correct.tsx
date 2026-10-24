@@ -10,6 +10,7 @@ import { holds, holdsAt } from './permissions';
 import { REASONS, correctionRequest, correctionWords, differenceWords, movementTitle, quantityProblem, signedQty, type ReasonCode } from './stock-correct-state';
 import { Problem, Success } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Segmented } from '../../../app/ui/Segmented';
 
 // "Correct" on a row of the stock list (issue #351, ADR-044): the owner fixes a mistake where he sees it, with a trail. Four small
 // choices, each opened on its own: the right quantity (a reason, posted as a correction that is not shrinkage), the category, a wrong
@@ -191,10 +192,14 @@ export function CorrectItem({ row, branchId, onClose }: { row: StockRow; branchI
     <section className="rt-card" aria-label={`Correct ${row.description}`} data-testid="correct-item">
       <h3>Correct {row.description}</h3>
       {message && <Success>{message}</Success>}
-      <div className="cluster filters" role="group" aria-label="What is wrong">
-        {choices.filter((c) => c.show).map((c) => (
-          <button key={c.id} type="button" className="btn-sm" aria-pressed={choice === c.id} onClick={() => { setMessage(null); setChoice(choice === c.id ? null : c.id); }}>{c.label}</button>
-        ))}
+      <div className="cluster">
+        <Segmented
+          label="What is wrong"
+          options={choices.filter((c) => c.show).map((c) => ({ value: c.id, label: c.label }))}
+          value={choice}
+          clearable
+          onChange={(id) => { setMessage(null); setChoice(id); }}
+        />
         <button type="button" className="btn-ghost btn-sm" onClick={onClose}>Close</button>
       </div>
       {choice === 'quantity' && <QuantityForm row={row} branchId={branchId} onDone={done} />}

@@ -153,3 +153,96 @@ describe('design guard', () => {
     }
   });
 });
+
+// The component kit (#520): the rules of docs/ui-rules.md that a test can read off the source.
+describe('design guard, the rules the kit holds every screen to', () => {
+  const sources = files(SRC, /\.(tsx?|css)$/).map((f) => relative(SRC, f));
+
+  // Rule 3: an emoji draws differently on every phone and reads as generated. Icons come from components/icons.tsx.
+  it.each(sources)('%s draws no emoji', (file) => {
+    expect(code(file).match(/\p{Emoji_Presentation}|️/u)?.[0] ?? null, file).toBeNull();
+  });
+
+  // Rule 17 and CLAUDE.md: no em or en dash anywhere, in copy, comments or styles.
+  it.each(sources)('%s writes no dash', (file) => {
+    expect(readFileSync(join(SRC, file), 'utf8').match(/[\u2013\u2014]/)?.[0] ?? null, file).toBeNull();
+  });
+
+  // Rule 2: no gradient on text, buttons or backgrounds, no glow and no glass. The two gradients left are not paint: the table's
+  // scroll shadows (a hint that it scrolls) and the old skeleton shimmer, which phase 3 replaces with the kit's Skeleton.
+  const GRADIENTS = new Set(['app/ui/tables.css', 'app/ui/feedback.css']);
+  it.each(allStylesheets.map((f) => relative(SRC, f)))('%s paints no gradient, glow or glass', (file) => {
+    const css = code(file);
+    if (!GRADIENTS.has(file)) expect(css, file).not.toMatch(/gradient\(/);
+    expect(css, file).not.toMatch(/text-shadow|backdrop-filter|filter:\s*blur/);
+    // A glow is a blurred shadow in the brand or a status colour; a focus ring (no blur) and the neutral shadows are not.
+    for (const [, value] of css.matchAll(/box-shadow:\s*([^;]+);/g)) {
+      for (const layer of (value as string).split(/,(?![^(]*\))/)) {
+        const blur = Number(layer.trim().replace(/^inset\s+/, '').split(/\s+/)[2]?.replace('px', '') ?? 0);
+        const coloured = /var\(--color-(accent|primary|success|danger|warning|link|focus)/.test(layer);
+        expect(blur > 0 && coloured ? layer.trim() : null, `${file} glows`).toBeNull();
+      }
+    }
+  });
+
+  it('keeps the gradient list to files that still draw one', () => {
+    for (const file of GRADIENTS) expect(code(file), file).toMatch(/gradient\(/);
+  });
+
+  // Rule 11: a choice of 2 to 5 options is the one Segmented control, not a row of separate pressed buttons.
+  it.each(components.map((f) => relative(SRC, f)))('%s draws no row of pressed buttons in place of Segmented', (file) => {
+    expect(code(file), file).not.toMatch(/className=\{?["'`][^"'`]*(?<![\w-])filters(?![\w-])/);
+  });
+
+  const kit = code('app/ui/kit.css');
+  const rule = (selector: string) => kit.match(new RegExp(`\\n${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
+
+  // Rule 4: two radii and two shadows. The kit keeps to --radius and --radius-lg, --shadow-sm and --shadow-lg.
+  it('the kit uses the two radii and the two shadows only', () => {
+    const radii = [...kit.matchAll(/border-radius:\s*([^;]+);/g)].flatMap(([, v]) => (v as string).split(/\s+/));
+    expect(new Set(radii)).toEqual(new Set(['var(--radius)', 'var(--radius-lg)', '0']));
+    // The focus ring is not a depth: it is the keyboard ring, put back where a reset removed it.
+    const shadows = [...kit.matchAll(/box-shadow:\s*([^;]+);/g)].flatMap(([, v]) => (v as string).split(/,\s*/)).filter((v) => v !== 'var(--focus-ring)');
+    expect(new Set(shadows)).toEqual(new Set(['none', 'var(--shadow-sm)', 'var(--shadow-lg)']));
+  });
+
+  // Rule 12: every target of the kit is at least 48px. A bare button already has min-height: var(--tap) (buttons.css).
+  it('gives every kit target 48px', () => {
+    expect(rule('.segmented > button')).toMatch(/min-height: var\(--tap\)/);
+    expect(rule('.stepper > button')).toMatch(/width: var\(--tap\)/);
+    expect(rule('.stepper')).toMatch(/grid-template-columns: var\(--tap\) [^;]+ var\(--tap\)/);
+    expect(rule('.sheet-close')).toMatch(/width: var\(--tap\)/);
+    expect(rule('.list-row')).toMatch(/min-height: 64px/);
+  });
+
+  // Rule 8: every amount the kit draws is in tabular figures, and the success amount is the display size.
+  it('draws every kit amount in tabular figures', () => {
+    for (const selector of ['.stepper > input', '.money-input > input', '.list-row-amount', '.success-amount']) {
+      expect(rule(selector), selector).toMatch(/font-variant-numeric: tabular-nums/);
+    }
+    expect(rule('.success-amount')).toMatch(/font-size: var\(--text-display\)/);
+  });
+
+  // Rule 13: under reduced motion every animation stops: base.css ends them all, and kit.css names each of its own.
+  it('stops every animation under reduced motion', () => {
+    const reduce = code('app/ui/base.css').match(/prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(reduce).toMatch(/animation-duration: 1ms !important/);
+    expect(reduce).toMatch(/animation-iteration-count: 1 !important/);
+    const still = kit.match(/prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(still).toMatch(/animation: none/);
+    const animated = [...kit.matchAll(/\n([^\n{}]+)\{[^}]*animation(?:-name)?: (?!none)/g)].map(([, sel]) => (sel as string).trim());
+    expect(animated.length).toBeGreaterThanOrEqual(6);
+    for (const selector of animated) expect(still, `${selector} still moves under reduced motion`).toContain(selector);
+  });
+
+  // Rule 13 (owner rule, 24 Oct 2026): the kit moves on the motion tokens, 300ms at most, never in a loop; only the sale-complete
+  // check takes 400ms.
+  it('times every kit motion with the tokens, never loops, and only the check takes 400 ms', () => {
+    const times = [...kit.matchAll(/animation:\s*[\w-]+\s+([^\s;]+)/g)].map(([, t]) => t);
+    expect(new Set(times)).toEqual(new Set(['var(--motion)', '400ms']));
+    expect(kit).not.toMatch(/infinite/);
+    expect(rule('.success-tick')).toMatch(/400ms/);
+    expect(rule('.success-tick-inner')).toMatch(/400ms/);
+    expect([...kit.matchAll(/animation:\s*[\w-]+\s+400ms/g)]).toHaveLength(2);
+  });
+});

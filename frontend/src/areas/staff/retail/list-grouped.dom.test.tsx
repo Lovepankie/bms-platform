@@ -88,14 +88,14 @@ describe('the stock list, grouped', () => {
 
   it('is the flat list until Grouped is chosen, and asks for no summary', async () => {
     show(<StockPage />);
-    expect(await screen.findByRole('button', { name: 'Flat list' })).toHaveProperty('ariaPressed', 'true');
+    expect(await screen.findByRole('radio', { name: 'Flat list' })).toHaveProperty('ariaChecked', 'true');
     expect(listStockAllBranches).toHaveBeenCalled();
     expect(stockSummary).not.toHaveBeenCalled();
   });
 
   it('opens from the shop to the category to the items, each level asked with what was opened above it', async () => {
     show(<StockPage />);
-    const grouped = await screen.findByRole('button', { name: 'Grouped' });
+    const grouped = await screen.findByRole('radio', { name: 'Grouped' });
     listStockAllBranches.mockClear();
     fireEvent.click(grouped);
     const gayaza = await head(/Test Branch Gayaza/);
@@ -120,14 +120,14 @@ describe('the stock list, grouped', () => {
   it('shows no cost when the server sent none', async () => {
     stockSummary.mockImplementation(stockAnswer(false));
     show(<StockPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Grouped' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
     const gayaza = await head(/Test Branch Gayaza/);
     expect(gayaza.textContent).not.toContain('at cost');
   });
 
   it('with one shop chosen at the top leaves the shop level out, and remembers the choice for the person', async () => {
     show(<StockPage />, hq);
-    fireEvent.click(await screen.findByRole('button', { name: 'Grouped' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
     await head(/Test Category Cables/);
     expect(stockSummary.mock.calls[0]?.[0]).toMatchObject({ level: 'category', chain: ['category'], branchId: hq });
     expect(localStorage.getItem(`bms.listView.stock.${user}`)).toBe('grouped');
@@ -174,7 +174,7 @@ describe('the past restocks, grouped', () => {
   it('groups by the chain with the counts, the voided apart and the cost the server sent', async () => {
     writeChainOf(user, 'restocks', ['year', 'supplier']);
     show(<RestocksPage />);
-    const grouped = await screen.findByRole('button', { name: 'Grouped' });
+    const grouped = await screen.findByRole('radio', { name: 'Grouped' });
     listPurchases.mockClear();
     fireEvent.click(grouped);
     const y = await head(/2026/);
@@ -189,7 +189,7 @@ describe('the past restocks, grouped', () => {
     writeChainOf(user, 'restocks', ['year']);
     purchasesSummary.mockImplementation(purchaseAnswer(false));
     show(<RestocksPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Grouped' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
     const y = await head(/2026/);
     expect(y.textContent).not.toContain('20,000');
   });
@@ -197,7 +197,7 @@ describe('the past restocks, grouped', () => {
   it('lists the restocks of the last opened group with the cards that correct them', async () => {
     writeChainOf(user, 'restocks', ['supplier']);
     show(<RestocksPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Grouped' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
     fireEvent.click(await head(/Test Supplier 01/));
     expect(await screen.findByText('RP00000001')).toBeTruthy();
     expect(listPurchases).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 's1' }));
@@ -208,7 +208,7 @@ describe('the past restocks, grouped', () => {
   it('passes what was opened above to the next level and to the restocks', async () => {
     writeChainOf(user, 'restocks', ['year', 'supplier']);
     show(<RestocksPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Grouped' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
     fireEvent.click(await head(/2026/));
     fireEvent.click(await head(/Test Supplier 01/));
     // The group's year is narrowed by the page's own dates, so a restock outside them is never asked for.

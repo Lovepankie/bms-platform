@@ -54,6 +54,20 @@ const fill = (nin = 'CM000000000099', phone = '0700000099') => {
 };
 
 describe('the new member form', () => {
+  it('starts with the needed line and marks each required field with a hidden red asterisk and aria-required', () => {
+    mount(<MemberForm />, createMembersMock().api);
+    expect(document.querySelector('form .fields-needed')?.textContent).toBe('Fields marked * are needed.');
+    const name = screen.getByLabelText(/^Full name/);
+    expect(name.getAttribute('aria-required')).toBe('true');
+    const star = document.querySelector(`label[for="${name.id}"] .field-star`);
+    expect(star?.textContent).toBe(' *');
+    expect(star?.getAttribute('aria-hidden')).toBe('true');
+    const branch = screen.getByLabelText(/^Branch/);
+    expect(branch.tagName).toBe('SELECT');
+    expect(branch.getAttribute('aria-required')).toBe('true');
+    expect(document.body.textContent).not.toMatch(/\(needed\)/);
+  });
+
   it('names what is wrong in plain words, ties it to the input and moves focus to the first one', async () => {
     mount(<MemberForm />, createMembersMock().api);
     fireEvent.click(save());

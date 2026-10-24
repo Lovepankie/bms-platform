@@ -102,7 +102,7 @@ describe('the applications queue (FR-ONB-05)', () => {
     const html = await inRouter(<ApplicationsTable items={[application]} counts={counts} filter="open" onFilter={noop} />);
     expect(html).toContain('Open (4)');
     expect(html).toContain('Activated (3)');
-    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('aria-checked="true"');
     expect(html).toContain('href="/platform/applications/00000000-0000-4000-8000-0000000000a1"');
     expect(html).toContain('Test Hardware Shop');
     expect(html).toContain('<th scope="col">Status</th>');

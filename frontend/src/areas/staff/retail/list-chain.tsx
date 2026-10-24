@@ -1,5 +1,6 @@
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { Segmented } from '../../../app/ui/Segmented';
 import { shutGroup, toggleGroup, trailOf, type OpenGroups } from './sales-chain-state';
 import {
   addTo, dropFrom, isTime, moveIn, pathOf, readChainOf, readView, selectIn, writeChainOf, writeView,
@@ -30,13 +31,12 @@ export function useListView<L extends string>(user: string, list: ListName, orde
 }
 export type ListViewState<L extends string> = ReturnType<typeof useListView<L>>;
 
+const VIEWS: { value: ListView; label: string }[] = [{ value: 'flat', label: 'Flat list' }, { value: 'grouped', label: 'Grouped' }];
+
 /** "Show: Flat list or Grouped", so the list people know stays the way it is until they choose to group it. */
 export function ViewSwitch({ view, onChange }: { view: ListView; onChange: (view: ListView) => void }) {
   return (
-    <div className="cluster filters" role="group" aria-label="View" data-tour="list-view">
-      <button type="button" className="btn-sm" aria-pressed={view === 'flat'} onClick={() => onChange('flat')}>Flat list</button>
-      <button type="button" className="btn-sm" aria-pressed={view === 'grouped'} onClick={() => onChange('grouped')}>Grouped</button>
-    </div>
+    <Segmented label="View" tour="list-view" options={VIEWS} value={view} onChange={onChange} />
   );
 }
 

@@ -5,7 +5,9 @@ import { TOURS } from './tours';
 // The rule of ADR-049: every staff route has a page tour. tour_guard.py (CI) stops a pull request that adds a route without touching
 // frontend/src/tour/; this test is the other half, so the table of routes and the table of tours cannot drift apart over time.
 // A route that really needs none is listed here with its reason, which a reviewer reads.
-const NO_TOUR: Record<string, string> = {};
+const NO_TOUR: Record<string, string> = {
+  '/staff/kit': 'the component kit (#520) is a review page for administrators, reached by its address, not a screen of the work',
+};
 
 /** A tour's `page` matches a route path segment by segment, a `$name` segment matching any one segment (model.ts, pageTourFor). */
 const covers = (page: string, route: string) => {
@@ -34,7 +36,7 @@ describe('every staff route has a page tour (ADR-049)', () => {
   });
 
   it('finds, for every route, the tour whose page is that route exactly (a fixed segment before its $ sibling)', () => {
-    for (const route of routes) {
+    for (const route of routes.filter((r) => !(r in NO_TOUR))) {
       const first = TOURS.find((t) => t.page !== undefined && covers(t.page, route));
       expect(first?.page, route).toBe(route);
     }

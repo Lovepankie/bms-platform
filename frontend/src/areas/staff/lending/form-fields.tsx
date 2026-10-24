@@ -114,7 +114,7 @@ export function TextField({ name, label, form, hint, required, disabled, value, 
   };
   return (
     <div className="mf-field">
-      <label htmlFor={id}>{label}{required ? <span className="mf-req"> (needed)</span> : null}</label>
+      <label htmlFor={id}>{label}{required ? <span className="field-star" aria-hidden="true"> *</span> : null}</label>
       {type === 'textarea' ? (
         <textarea {...shared} rows={rows ?? 3} maxLength={maxLength} onChange={(e) => change(e.target.value)} />
       ) : (
@@ -136,7 +136,7 @@ export function SelectField({ name, label, form, hint, required, disabled, value
   const error = form.error(name);
   return (
     <div className="mf-field">
-      <label htmlFor={id}>{label}{required ? <span className="mf-req"> (needed)</span> : null}</label>
+      <label htmlFor={id}>{label}{required ? <span className="field-star" aria-hidden="true"> *</span> : null}</label>
       <select
         id={id}
         value={value}
