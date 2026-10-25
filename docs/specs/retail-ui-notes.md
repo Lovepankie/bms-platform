@@ -12,7 +12,7 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 |---|---|---|
 | `/staff/retail` | Landing: one tile per screen the user may use | any `retail.*` permission |
 | `/staff/retail/sale` | Record a sale, then the receipt summary | `retail.sale.create` |
-| `/staff/retail/restock` | Buy stock: supplier, lines, per-branch quantities; under the item search, Not in the list? Add it here (issue #505): Item code filled in from the category, Category, Description, Counted in, Buying price, Selling price and the quantity at this branch, one Save that makes the item and puts it on the purchase; a line bought in a pack asks How many pieces in each carton? (issue #554, ADR-082: required, filled with the usual size or by a scanned carton barcode, and Use 30 from now on for a different size, offered with `retail.catalogue.manage`) | `retail.purchase.create` (Add it here: `retail.catalogue.manage`, others read Ask your manager to add this item) |
+| `/staff/retail/restock` | Buy stock: supplier, lines, per-branch quantities; under the item search, Not in the list? Add it here (issue #505): Item code shown as text, made by the app from the category (never typed, issue #562), Category, Description, Counted in, Buying price, Selling price and the quantity at this branch, one Save that makes the item and puts it on the purchase; a line bought in a pack asks How many pieces in each carton? (issue #554, ADR-082: required, filled with the usual size or by a scanned carton barcode, and Use 30 from now on for a different size, offered with `retail.catalogue.manage`) | `retail.purchase.create` (Add it here: `retail.catalogue.manage`, others read Ask your manager to add this item) |
 | `/staff/retail/usage` | Usage and damage | `retail.usage.report` |
 | `/staff/retail/credit-sales` | Credit sales, grouped by a chain of levels the user chooses (issues #328, #341): buyer, date, amount, due date, state; open a sale | `retail.sale.read` |
 | `/staff/retail/sales` | All sales, grouped by a chain of levels the user chooses (issues #328, #341): filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
@@ -30,12 +30,12 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/credit-control` | Credit control: what credit buyers owe by age, the overdue list, payments received (#149) | `retail.sale.read` |
 | `/staff/retail/evaluation` | Business evaluation: profit to date, expected profit of the stock at today's prices, a 30 day pace (#149) | `retail.profit.read` |
 | `/staff/retail/catalogue` | Catalogue home: links to the screens below the session may use | any one of the catalogue screens' permissions |
-| `/staff/retail/catalogue/products` | Items: list with search, category and on sale filters; add, edit, change price, price history (#146) | `retail.catalogue.manage` and `retail.stock.read` (Change price: `retail.price.edit`; cost: `retail.profit.read`) |
-| `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each; a category shows its code start and next code and opens the category page (issue #493) | `retail.catalogue.manage` and `retail.stock.read` |
-| `/staff/retail/catalogue/categories/$categoryId` | One category (issue #493, ADR-081): how its item codes are made, its items, Add an item with the category fixed (no dropdown; an empty Item code gets the next code, such as BLB-0001), Change the code start (items made before keep their codes) | `retail.catalogue.manage` and `retail.stock.read` |
+| `/staff/retail/catalogue/products` | Items: list with search, category and on sale filters; add, edit, change price, price history (#146); the Item code is shown as text on add (the category's next code, made by the app) and on edit (it never changes), never an input (issue #562) | `retail.catalogue.manage` and `retail.stock.read` (Change price: `retail.price.edit`; cost: `retail.profit.read`) |
+| `/staff/retail/catalogue/categories`, `/units` | Add, rename, switch off or on, with the number of items using each; a category shows its code start and next code and opens the category page (issue #493); the add form does not ask for a code start, it shows the one the app makes from the name (issue #562) | `retail.catalogue.manage` and `retail.stock.read` |
+| `/staff/retail/catalogue/categories/$categoryId` | One category (issue #493, ADR-081): how its item codes are made, its items, Add an item with the category fixed (no dropdown; the Item code is shown as text, the next code such as BLB-0001, made by the app and never typed, issue #562), Change the code start (items made before keep their codes) | `retail.catalogue.manage` and `retail.stock.read` |
 | `/staff/retail/catalogue/suppliers` | Add, edit, switch off or on | `retail.catalogue.manage` and `retail.purchase.create` |
 | `/staff/retail/catalogue/buyers` | Credit buyers with what each owes; add, edit name and contact | `retail.customer.manage` and `retail.sale.read` |
-| `/staff/retail/catalogue/import` | Import items from a CSV file or pasted rows: check first, then add (#146) | `retail.catalogue.manage`, `retail.stock.read` and `core.settings.manage` (administrators) |
+| `/staff/retail/catalogue/import` | Import items from a CSV file or pasted rows: check first, then add (#146); the tick Let the app make the codes, unticked by default, makes every item's code and leaves out the file's, and a file already checked is checked again when the tick changes (owner decision D45, issue #562) | `retail.catalogue.manage`, `retail.stock.read` and `core.settings.manage` (administrators) |
 
 Sale, usage, stock, stock-take, Move stock, valuation and profit work on the branch chosen in the staff header;
 with "All branches" they ask for one branch. Restock takes a quantity per branch the user can see. Stock moves
@@ -1168,12 +1168,13 @@ For a shop that sells one design in several sizes, colours or prints (a romper i
 stock list shows it on its own row.
 
 - **Items** has a second button, **Add an item with sizes and colours** (`/staff/retail/catalogue/products/sizes/new`). The owner types
-  the name, a short code, the category, the unit and the prices once, then the sizes and the colours or prints, each list separated by
-  commas. The list of what will be made shows at once, each with its code (`ROMP-03M-BLUE`) and price, which the owner may change (a
-  bigger size that costs more); two that would share a code are flagged in plain words. **Make these 6** saves exactly that list.
+  the name, the category, the unit and the prices once, then the sizes and the colours or prints, each list separated by
+  commas. The list of what will be made shows at once, each with its item code made by the app from the category's next code
+  (`BLB-0007-03M-BLUE`, shown as text, never typed: issue #562) and its price, which the owner may change (a bigger size that costs
+  more); two that would share a code are flagged in plain words. **Make these 6** saves exactly that list.
 - **The item's page** (`/staff/retail/catalogue/products/sizes/$familyId`, crumbs Catalogue, Items, then the item's name): the stock of
   every size and colour together, per shop or store the person may see and in all; each size and colour with its code, price, cost
-  (with cost read) and stock, with **Change price** and **Change** (its size, colour, code, on sale); **Add more sizes or colours** (a
+  (with cost read) and stock, with **Change price** and **Change** (its size, colour, on sale; the code never changes); **Add more sizes or colours** (a
   new print is made in every size the item has, at the price of its first size); **Change the name or category** (every size and
   colour follows). Links to Items, Record a sale, Restock, Move stock, Stock and Sales.
 - **An existing item** gets **Give this item sizes and colours** on its edit form: the owner says which size or colour its stock is

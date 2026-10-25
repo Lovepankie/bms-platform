@@ -9,7 +9,6 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Versions;
-import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailPricing;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.AddVariantsRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.BranchStock;
@@ -83,7 +82,11 @@ class FamilyService {
     Family create(CreateFamilyRequest r) {
         catalogue.requireCategoryAndUnit(r.categoryId(), r.unitId(), null, null);
         String name = r.name().trim();
-        String base = baseCode(r.baseCode());
+        // Issue #562: the item's base code is the category's next code, such as BLB-0007, and never typed.
+        if (r.baseCode() != null && !r.baseCode().isBlank()) {
+            throw CatalogueService.codeMadeByApp("base_code", CatalogueService.MADE_BY_APP);
+        }
+        String base = repo.nextItemCode(r.categoryId());
         List<Planned> plan =
                 VariantGrid.plan(base, r.sizes(), r.colours(), r.variants(), r.costMinor(), r.sellMinor(), Set.of(), 0);
         requireSome(plan);
@@ -285,9 +288,13 @@ class FamilyService {
             }
             name = r.name().trim();
             catalogue.requireCategoryAndUnit(categoryId, unitId, null, null);
-            String base = r.baseCode() != null
-                    ? baseCode(r.baseCode())
-                    : first.code().length() > 24 ? first.code().substring(0, 24).strip() : first.code();
+            // Issue #562: later sizes take the first item's code, the one the app gave it; a typed base code is
+            // refused.
+            if (r.baseCode() != null && !r.baseCode().isBlank()) {
+                throw CatalogueService.codeMadeByApp("base_code", CatalogueService.MADE_BY_APP);
+            }
+            String base =
+                    first.code().length() > 24 ? first.code().substring(0, 24).strip() : first.code();
             duplicateReason = catalogue.acceptItemName(name, unitId, null, Set.copyOf(ids), r.duplicateReason());
             id = UUID.randomUUID();
             repo.insertFamily(id, name, base, categoryId, unitId, by, duplicateReason);
@@ -629,13 +636,13 @@ class FamilyService {
                 throw ApiException.validation(List.of(new FieldProblem(
                         "variants",
                         "invalid",
-                        "The code " + code + " is longer than 40 characters. Give a shorter one.")));
+                        "The code " + code + " is longer than 40 characters. Use a shorter size or colour.")));
             }
             if (codes.contains(code.toLowerCase(Locale.ROOT))) {
                 throw CatalogueService.duplicate(
                         "duplicate_product_code",
-                        "A product with the code " + code + " exists. Give " + VariantGrid.label(v.size(), v.colour())
-                                + " another code.");
+                        "A product with the code " + code + " exists. Spell the size or colour of "
+                                + VariantGrid.label(v.size(), v.colour()) + " differently.");
             }
             String description = VariantGrid.description(name, v.size(), v.colour());
             catalogue.acceptName(description, unitId, null, null);
@@ -706,19 +713,6 @@ class FamilyService {
             throw ApiException.validation(
                     List.of(new FieldProblem("sizes", "required", "Give at least one size or one colour.")));
         }
-    }
-
-    private static String baseCode(String raw) {
-        String code = RetailCatalogue.normaliseCode(raw)
-                .orElseThrow(() -> ApiException.validation(List.of(new FieldProblem(
-                        "base_code",
-                        "invalid",
-                        "A code must not be blank or contain control characters or special spaces."))));
-        if (code.length() > 24) {
-            throw ApiException.validation(
-                    List.of(new FieldProblem("base_code", "invalid", "Keep the base code to 24 characters.")));
-        }
-        return code;
     }
 
     private static String qty(BigDecimal q) {

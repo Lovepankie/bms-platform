@@ -75,7 +75,10 @@ class RetailCatalogueIT extends IntegrationTest {
                 .isEmpty();
     }
 
-    /** Data dictionary rule 1: codes are unique ignoring case and surrounding spaces. */
+    /**
+     * Data dictionary rule 1: codes are unique ignoring case and surrounding spaces. Issue #562: an add never takes a typed
+     * code, and the database still refuses a second item holding one in other capitals.
+     */
     @Test
     void productCodesAreUniqueIgnoringCase() {
         api.product("SW-01", 1_000, 1_200);
@@ -89,15 +92,19 @@ class RetailCatalogueIT extends IntegrationTest {
         body.put("cost_minor", 1);
         body.put("sell_minor", 2);
         ResponseEntity<JsonNode> again = api.post("/products", body, ADMIN);
-        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(again.getBody().get("code").asString()).isEqualTo("duplicate_product_code");
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(again.getBody().get("code").asString()).isEqualTo("item_code_made_by_app");
+        body.remove("code");
+        UUID second = RetailTestSupport.id(api.post("/products", body, ADMIN));
+        assertThatThrownBy(() -> api.existingCode(second, "sw-01"))
+                .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
 
         assertThat(api.post("/units", Map.of("name", "PCS"), ADMIN)
                         .getBody()
                         .get("code")
                         .asString())
                 .isEqualTo("duplicate_unit");
-        body.put("code", "SW-02");
+        body.put("description", "Test switch three");
         body.put("category_id", UUID.randomUUID());
         assertThat(api.post("/products", body, ADMIN).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }

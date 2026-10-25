@@ -1228,7 +1228,6 @@ class RetailCustomerOrdersIT extends IntegrationTest {
     void anOrderLineIsOneSizeAndColourOfAnItem() {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("name", "Test Romper");
-        item.put("base_code", "ROMP");
         item.put("category_id", api.category("Test Baby Clothes"));
         item.put("unit_id", api.unit("u-romper"));
         item.put("cost_minor", 4_000);

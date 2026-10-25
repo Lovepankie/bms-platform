@@ -58,19 +58,19 @@ class VariantGridTest {
     }
 
     @Test
-    void frRet51NamedLinesKeepTheirOwnCodesAndPricesAndRefuseRepeats() {
+    void frRet51NamedLinesKeepTheirOwnPricesTakeTheAppsCodesAndRefuseRepeats() {
         List<Planned> plan = VariantGrid.plan(
                 "ROMP",
                 null,
                 null,
                 List.of(
-                        new VariantLine("0-3m", "Blue", "R-SMALL", 3_000L, 8_000L),
+                        new VariantLine("0-3m", "Blue", null, 3_000L, 8_000L),
                         new VariantLine("3-6m", null, null, null, null)),
                 4_000,
                 9_000,
                 Set.of(),
                 0);
-        assertThat(plan.get(0).code()).isEqualTo("R-SMALL");
+        assertThat(plan.get(0).code()).isEqualTo("ROMP-03M-BLUE");
         assertThat(plan.get(0).sellMinor()).isEqualTo(8_000);
         assertThat(plan.get(1).code()).isEqualTo("ROMP-36M");
         assertThat(plan.get(1).costMinor()).isEqualTo(4_000);
@@ -119,5 +119,21 @@ class VariantGridTest {
         assertThat(VariantGrid.description("Cable", "2.5mm", null)).isEqualTo("Cable (2.5mm)");
         assertThat(VariantGrid.description("Socket", null, "White")).isEqualTo("Socket (White)");
         assertThat(VariantGrid.token("Sky blue stripes")).isEqualTo("SKYBLUE");
+    }
+
+    @Test
+    void issue562ACodeTypedOnALineIsRefused() {
+        assertThatThrownBy(() -> VariantGrid.plan(
+                        "ROMP",
+                        null,
+                        null,
+                        List.of(new VariantLine("0-3m", "Blue", "R-SMALL", null, null)),
+                        1,
+                        2,
+                        Set.of(),
+                        0))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).code())
+                .isEqualTo("item_code_made_by_app");
     }
 }

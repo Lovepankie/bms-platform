@@ -10,16 +10,19 @@ async function romper() {
   const [category] = await api.listCategories();
   const [unit] = await api.listUnits();
   const family = await api.createFamily({
-    name: 'Test romper', base_code: 'ROMP', category_id: category?.id ?? '', unit_id: unit?.id ?? '', cost_minor: 4000, sell_minor: 9000,
+    name: 'Test romper', category_id: category?.id ?? '', unit_id: unit?.id ?? '', cost_minor: 4000, sell_minor: 9000,
     sizes: ['0-3m', '3-6m'], colours: ['Blue', 'Pink'],
   });
   return { api, family };
 }
 
 describe('items with sizes and colours in the mock', () => {
-  it('makes every combination with its own code, named after the item', async () => {
+  it('makes every combination with its own code from the category\'s next code, named after the item', async () => {
     const { family } = await romper();
-    expect(family.variants?.map((v) => v.code)).toEqual(['ROMP-03M-BLUE', 'ROMP-03M-PINK', 'ROMP-36M-BLUE', 'ROMP-36M-PINK']);
+    // Issue #562: the base code is the category's next code, made by the app.
+    const base = family.base_code ?? '';
+    expect(base).toMatch(/^[A-Z]{2,4}-\d{4}$/);
+    expect(family.variants?.map((v) => v.code)).toEqual([`${base}-03M-BLUE`, `${base}-03M-PINK`, `${base}-36M-BLUE`, `${base}-36M-PINK`]);
     expect(family.variants?.[0]?.description).toBe('Test romper (0-3m, Blue)');
     expect(family.variants?.[0]?.variant).toMatchObject({ family_id: family.id, size: '0-3m', colour: 'Blue', position: 0 });
     expect(family.sizes).toEqual(['0-3m', '3-6m']);
@@ -28,7 +31,7 @@ describe('items with sizes and colours in the mock', () => {
   it('skips a combination the item has and refuses when nothing is new', async () => {
     const { api, family } = await romper();
     const more = await api.addVariants(family.id ?? '', { sizes: ['0-3m', '6-12m'], colours: ['Blue'] });
-    expect(more.variants?.map((v) => v.code)).toContain('ROMP-612M-BLUE');
+    expect(more.variants?.map((v) => v.code)).toContain(`${family.base_code ?? ''}-612M-BLUE`);
     expect(more.variants).toHaveLength(5);
     await expect(api.addVariants(family.id ?? '', { sizes: ['0-3m'], colours: ['Blue'] })).rejects.toMatchObject({ status: 422, code: 'nothing_to_add' });
   });

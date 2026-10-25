@@ -5,6 +5,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ImportResult } from '../../../api/retail';
 import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { Hint } from '../../../app/ui/Hint';
 
 // Import items from a file (#146), for a new client, administrators only. Paste the rows or choose a
 // CSV file, check it first (nothing is saved), read what would be added, skipped and wrong, then add
@@ -60,16 +61,18 @@ export function ImportPage() {
   const profit = useProfitAccess();
   const { show, toast } = useToast();
   const [text, setText] = useState('');
-  const [checked, setChecked] = useState<{ text: string; result: ImportResult } | null>(null);
+  // Owner decision D45 (issue #562): Let the app make the codes, unticked by default; a check is only good for the tick it ran with.
+  const [makeCodes, setMakeCodes] = useState(false);
+  const [checked, setChecked] = useState<{ text: string; makeCodes: boolean; result: ImportResult } | null>(null);
   const [done, setDone] = useState<ImportResult | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const check = useMutation({
-    mutationFn: () => retail.importProducts(text, true),
+    mutationFn: (codes: boolean) => retail.importProducts(text, true, codes),
     onMutate: () => setDone(null),
-    onSuccess: (result) => setChecked({ text, result }),
+    onSuccess: (result, codes) => setChecked({ text, makeCodes: codes, result }),
   });
   const apply = useMutation({
-    mutationFn: () => retail.importProducts(text, false),
+    mutationFn: () => retail.importProducts(text, false, makeCodes),
     onSuccess: (result) => {
       setDone(result);
       setChecked(null);
@@ -78,8 +81,13 @@ export function ImportPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
-  const current = checked && checked.text === text ? checked.result : null;
+  const current = checked && checked.text === text && checked.makeCodes === makeCodes ? checked.result : null;
   const ready = current !== null && current.errors === 0 && (current.added ?? 0) > 0;
+  // A file already checked is checked again with the new choice, so the report always matches the tick.
+  const tick = (codes: boolean) => {
+    setMakeCodes(codes);
+    if (checked && checked.text === text) check.mutate(codes);
+  };
   const choose = (file: File | undefined) => {
     if (!file) return;
     void file.text().then((raw) => {
@@ -94,7 +102,7 @@ export function ImportPage() {
     <Gate screen="importer" title="Import items">
       <div data-tour="import-note">
         <Note>
-          The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row. Leave a code empty, or leave out the code column, and the app gives the item the next code of its category, such as BLB-0001.
+          The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row. A code in the file is kept, unless you tick Let the app make the codes below. Leave a code empty, or leave out the code column, and the app gives the item the next code of its category, such as BLB-0001.
           {profit ? '' : ' Leave the buying price out.'} Check the file first: nothing is saved until you add the items.
         </Note>
       </div>
@@ -102,10 +110,14 @@ export function ImportPage() {
       <input id="import-file" type="file" data-tour="import-file" accept=".csv,.txt,text/csv,text/plain" onChange={(e) => choose(e.target.files?.[0])} />
       <label htmlFor="import-text">Or paste the rows here</label>
       <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
+      <label htmlFor="import-make-codes">
+        <input id="import-make-codes" type="checkbox" data-tour="import-make-codes" checked={makeCodes} onChange={(e) => tick(e.target.checked)} /> Let the app make the codes
+      </label>
+      <Hint full>Tick this to give every item the next code of its category and leave out the codes in your file. Without the tick, a code in your file is kept.</Hint>
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
       <ActionBar>
-        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate()}>
+        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate(makeCodes)}>
           Check the file
         </BusyButton>
       </ActionBar>

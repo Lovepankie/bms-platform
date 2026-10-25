@@ -76,13 +76,14 @@ final class VariantGrid {
                             "Duplicate",
                             "The item has " + label(size, colour) + " already. Each one is listed once.");
                 }
-                String code = l.code() == null || l.code().isBlank()
-                        ? code(baseCode, size, colour)
-                        : l.code().trim();
+                // Issue #562: the app makes every new item's code, a variant's too.
+                if (l.code() != null && !l.code().isBlank()) {
+                    throw CatalogueService.codeMadeByApp("variants[" + i + "].code", CatalogueService.MADE_BY_APP);
+                }
                 out.add(new Planned(
                         size,
                         colour,
-                        code,
+                        code(baseCode, size, colour),
                         l.costMinor() == null ? costMinor : l.costMinor(),
                         l.sellMinor() == null ? sellMinor : l.sellMinor(),
                         position++));
@@ -114,7 +115,8 @@ final class VariantGrid {
             if (!codes.add(p.code().toLowerCase(Locale.ROOT))) {
                 throw ApiException.rule(
                         "duplicate_variant_code",
-                        "Two sizes or colours would get the code " + p.code() + ". Give one of them another code.");
+                        "Two sizes or colours would get the code " + p.code()
+                                + ". Spell one of them differently in its first seven letters or digits.");
             }
         }
         return out;
@@ -134,7 +136,7 @@ final class VariantGrid {
     }
 
     /**
-     * The code a variant gets unless the owner types one: the base code, then the size and the colour, each cut to their
+     * The code the app gives a variant (issue #562: always, never typed): the base code, then the size and the colour, each cut to their
      * letters and digits in capitals and to seven characters. ROMP, 0-3m and Sky blue give ROMP-03M-SKYBLUE;
      * a longer part keeps its first seven.
      */

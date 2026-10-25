@@ -110,7 +110,8 @@ Rule: every label is a word a shop attendant in Kampala uses. There is a glossar
 
 - Each category has a short prefix of 2 to 4 letters, made from its name and editable: Bulbs BLB, TVs TV, Phone accessories PHA, Extensions EXT.
 - A new item added inside a category gets the next number: BLB-0001, BLB-0002. Two people adding at once still get different numbers.
-- A code that already exists, or one the owner types, is kept.
+- A code that already exists is kept. Nobody types a code for a new item: the app always makes it (owner decision of 25 Oct 2026, issue #562). Edit shows the code but never changes it. The import keeps the codes in a shop's file and makes the blank ones; with the tick Let the app make the codes, it makes every code and ignores the file's (owner decision D45). A supplier's or maker's code goes in the barcode.
+- A new category is not asked for its letters: the app makes them from the name and shows them. Whoever manages the catalogue can change them on the category's page.
 - Packs do not get their own item code. A pack is the same item, and is told apart by its barcode.
 - The code names the item, not the delivery. Moving an item to another category keeps its code; the new category's numbering is not used.
 

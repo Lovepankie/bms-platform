@@ -413,7 +413,6 @@ class RetailDashboardRangeIT extends IntegrationTest {
     void theBestSellerCountsAnItemWithSizesOnceAllItsSizesTogether() {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("name", "Test Sized Shirt");
-        body.put("base_code", "DSZ");
         body.put("category_id", api.category("Test Sized Category"));
         body.put("unit_id", api.unit("test-sized-piece"));
         body.put("cost_minor", 1_000);
@@ -429,7 +428,8 @@ class RetailDashboardRangeIT extends IntegrationTest {
         }
         JsonNode best = range("period=today", ADMIN).get("range").get("best_seller");
         assertThat(best.get("id").asString()).isEqualTo(family);
-        assertThat(best.get("code").asString()).isEqualTo("DSZ");
+        assertThat(best.get("code").asString())
+                .isEqualTo(made.getBody().get("base_code").asString());
         assertThat(best.get("label").asString()).isEqualTo("Test Sized Shirt");
         assertThat(best.get("sales_minor").asLong()).isEqualTo(4_000);
         assertThat(best.get("sale_count").asLong()).isEqualTo(2);

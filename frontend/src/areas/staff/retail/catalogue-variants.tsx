@@ -83,21 +83,24 @@ export function NameTaken({ error, busy, onAnyway }: { error: unknown; busy: boo
   );
 }
 
-/** One row of the preview as the owner edits it: the code, the selling price and (with cost read) the cost, as typed. */
+/**
+ * One row of the preview as the owner edits it: the selling price and (with cost read) the cost, as typed. The code is the
+ * app's, shown and never typed (issue #562).
+ */
 export interface PreviewRow extends PlannedVariant {
-  codeText: string;
   sellText: string;
   costText: string;
 }
 
-const rowsOf = (plan: PlannedVariant[]): PreviewRow[] => plan.map((p) => ({ ...p, codeText: p.code, sellText: String(p.sellMinor), costText: String(p.costMinor) }));
+type PriceEdit = Partial<Pick<PreviewRow, 'sellText' | 'costText'>>;
 
-/** What the server is sent: every row with its own code and prices, so the preview the owner checked is exactly what is made. */
+const rowsOf = (plan: PlannedVariant[]): PreviewRow[] => plan.map((p) => ({ ...p, sellText: String(p.sellMinor), costText: String(p.costMinor) }));
+
+/** What the server is sent: every row with its own prices, so the preview the owner checked is exactly what is made. */
 export function linesOf(rows: readonly PreviewRow[], profit: boolean): VariantLine[] {
   return rows.map((r) => ({
     ...(r.size ? { size: r.size } : {}),
     ...(r.colour ? { colour: r.colour } : {}),
-    code: r.codeText.trim(),
     sell_minor: parseMinor(r.sellText, RETAIL_CURRENCY) ?? 0,
     ...(profit ? { cost_minor: parseMinor(r.costText, RETAIL_CURRENCY) ?? 0 } : {}),
   }));
@@ -107,26 +110,26 @@ export function linesOf(rows: readonly PreviewRow[], profit: boolean): VariantLi
 export function previewProblem(rows: readonly PreviewRow[]): string | null {
   if (rows.length === 0) return 'Type at least one size or one colour.';
   if (rows.length > MAX_VARIANTS) return `That makes ${rows.length}. An item has at most ${MAX_VARIANTS} sizes and colours.`;
-  if (rows.some((r) => r.codeText.trim() === '')) return 'Every size and colour needs a code.';
   if (rows.some((r) => parseMinor(r.sellText, RETAIL_CURRENCY) === null)) return 'Every size and colour needs a selling price.';
-  const repeated = repeatedCodes(rows.map((r) => ({ code: r.codeText })));
-  if (repeated.length > 0) return `Two of them would have the code ${repeated[0]}. Change one of the codes.`;
+  const repeated = repeatedCodes(rows);
+  if (repeated.length > 0) return `Two of them would have the code ${repeated[0]}. Spell one of the sizes or colours differently in its first seven letters.`;
   return null;
 }
 
 /**
- * The list of what will be made, each row with its code and prices the owner may change. The rows follow the sizes and colours
- * typed; a code or price the owner changed is kept while the same size and colour stays in the list.
+ * The list of what will be made, each row with its code and the prices the owner may change. The rows follow the sizes and
+ * colours typed; a price the owner changed is kept while the same size and colour stays in the list.
  */
 export function usePreview(plan: PlannedVariant[]) {
-  const [edits, setEdits] = useState<Record<string, Partial<Pick<PreviewRow, 'codeText' | 'sellText' | 'costText'>>>>({});
+  const [edits, setEdits] = useState<Record<string, PriceEdit>>({});
   const rows = rowsOf(plan).map((r) => ({ ...r, ...(edits[variantKey(r.size, r.colour)] ?? {}) }));
-  const edit = (r: PreviewRow, change: Partial<Pick<PreviewRow, 'codeText' | 'sellText' | 'costText'>>) =>
+  const edit = (r: PreviewRow, change: PriceEdit) =>
     setEdits((e) => ({ ...e, [variantKey(r.size, r.colour)]: { ...(e[variantKey(r.size, r.colour)] ?? {}), ...change } }));
   return { rows, edit, reset: () => setEdits({}) };
 }
 
-export function VariantPreview({ rows, profit, onEdit }: { rows: PreviewRow[]; profit: boolean; onEdit: (r: PreviewRow, change: Partial<Pick<PreviewRow, 'codeText' | 'sellText' | 'costText'>>) => void }) {
+/** The preview; {@code codesKnown} is false while the category that makes the codes is not chosen yet. */
+export function VariantPreview({ rows, profit, onEdit, codesKnown = true }: { rows: PreviewRow[]; profit: boolean; onEdit: (r: PreviewRow, change: PriceEdit) => void; codesKnown?: boolean }) {
   if (rows.length === 0) return <p className="empty-state">Type the sizes or the colours above and the list of what will be made shows here.</p>;
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -136,11 +139,8 @@ export function VariantPreview({ rows, profit, onEdit }: { rows: PreviewRow[]; p
         return (
           <li key={variantKey(r.size, r.colour)} className="rt-card">
             <p><strong>{label}</strong></p>
+            <p id={`${id}-code`}>{WORDS.itemCode}: {codesKnown ? <><strong>{r.code}</strong>, made by the app</> : 'made by the app once you choose the category'}</p>
             <div className="rt-row">
-              <div>
-                <label htmlFor={`${id}-code`}>Code</label>
-                <input id={`${id}-code`} value={r.codeText} maxLength={40} autoComplete="off" onChange={(e) => onEdit(r, { codeText: e.target.value })} aria-label={`Code of ${label}`} />
-              </div>
               {profit && (
                 <div>
                   <label htmlFor={`${id}-cost`}>Buying price ({RETAIL_CURRENCY})</label>
@@ -173,7 +173,10 @@ export function OptionBoxes({ sizes, colours, onSizes, onColours, prefix }: { si
   );
 }
 
-/** Add an item with sizes and colours: the name, a short code, category and unit, the prices, then the sizes and colours once. */
+/**
+ * Add an item with sizes and colours: the name, category and unit, the prices, then the sizes and colours once. The codes start
+ * with the category's next code, made by the app (issue #562).
+ */
 export function NewFamilyPage() {
   const profit = useProfitAccess();
   const navigate = useNavigate();
@@ -181,7 +184,6 @@ export function NewFamilyPage() {
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
   const units = useQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits() });
   const [name, setName] = useState('');
-  const [baseCode, setBaseCode] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [sell, setSell] = useState('');
@@ -190,14 +192,16 @@ export function NewFamilyPage() {
   const [colours, setColours] = useState('');
   const sellMinor = parseMinor(sell, RETAIL_CURRENCY);
   const costMinor = profit ? parseMinor(cost, RETAIL_CURRENCY) : 0;
-  const plan = planVariants({ baseCode: baseCode.trim() || 'ITEM', sizes: splitOptions(sizes), colours: splitOptions(colours), costMinor: costMinor ?? 0, sellMinor: sellMinor ?? 0 });
+  const chosen = (categories.data ?? []).find((c) => c.id === categoryId);
+  const baseCode = chosen ? chosen.next_code ?? `${chosen.code_prefix ?? ''}-0001` : 'ITEM';
+  const plan = planVariants({ baseCode, sizes: splitOptions(sizes), colours: splitOptions(colours), costMinor: costMinor ?? 0, sellMinor: sellMinor ?? 0 });
   const preview = usePreview(plan);
   const problem = previewProblem(preview.rows);
-  const complete = name.trim() !== '' && baseCode.trim() !== '' && categoryId !== '' && unitId !== '' && sellMinor !== null && costMinor !== null && problem === null;
+  const complete = name.trim() !== '' && categoryId !== '' && unitId !== '' && sellMinor !== null && costMinor !== null && problem === null;
   const sending = useRef(false);
   const save = useMutation({
     mutationFn: (duplicateReason?: string) => retail.createFamily({
-      name: name.trim(), base_code: baseCode.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: costMinor ?? 0,
+      name: name.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: costMinor ?? 0,
       sizes: splitOptions(sizes), colours: splitOptions(colours), variants: linesOf(preview.rows, profit),
       ...(duplicateReason ? { duplicate_reason: duplicateReason } : {}),
     }),
@@ -214,14 +218,11 @@ export function NewFamilyPage() {
   };
   return (
     <Gate screen="products" title="Add an item with sizes and colours">
-      <p>Use this for something you sell in several sizes, colours or prints, such as a romper in 0-3m, 3-6m and 6-12m. Each size and colour gets its own code, price and stock, and you choose them once here.</p>
+      <p>Use this for something you sell in several sizes, colours or prints, such as a romper in 0-3m, 3-6m and 6-12m. Each size and colour gets its own item code, made by the app from the category, and its own price and stock. You choose them once here.</p>
       <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <div data-tour="sizes-name">
           <label htmlFor="sizes-item-name">What is it called?</label>
           <input id="sizes-item-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Baby romper" />
-          <label htmlFor="sizes-item-code">Short code</label>
-          <input id="sizes-item-code" value={baseCode} maxLength={24} onChange={(e) => setBaseCode(e.target.value)} autoComplete="off" placeholder="ROMP" />
-          <Hint>Every size and colour gets a code that starts with this, such as ROMP-03M-BLUE. You can change each one below.</Hint>
           <label htmlFor="sizes-item-category">Category</label>
           <select id="sizes-item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
             <option value="">Choose a category</option>
@@ -248,7 +249,7 @@ export function NewFamilyPage() {
         </div>
         <section data-tour="sizes-preview" aria-label="What will be made">
           <h2>{preview.rows.length === 0 ? 'What will be made' : `${preview.rows.length} to be made`}</h2>
-          <VariantPreview rows={preview.rows} profit={profit} onEdit={preview.edit} />
+          <VariantPreview rows={preview.rows} profit={profit} onEdit={preview.edit} codesKnown={chosen !== undefined} />
         </section>
         {problem && preview.rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
         {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}

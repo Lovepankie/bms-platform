@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { Field } from '../../../app/ui/Field';
 import { retail, type Category, type Unit } from '../../../api/retail';
 import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
@@ -11,7 +10,8 @@ import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } f
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
 // deleted: items and their history keep pointing at it. A switched-off row stays on the items that
 // use it and cannot be chosen for a new item or a change of item. A category also has its code start (issue
-// #493): its row shows it and opens the category, where items are added; a new one may type its own.
+// #493): its row shows it and opens the category, where items are added. A new category is not asked for one (issue
+// #562): the app makes it from the name and shows it; the category's page changes it.
 
 type Named = Category | Unit;
 
@@ -72,8 +72,8 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   noun: string;
   plural: string;
   list: () => Promise<Named[]>;
-  create: (name: string, codePrefix?: string) => Promise<Named>;
-  /** Categories (issue #493): a code start on the add form and on each row, and the row opens the category. */
+  create: (name: string) => Promise<Named>;
+  /** Categories (issue #493): the code start the app will make shown on the add form and on each row; the row opens the category. */
   withPrefix?: boolean;
   update: (id: string, version: number, body: { name?: string; active?: boolean }) => Promise<Named>;
 }) {
@@ -82,7 +82,6 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [prefix, setPrefix] = useState('');
   const [suggested, setSuggested] = useState('');
   const [adding, setAdding] = useState(false);
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
@@ -92,10 +91,10 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
   const add = useMutation({
-    mutationFn: () => create(name.trim(), withPrefix ? prefix.trim() : undefined),
+    mutationFn: () => create(name.trim()),
     onMutate: () => setMessage(null),
     onSuccess: (row) => {
-      setName(''); setPrefix(''); setSuggested(''); setAdding(false);
+      setName(''); setSuggested(''); setAdding(false);
       const codes = withPrefix && 'code_prefix' in row && row.code_prefix ? ` Its item codes start with ${row.code_prefix}.` : '';
       done(`Added the ${noun} "${row.name}".${codes}`);
     },
@@ -109,7 +108,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   return (
     <>
       <div data-tour="named-add">
-        <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setPrefix(''); setSuggested(''); }}>
+        <AddPanel label={`Add a ${noun}`} open={adding} onOpen={() => setAdding(true)} onClose={() => { setAdding(false); setName(''); setSuggested(''); }}>
           <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) add.mutate(); }}>
             <label htmlFor={`new-${plural}`}>Name of the new {noun}</label>
             <input
@@ -121,21 +120,11 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
               autoComplete="off"
             />
             {withPrefix && (
-              <Field
-                id="new-category-prefix"
-                label="Code start"
-                optional
-                hint={suggested
-                  ? `Leave it empty to use ${suggested}, so items get codes like ${suggested}-0001. Or type 2 to 4 letters.`
-                  : 'Items in this category get codes that start with these letters, like BLB-0001. Leave it empty and the app makes them from the name.'}
-                error={prefix.trim() !== '' && !/^[A-Za-z]{2,4}$/.test(prefix.trim()) ? 'Use 2 to 4 letters, A to Z, such as BLB.' : null}
-                value={prefix}
-                placeholder={suggested}
-                maxLength={4}
-                autoCapitalize="characters"
-                autoComplete="off"
-                onChange={(e) => setPrefix(e.target.value)}
-              />
+              <p className="hint" id="new-category-prefix" data-testid="new-category-prefix">
+                {suggested
+                  ? <>Item codes here will start with <strong>{suggested}</strong>, like {suggested}-0001, made by the app. You can change the letters on the category&apos;s page.</>
+                  : 'The app makes the item codes of this category from its name, like BLB-0001 for Bulbs.'}
+              </p>
             )}
             <BusyButton busy={add.isPending} type="submit" className="rt-primary" notReady={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
           </form>
@@ -179,7 +168,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
 export function CategoriesPage() {
   return (
     <Gate screen="categories" title="Categories">
-      <NamedList noun="category" plural="categories" withPrefix list={() => retail.listCategories()} create={(n, p) => retail.createCategory(n, p)} update={(id, v, b) => retail.updateCategory(id, v, b)} />
+      <NamedList noun="category" plural="categories" withPrefix list={() => retail.listCategories()} create={(n) => retail.createCategory(n)} update={(id, v, b) => retail.updateCategory(id, v, b)} />
     </Gate>
   );
 }

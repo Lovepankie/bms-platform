@@ -2260,7 +2260,7 @@ correction with its reason and the old and new quantity.
 A variant is a row of `retail_products`; every movement, balance and line keeps pointing at it, so no stock or ledger table changes.
 
 `retail_product_families`: the item with sizes and colours. `name` (varchar(200), trimmed, not blank: what every variant's description
-starts with), `base_code` (varchar(24): what generated variant codes start with), `category_id` and `unit_id` (composite FKs; every
+starts with), `base_code` (varchar(24): what generated variant codes start with; for a new item the category's next code, never typed, issue #562), `category_id` and `unit_id` (composite FKs; every
 variant has the same category and unit, kept equal by the service), `created_by`, `version` for If-Match. Forced row-level security;
 the application role may select, insert and update.
 

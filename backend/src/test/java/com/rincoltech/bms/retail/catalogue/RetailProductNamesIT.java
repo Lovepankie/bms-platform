@@ -58,7 +58,7 @@ class RetailProductNamesIT extends IntegrationTest {
         if (duplicateReason != null) {
             body.put("duplicate_reason", duplicateReason);
         }
-        return api.post("/products", body, permissions);
+        return api.postItem(body, permissions);
     }
 
     ResponseEntity<JsonNode> rename(UUID product, Map<String, Object> change, String permissions) {

@@ -4,7 +4,8 @@
 
 Proposed (2026-10-21, issue #384). Builds on ADR-020 (stock as append-only movements per product), ADR-033 (pack sizes and price lists per
 product) and ADR-044 (one product name per unit). The migration is `V69` (the next free number after `V68` of PR #380; renamed at merge if
-another migration lands first). Item photos are the second slice of the same issue and are not decided here.
+another migration lands first). Item photos are the second slice of the same issue and are not decided here. Amended by
+ADR-081 as amended on 25 Oct 2026 (issue #562): the base code is the category's next code and no variant code is typed or changed.
 
 ## Context
 

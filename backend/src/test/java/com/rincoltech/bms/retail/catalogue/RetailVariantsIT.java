@@ -48,16 +48,17 @@ class RetailVariantsIT extends IntegrationTest {
         api = new RetailTestSupport(http, t);
         hq = t.headOffice();
         br2 = t.secondBranch();
-        category = api.category("Test Baby Wear");
+        category = RetailTestSupport.id(
+                api.post("/categories", Map.of("name", "Test Baby Wear", "code_prefix", "ROMP"), ADMIN));
         pieces = api.unit("test-piece");
     }
 
     // ---- helpers ---------------------------------------------------------------------------
 
-    ResponseEntity<JsonNode> createFamily(String name, String base, List<String> sizes, List<String> colours) {
+    /** Issue #562: the item's codes start with the category's next code, ROMP-0001 in the first item of a test. */
+    ResponseEntity<JsonNode> createFamily(String name, List<String> sizes, List<String> colours) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
-        body.put("base_code", base);
         body.put("category_id", category);
         body.put("unit_id", pieces);
         body.put("cost_minor", 4_000);
@@ -69,7 +70,7 @@ class RetailVariantsIT extends IntegrationTest {
 
     JsonNode romper() {
         ResponseEntity<JsonNode> r =
-                createFamily("Test Romper", "ROMP", List.of("0-3m", "3-6m", "6-12m"), List.of("Blue", "Pink"));
+                createFamily("Test Romper", List.of("0-3m", "3-6m", "6-12m"), List.of("Blue", "Pink"));
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
         return r.getBody();
     }
@@ -171,13 +172,13 @@ class RetailVariantsIT extends IntegrationTest {
         assertThat(f.get("variants")).hasSize(6);
         assertThat(f.get("stock_on_hand").asString()).isEqualTo("0.000");
         JsonNode first = f.get("variants").get(0);
-        assertThat(first.get("code").asString()).isEqualTo("ROMP-03M-BLUE");
+        assertThat(first.get("code").asString()).isEqualTo("ROMP-0001-03M-BLUE");
         assertThat(first.get("description").asString()).isEqualTo("Test Romper (0-3m, Blue)");
         assertThat(first.get("sell_minor").asLong()).isEqualTo(9_000);
         assertThat(first.get("cost_minor").asLong()).isEqualTo(4_000);
         assertThat(first.get("category_id").asString()).isEqualTo(category.toString());
         assertThat(first.get("variant").get("family_name").asString()).isEqualTo("Test Romper");
-        assertThat(f.get("variants").get(5).get("code").asString()).isEqualTo("ROMP-612M-PINK");
+        assertThat(f.get("variants").get(5).get("code").asString()).isEqualTo("ROMP-0001-612M-PINK");
 
         // Each variant is a product: it has its own page, price history and a place in the item list.
         UUID blue = variant(f, "0-3m", "Blue");
@@ -199,7 +200,7 @@ class RetailVariantsIT extends IntegrationTest {
         assertThat(added.getStatusCode()).as("%s", added.getBody()).isEqualTo(HttpStatus.CREATED);
         assertThat(added.getBody().get("variants")).hasSize(7);
         JsonNode last = added.getBody().get("variants").get(6);
-        assertThat(last.get("code").asString()).isEqualTo("ROMP-1218M-BLUE");
+        assertThat(last.get("code").asString()).isEqualTo("ROMP-0001-1218M-BLUE");
         assertThat(last.get("sell_minor").asLong()).isEqualTo(9_000);
         assertThat(last.get("variant").get("position").asInt()).isEqualTo(6);
         ResponseEntity<JsonNode> nothing =
@@ -209,9 +210,11 @@ class RetailVariantsIT extends IntegrationTest {
     }
 
     @Test
-    void frRet51NamedVariantsTakeTheirOwnCodesAndPricesAndCodesStayUnique() {
-        api.product("ROMP-03M-BLUE", 1, 2);
-        ResponseEntity<JsonNode> clash = createFamily("Test Romper", "ROMP", List.of("0-3m"), List.of("Blue"));
+    void frRet51NamedVariantsTakeTheirOwnPricesAndTheAppsCodesAndCodesStayUnique() {
+        // An item that already holds the code the app would give a size: the item is refused and nothing is kept, not
+        // even the number, so the next item gets ROMP-0001 again.
+        api.existingCode(api.product("ROMP-OLD", 1, 2), "ROMP-0001-03M-BLUE");
+        ResponseEntity<JsonNode> clash = createFamily("Test Romper", List.of("0-3m"), List.of("Blue"));
         assertThat(clash.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(clash.getBody().get("code").asString()).isEqualTo("duplicate_product_code");
         assertThat(TestDatabase.owner()
@@ -224,31 +227,64 @@ class RetailVariantsIT extends IntegrationTest {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "Test Cable");
-        body.put("base_code", "CAB");
         body.put("category_id", category);
         body.put("unit_id", pieces);
         body.put("cost_minor", 1_000);
         body.put("sell_minor", 1_500);
         body.put(
                 "variants",
-                List.of(
-                        Map.of("size", "1.5mm", "code", "CAB-THIN", "sell_minor", 1_200),
-                        Map.of("size", "2.5mm", "colour", "Red")));
+                List.of(Map.of("size", "1.5mm", "sell_minor", 1_200), Map.of("size", "2.5mm", "colour", "Red")));
         ResponseEntity<JsonNode> r = api.post("/product-families", body, ADMIN);
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(r.getBody().get("base_code").asString()).isEqualTo("ROMP-0001");
         JsonNode thin = r.getBody().get("variants").get(0);
-        assertThat(thin.get("code").asString()).isEqualTo("CAB-THIN");
+        assertThat(thin.get("code").asString()).isEqualTo("ROMP-0001-15MM");
         assertThat(thin.get("sell_minor").asLong()).isEqualTo(1_200);
         assertThat(thin.get("cost_minor").asLong()).isEqualTo(1_000);
         assertThat(thin.get("description").asString()).isEqualTo("Test Cable (1.5mm)");
-        assertThat(r.getBody().get("variants").get(1).get("code").asString()).isEqualTo("CAB-25MM-RED");
+        assertThat(r.getBody().get("variants").get(1).get("code").asString()).isEqualTo("ROMP-0001-25MM-RED");
+    }
+
+    @Test
+    void issue562ACodeTypedForAnItemWithSizesOrForOneOfItsSizesIsRefused() {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("name", "Test Cable");
+        body.put("base_code", "CAB");
+        body.put("category_id", category);
+        body.put("unit_id", pieces);
+        body.put("cost_minor", 1_000);
+        body.put("sell_minor", 1_500);
+        body.put("sizes", List.of("1.5mm"));
+        ResponseEntity<JsonNode> base = api.post("/product-families", body, ADMIN);
+        assertThat(base.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(base.getBody().get("code").asString()).isEqualTo("item_code_made_by_app");
+
+        body.remove("base_code");
+        body.remove("sizes");
+        body.put("variants", List.of(Map.of("size", "1.5mm", "code", "CAB-THIN")));
+        ResponseEntity<JsonNode> line = api.post("/product-families", body, ADMIN);
+        assertThat(line.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(line.getBody().get("errors").get(0).get("field").asString()).isEqualTo("variants[0].code");
+
+        JsonNode f = romper();
+        ResponseEntity<JsonNode> more = api.post(
+                "/product-families/" + f.get("id").asString() + "/variants",
+                Map.of("variants", List.of(Map.of("size", "12-18m", "code", "ROMP-BIG"))),
+                ADMIN);
+        assertThat(more.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_product_families WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .as("only the romper was made")
+                .isEqualTo(1);
     }
 
     @Test
     void frRet51OnlyTheCatalogueManagerMakesItemsAndASellerSeesNoCost() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "Test Romper");
-        body.put("base_code", "ROMP");
         body.put("category_id", category);
         body.put("unit_id", pieces);
         body.put("cost_minor", 4_000);
@@ -462,11 +498,14 @@ class RetailVariantsIT extends IntegrationTest {
                         .asString())
                 .isEqualTo("variant_follows_item");
 
-        ResponseEntity<JsonNode> corrected =
-                patchProduct(small, Map.of("variant_colour", "Navy", "code", "ROMP-S-NAVY"));
+        // Issue #562: a size keeps the code the app gave it.
+        ResponseEntity<JsonNode> recoded = patchProduct(small, Map.of("variant_colour", "Navy", "code", "ROMP-S-NAVY"));
+        assertThat(recoded.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(recoded.getBody().get("code").asString()).isEqualTo("item_code_made_by_app");
+        ResponseEntity<JsonNode> corrected = patchProduct(small, Map.of("variant_colour", "Navy"));
         assertThat(corrected.getStatusCode()).as("%s", corrected.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(corrected.getBody().get("description").asString()).isEqualTo("Test Romper (0-3m, Navy)");
-        assertThat(corrected.getBody().get("code").asString()).isEqualTo("ROMP-S-NAVY");
+        assertThat(corrected.getBody().get("code").asString()).isEqualTo("ROMP-0001-03M-BLUE");
         ResponseEntity<JsonNode> twice = patchProduct(small, Map.of("variant_colour", "Pink"));
         assertThat(twice.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(twice.getBody().get("code").asString()).isEqualTo("duplicate_variant");
@@ -545,15 +584,17 @@ class RetailVariantsIT extends IntegrationTest {
     static final String ADMINISTRATOR = ADMIN + ",core.settings.manage";
 
     /** An item without variants in this test's category and unit. */
+    /** Issue #562: the app makes the code; {@code code} is the one the item held before, as an existing item keeps it. */
     UUID plain(String code, String description) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("code", code);
         body.put("description", description);
         body.put("category_id", category);
         body.put("unit_id", pieces);
         body.put("cost_minor", 1_000);
         body.put("sell_minor", 2_000);
-        return RetailTestSupport.id(api.post("/products", body, ADMIN));
+        UUID id = RetailTestSupport.id(api.post("/products", body, ADMIN));
+        api.existingCode(id, code);
+        return id;
     }
 
     @Test
@@ -588,7 +629,7 @@ class RetailVariantsIT extends IntegrationTest {
     void adr044AnItemsNameIsKeptOncePerUnitAgainstItemsWithAndWithoutSizes() {
         // The HATS case: a shop that has "Test Twin Cable" as an item names an item with sizes the same.
         UUID existing = plain("TWIN-1", "Test Twin Cable");
-        ResponseEntity<JsonNode> same = createFamily("test  twin cable", "TWIN", List.of("1.5mm", "2.5mm"), List.of());
+        ResponseEntity<JsonNode> same = createFamily("test  twin cable", List.of("1.5mm", "2.5mm"), List.of());
         assertThat(same.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(same.getBody().get("code").asString()).isEqualTo("duplicate_product_name");
         assertThat(same.getBody().get("existing_id").asString()).isEqualTo(existing.toString());
@@ -596,7 +637,6 @@ class RetailVariantsIT extends IntegrationTest {
 
         Map<String, Object> anyway = new LinkedHashMap<>();
         anyway.put("name", "Test Twin Cable");
-        anyway.put("base_code", "TWIN");
         anyway.put("category_id", category);
         anyway.put("unit_id", pieces);
         anyway.put("cost_minor", 1_000);
@@ -609,12 +649,11 @@ class RetailVariantsIT extends IntegrationTest {
 
         // Another item with sizes holds its name too, and a new item without sizes cannot take it either.
         JsonNode f = romper();
-        ResponseEntity<JsonNode> twice = createFamily("Test Romper", "ROMQ", List.of("Small"), List.of());
+        ResponseEntity<JsonNode> twice = createFamily("Test Romper", List.of("Small"), List.of());
         assertThat(twice.getBody().get("code").asString()).isEqualTo("duplicate_product_name");
         assertThat(twice.getBody().get("existing_id").asString())
                 .isEqualTo(f.get("id").asString());
         Map<String, Object> product = new LinkedHashMap<>();
-        product.put("code", "ROMP-PLAIN");
         product.put("description", "Test Romper");
         product.put("category_id", category);
         product.put("unit_id", pieces);
@@ -641,7 +680,6 @@ class RetailVariantsIT extends IntegrationTest {
         Map<String, Object> rolls = new LinkedHashMap<>(anyway);
         rolls.remove("duplicate_reason");
         rolls.put("unit_id", api.unit("test-roll"));
-        rolls.put("base_code", "TWINR");
         assertThat(api.post("/product-families", rolls, ADMIN).getStatusCode()).isEqualTo(HttpStatus.CREATED);
     }
 
@@ -722,11 +760,11 @@ class RetailVariantsIT extends IntegrationTest {
 
     @Test
     void frRet51ASizeOrColourIsOneLineOfAtMostThirtyLetters() {
-        ResponseEntity<JsonNode> lineBreak = createFamily("Test Sock", "SOCK", List.of("S\nM"), List.of());
+        ResponseEntity<JsonNode> lineBreak = createFamily("Test Sock", List.of("S\nM"), List.of());
         assertThat(lineBreak.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(lineBreak.getBody().get("code").asString()).isEqualTo("validation_failed");
         // Spaces around a size are not part of it.
-        ResponseEntity<JsonNode> trimmed = createFamily("Test Sock", "SOCK", List.of("  Small  "), List.of());
+        ResponseEntity<JsonNode> trimmed = createFamily("Test Sock", List.of("  Small  "), List.of());
         assertThat(trimmed.getStatusCode()).as("%s", trimmed.getBody()).isEqualTo(HttpStatus.CREATED);
         assertThat(trimmed.getBody()
                         .get("variants")
@@ -827,7 +865,7 @@ class RetailVariantsIT extends IntegrationTest {
             sizes.add("S" + i);
             colours.add("C" + i);
         }
-        ResponseEntity<JsonNode> full = createFamily("Test Full Item", "FULL", sizes, colours);
+        ResponseEntity<JsonNode> full = createFamily("Test Full Item", sizes, colours);
         assertThat(full.getStatusCode()).as("%s", full.getBody()).isEqualTo(HttpStatus.CREATED);
         UUID one = plain("ONE-1", "Test One");
         ResponseEntity<JsonNode> r = api.post(
@@ -951,7 +989,7 @@ class RetailVariantsIT extends IntegrationTest {
         for (int i = 1; i <= 9; i++) {
             sizes.add("S" + i);
         }
-        ResponseEntity<JsonNode> ninety = createFamily("Test Ninety Item", "NINE", sizes, colours);
+        ResponseEntity<JsonNode> ninety = createFamily("Test Ninety Item", sizes, colours);
         assertThat(ninety.getStatusCode()).as("%s", ninety.getBody()).isEqualTo(HttpStatus.CREATED);
         UUID id = UUID.fromString(ninety.getBody().get("id").asString());
         ResponseEntity<JsonNode> r = api.post(
@@ -1062,7 +1100,7 @@ class RetailVariantsIT extends IntegrationTest {
 
         // A size with no list price at all gets the identical answer, and so does any size with the capability off:
         // adding sizes item by item never tells which items carry list prices, nor whether the lists are on.
-        ResponseEntity<JsonNode> bare = createFamily("Test Bare Item", "BARE", List.of("S"), List.of());
+        ResponseEntity<JsonNode> bare = createFamily("Test Bare Item", List.of("S"), List.of());
         assertThat(bare.getStatusCode()).as("%s", bare.getBody()).isEqualTo(HttpStatus.CREATED);
         ResponseEntity<JsonNode> none = api.post(
                 "/product-families/" + bare.getBody().get("id").asString() + "/variants",
@@ -1086,7 +1124,6 @@ class RetailVariantsIT extends IntegrationTest {
         String noProfit = perms.replace(",retail.profit.read", "");
         assertThat(noProfit).doesNotContain("retail.profit.read");
         Map<String, Object> shirt = new LinkedHashMap<>();
-        shirt.put("code", "TEE-M");
         shirt.put("description", "Test Tee");
         shirt.put("category_id", category);
         shirt.put("unit_id", pieces);
@@ -1111,7 +1148,6 @@ class RetailVariantsIT extends IntegrationTest {
         String perms = ADMIN + ",retail.pricelist.manage,retail.pricelist.use";
         // Size M sells at 30,000 (cost 20,000) with a wholesale price of 25,000.
         Map<String, Object> shirt = new LinkedHashMap<>();
-        shirt.put("code", "SHIRT-M");
         shirt.put("description", "Test Shirt");
         shirt.put("category_id", category);
         shirt.put("unit_id", pieces);
@@ -1183,7 +1219,7 @@ class RetailVariantsIT extends IntegrationTest {
             }
             assertThat(romperRow).as(path).isNotNull();
             assertThat(romperRow.get("label").asString()).isEqualTo("Test Romper");
-            assertThat(romperRow.get("code").asString()).isEqualTo("ROMP");
+            assertThat(romperRow.get("code").asString()).isEqualTo("ROMP-0001");
             assertThat(romperRow.get("sales_minor").asLong()).isEqualTo(5 * 9_000);
             assertThat(romperRow.get("qty").asString()).isEqualTo("5.000");
             JsonNode alone = null;

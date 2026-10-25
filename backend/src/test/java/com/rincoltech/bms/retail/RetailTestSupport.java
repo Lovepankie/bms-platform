@@ -145,18 +145,49 @@ public final class RetailTestSupport {
         return id(post("/units", Map.of("name", name), ADMIN));
     }
 
-    /** A product in a fresh category and unit; prices in minor units. */
+    /**
+     * A product in a fresh category and unit; prices in minor units. The app makes its code (issue #562); the test's code is
+     * then written as the owner, as the pilot importer brings an item in with the code it already had, so the tests that
+     * scan, search or report by code keep their fabricated codes.
+     */
     public UUID product(String code, long costMinor, long sellMinor) {
         UUID category = category("Test Category " + code);
         UUID unit = unit("u-" + code.toLowerCase());
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("code", code);
         body.put("description", "Test Product " + code);
         body.put("category_id", category);
         body.put("unit_id", unit);
         body.put("cost_minor", costMinor);
         body.put("sell_minor", sellMinor);
-        return id(post("/products", body, ADMIN));
+        UUID id = id(post("/products", body, ADMIN));
+        existingCode(id, code);
+        return id;
+    }
+
+    /**
+     * POST /products for a fixture whose body names a {@code code}: the app makes the code (issue #562), so the item is
+     * added without it and then given the fixture's code as an existing item's (see {@link #existingCode}). Answers as the
+     * add does, 201 with the item as it now reads, or the refusal unchanged.
+     */
+    public ResponseEntity<JsonNode> postItem(Map<String, Object> body, String permissions) {
+        Map<String, Object> made = new LinkedHashMap<>(body);
+        Object code = made.remove("code");
+        ResponseEntity<JsonNode> added = post("/products", made, permissions);
+        if (code == null || added.getStatusCode().value() != 201) {
+            return added;
+        }
+        UUID id = id(added);
+        existingCode(id, code.toString().strip());
+        ResponseEntity<JsonNode> now = get("/products/" + id, ADMIN);
+        return ResponseEntity.status(201).headers(now.getHeaders()).body(now.getBody());
+    }
+
+    /** Gives an item the code it held before the app made codes (issue #562): an existing item keeps its code. */
+    public void existingCode(UUID productId, String code) {
+        TestDatabase.owner()
+                .sql("UPDATE retail_products SET code = ? WHERE id = ?")
+                .params(code, productId)
+                .update();
     }
 
     public static UUID id(ResponseEntity<JsonNode> response) {

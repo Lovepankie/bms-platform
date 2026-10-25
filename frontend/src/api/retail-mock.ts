@@ -418,14 +418,14 @@ export function createMockRetail(): RetailApi {
     const f = families.get(familyId) ?? refuse(404, 'not_found', 'That could not be found.');
     const existing = new Set([...products.values()].filter((p) => p.familyId === familyId).map((p) => variantKey(p.size, p.colour)));
     const plan = lines && lines.length > 0
-      ? lines.map((l, i) => ({ size: cleanOption(l.size), colour: cleanOption(l.colour), code: (l.code ?? '').trim() || planVariants({ baseCode: f.baseCode, sizes: [l.size ?? ''], colours: [l.colour ?? ''], costMinor, sellMinor })[0]?.code || f.baseCode, costMinor: l.cost_minor ?? costMinor, sellMinor: l.sell_minor ?? sellMinor, position: nextPosition + i }))
+      ? lines.map((l, i) => ({ size: cleanOption(l.size), colour: cleanOption(l.colour), code: planVariants({ baseCode: f.baseCode, sizes: [l.size ?? ''], colours: [l.colour ?? ''], costMinor, sellMinor })[0]?.code || f.baseCode, costMinor: l.cost_minor ?? costMinor, sellMinor: l.sell_minor ?? sellMinor, position: nextPosition + i }))
       : planVariants({ baseCode: f.baseCode, sizes, colours, costMinor, sellMinor, existing, nextPosition });
     if (plan.length > 100) refuse(422, 'too_many_variants', `That makes ${plan.length} sizes and colours. An item has at most 100.`);
     // An item never has more than 100, counting those it has (issue #395).
     if (existing.size + plan.length > 100) refuse(422, 'too_many_variants', `The item has ${existing.size} sizes and colours and this adds ${plan.length}. An item has at most 100; add fewer.`);
     for (const v of plan) {
       if (existing.has(variantKey(v.size, v.colour)) && lines && lines.length > 0) refuse(409, 'duplicate_variant', `The item has ${variantLabel(v.size, v.colour)} already. Each one is listed once.`);
-      if ([...products.values()].some((x) => x.code.toLowerCase() === v.code.toLowerCase())) refuse(409, 'duplicate_product_code', `A product with the code ${v.code} exists. Give ${variantLabel(v.size, v.colour)} another code.`);
+      if ([...products.values()].some((x) => x.code.toLowerCase() === v.code.toLowerCase())) refuse(409, 'duplicate_product_code', `A product with the code ${v.code} exists. Spell the size or colour of ${variantLabel(v.size, v.colour)} differently.`);
       const p: MockProduct = { id: nextId('b'), code: v.code, description: variantDescription(f.name, v.size, v.colour), category: f.category, unit: f.unit, costMinor: v.costMinor, sellMinor: v.sellMinor, active: true, version: 1, familyId, size: v.size, colour: v.colour, position: v.position };
       products.set(p.id, p);
       existing.add(variantKey(v.size, v.colour));
@@ -509,20 +509,15 @@ export function createMockRetail(): RetailApi {
 
     createProduct: (body) =>
       run(() => {
-        const typed = (body.code ?? '').trim();
-        if (typed && codeTaken(typed)) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
+        // Issue #562: the app makes every new item's code; a typed one is refused, as the server does.
+        if ((body.code ?? '').trim()) refuse(400, 'item_code_made_by_app', 'The app makes the item code from the category. Leave the code out.');
         const category = cats.find((c) => c.id === body.category_id);
         const unit = unitRows.find((u) => u.id === body.unit_id);
         if (!category || !unit) return refuse(422, 'validation_failed', 'Choose a category and a unit.');
         if (!category.active || !unit.active) refuse(422, 'inactive_category', 'This category or unit is switched off. Choose another one.');
         sameNameCheck(body.description ?? '', unit.name, undefined, body.duplicate_reason);
-        // Issue #493: without a typed code the category gives its next free number.
-        let code = typed;
-        if (!code) {
-          const [made, n] = freeCode(category);
-          code = made;
-          category.next = n + 1;
-        }
+        const [code, n] = freeCode(category);
+        category.next = n + 1;
         const p: MockProduct = { id: nextId('b'), code, description: (body.description ?? '').trim(), category: category.name, unit: unit.name, costMinor: body.cost_minor ?? 0, sellMinor: body.sell_minor ?? 0, active: true, version: 1 };
         products.set(p.id, p);
         history.set(p.id, [{ id: nextId('h'), at: new Date().toISOString(), source: 'initial', new_sell_minor: p.sellMinor, currency: 'UGX', ...(profitAccess ? { new_cost_minor: p.costMinor } : {}) }]);
@@ -533,6 +528,7 @@ export function createMockRetail(): RetailApi {
       run(() => {
         const p = find(id);
         stale(p, version);
+        if (body.code !== undefined && body.code.trim() !== '' && body.code.trim().toLowerCase() !== p.code.toLowerCase()) refuse(400, 'item_code_made_by_app', 'An item keeps the code the app gave it. The code cannot be changed.');
         const fam = p.familyId ? families.get(p.familyId) : undefined;
         if (!fam && (body.variant_size !== undefined || body.variant_colour !== undefined)) refuse(422, 'not_a_variant', 'This item has no sizes or colours. Give it sizes and colours first, then change one of them.');
         if (fam) {
@@ -541,17 +537,15 @@ export function createMockRetail(): RetailApi {
           const colour = body.variant_colour === undefined ? p.colour : cleanOption(body.variant_colour);
           if (!size && !colour) refuse(422, 'validation_failed', 'Keep a size, a colour or both.');
           if ([...products.values()].some((x) => x.id !== id && x.familyId === fam.id && variantKey(x.size, x.colour) === variantKey(size, colour))) refuse(409, 'duplicate_variant', `The item has ${variantLabel(size, colour)} already. Each one is listed once.`);
-          Object.assign(p, { size, colour, description: variantDescription(fam.name, size, colour), code: body.code === undefined ? p.code : body.code.trim(), active: body.active ?? p.active, version: (p.version ?? 1) + 1 });
+          Object.assign(p, { size, colour, description: variantDescription(fam.name, size, colour), active: body.active ?? p.active, version: (p.version ?? 1) + 1 });
           return asProduct(p);
         }
-        const code = body.code === undefined ? p.code : body.code.trim();
-        if ([...products.values()].some((x) => x.id !== id && x.code.toLowerCase() === code.toLowerCase())) refuse(409, 'duplicate_product_code', 'A product with this code exists (codes ignore case).');
         const category = body.category_id ? cats.find((c) => c.id === body.category_id) : undefined;
         const unit = body.unit_id ? unitRows.find((u) => u.id === body.unit_id) : undefined;
         if (category && !category.active && category.name !== p.category) refuse(422, 'inactive_category', 'This category is switched off. Choose another one.');
         if (body.description !== undefined || unit) sameNameCheck(body.description ?? p.description, unit?.name ?? p.unit, id, body.duplicate_reason);
         Object.assign(p, {
-          code, description: body.description === undefined ? p.description : body.description.trim(),
+          description: body.description === undefined ? p.description : body.description.trim(),
           category: category?.name ?? p.category, unit: unit?.name ?? p.unit, active: body.active ?? p.active, version: (p.version ?? 1) + 1,
         });
         return asProduct(p);
@@ -580,8 +574,12 @@ export function createMockRetail(): RetailApi {
         const category = cats.find((c) => c.id === body.category_id);
         const unit = unitRows.find((u) => u.id === body.unit_id);
         if (!category || !unit) return refuse(422, 'validation_failed', 'Choose a category and a unit.');
+        // Issue #562: the item's codes start with the category's next code, made by the app.
+        if ((body.base_code ?? '').trim() || (body.variants ?? []).some((v) => (v.code ?? '').trim())) refuse(400, 'item_code_made_by_app', 'The app makes the item code from the category. Leave the code out.');
+        const [baseCode, n] = freeCode(category);
+        category.next = n + 1;
         const id = nextId('f');
-        families.set(id, { id, name: (body.name ?? '').trim(), baseCode: (body.base_code ?? '').trim(), category: category.name, unit: unit.name, version: 1, createdAt: new Date().toISOString() });
+        families.set(id, { id, name: (body.name ?? '').trim(), baseCode, category: category.name, unit: unit.name, version: 1, createdAt: new Date().toISOString() });
         addPlanned(id, body.sizes ?? [], body.colours ?? [], body.variants, body.cost_minor ?? 0, body.sell_minor ?? 0, 0);
         return familyOf(id);
       }),
@@ -765,12 +763,12 @@ export function createMockRetail(): RetailApi {
         }),
       ),
 
-    importProducts: (csv, dryRun) =>
+    importProducts: (csv, dryRun, makeCodes = false) =>
       run(() => {
         const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== '');
         const sep = lines[0]?.includes('\t') ? '\t' : ',';
         const head = (lines[0] ?? '').split(sep).map((h) => h.trim().toLowerCase().replace(/[\s-]+/g, '_'));
-        for (const need of ['code', 'description', 'category', 'unit', 'sell_price']) {
+        for (const need of [...(makeCodes ? [] : ['code']), 'description', 'category', 'unit', 'sell_price']) {
           if (!head.includes(need)) refuse(422, 'validation_failed', `The file needs a column called ${need.replace('_', ' ')}.`);
         }
         if (head.includes('cost_price') && !profitAccess) refuse(422, 'cost_not_allowed', 'The buying price column needs permission to see buying prices. Take that column out of the file and try again.');
@@ -778,9 +776,14 @@ export function createMockRetail(): RetailApi {
         const rows = lines.slice(1).map((l, i) => {
           const c = l.split(sep).map((x) => x.trim());
           const get = (n: string) => c[head.indexOf(n)] ?? '';
-          const code = get('code');
+          // Owner decision D45 (issue #562): with Let the app make the codes, the file's codes are not read.
+          const code = makeCodes ? '' : get('code');
           const base = { line: i + 2, code, description: get('description') };
           if (!/^\d+$/.test(get('sell_price').replace(/,/g, ''))) return { ...base, outcome: 'error', message: 'The selling price must be a whole number, for example 12000.' };
+          if (makeCodes) {
+            const typed = head.includes('code') ? get('code') : '';
+            return { ...base, outcome: 'added', message: `${dryRun ? 'Would be added.' : 'Added.'} The app gives it the next code of ${get('category')}.${typed ? ` The code ${typed} in the file is not used.` : ''}` };
+          }
           if ([...products.values()].some((p) => p.code.toLowerCase() === code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'An item with this code exists already.' };
           if (seen.has(code.toLowerCase())) return { ...base, outcome: 'skipped', message: 'This code is repeated in the file; the first row is used.' };
           seen.add(code.toLowerCase());
@@ -789,12 +792,21 @@ export function createMockRetail(): RetailApi {
         const count = (o: string) => rows.filter((r) => r.outcome === o).length;
         if (!dryRun && count('error') > 0) refuse(422, 'import_has_errors', `${count('error')} rows have a problem. Nothing was added. Run the check to see which rows, fix them and try again.`);
         if (!dryRun) {
-          lines.slice(1).forEach((l) => {
+          lines.slice(1).forEach((l, i) => {
             const c = l.split(sep).map((x) => x.trim());
             const get = (n: string) => c[head.indexOf(n)] ?? '';
-            if ([...products.values()].some((p) => p.code.toLowerCase() === get('code').toLowerCase())) return;
+            if (!makeCodes && [...products.values()].some((p) => p.code.toLowerCase() === get('code').toLowerCase())) return;
+            const category = cats.find((x) => x.name.toLowerCase() === get('category').toLowerCase()) ?? cats[0];
+            let code = get('code');
+            if (makeCodes && category) {
+              const [made, n] = freeCode(category);
+              category.next = n + 1;
+              code = made;
+              const row = rows[i];
+              if (row) row.code = made;
+            }
             const id = nextId('b');
-            products.set(id, { id, code: get('code'), description: get('description'), category: get('category'), unit: get('unit'), costMinor: 0, sellMinor: Number(get('sell_price').replace(/,/g, '')), active: true, version: 1 });
+            products.set(id, { id, code, description: get('description'), category: get('category'), unit: get('unit'), costMinor: 0, sellMinor: Number(get('sell_price').replace(/,/g, '')), active: true, version: 1 });
           });
         }
         return { dry_run: dryRun, rows_read: rows.length, added: count('added'), skipped: count('skipped'), errors: count('error'), categories_created: [], units_created: [], rows };

@@ -65,7 +65,7 @@ class SearchRetailIT extends IntegrationTest {
         body.put("unit_id", api.unit("u-" + code.toLowerCase()));
         body.put("cost_minor", 100);
         body.put("sell_minor", 200);
-        return RetailTestSupport.id(api.post("/products", body, RetailTestSupport.ADMIN));
+        return RetailTestSupport.id(api.postItem(body, RetailTestSupport.ADMIN));
     }
 
     URI uri(String path, String param, String q, Integer limit, String cursor) {

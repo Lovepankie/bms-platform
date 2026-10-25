@@ -6,7 +6,7 @@ import type { Category, Customer, PriceChange, Product } from '../../../api/reta
 import { createMockRetail, mockMe, setMockProfitAccess } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { catalogueLinksFor } from './catalogue';
-import { ImportReport, NOT_UTF8, readCsvText } from './catalogue-import';
+import { ImportPage, ImportReport, NOT_UTF8, readCsvText } from './catalogue-import';
 import { NamedRow, usedText } from './catalogue-lists';
 import { PersonRow } from './catalogue-people';
 import { countableStock } from './stocktake';
@@ -106,7 +106,9 @@ describe('items and prices', () => {
 
   it('edits the item fields but sends the user to the price form for prices', () => {
     const html = page('admin', <ProductForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />);
-    expect(html).toContain('value="P003"');
+    // Issue #562: the code is shown, never an input.
+    expect(html).toContain('Item code: <strong>P003</strong>. It never changes.');
+    expect(html).not.toMatch(/<input[^>]*id="item-code"/);
     expect(html).toContain('Change price');
     expect(html).not.toContain('for="item-sell"');
   });
@@ -147,15 +149,17 @@ describe('items and prices', () => {
 });
 
 describe('the mock catalogue (the server rules the screens rely on)', () => {
-  it('refuses a duplicate code ignoring case, and a stale version', async () => {
+  it('refuses a typed code on an add or an edit, as the server does, and a stale version', async () => {
     setMockProfitAccess(true);
     const api = createMockRetail();
     const cats = await api.listCategories();
     const units = await api.listUnits();
-    const body = { code: 'p003 ', description: 'Test copy', category_id: cats[0]?.id ?? '', unit_id: units[0]?.id ?? '', sell_minor: 10, cost_minor: 1 };
-    await expect(api.createProduct(body)).rejects.toMatchObject({ status: 409, code: 'duplicate_product_code' });
-    const made = await api.createProduct({ ...body, code: 'NEW-1' });
+    const body = { code: 'NEW-1', description: 'Test copy', category_id: cats[0]?.id ?? '', unit_id: units[0]?.id ?? '', sell_minor: 10, cost_minor: 1 };
+    await expect(api.createProduct(body)).rejects.toMatchObject({ status: 400, code: 'item_code_made_by_app' });
+    const made = await api.createProduct({ ...body, code: undefined });
+    expect(made.code).toMatch(/^[A-Z]{2,4}-\d{4}$/);
     expect(made.version).toBe(1);
+    await expect(api.updateProduct(made.id ?? '', 1, { code: 'MY-OWN' })).rejects.toMatchObject({ status: 400, code: 'item_code_made_by_app' });
     const edited = await api.updateProduct(made.id ?? '', 1, { description: 'Test renamed' });
     expect(edited.version).toBe(2);
     await expect(api.updateProduct(made.id ?? '', 1, { description: 'Again' })).rejects.toMatchObject({ status: 412 });
@@ -279,6 +283,19 @@ describe('importing items from a file', () => {
     expect([again.added, again.skipped]).toEqual([0, 3]);
     expect((await api.listCatalogue({ query: 'IMP-' })).items).toHaveLength(2);
     expect(renderToString(<ImportReport result={first} />)).toContain('What was done');
+  });
+
+  it('keeps the file\'s codes by default, and makes every code with Let the app make the codes (owner decision D45)', async () => {
+    setMockProfitAccess(true);
+    const clean = csv.replace('abc', '900');
+    const kept = await createMockRetail().importProducts(clean, false);
+    expect(kept.rows?.filter((r) => r.outcome === 'added').map((r) => r.code)).toEqual(['IMP-1', 'IMP-2']);
+    const made = await createMockRetail().importProducts(clean, true, true);
+    expect(made.added).toBe(3);
+    expect(made.rows?.[1]?.message).toContain('The code P003 in the file is not used.');
+    const html = page('admin', <ImportPage />, [...(mockMe('admin').permissions ?? []), 'core.settings.manage']);
+    expect(html).toMatch(/<input id="import-make-codes" type="checkbox"(?![^>]*checked)[^>]*\/> Let the app make the codes/);
+    expect(html).toContain('Without the tick, a code in your file is kept.');
   });
 
   it('strips a byte order mark, accepts CRLF and warns when the file is not UTF-8', async () => {

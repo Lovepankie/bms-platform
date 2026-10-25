@@ -25,7 +25,7 @@ vi.mock('../../../api/retail', async (original) => {
     ...real,
     retail: {
       ...real.retail,
-      listCategories: () => Promise.resolve([{ id: 'c1', name: 'Baby wear', active: true, product_count: 0, version: 1 }]),
+      listCategories: () => Promise.resolve([{ id: 'c1', name: 'Baby wear', active: true, product_count: 0, version: 1, code_prefix: 'BBW', next_code: 'BBW-0007' }]),
       listUnits: () => Promise.resolve([{ id: 'u1', name: 'piece', active: true, product_count: 0, version: 1 }]),
       createFamily: (...a: unknown[]) => createFamily(...a),
       joinFamily: (...a: unknown[]) => joinFamily(...a),
@@ -70,34 +70,41 @@ describe('an item with sizes and colours', () => {
     expect(buying.compareDocumentPosition(selling) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('lists every combination with its code and sends the list the owner checked', async () => {
+  it('lists every combination with the code the app makes and sends the list the owner checked, without codes', async () => {
     createFamily.mockResolvedValue({ id: 'f1', name: 'Test romper', variants: [] });
     screenOf(<NewFamilyPage />);
     fireEvent.change(screen.getByLabelText('What is it called?'), { target: { value: 'Test romper' } });
-    fireEvent.change(screen.getByLabelText('Short code'), { target: { value: 'ROMP' } });
+    // Issue #562: no code is asked; the codes start with the category's next code.
+    expect(screen.queryByLabelText(/code/i)).toBeNull();
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m' } });
+    expect(document.getElementById('variant-0-code')?.textContent).toBe('Item code: made by the app once you choose the category');
     fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
     fireEvent.change(screen.getByLabelText('Counted in'), { target: { value: 'u1' } });
-    fireEvent.change(screen.getByLabelText(/^Selling price/), { target: { value: '9000' } });
+    fireEvent.change(document.getElementById('sizes-item-sell') as HTMLInputElement, { target: { value: '9000' } });
     fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m, 3-6m' } });
     fireEvent.change(screen.getByLabelText('Colours or prints'), { target: { value: 'Blue, Pink' } });
     expect(screen.getByText('4 to be made')).toBeTruthy();
-    expect((screen.getByLabelText('Code of 3-6m, Pink') as HTMLInputElement).value).toBe('ROMP-36M-PINK');
+    expect(document.getElementById('variant-3-code')?.textContent).toBe('Item code: BBW-0007-36M-PINK, made by the app');
+    expect(screen.queryByLabelText(/^Code of/)).toBeNull();
     // A bigger size costs more: its price is changed in the list.
     fireEvent.change(screen.getByLabelText('Selling price of 3-6m, Pink'), { target: { value: '11000' } });
     fireEvent.click(screen.getByRole('button', { name: 'Make these 4' }));
     await waitFor(() => expect(createFamily).toHaveBeenCalledTimes(1));
-    const body = createFamily.mock.calls[0]?.[0] as { variants: { code: string; sell_minor: number }[] };
-    expect(body.variants.map((v) => v.code)).toEqual(['ROMP-03M-BLUE', 'ROMP-03M-PINK', 'ROMP-36M-BLUE', 'ROMP-36M-PINK']);
+    const body = createFamily.mock.calls[0]?.[0] as { base_code?: string; variants: { code?: string; size: string; sell_minor: number }[] };
+    expect(body).not.toHaveProperty('base_code');
+    expect(body.variants.map((v) => v.size)).toEqual(['0-3m', '0-3m', '3-6m', '3-6m']);
+    expect(body.variants.every((v) => !('code' in v))).toBe(true);
     expect(body.variants[3]?.sell_minor).toBe(11000);
     expect(body.variants[0]?.sell_minor).toBe(9000);
   });
 
-  it('says in plain words when two would share a code', () => {
+  it('says in plain words when two would share a code', async () => {
     screenOf(<NewFamilyPage />);
-    fireEvent.change(screen.getByLabelText('Short code'), { target: { value: 'ROMP' } });
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
     fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m, 03m' } });
-    expect(screen.getByRole('note').textContent).toContain('Two of them would have the code ROMP-03M');
+    expect(screen.getByRole('note').textContent).toContain('Two of them would have the code BBW-0007-03M. Spell one of the sizes or colours differently');
   });
 
   it('joins items into an item that exists, sending only the items and not a name', async () => {

@@ -12,8 +12,9 @@ import { StaffContext } from '../context';
 const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
 
 // Items added inside a category (issue #493, owner decisions D14 and D16): the category page lists its items and adds one with the
-// category fixed (no dropdown), the Item code may be left empty for the category's next code, the Items form asks for the
-// category first, and the Categories list shows each code start and opens the category. Fabricated items.
+// category fixed (no dropdown), the Items form asks for the category first, and the Categories list shows each code start and
+// opens the category. Issue #562: the app always makes the Item code; every form shows it as text, never an input, and sends
+// none. Fabricated items.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -21,6 +22,7 @@ const createProduct = vi.fn();
 const updateCategory = vi.fn();
 const listCatalogue = vi.fn();
 const createCategory = vi.fn();
+const updateProduct = vi.fn();
 const bulbs = { id: 'c1', name: 'Bulbs', active: true, product_count: 1, version: 3, code_prefix: 'BLB', next_code: 'BLB-0002' };
 const lamps = { id: 'c2', name: 'Lamps', active: true, product_count: 0, version: 1, code_prefix: 'LMP', next_code: 'LMP-0001' };
 const bulb = { id: 'p1', code: 'BLB-0001', description: 'Test bulb 9W', category_id: 'c1', category: 'Bulbs', unit_id: 'u1', unit: 'piece', sell_minor: 5000, active: true, version: 1 };
@@ -37,6 +39,7 @@ vi.mock('../../../api/retail', async (original) => {
       getProduct: () => Promise.resolve(bulb),
       similarProducts: () => Promise.resolve({ exact: [], similar: [] }),
       createProduct: (...a: unknown[]) => createProduct(...a),
+      updateProduct: (...a: unknown[]) => updateProduct(...a),
       updateCategory: (...a: unknown[]) => updateCategory(...a),
       createCategory: (...a: unknown[]) => createCategory(...a),
       suggestCategoryPrefix: () => Promise.resolve('TV'),
@@ -56,6 +59,7 @@ afterEach(() => {
   updateCategory.mockReset();
   listCatalogue.mockReset();
   createCategory.mockReset();
+  updateProduct.mockReset();
 });
 
 const admin = mockMe('admin');
@@ -76,12 +80,12 @@ describe('the category page', () => {
   it('lists the items of the category and says how its codes are made', async () => {
     listCatalogue.mockResolvedValue({ items: [bulb] });
     screenOf(<CategoryPage categoryId="c1" />);
-    expect(await screen.findByText('Item codes here start with BLB. The next item added without a code gets BLB-0002.')).toBeTruthy();
+    expect(await screen.findByText('Item codes here start with BLB. The app gives the next item added BLB-0002.')).toBeTruthy();
     expect(await screen.findByText('Test bulb 9W')).toBeTruthy();
     expect(listCatalogue).toHaveBeenCalledWith(expect.objectContaining({ categoryId: 'c1' }));
   });
 
-  it('adds an item with the category fixed: no category dropdown, and an empty Item code is left to the app', async () => {
+  it('adds an item with the category fixed: no category dropdown, and the Item code shown as made by the app', async () => {
     listCatalogue.mockResolvedValue({ items: [] });
     createProduct.mockResolvedValue({ ...bulb, id: 'p2', code: 'BLB-0002', description: 'Test bulb 12W' });
     screenOf(<CategoryPage categoryId="c1" />);
@@ -90,7 +94,9 @@ describe('the category page', () => {
     expect(screen.getByRole('heading', { name: 'Add an item to Bulbs' })).toBeTruthy();
     expect(screen.queryByLabelText(/^Category/)).toBeNull();
     expect(screen.getByText('Bulbs', { selector: 'strong' })).toBeTruthy();
-    expect(screen.getByText('Leave it empty and the app gives it the next code of Bulbs, BLB-0002. Or type your own.')).toBeTruthy();
+    expect(screen.getByTestId('item-code').textContent).toBe('Item code: BLB-0002, made by the app');
+    expect(screen.queryByLabelText(/Item code/)).toBeNull();
+    expect(document.querySelector('input#item-code')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Test bulb 12W' } });
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1));
     fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
@@ -101,22 +107,6 @@ describe('the category page', () => {
     expect(body).not.toHaveProperty('code');
     expect(body).toMatchObject({ category_id: 'c1', description: 'Test bulb 12W', unit_id: 'u1' });
     expect((await screen.findAllByText('Added the item "Test bulb 12W" (BLB-0002).')).length).toBeGreaterThan(0);
-  });
-
-  it('keeps a typed Item code', async () => {
-    listCatalogue.mockResolvedValue({ items: [] });
-    createProduct.mockResolvedValue({ ...bulb, id: 'p3', code: 'OWN-1' });
-    screenOf(<CategoryPage categoryId="c1" />);
-    await screen.findByText(/^Item codes here start/);
-    fireEvent.click(screen.getByRole('button', { name: 'Add an item' }));
-    fireEvent.change(screen.getByLabelText('Item code'), { target: { value: ' OWN-1 ' } });
-    fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Test bulb 15W' } });
-    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1));
-    fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
-    fireEvent.change(screen.getByLabelText(/^Selling price/), { target: { value: '6000' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Add item/ }));
-    await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
-    expect(createProduct.mock.calls[0]?.[0]).toMatchObject({ code: 'OWN-1' });
   });
 
   it('changes the code start under If-Match, and says items made before keep their codes', async () => {
@@ -154,24 +144,32 @@ describe('the item form outside a category', () => {
     expect(category.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(category.getAttribute('aria-required')).toBe('true');
     expect(description.getAttribute('aria-required')).toBe('true');
-    expect(screen.getByLabelText('Item code').getAttribute('aria-required')).toBeNull();
+    // Issue #562: the Item code is text, not a field, until a category gives it.
+    expect(screen.queryByLabelText(/Item code/)).toBeNull();
+    expect(screen.getByTestId('item-code').textContent).toBe('Item code: made by the app once you choose the category');
     const add = screen.getByRole('button', { name: /^Add item/ }) as HTMLButtonElement;
     expect(ready(add)).toBe(true);
     fireEvent.click(add);
     expect(document.activeElement).toBe(category);
     expect(await screen.findByText('Choose a category.')).toBeTruthy();
     expect(createProduct).not.toHaveBeenCalled();
-    // Once a category is chosen the hint names its next code.
+    // Once a category is chosen the line names its next code.
     fireEvent.change(category, { target: { value: 'c2' } });
-    expect(screen.getByText('Leave it empty and the app gives it the next code of Lamps, LMP-0001. Or type your own.')).toBeTruthy();
+    expect(screen.getByTestId('item-code').textContent).toBe('Item code: LMP-0001, made by the app');
   });
 
   it('on an item\'s own page lets it move to another category and says it keeps its code', async () => {
+    updateProduct.mockResolvedValue({ ...bulb, category_id: 'c2', category: 'Lamps', version: 2 });
     screenOf(<ProductForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />);
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
     fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: 'c2' } });
     expect(screen.getByText('Moving it from Bulbs keeps its item code.')).toBeTruthy();
-    expect((screen.getByLabelText(/^Item code/) as HTMLInputElement).value).toBe('BLB-0001');
+    // Issue #562: the code is shown read-only and never sent.
+    expect(screen.getByTestId('item-code').textContent).toBe('Item code: BLB-0001. It never changes.');
+    expect(screen.queryByLabelText(/Item code/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(updateProduct).toHaveBeenCalledTimes(1));
+    expect(updateProduct.mock.calls[0]?.[2]).not.toHaveProperty('code');
   });
 });
 
@@ -184,17 +182,18 @@ describe('the categories list', () => {
     expect(open.getAttribute('href')).toBe('/staff/retail/catalogue/categories/c1');
   });
 
-  it('suggests a code start from the name and sends a typed one', async () => {
+  it('shows the code start the app makes from the name and asks for none', async () => {
     createCategory.mockResolvedValue({ id: 'c3', name: 'TVs', active: true, product_count: 0, version: 1, code_prefix: 'TV', next_code: 'TV-0001' });
     screenOf(<CategoriesPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add a category' }));
     const name = screen.getByLabelText('Name of the new category');
     fireEvent.change(name, { target: { value: 'TVs' } });
     fireEvent.blur(name);
-    expect(await screen.findByText('Leave it empty to use TV, so items get codes like TV-0001. Or type 2 to 4 letters.')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText(/^Code start/), { target: { value: 'tvs' } });
+    await waitFor(() => expect(screen.getByTestId('new-category-prefix').textContent)
+      .toBe("Item codes here will start with TV, like TV-0001, made by the app. You can change the letters on the category's page."));
+    expect(screen.queryByLabelText(/Code start/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
-    await waitFor(() => expect(createCategory).toHaveBeenCalledWith('TVs', 'tvs'));
+    await waitFor(() => expect(createCategory).toHaveBeenCalledWith('TVs'));
     expect((await screen.findAllByText('Added the category "TVs". Its item codes start with TV.')).length).toBeGreaterThan(0);
   });
 });

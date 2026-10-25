@@ -215,13 +215,14 @@ describe('design guard, the rules the kit holds every screen to', () => {
     expect(rule('.list-row')).toMatch(/min-height: 64px/);
   });
 
-  // Rules 10 and 12 on the inline Add an item of Buy stock and Count stock (issue #505): every field is the kit's Field, each one
-  // but the app-filled Item code is required (red asterisk, aria-required), the form starts with the needed line, and its
-  // controls are plain buttons and fields, which buttons.css and forms.css keep at --tap, 48px.
-  it('builds the inline Add an item from Field, with every field but Item code required and 48px controls', () => {
+  // Rules 10 and 12 on the inline Add an item of Buy stock and Count stock (issue #505): every field is the kit's Field and
+  // required (red asterisk, aria-required), the form starts with the needed line, and its controls are plain buttons and fields,
+  // which buttons.css and forms.css keep at --tap, 48px. Issue #562: the Item code is text the app makes, never a field.
+  it('builds the inline Add an item from Field, every field required, the Item code as text and 48px controls', () => {
     const form = code('areas/staff/retail/new-item-here.tsx');
     const fields = [...form.matchAll(/<Field\b([\s\S]*?)\n\s*\/>/g)].map(([, props]) => props as string);
-    expect(fields.length).toBe(7);
+    expect(fields.length).toBe(6);
+    expect(form).toContain('<ItemCodeLine id={`${id}-code`}');
     expect(fields.filter((props) => /\n\s*required\n/.test(props)).map((props) => props.match(/id=\{`\$\{id\}-(\w+)`\}/)?.[1]))
       .toEqual(['category', 'description', 'unit', 'cost', 'sell', 'qty']);
     expect(form).toContain('<FieldsNeededNote />');

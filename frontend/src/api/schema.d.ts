@@ -8425,8 +8425,11 @@ export interface components {
         };
         /** @description Issue #384: an item with sizes and colours. Without variants every combination of sizes and colours is made, sizes in the order given; with variants exactly those are made */
         CreateRetailFamilyRequest: {
-            /** @description What every variant's code starts with, as ROMP; unique codes ignore case */
-            base_code: string;
+            /**
+             * @deprecated
+             * @description Leave it out: every variant's code starts with the category's next code, as BLB-0007 (issue #562). One that is not blank is refused with 400 item_code_made_by_app
+             */
+            base_code?: string;
             /** Format: uuid */
             category_id: string;
             colours?: string[];
@@ -8452,7 +8455,10 @@ export interface components {
         CreateRetailProductRequest: {
             /** Format: uuid */
             category_id: string;
-            /** @description Unique ignoring case and surrounding spaces. Left out or blank, the app gives the category's next code, such as BLB-0001 (issue #493) */
+            /**
+             * @deprecated
+             * @description Leave it out: the app always gives the category's next code, such as BLB-0001 (issue #562, ADR-081 as amended). A code that is not blank is refused with 400 item_code_made_by_app
+             */
             code?: string;
             /** Format: int64 */
             cost_minor: number;
@@ -13556,7 +13562,10 @@ export interface components {
         };
         /** @description Issue #384: items kept apart until now (one per size) become the sizes and colours of one item. Each keeps its id, code, prices, stock and history; its name becomes the item's name with its size and colour, its category the item's. They must share one unit and have no sizes yet. Joining an item that exists (POST /product-families/{id}/join) takes only items: name, base_code, category_id and duplicate_reason are refused with 422 there, and the item may not pass 100 sizes and colours. A product's reason for a name in use is cleared by a join and kept in the audit trail */
         RetailJoinRequest: {
-            /** @description What later variant codes start with; by default the first item's code */
+            /**
+             * @deprecated
+             * @description Leave it out: later variant codes start with the first item's code (issue #562). One that is not blank is refused with 400 item_code_made_by_app
+             */
             base_code?: string;
             /**
              * Format: uuid
@@ -17666,7 +17675,10 @@ export interface components {
         };
         /** @description One size and colour to make: a size, a colour or both; the code and prices default from the item */
         RetailVariantLine: {
-            /** @description The variant's own code; by default the base code, the size and the colour in capitals, as ROMP-03M-BLUE */
+            /**
+             * @deprecated
+             * @description Leave it out: the app makes the code from the item's base code, the size and the colour in capitals, as BLB-0007-03M-BLUE (issue #562). One that is not blank is refused with 400 item_code_made_by_app
+             */
             code?: string;
             /** @description A colour or a print */
             colour?: string;
@@ -18909,6 +18921,10 @@ export interface components {
             active?: boolean;
             /** Format: uuid */
             category_id?: string;
+            /**
+             * @deprecated
+             * @description Leave it out: an item keeps the code the app gave it (issue #562). A blank code, or the item's own code in any case, is no change; any other is refused with 400 item_code_made_by_app
+             */
             code?: string;
             description?: string;
             /** @description Issue #352: only an administrator (core.settings.manage) may add or rename a product to a name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product. Without it that is refused with 422 duplicate_product_name. */
@@ -28501,6 +28517,8 @@ export interface operations {
         parameters: {
             query?: {
                 dry_run?: boolean;
+                /** @description Let the app make the codes (owner decision D45, issue #562): every row gets its category's next code and the file's code column is not read. Off by default: a row's code is kept and a blank one is made */
+                make_codes?: boolean;
             };
             header?: never;
             path?: never;

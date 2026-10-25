@@ -34,14 +34,15 @@ export const productsPage: Tour = {
   id: 'page-products',
   // Version 5 says what an item is counted in, as the item form now does (issue #547); version 6 that the category comes first and
   // the item code is made from it (issue #493).
-  version: 6,
+  // Version 7: the app always makes the item code, never typed (issue #562).
+  version: 7,
   title: 'This page: items',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products',
   steps: [
-    step({ id: 'add', target: 'product-add', title: 'Add an item', body: 'Tap here to add something you sell. Pick the category first, then type the name, what it is counted in and the price. Leave Item code empty and the app gives it the next code of the category, such as BLB-0001. Adding from the category\'s own page saves picking the category.' }),
-    step({ id: 'sizes', target: 'product-add-sizes', title: 'Sizes and colours', body: 'Sell one design in several sizes or prints? Tap here, type the sizes and the colours once, and each one gets its own code, price and stock.' }),
+    step({ id: 'add', target: 'product-add', title: 'Add an item', body: 'Tap here to add something you sell. Pick the category first, then type the name, what it is counted in and the price. The app gives it the next code of the category, such as BLB-0001: you never type one. Adding from the category\'s own page saves picking the category.' }),
+    step({ id: 'sizes', target: 'product-add-sizes', title: 'Sizes and colours', body: 'Sell one design in several sizes or prints? Tap here and type the sizes and the colours once. Each one gets its own price, stock and item code.' }),
     step({ id: 'join', target: 'product-join-sizes', title: 'One item per size?', body: 'If you typed each size as its own item, tap here to join them. Each keeps its stock and history.' }),
     step({ id: 'search', target: 'product-search', title: 'Find an item', body: 'Type a name, a code or a category. The list narrows as you type.' }),
     step({ id: 'filters', target: 'product-filters', title: 'Narrow the list', body: 'Pick a category, or choose Switched off to see items you no longer sell.' }),
@@ -56,13 +57,14 @@ export const productsPage: Tour = {
 export const sizesNewPage: Tour = {
   id: 'page-sizes-new',
   // Version 2 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 2,
+  // Version 3: the app always makes the item code, never typed (issue #562).
+  version: 3,
   title: 'This page: an item with sizes and colours',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/products/sizes/new',
   steps: [
-    step({ id: 'name', target: 'sizes-name', title: 'Name it once', body: 'Type what it is called, a short code, the category, what it is counted in and the price. Every size and colour starts from these.' }),
+    step({ id: 'name', target: 'sizes-name', title: 'Name it once', body: 'Type what it is called, the category, what it is counted in and the price. Every size and colour starts from these, and the app gives each its item code.' }),
     step({ id: 'options', target: 'sizes-options', title: 'Sizes and colours', body: 'Type the sizes, then the colours or prints, each list separated by commas. Every size comes in every colour.' }),
     step({ id: 'preview', target: 'sizes-preview', title: 'Check the list', body: 'Each one shows its code and price. Change a price here if a bigger size costs more.' }),
     step({ id: 'save', target: 'sizes-save', title: 'Make them', body: 'Tap here. Each size and colour is then an item you can sell, buy, move and count on its own.' }),
@@ -91,7 +93,8 @@ export const sizesJoinPage: Tour = {
 export const sizesPage: Tour = {
   id: 'page-sizes',
   // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 3,
+  // Version 4: the app always makes the item code, never typed (issue #562).
+  version: 4,
   title: 'This page: sizes and colours',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
@@ -99,7 +102,7 @@ export const sizesPage: Tour = {
   steps: [
     step({ id: 'photo', target: 'family-photo', title: 'A photo', body: 'Add a photo of the item. It shows in the item list and in a sale, so the right print is easy to find.' }),
     step({ id: 'stock', target: 'family-stock', title: 'All its stock', body: 'This is the stock of every size and colour together, in each shop and store you can see.' }),
-    step({ id: 'variants', target: 'family-variants', title: 'Each size and colour', body: 'Each one has its own code, price and stock. Tap Change price for one size, or Change to fix its size, colour or code.' }),
+    step({ id: 'variants', target: 'family-variants', title: 'Each size and colour', body: 'Each one has its own code, price and stock. Tap Change price for one size, or Change to fix its size or colour. Codes never change.' }),
     step({ id: 'add', target: 'family-add', title: 'Add more', body: 'Type a new size or a new print. It is made in every colour or size the item has, at the price of the first one.' }),
     step({ id: 'links', target: 'family-links', title: 'Sell and buy stock', body: 'Record a sale, buy stock or move stock as usual: look for the name with the size and colour.' }),
   ],
@@ -107,13 +110,14 @@ export const sizesPage: Tour = {
 
 export const categoriesPage: Tour = {
   id: 'page-categories',
-  version: 2,
+  // Version 3: the app always makes the item code, never typed (issue #562).
+  version: 3,
   title: 'This page: categories',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/categories',
   steps: [
-    step({ id: 'add', target: 'named-add', title: 'Add a category', body: 'Tap here and type a name, such as Bulbs. The app suggests a code start from the name, such as BLB, or type your own 2 to 4 letters.' }),
+    step({ id: 'add', target: 'named-add', title: 'Add a category', body: 'Tap here and type a name, such as Bulbs. The app makes the code start from the name, such as BLB, and shows it. The category\'s page can change it.' }),
     step({ id: 'list', target: 'named-list', title: 'Open a category', body: 'Tap Open to see its items and add new ones there. Tap Rename to fix a name. Tap Switch off to stop new items using it. Old items keep it.' }),
   ],
 };
@@ -121,14 +125,15 @@ export const categoriesPage: Tour = {
 /** Issue #493: one category, its items and Add an item there; the item code is made from the category. */
 export const categoryPage: Tour = {
   id: 'page-category',
-  version: 1,
+  // Version 2: the app always makes the item code, never typed (issue #562).
+  version: 2,
   title: 'This page: one category',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/catalogue/categories/$categoryId',
   steps: [
     step({ id: 'codes', target: 'category-codes', title: 'Item codes', body: 'Every item added here gets a code that starts with the category\'s letters, such as BLB-0001, BLB-0002. You never have to make one up.' }),
-    step({ id: 'add', target: 'category-add-item', title: 'Add an item here', body: 'Tap here to add an item to this category. There is no category to pick: it goes here. Leave Item code empty for the next number, or type your own.' }),
+    step({ id: 'add', target: 'category-add-item', title: 'Add an item here', body: 'Tap here to add an item to this category. There is no category to pick: it goes here, and the app gives it the next number.' }),
     step({ id: 'prefix', target: 'category-prefix', title: 'Change the letters', body: 'Tap here to change the code start. New items use the new letters. Items made before keep their codes.' }),
     step({ id: 'items', target: 'category-items', title: 'Its items', body: 'These are the items in this category. Tap Edit on one to change it, or to move it to another category. It keeps its code.' }),
   ],
@@ -178,7 +183,8 @@ export const buyersPage: Tour = {
 
 export const importPage: Tour = {
   id: 'page-import',
-  version: 2,
+  // Version 3 shows Let the app make the codes (owner decision D45, issue #562).
+  version: 3,
   title: 'This page: import items',
   audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ) && held(me, SETTINGS),
   autoStart: false,
@@ -187,6 +193,7 @@ export const importPage: Tour = {
     step({ id: 'format', target: 'import-note', title: 'Get the file ready', body: 'The first row names the columns. Then put one item on each row. Leave a code empty and the app gives the next code of its category. Nothing is saved until you add the items.' }),
     step({ id: 'file', target: 'import-file', title: 'Choose your file', body: 'Tap here and pick a CSV file saved as UTF-8.' }),
     step({ id: 'paste', target: 'import-text', title: 'Or paste the rows', body: 'You can also paste the rows straight into this box.' }),
+    step({ id: 'make-codes', target: 'import-make-codes', title: 'Let the app make the codes', body: 'Tick this to give every item the next code of its category. Without the tick, the codes in your file are kept.' }),
     step({ id: 'check', target: 'import-check', title: 'Check it first', body: 'Tap Check the file. You see what would be added and which rows have a problem. When all is well, an Add button appears.' }),
   ],
 };

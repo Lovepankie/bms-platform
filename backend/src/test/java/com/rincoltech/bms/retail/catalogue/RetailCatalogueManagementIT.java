@@ -262,7 +262,7 @@ class RetailCatalogueManagementIT extends IntegrationTest {
 
     /** A product's code is normalised like the importer's, a duplicate says so, and the audit holds no cost. */
     @Test
-    void productCodesAreNormalisedAndAuditHoldsNoCost() {
+    void aTypedCodeIsRefusedAndAuditHoldsNoCost() {
         api.product("MGT-6", 7_777, 9_999);
         UUID category = api.category("Test Cat Z");
         UUID unit = api.unit("kg");
@@ -280,8 +280,9 @@ class RetailCatalogueManagementIT extends IntegrationTest {
                 "sell_minor",
                 2);
         ResponseEntity<JsonNode> again = api.post("/products", body, ADMIN);
-        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(again.getBody().get("detail").asString()).contains("code exists");
+        // Issue #562: the app makes every new item's code.
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(again.getBody().get("code").asString()).isEqualTo("item_code_made_by_app");
         String audited = TestDatabase.owner()
                 .sql("SELECT string_agg(cast(data AS text),"
                         + " ' ') FROM audit_log WHERE tenant_id = ? AND action LIKE 'retail.product.%'")

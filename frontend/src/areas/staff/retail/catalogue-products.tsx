@@ -10,6 +10,7 @@ import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
+import { ItemCodeLine } from './new-item-here';
 import { PackEditor } from './catalogue-packs';
 import { BarcodeEditor } from './catalogue-barcodes';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
@@ -21,9 +22,10 @@ import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
 
-// Items (#146): list with search, category and active filters; add and edit an item's code,
+// Items (#146): list with search, category and active filters; add and edit an item's
 // description, category, unit and whether it is on sale (issue #493: added inside a category, the item
-// takes that category and no dropdown is shown; an empty Item code is made by the server as PREFIX-0001); and change prices only through the price
+// takes that category and no dropdown is shown; issue #562: the app always makes the Item code, PREFIX-0001, and it is
+// shown, never typed or changed); and change prices only through the price
 // form, which keeps the history. Cost shows only with retail.profit.read (the server never sends it
 // otherwise). A price at or below cost is saved with a warning: the price floor is enforced when a sale
 // is made (price_below_cost, unless the seller holds retail.price.below_cost).
@@ -103,13 +105,6 @@ export function inactiveWarning(stockOnHand: string | undefined, branches: numbe
   return `This item still has stock in the branches you can see (${stockOnHand} in all). Inactive items cannot be sold, bought or moved, so that stock stays put until you correct it on the Stock page or switch the item on again.`;
 }
 
-/** The hint under Item code: what the app gives an item left without one (issue #493, owner decision D16). */
-export function itemCodeHint(category: Category | undefined): string {
-  if (!category) return 'Leave it empty and the app gives the next code of the category you choose.';
-  const next = category.next_code ?? `${category.code_prefix ?? ''}-0001`;
-  return `Leave it empty and the app gives it the next code of ${category.name}, ${next}. Or type your own.`;
-}
-
 export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpen }: {
   product?: Product;
   /** Issue #493: the category the item is added in; the form then has no category dropdown. */
@@ -123,7 +118,6 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
   const queryClient = useQueryClient();
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
   const units = useQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits() });
-  const [code, setCode] = useState(product?.code ?? '');
   const [description, setDescription] = useState(product?.description ?? '');
   const [categoryId, setCategoryId] = useState(product?.category_id ?? fixed?.id ?? '');
   const [showErrors, setShowErrors] = useState(false);
@@ -141,8 +135,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
   // A switched-off category or unit is offered only when it is the item's own.
   const categoryChoices = (categories.data ?? []).filter((c) => c.active !== false || c.id === product?.category_id);
   const unitChoices = (units.data ?? []).filter((u) => u.active !== false || u.id === product?.unit_id);
-  // A new item may leave the code empty: the server makes it from the category (issue #493). A saved item keeps one.
-  const complete = (!product || code.trim() !== '') && description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null)
+  const complete = description.trim() !== '' && categoryId !== '' && unitId !== '' && (product ? true : sellMinor !== null && costMinor !== null)
     && (!variant || size.trim() !== '' || colour.trim() !== '');
   const chosen = fixed ?? (categories.data ?? []).find((c) => c.id === categoryId);
   const movedFrom = product && !variant && categoryId !== product.category_id ? product.category : null;
@@ -158,10 +151,10 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
   const save = useMutation({
     mutationFn: (duplicateReason?: string) => {
       const reason = duplicateReason ? { duplicate_reason: duplicateReason } : {};
-      if (product && variant) return retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), active, variant_size: size.trim(), variant_colour: colour.trim() });
+      if (product && variant) return retail.updateProduct(product.id ?? '', product.version ?? 1, { active, variant_size: size.trim(), variant_colour: colour.trim() });
       return product
-        ? retail.updateProduct(product.id ?? '', product.version ?? 1, { code: code.trim(), description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason })
-        : retail.createProduct({ ...(code.trim() ? { code: code.trim() } : {}), description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
+        ? retail.updateProduct(product.id ?? '', product.version ?? 1, { description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason })
+        : retail.createProduct({ description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
     },
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
@@ -225,18 +218,9 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
           )}
         />
       )}
-      <Field
-        id="item-code"
-        label={WORDS.itemCode}
-        required={product !== undefined}
-        error={product && code.trim() === '' ? 'An item keeps its code. Type one.' : null}
-        showError={showErrors}
-        hint={product ? undefined : itemCodeHint(chosen)}
-        value={code}
-        maxLength={40}
-        onChange={(e) => setCode(e.target.value)}
-        autoComplete="off"
-      />
+      {product
+        ? <p id="item-code" data-testid="item-code">{WORDS.itemCode}: <strong>{product.code}</strong>. It never changes.</p>
+        : <ItemCodeLine id="item-code" category={chosen} />}
       {variant ? (
         <>
           <p>

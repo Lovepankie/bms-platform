@@ -23,6 +23,7 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdatePackReque
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -155,8 +156,15 @@ class CatalogueController {
             operationId = "importRetailProducts")
     ImportResult importProducts(
             @RequestParam(name = "dry_run", required = false, defaultValue = "true") boolean dryRun,
+            @Parameter(
+                            description =
+                                    "Let the app make the codes (owner decision D45, issue #562): every row gets its category's"
+                                            + " next code and the file's code column is not read. Off by default: a row's code is kept"
+                                            + " and a blank one is made")
+                    @RequestParam(name = "make_codes", required = false, defaultValue = "false")
+                    boolean makeCodes,
             @Valid @RequestBody ImportRequest request) {
-        return importer.run(request.csv(), dryRun);
+        return importer.run(request.csv(), dryRun, makeCodes);
     }
 
     @GetMapping("/products/similar")

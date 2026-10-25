@@ -3,13 +3,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import { RetailError, type Product, type StockRow } from '../../../api/retail';
+import { type Product, type StockRow } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
 // Issue #505: under the item search on Buy stock and Count stock, "Not in the list? Add it here" opens a short form in the
 // AppSheet order and one Save makes the item and puts it on the purchase or the count. Only retail.catalogue.manage sees it;
-// the name and code rules stay the server's and show inline; offline is refused in plain words. Fabricated items and amounts.
+// the name rules stay the server's and show inline; offline is refused in plain words. Issue #562: the Item code is the app's,
+// shown as text and never typed or sent. Fabricated items and amounts.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -83,16 +84,20 @@ async function fill(qtyLabel: RegExp, qty: string) {
 const save = () => fireEvent.click(within(form()).getByRole('button', { name: 'Save the item' }));
 
 describe('Buy stock: add an item that is not in the list', () => {
-  it('shows the fields in the AppSheet order, the code filled in by the app and the category taking the cursor', async () => {
+  it('shows the fields in the AppSheet order, the code as text made by the app and the category taking the cursor', async () => {
     open(<RestockForm />);
     fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
     await within(form()).findByRole('option', { name: 'Bulbs' });
     const labels = [...form().querySelectorAll('label')].map((l) => l.textContent?.replace(/\s*\*$/, '').trim());
-    expect(labels).toEqual(['Item code', 'Category', 'Description', 'Counted in', 'Buying price (UGX)', 'Selling price (UGX)', expect.stringMatching(/^Quantity bought/)]);
+    expect(labels).toEqual(['Category', 'Description', 'Counted in', 'Buying price (UGX)', 'Selling price (UGX)', expect.stringMatching(/^Quantity bought/)]);
     expect(document.activeElement).toBe(field(/^Category/));
-    expect(field(/^Item code/).value).toBe('');
+    // Issue #562: the code comes first, as text, never a field.
+    const code = within(form()).getByTestId('restock-new-code');
+    expect(code.compareDocumentPosition(field(/^Category/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(code.textContent).toBe('Item code: made by the app once you choose the category');
+    expect(within(form()).queryByLabelText(/Item code/)).toBeNull();
     fireEvent.change(field(/^Category/), { target: { value: 'c1' } });
-    expect(field(/^Item code/).value).toBe('BLB-0002');
+    expect(code.textContent).toBe('Item code: BLB-0002, made by the app');
     expect(within(form()).getAllByRole('button', { name: 'Save the item' })).toHaveLength(1);
   });
 
@@ -106,7 +111,6 @@ describe('Buy stock: add an item that is not in the list', () => {
       expect(control.getAttribute('aria-required'), String(label)).toBe('true');
       expect(form().querySelector(`label[for="${control.id}"] .field-star`)?.getAttribute('aria-hidden')).toBe('true');
     }
-    expect(field(/^Item code/).getAttribute('aria-required')).toBeNull();
     fireEvent.change(field(/^Category/), { target: { value: 'c1' } });
     save();
     expect(document.activeElement).toBe(field(/^Description/));
@@ -128,30 +132,6 @@ describe('Buy stock: add an item that is not in the list', () => {
     expect((document.getElementById('cost-0') as HTMLInputElement).value).toBe('6000');
     expect((document.getElementById('sell-0') as HTMLInputElement).value).toBe('9000');
     expect((document.getElementById(`q-0-${branch}`) as HTMLInputElement).value).toBe('12');
-  });
-
-  it('sends a code the person typed', async () => {
-    similarProducts.mockResolvedValue({ exact: [], similar: [] });
-    createProduct.mockResolvedValue({ ...made, code: 'MY-1' });
-    open(<RestockForm />);
-    await fill(/^Quantity bought/, '1');
-    fireEvent.change(field(/^Item code/), { target: { value: 'MY-1' } });
-    save();
-    await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
-    expect(createProduct.mock.calls[0]?.[0]).toMatchObject({ code: 'MY-1' });
-  });
-
-  it('shows a code already used under Item code, and keeps the form', async () => {
-    similarProducts.mockResolvedValue({ exact: [], similar: [] });
-    createProduct.mockRejectedValue(new RetailError('An item with this code already exists. Codes ignore capital letters and spaces at the ends. Use another code.', 409, 'duplicate_product_code'));
-    open(<RestockForm />);
-    await fill(/^Quantity bought/, '2');
-    fireEvent.change(field(/^Item code/), { target: { value: 'BLB-0001' } });
-    save();
-    const code = field(/^Item code/);
-    await waitFor(() => expect(code.getAttribute('aria-invalid')).toBe('true'));
-    expect(document.getElementById(`${code.id}-error`)?.textContent).toMatch(/An item with this code already exists/);
-    expect(document.getElementById('cost-0')).toBeNull();
   });
 
   it('warns inline that the name exists, and Use this item puts the existing one on the purchase', async () => {

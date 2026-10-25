@@ -135,7 +135,7 @@ class RetailEvaluationIT extends IntegrationTest {
         body.put("unit_id", cat.get("unit_id").asString());
         body.put("cost_minor", 100);
         body.put("sell_minor", 200);
-        UUID p7 = RetailTestSupport.id(api.post("/products", body, ADMIN));
+        UUID p7 = RetailTestSupport.id(api.postItem(body, ADMIN));
         api.stockUp(t.headOffice(), p7, "3");
         JsonNode hq = branch(evaluate("?top=1"), t.headOffice());
         JsonNode category = hq.get("categories").get(0);

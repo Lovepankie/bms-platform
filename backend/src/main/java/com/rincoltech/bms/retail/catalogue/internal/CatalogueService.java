@@ -287,11 +287,13 @@ class CatalogueService {
         requireCategoryAndUnit(r.categoryId(), r.unitId(), null, null);
         String duplicateReason = acceptName(r.description().trim(), r.unitId(), null, r.duplicateReason());
         UUID by = CurrentPrincipal.require().userId();
-        // Issue #493, ADR-081: a typed code is kept; without one the category gives its next, such as BLB-0001.
-        boolean typed = r.code() != null && !r.code().isBlank();
+        // Issue #562, ADR-081 as amended: the category always gives the code, such as BLB-0001; a typed one is refused.
+        if (r.code() != null && !r.code().isBlank()) {
+            throw codeMadeByApp("code", MADE_BY_APP);
+        }
         Product p = new Product(
                 UUID.randomUUID(),
-                typed ? code(r.code()) : repo.nextItemCode(r.categoryId()),
+                repo.nextItemCode(r.categoryId()),
                 r.description().trim(),
                 r.categoryId(),
                 null,
@@ -331,9 +333,7 @@ class CatalogueService {
         after.put("category_id", p.categoryId());
         after.put("unit_id", p.unitId());
         after.put("sell_minor", p.sellMinor());
-        if (!typed) {
-            after.put("code_source", "category");
-        }
+        after.put("code_source", "category");
         if (duplicateReason != null) {
             after.put("duplicate_reason", duplicateReason);
         }
@@ -452,9 +452,19 @@ class CatalogueService {
                 r.unitId() == null ? before.unitId() : r.unitId(),
                 before.categoryId(),
                 before.unitId());
+        // Issue #562: an item keeps the code the app gave it. A blank code is no code, as on create, and the item's own
+        // code
+        // sent back, in any case as the unique index compares codes, is no change.
+        if (r.code() != null
+                && !r.code().isBlank()
+                && !RetailCatalogue.normaliseCode(r.code())
+                        .map(before.code()::equalsIgnoreCase)
+                        .orElse(false)) {
+            throw codeMadeByApp("code", CODE_KEPT);
+        }
         Product after = new Product(
                 id,
-                r.code() == null ? before.code() : code(r.code()),
+                before.code(),
                 variant != null
                         ? VariantGrid.description(variant.familyName(), size, colour)
                         : r.description() == null
@@ -473,13 +483,12 @@ class CatalogueService {
                 before.version(),
                 null,
                 null);
-        if (after.code().isEmpty() || after.description().isEmpty()) {
+        if (after.description().isEmpty()) {
             throw ApiException.validation(
-                    List.of(new FieldProblem("code", "invalid", "Code and description must not be blank.")));
+                    List.of(new FieldProblem("description", "invalid", "The description must not be blank.")));
         }
         Map<String, Object> was = new LinkedHashMap<>();
         Map<String, Object> now = new LinkedHashMap<>();
-        diff(was, now, "code", before.code(), after.code());
         diff(was, now, "description", before.description(), after.description());
         diff(was, now, "category_id", before.categoryId(), after.categoryId());
         diff(was, now, "unit_id", before.unitId(), after.unitId());
@@ -992,6 +1001,22 @@ class CatalogueService {
         return duplicate(
                 "duplicate_variant",
                 "The item has " + VariantGrid.label(size, colour) + " already. Each one is listed once.");
+    }
+
+    static final String MADE_BY_APP = "The app makes the item code from the category. Leave the code out.";
+    static final String CODE_KEPT = "An item keeps the code the app gave it. The code cannot be changed.";
+
+    /**
+     * Issue #562, ADR-081 as amended: the app makes every new item's code and never changes one. A typed code is refused
+     * with 400, not dropped, so a caller (an old build of the app, a script) never believes its code was kept.
+     */
+    static ApiException codeMadeByApp(String field, String detail) {
+        return new ApiException(
+                HttpStatus.BAD_REQUEST,
+                "item_code_made_by_app",
+                "Item code made by the app",
+                detail,
+                List.of(new FieldProblem(field, "not_allowed", detail)));
     }
 
     static ApiException duplicateCode() {

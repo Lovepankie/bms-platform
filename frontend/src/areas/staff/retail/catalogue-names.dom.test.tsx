@@ -52,7 +52,6 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
 }
 
 async function fillIn(description: string) {
-  fireEvent.change(screen.getByLabelText('Item code'), { target: { value: 'NEW-1' } });
   fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: description } });
   await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
   fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: 'c1' } });

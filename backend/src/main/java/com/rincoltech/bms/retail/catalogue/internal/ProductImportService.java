@@ -37,7 +37,9 @@ import org.springframework.transaction.annotation.Transactional;
  * with any error row adds nothing, so a half-read file never lands. Codes are normalised by
  * {@link RetailCatalogue#normaliseCode} as the pilot importer does; categories and units are created
  * on demand, matched by name ignoring case. A row with a blank code, or a file without the code column,
- * gets the next code of its category on apply, such as BLB-0001 (issue #493, ADR-081); rows with a code keep it. Allowed for an administrator only, and the cost column
+ * gets the next code of its category on apply, such as BLB-0001 (issue #493, ADR-081); rows with a code keep it, unless
+ * "Let the app make the codes" is ticked ({@code make_codes}, owner decision D45, issue #562): then every row's code is made
+ * and the file's codes are not read. Allowed for an administrator only, and the cost column
  * only for a caller holding {@code retail.profit.read}. Cost is never written to the audit log.
  */
 @Service
@@ -69,7 +71,7 @@ class ProductImportService {
     }
 
     @Transactional
-    ImportResult run(String text, boolean dryRun) {
+    ImportResult run(String text, boolean dryRun, boolean makeCodes) {
         Principal principal = CurrentPrincipal.require();
         if (!principal.hasPermission(ADMIN)) {
             throw new ApiException(
@@ -140,8 +142,10 @@ class ProductImportService {
             if (cells.stream().allMatch(String::isBlank)) {
                 continue;
             }
-            String rawCode = columns.containsKey("code") ? cell(cells, columns, "code") : "";
-            // Issue #493: a blank code is made from the row's category on apply.
+            String fileCode = columns.containsKey("code") ? cell(cells, columns, "code") : "";
+            // Issue #493: a blank code is made from the row's category on apply. Issue #562, owner decision D45: with
+            // "Let the app make the codes" ticked every row's code is made and the file's codes are not read at all.
+            String rawCode = makeCodes ? "" : fileCode;
             boolean auto = rawCode.isBlank();
             String description = cell(cells, columns, "description");
             String shown = rawCode.strip();
@@ -298,6 +302,9 @@ class ProductImportService {
                     "added",
                     (dryRun ? "Would be added." : "Added.")
                             + (auto ? " The app gives it the next code of " + category + "." : "")
+                            + (makeCodes && !fileCode.isBlank()
+                                    ? " The code " + fileCode.strip() + " in the file is not used."
+                                    : "")
                             + packNote
                             + movedNote(rowCodes, rowPackCodes, rowFormat, heldCodes)));
             pending.add(new Pending(
@@ -322,8 +329,16 @@ class ProductImportService {
                                 + " a problem. Nothing was added. Run the check to see which rows, fix them and try again.");
             }
             try {
-                Map<Integer, String> made =
-                        apply(pending, categories, units, newCategories, newUnits, added, skipped, principal.userId());
+                Map<Integer, String> made = apply(
+                        pending,
+                        categories,
+                        units,
+                        newCategories,
+                        newUnits,
+                        added,
+                        skipped,
+                        makeCodes,
+                        principal.userId());
                 made.forEach((row, code) -> {
                     ImportRow r = report.get(row);
                     report.set(row, new ImportRow(r.line(), code, r.description(), r.outcome(), r.message()));
@@ -356,6 +371,7 @@ class ProductImportService {
             Map<String, String> newUnits,
             int added,
             int skipped,
+            boolean makeCodes,
             UUID by) {
         // Issue #352: the names are locked in a fixed order before any row is written, so a person adding the same name
         // through the screen at this moment queues behind the import (or the import behind them) and sees it.
@@ -478,6 +494,7 @@ class ProductImportService {
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("added", added);
         summary.put("skipped", skipped);
+        summary.put("make_codes", makeCodes);
         summary.put("categories_created", newCategories.size());
         summary.put("units_created", newUnits.size());
         audit.record(AuditLog.Entry.created("retail.product.imported", PRODUCT, null, null, summary));

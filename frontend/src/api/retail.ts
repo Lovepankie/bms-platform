@@ -407,7 +407,8 @@ export interface RetailApi {
   /** Under If-Match with the pack's version: a new factor, or switch the pack off or on. */
   updatePack(productId: string, unitId: string, version: number, body: { factor?: string; active?: boolean }): Promise<Pack>;
   /** The CSV item import: a dry run reports, an apply adds the rows that are fine (administrators only). */
-  importProducts(csv: string, dryRun: boolean): Promise<ImportResult>;
+  /** Owner decision D45 (issue #562): makeCodes is Let the app make the codes, off by default. */
+  importProducts(csv: string, dryRun: boolean, makeCodes?: boolean): Promise<ImportResult>;
   /** Issue #345: the active item a scanned code belongs to, with the branch's balance when given; null for an unknown code. */
   findByBarcode(code: string, branchId?: string, signal?: AbortSignal): Promise<BarcodeMatch | null>;
   addBarcode(productId: string, body: { code: string; format?: string; unit_id?: string }): Promise<Barcode>;
@@ -804,8 +805,8 @@ const realRetail: RetailApi = {
     );
   },
 
-  async importProducts(csv, dryRun) {
-    return unwrap(await api.POST('/api/v1/retail/products/import', { params: { query: { dry_run: dryRun } }, body: { csv } }));
+  async importProducts(csv, dryRun, makeCodes = false) {
+    return unwrap(await api.POST('/api/v1/retail/products/import', { params: { query: { dry_run: dryRun, make_codes: makeCodes } }, body: { csv } }));
   },
 
   async findByBarcode(code, branchId, signal) {

@@ -80,7 +80,6 @@ class RetailItemPhotosIT extends IntegrationTest {
     JsonNode romper() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "Test Romper");
-        body.put("base_code", "ROMP");
         body.put("category_id", api.category("Test Baby Wear"));
         body.put("unit_id", api.unit("test-piece"));
         body.put("cost_minor", 4_000);

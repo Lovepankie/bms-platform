@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { RETAIL_CURRENCY, RetailError, retail, type Product, type SimilarProduct } from '../../../api/retail';
+import { RETAIL_CURRENCY, RetailError, retail, type Category, type Product, type SimilarProduct } from '../../../api/retail';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Field';
 import { WORDS } from '../../../app/glossary';
@@ -12,9 +12,9 @@ import { parseCount, parseQty } from './maths';
 import { Problem, money } from './ui';
 
 // Add an item while buying or counting stock (issue #505): under the item search, "Not in the list? Add it here" opens a
-// short form in the order of the owner's AppSheet form (Hatibu, 23 Oct 2026): Item code (filled by the app from the
-// category, editable), Category (the first field the person fills), Description, Counted in, Buying price, Selling price,
-// the quantity, one Save. Saving creates the item through the same create call as Items, so the server makes the code
+// short form in the order of the owner's AppSheet form (Hatibu, 23 Oct 2026): Item code (shown, made by the app from the
+// category, never typed: issue #562), Category (the first field the person fills), Description, Counted in, Buying price,
+// Selling price, the quantity, one Save. Saving creates the item through the same create call as Items, so the server makes the code
 // (ADR-081) and keeps the name rules (issue #352); the screen then puts it on the purchase or the count without leaving.
 // Only retail.catalogue.manage may add items; anyone else is told to ask their manager. The form is a group, not a <form>:
 // it sits inside the purchase form, and Enter in it saves the item, never the purchase.
@@ -37,10 +37,19 @@ function unreachable(error: unknown): boolean {
   return error instanceof TypeError || (error instanceof RetailError && error.status === 0);
 }
 
-/** The code sent: nothing while the person keeps the code the app filled in, so the server takes the next free one. */
-export function codeToSend(typed: string | null, suggested: string | undefined): string | undefined {
-  const code = (typed ?? '').trim();
-  return code === '' || code === suggested ? undefined : code;
+/**
+ * The item code line of a new item (issue #562, owner decision of 25 Oct 2026): the app always makes the code from the
+ * category, so it is shown as text, never asked. The number is the category's next; another add may take it first.
+ */
+export function ItemCodeLine({ id, category }: { id: string; category: Category | undefined }) {
+  return (
+    <p id={id} data-testid={id}>
+      {WORDS.itemCode}:{' '}
+      {category
+        ? <><strong>{category.next_code ?? `${category.code_prefix ?? ''}-0001`}</strong>, made by the app</>
+        : 'made by the app once you choose the category'}
+    </p>
+  );
 }
 
 export function NewItemHere({ id, qtyLabel, counting = false, askCost, onAdded }: {
@@ -93,8 +102,6 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
   const units = useQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits() });
   const [categoryId, setCategoryId] = useState('');
-  // null while the person keeps what the app fills in from the category.
-  const [typedCode, setTypedCode] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [unitId, setUnitId] = useState('');
   const [cost, setCost] = useState(counting ? '0' : '');
@@ -111,8 +118,6 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
   useEffect(() => { document.getElementById(`${id}-category`)?.focus(); }, [id]);
 
   const chosen = (categories.data ?? []).find((c) => c.id === categoryId);
-  const suggested = chosen?.next_code;
-  const code = typedCode ?? suggested ?? '';
   const costMinor = askCost ? parseMinor(cost, RETAIL_CURRENCY) : 0;
   const sellMinor = parseMinor(sell, RETAIL_CURRENCY);
   const qtyMilli = qtyLabel === undefined ? 0 : counting ? parseCount(qty) : parseQty(qty);
@@ -126,7 +131,6 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
   const save = useMutation({
     mutationFn: async (duplicateReason?: string) => {
       const product = await retail.createProduct({
-        ...(codeToSend(typedCode, suggested) ? { code: codeToSend(typedCode, suggested) } : {}),
         description: description.trim(),
         category_id: categoryId,
         unit_id: unitId,
@@ -196,24 +200,13 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
     e.preventDefault();
     submit();
   };
-  const codeTaken = save.error instanceof RetailError && save.error.code === 'duplicate_product_code' ? save.error.message : null;
   const fail = save.error ?? check.error ?? pickExisting.error;
 
   return (
     <div ref={group} id={`${id}-form`} role="group" aria-labelledby={`${id}-title`} className="rt-card" onKeyDown={enter}>
       <h3 id={`${id}-title`}>Add a new item</h3>
       <FieldsNeededNote />
-      <Field
-        id={`${id}-code`}
-        label={WORDS.itemCode}
-        error={codeTaken}
-        showError={codeTaken !== null}
-        hint={chosen ? `Filled in by the app from ${chosen.name}. Change it to use your own.` : 'The app fills this in once you choose the category.'}
-        value={code}
-        maxLength={40}
-        onChange={(e) => { setTypedCode(e.target.value); save.reset(); }}
-        autoComplete="off"
-      />
+      <ItemCodeLine id={`${id}-code`} category={chosen} />
       <Field
         id={`${id}-category`}
         label="Category"
@@ -314,7 +307,7 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
       {offline ? (
         <p role="alert" className="alert alert-warning" data-testid={`${id}-offline`}>{OFFLINE_TEXT}</p>
       ) : (
-        !exists && !codeTaken && <Problem error={fail} />
+        !exists && <Problem error={fail} />
       )}
       <p className="cluster">
         <BusyButton busy={busy} type="button" disabled={exists !== null || similar !== null} onClick={submit}>Save the item</BusyButton>

@@ -52,24 +52,41 @@ class RetailInputGuardsIT extends IntegrationTest {
     }
 
     /**
-     * F9: a code that differs from another only by a no-break space at the end is the same code; a
-     * full-width code folds to its ASCII form; a code with a control character or a Unicode space
-     * inside is refused, and so is a raw insert that bypasses the API.
+     * F9: a code that differs from another only by a no-break space at the end is the same code; a full-width code folds to
+     * its ASCII form; a code with a control character or a Unicode space inside is refused, and so is a raw insert that
+     * bypasses the API. Issue #562: an add takes no code at all, so the rule now shows where a code is still read, the import
+     * finding an item by its code.
      */
     @Test
     void productCodesAreNormalisedAndUnicodeSpacesRefused() {
         api.product("NB-1", 100, 200);
-        ResponseEntity<JsonNode> twin = api.post("/products", product("NB-1\u00a0"), ADMIN);
-        assertThat(twin.getStatusCode()).as("%s", twin.getBody()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(twin.getBody().get("code").asString()).isEqualTo("duplicate_product_code");
-
-        ResponseEntity<JsonNode> wide = api.post("/products", product("\u3000\uff2e\uff22-2"), ADMIN);
-        assertThat(wide.getStatusCode()).as("%s", wide.getBody()).isEqualTo(HttpStatus.CREATED);
-        assertThat(wide.getBody().get("code").asString()).isEqualTo("NB-2");
-
-        for (String bad : new String[] {"NB\u00a03", "NB\u200b4", "NB\t5", "\u00a0\u2003"}) {
-            ResponseEntity<JsonNode> r = api.post("/products", product(bad), ADMIN);
-            assertThat(r.getStatusCode()).as("%s: %s", bad, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        for (String typed : new String[] {"NB-1\u00a0", "\u3000\uff2e\uff22-2", "NB\u200b4", "\u00a0\u2003"}) {
+            ResponseEntity<JsonNode> r = api.post("/products", product(typed), ADMIN);
+            assertThat(r.getStatusCode()).as("%s: %s", typed, r.getBody()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(r.getBody().get("code").asString()).isEqualTo("item_code_made_by_app");
+        }
+        String csv = "code,description,category,unit,sell price\n"
+                + "NB-1\u00a0,Test twin,Test Category NB-1,u-nb-1,500\n"
+                + "\uff2e\uff22-1,Test wide twin,Test Category NB-1,u-nb-1,500\n";
+        ResponseEntity<JsonNode> imported =
+                api.post("/products/import?dry_run=true", Map.of("csv", csv), ADMIN + ",core.settings.manage");
+        assertThat(imported.getStatusCode()).as("%s", imported.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(imported.getBody().get("skipped").asInt())
+                .as("%s", imported.getBody())
+                .isEqualTo(2);
+        // The import keeps a file's codes while the tick is off, so it is where a code with a control character or a
+        // Unicode space inside is refused now: an error row, never a code of its own.
+        String bad = "code,description,category,unit,sell price\n"
+                + "NB\u200b4,Test zero width,Test Category NB-1,u-nb-1,500\n"
+                + "NB\t5,Test tab,Test Category NB-1,u-nb-1,500\n"
+                + "NB\u00a03,Test inner space,Test Category NB-1,u-nb-1,500\n";
+        JsonNode rows = api.post("/products/import?dry_run=true", Map.of("csv", bad), ADMIN + ",core.settings.manage")
+                .getBody()
+                .get("rows");
+        assertThat(rows).hasSize(3);
+        for (JsonNode row : rows) {
+            assertThat(row.get("outcome").asString()).as("%s", row).isEqualTo("error");
+            assertThat(row.get("message").asString()).as("%s", row).contains("special character");
         }
         UUID category = api.category("Test Category Raw");
         UUID unit = api.unit("u-raw");

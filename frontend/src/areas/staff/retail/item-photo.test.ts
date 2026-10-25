@@ -16,7 +16,7 @@ describe('item photos', () => {
     const api = createMockRetail();
     const [category] = await api.listCategories();
     const [unit] = await api.listUnits();
-    const family = await api.createFamily({ name: 'Test romper', base_code: 'ROMP', category_id: category?.id ?? '', unit_id: unit?.id ?? '', cost_minor: 1, sell_minor: 2, sizes: ['S', 'M'] });
+    const family = await api.createFamily({ name: 'Test romper', category_id: category?.id ?? '', unit_id: unit?.id ?? '', cost_minor: 1, sell_minor: 2, sizes: ['S', 'M'] });
     const withPhoto = await api.setFamilyPhoto(family.id ?? '', new Blob(['x'], { type: 'image/png' }));
     expect(withPhoto.variants?.every((v) => v.photo_id === undefined && v.item_photo_id === withPhoto.photo_id)).toBe(true);
     const small = withPhoto.variants?.[0];

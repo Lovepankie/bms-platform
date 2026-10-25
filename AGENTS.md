@@ -172,13 +172,24 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   migration `V96` (the next number after `V95`, merged): `retail_categories.code_prefix` (2 to 4 capital letters, unique per business, suggested from the name by
   `bms_category_prefix_base` and `bms_suggest_category_prefix`, backfilled oldest first, filled by a trigger when an insert leaves it out) and
   `code_next`; `bms_next_item_code(category_id)` locks the category row and returns `PREFIX-0001`, the next number no item holds. `POST /retail/products`
-  takes `code` as optional (blank means the category's next code; a typed code is kept, uniqueness unchanged); `POST` and `PATCH /retail/categories`
+  takes `code` as optional (blank means the category's next code; a typed code was kept until #562, which refuses it); `POST` and `PATCH /retail/categories`
   take `code_prefix` (409 `duplicate_category_prefix`); `GET /retail/categories/prefix-suggestion`; a category carries `code_prefix` and `next_code`; the
   CSV import fills blank codes (or a missing code column) from each row's category on apply. Existing items and codes are untouched; moving an item to
   another category (its own form, audited) keeps its code. Screens: Categories shows each code start and opens the category page
   (`/staff/retail/catalogue/categories/$categoryId`, tour `page-category`): its items, Add an item with the category fixed (no dropdown) and Change the
   code start; the field is Item code everywhere (D16); on the Items page the category comes first. No permission added. Tests: `RetailItemCodesIT`,
   `MigrationOrderIT`, `catalogue-category.dom.test.tsx`, `catalogue-names.dom.test.tsx`, `tours-retail-cash.test.tsx`.
+- **Built (the app always makes a new item's code, issue #562, owner decision of 25 Oct 2026, ADR-081 as amended, FR-RET-70):** no
+  migration. Every new item gets its category's next code from `bms_next_item_code`: the item form in a category, Add an item on
+  Items, the new item on Buy stock and Count stock, and Add an item with sizes and colours (the base code is the category's next
+  code, each size `BLB-0007-03M-BLUE`). The CSV import keeps a file's codes (blank ones made) unless Let the app make the
+  codes is ticked (`make_codes=true`, owner decision D45, unticked by default), when every row's code is made. A typed code is refused with 400 `item_code_made_by_app` (field problem `not_allowed`): `code` on
+  `POST /retail/products`, `base_code` on the family create and joins, a size line's `code`, and on `PATCH /retail/products/{id}` a
+  `code` other than the item's own. Existing codes never change. Screens show the code as text ("Item code: BLB-0007, made by
+  the app"; on edit "It never changes."), never an input; the new category form shows the code start the app makes and asks
+  for none (it changes on the category's page). No permission added. Tests: `RetailItemCodesIT`, `RetailVariantsIT`,
+  `VariantGridTest`, `catalogue-category.dom.test.tsx`, `new-item-here.dom.test.tsx`,
+  `catalogue-variants.dom.test.tsx`, `catalogue-import.dom.test.tsx`, `design-guard.test.ts`.
 - **Built (a buying pack's size per delivery, issue #554, owner decision D23, ADR-082, FR-RET-72):** no migration. A restock line and a
   goods received line in a pack take `pack_size` (how many base units each pack held in this delivery, at least 1), kept in the line's existing
   `unit_factor`; stock, the cost per base unit and the branch's average (ADR-079) use it, and every later reading of the line (voids, supplier
@@ -973,7 +984,9 @@ Accepted (this list is the ADR index):
   from its name (Bulbs BLB, TVs TV, Phone accessories PHA) and editable; an item added without a typed code gets `PREFIX-0001`, the
   next number no item holds, under the category row's lock; typed codes are kept, existing codes never change, a moved item keeps its
   code, the import fills blank codes; items are added inside a category, whose form has no category dropdown; the field is Item code
-  (proposed, #493, owner decisions D14 and D16; FR-RET-70; migration `V96`, the next number after `V95`)
+  (proposed, #493, owner decisions D14 and D16; FR-RET-70; migration `V96`, the next number after `V95`). Amended 25 Oct 2026
+  (#562): the app always makes a new item's code, everywhere; a typed code is refused with 400 `item_code_made_by_app` (the import
+  keeps a file's codes unless Let the app make the codes is ticked, D45), existing codes never change, and the new category form shows the code start without asking
 - ADR-082 A buying pack's size is kept per delivery: a restock or goods received line in a pack says how many pieces each pack held,
   kept in its `unit_factor` and used for stock and the average; "use from now on" (with `retail.catalogue.manage`) changes the usual size;
   selling packs keep their size; an order counts packs whatever each held (proposed, #554, owner decision D23; FR-RET-72; no migration)

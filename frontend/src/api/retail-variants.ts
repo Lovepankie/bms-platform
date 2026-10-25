@@ -50,7 +50,7 @@ export function codeToken(part: string | undefined): string {
   return [...t].slice(0, VARIANT_TOKEN).join('');
 }
 
-/** The code a variant gets unless the owner types one: ROMP, 0-3m and Blue give ROMP-03M-BLUE. */
+/** The code the app gives a variant (issue #562: never typed): ROMP, 0-3m and Blue give ROMP-03M-BLUE. */
 export function variantCode(baseCode: string, size?: string, colour?: string): string {
   return [baseCode.trim(), codeToken(size), codeToken(colour)].filter((p) => p !== '').join('-');
 }
@@ -100,7 +100,7 @@ export function planVariants({ baseCode, sizes, colours, costMinor, sellMinor, e
   return out;
 }
 
-/** The codes that two planned variants share (ignoring case), which the server would refuse: give one of them another code. */
+/** The codes that two planned variants share (ignoring case), which the server would refuse: spell one size or colour differently. */
 export function repeatedCodes(plan: readonly { code: string }[]): string[] {
   const seen = new Set<string>();
   const repeated = new Set<string>();

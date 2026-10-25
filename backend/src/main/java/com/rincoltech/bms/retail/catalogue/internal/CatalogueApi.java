@@ -94,10 +94,11 @@ final class CatalogueApi {
 
     @Schema(name = "CreateRetailProductRequest")
     record CreateProductRequest(
-            @Size(max = 40)
             @Schema(
+                    deprecated = true,
                     description =
-                            "Unique ignoring case and surrounding spaces. Left out or blank, the app gives the category's next code, such as BLB-0001 (issue #493)")
+                            "Leave it out: the app always gives the category's next code, such as BLB-0001 (issue #562, ADR-081"
+                                    + " as amended). A code that is not blank is refused with 400 item_code_made_by_app")
             String code,
 
             @NotBlank @Size(max = 300) String description,
@@ -117,7 +118,13 @@ final class CatalogueApi {
             name = "UpdateRetailProductRequest",
             description = "Omitted fields are unchanged; prices change only through /prices")
     record UpdateProductRequest(
-            @Size(min = 1, max = 40) String code,
+            @Schema(
+                    deprecated = true,
+                    description =
+                            "Leave it out: an item keeps the code the app gave it (issue #562). A blank code, or the item's own"
+                                    + " code in any case, is no change; any other is refused with 400 item_code_made_by_app")
+            String code,
+
             @Size(min = 1, max = 300) String description,
             UUID categoryId,
             UUID unitId,
@@ -786,10 +793,12 @@ final class CatalogueApi {
             @Size(max = 30) @Schema(description = "A colour or a print")
             String colour,
 
-            @Size(max = 40)
             @Schema(
+                    deprecated = true,
                     description =
-                            "The variant's own code; by default the base code, the size and the colour in capitals, as ROMP-03M-BLUE")
+                            "Leave it out: the app makes the code from the item's base code, the size and the colour in"
+                                    + " capitals, as BLB-0007-03M-BLUE (issue #562). One that is not blank is refused with 400"
+                                    + " item_code_made_by_app")
             String code,
 
             @PositiveOrZero
@@ -811,9 +820,11 @@ final class CatalogueApi {
             @NotBlank @Size(max = 200) @Schema(description = "The item's name, as Baby romper")
             String name,
 
-            @NotBlank
-            @Size(max = 24)
-            @Schema(description = "What every variant's code starts with, as ROMP; unique codes ignore case")
+            @Schema(
+                    deprecated = true,
+                    description =
+                            "Leave it out: every variant's code starts with the category's next code, as BLB-0007 (issue"
+                                    + " #562). One that is not blank is refused with 400 item_code_made_by_app")
             String baseCode,
 
             @NotNull UUID categoryId,
@@ -914,8 +925,11 @@ final class CatalogueApi {
             @Size(min = 1, max = 200) @Schema(description = "The item's name; required for a new item")
             String name,
 
-            @Size(min = 1, max = 24)
-            @Schema(description = "What later variant codes start with; by default the first item's code")
+            @Schema(
+                    deprecated = true,
+                    description =
+                            "Leave it out: later variant codes start with the first item's code (issue #562). One that is not"
+                                    + " blank is refused with 400 item_code_made_by_app")
             String baseCode,
 
             @Schema(description = "The item's category; by default the first item's")

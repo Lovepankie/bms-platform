@@ -11,8 +11,9 @@ import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useProfitAccess, useToast } from './ui';
 
 // One category (issue #493, owner decisions D14 and D16): its items, and Add an item, which opens the item form with this category
-// fixed (no category dropdown). An item added without a typed Item code gets the category's next code, such as BLB-0001. The code
-// start is shown and, for whoever manages the catalogue, changed here; items made before keep their codes. Moving an item to
+// fixed (no category dropdown). Every item added gets the category's next code, such as BLB-0001, made by the app and never
+// typed (issue #562). The code start is shown and, for whoever manages the catalogue, changed here; items made before keep
+// their codes. Moving an item to
 // another category is on the item's own form (Edit), which keeps its code.
 
 const route = getRouteApi('/staff/retail/catalogue/categories/$categoryId');
@@ -21,7 +22,7 @@ const MANAGE = 'retail.catalogue.manage';
 /** The line under the category's name: how its item codes are made. */
 export function codeLine(category: Category): string {
   const next = category.next_code ?? `${category.code_prefix ?? ''}-0001`;
-  return `Item codes here start with ${category.code_prefix ?? ''}. The next item added without a code gets ${next}.`;
+  return `Item codes here start with ${category.code_prefix ?? ''}. The app gives the next item added ${next}.`;
 }
 
 /** A code start as typed: 2 to 4 letters A to Z, or what is wrong with it. */
