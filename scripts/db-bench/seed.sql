@@ -98,8 +98,10 @@ SELECT gen_random_uuid(), bt.id, ts, bt.users[1 + (s % array_length(bt.users, 1)
 -- Retail catalogue
 -- ---------------------------------------------------------------------------------------------
 
-INSERT INTO retail_categories (id, tenant_id, name)
-SELECT gen_random_uuid(), bt.id, 'Category ' || c FROM bt, generate_series(1, 20) c WHERE bt.kind = 'retail';
+-- The prefix trigger of V96 does not fire under session_replication_role = replica, so the seed sets it (CA to CT).
+INSERT INTO retail_categories (id, tenant_id, name, code_prefix)
+SELECT gen_random_uuid(), bt.id, 'Category ' || c, 'C' || chr(64 + c) FROM bt, generate_series(1, 20) c
+ WHERE bt.kind = 'retail';
 INSERT INTO retail_units (id, tenant_id, name)
 SELECT gen_random_uuid(), bt.id, u FROM bt, unnest(ARRAY['pcs', 'kg', 'litre', 'box', 'metre']) u
  WHERE bt.kind = 'retail';
@@ -201,6 +203,19 @@ SELECT l.id, l.tenant_id, s.created_at, l.sale_id, l.line_no, l.product_id, l.qt
        l.line_cost
   FROM bline l JOIN bsale s ON s.id = l.sale_id
  ORDER BY s.created_at, l.line_no;
+
+-- Payments on credit sales (issue #488): what each credit sale has been paid, in one or two payments dated 1 to 60 days
+-- after the sale, as SalesService.pay writes them. Their journal entries are not seeded; no measured query reads them.
+INSERT INTO retail_sale_payments (id, tenant_id, created_at, sale_id, amount_minor, currency, method, paid_on,
+                                  journal_entry_id, historical, created_by)
+SELECT gen_random_uuid(), s.tenant_id, s.created_at + d.days * interval '1 day', s.id,
+       CASE WHEN s.pays = 1 THEN s.paid_minor WHEN k = 1 THEN s.paid_minor / 2 ELSE s.paid_minor - s.paid_minor / 2 END,
+       'UGX', CASE WHEN random() < 0.6 THEN 'cash' WHEN random() < 0.8 THEN 'mobile_money' ELSE 'bank' END,
+       ((s.created_at + d.days * interval '1 day') AT TIME ZONE 'Africa/Kampala')::date, gen_random_uuid(),
+       s.historical, s.created_by
+  FROM (SELECT x.*, CASE WHEN x.paid_minor >= 2 AND random() < 0.5 THEN 2 ELSE 1 END AS pays
+          FROM retail_sales x WHERE x.payment_method = 'credit' AND x.paid_minor > 0) s,
+       generate_series(1, s.pays) k, LATERAL (SELECT k * (1 + floor(random() * 30))::int AS days) d;
 
 -- Movements: one sale movement per line (JdbcStockLedger.record and recordHistorical), and a
 -- reversing return for a voided sale.

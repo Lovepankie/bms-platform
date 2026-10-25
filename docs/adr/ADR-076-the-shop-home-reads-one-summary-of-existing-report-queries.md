@@ -51,8 +51,9 @@ rules than the cards need.
    sale was cancelled today. Each way (cash and mobile money always, bank when it moved money) gives its in, its out and the
    difference. Payments are chosen by `paid_on` alone, as the cash book chooses them, whenever they were entered: the payment
    routes refuse a `paid_on` after the day of entry, but an import or a replay can still write one, and the card must not lose it.
-   No index leads on `retail_sale_payments.paid_on`, so that part reads the tenant's payments as the cash summary's own query does
-   (bench query k17); an index on `(tenant_id, paid_on)` is the fix if it shows, and needs a migration. They are not Received of ADR-043, which counts a
+   No index led on `retail_sale_payments.paid_on`, so that part read the tenant's payments as the cash summary's own query does
+   (bench query k17); the index `(tenant_id, paid_on)` is the fix, added by `V100` (issue #488: at 25 times the staging data
+   the payments part went from 300 buffers to 14, k17 from 2.25 to 1.33 ms). They are not Received of ADR-043, which counts a
    sale on the day it was entered.
 5. **Home dates are the business day in the tenant's zone** (Africa/Kampala by default); this week starts on Monday.
 
@@ -68,7 +69,7 @@ changes Home too (on purpose). The takings repeat the rules of `JdbcCashSales` i
 line with `GET /retail/reports/cash/daily` and fails if they part. A session with `retail.order.manage` and no sales read still asks the orders board.
 
 **Watch for:** the reversals of payments on account, the refunds and the fees paid on an account have no index on their day; those
-tables hold one row per receipt, return or order and are measured by bench query k17. The top items of the week scan the sale lines
+tables hold one row per receipt, return or order and are read by bench query k17, though its seed holds none of them yet (#488). The top items of the week scan the sale lines
 of up to seven days; if it shows in the database benchmarks, the week
 can move to the sales summary's grouped read. A new way of paying appears on the takings card on its own, labelled by its key until
 the PWA names it.

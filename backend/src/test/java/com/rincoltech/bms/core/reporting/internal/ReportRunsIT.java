@@ -420,11 +420,26 @@ class ReportRunsIT extends ReportsItSupport {
     }
 
     // JUSTIFICATION-A3: new cases for the order of the repeat check and the limit, and for the limit under concurrent
-    // requests.
+    // requests. Issue #267: a repeat finds the first run only while it is open, and a runner of another cached
+    // context once claimed and finished it first, so the repeat met the limit. Beyond IntegrationTest's switch
+    // (#285), another user's run holds the tenant's one running place with a heartbeat that never goes stale, so no
+    // runner on any clock can start or sweep this user's runs before the repeat (closeOpenRuns cancels every open
+    // run, whoever asked for it).
     @Test
     void anIdenticalRepeatPastTheLimitGetsTheExistingRunNotA429() {
         TestDatabase.Fixture t = tenant(true);
         UUID user = UUID.randomUUID();
+        java.sql.Timestamp before = java.sql.Timestamp.from(TestReports.START.minus(Duration.ofHours(1)));
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO report_runs (id, tenant_id, created_at, report_key, params, params_hash, scope, format,
+                                                 status, requested_by, as_of, started_at, owner, heartbeat_at, row_cap,
+                                                 size_cap_bytes)
+                        VALUES (?, ?, ?, 'test.rows', '{}', repeat('b', 64), '{}', 'json', 'running', ?, DATE '2026-10-08',
+                                ?, 'another-host/held', TIMESTAMPTZ '2999-01-01 00:00Z', 500, 1048576)
+                        """)
+                .params(UUID.randomUUID(), t.tenantId(), before, UUID.randomUUID(), before)
+                .update();
         String first = null;
         for (int i = 1; i <= 10; i++) {
             ResponseEntity<JsonNode> r = post(t, user, PORTFOLIO, "test.rows", Map.of("n", i), "json");
@@ -434,13 +449,13 @@ class ReportRunsIT extends ReportsItSupport {
             }
         }
         // The eleventh distinct request is refused; a repeat of the first is answered with the first.
-        assertThat(post(t, user, PORTFOLIO, "test.rows", Map.of("n", 11), "json")
-                        .getStatusCode()
-                        .value())
-                .isEqualTo(429);
+        ResponseEntity<JsonNode> eleventh = post(t, user, PORTFOLIO, "test.rows", Map.of("n", 11), "json");
+        assertThat(eleventh.getStatusCode().value()).isEqualTo(429);
+        assertThat(eleventh.getBody().get("code").asString()).isEqualTo("rate_limited");
         ResponseEntity<JsonNode> again = post(t, user, PORTFOLIO, "test.rows", Map.of("n", 1), "json");
-        assertThat(again.getStatusCode().value()).isEqualTo(200);
+        assertThat(again.getStatusCode().value()).as("%s", again.getBody()).isEqualTo(200);
         assertThat(again.getBody().get("id").asString()).isEqualTo(first);
+        assertThat(again.getBody().get("status").asString()).isEqualTo("queued");
     }
 
     @Test

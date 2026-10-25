@@ -37,8 +37,8 @@ class HomeRepository {
      * account reversed today, money refunded today on goods taken back (at the till that paid it), and the door fee of an order
      * whose sale was cancelled today; a return cancelled today brings its refund back in. Every part out is read for cash,
      * mobile money and bank only, as the fees are: what a return takes off a buyer's balance is not money. Payments are chosen by {@code paid_on}
-     * alone, as the cash book chooses them, whenever they were entered: no index leads on {@code paid_on} (pending a migration,
-     * see bench query k17), so this part reads the tenant's payments the way the cash summary does.
+     * alone, as the cash book chooses them, whenever they were entered, through the index {@code (tenant_id, paid_on)} (V100,
+     * issue #488, bench query k17).
      */
     List<Taking> takings(List<UUID> branchIds, LocalDate today, ZoneId zone) {
         if (branchIds != null && branchIds.isEmpty()) {

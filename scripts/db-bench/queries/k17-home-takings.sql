@@ -1,9 +1,9 @@
 -- HomeRepository.takings: today's takings by way of paying for the shop Home (issue #485, ADR-076), read as the cash book
 -- reads a day for every way. Sales by retail_sales_by_date, voids by retail_sales_voided, deliveries by
--- retail_customer_orders_delivered. Payments are chosen by paid_on alone, as the cash book chooses them; no index leads on
--- paid_on (retail_sale_payments_sale is (tenant_id, sale_id, paid_on)), so that part reads the tenant's payments, as the cash
--- summary's own query does. The reversals of payments on account (reversed_on), the refunds (returned_on, voided_on) and the
--- fees paid on an account (fee_paid_on) have no index of their own either. All are measured here.
+-- retail_customer_orders_delivered. Payments are chosen by paid_on alone, as the cash book chooses them, through
+-- retail_sale_payments_by_day (tenant_id, paid_on), V100, issue #488; before it that part read the tenant's payments. The
+-- reversals of payments on account (reversed_on), the refunds (returned_on, voided_on) and the fees paid on an account
+-- (fee_paid_on) have no index of their own. All are measured here.
 -- tenant: tenant
 SELECT t.method, t.kind, sum(t.amount) AS amount FROM (
   SELECT s.payment_method AS method, 'sales' AS kind, s.total_minor AS amount FROM retail_sales s

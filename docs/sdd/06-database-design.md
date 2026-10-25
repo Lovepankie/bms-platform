@@ -2227,7 +2227,10 @@ time, ADR-079) and `line_cost_minor`. Each line writes a `usage` or `damage` mov
 
 `sale_id`, `amount_minor > 0`, `currency`, `method` (`cash`, `mobile_money`, `bank`), `paid_on`,
 `journal_entry_id`. Each payment raises `retail_sales.paid_minor` under the sale's row lock; the
-CHECK `paid_minor <= total_minor` makes an overpayment impossible.
+CHECK `paid_minor <= total_minor` makes an overpayment impossible. Indexes: `(tenant_id, sale_id, paid_on)`
+for a sale's payments (V12), `(tenant_id, created_at)` for the payments entered in a range (V64), and
+`retail_sale_payments_by_day` `(tenant_id, paid_on)` for a day's payments, as the cash book and the shop
+Home takings choose them (V100, issue #488, ADR-076, bench query k17).
 
 Every retail unit amount a request can set (product and purchase cost and sell price, sale line
 price and cost snapshot, payment amount, movement, usage and stock-take unit cost, price history)
