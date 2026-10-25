@@ -104,6 +104,10 @@ jobs:
             || { echo "::error::src/api/schema.d.ts is stale; run 'make openapi' and commit it."; exit 1; }
       - run: npm run lint
       - run: npm test
+      - name: Layout checks in Chromium (the bottom tabs, issue #544)
+        run: |
+          npx playwright install chromium
+          npm run test:layout
       - run: npm run build
 
   delivery:

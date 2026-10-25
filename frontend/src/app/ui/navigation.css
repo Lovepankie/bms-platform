@@ -857,11 +857,17 @@ body.side-menu-open {
  * on a target taller than 48px. The current tab is in the brand colour, its label semibold, and its icon sits on a tinted pill that
  * fades and widens in by opacity and transform: no stripe, no glow. The bar takes the iPhone's home indicator and side insets. While
  * it shows, the root has the class has-tab-bar and --tab-bar is its full height, edge included, so the page ends above it, a sticky action bar
- * stops on top of it (retail.css, lending.css) and a toast rises above both (feedback.css).
+ * stops on top of it at --tab-bar-offset (kit.css, lending.css) and a toast rises above both (feedback.css).
  */
-/* The tabs' 64px and the hairline above them. */
+/* The first paint's value, until the bar is measured: the tabs' height and the hairline above them. The sticky bars stop at
+   --tab-bar-offset, which drops to 0 while the soft keyboard has the tabs aside; the body keeps its padding then (#544). */
 .has-tab-bar {
-  --tab-bar: calc(65px + env(safe-area-inset-bottom));
+  --tab-bar: calc(var(--tab-height) + 1px + env(safe-area-inset-bottom));
+  --tab-bar-offset: var(--tab-bar);
+}
+
+.has-tab-bar.tab-bar-aside {
+  --tab-bar-offset: 0px;
 }
 
 .has-tab-bar body {
@@ -896,10 +902,10 @@ body.side-menu-open {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-height: 64px;
+  gap: var(--tab-gap);
+  min-height: var(--tab-height);
   min-width: var(--tap);
-  padding: var(--space-1) 2px;
+  padding: var(--space-1) var(--tab-gap);
   color: var(--color-text-muted);
   font-size: var(--text-xs);
   line-height: 1.2;
@@ -917,7 +923,7 @@ body.side-menu-open {
 
 .tab:focus-visible {
   outline: 2px solid var(--color-focus);
-  outline-offset: -4px;
+  outline-offset: calc(-1 * var(--space-1));
   border-radius: var(--radius);
 }
 
@@ -925,8 +931,8 @@ body.side-menu-open {
   position: relative;
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 32px;
+  width: var(--tab-pill-width);
+  height: var(--tab-pill-height);
   transition: transform var(--motion-fast) var(--ease-out);
 }
 
@@ -965,17 +971,17 @@ body.side-menu-open {
 /* Only where it means something: the count of items low on stock on My stock. The number is read out with the label instead. */
 .tab-badge {
   position: absolute;
-  top: -2px;
-  left: calc(50% + 6px);
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
+  top: calc(-1 * var(--tab-gap));
+  left: calc(50% + var(--space-1));
+  min-width: var(--tab-badge);
+  height: var(--tab-badge);
+  padding: 0 var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--color-danger-fill);
-  color: var(--rt-white);
-  font-size: var(--text-xs);
+  color: var(--color-on-danger);
+  font-size: var(--tab-badge-text);
   font-weight: var(--weight-semibold);
-  line-height: 18px;
+  line-height: var(--tab-badge);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

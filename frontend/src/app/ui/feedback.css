@@ -149,7 +149,7 @@
 .toast {
   position: fixed;
   left: calc(50% + var(--side-nav-width, 0px) / 2);
-  bottom: calc(var(--space-5) + var(--bottom-bar, 0px) + max(var(--tab-bar, 0px), env(safe-area-inset-bottom)));
+  bottom: calc(var(--space-5) + var(--bottom-bar, 0px) + max(var(--tab-bar-offset, 0px), env(safe-area-inset-bottom)));
   transform: translateX(-50%);
   z-index: var(--z-toast);
   display: flex;

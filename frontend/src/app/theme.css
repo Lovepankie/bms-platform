@@ -202,7 +202,8 @@ body {
   --color-scrim: rgba(16, 24, 40, 0.62); /* dims the page behind a guided tour step */
   /* Roles added for the theme selector (#429): each has a light and a dark value (docs/ui/design-system.md). */
   --color-neutral-tint: var(--rt-grey-100); /* disabled and pressed controls, skeletons, hairlines inside tables */
-  --color-danger-fill: var(--color-danger); /* the destructive button; text on it is always white */
+  --color-danger-fill: var(--color-danger); /* the destructive button and the tab badge */
+  --color-on-danger: #ffffff; /* text on --color-danger-fill, in both themes */
   --color-inverse: var(--rt-grey-900); /* toasts and chart read-outs, drawn the other way round */
   --color-on-inverse: #ffffff;
   /* The toast (docs/ui-rules.md rule 15) stays a dark neutral pill in both themes; its icon takes a status colour lifted to read on it. */
@@ -261,6 +262,13 @@ body {
 
   /* Interaction */
   --tap: 48px; /* docs/ui-rules.md rule 12 */
+  /* The phone's bottom tabs (issue #539, navigation.css), all from the target and the spacing steps. */
+  --tab-height: calc(var(--tap) + var(--space-4)); /* 64px: the 48px target and room for the label */
+  --tab-pill-width: calc(var(--tap) + var(--space-2)); /* 56px: the current tab's pill behind the icon */
+  --tab-pill-height: var(--space-6); /* 32px */
+  --tab-gap: calc(var(--space-1) / 2); /* 2px: between icon and label, and at the tab's sides */
+  --tab-badge-text: min(var(--text-xs), var(--space-4)); /* 12px, growing with the phone's font size up to 16px so it never covers the icon */
+  --tab-badge: calc(var(--tab-badge-text) * 1.5); /* 18px at the default size */
   --focus-ring: 0 0 0 4px color-mix(in srgb, var(--color-accent) 30%, transparent);
   --content-width: 1120px;
   --transition: var(--motion-fast) var(--ease-out);
@@ -314,6 +322,7 @@ body {
   --color-danger: #f97066;
   --color-danger-tint: #3b1614;
   --color-danger-fill: #d92d20;
+  --color-on-danger: #ffffff;
   --color-success: #47cd89;
   --color-success-tint: #0f2c1e;
   --color-warning: #fdb022;

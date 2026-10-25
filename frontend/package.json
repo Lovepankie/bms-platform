@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "test": "vitest run",
+    "test:layout": "vitest run --config layout/vitest.config.ts",
     "gen:api": "openapi-typescript ../docs/api/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
@@ -35,6 +36,7 @@
     "@vitejs/plugin-react": "5.2.0",
     "jsdom": "29.1.1",
     "openapi-typescript": "7.13.0",
+    "playwright": "1.63.0",
     "typescript": "5.9.3",
     "vite": "7.3.6",
     "vite-plugin-pwa": "1.3.0",

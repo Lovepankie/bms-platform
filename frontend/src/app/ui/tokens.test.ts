@@ -140,6 +140,12 @@ describe('the dark theme tokens', () => {
     expect(contrast(darkToken('--color-focus'), D_BG)).toBeGreaterThanOrEqual(3);
   });
 
+  // Issue #544: the tab badge's small number pairs --color-on-danger with --color-danger-fill, so the pair is proven in both themes.
+  it('the on-danger text reads at 4.5:1 on the danger fill in both themes', () => {
+    expect(contrast(token('--color-on-danger'), token('--color-danger'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(darkToken('--color-on-danger'), darkToken('--color-danger-fill'))).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('white text on the destructive button fill and the inverse toast text read at 4.5:1', () => {
     expect(contrast(WHITE, darkToken('--color-danger-fill'))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(darkToken('--color-on-inverse'), darkToken('--color-inverse'))).toBeGreaterThanOrEqual(4.5);

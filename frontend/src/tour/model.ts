@@ -54,6 +54,8 @@ export interface TourStep {
   feature?: Feature;
   /** Skip the step quietly when its target is not on the page (a permission or a setting hides it). */
   optional?: boolean;
+  /** Words for this user in place of `body`, such as the tabs they actually have (issue #544). */
+  bodyFor?: (me: Me) => string;
 }
 
 export interface Tour {
@@ -100,9 +102,9 @@ export function stepVisible(step: TourStep, me: Me, features: Record<Feature, bo
   return true;
 }
 
-/** The steps of a tour this user sees, in order. */
+/** The steps of a tour this user sees, in order, each in its words for this user. */
 export function stepsFor(tour: Tour, me: Me, features: Record<Feature, boolean> = FEATURES): TourStep[] {
-  return tour.steps.filter((step) => stepVisible(step, me, features));
+  return tour.steps.filter((step) => stepVisible(step, me, features)).map((step) => (step.bodyFor ? { ...step, body: step.bodyFor(me) } : step));
 }
 
 /** The first-run tour for this user: the first auto tour of the registry whose audience matches. */

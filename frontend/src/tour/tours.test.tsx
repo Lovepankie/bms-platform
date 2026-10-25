@@ -30,6 +30,7 @@ import { LandedCostsPage } from '../areas/staff/retail/landed-costs';
 import { CataloguePage } from '../areas/staff/retail/catalogue';
 import { ControlsPage } from '../areas/staff/retail/controls';
 import { RetailHome } from '../areas/staff/retail/home';
+import { canUse, showRetail } from '../areas/staff/retail/permissions';
 import { RecordSale } from '../areas/staff/retail/sale';
 import { InTransitPage } from '../areas/staff/retail/in-transit';
 import { RetailSettings } from '../areas/staff/retail/settings';
@@ -41,7 +42,7 @@ import { StockByLocationPage } from '../areas/staff/retail/stock-by-location';
 import { StocktakePage } from '../areas/staff/retail/stocktake';
 import { StaffBar, StaffSideNav } from '../areas/staff/route';
 import { MoneyPage, MorePage } from '../areas/staff/tab-pages';
-import { TabBar } from '../areas/staff/tabs';
+import { TabBar, staffTabs } from '../areas/staff/tabs';
 import { AssistantSettingsPage } from '../areas/staff/assistant/page';
 import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
@@ -53,7 +54,7 @@ import { BillingScreen } from '../areas/staff/billing/page';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
-import { CORE_TOURS, TOURS } from './tours';
+import { CORE_TOURS, TOURS, tabNamesFor } from './tours';
 
 // One test per tour: render the screen each step points at (under the shell's brand bar, the sidebar and the staff bar, as the staff
 // layout draws them), as the user the tour is for, and prove its data-tour target is there. Renaming a screen or dropping an anchor fails here, not on
@@ -391,3 +392,39 @@ describe('steps waiting for a feature', () => {
     }
   });
 });
+
+// Issue #544: the bottom tabs step names only the tabs the person has, so a lending-only session is not told of Sell or Buy.
+describe('the bottom tabs step', () => {
+  const lending = (permissions: string[]) => ({ user_id: 'u-1', full_name: 'Test Officer 02', kind: 'staff', permissions, modules: ['lending'], branches: [] }) as unknown as Me;
+  const people: [string, Me][] = [
+    ['an owner', mockMe('admin')],
+    ['a seller', mockMe('sales')],
+    ['a loan officer', lending(['lending.loans.read', 'lending.members.read'])],
+    ['a savings officer', lending(['lending.loans.read', 'lending.savings.read'])],
+    ['a storekeeper', { ...mockMe('admin'), permissions: ['retail.stock.read', 'retail.purchase.create'] } as Me],
+  ];
+
+  it.each(people)('names the same tabs the bar draws for %s', (_who, me) => {
+    const drawn = staffTabs(me, { sells: canSell(me) }).map((t) => t.label).filter((l) => l !== 'More');
+    expect(tabNamesFor(me)).toEqual(drawn);
+  });
+
+  const wordsOf = (tourId: string, me: Me) => stepsFor(TOURS.find((t) => t.id === tourId) as Tour, me).find((s) => s.id === 'tabs')?.body;
+
+  it('words the step for the tabs the person has', () => {
+    expect(wordsOf('admin-welcome', mockMe('admin'))).toBe('On a phone, the bar at the bottom holds Sell, My stock, Buy and Money. More has everything else, and Sign out.');
+    expect(wordsOf('retail-sales', mockMe('sales'))).toBe('On a phone, the bar at the bottom holds Sell, My stock and Money. More has everything else, and Sign out.');
+    expect(wordsOf('staff-welcome', lending(['lending.loans.read', 'lending.savings.read']))).toBe('On a phone, the bar at the bottom holds Money. More has everything else, and Sign out.');
+    expect(wordsOf('staff-welcome', lending(['lending.loans.read']))).toBe('On a phone, the bar at the bottom holds More: every page your role allows, and Sign out.');
+  });
+
+  it('on the Money page names the other tabs to go back to, and none a lending-only session lacks', () => {
+    expect(wordsOf('page-money', mockMe('admin'))).toBe('Money is one of the tabs at the bottom. Tap Sell, My stock or Buy to get back to the daily jobs.');
+    expect(wordsOf('page-money', lending(['lending.savings.read']))).toBe('Money is one of the tabs at the bottom. More has everything else.');
+  });
+});
+
+// useSells without branch roles: may the session sell at all.
+function canSell(me: Me) {
+  return showRetail(me) && canUse(me, 'sale');
+}

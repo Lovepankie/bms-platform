@@ -1,4 +1,7 @@
 import type { Me } from '../api/client';
+import { showSavings } from '../areas/staff/lending/savings-permissions';
+import { showReceivePayments } from '../areas/staff/payments/state';
+import { MONEY_SCREENS, canUse, showRetail } from '../areas/staff/retail/permissions';
 import type { Tour, TourStep } from './model';
 import { CUSTOMER_TOURS } from './tours-customers';
 import { LENDING_MORE_TOURS } from './tours-lending-more';
@@ -102,13 +105,33 @@ const search: TourStep = {
   body: 'Tap Search at the top and type what you want to do, like sell, buy stock, expenses or owe. Tap the screen to open it. On a laptop, press / or Ctrl and K (Cmd and K on a Mac). On a phone it is also at the top of More.',
 };
 
-// The bottom tabs on a phone (issue #539): the daily jobs one tap away. On a laptop there is no bar and the step is skipped.
+/**
+ * The names of the tabs before More this session gets, by the checks of staffTabs (areas/staff/tabs.tsx), read here without loading
+ * the staff area, which loads the tour host. Sell counts as it would where the session sells. tours.test.tsx proves the two agree.
+ */
+export function tabNamesFor(me: Me): string[] {
+  const retail = showRetail(me);
+  const money = (retail && MONEY_SCREENS.some((screen) => canUse(me, screen))) || showSavings(me) || showReceivePayments(me);
+  const names: (string | false)[] = [retail && canUse(me, 'sale') && 'Sell', retail && canUse(me, 'stock') && 'My stock', retail && canUse(me, 'restock') && 'Buy', money && 'Money'];
+  return names.filter((n): n is string => n !== false);
+}
+
+const listed = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] ?? ''));
+
+// The bottom tabs on a phone (issue #539): the daily jobs one tap away. On a laptop there is no bar and the step is skipped. The
+// words name only the tabs the person has (issue #544): a lending-only session may have Money and More, or More alone.
 const tabs: TourStep = {
   id: 'tabs',
   target: 'tab-bar',
   optional: true,
   title: 'Your daily jobs at the bottom',
-  body: 'On a phone, the bar at the bottom holds Sell, My stock, Buy and Money, the ones your role allows. More has everything else, and Sign out.',
+  body: 'On a phone, the bar at the bottom holds your daily jobs. More has everything else, and Sign out.',
+  bodyFor: (me) => {
+    const names = tabNamesFor(me);
+    return names.length === 0
+      ? 'On a phone, the bar at the bottom holds More: every page your role allows, and Sign out.'
+      : `On a phone, the bar at the bottom holds ${listed(names)}. More has everything else, and Sign out.`;
+  },
 };
 
 const branch: TourStep = {
@@ -141,7 +164,8 @@ export const adminWelcome: Tour = {
   // Version 21 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 22 adds the Find any screen step (issue #551): the Search button at the top.
   // Version 23 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
-  version: 23,
+  // Version 24 words the bottom tabs step for the tabs the person has (issue #544).
+  version: 24,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -408,7 +432,8 @@ export const retailSales: Tour = {
   // Version 18 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 19 adds the Find any screen step (issue #551): the Search button at the top.
   // Version 20 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
-  version: 20,
+  // Version 21 words the bottom tabs step for the tabs the person has (issue #544).
+  version: 21,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -585,7 +610,8 @@ export const staffWelcome: Tour = {
   // Version 7 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
   // Version 8 adds the Find any screen step (issue #551): the Search button at the top.
   // Version 9 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
-  version: 9,
+  // Version 10 words the bottom tabs step for the tabs the person has (issue #544).
+  version: 10,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -1061,7 +1087,8 @@ export const notificationsPage: Tour = {
 // The Money and More pages of the phone's bottom tabs (issue #539). JUSTIFICATION-A3: one page tour per new screen, as ADR-049 asks.
 export const moneyPage: Tour = {
   id: 'page-money',
-  version: 1,
+  // Version 2 names only the tabs the person has (issue #544).
+  version: 2,
   title: 'This page: money',
   audience: () => true,
   autoStart: false,
@@ -1074,7 +1101,16 @@ export const moneyPage: Tour = {
       title: 'Your money pages',
       body: 'Cash, banking, savings, expenses and who owes you, the ones your role allows. Tap one to open it.',
     },
-    { ...tabs, id: 'tabs', body: 'Money is one of the tabs at the bottom. Tap Sell, My stock or Buy to get back to the daily jobs.' },
+    {
+      ...tabs,
+      id: 'tabs',
+      body: 'Money is one of the tabs at the bottom.',
+      bodyFor: (me) => {
+        const jobs = tabNamesFor(me).filter((n) => n !== 'Money');
+        const back = jobs.length > 1 ? `${jobs.slice(0, -1).join(', ')} or ${jobs[jobs.length - 1]}` : jobs[0];
+        return back ? `Money is one of the tabs at the bottom. Tap ${back} to get back to the daily jobs.` : 'Money is one of the tabs at the bottom. More has everything else.';
+      },
+    },
   ],
 };
 

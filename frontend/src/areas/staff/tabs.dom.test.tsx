@@ -210,10 +210,60 @@ describe('the bottom tabs on a phone (issue #539)', () => {
     view.resize(520);
     expect(nav.isConnected).toBe(true);
     expect(nav.hidden).toBe(true);
-    expect(document.documentElement.classList.contains('has-tab-bar')).toBe(false);
+    expect(document.documentElement.classList.contains('tab-bar-aside')).toBe(true);
     view.resize(900);
     expect(nav.hidden).toBe(false);
-    expect(document.documentElement.classList.contains('has-tab-bar')).toBe(true);
+    expect(document.documentElement.classList.contains('tab-bar-aside')).toBe(false);
+  });
+
+  // Issue #544: dropping has-tab-bar while the keyboard opened took the body's padding away, and a page with a field near its end
+  // got about 65px shorter under it. The padding and the measured height stay; only the sticky bars' offset drops.
+  it('keeps the body padding and the measured height while the keyboard has it aside', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return { height: this.classList.contains('tab-bar') && !this.hidden ? 65 : 0 } as DOMRect;
+    });
+    const view = viewport(900);
+    show(admin, { children: <input aria-label="Item" /> });
+    const root = document.documentElement;
+    expect(root.style.getPropertyValue('--tab-bar')).toBe('65px');
+    act(() => screen.getByRole('textbox', { name: 'Item' }).focus());
+    view.resize(520);
+    expect((document.querySelector('.tab-bar') as HTMLElement).hidden).toBe(true);
+    expect(root.classList.contains('has-tab-bar')).toBe(true);
+    expect(root.style.getPropertyValue('--tab-bar')).toBe('65px');
+    expect(root.classList.contains('tab-bar-aside')).toBe(true);
+  });
+
+  it.each([
+    ['an empty contenteditable', ''],
+    ['a contenteditable="true"', 'true'],
+    ['a contenteditable="plaintext-only"', 'plaintext-only'],
+  ])('steps aside for the keyboard of %s, and not for contenteditable="false"', (_name, value) => {
+    const view = viewport(900);
+    show(admin, {
+      children: (
+        <>
+          <div aria-label="Note" tabIndex={0} contentEditable={value as never} suppressContentEditableWarning />
+          <div aria-label="Shut" tabIndex={0} contentEditable="false" suppressContentEditableWarning />
+        </>
+      ),
+    });
+    // React writes contentEditable="" as the attribute only through setAttribute, so the test sets the exact value.
+    const note = document.querySelector('[aria-label="Note"]') as HTMLElement;
+    note.setAttribute('contenteditable', value);
+    const nav = bar();
+    act(() => note.focus());
+    view.resize(520);
+    expect(nav.hidden).toBe(true);
+    act(() => (document.querySelector('[aria-label="Shut"]') as HTMLElement).focus());
+    view.resize(519);
+    expect(nav.hidden).toBe(false);
+  });
+
+  // Under interactive-widget=resizes-content (Android) the window shrinks with the viewport, so the bar never steps aside. That is
+  // accepted in docs/ui/design-system.md as long as the app never sets it: this fails the day it does, so the check is revisited.
+  it('relies on the viewport meta not setting interactive-widget=resizes-content', () => {
+    expect(readFileSync(join(process.cwd(), 'index.html'), 'utf8')).not.toMatch(/interactive-widget\s*=\s*resizes-content/);
   });
 
   it('stays while a select has focus, even with the viewport short, as its picker is not the keyboard', () => {
@@ -356,15 +406,28 @@ describe('the tabs and their pages, read from /me (issue #539)', () => {
   it('Money lists its pages as rows', () => {
     page(admin, <MoneyPage />);
     const rows = within(screen.getByRole('list', { name: 'Money pages' })).getAllByRole('link').map((a) => a.querySelector('.list-row-title')?.textContent);
-    expect(rows.slice(0, 3)).toEqual(['Cash summary', 'Banking', 'Savings']);
+    expect(rows.slice(0, 3)).toEqual(['Cash summary', 'Banking', 'Shop savings']);
     expect(rows).toContain('Customers who owe');
+  });
+
+  // Issue #544: the shop's savings and the lending members' savings sat side by side as "Savings" and "Member savings".
+  it('tells the shop savings from the member savings by name and by hint', () => {
+    const both = { ...admin, permissions: [...(admin.permissions ?? []), 'lending.savings.read'], modules: ['retail', 'lending'] } as Me;
+    const savings = moneyLinks(both).filter((l) => /savings/i.test(l.label));
+    expect(savings.map((l) => l.label)).toEqual(['Shop savings', 'Member savings']);
+    expect(savings.map((l) => l.hint)).toEqual(["The shop's money set aside each day", 'Deposits and withdrawals of lending members']);
   });
 
   it('More lists the areas the session may open, under Shop and Lending for a business with both, and signs out', () => {
     const signOut = vi.fn();
-    const both = { ...admin, permissions: [...(admin.permissions ?? []), 'lending.loans.read'], modules: ['retail', 'lending'] } as Me;
+    const both = { ...admin, permissions: [...(admin.permissions ?? []), 'lending.loans.read', 'core.approvals.read'], modules: ['retail', 'lending'] } as Me;
     page(both, <MorePage />, signOut);
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Shop', 'Lending', 'Business', 'You']);
+    // The sidebar's order (FR-UXN-04, #544): Home and Approvals first, then Shop and Lending, then the other shared areas.
+    const lists = screen.getAllByRole('list').map((l) => l.getAttribute('aria-label'));
+    expect(lists.slice(0, 4)).toEqual(['Start', 'Shop', 'Lending', 'Business']);
+    expect(within(screen.getByRole('list', { name: 'Start' })).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Approvals']);
+    expect(within(screen.getByRole('list', { name: 'Business' })).queryByRole('link', { name: 'Home' })).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Lending' })).getByRole('link', { name: 'Loans' })).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Business' })).getByRole('link', { name: 'Business set-up' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
@@ -388,9 +451,22 @@ describe('the tab bar styles', () => {
     expect(rule('.tab-bar')).toMatch(/position: fixed/);
     expect(rule('.tab-bar')).toMatch(/env\(safe-area-inset-bottom\)/);
     expect(rule('.tab-bar')).toMatch(/env\(safe-area-inset-left\)/);
-    expect(rule('.tab')).toMatch(/min-height: 64px/);
+    expect(rule('.tab')).toMatch(/min-height: var\(--tab-height\)/);
     expect(rule('.tab')).toMatch(/min-width: var\(--tap\)/);
-    expect(rule('.has-tab-bar')).toMatch(/--tab-bar: calc\(65px \+ env\(safe-area-inset-bottom\)\)/);
+    expect(rule('.has-tab-bar')).toMatch(/--tab-bar: calc\(var\(--tab-height\) \+ 1px \+ env\(safe-area-inset-bottom\)\)/);
+  });
+
+  // Issue #544: every size comes from a token, so the bar changes with the target and the spacing steps.
+  it('uses no raw size but the 1px hairline and the 2px focus ring, and the badge text takes the on-danger role', () => {
+    const tabRules = [...css.matchAll(/\n(\.has-tab-bar|\.tab[\w\s.:'=\[\]()-]*) \{([^}]*)\}/g)].map(([, selector, body]) => [selector, body] as const);
+    expect(tabRules.length).toBeGreaterThan(8);
+    for (const [selector, body] of tabRules) {
+      const raw = (body ?? '').replace(/outline: 2px solid/g, '').replace(/border-top: 1px solid/g, '').replace(/\+ 1px \+/g, '').match(/-?\d+px/g);
+      expect(raw, selector).toBeNull();
+    }
+    expect(rule('.tab-badge')).toMatch(/color: var\(--color-on-danger\)/);
+    const theme = readFileSync(join(process.cwd(), 'src/app/theme.css'), 'utf8');
+    expect(theme).toMatch(/--tab-height: calc\(var\(--tap\) \+ var\(--space-4\)\);/);
   });
 
   it('marks the current tab without a stripe: the colour, the weight and a pill behind the icon', () => {
@@ -402,8 +478,12 @@ describe('the tab bar styles', () => {
     const kitCss = read('kit.css');
     const lendingCss = read('lending.css');
     // The sale's bar is the kit's ActionBar since issue #526.
-    expect(kitCss).toMatch(/\.has-tab-bar \.action-bar \{\s*bottom: var\(--tab-bar\);/);
-    expect(lendingCss).toMatch(/\.has-tab-bar \.mf-savebar \{\s*bottom: var\(--tab-bar\);/);
-    expect(read('feedback.css')).toMatch(/var\(--tab-bar, 0px\)/);
+    expect(kitCss).toMatch(/\.has-tab-bar \.action-bar \{\s*bottom: var\(--tab-bar-offset\);/);
+    expect(lendingCss).toMatch(/\.has-tab-bar \.mf-savebar \{\s*bottom: var\(--tab-bar-offset\);/);
+    expect(read('feedback.css')).toMatch(/var\(--tab-bar-offset, 0px\)/);
+    // The offset is the bar's height, and 0 while the keyboard has the bar aside; the body's padding stays --tab-bar (#544).
+    expect(rule('.has-tab-bar')).toMatch(/--tab-bar-offset: var\(--tab-bar\);/);
+    expect(rule('.has-tab-bar.tab-bar-aside')).toMatch(/--tab-bar-offset: 0px;/);
+    expect(rule('.has-tab-bar body')).toMatch(/padding-bottom: var\(--tab-bar\);/);
   });
 });

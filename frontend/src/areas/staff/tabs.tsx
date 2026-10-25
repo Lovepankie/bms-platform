@@ -10,7 +10,7 @@ import { showSavings } from './lending/savings-permissions';
 import { staffAreas } from './menu';
 import { showReceivePayments } from './payments/state';
 import { useSells } from './retail/nav';
-import { SCREENS, canUse, showRetail, type RetailScreen } from './retail/permissions';
+import { MONEY_SCREENS, SCREENS, canUse, showRetail, type RetailScreen } from './retail/permissions';
 
 // The bottom tabs on a phone (issue #539, decisions D29 and D31): the five daily jobs, Sell, My stock, Buy, Money and More, each an
 // icon above its label. Below 720px they replace the side menu's drawer; from 720px the sidebar stays and there are no tabs. A tab
@@ -32,24 +32,23 @@ export interface Tab {
 
 const pathOf = (screen: RetailScreen) => SCREENS.find((s) => s.screen === screen)?.path ?? '';
 
-/** The money pages under the Money tab: the cash book, then who owes and what is owed, then lending savings and payments in. */
-const MONEY_SCREENS: RetailScreen[] = [
-  'cashSummary', 'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'creditSales', 'creditControl', 'customerAccounts', 'customerAgeing', 'supplierPayables',
-];
-
 export interface MoneyLink {
   to: string;
   label: string;
   hint: string;
 }
 
+// The Money page's own words where the menu's would be unclear side by side: the shop's Savings sits next to Member savings (#544).
+const MONEY_LABELS: Partial<Record<RetailScreen, string>> = { creditSales: 'Customers who owe', savings: 'Shop savings' };
+const MONEY_HINTS: Partial<Record<RetailScreen, string>> = { savings: "The shop's money set aside each day" };
+
 /** The money pages the session may use, in the order the Money page lists them. Empty means no Money tab. */
 export function moneyLinks(me: Me): MoneyLink[] {
   const retail = showRetail(me) ? SCREENS.filter((s) => MONEY_SCREENS.includes(s.screen) && canUse(me, s.screen)) : [];
   const links: MoneyLink[] = retail
     .sort((a, b) => MONEY_SCREENS.indexOf(a.screen) - MONEY_SCREENS.indexOf(b.screen))
-    .map((s) => ({ to: s.path, label: s.screen === 'creditSales' ? 'Customers who owe' : s.label, hint: s.hint }));
-  if (showSavings(me)) links.push({ to: '/staff/lending/savings', label: 'Member savings', hint: 'Deposits and withdrawals of members' });
+    .map((s) => ({ to: s.path, label: MONEY_LABELS[s.screen] ?? s.label, hint: MONEY_HINTS[s.screen] ?? s.hint }));
+  if (showSavings(me)) links.push({ to: '/staff/lending/savings', label: 'Member savings', hint: 'Deposits and withdrawals of lending members' });
   if (showReceivePayments(me)) links.push({ to: '/staff/payments', label: 'Receive payments', hint: 'Mobile money and card payments into the business' });
   return links;
 }
@@ -81,7 +80,8 @@ export function currentTab(tabs: Tab[], pathname: string): TabId | undefined {
 }
 
 // The fields that bring up the keyboard. A select is left out: its picker is not the keyboard, and focus stays on it after a choice.
-const TEXT_ENTRY = ['', 'text', 'search', 'tel', 'number', 'email', 'password', 'url'].map((t) => (t ? `input[type=${t}]` : 'input:not([type])')).concat('textarea', '[contenteditable="true"]').join(', ');
+// contenteditable is editable as "", "true" and "plaintext-only", so only "false" is left out (#544).
+const TEXT_ENTRY = ['', 'text', 'search', 'tel', 'number', 'email', 'password', 'url'].map((t) => (t ? `input[type=${t}]` : 'input:not([type])')).concat('textarea', '[contenteditable]:not([contenteditable="false"])').join(', ');
 const typingIn = (el: EventTarget | null) => el instanceof Element && el.matches(TEXT_ENTRY);
 
 // How far the visual viewport must shrink under the layout one before it counts as the soft keyboard, not a browser bar.
@@ -179,23 +179,24 @@ export function TabBar({ me, away = false, barRef }: { me: Me; away?: boolean; b
 
 /**
  * The tabs on a phone only. While the soft keyboard is up they stay mounted but hidden, so the badge's read is not asked again on
- * every focus. While they show, the root carries has-tab-bar and --tab-bar is their measured height (safe-area inset and edge
- * included, at any font size), as the sale bar measures --bottom-bar; the CSS value is only the first paint's.
+ * every focus. On a phone the root carries has-tab-bar and --tab-bar is their measured height (safe-area inset and edge included,
+ * at any font size), as the sale bar measures --bottom-bar; the CSS value is only the first paint's. While the keyboard has them
+ * aside the root also carries tab-bar-aside: the body keeps its padding, so the page does not get shorter under a field while the
+ * keyboard opens, and only the sticky bars drop to the bottom (--tab-bar-offset, navigation.css; #544).
  */
 export function StaffTabBar({ me }: { me: Me }) {
   const phone = useIsPhone();
   const keyboard = useSoftKeyboard();
   const bar = useRef<HTMLElement>(null);
-  const shown = phone && !keyboard;
   useEffect(() => {
     const el = bar.current;
-    if (!shown || !el) return;
+    if (!phone || !el) return;
     const root = document.documentElement;
     root.classList.add('has-tab-bar');
+    // A hidden bar measures 0: the height it had when it last showed is kept.
     const measure = () => {
       const height = Math.ceil(el.getBoundingClientRect().height);
       if (height > 0) root.style.setProperty('--tab-bar', `${height}px`);
-      else root.style.removeProperty('--tab-bar');
     };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
@@ -205,6 +206,12 @@ export function StaffTabBar({ me }: { me: Me }) {
       root.classList.remove('has-tab-bar');
       root.style.removeProperty('--tab-bar');
     };
-  }, [shown]);
+  }, [phone]);
+  useEffect(() => {
+    if (!phone || !keyboard) return;
+    const root = document.documentElement;
+    root.classList.add('tab-bar-aside');
+    return () => root.classList.remove('tab-bar-aside');
+  }, [phone, keyboard]);
   return phone ? <TabBar me={me} away={keyboard} barRef={bar} /> : null;
 }

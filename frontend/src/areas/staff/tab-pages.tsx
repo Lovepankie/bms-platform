@@ -44,11 +44,11 @@ export function MoneyPage() {
 }
 
 /** One card of links; Retail is every shop page, so its row says so rather than repeating the shortcuts the tabs already hold. */
-function AreaCard({ title, links }: { title?: string; links: MenuLink[] }) {
+function AreaCard({ title, label = title ?? 'Areas', links }: { title?: string; label?: string; links: MenuLink[] }) {
   if (links.length === 0) return null;
   return (
     <Card title={title}>
-      <RowList label={title ?? 'Areas'}>
+      <RowList label={label}>
         {links.map((l) => (
           <ListRow key={l.to} to={l.to} title={l.label} meta={l.to === '/staff/retail' ? 'Every shop page' : undefined} />
         ))}
@@ -61,9 +61,11 @@ export function MorePage() {
   const { me, branch, signOut, signingOut = false } = useStaff();
   const sells = useSells(me);
   const areas = staffAreas(me, { sells });
-  // As in the side menu (issue #471): headed parts only when the links name two sections.
+  // As in the side menu (issue #471, FR-UXN-04): headed parts only when the links name two sections, and then the shared areas
+  // before the first sectioned one (Home, Approvals) come first, then each section, then the other shared areas (#544).
   const named = STAFF_SECTIONS.filter((s) => areas.some((l) => l.section === s.id));
   const headed = named.length > 1;
+  const first = areas.findIndex((l) => l.section !== undefined);
   return (
     <main className="tab-page">
       <div className="page-header">
@@ -76,10 +78,11 @@ export function MorePage() {
       <div data-tour="more-list">
         {headed ? (
           <>
+            <AreaCard label="Start" links={areas.slice(0, first)} />
             {named.map((s) => (
               <AreaCard key={s.id} title={s.label} links={areas.filter((l) => l.section === s.id)} />
             ))}
-            <AreaCard title="Business" links={areas.filter((l) => !l.section)} />
+            <AreaCard title="Business" links={areas.slice(first).filter((l) => !l.section)} />
           </>
         ) : (
           <AreaCard links={areas} />

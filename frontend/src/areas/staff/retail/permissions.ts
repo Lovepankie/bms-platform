@@ -306,6 +306,11 @@ export function sellingBranches<B extends { id?: string; stocks_goods?: boolean;
   return branches.filter((b) => b.stocks_goods !== false && b.sells_goods !== false && sellsAt(roles, b.id));
 }
 
+/** The money pages under the phone's Money tab (areas/staff/tabs.tsx): the cash book, then who owes and what is owed. */
+export const MONEY_SCREENS: RetailScreen[] = [
+  'cashSummary', 'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'creditSales', 'creditControl', 'customerAccounts', 'customerAgeing', 'supplierPayables',
+];
+
 export const SCREENS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [
   { screen: 'sale', path: '/staff/retail/sale', label: 'Record a sale', hint: 'Sell items and take payment' },
   { screen: 'creditSales', path: '/staff/retail/credit-sales', label: 'Credit sales', hint: 'Who owes, how much, and by when' },

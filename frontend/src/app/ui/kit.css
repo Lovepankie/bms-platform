@@ -666,7 +666,7 @@ button.list-row:focus-visible {
 
   /* Over the bottom tabs (issue #539): the bar stops on top of them, and they take the home indicator inset. */
   .has-tab-bar .action-bar {
-    bottom: var(--tab-bar);
+    bottom: var(--tab-bar-offset);
     padding-bottom: var(--space-3);
   }
 }
