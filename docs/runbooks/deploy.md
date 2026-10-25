@@ -121,7 +121,8 @@ timer run; stop `bms-pull.timer` first if it must stay.
 - Exit 1 with `refused-downgrade`: the release is older than the one already live and
   `state/allow_downgrade` does not exist (ADR-018 finding L1).
 - Exit 1 with `failed-migration` in `state/history.log`: the migration failed and nothing was
-  switched. Fix forward with a new migration in a pull request.
+  switched. Fix forward with a new migration in a pull request. A `V98:` message about staff
+  users sharing a phone is fixed in the data instead: `docs/runbooks/staff-duplicate-phones.md`.
 - Exit 1 with `failed-health` then `rolled-back-to`: the new release did not become ready and the
   previous one is serving again. See `docs/runbooks/rollback.md`.
 - Exit 2: invalid tag. Exit 3: another deploy holds the lock.

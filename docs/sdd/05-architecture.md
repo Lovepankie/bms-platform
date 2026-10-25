@@ -213,7 +213,7 @@ to other modules.
 | `core.identity` | `...core.identity` | Staff and platform sign-in, TOTP and recovery codes, sessions, the authentication filter and permission interceptor, invitations, users and roles, `/me`, the development authentication stub (ADR-014) |
 | `core.audit` | `...core.audit` | `AuditLog.record`, `PlatformAuditLog`, masking identifiers, audit search and CSV export |
 | `core.approvals` | `...core.approvals` | `Approvals.request`, the `ApprovalAction` registry, the queue and decisions, nightly expiry (ADR-015) |
-| `core.notifications` | `...core.notifications` | The `Notifier` port and a recording fake adapter; no provider yet |
+| `core.notifications` | `...core.notifications` | The `Notifier` port: a recording fake adapter in the dev and test profiles only, and everywhere else `LogOnlyNotifier`, which sends and keeps nothing (issue #324, ADR-085); no provider yet |
 | `core.platform` | `...core.platform` | The platform console API: tenants, modules, subscriptions, admin MFA reset (ADR-016); the price book, payments entered by the operator and the Business page overview (ADR-056) |
 | `core.feedback` | `...core.feedback` | In-app feedback (issue #447, ADR-065): the staff send with an optional screenshot, the sender's own list, the ten-an-hour limit, the operator email through the outbox, and the public port `FeedbackInbox` the platform console serves the operator's list, status change and screenshot through |
 | `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |

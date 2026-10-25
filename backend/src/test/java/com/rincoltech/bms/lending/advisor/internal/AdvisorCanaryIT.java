@@ -88,8 +88,8 @@ class AdvisorCanaryIT extends IntegrationTest {
         staff = UUID.randomUUID();
         TestDatabase.owner()
                 .sql(
-                        "INSERT INTO users (id, tenant_id, kind, full_name, phone_e164, status) VALUES (?, ?, 'staff', 'Canary Staff Qx', '+256700000090', 'active') ON CONFLICT DO NOTHING")
-                .params(staff, TENANT.tenantId())
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Canary Staff Qx', ?, 'active')")
+                .params(staff, TENANT.tenantId(), "canary-" + staff + "@example.test")
                 .update();
         CurrentPrincipal.set(Principal.uniform(
                 staff,

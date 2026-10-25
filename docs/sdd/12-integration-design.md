@@ -231,7 +231,9 @@ Each adapter reads its settings from environment variables documented in `.env.e
 (chapter 9 owns the file). Naming pattern: `SMS_PROVIDER`, `SMS_*`; `PAYMENT_GATEWAY`,
 `PAYMENT_*`; `R2_*`; `EMAIL_PROVIDER`, `EMAIL_*`. Setting a provider key to `fake` selects
 the recording fake adapter, which is the default in local and test environments and is
-refused in production. The SMS adapter adds `BMS_SMS_MODE` (`off`, `sink`, `allowlist`, `live`; section 4.4 of the
+refused in production. The staff `Notifier` port has no provider key yet: its recording adapter is a bean of the dev and test
+profiles only, and every other profile gets `LogOnlyNotifier`, which keeps no message, so no one-time link is held in server
+memory (issue #324, ADR-085). The SMS adapter adds `BMS_SMS_MODE` (`off`, `sink`, `allowlist`, `live`; section 4.4 of the
 client extras spec) and the AI adapter `BMS_AI_*`; the complete list is in chapter 9 section 9.8.
 
 Object storage (#12): `OBJECT_STORAGE` is `r2` (default) or `fake`, and `fake` refuses to start

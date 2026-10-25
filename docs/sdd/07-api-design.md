@@ -563,7 +563,10 @@ is held only in the screen's own state, never in a query cache, the browser stor
 gone when the box is closed; to get another, an administrator uses Send a new link, which replaces the
 old one. Double taps send one request. Refusals are shown in plain words: `plan_limit_reached` (the plan
 caps staff users; people still invited count), `last_tenant_admin`, `cannot_deactivate_self` (the screen
-offers no Deactivate on one's own card), `duplicate_email`, `duplicate_phone`, `invalid_phone`.
+offers no Deactivate on one's own card), `duplicate_email`, `duplicate_phone`, `invalid_phone`. Two invitations or edits with
+one phone sent at the same moment cannot both win: the unique index `users_staff_phone` (`V98`, issue #323, ADR-085) refuses
+the second with the same 409 `duplicate_phone`, as `users_staff_email` does for `duplicate_email`. The link sent through the
+notification port is not kept in server memory outside the dev and test profiles (issue #324, ADR-085).
 Deactivating asks first and ends every session of the person (FR-IAM-08), and closes a link box that was
 made for that person. **Reset sign-in (issue #339, FR-IAM-15, ADR-042)** is a button on the card of an
 **active** person who is not a tenant admin and not the signed-in administrator (the server refuses the others with

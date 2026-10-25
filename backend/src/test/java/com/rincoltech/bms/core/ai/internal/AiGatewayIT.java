@@ -186,8 +186,8 @@ class AiGatewayIT extends IntegrationTest {
         UUID id = UUID.randomUUID();
         TestDatabase.owner()
                 .sql(
-                        "INSERT INTO users (id, tenant_id, kind, full_name, phone_e164, status) VALUES (?, ?, 'staff', 'Test Staff 01', '+256700000090', 'active')")
-                .params(id, tenant.tenantId())
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff 01', ?, 'active')")
+                .params(id, tenant.tenantId(), "staff-" + id + "@example.test")
                 .update();
         CurrentPrincipal.set(Principal.uniform(id, "staff", Set.of("core.settings.manage"), true, Set.of()));
         return id;

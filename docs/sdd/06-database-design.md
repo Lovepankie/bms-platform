@@ -561,7 +561,10 @@ issue #461, ADR-068, FR-BR-09).
 an object). `preferences.tours` maps a guided tour id to `{status: completed | dismissed, version, at}`
 (FR-IAM-14); it holds only what the user chose for themselves, never anything a permission reads.
 Partial unique `(tenant_id, lower(email)) WHERE email IS NOT NULL AND kind = 'staff'`;
-partial unique `(tenant_id, phone_e164) WHERE kind = 'member'`.
+partial unique `(tenant_id, phone_e164) WHERE kind = 'member'`; partial unique `users_staff_phone (tenant_id, phone_e164)
+WHERE kind = 'staff' AND phone_e164 IS NOT NULL AND status IN ('invited', 'active')` (`V98`, issue #323, ADR-085: two
+invitations at once cannot make two staff users with one phone; V98 stops, changing nothing, when a business already has
+such a pair, `docs/runbooks/staff-duplicate-phones.md`).
 `CHECK (email IS NOT NULL OR phone_e164 IS NOT NULL)`.
 `is_owner boolean NOT NULL DEFAULT false` (`V79`, ADR-062, FR-IAM-18): the Owner of the business. `contact_changed_at
 timestamptz` (`V79`): when the email or phone last changed; `second_factor_changed_at timestamptz` (`V79`): when two-step
