@@ -385,23 +385,56 @@ class CustomerOrdersRepository {
     }
 
     /**
-     * How a phone number is matched: on its last nine digits when it has that many (a Ugandan number without the country code
-     * or the leading zero, so +256 700 000 011 and 0700 000 011 are one number), otherwise on all its digits.
+     * How a phone number is matched. With nine digits or more, on the whole number with its country code ({@link
+     * #fullNumber}), so +256 700 000 011 and 0700 000 011 are one number but +254 700 000 011 is another (issue #441); the last
+     * nine digits are compared too, which the index of V70 serves. With fewer, on all its digits.
      */
     static String phoneMatch(String column, String digits) {
-        return digits.length() >= PHONE_KEY
-                ? "right(bms_digits(" + column + "), " + PHONE_KEY + ") = :digits"
-                : "bms_digits(" + column + ") = :digits";
+        if (digits.length() < PHONE_KEY) {
+            return "bms_digits(" + column + ") = :digits";
+        }
+        String d = "bms_digits(" + column + ")";
+        return "right(" + d + ", " + PHONE_KEY + ") = :digits AND (CASE WHEN " + column + " ~ '^\\s*\\+' THEN " + d
+                + " WHEN " + d + " LIKE '00%' THEN substr(" + d + ", 3)"
+                + " WHEN " + d + " LIKE '0%' THEN '" + HOME_CODE + "' || substr(" + d + ", 2)"
+                + " WHEN length(" + d + ") = " + PHONE_KEY + " THEN '" + HOME_CODE + "' || " + d
+                + " ELSE " + d + " END) = :full";
     }
 
     static final int PHONE_KEY = 9;
+
+    /**
+     * The country code of a number written without one (07..., or a bare nine digits). The tenant has no country of its own
+     * yet (only the onboarding application records one), and every business today is in Uganda, so it is +256 (issue #441).
+     */
+    static final String HOME_CODE = "256";
 
     static String phoneKey(String digits) {
         return digits.length() >= PHONE_KEY ? digits.substring(digits.length() - PHONE_KEY) : digits;
     }
 
+    /**
+     * The whole number with its country code, digits only, as {@link #phoneMatch} reads a stored one: a number starting with
+     * {@code +} or {@code 00} carries its code; {@code 07...} and a bare nine digits are local, so {@link #HOME_CODE}; any other
+     * is taken as written (for example {@code 254700000011}).
+     */
+    static String fullNumber(String phone) {
+        String digits = phone.replaceAll("\\D", "");
+        if (phone.stripLeading().startsWith("+")) {
+            return digits;
+        }
+        if (digits.startsWith("00")) {
+            return digits.substring(2);
+        }
+        if (digits.startsWith("0")) {
+            return HOME_CODE + digits.substring(1);
+        }
+        return digits.length() == PHONE_KEY ? HOME_CODE + digits : digits;
+    }
+
     /** The newest order of a phone number (see {@link #phoneMatch}) in the branches of the filter, and how many it made. */
-    Optional<Map<String, Object>> lastByPhone(String digits, List<UUID> branchIds) {
+    Optional<Map<String, Object>> lastByPhone(String phone, List<UUID> branchIds) {
+        String digits = phone.replaceAll("\\D", "");
         if (branchIds != null && branchIds.isEmpty()) {
             return Optional.empty();
         }
@@ -411,6 +444,7 @@ class CustomerOrdersRepository {
             params.put("branchIds", branchIds);
         }
         params.put("digits", phoneKey(digits));
+        params.put("full", fullNumber(phone));
         return jdbc.sql("""
                         SELECT customer_id, customer_name, customer_phone, delivery_place, delivery_fee_minor,
                                count(*) OVER () AS orders
@@ -434,7 +468,8 @@ class CustomerOrdersRepository {
     }
 
     /** A credit buyer whose contact is this number (see {@link #phoneMatch}), the oldest first (the one most likely set up on purpose). */
-    Optional<UUID> customerByPhone(String digits) {
+    Optional<UUID> customerByPhone(String phone) {
+        String digits = phone.replaceAll("\\D", "");
         return jdbc.sql("""
                         SELECT id FROM retail_customers
                          WHERE contact IS NOT NULL AND %s
@@ -442,6 +477,7 @@ class CustomerOrdersRepository {
                          LIMIT 1
                         """.formatted(phoneMatch("contact", digits)))
                 .param("digits", phoneKey(digits))
+                .param("full", fullNumber(phone))
                 .query(UUID.class)
                 .optional();
     }

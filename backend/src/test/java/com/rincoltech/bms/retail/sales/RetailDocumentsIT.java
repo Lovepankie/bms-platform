@@ -1390,6 +1390,57 @@ class RetailDocumentsIT extends IntegrationTest {
                 .contains("Part paid when issued.", "Paid when issued: 200", "Balance due when issued: 300 UGX");
     }
 
+    // ---- an invoice after a write-off (issue #354) ------------------------------------------------
+
+    // JUSTIFICATION-A3: two new regression tests for issue #354, placed beside the part-payment invoice test they
+    // mirror.
+    /**
+     * ADR-043: a document may still be issued for a written-off sale (the goods left and the sale stands), but the invoice
+     * says what was paid and what was written off, never "Paid in full", and the delivery note says nothing about payment.
+     */
+    @Test
+    void anInvoiceAfterAWriteOffSaysWhatWasWrittenOffNotPaidInFull() throws Exception {
+        UUID s = sale(hq, "credit", "5");
+        assertThat(api.postKeyed(
+                                "/sales/" + s + "/payments",
+                                Map.of("amount_minor", 200, "method", "cash"),
+                                DOCS,
+                                "*",
+                                UUID.randomUUID().toString())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        writeOff(s);
+        String invoice = text(pdf(issued(s, "invoice")));
+        assertThat(invoice)
+                .contains(
+                        "Unpaid part written off as a loss. Nothing is owed.",
+                        "Paid: 200.",
+                        "Written off on {DATE}: 300 UGX")
+                .doesNotContain("Paid in full", "Balance due");
+        String note = text(pdf(issued(s, "delivery_note")));
+        assertThat(note).doesNotContain("Paid in full", "Paid when issued");
+    }
+
+    /** With nothing paid, the invoice of a written-off sale says so. */
+    @Test
+    void anInvoiceAfterAWriteOffOfAnUnpaidSaleSaysNothingWasPaid() throws Exception {
+        UUID s = sale(hq, "credit", "2");
+        writeOff(s);
+        assertThat(text(pdf(issued(s, "invoice"))))
+                .contains("Nothing was paid.", "Written off on {DATE}: 200 UGX")
+                .doesNotContain("Paid in full");
+    }
+
+    void writeOff(UUID s) {
+        ResponseEntity<JsonNode> w = api.postKeyed(
+                "/sales/" + s + "/write-off",
+                Map.of("reason", "Buyer cannot be found"),
+                DOCS + ",retail.credit.write_off",
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(w.getStatusCode()).as("%s", w.getBody()).isEqualTo(HttpStatus.CREATED);
+    }
+
     // ---- races -------------------------------------------------------------------------------------
 
     /** A void that has not committed yet finishes first: the invoice of that moment is refused, not numbered for a voided sale. */

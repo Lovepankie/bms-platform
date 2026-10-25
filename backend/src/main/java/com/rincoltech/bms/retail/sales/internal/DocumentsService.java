@@ -385,7 +385,7 @@ class DocumentsService {
                 new Place(branch.name(), branch.location(), branch.code()),
                 new Buyer(name == null || name.isBlank() ? "Cash customer" : name, contact),
                 null,
-                new SaleRef(sale.saleNo(), sale.saleDate(), sale.paymentMethod(), sale.dueDate(), sale.paidMinor()),
+                saleRef(sale),
                 null,
                 quotationRef,
                 invoiceNumber,
@@ -395,6 +395,21 @@ class DocumentsService {
                 repo.userName(CurrentPrincipal.require().userId()),
                 showPrices,
                 null);
+    }
+
+    /** The sale as a document records it, with the part of the goods written off when the sale was (issue #354). */
+    private static SaleRef saleRef(Sale sale) {
+        SalesApi.WriteOffInfo w = sale.writeOff();
+        Long writtenOff =
+                w == null ? null : w.unpaidMinor() - (w.deliveryFeeMinor() == null ? 0 : w.deliveryFeeMinor());
+        return new SaleRef(
+                sale.saleNo(),
+                sale.saleDate(),
+                sale.paymentMethod(),
+                sale.dueDate(),
+                sale.paidMinor(),
+                writtenOff,
+                w == null ? null : w.writtenOffOn());
     }
 
     // ---- The stored PDF ----------------------------------------------------------------------------------

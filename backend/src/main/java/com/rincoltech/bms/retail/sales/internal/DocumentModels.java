@@ -91,7 +91,17 @@ class DocumentModels {
         m.put("ref", ref);
         Map<String, Object> totals = totals(s);
         long balance = s.totalMinor() - sale.paidMinor();
-        if (sale.paymentMethod().equals("credit")) {
+        if (sale.writtenOffMinor() != null) {
+            // Issue #354, ADR-043: the write-off raised the paid amount to the total, but nobody paid the written-off
+            // part.
+            long paidBefore = sale.paidMinor() - sale.writtenOffMinor();
+            totals.put("status", "Unpaid part written off as a loss. Nothing is owed.");
+            totals.put(
+                    "due",
+                    (paidBefore > 0 ? "Paid: " + money(paidBefore, s.currency()) + ". " : "Nothing was paid. ")
+                            + "Written off on " + date(sale.writtenOffOn()) + ": "
+                            + money(sale.writtenOffMinor(), s.currency()) + " " + s.currency());
+        } else if (sale.paymentMethod().equals("credit")) {
             boolean partPaid = sale.paidMinor() > 0 && balance > 0;
             totals.put(
                     "status",

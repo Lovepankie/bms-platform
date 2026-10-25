@@ -16436,7 +16436,7 @@ export interface components {
             /** Format: uuid */
             branch_id: string;
             /**
-             * @description The quantity the form showed when it was opened; 409 stock_moved when it has changed since
+             * @description The quantity the form showed when it was opened; 409 stock_moved when it has changed since, with current_qty, the quantity now
              * @example 12.5
              */
             expected_qty: string;

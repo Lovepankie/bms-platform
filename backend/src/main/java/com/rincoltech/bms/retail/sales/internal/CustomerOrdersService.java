@@ -337,8 +337,8 @@ class CustomerOrdersService {
                     "phone", "invalid", "Type at least " + Search.MIN_PHONE_DIGITS + " digits of the phone number.")));
         }
         List<UUID> filter = CurrentPrincipal.require().branchFilter(MANAGE, null);
-        Map<String, Object> last = repo.lastByPhone(digits, filter).orElse(null);
-        UUID buyer = repo.customerByPhone(digits).orElse(null);
+        Map<String, Object> last = repo.lastByPhone(phone, filter).orElse(null);
+        UUID buyer = repo.customerByPhone(phone).orElse(null);
         if (last == null && buyer == null) {
             return new Lookup(false, null, null, null, null, null, 0);
         }

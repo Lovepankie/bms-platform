@@ -5,7 +5,7 @@
 Proposed (2026-10-20, issue #340). It becomes Accepted when Hillary accepts it. Builds on ADR-020 (retail posts to the ledger), ADR-022
 (the daily savings are half of the shop's profit for the day) and ADR-033 (the tenant settings group `retail.capabilities`).
 Amends ADR-022 decision 11 only for a tenant that chooses `on_payment`; for every other tenant nothing changes. The number
-follows ADR-041 (#329, merged) and ADR-042 (#322, merged).
+follows ADR-041 (#329, merged) and ADR-042 (#322, merged). Issue #354 amends decision 10 on the documents of a written-off sale (see "Amendment (issue #354)" at the end).
 
 ## Context
 
@@ -210,3 +210,16 @@ balance today and every closed period.
   usage; the two differ for that rare case only.
 - The sales summary endpoint (`/retail/sales/summary`, issue #341) needs the same switch: Sold for the totals, Received and On
   credit beside them, using the `Received` figures of `ProfitFigures` and `CreditRecognitionRepository`.
+
+## Amendment (issue #354)
+
+Decision 10 said the invoice or delivery note of a written-off sale still read "Paid in full when issued". From issue #354:
+
+- A document may still be issued for a written-off sale: the goods left and the sale stands, so an invoice or a delivery note
+  is still a true record of it. The receipt to share stays refused (ADR-061).
+- The document's snapshot records the part of the goods written off and the day (`writtenOffMinor` and `writtenOffOn` on the
+  sale reference; absent on a snapshot from before, which reads as it did). The invoice then says "Unpaid part written off as a
+  loss. Nothing is owed.", what was paid before ("Paid: ..." or "Nothing was paid.") and "Written off on <date>: <amount>". It
+  never says "Paid in full". A delivery fee written off with the sale is not on the invoice, so it is not in this figure.
+- The delivery note prints no payment line, before or after a write-off.
+- An invoice issued before the write-off keeps its own snapshot ("Balance due when issued"), which was true when it was issued.

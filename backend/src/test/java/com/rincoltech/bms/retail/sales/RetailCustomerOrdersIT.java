@@ -510,6 +510,8 @@ class RetailCustomerOrdersIT extends IntegrationTest {
                 api.get("/orders/" + c, ORDERS).getBody().get("order_no").asString();
         assertThat(ids(api.get("/orders?query=" + number, ORDERS))).containsExactly(c);
         assertThat(ids(api.get("/orders?query=0700000022", ORDERS))).containsExactly(c);
+        // Issue #441 review: the list search is not the lookup's phone match; a bare nine digits still finds the order.
+        assertThat(ids(api.get("/orders?query=700000022", ORDERS))).containsExactly(c);
         assertThat(api.get("/orders?status=lost", ORDERS).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
@@ -549,6 +551,57 @@ class RetailCustomerOrdersIT extends IntegrationTest {
         assertThat(credit.get("customer_name").asString()).isEqualTo("Test Buyer 03");
         assertThat(api.get("/orders/customer-lookup?phone=12", ORDERS).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    // JUSTIFICATION-A3: the regression test of issue #441 needs orders and buyers on both sides of the border.
+    /**
+     * Issue #441, FR-RET-56: a Kenyan +254 number and a Ugandan +256 number with the same last nine digits are two people. The
+     * lookup compares the whole number with its country code; a local 07 form, or a bare nine digits, is a Ugandan number.
+     */
+    @Test
+    void aKenyanNumberNeverFindsTheUgandanWithTheSameNineDigits() {
+        api.stockUp(hq, product, "5");
+        Map<String, Object> kenyan = body(hq, "whatsapp", 2_000, List.of(line(product, "1")));
+        kenyan.put("customer_name", "Test Customer 02");
+        kenyan.put("customer_phone", "+254 700 000 011");
+        assertThat(order(kenyan).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        // The Ugandan order is the newest: a nine-digit match would answer it for the Kenyan number.
+        placed("1", 4_000);
+
+        JsonNode ke = lookup("+254700000011");
+        assertThat(ke.get("customer_name").asString()).isEqualTo("Test Customer 02");
+        assertThat(ke.get("orders").asLong()).isEqualTo(1);
+        assertThat(lookup("00254 700 000 011").get("customer_name").asString()).isEqualTo("Test Customer 02");
+        for (String ugandan : List.of("+256700000011", "0700000011", "700000011", "256700000011")) {
+            JsonNode ug = lookup(ugandan);
+            assertThat(ug.get("customer_name").asString()).as(ugandan).isEqualTo("Test Customer 01");
+            assertThat(ug.get("orders").asLong()).as(ugandan).isEqualTo(1);
+        }
+
+        // A credit buyer with a Kenyan contact is not offered for the local form of the same nine digits, and is for
+        // its own.
+        UUID buyer = RetailTestSupport.id(
+                api.post("/customers", Map.of("name", "Test Buyer 05", "contact", "+254 700 000 055"), ADMIN));
+        assertThat(lookup("0700000055").get("found").asBoolean()).isFalse();
+        assertThat(lookup("+256700000055").get("found").asBoolean()).isFalse();
+        assertThat(lookup("+254700000055").get("customer_id").asString()).isEqualTo(buyer.toString());
+        // A local contact is a Ugandan number, found by its +256 form.
+        UUID local = RetailTestSupport.id(
+                api.post("/customers", Map.of("name", "Test Buyer 06", "contact", "0700 000 066"), ADMIN));
+        assertThat(lookup("+256 700 000 066").get("customer_id").asString()).isEqualTo(local.toString());
+        assertThat(lookup("+254 700 000 066").get("found").asBoolean()).isFalse();
+    }
+
+    JsonNode lookup(String phone) {
+        // A URI, so the plus of +254 reaches the server encoded once and is not read as a space.
+        ResponseEntity<JsonNode> r = http.exchange(
+                java.net.URI.create(http.getRootUri() + "/api/v1/retail/orders/customer-lookup?phone="
+                        + java.net.URLEncoder.encode(phone, java.nio.charset.StandardCharsets.UTF_8)),
+                HttpMethod.GET,
+                new org.springframework.http.HttpEntity<>(api.headers(ORDERS, "*", Map.of())),
+                JsonNode.class);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        return r.getBody();
     }
 
     /** FR-RET-57: delivery fees by source and by rider, and the cancelled orders with their reasons. */

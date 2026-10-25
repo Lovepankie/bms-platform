@@ -143,10 +143,14 @@ export const blankOrder = (branchId: string, today: string): OrderDraft => ({
   branchId, source: 'whatsapp', phone: '', customerId: '', name: '', place: '', deliveryDate: today, fee: '', notes: '', lines: [],
 });
 
-/** The digits of a phone number, enough of them to look the customer up (the server matches the last nine). */
+/**
+ * The digits of a phone number, enough of them to look the customer up, with the plus that says a country code follows: the
+ * server compares the whole number, so +254 and +256 with the same nine digits are two people (issue #441).
+ */
 export function lookupKey(phone: string): string | null {
   const digits = phone.replace(/\D/g, '');
-  return digits.length >= 9 ? digits : null;
+  if (digits.length < 9) return null;
+  return phone.trimStart().startsWith('+') ? `+${digits}` : digits;
 }
 
 /** A whole number of shillings typed in a box, or null; empty is zero. */

@@ -45,9 +45,21 @@ record DocumentSnapshot(
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Buyer(String name, String contact) {}
 
+    /**
+     * The sale a document is made from. {@code paidMinor} is what the sale carried when the document was issued; after a
+     * write-off (ADR-043, issue #354) that includes the written-off part, so {@code writtenOffMinor} (the part of the goods
+     * written off, a delivery fee left out) and {@code writtenOffOn} say so, and are absent on a snapshot from before.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    record SaleRef(String no, LocalDate date, String paymentMethod, LocalDate dueDate, long paidMinor) {}
+    record SaleRef(
+            String no,
+            LocalDate date,
+            String paymentMethod,
+            LocalDate dueDate,
+            long paidMinor,
+            Long writtenOffMinor,
+            LocalDate writtenOffOn) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     @JsonInclude(JsonInclude.Include.NON_NULL)

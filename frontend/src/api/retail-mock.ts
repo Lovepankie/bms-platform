@@ -1073,7 +1073,7 @@ export function createMockRetail(): RetailApi {
         const was = bal(body.branch_id, p.id);
         const next = toMilli(body.new_qty);
         if (next < 0) refuse(422, 'validation_failed', 'The quantity cannot be below none.');
-        if (toMilli(body.expected_qty) !== was) refuse(409, 'stock_moved', `The quantity changed while you were typing: it is ${plainQty(fromMilli(was))} ${p.unit} now. Look at the list again and type the right quantity.`);
+        if (toMilli(body.expected_qty) !== was) refuse(409, 'stock_moved', `The quantity changed while you were typing: it is ${plainQty(fromMilli(was))} ${p.unit} now. Look at the list again and type the right quantity.`, { current_qty: fromMilli(was) });
         if (next === was) refuse(422, 'quantity_unchanged', `The quantity is ${plainQty(fromMilli(was))} ${p.unit} already. Type the right quantity.`);
         move(body.branch_id, p.id, next - was);
         const label = body.reason_code === 'entry_mistake' ? 'Entry mistake' : 'Miscount';

@@ -100,7 +100,10 @@ class StockCorrectionService {
                     "Stock moved",
                     "The quantity changed while you were typing: it is " + plain(old) + " " + product.unit()
                             + " now, not " + plain(r.expectedQty())
-                            + ". Look at the list again and type the right quantity.");
+                            + ". Look at the list again and type the right quantity.",
+                    List.of(),
+                    // Issue #370: the quantity now, so the form shows it at once instead of the one it was opened with.
+                    Map.of("current_qty", Quantities.format(old)));
         }
         // A stock-take that is not committed yet measures its variance from the shelf as it stood when it was made, so
         // a correction now would be counted a second time when it is committed.

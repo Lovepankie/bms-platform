@@ -174,7 +174,7 @@ final class StockApi {
                     type = "string",
                     example = "12.5",
                     description = "The quantity the form showed when it was opened; 409 stock_moved when it has "
-                            + "changed since")
+                            + "changed since, with current_qty, the quantity now")
             BigDecimal expectedQty,
 
             @NotNull

@@ -245,6 +245,89 @@ describe('a 409 after the list already moved', () => {
   });
 });
 
+// Issue #370: the 409 comes first and the list is read again after it. The notice names the quantity on the shelf now, never
+// the one the form was opened with, and it stays when the list comes back with that quantity.
+describe('a 409 before the list is read again', () => {
+  const tree = (client: QueryClient, q: string) => (
+    <QueryClientProvider client={client}>
+      <StaffContext.Provider value={{ me: admin, branch }}>
+        <CorrectItem row={{ ...row, qty: q }} branchId={branch} onClose={() => undefined} />
+      </StaffContext.Provider>
+    </QueryClientProvider>
+  );
+  const moved = (problem?: Record<string, unknown>) =>
+    new RetailError(retailMessage({ code: 'stock_moved', detail: 'The quantity changed while you were typing: it is 8 roll now, not 10.' }, 409), 409, 'stock_moved', problem);
+  const notice = () => screen.queryAllByRole('status').map((s) => s.textContent ?? '').find((t) => t.includes('changed to')) ?? '';
+
+  it('shows the quantity the refusal names at once, keeps it when the list catches up, and retries against it with a new key', async () => {
+    correctStock.mockRejectedValueOnce(moved({ code: 'stock_moved', current_qty: '8.000' }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(tree(client, '10.000'));
+    open('The quantity is wrong');
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
+    fireEvent.click(save());
+    await screen.findByRole('alert');
+    await waitFor(() => expect(notice()).toContain('changed to 8'));
+    expect(notice()).not.toContain('changed to 10');
+    expect(qty().value).toBe('8');
+    expect(screen.getByText(/In stock now/).textContent).toContain('8 roll');
+    view.rerender(tree(client, '8.000'));
+    await waitFor(() => expect(qty().value).toBe('8'));
+    expect(notice()).toContain('changed to 8');
+    correctStock.mockResolvedValueOnce({ id: 'c5', old_qty: '8.000', new_qty: '6.000' });
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
+    fireEvent.click(save());
+    await waitFor(() => expect(correctStock).toHaveBeenCalledTimes(2));
+    expect(correctStock.mock.calls[1]?.[0]).toMatchObject({ expected_qty: '8.000', new_qty: '6.000' });
+    expect(correctStock.mock.calls[1]?.[1]).not.toBe(correctStock.mock.calls[0]?.[1]);
+  });
+
+  it('without the number in the refusal, never names the old quantity and keeps the notice once the list shows the new one', async () => {
+    correctStock.mockRejectedValueOnce(moved());
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // As in the app: the list is read again and shows 8 before the read of it has finished.
+    let listRead: () => void = () => undefined;
+    vi.spyOn(client, 'invalidateQueries').mockReturnValue(new Promise<void>((done) => { listRead = done; }));
+    const view = render(tree(client, '10.000'));
+    open('The quantity is wrong');
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
+    fireEvent.click(save());
+    await screen.findByRole('alert');
+    expect(notice()).not.toContain('changed to 10');
+    // Until the list comes back, no quantity is shown or offered, and nothing can be saved against the old one.
+    await waitFor(() => expect(qty().value).toBe(''));
+    expect(qty().disabled).toBe(true);
+    expect(screen.queryByText(/In stock now/)).toBeNull();
+    fireEvent.click(save());
+    expect(correctStock).toHaveBeenCalledTimes(1);
+    view.rerender(tree(client, '8.000'));
+    await waitFor(() => expect(qty().value).toBe('8'));
+    expect(notice()).toContain('changed to 8');
+    expect(qty().disabled).toBe(false);
+    expect(screen.getByText(/In stock now/).textContent).toContain('8 roll');
+    listRead();
+    await waitFor(() => expect(notice()).toContain('changed to 8'));
+    expect(qty().value).toBe('8');
+  });
+
+  it('without the number, starts from the list once it has been read again, even when it shows the same quantity', async () => {
+    correctStock.mockRejectedValueOnce(moved());
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(tree(client, '8.000'));
+    open('The quantity is wrong');
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
+    fireEvent.click(save());
+    await screen.findByRole('alert');
+    await waitFor(() => expect(qty().value).toBe('8'));
+    expect(qty().disabled).toBe(false);
+    expect(notice()).toContain('changed to 8');
+  });
+});
+
 describe('a unit in use', () => {
   it('sends nobody to change it in Items: a unit is never converted', () => {
     screenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);

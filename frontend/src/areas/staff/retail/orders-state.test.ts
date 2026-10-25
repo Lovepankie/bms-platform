@@ -37,8 +37,17 @@ describe('taking an order', () => {
 
   it('looks a customer up only with nine digits or more', () => {
     expect(lookupKey('0700 00')).toBeNull();
-    expect(lookupKey('+256 700 000 011')).toBe('256700000011');
+    expect(lookupKey('+256 700 000 011')).toBe('+256700000011');
     expect(feeOf('')).toBe(0);
+  });
+
+  // Issue #441: the server compares the whole number with its country code, so the plus that says a code follows is kept.
+  it('keeps the plus of a number with its country code, so +254 and +256 with the same nine digits are two numbers', () => {
+    expect(lookupKey('+254 700 000 011')).toBe('+254700000011');
+    expect(lookupKey('+254 700 000 011')).not.toBe(lookupKey('+256 700 000 011'));
+    expect(lookupKey(' +254-700-000-011')).toBe('+254700000011');
+    expect(lookupKey('0700 000 011')).toBe('0700000011');
+    expect(lookupKey('00254 700 000 011')).toBe('00254700000011');
   });
 });
 

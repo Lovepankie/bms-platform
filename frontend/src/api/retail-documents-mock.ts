@@ -33,6 +33,8 @@ export type DocumentsMock = Pick<
 const DEFAULT_PREFIX: Record<DocumentType, string> = { quotation: 'QT', invoice: 'INV', delivery_note: 'DN' };
 const TYPES: DocumentType[] = ['quotation', 'invoice', 'delivery_note'];
 const PAYMENT: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank', credit: 'Credit' };
+// Issue #354: the server's refusal, so the mock never prints "Paid in full" for a sale nobody paid.
+const WRITTEN_OFF = 'The unpaid part of this sale was written off, so it has no receipt to share.';
 /** UGX as the PDF prints it, without decimals, and a day as d MMM yyyy (16 Mar 2026). */
 const money = (minor?: number) => (minor ?? 0).toLocaleString('en-US');
 const day = (iso?: string) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -251,6 +253,7 @@ export function createDocumentsMock(env: DocumentsEnv): DocumentsMock {
         const sale = env.sales().find((x) => x.id === saleId);
         if (!sale) return env.refuse(404, 'not_found', 'Not found.');
         if (sale.status !== 'completed') return env.refuse(422, 'sale_voided', 'A cancelled sale has no receipt to share.');
+        if (sale.write_off) return env.refuse(422, 'sale_written_off', WRITTEN_OFF);
         const buyer = sale.customer_id ? env.customer(sale.customer_id) : undefined;
         return {
           sale_id: sale.id, receipt_no: sale.sale_no, business_name: 'Demo Shop', buyer_name: buyer?.name ?? sale.buyer_name,
@@ -267,6 +270,7 @@ export function createDocumentsMock(env: DocumentsEnv): DocumentsMock {
         const sale = env.sales().find((x) => x.id === saleId);
         if (!sale) return env.refuse(404, 'not_found', 'Not found.');
         if (sale.status !== 'completed') return env.refuse(422, 'sale_voided', 'A cancelled sale has no receipt to share.');
+        if (sale.write_off) return env.refuse(422, 'sale_written_off', WRITTEN_OFF);
         const buyer = (sale.customer_id ? env.customer(sale.customer_id)?.name : undefined) ?? sale.buyer_name ?? '';
         const balance = sale.balance_minor ?? 0;
         const credit = sale.payment_method === 'credit';
@@ -300,6 +304,7 @@ export function createDocumentsMock(env: DocumentsEnv): DocumentsMock {
         const sale = env.sales().find((x) => x.id === saleId);
         if (!sale) return env.refuse(404, 'not_found', 'Not found.');
         if (sale.status !== 'completed') return env.refuse(422, 'sale_voided', 'A cancelled sale has no receipt to share.');
+        if (sale.write_off) return env.refuse(422, 'sale_written_off', WRITTEN_OFF);
         return new Blob([`%PDF-1.4 mock receipt ${sale.sale_no ?? ''}`], { type: 'application/pdf' });
       }),
   };

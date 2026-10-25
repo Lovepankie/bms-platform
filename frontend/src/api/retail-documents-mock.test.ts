@@ -116,4 +116,14 @@ describe('documents in the mock', () => {
     expect(printed?.received).toBe(`Received by ${printed?.buyer_name}`);
     expect(printed?.date).toMatch(/^\d{1,2} [A-Z][a-z]{2} \d{4}$/);
   });
+
+  it('has no receipt for a written-off sale, so it never prints "Paid in full when issued" (issue #354)', async () => {
+    const api = createMockRetail();
+    const [bulb] = await api.listProducts({ query: 'P003' });
+    const made = await api.createSale({ branch_id: hq, payment_method: 'credit', buyer_name: 'Test Buyer 01', due_date: today, lines: [{ product_id: bulb?.id ?? '', qty: '1' }] }, 'wo-sale');
+    await api.writeOffSale(made.id ?? '', 'Buyer cannot be found', 'wo-1');
+    await expect(api.saleReceiptPrinted(made.id ?? '')).rejects.toMatchObject({ code: 'sale_written_off' });
+    await expect(api.saleReceipt(made.id ?? '')).rejects.toMatchObject({ code: 'sale_written_off' });
+    await expect(api.saleReceiptPdf(made.id ?? '')).rejects.toMatchObject({ code: 'sale_written_off' });
+  });
 });
