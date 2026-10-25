@@ -50,14 +50,26 @@ class BranchController {
 
     @Schema(name = "CreateBranchRequest")
     record CreateBranchRequest(
-            @NotBlank @Pattern(regexp = "^[A-Z0-9]{2,10}$") String code,
+            @Schema(
+                    description =
+                            "2 to 10 capital letters or digits. Omitted, the server makes one from the name, unique "
+                                    + "in the business (issue #581, ADR-089).")
+            @Pattern(regexp = "^[A-Z0-9]{2,10}$")
+            String code,
+
             @NotBlank @Size(max = 200) String name,
             @Size(max = 200) String location,
 
             @Schema(
                     description =
                             "false creates a Store: it holds stock but does not sell (ADR-048). Omitted means a shop.")
-            Boolean sellsGoods) {}
+            Boolean sellsGoods,
+
+            @Schema(
+                    description =
+                            "false creates a branch that keeps no goods, such as a head office (ADR-041, ADR-089). "
+                                    + "Omitted means it keeps goods. A Store must keep goods (422 store_must_stock).")
+            Boolean stocksGoods) {}
 
     @Schema(name = "UpdateBranchRequest", description = "Omitted fields are unchanged. The code never changes.")
     record UpdateBranchRequest(

@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-10-20, issue #366; the product owner decided the behaviour on 20 October 2026, the ADR is not yet accepted). Builds on ADR-041 and ADR-033. The migration is `V67` (merge order: #349 `V64`, this one `V65`, #359 `V66`, #361 `V67`).
+Proposed (2026-10-20, issue #366; the product owner decided the behaviour on 20 October 2026, the ADR is not yet accepted). Builds on ADR-041 and ADR-033. The migration is `V65` (merge order: #349 `V64`, this one `V65`, #359 `V66`, #361 `V67`). Amended by ADR-089 (a branch is
+added from the app as a shop, a store or a head office, with its code made from the name when none is typed).
 
 ## Context
 

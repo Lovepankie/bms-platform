@@ -1205,7 +1205,8 @@ export const branchesPage: Tour = {
   id: 'page-branches',
   // Version 2 adds the Store step (issue #366): a branch that holds stock but does not sell.
   // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 3,
+  // Version 4 adds the Add a branch step (issue #581).
+  version: 4,
   title: 'This page: branches',
   audience: (me) => held(me, 'core.branches.read'),
   autoStart: false,
@@ -1216,6 +1217,14 @@ export const branchesPage: Tour = {
       target: 'branches-intro',
       title: 'Closing a branch keeps its history',
       body: 'A closed branch keeps its sales and stock records for your reports. It only leaves the branch lists and the sale, buy stock and move stock screens.',
+    },
+    {
+      id: 'add',
+      target: 'branches-add',
+      // Only whoever may add a branch has the button, so only they see the step.
+      needs: ['core.branches.manage'],
+      title: 'Add a shop, a store or a head office',
+      body: 'An administrator taps Add a branch, types the name and picks what it is. The app makes the code from the name. A store keeps stock and does not sell from the moment it is added.',
     },
     {
       id: 'list',

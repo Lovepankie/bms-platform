@@ -121,34 +121,81 @@ class BranchService implements BranchProvisioning {
 
     @Transactional
     BranchResponse create(CreateBranchRequest request) {
-        long active = jdbc.sql("SELECT count(*) FROM branches WHERE status = 'active'")
-                .query(Long.class)
-                .single();
-        planLimits.checkRoomFor(PlanLimits.MAX_BRANCHES, active);
-        boolean codeTaken = jdbc.sql("SELECT count(*) FROM branches WHERE code = ?")
-                        .param(request.code())
-                        .query(Long.class)
-                        .single()
-                > 0;
-        if (codeTaken) {
+        boolean sells = request.sellsGoods() == null || request.sellsGoods();
+        boolean stocks = request.stocksGoods() == null || request.stocksGoods();
+        if (!sells && !stocks) {
+            throw ApiException.rule(
+                    "store_must_stock",
+                    "A Store holds stock, so it cannot also be a branch that keeps no goods. Make it a shop that sells,"
+                            + " or let it keep goods.");
+        }
+        checkRoomForAnOpenBranch();
+        String code = request.code() == null ? codeFrom(request.name()) : request.code();
+        UUID id = UUID.randomUUID();
+        // The lock above serialises adds, so a made code is never taken in between.
+        // A typed code that is taken is refused here with a 409, never a 500.
+        int inserted = jdbc.sql("""
+                        INSERT INTO branches (id, tenant_id, code, name, location, sells_goods, stocks_goods)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?)
+                        ON CONFLICT (tenant_id, code) DO NOTHING
+                        """)
+                .params(id, code, request.name().trim(), request.location(), sells, stocks)
+                .update();
+        if (inserted == 0) {
             throw new ApiException(
                     HttpStatus.CONFLICT, "duplicate_branch_code", "Duplicate branch code", "The code is in use.");
         }
-        UUID id = UUID.randomUUID();
-        boolean sells = request.sellsGoods() == null || request.sellsGoods();
-        jdbc.sql("""
-                        INSERT INTO branches (id, tenant_id, code, name, location, sells_goods)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
-                        """)
-                .params(id, request.code(), request.name().trim(), request.location(), sells)
-                .update();
         Map<String, Object> after = new LinkedHashMap<>();
-        after.put("code", request.code());
+        after.put("code", code);
         after.put("sells_goods", sells);
+        after.put("stocks_goods", stocks);
         after.put("name", request.name().trim());
         after.put("location", request.location());
         audit.record(AuditLog.Entry.created("core.branch.created", "core.branch", id, id, after));
         return find(id).orElseThrow();
+    }
+
+    /**
+     * The plan's branch limit, counted under a lock per business (issue #581, ADR-089): two adds or reopens at the same moment
+     * queue here, and the second counts the first's branch once it commits, so neither goes past {@code max_branches}. The
+     * count is its own statement after the lock, so under read committed it sees what the first committed.
+     */
+    private void checkRoomForAnOpenBranch() {
+        jdbc.sql(
+                        "SELECT pg_advisory_xact_lock(hashtextextended(current_setting('app.tenant_id') || ':core.branch.open', 0))")
+                .query(rs -> {});
+        long active = jdbc.sql("SELECT count(*) FROM branches WHERE status = 'active'")
+                .query(Long.class)
+                .single();
+        planLimits.checkRoomFor(PlanLimits.MAX_BRANCHES, active);
+    }
+
+    private boolean codeTaken(String code) {
+        return jdbc.sql("SELECT count(*) FROM branches WHERE code = ?")
+                        .param(code)
+                        .query(Long.class)
+                        .single()
+                > 0;
+    }
+
+    /**
+     * A code made from the name when none is typed (issue #581, ADR-089): its letters and digits in capitals, at most six, and
+     * a number after them when that is taken ("Gayaza Store" is GAYAZA, a second Gayaza branch GAYAZA2). A name with fewer than
+     * two such characters starts from BR.
+     */
+    private String codeFrom(String name) {
+        String base = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+        base = base.length() < 2 ? "BR" : base.substring(0, Math.min(6, base.length()));
+        if (!codeTaken(base)) {
+            return base;
+        }
+        for (int n = 2; ; n++) {
+            String suffix = String.valueOf(n);
+            String code = base.substring(0, Math.min(base.length(), 10 - suffix.length())) + suffix;
+            if (!codeTaken(code)) {
+                return code;
+            }
+        }
     }
 
     @Override
@@ -158,7 +205,7 @@ class BranchService implements BranchProvisioning {
             throw ApiException.rule(
                     "invalid_branch", "A branch needs a code of 2 to 10 capital letters or digits and a name.");
         }
-        return create(new CreateBranchRequest(code, name, null, null)).id();
+        return create(new CreateBranchRequest(code, name, null, null, null)).id();
     }
 
     @Transactional
@@ -287,14 +334,15 @@ class BranchService implements BranchProvisioning {
                     "Invalid status transition",
                     "The branch is already open.");
         }
-        long active = jdbc.sql("SELECT count(*) FROM branches WHERE status = 'active'")
-                .query(Long.class)
-                .single();
-        planLimits.checkRoomFor(PlanLimits.MAX_BRANCHES, active);
-        jdbc.sql("""
+        checkRoomForAnOpenBranch();
+        // Guarded by the version and status read above, so the row is changed exactly once whatever ran in between.
+        int reopened = jdbc.sql("""
                         UPDATE branches SET status = 'active', closed_at = NULL, closed_reason = NULL, updated_at = now(),
-                               version = version + 1 WHERE id = ?
-                        """).param(branchId).update();
+                               version = version + 1 WHERE id = ? AND status = 'inactive' AND version = ?
+                        """).params(branchId, before.version()).update();
+        if (reopened == 0) {
+            throw Versions.conflict(before.version());
+        }
         audit.record(new AuditLog.Entry(
                 "core.branch.reopened",
                 "core.branch",

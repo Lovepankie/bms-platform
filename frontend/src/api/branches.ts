@@ -1,11 +1,12 @@
 import { api, problemOf } from './client';
 import type { components } from './schema';
 
-// The branches client (issue #329; ADR-041; chapter 7 section 7.11.4): list, close, reopen, the stocking switch and the shop's own
-// logo (issue #461, ADR-068). Every change but the logo carries the branch's version in If-Match. A close over stock or transfers on the road comes back as 422
+// The branches client (issue #329; ADR-041; chapter 7 section 7.11.4): list, add (issue #581, ADR-089), close, reopen, the stocking
+// switch and the shop's own logo (issue #461, ADR-068). Every change but the logo carries the branch's version in If-Match. A close over stock or transfers on the road comes back as 422
 // `branch_close_needs_reason` with the figures; the screen shows them and asks for a reason, then sends the same call again.
 
 export type AdminBranch = components['schemas']['Branch'];
+export type NewBranch = components['schemas']['CreateBranchRequest'];
 
 /** What a closing warning carries: the figures the server found on the branch. */
 export type CloseFacts = {
@@ -33,6 +34,7 @@ const MESSAGES: Record<string, string | undefined> = {
   branch_has_open_accounts: 'This branch still has open loans, savings or investments. Close or move those first.',
   invalid_status_transition: 'This branch changed while you were looking. Reload the page to see how it is now.',
   version_conflict: 'Someone else changed this branch. Reload the page and try again.',
+  duplicate_branch_code: 'Another branch already has this code. Each branch needs its own.',
   plan_limit_reached: 'Your plan has no room for another open branch. Close one you no longer use, or ask us to change your plan.',
   permission_denied: 'You are not allowed to do this. Ask an administrator.',
 };
@@ -76,6 +78,11 @@ export const branches = {
   /** Every branch in the caller's scope, open and closed, head office first. */
   async list(): Promise<AdminBranch[]> {
     return unwrap(await sent(api.GET('/api/v1/branches')), 'Could not load the branches.').items ?? [];
+  },
+
+  /** Adds a shop, a store or a branch that keeps no goods; with no code the server makes one from the name. */
+  async create(branch: NewBranch): Promise<AdminBranch> {
+    return unwrap(await sent(api.POST('/api/v1/branches', { body: branch })), 'Could not add the branch.');
   },
 
   /** Closes a branch. Over stock or transfers on the road the server asks for a reason (code `branch_close_needs_reason`). */

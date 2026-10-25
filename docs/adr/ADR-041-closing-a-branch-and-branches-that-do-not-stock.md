@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-10-20, issue #329; not yet accepted by the product owner). Builds on ADR-017 and ADR-020. The migration is `V61`, the first free number after `V60`.
+Proposed (2026-10-20, issue #329; not yet accepted by the product owner). Builds on ADR-017 and ADR-020. The migration is `V61`, the first free number after `V60`. Amended by ADR-089
+(`POST /branches` also takes `stocks_goods`, so a branch that keeps no goods is created as one).
 
 ## Context
 

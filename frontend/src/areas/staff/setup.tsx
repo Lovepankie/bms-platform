@@ -394,7 +394,7 @@ export function Setup() {
       <h2>More set-up</h2>
       <TileGrid label="More set-up">
         {permissions.includes('core.branches.read') && (
-          <Tile to="/staff/setup/branches" icon={icons.building} label="Branches" hint="Close or reopen a shop, or say your head office keeps no goods" />
+          <Tile to="/staff/setup/branches" icon={icons.building} label="Branches" hint="Add a shop or a store, close or reopen one, or say a branch keeps no goods" />
         )}
         {permissions.includes('core.users.read') && (
           <Tile to="/staff/users" icon={icons.people} label="Users" hint="Invite your staff, give each a role, see who has not joined" />

@@ -8318,11 +8318,14 @@ export interface components {
             promised_date?: string;
         };
         CreateBranchRequest: {
-            code: string;
+            /** @description 2 to 10 capital letters or digits. Omitted, the server makes one from the name, unique in the business (issue #581, ADR-089). */
+            code?: string;
             location?: string;
             name: string;
             /** @description false creates a Store: it holds stock but does not sell (ADR-048). Omitted means a shop. */
             sells_goods?: boolean;
+            /** @description false creates a branch that keeps no goods, such as a head office (ADR-041, ADR-089). Omitted means it keeps goods. A Store must keep goods (422 store_must_stock). */
+            stocks_goods?: boolean;
         };
         CreateCollateralRequest: {
             collateral_type: string;

@@ -815,6 +815,19 @@ again under the sale's lock; the screens only save a round trip and say each ref
 - **Tests.** `branches/state.test.ts`, `branches/branches.dom.test.tsx` (confirm once, the refusal in plain words, the badge and the way back),
   `retail/not-stocking.test.tsx`, `auth/branch.test.ts`.
 
+## Add a branch (#581, ADR-089)
+
+- **Screen.** On the Branches screen whoever holds `core.branches.manage` sees Add a branch at the top. The form (Fields marked * are needed) asks for the
+  Name *, What is it? as a segmented control (Shop (sells), Store (keeps stock, does not sell), Head office (keeps no goods)) with a one-line hint for the
+  chosen kind, and Where is it? (the branch `location`). No code is asked for (the owner's rule of #562): the Name's hint shows the code the app makes from
+  it ("Code KASUBI, made by the app from the name", with a number when a listed branch has it). Add the branch sends `sells_goods` and `stocks_goods` for the kind. A full plan shows "Your plan has no room for another branch" with
+  Open Plan and billing for whoever holds `core.billing.read`, else "Ask the owner to change the plan"; a taken code shows its refusal in plain words.
+  On success the form closes, a dark toast says what was added ("Gayaza Store added. It is a store: it keeps stock and does not sell.") and `/me`, the branch
+  list and the retail queries are read again, so the picker and Move stock carry it at once. A reader sees "Only an administrator can add, close or reopen a branch."
+- **Tours.** `page-branches` is version 4 with an Add a branch step.
+- **Business set-up.** The Branches tile reads "Add a shop or a store, close or reopen one, or say a branch keeps no goods".
+- **Tests.** `branches/branches.dom.test.tsx` (each kind with its flags and toast, no code box and the code made from the name, the needed name, the plan limit with and without the billing link, the button only for `core.branches.manage`), `branches/state.test.ts`; backend `AddBranchIT`.
+
 ## Correcting entry mistakes (#351, #352, ADR-044)
 
 The owner fixes a mistake where he sees it, with a trail the spreadsheet never had. Everything below is phone first, in plain words, and

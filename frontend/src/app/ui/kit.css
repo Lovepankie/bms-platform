@@ -97,6 +97,17 @@
   margin-bottom: var(--space-4);
 }
 
+.field-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.field > .segmented {
+  margin-top: 6px;
+}
+
 .field-star {
   color: var(--color-danger);
 }

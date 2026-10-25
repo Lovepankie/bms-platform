@@ -54,3 +54,42 @@ export function branchLine(b: AdminBranch): string {
   if (!keepsGoods(b)) return 'Keeps no goods: no sales, purchases or stock counts here, and no goods can be moved in. Cash records still work, and goods left here can be moved out.';
   return b.is_head_office ? 'Head office.' : 'Open.';
 }
+
+/** What a new branch is (issue #581, ADR-048, ADR-089): the three kinds the Add a branch form offers. */
+export type BranchKind = 'shop' | 'store' | 'office';
+
+export const BRANCH_KINDS: readonly { value: BranchKind; label: string }[] = [
+  { value: 'shop', label: 'Shop (sells)' },
+  { value: 'store', label: 'Store (keeps stock, does not sell)' },
+  { value: 'office', label: 'Head office (keeps no goods)' },
+];
+
+/** The two flags each kind is sent as: a store keeps stock and does not sell, a head office keeps no goods. */
+export const KIND_FLAGS: Record<BranchKind, { sells_goods: boolean; stocks_goods: boolean }> = {
+  shop: { sells_goods: true, stocks_goods: true },
+  store: { sells_goods: false, stocks_goods: true },
+  office: { sells_goods: true, stocks_goods: false },
+};
+
+/**
+ * The code the server will make from a new branch's name (ADR-089): its letters and digits in capitals, at most six, then 2, 3 and
+ * on while the code is taken; BR when the name has fewer than two. Shown on the form only: the server makes the real one, and a
+ * branch the caller cannot see may still take a number.
+ */
+export function madeCode(name: string, taken: readonly string[]): string {
+  const letters = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const base = letters.length < 2 ? 'BR' : letters.slice(0, 6);
+  if (!taken.includes(base)) return base;
+  for (let n = 2; ; n++) {
+    const code = base.slice(0, 10 - String(n).length) + n;
+    if (!taken.includes(code)) return code;
+  }
+}
+
+/** The toast after a branch is added: its name and what it is, in the words of the people who run it. */
+export function addedWords(b: AdminBranch): string {
+  const name = b.name ?? 'The branch';
+  if (!sellsGoods(b)) return `${name} added. It is a store: it keeps stock and does not sell.`;
+  if (!keepsGoods(b)) return `${name} added. It keeps no goods, like a head office.`;
+  return `${name} added. It is a shop: it keeps stock and sells.`;
+}
