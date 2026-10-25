@@ -83,11 +83,12 @@ afterEach(() => {
 });
 
 describe('the bottom tabs on a phone (issue #539)', () => {
-  it('shows the five tabs in order for an owner, as links in one labelled navigation, with no menu button and no sidebar', () => {
+  it('shows the five tabs in order for an owner, as links in one labelled navigation, beside the menu button and no sidebar', () => {
     show(admin);
     expect(tabNames()).toEqual(['Sell', 'My stock', 'Buy', 'Money', 'More']);
     expect(bar().tagName).toBe('NAV');
-    expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    // The grouped menu's drawer opens from the top left on a phone too (issue #564); the tabs stay as they are.
+    expect(screen.getByRole('button', { name: 'Menu' })).toBeTruthy();
     expect(document.querySelector('.side-nav')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
   });
@@ -351,7 +352,7 @@ describe('the bottom tabs on a phone (issue #539)', () => {
     expect(document.documentElement.classList.contains('has-tab-bar')).toBe(false);
   });
 
-  it('lights up the More tab for a tour step on a menu link, since the link lives under More on a phone', async () => {
+  it('opens the menu drawer for a tour step on a menu link, the More tab still answering for the links it lists', async () => {
     const tour: Tour = {
       id: 'test-tabs-tour',
       version: 1,
@@ -371,8 +372,9 @@ describe('the bottom tabs on a phone (issue #539)', () => {
     await screen.findByRole('heading', { name: 'Feedback here' });
     const more = within(bar()).getByRole('link', { name: 'More' });
     expect(more.getAttribute('data-tour-also')?.split(' ')).toEqual(expect.arrayContaining(['nav-areas', 'nav-feedback', 'nav-notifications', 'nav-retail']));
+    // On a phone the drawer holds the link itself since issue #564, so the step opens the drawer rather than lighting up More.
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
-    expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts[0]).toBe(more);
+    expect(vi.mocked(Element.prototype.scrollIntoView).mock.contexts[0]).toBe(document.querySelector('.side-menu [data-tour="nav-feedback"]'));
   });
 });
 
@@ -423,10 +425,12 @@ describe('the tabs and their pages, read from /me (issue #539)', () => {
     const both = { ...admin, permissions: [...(admin.permissions ?? []), 'lending.loans.read', 'core.approvals.read'], modules: ['retail', 'lending'] } as Me;
     page(both, <MorePage />, signOut);
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Shop', 'Lending', 'Business', 'You']);
-    // The sidebar's order (FR-UXN-04, #544): Home and Approvals first, then Shop and Lending, then the other shared areas.
+    // The menu's order (FR-UXN-04, #544, #564): Home first, then Shop and Lending, then the other shared areas, Approvals among them
+    // since it sits in Today after the shop's rows.
     const lists = screen.getAllByRole('list').map((l) => l.getAttribute('aria-label'));
     expect(lists.slice(0, 4)).toEqual(['Start', 'Shop', 'Lending', 'Business']);
-    expect(within(screen.getByRole('list', { name: 'Start' })).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Approvals']);
+    expect(within(screen.getByRole('list', { name: 'Start' })).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home']);
+    expect(within(screen.getByRole('list', { name: 'Business' })).getByRole('link', { name: 'Approvals' })).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Business' })).queryByRole('link', { name: 'Home' })).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Lending' })).getByRole('link', { name: 'Loans' })).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Business' })).getByRole('link', { name: 'Business set-up' })).toBeTruthy();
@@ -435,9 +439,9 @@ describe('the tabs and their pages, read from /me (issue #539)', () => {
     cleanup();
     page(seller, <MorePage />, signOut);
     const links = within(screen.getByRole('list', { name: 'Areas' })).getAllByRole('link').map((a) => a.querySelector('.list-row-title')?.textContent);
-    expect(links).toContain('Retail');
+    expect(links).toContain('Reports');
     expect(links).not.toContain('Business set-up');
-    expect(links).not.toContain('Users');
+    expect(links).not.toContain('Staff');
   });
 });
 

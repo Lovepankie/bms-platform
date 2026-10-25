@@ -575,6 +575,14 @@ export const icons = {
       <path d="M12 7.5v5.5M12 16.5v.01" />
     </Svg>
   ),
+  // A question mark in a circle: Help and feedback at the foot of the staff menu (issue #564).
+  help: (
+    <Svg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </Svg>
+  ),
   // A circle with an i: a toast that only informs (#508).
   info: (
     <Svg>

@@ -622,6 +622,15 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   (`/platform/feedback`), the tours `page-feedback` and `page-operator-feedback`, and a Feedback step in `admin-welcome` v18,
   `retail-sales` v12 and `staff-welcome` v6. Tests: `FeedbackIT`, `RlsIsolationIT`, `ModularityTest`, `feedback-state.test.ts`,
   `feedback.dom.test.tsx`, `tours-operator.test.tsx`.
+- **Built (one grouped menu, issue #564, ADR-086, FR-UXN-04):** PWA only, no migration, no API change. `staffMenu` in
+  `frontend/src/areas/staff/menu.tsx` builds the groups (Home, Today, Stock, Money, Lending, Business) with the permission checks,
+  `useMenuCounts` reads the open orders and "N low" from Home's summary, and `SideNav` and `SideMenu` (`components/side-menu.tsx`)
+  draw them with `MenuShop` (`branch-picker.tsx`) at the top and `StaffMenuFoot` (`route.tsx`) at the foot: a fixed 264px sidebar
+  from 720px, the drawer from the menu button at the top left of the top bar on a phone. The retail shortcuts, their cap of five,
+  `RetailMenuGroup`, the folding sidebar and the foldable Shop and Lending sections are gone; `staffAreas` is the flat list the More
+  page, the feature search and the tabs read. Tours `admin-welcome` v27, `retail-sales` v23, `staff-welcome` v13,
+  `page-staff-home` v4. Picture `docs/ui/grouped-menu-564/menu.html`, screenshots in `docs/ui/grouped-menu-564/`. Tests:
+  `side-menu.dom.test.tsx`, `side-menu-shop.dom.test.tsx`, `menu-icons.test.tsx`, `retail/permissions.test.ts`.
 - The isolation, boundary, ledger, API, actuator, route permission and contract tests run in
   `mvn verify`; CI runs them on every pull request. Staging runs on a shared ARM64 host behind a
   Cloudflare Tunnel and pulls every green build of `main` from a `staging` pointer tag; hosts are
@@ -1015,6 +1024,11 @@ Accepted (this list is the ADR index):
   the second of two invitations at once with 409 `duplicate_phone`; the migration stops, changing nothing, on existing
   duplicates (manual fix in a runbook, never a deleted user); the recording notifier is dev and test only and every other
   profile keeps no message or link (proposed, #323 and #324; amends ADR-014; migration `V98`)
+- ADR-086 One grouped staff menu, the same on a phone and a laptop: Home, Today, Stock, Money, Lending (when on, after Money) and
+  Business, every page the session may open by the same permission rules and no cap; the shop logo or initials, business, role
+  and branch picker at the top; Notifications, Help and feedback, the person and Sign out at the foot; a fixed 264px sidebar from
+  720px that no longer folds and a drawer from the top left on a phone, the bottom tabs unchanged (proposed, #564, owner decisions
+  D38 and D44; amends the menu decisions of #455 and #471, FR-UXN-04; no migration)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared

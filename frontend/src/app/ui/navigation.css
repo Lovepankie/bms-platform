@@ -30,6 +30,10 @@
   min-height: 56px;
 }
 
+.staff-bar-spacer {
+  flex: 1 1 0;
+}
+
 .top-logo {
   height: 32px;
   width: auto;
@@ -248,9 +252,9 @@
 }
 
 /*
- * The sidebar from 720px (SideNav in components/side-menu.tsx, issue #455): the page becomes two columns, the sidebar and the
- * rest. The sidebar is 240px, or 64px of icons when folded, and stays in view while the page scrolls; the content takes the
- * remaining width with its text centred up to --content-width, and clips its full-bleed staff bar so nothing scrolls sideways.
+ * The sidebar from 720px (SideNav in components/side-menu.tsx, issues #455 and #564): the page becomes two columns, the sidebar and
+ * the rest. The sidebar is 264px and stays in view while the page scrolls; the content takes the remaining width with its text
+ * centred up to --content-width, and clips its full-bleed staff bar so nothing scrolls sideways.
  */
 .app-content:has(> .nav-layout > .side-nav) {
   max-width: none;
@@ -258,13 +262,9 @@
 }
 
 .nav-layout:has(> .side-nav) {
-  --side-nav-width: 240px;
+  --side-nav-width: 264px;
   display: flex;
   align-items: flex-start;
-}
-
-.nav-layout:has(> .side-nav-folded) {
-  --side-nav-width: 64px;
 }
 
 .nav-layout:has(> .side-nav) > .nav-layout-main {
@@ -280,36 +280,16 @@
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
   width: var(--side-nav-width);
   flex: none;
   height: 100vh;
   height: 100dvh;
-  padding: var(--space-3);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
 }
 
-.side-nav-folded {
-  padding: var(--space-3) var(--space-2);
-}
-
-.side-nav-toggle {
-  display: inline-grid;
-  place-items: center;
-  width: var(--tap);
-  min-height: var(--tap);
-  padding: 0;
-}
-
-.side-nav-toggle svg {
-  width: 24px;
-  height: 24px;
-}
-
-/* The shop in use above the side menu's links (issue #461, ADR-068): its logo, small and rounded, beside its name. */
+/* The shop in use on the More page (issue #461, ADR-068): its logo, small and rounded, beside its name. */
 .current-shop {
   display: flex;
   align-items: center;
@@ -334,30 +314,11 @@
   white-space: nowrap;
 }
 
-.side-nav-folded .current-shop {
-  justify-content: center;
-  padding: 0;
-}
-
-.side-nav .side-menu-links a {
-  white-space: nowrap;
-}
-
-.side-nav-folded .side-menu-links a {
-  justify-content: center;
-  padding: 0;
-}
-
-.side-nav-folded .side-menu-group {
-  margin-left: 0;
-  border-left: 0;
-  border-top: 1px solid var(--color-border);
-}
-
 /*
  * The phone side menu (components/side-menu.tsx, issue #455): below 720px a menu button at the top left of the staff bar opens a
  * drawer from the left, 85% of the width and at most 320px, over a dimmed backdrop. It keeps clear of the iPhone notch and home
- * bar, slides in over --motion (once in 1ms under reduced motion, base.css) and appears at once when a tour step opens it.
+ * bar, slides in over --motion (once in 1ms under reduced motion, base.css) and appears at once when a tour step opens it. Its
+ * shadow is the only one in the menu.
  */
 .menu-button {
   display: inline-grid;
@@ -398,14 +359,20 @@
   display: flex;
   flex-direction: column;
   width: min(85vw, 320px);
-  padding: calc(var(--space-2) + env(safe-area-inset-top)) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom))
-    calc(var(--space-3) + env(safe-area-inset-left));
-  overflow-y: auto;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow: hidden;
   overscroll-behavior: contain;
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: var(--shadow-lg);
   animation: rt-drawer-in var(--motion) var(--ease-out);
+}
+
+/* The operator portal's drawer heads itself with Menu and its close button. */
+.side-menu-panel:has(> .side-menu-head) {
+  padding: calc(var(--space-2) + env(safe-area-inset-top)) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom))
+    calc(var(--space-3) + env(safe-area-inset-left));
+  overflow-y: auto;
 }
 
 .side-menu-instant .side-menu-backdrop,
@@ -444,76 +411,165 @@ body.side-menu-open {
   font-size: var(--text-lg);
 }
 
-.side-menu-links {
-  flex: 1 0 auto;
+/* The staff drawer's close button: out of sight until it has focus, as it has when the drawer opens (Escape, the backdrop and a
+   swipe close it too). */
+.side-menu-close {
+  position: absolute;
+  top: calc(var(--space-2) + env(safe-area-inset-top));
+  right: var(--space-2);
+  z-index: 1;
+  background: var(--color-surface);
 }
 
-.side-menu-links ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.side-menu-close:not(:focus) {
+  clip-path: inset(50%);
+  pointer-events: none; /* hidden until focused, so it must not take a tap over the logo either */
 }
 
-.side-menu-links a {
+/*
+ * The top of the staff menu (issue #564): the logo or the business's initials on a tint, the business and the role, and under
+ * them on a full-width row of its own the branch in use, a native select laid over it when there is more than one to choose.
+ */
+.menu-shop {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  min-height: var(--tap);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius);
-  color: var(--color-text);
-  font-weight: var(--weight-semibold);
-  text-decoration: none;
-}
-
-.side-menu-links a svg {
-  width: 20px;
-  height: 20px;
+  gap: var(--space-1) var(--space-3);
   flex: none;
-  color: var(--color-text-muted);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.side-menu-links a:hover {
-  background: var(--color-hover);
+.menu-shop-logo {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--radius-lg);
+  object-fit: contain;
 }
 
-.side-menu-links a[aria-current='page'] {
+/* A wide logo (a wordmark) keeps its height and takes up to 88px rather than shrinking into the square. */
+img.menu-shop-logo {
+  width: auto;
+  min-width: 40px;
+  max-width: 88px;
+}
+
+/* The tile while the business is not known: plain, with nothing in it. */
+.menu-shop-blank {
+  background: var(--color-neutral-tint);
+}
+
+.menu-shop-initials {
+  display: grid;
+  place-items: center;
   background: var(--color-accent-tint);
   color: var(--color-link);
   font-weight: var(--weight-semibold);
 }
 
-.side-menu-links a[aria-current='page'] svg {
-  color: var(--color-link);
+.menu-shop-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  line-height: var(--leading-tight);
 }
 
-/* The section of the current page (Retail above its current shortcut): the colour of the current item without its tint or edge. */
-.side-menu-links a.side-menu-section {
-  color: var(--color-link);
+.menu-shop-name {
+  overflow: hidden;
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.side-menu-links a.side-menu-section svg {
-  color: var(--color-link);
-}
-
-.side-menu-group {
-  margin: 0 0 var(--space-2) var(--space-6);
-  border-left: 1px solid var(--color-border);
-}
-
-.side-menu-group a {
-  font-weight: var(--weight-regular);
+.menu-shop-role {
+  overflow: hidden;
+  color: var(--color-text-muted);
   font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* A section of a business with both Shop and Lending (issue #471): a small heading that folds its links, a rule above it. */
-.side-menu-block {
-  margin-top: var(--space-2);
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
+.menu-shop-branch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1 0 100%;
+  min-width: 0;
+  min-height: var(--tap);
+  border-radius: var(--radius);
+  color: var(--color-link);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.menu-shop-branch:has(.menu-shop-select:focus-visible) {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.menu-shop-branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-shop-chevron {
+  display: inline-flex;
+  flex: none;
+}
+
+.menu-shop-chevron svg {
+  width: 16px;
+  height: 16px;
+  transform: rotate(90deg);
+}
+
+.menu-shop-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* The groups: rows of 48px with one line icon, a small muted heading above each group but the first. */
+.side-menu-links {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.side-menu-panel:has(> .side-menu-head) .side-menu-links {
+  flex: 1 0 auto;
+  padding: 0;
+  overflow: visible;
+}
+
+.side-menu-links ul,
+.side-menu-foot-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .side-menu-heading {
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}
+
+.side-menu-links a,
+.side-menu-foot a,
+.side-menu-help {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -523,63 +579,138 @@ body.side-menu-open {
   border: 0;
   border-radius: var(--radius);
   background: none;
-  color: var(--color-text-muted);
+  color: var(--color-text);
   font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
+  box-shadow: none;
 }
 
-.side-menu-heading:hover {
-  background: var(--color-hover);
-}
-
-.side-menu-heading svg {
-  width: 20px;
-  height: 20px;
+.side-menu-links a svg,
+.side-menu-foot a svg,
+.side-menu-help svg {
+  width: 22px;
+  height: 22px;
   flex: none;
 }
 
-.side-menu-caret {
+.side-menu-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-menu-links a:hover,
+.side-menu-foot a:hover,
+.side-menu-help:hover {
+  background: var(--color-hover);
+}
+
+/* The current page: a tinted row and brand-colour text, no stripe at its side. */
+.side-menu-links a[aria-current='page'],
+.side-menu-foot a[aria-current='page'] {
+  background: var(--color-accent-tint);
+  color: var(--color-link);
+  font-weight: var(--weight-semibold);
+}
+
+/* A count is a muted number at the right of its row, not a coloured badge. */
+.side-menu-count {
+  flex: none;
   margin-left: auto;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  transform: rotate(45deg);
-}
-
-.side-menu-heading[aria-expanded='false'] .side-menu-caret {
-  transform: rotate(-45deg);
-}
-
-.side-nav-folded .side-menu-heading {
-  justify-content: center;
-  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
 }
 
 .side-menu-foot {
+  flex: none;
+  padding: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+/* The operator portal's foot: its name and Sign out on one line. */
+.side-menu-panel:has(> .side-menu-head) .side-menu-foot {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
+  padding: var(--space-3) 0 0;
 }
 
-.side-menu-foot button {
+.side-menu-foot > button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   flex: none;
 }
 
-.side-menu-foot button svg {
+.side-menu-foot > button svg {
   width: 18px;
   height: 18px;
+}
+
+/* Who is signed in: initials, name and role, and Sign out on a row of its own under them, so neither is cut off at 264px. */
+.side-menu-me {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-1) 0 var(--space-3);
+}
+
+.side-menu-avatar {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-neutral-tint);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.side-menu-me-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  line-height: var(--leading-tight);
+}
+
+/* The name and the role wrap rather than cut off, so the 264px sidebar shows them whole beside Sign out. */
+.side-menu-me-name,
+.side-menu-me-role {
+  overflow-wrap: break-word;
+}
+
+.side-menu-me-role {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.side-menu-sign-out {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  flex: 1 0 100%;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  color: var(--color-text-muted);
+  font-weight: var(--weight-regular);
+  box-shadow: none;
+}
+
+.side-menu-sign-out svg {
+  width: 22px;
+  height: 22px;
 }
 
 /*

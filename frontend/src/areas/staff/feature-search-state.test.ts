@@ -115,7 +115,7 @@ describe('feature search: how it matches (issue #551)', () => {
     expect(labels(admin, 'move stock')[0]).toBe('Move stock');
     expect(labels(cashier, 'expenses')[0]).toBe('Expenses');
     expect(labels(cashier, 'savings')[0]).toBe('Savings');
-    expect(labels(everything, 'users')[0]).toBe('Users');
+    expect(labels(everything, 'users')[0]).toBe('Staff');
     expect(labels(admin, 'add an item')[0]).toBe('Add an item');
   });
 
@@ -130,8 +130,8 @@ describe('feature search: how it matches (issue #551)', () => {
     expect(labels(admin, 'debt')).toContain('Customers who owe');
     expect(labels(admin, 'transfer')).toContain('Move stock');
     expect(labels(admin, 'product')).toContain('Items');
-    expect(labels(everything, 'staff')).toContain('Users');
-    expect(labels(everything, 'abakozi')).toContain('Users');
+    expect(labels(everything, 'staff')).toContain('Staff');
+    expect(labels(everything, 'abakozi')).toContain('Staff');
     expect(labels(seller, 'okutunda')).toContain('Record a sale');
     expect(labels(admin, 'okugula')).toContain('Buy stock');
     expect(labels(admin, 'bbanja')).toContain('Customers who owe');

@@ -11,8 +11,8 @@ import { BranchRoles } from './branch-roles';
 import {
   CAPABILITIES, KEYS, TRADE_PRESET, changeOf, chooseProfile, draftOf, isChange, requestOf, sentencesOf, toggle,
 } from './capabilities-state';
-import { shortcutsFor } from './nav';
-import { SCREEN_CAPABILITY, canUse, screensFor } from './permissions';
+import { staffAreas } from '../menu';
+import { SCREENS, SCREEN_CAPABILITY, canUse, screensFor } from './permissions';
 import { ChangeReview, RetailSettings } from './settings';
 import { GoodsReceivedPage } from './goods-received';
 import { LandedCostsPage } from './landed-costs';
@@ -79,11 +79,11 @@ describe('the profile is a preset of the flags (spec 1.2)', () => {
 
 describe('menus and screens follow the capabilities (ADR-033)', () => {
   const screens = (me: Me) => screensFor(me).map((s) => s.screen);
-  const shortcuts = (me: Me) => shortcutsFor(me).map((s) => s.screen);
+  const menu = (me: Me) => staffAreas(me, { sells: true }).map((l) => l.to);
 
   it('all off equals today: no list, one list without the capability, and an empty list offer the same screens', () => {
     expect(screens(admin(undefined))).toEqual(screens(admin([])));
-    expect(shortcuts(admin(undefined))).toEqual(shortcuts(admin([])));
+    expect(menu(admin(undefined))).toEqual(menu(admin([])));
     expect(screens(admin([]))).not.toContain('branchRoles');
   });
 
@@ -217,13 +217,14 @@ describe('purchasing follows its capability', () => {
   // Supplier payments and What I owe suppliers are not among them since issue #557: they pay what Buy stock bought on credit.
   const NEW_SCREENS = ['purchaseOrders', 'goodsReceived', 'supplierBills', 'landedCosts', 'supplierCredits'];
   const screens = (me: Me) => screensFor(me).map((s) => s.screen);
+  const menu = (me: Me) => staffAreas(me, { sells: true }).map((l) => l.to);
 
-  it('offers none of the purchasing screens or shortcuts while purchasing is absent, and leaves Restock where it was', () => {
+  it('offers none of the purchasing screens or menu rows while purchasing is absent, and leaves Restock where it was', () => {
     for (const me of [admin(undefined), admin([]), admin(['branch_roles', 'units', 'returns'])]) {
       const offered = screens(me);
       for (const screen of NEW_SCREENS) expect(offered, screen).not.toContain(screen);
       expect(offered).toContain('restock');
-      for (const screen of NEW_SCREENS) expect(shortcutsFor(me).map((s) => s.screen), screen).not.toContain(screen);
+      for (const screen of NEW_SCREENS) expect(menu(me), screen).not.toContain(SCREENS.find((s) => s.screen === screen)?.path);
     }
   });
 
@@ -232,7 +233,7 @@ describe('purchasing follows its capability', () => {
     const on = screens(admin(['purchasing']));
     expect(on.filter((s) => !off.includes(s)).sort()).toEqual([...NEW_SCREENS].sort());
     expect(off.filter((s) => !on.includes(s))).toEqual([]);
-    expect(shortcutsFor(admin(['purchasing'])).map((s) => s.screen)).toEqual(shortcutsFor(admin([])).map((s) => s.screen));
+    expect(menu(admin(['purchasing']))).toEqual(menu(admin([])));
   });
 
   it('gives orders and goods received to the restock permission, and the money screens to administrators only', () => {

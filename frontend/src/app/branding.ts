@@ -102,6 +102,17 @@ export function useTenantHost(): boolean | null {
   return Boolean(import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT) || classifyHost(window.location.hostname, hosts.data).kind === 'tenant';
 }
 
+/**
+ * The business's own name for the staff menu (issue #564, ADR-086 decision 8): the trimmed `display_name` of this host's tenant
+ * branding once it has loaded, else null. Null on a host that serves no tenant, while the branding loads, when it fails, and
+ * when it carries no name, so a caller never falls back to a product name the way the shell brand does.
+ */
+export function useBusinessName(): string | null {
+  const tenantHost = useTenantHost() === true;
+  const branding = useQuery({ ...BRANDING_QUERY, enabled: tenantHost });
+  return (tenantHost && branding.data?.display_name?.trim()) || null;
+}
+
 /** A public logo URL (the business's or a shop's, issue #461): the address an <img> can show, or null, and whether it is still loading. */
 export function useLogo(logoUrl: string | null): { src: string | null; loading: boolean } {
   const logo = useQuery({

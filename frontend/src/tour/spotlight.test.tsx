@@ -89,7 +89,8 @@ describe('Help', () => {
     expect(html).toContain('data-tour="help-menu"');
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('>Help</button>');
-    expect(html).toContain('<dialog class="sheet help-sheet" aria-labelledby="help-title">');
+    const title = /<dialog class="sheet help-sheet" aria-labelledby="([^"]+)"><h2 id="([^"]+)">Help<\/h2>/.exec(html);
+    expect(title?.[1]).toBe(title?.[2]);
     expect(html).not.toContain('style=');
   });
 });

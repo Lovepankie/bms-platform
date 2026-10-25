@@ -127,25 +127,25 @@ dark theme follow (#429): the person picks Light, Dark or Same as my phone with 
 right of the header, or under Appearance on the Notifications and app page (#452), kept on the device; the tokens, the
 menu and the dark pairs are in `docs/ui/design-system.md`.
 
-Navigation (#455): one pattern on every screen size. The staff area and the operator portal list
-their areas in a side menu, each item with an inline SVG icon, the current one marked
-`aria-current="page"` and the retail shortcuts as a group under Retail; the area tabs and the
-separate retail bar are gone. From 720px the menu is a sidebar at the left of the page (about 240px,
-folding to 64px of icons, folded at first below 1024px and unfolded from there until the person
-chooses, the choice kept on the device, each folded item keeping its label as its accessible name and
-tooltip), and the content takes the remaining width. Below 720px the staff area has bottom tabs
-(issue #539, FR-UXN-08): Sell, My stock, Buy, Money and More, fixed to the bottom over the iPhone's
-safe-area insets, each shown only while its module is on and the session may use its page; More
-lists the same areas as the sidebar, from the same list and permission checks, with the shop in use
-and Sign out, and the sticky primary action bar sits on top of the tabs. The operator portal keeps a
-menu button at the top left that opens its list in a side drawer from the left (85% of the width, at
-most 320px, over a dimmed backdrop) with the person's name and Sign out at the bottom; the drawer is
-a modal dialog: focus moves in, stays in, and returns to the menu button; the page behind does not
-scroll; it closes on the backdrop, Escape, a left swipe, a chosen link or any change of page. Each
-layout builds its areas from one list, so the items and permission checks cannot drift apart, and
-all of it follows the theme and reduced motion. A guided tour step that points at a menu item finds
-it in the sidebar, unfolding it if folded, or on a phone the More tab that holds it. The member area has no area list
-and keeps its layout. Details in `docs/ui/design-system.md`, "Navigation".
+Navigation (#455, #564): one grouped menu on every screen size (FR-UXN-04, ADR-086). The staff area
+lists its pages in groups the way a shop owner thinks: Home, Today, Stock, Money, Lending (for a
+business with lending) and Business, each under a small muted heading, every row with an inline SVG
+line icon, 48px high, the current one marked `aria-current="page"` with a tinted background and
+brand-colour text, and counts (open orders, items low on stock) as muted figures at the right. Its top
+shows the shop's logo or initials, the business name, the person's role and the branch picker; its
+footer holds Notifications, Help and feedback, the person and Sign out. From 720px the menu is a fixed
+sidebar at the left of the page (264px) and the content takes the remaining width. Below 720px the
+menu button at the top left of the top bar opens the same list in a drawer from the left (85% of the
+width, at most 320px, over a dimmed backdrop), and the bottom tabs (issue #539, FR-UXN-08) stay: Sell,
+My stock, Buy, Money and More, fixed to the bottom over the iPhone's safe-area insets, each shown only
+while its module is on and the session may use its page; the sticky primary action bar sits on top of
+the tabs. The operator portal draws its list in the same sidebar and drawer, with the person's name and
+Sign out at the bottom. The drawer is a modal dialog: focus moves in, stays in, and returns to the menu
+button; the page behind does not scroll; it closes on the backdrop, Escape, a left swipe, a chosen link
+or any change of page. Each layout builds its menu from one list, so the items and permission checks
+cannot drift apart, and all of it follows the theme and reduced motion. A guided tour step that points
+at a menu row finds it in the sidebar, or on a phone opens the drawer for it. The member area has no
+area list and keeps its layout. Details in `docs/ui/design-system.md`, "Navigation".
 
 ## 11.3 SMS
 

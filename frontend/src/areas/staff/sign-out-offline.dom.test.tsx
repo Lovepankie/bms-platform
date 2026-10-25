@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, type Me } from '../../api/client';
 import { router as appRouter } from '../../app/router';
@@ -44,9 +44,9 @@ async function signOutOffline() {
     path === '/api/v1/me' ? Promise.resolve({ data: seller, response: new Response() }) : new Promise(() => undefined)) as never);
   vi.spyOn(api, 'POST').mockImplementation((() => Promise.reject(new TypeError('offline'))) as never);
   const router = start();
-  // Sign out is in the top bar's one menu (issue #526).
+  // Sign out is in the top bar's one menu (issue #526); the sidebar's foot holds another (issue #564).
   fireEvent.click(await screen.findByRole('button', { name: /^Menu for / }, { timeout: 5000 }));
-  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  fireEvent.click(within(document.querySelector('.top-menu') as HTMLElement).getByRole('button', { name: 'Sign out' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'));
   expect(getAccessToken()).toBeNull();
   expect(logoutPending()).toBe(true);

@@ -1,6 +1,6 @@
 # Design system
 
-**Status:** Draft · **Chore:** #95, #106 (visual polish), #429 (light and dark theme), #455 (phone side menu), #471 (menu sections and Home cards) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
+**Status:** Draft · **Chore:** #95, #106 (visual polish), #429 (light and dark theme), #455 (phone side menu), #471 (menu sections and Home cards), #564 (one grouped menu) · **Chapter:** `docs/sdd/11-member-channels.md` section 11.2.6 · **Builds on:** #87 (tenant branding, FR-TEN-08)
 
 The look of the PWA: calm, trustworthy business software in Rincol Tech blue. One design layer serves the
 landing page, the sign-in family, the staff area, every retail screen, the member portal and the platform
@@ -20,7 +20,7 @@ placeholder. Screens use class names from this catalogue and never write a raw c
 | `ui/tables.css` | Tables and `.table-wrap` |
 | `ui/feedback.css` | `.alert-*`, `.badge-*`, `.empty-state`, `.loading`, `.spinner`, `.skeleton`, `.toast`, `.toast-success`, `.toast-error`, `.toast-info`, `.toast-icon`, the header refresh button (`.refresh`, `.refresh-status` readable by assistive tech but off screen below 720px, `.refresh-problem` visible at every width) |
 | `ui/illustrations.css` | The paint classes of the illustrations (`.ill-*`), the state components (`.empty-state-art`, `.status-panel`, `.brand-loader`, `.skeleton-list`) and the shared keyframes |
-| `ui/navigation.css` | The staff bar, the side menu: the sidebar from 720px (`.nav-layout`, `.side-nav`) and the phone drawer of the operator portal (`.menu-button`, `.side-menu`); the staff area's bottom tabs on a phone (`.tab-bar`, `.tab`, `.has-tab-bar`, #539) |
+| `ui/navigation.css` | The staff bar, the side menu: the sidebar from 720px (`.nav-layout`, `.side-nav`) and the phone drawer (`.menu-button`, `.side-menu`), its groups, counts, top and foot (#564); the staff area's bottom tabs on a phone (`.tab-bar`, `.tab`, `.has-tab-bar`, #539) |
 | `ui/pages.css` | The landing page (hero, trust line, module cards), `.auth-card` and `.auth-art`, the portal cards, the approvals decision cell, the style page |
 | `ui/retail.css` | The retail classes (`.rt`, `.rt-card`, `.rt-row`, `.rt-total`, `.rt-flag`, `.rt-primary`), `.line-foot` |
 | `ui/search.css` | The shared search box (#241): `.sb`, `.sb-field`, `.sb-clear`, `.sb-status`, `.sb-searching`, `.sb-results` (dimmed while `aria-busy`), `.sb-mark` |
@@ -86,7 +86,7 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Card | `.card`, `.card-muted`, `.card-raised`, `.card-interactive` | White, 8px corners, soft shadow; `.card-interactive` (a card that is a link) lifts on hover and sinks on press |
 | Table | `<div className="table-wrap" tabIndex={0}><table>` | Scrolls inside its card on a phone with edge shadows; `.num` cells right-aligned in tabular figures; `tabIndex` lets a keyboard scroll it |
 | Table as cards | `.table-wrap.table-cards` and `data-label` on every `<td>` | Below 560px each row is a card of label and value pairs (no sideways scroll); `.cell-stack` puts controls under their label. Used by approvals and the member list |
-| Side menu | `SideNav` and `SideMenu` (`components/side-menu.tsx`), `.side-nav`, `.side-nav-folded`, `.menu-button`, `.side-menu`, `.side-menu-panel`, `.side-menu-group` | The navigation of the staff area and the operator portal from 720px: a sidebar that folds to icons; below 720px the operator portal draws the same items in a drawer (see Navigation) |
+| Side menu | `SideNav` and `SideMenu` (`components/side-menu.tsx`), `.side-nav`, `.menu-button`, `.side-menu`, `.side-menu-panel`, `.side-menu-group`, `.side-menu-heading`, `.side-menu-count`, `.side-menu-foot`, `.menu-shop` | The navigation of the staff area and the operator portal: a fixed 264px sidebar from 720px and the same groups in a drawer below it (#564, see Navigation) |
 | Bottom tabs | `StaffTabBar` and `TabBar` (`areas/staff/tabs.tsx`), `MoneyPage` and `MorePage` (`areas/staff/tab-pages.tsx`), `.tab-bar`, `.tab`, `.tab-icon`, `.tab-badge` | The staff area's navigation below 720px (#539): Sell, My stock, Buy, Money and More (see Navigation) |
 | Breadcrumbs | `StaffBreadcrumbs` (`components/breadcrumbs.tsx`): `<nav aria-label="Breadcrumb">` with an `<ol>` | One trail under the staff bar from the routes' `crumb` labels (FR-UXN-01); the last item is `aria-current="page"`; below 720px only Back to the parent and the current page |
 | Category group | `GroupControls`, `GroupedBodies`, `GroupedCards` (`areas/staff/retail/category-groups.tsx`), `.cat-head` | A list in expandable category sections: a full-width header button (`aria-expanded`, `aria-controls`) with the count and subtotal, a Group by category switch, Expand all and Collapse all (FR-UXN-02). The Stock page and the catalogue items only; never an item picker |
@@ -94,7 +94,6 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Feature search | `FeatureSearch` (`areas/staff/feature-search.tsx`), the list in `feature-search-state.ts`, `.find-open`, `.find-open-more`, `.find-screen` in `ui/search.css`; the `search` icon | Find any screen by what you want to do (#551, FR-UXN-09): a Search button in the staff bar (icon alone below 720px, named Search) and at the top of the More page opens the kit's `Sheet` holding the item picker, whose list sits in the sheet's flow rather than over it. / and Ctrl+K open it on a laptop. It lists only what the menu offers the session |
 | Home cards | `HomeCards` (`areas/staff/home-cards.tsx`), `.home-cards`, `.home-card`, `.home-figures` | Home's card per module the business uses (#471, FR-UXN-05, ADR-072): a `.card` headed with the module's menu icon and name, its figures as a `dl` (label muted, value large and semibold, a count as a hint), and a link to the module; a grid of columns at least 280px wide, so one column on a phone |
 | Shop summary cards | `TakingsCard`, `CreditCard`, `TopItemsCard`, `BranchesCard` (`areas/staff/home-cards.tsx`), `.home-summary`, `.home-summary-body`, `.home-list` | The shop's cards after the Shop card on Home (#485, FR-UXN-06, ADR-076): a `.card` headed by its name without an icon (the icons stay the modules'), figures as a `dl` or a `.home-list` (a name, then its figure at the end of the line, semibold), Today and This week as two `aria-pressed` buttons, a plain sentence when there is nothing to show, and a link to the full page |
-| Retail shortcuts | `RetailMenuGroup` (`areas/staff/retail/nav.tsx`) | Up to five retail shortcuts the user may use, as a group under Retail in the side menu on every size (#455, which removed the retail bottom bar) |
 | Tile | `<TileGrid label><Tile to icon label hint /></TileGrid>` (`app/ui/Tile.tsx`, `.tile-grid`, `.tile`, `.tile-label`, `.tile-hint` in `ui/navigation.css`; #508) | Every hub page (Retail home, Catalogue, Business set-up): an icon above the label and a one-line hint under it, two per row on a phone. The link is named by its label and described by its hint. A press shrinks it to 98% over 120ms; hover changes the edge and background; focus adds a 3px ring; the shadow never grows |
 | Sale bar | `<SaleBar>` around the sale's submit button (`areas/staff/retail/sale.tsx`, `.sale-bar`, `.sale-bar-action`, `.sale-bar-amount`; #508) | The sale screen's one primary action, Record sale with the live total (Record sale UGX 45,000). Below 720px it sticks full width to the bottom of the screen over the page gutter, and `SaleBar` measures it with a `ResizeObserver` into `--bottom-bar` on the root (cleared on unmount), so the toast rises above it and `scroll-padding-bottom` with the form's bottom padding keep a focused field clear of it; from 720px it sits in the form. The total above it is `.rt-total-hero` with the amount in `.rt-total-amount` at `--text-display`. A new line on the sale slides (`.line-new`) up 8px and fades in over 200ms; the count beside Items (`.count-badge`) pops on every add or scan top-up, never on a removal; and a phone that can vibrates for 10ms. A duplicate add gives none of these |
 | Amounts | `.num`, `.rt-total`, `.rt-group-total`, `.rc-total`, `.line-foot`, `.sale-bar-amount`, `.an-stat-value`, `.iv-card-value`, `.iv-bars-value`, `.iv-value-btn`, `.home-figure dd` (`ui/base.css`) | Every amount in tabular figures, formatted only by `formatMinor` (`money()` on the retail screens); UGX has no decimals |
@@ -136,59 +135,58 @@ The platform host and a tenant without a colour show the Rincol blue.
 | Guided tour | `tour/` (`.tour-card`, `.tour-hole`, `.tour-backdrop`, `.tour-dots`) | A card docked top or bottom, away from the lit target; the hole is placed with CSS custom properties, never a style attribute (ADR-025) |
 | Tour anchor | `data-tour="<id>"` on the element a tour step lights up | Stable ids, never a CSS class; `tour/tours.test.tsx` fails when one disappears |
 | Tour rules (issue #292) | `tour/model.ts` `autoTourFor`, `host.tsx` | At most one tour starts by itself per page load; the rest wait for the next visit. A user with no tour history gets only the first-run (Welcome) tour, and every "New:" tour is marked seen for them at that moment, since they have nothing to compare against. One "Do not show tours again" checkbox (progress key `tours-off`) stops every automatic tour, "New:" ones included; Help still replays any tour |
-| Top bar (#526) | `StaffBar` (`areas/staff/route.tsx`) with `BranchTitle`, `TopMenu` and `OfflineBanner` (`areas/staff/top-bar.tsx`); `.staff-bar`, `.top-title`, `.top-menu`, `.offline-banner` in `ui/navigation.css` | The staff area's one 56px bar, sticky: the business small above the branch in use as the title (a native select laid over it switches branch), Search, the sync dot only with news, and one menu (a disclosure, Escape and a press outside close it) holding who is signed in, Help, Refresh with when the page was loaded, the theme as a Segmented, and Sign out (from 720px, or while two-step set-up blocks the page). The shell draws no brand bar in the staff area, and its Powered-by footer only on More, Business set-up and Retail settings. Offline, a neutral banner under the bar says so |
+| Top bar (#526) | `StaffBar` (`areas/staff/route.tsx`) with `BranchTitle`, `TopMenu` and `OfflineBanner` (`areas/staff/top-bar.tsx`); `.staff-bar`, `.top-title`, `.top-menu`, `.offline-banner` in `ui/navigation.css` | The staff area's one 56px bar, sticky: on a phone the business small above the branch in use as the title (a native select laid over it switches branch; from 720px both are at the top of the sidebar instead, #564), Search, the sync dot only with news, and one menu (a disclosure, Escape and a press outside close it) holding who is signed in, Help, Refresh with when the page was loaded, the theme as a Segmented, and Sign out (from 720px, or while two-step set-up blocks the page). The shell draws no brand bar in the staff area, and its Powered-by footer only on More, Business set-up and Retail settings. Offline, a neutral banner under the bar says so |
 | Help | `useHelpSheet` and `HelpMenu` (`tour/host.tsx`) | A `dialog.sheet` with Take the tour and Show me this page; the staff area opens it from the top bar's menu |
 | Sync status (issue #458, ADR-067) | `SyncStatus` in `frontend/src/offline/sync-status.tsx`, mounted in the top bar before Search, its dot drawn only while offline, sending, or with sales waiting or failed, and always for a manager (`retail.offline.resolve`), whose sheet settles other phones' sales (#526); `.sync-status`, `.sync-dot`, `.sync-dot-offline`, `.sync-dot-syncing`, `.sync-word`, `.sync-count` (`.sync-long`, `.sync-short`), `.sync-list`, `.sync-row`, `.sync-row-failed`, `.sync-reason` | A 12px dot, `--color-success` online, `--color-text-muted` offline, `--color-warning` while sending (a slow pulse, still with `prefers-reduced-motion`), with the state as visible text beside it (Online, Offline, Syncing) and "3 waiting to sync" ("3 waiting" at 480px and below). The button's accessible name says the state, the count and the failed ones ("Offline, 3 waiting to sync, 1 failed"), so colour never carries the meaning alone (WCAG 1.4.1); it is 44px high and keeps its size on a phone. Tapping it opens a `dialog.sheet` (a bottom sheet below 560px): the queued and failed sales with the time, branch, way of paying, total and the reason of a failure, Send again, Sync now, and for a manager the sales other phones could not record (Send it again, Discard with a reason) and the open clashes (Mark resolved with a note). It lives in the staff bar, not the shell's header, so it never sits beside the theme selector or a phone menu. Drawn only for a person who sells |
 | Sign-out warning (issue #458) | `SignOutWarning` in `frontend/src/offline/sign-out-warning.tsx` | A `dialog.sheet` when sales wait: "3 sales are waiting to sync.", Sync now, Keep them and sign out, Cancel |
 
-## Navigation (#455)
+## Navigation (#455, #564)
 
-From 720px the staff area and the operator portal list their areas in a side menu with an icon on each item, like the owner's
-other apps. Below 720px the staff area has bottom tabs for the five daily jobs instead (#539, decisions D29 and D31), and the
-operator portal keeps the drawer. There is no separate retail row. Where the navigation sits changes at the design system's phone width, `(max-width: 719px)`, read in code by `useIsPhone` (`components/side-menu.tsx`;
-the retail screens re-export it) and in CSS by the `720px` media queries. CSS custom properties cannot be used in a media
-query, so the number is the token. Tablets from 720 to 1023px therefore keep the sidebar and get no tabs; whether decision D29 ("side menu for laptops only")
+One menu, grouped the way a shop owner thinks, the same on a phone and a laptop (#564, owner decisions D38 and D44, ADR-086,
+which amends the menu decisions of #455 and #471; the approved picture is `docs/ui/grouped-menu-564/menu.html`). From 720px it
+is a fixed sidebar; below 720px the menu button at the top left of the top bar opens the same list in a drawer from the left, and
+the bottom tabs for the five daily jobs stay as they are (#539, decisions D29 and D31). Where the navigation sits changes at the
+design system's phone width, `(max-width: 719px)`, read in code by `useIsPhone` (`components/side-menu.tsx`; the retail screens
+re-export it) and in CSS by the `720px` media queries. CSS custom properties cannot be used in a media query, so the number is
+the token. Tablets from 720 to 1023px therefore keep the sidebar and get no tabs; whether decision D29 ("side menu for laptops only")
 means tablets should have the tabs too waits for the owner's sign-off (#544), and nothing changes until then.
 
-- **One list.** Each layout builds its areas once (`staffAreas` in `areas/staff/menu.tsx`, `AREAS` in
-  `areas/platform/operator-areas.ts`) with the permission checks, and both the sidebar and the drawer draw that list with the same
-  component (`MenuLinks`, one `MenuItemLink` per item): the same items, icons (inline SVG in `currentColor`), groups and the
-  current item marked `aria-current="page"` (tinted, with an accent edge). The retail shortcuts are a group under Retail
-  (`RetailMenuGroup`, `data-tour="retail-nav"`), drawn with `MenuItemLink` too. Notifications and Feedback are always there.
-- **Retail and its shortcuts:** Retail is current on every page under `/staff/retail`. On the page of one of its shortcuts
-  (the item's `groupPaths`) the shortcut is the current item and Retail is drawn as its section (`.side-menu-section`: the
-  link colour, no tint or edge, no `aria-current`). Sale is a shortcut only for a session that can sell (`useSells` in
-  `areas/staff/retail/nav.tsx`: retail on, the sale screen allowed and, with branch roles, a branch that is not a store); the
-  branch roles are read only when the first two hold.
-- **From 720px, the sidebar** (`SideNav`, a `div.side-nav` around the `nav`): a column at the left of the page, about 240px wide,
-  that stays in view while the page scrolls (`position: sticky`, the height of the window, scrolling inside when the list is
-  longer). The page becomes two columns (`.nav-layout`, `.nav-layout-main`): the content takes the remaining width, centred up
-  to `--content-width`, and clips the staff bar's full-bleed band, so nothing scrolls sideways at 1024px. It comes first in the
-  page, so Tab reaches the menu before the content. Sign out stays in the staff bar.
-- **Sections for a business with Shop and Lending (#471, FR-UXN-04):** each item of `staffAreas` names its module with
-  `section` (`shop` for Retail, `lending` for Loans, Members, Collateral, Savings, Investments, Insights and the AI assistant),
-  and the layout passes `STAFF_SECTIONS` (Shop with the `shop` icon, a shop front, which also heads the Shop card on Home; Lending with its own `lending` icon, a coin on an open hand). When the links name two
-  sections, `MenuLinks` draws the shared items before the first sectioned one (Home, Approvals), then each section, then the
-  other shared items (Reports, SMS, Receive payments, Users, Notifications, Feedback, Business set-up). A section is a
-  `.side-menu-block` with a rule above it and a heading button (`.side-menu-heading`: small muted capitals, its icon, a caret,
-  `aria-expanded`, `aria-controls` on the list) that folds its links; folded, the links stay in the page under `hidden`, and the
-  drawer's Tab cycle skips any control inside a `[hidden]` ancestor. The folded sections are kept per person in `localStorage`
-  under `bms.menu.sections.<user id>` (a list of ids, read and written inside `try`/`catch`), read again when another person
-  signs in. A folded section shows its links while the page is one of them or of their groups (`groupPaths`), and while a tour
-  step points at one of its links or its `tours` (`retail-nav` for Shop). The heading acts on what the person sees, as the
-  sidebar button does: a press on a section held open folds it and wins until the page or the tour step changes. In the folded
-  sidebar the heading is its icon, with the label as its accessible name and `title`. With one section, or none, the list stays
-  flat with no heading, as before. On a phone the same sections head the More page's cards (#539).
-- **Folding the sidebar:** a button at its top (the `menu` icon, the constant name `aria-label="Menu labels"`, `aria-expanded`
-  true while the labels show, a `title` that says Show or Hide menu labels) folds it to 64px of icons and back. It starts
-  folded between 720 and 1023px and unfolded from 1024px. A folded item keeps its label as its accessible name (a
-  `visually-hidden` span) and as its `title` tooltip, the retail group too. Once the person folds or unfolds it, the choice is
-  kept per device in `localStorage` under `bms.sidebar` (`folded` or `open`; nothing kept means the width decides), read and
-  written inside `try`/`catch`, so a browser that blocks storage still folds until the page is reloaded. The width changes
-  over `--motion`, and not at all under reduced motion. A tour step that points into a folded sidebar unfolds it while the step
-  shows. The button acts on what the person sees and the press wins for the rest of that step: pressed during the step, the
-  sidebar folds (or unfolds again on a second press) at once, with `aria-expanded`, the `side-nav-folded` class and the
-  `title` following, and the choice is kept in `bms.sidebar`. A step that points somewhere else, or the tour ending, forgets the press: the next step that points into the sidebar, going back to the step, or the next run of the tour unfolds it again.
+- **One list, in groups.** `staffMenu` (`areas/staff/menu.tsx`) builds the groups once with the permission checks, and both the
+  sidebar and the drawer draw them with the same component (`MenuLinks`, one `MenuItemLink` per row), so the rows, icons and the
+  current row cannot drift apart. In order: **Home**; **Today**: Sell (for `useSells`), Orders, Approvals; **Stock**: My stock,
+  Buy stock, Count stock, Move stock, Items and categories; **Money**: Cash book (the cash summary, else banking or cash
+  withdrawals), Expenses, Customers who owe (credit sales, else customer accounts), What I owe suppliers, Savings and advances
+  (savings, else advances); **Lending**, only for a business with lending: Loans, Members (or Collateral), Savings, Investments,
+  Insights and, with the shop too, Loan reports; **Business**: Reports (the shop's figures and every shop page, `/staff/retail`;
+  a lending business without the shop gets its own Reports page), Staff, Receive payments, SMS, AI assistant, Business set-up.
+  A row the session may not open is not drawn, and a group with no rows is left out. There is no cap on the rows (the five
+  shortcuts of #455 went), no nested Retail group and no headed Shop or Lending section that folds (#471). The names come from
+  the glossary (`WORDS`), so the menu, the tabs and the page titles use the same words.
+- **The look (product-ui-craft):** rows are 48px (`--tap`) with one 22px line icon in `currentColor` and the label; a group
+  heading is small muted text (`.side-menu-heading`, `--text-xs`, `--color-text-muted`), not a button; the current row
+  (`aria-current="page"`) has a tinted background (`--color-accent-tint`) and brand-colour text (`--color-link`), with no side
+  stripe; a count is a muted number at the right of its row (`.side-menu-count`), never a coloured badge: Orders shows the open
+  orders and My stock "N low", both from Home's own summary read (`useMenuCounts`, `homeSummaryQuery`), and nothing while the
+  figure is 0. The count is read with the row ("Orders, 3": a `visually-hidden` comma). The only shadow is the drawer's
+  (`--shadow-lg`); no gradients, no coloured stripes at a side or the top, no emoji.
+- **Top and foot.** The top (`MenuShop` in `areas/staff/branch-picker.tsx`) shows the shop's logo, else the business's own logo
+  (ADR-068), else the business's initials on a tint, never the platform's logo or name: the name is the loaded branding's
+  non-empty `display_name` (`useBusinessName`), and off a business's host, while the branding loads, when it fails or when it
+  has no name, the top shows a plain tile (`.menu-shop-blank`) and no name, the role and the branch still shown; the image's text names the shop or the business, whichever logo it is. Then the
+  business name and the person's role (Owner for the owner, else the first role), and under them, on a full-width row of its own so nothing is cut off at 264px, the branch in
+  use, a native select named Switch branch laid over it when there is more than one branch to choose. From 720px this is the
+  only place the logo, the business and the branch show: the top bar keeps Search, the sync dot and the profile button, and the
+  branch tour step (`branch-picker`, worded for both layouts) points at the sidebar's branch row, or at the whole top for a
+  session with no branch to show; with no branch in use but several to choose, the row says Choose a branch. On a phone the
+  top bar keeps its title and picker. Today carries the selling tour's `retail-nav` anchor only while it holds Sell or Orders.
+  The foot (`StaffMenuFoot` in `areas/staff/route.tsx`) holds Notifications, Help and feedback (a button that opens the Help
+  sheet, with its tours and Send feedback; in the drawer it closes the drawer first), then the person's initials, name and role,
+  and Sign out on a row of its own under them, so nothing is cut off at 264px (a `BusyButton`, busy while signing out runs).
+- **From 720px, the sidebar** (`SideNav`, a `div.side-nav`): a column at the left of the page, 264px wide, that stays in view
+  while the page scrolls (`position: sticky`, the height of the window, the list scrolling between the top and the foot). It
+  no longer folds to its icons. The page becomes two columns (`.nav-layout`, `.nav-layout-main`): the content takes the
+  remaining width, centred up to `--content-width`, and clips the staff bar's full-bleed band, so nothing scrolls sideways. It
+  comes first in the page, so Tab reaches the menu before the content.
 - **Below 720px, the staff area's bottom tabs (#539):** `StaffTabBar` draws a `nav` named Main fixed to the bottom of the
   screen, one link per tab, in this order: **Sell** (the sale screen, for `useSells`), **My stock** (the stock list, for the
   `stock` screen), **Buy** (restock, the D24 word for it, for the `restock` screen), **Money** (`/staff/money`, while
@@ -197,10 +195,10 @@ means tablets should have the tabs too waits for the owner's sign-off (#544), an
   named Shop savings there, with its own hint, so the two are told apart, #544) and **More**
   (`/staff/more`, always). A tab whose module is off or whose page the session may not use is not drawn, so the bar holds one
   to five tabs; a business with lending only has Money (when it has a money page) and More, or More alone. A bar holding only More
-  stays (#544): on a phone there is no drawer, so More is the only way to the other areas and to Sign out. More lists `staffAreas`
-  as rows; for a business with both modules it keeps the sidebar's order (FR-UXN-04, #544): the shared areas before the first
-  section (Home, Approvals) first, then the Shop and Lending headings, then the other shared areas under Business; the Retail row
-  stands for every shop page; then the shop in
+  stays (#544): More lists the other areas and Sign out as well as the drawer does (#564). More lists `staffAreas` as rows; for a
+  business with both modules the areas before the first one of a module (Home) come first, then the Shop and Lending headings
+  with the rows of each module in menu order, then the other shared areas under Business; the Reports row stands for every shop
+  page; then the shop in
   use (`CurrentShop`), the person's name and Sign out (the staff layout passes `signOut` and `signingOut` in `StaffContext`).
   Each tab is an icon above its label on a target 64px tall and at least 48px wide; the current one (`aria-current="page"`, on
   its page and the pages under it, such as Count under My stock) takes `--color-link`, a semibold label and a tinted pill
@@ -218,48 +216,43 @@ means tablets should have the tabs too waits for the owner's sign-off (#544), an
   so its read is not asked again, and the root keeps `has-tab-bar` and the measured `--tab-bar`, so the body keeps its padding and
   the page does not get shorter under the field while the keyboard opens; the root takes `tab-bar-aside`, which only drops
   `--tab-bar-offset` to 0 so the sticky bars sit at the bottom (#544). A test fails if `index.html` ever sets
-  `interactive-widget=resizes-content`. The staff bar has no menu button and no Sell button on a phone, except that Sign out stays in it
-  while two-step set-up blocks the page (`signOutInBar`), since the tabs and More are not drawn then.
-- **Below 720px in the operator portal, the drawer** (`SideMenu`): a menu button (`.menu-button`, the `menu` icon,
-  `aria-label="Menu"`) at the top left of the bar opens the list in a side drawer from the left: 85% of the width, at most 320px, over a dimmed backdrop
-  (`--color-scrim`). The person's name and Sign out sit at the bottom (one `BusyButton` in `SideMenu`, with an `onSignOut` prop and a `busy`
-  prop held true while signing out runs, like Sign out in the bar). It
-  closes on the backdrop, Escape, a left swipe on the drawer (50px, more sideways than down), a chosen link, or any change of
-  page (the back button, a tour, a redirect).
-- **Sell on a phone:** the first bottom tab, for anyone who can sell (`useSells`). With branch roles on, it waits until the
-  roles are read, so it never flashes up for a session whose every branch is a store. From 720px Sale is in the sidebar instead.
-- **Drawer accessibility:** the drawer is `role="dialog"` with the heading Menu, and `aria-modal="true"` only while the person
-  opened it (a tour step that opens it leaves the page reachable); focus moves to its
-  first control, Tab and Shift+Tab stay inside, and focus returns to the menu button on close. The menu button carries
-  `aria-expanded`. The page behind does not scroll: `body.side-menu-open` fixes the body at the scroll position (iOS Safari
-  ignores `overflow` on the body), and closing gives the position back, except after a change of page or a tapped link. If the window widens
-  past the phone width while the drawer is open, the drawer, its backdrop and the lock go, and focus moves to the sidebar's
-  first link; narrowing with focus in the sidebar moves it to the menu button.
+  `interactive-widget=resizes-content`. The staff bar has the menu button at its left on a phone (#564) and no Sell button; Sign out
+  stays in its one menu while two-step set-up blocks the page (`signOutInBar`), since the tabs and More are not drawn then.
+- **Below 720px, the drawer** (`SideMenu`): a menu button (`.menu-button`, the `menu` icon, `aria-label="Menu"`) at the top
+  left of the bar opens the list in a drawer from the left: 85% of the width, at most 320px, over a dimmed backdrop
+  (`--color-scrim`). It closes on the backdrop, Escape, a left swipe on the drawer (50px, more sideways than down), a chosen link,
+  or any change of page (the back button, a tour, a redirect). The staff drawer's close button is out of sight until the keyboard
+  reaches it. The operator portal's drawer keeps its Menu heading, and the person's name and Sign out at the bottom.
+- **Drawer accessibility:** the drawer is `role="dialog"` named Menu, and `aria-modal="true"` only while the person opened it
+  (a tour step that opens it leaves the page reachable); focus moves to its first control, Tab and Shift+Tab stay inside, and
+  focus returns to the menu button on close. The menu button carries `aria-expanded`. Each group is a `role="group"` named by
+  its heading. The page behind does not scroll: `body.side-menu-open` fixes the body at the scroll position (iOS Safari ignores
+  `overflow` on the body), and closing gives the position back, except after a change of page or a tapped link. If the window
+  widens past the phone width while the drawer is open, the drawer, its backdrop and the lock go, and focus moves to the
+  sidebar's first link; narrowing with focus in the sidebar moves it to the menu button.
 - **Phone edges, motion and theme:** the drawer pads itself with `env(safe-area-inset-top)`, `-bottom` and `-left` and slides
   in over `--motion` (once in 1ms under reduced motion). The sidebar and the drawer draw only with theme roles, so both
   follow light and dark.
-- **Guided tours:** every `data-tour` anchor of a menu item (`nav-areas`, `nav-approvals`, `nav-retail`, `retail-nav` and the
-  rest) is in the sidebar from 720px, which a step that points at one unfolds while it shows. On a phone the More tab answers
-  for them: it carries `data-tour-also` with `nav-areas` and the `tour` id of every link More lists, the tab bar carries
-  `retail-nav`, and the tour host looks for `[data-tour-also~=id]` when no element has the id itself. The welcome tours have a
-  `tabs` step on `data-tour="tab-bar"`, skipped on a laptop, worded for the tabs the person has (`bodyFor` on a step,
-  `tabNamesFor` in `tour/tours.ts`, which a test holds to `staffTabs`; #544), and the copy says "On a phone, tap More at the bottom". In the
-  operator portal a step on a drawer link opens the drawer at once, without animation and without taking focus from the tour
-  card.
-- **One icon per item (#483):** no two items of one menu draw the same picture, counting the Retail shortcuts and the section
-  headings as items of the side menu, and each retail tile and catalogue tile as an item of its page. The same item keeps its
-  icon wherever it shows: a retail shortcut and its tile both read `icons[screen]`, and the Shop heading and the Shop card on
-  Home both use `shop`. A new item gets a new drawing in `components/icons.tsx` chosen for its meaning, never another item's.
-  The side menu: Home `home`, Approvals `approve`, Loans `calendar`, Members `people`, Collateral `lock`, Savings `coins`,
-  Investments `investments` (a seedling), Insights `insights` (a light bulb), AI assistant `assistant` (a sparkle), Reports
-  `reports` (a page with bars), Retail `retail` (a shopping bag) with Sale `sale` (a cart), Orders `orders` (a delivery
-  motorbike), Banked `banking` (a bank building), Savings `savings` (a safe), Expenses `expenses` (a wallet), Advances
-  `advances`, Stock `stock`, Restock `restock`, Count `stocktake` and Usage `usage`, SMS `phone`, Receive payments
-  `receivePayments` (an arrow coming in to a coin), Users `user`, Notifications `bell`, Feedback `chat`, Business set-up
-  `settings`; the headings Shop `shop` and Lending `lending`. Stock moves (`transfers`) is redrawn as a list with arrows,
-  so it no longer looks like a plain list. The member portal cards (`member/features.ts`): Balances `coins`, Loan schedule
-  `calendar`, Payments `phone`.
-- **Where it applies:** the staff area and the operator portal. The member area has no area list and keeps its layout.
+- **Guided tours:** every `data-tour` anchor of the menu is in the sidebar from 720px and in the drawer below it: `nav-areas`
+  (the list), `retail-nav` (the Today group of a shop), `nav-approvals`, `nav-lending`, `nav-members`, `nav-insights`,
+  `nav-users`, `nav-retail` (Reports of a shop), `nav-notifications` and `nav-feedback` (the foot). A step that points at one
+  opens the drawer at once, without animation and without taking focus from the tour card. The More tab still carries
+  `data-tour-also` for them (#539); the tour host prefers the element with the id itself, so on a phone the drawer answers.
+  The welcome tours have a `tabs` step on `data-tour="tab-bar"`, skipped on a laptop, worded for the tabs the person has
+  (`bodyFor` on a step, `tabNamesFor` in `tour/tours.ts`, which a test holds to `staffTabs`; #544). The menu copy says "On a
+  phone, tap the menu button at the top left".
+- **One icon per item (#483):** no two items of one menu draw the same picture, and the same item keeps its icon wherever it
+  shows: a shop row and its tile on the Retail page both read `icons[screen]`. Today: Sell `sale`, Orders `orders`, Approvals
+  `approve`; Stock: My stock `stock`, Buy stock `restock`, Count stock `stocktake`, Move stock `transfer`, Items and categories
+  `catalogue`; Money: Cash book `cashSummary`, Expenses `expenses`, Customers who owe `creditSales`, What I owe suppliers
+  `supplierPayables`, Savings and advances `savings`; Lending: Loans `calendar`, Members `people`, Collateral `lock`, Savings
+  `coins`, Investments `investments`, Insights `insights`, Loan reports `documents`; Business: Reports `reports`, Staff `user`,
+  Receive payments `receivePayments`, SMS `phone`, AI assistant `assistant`, Business set-up `settings`; the foot:
+  Notifications `bell`, Help and feedback `help` (a question mark in a circle). The Home cards and the More page head the
+  modules with Shop `shop` and Lending `lending` (`STAFF_SECTIONS`). The member portal cards (`member/features.ts`): Balances
+  `coins`, Loan schedule `calendar`, Payments `phone`.
+- **Where it applies:** the staff area and the operator portal (one group, no head, its own foot). The member area has no
+  area list and keeps its layout.
 
 ## Light and dark theme (#429, #452)
 
@@ -364,7 +357,7 @@ cannot be read on a dark page: `--color-link` and `--color-focus` become `color-
 - `npm test` runs the busy guard (`src/app/ui/busy-guard.test.ts`, #456: every mutation a press sends, including
   `useMutation<T>(`, destructured ones and local hooks that return one, hands its pending flag to `busy`, and no plain
   button is disabled by a pending state; fixture tests prove it fails both wrong shapes) and `BusyButton.dom.test.tsx`.
-- `npm test` runs `src/areas/staff/menu-icons.test.tsx` (#483): two items of the staff side menu (its full list asserted, the shortcuts as their group draws them), the
+- `npm test` runs `src/areas/staff/menu-icons.test.tsx` (#483): two items of the staff side menu (its full list asserted, with Help and feedback and the module headings), the
   retail tiles and catalogue tiles (both as their pages draw them), the operator portal or the member portal cards that draw
   the same picture fail it, compared by the drawing itself. `home-cards.dom.test.tsx` checks the Home cards draw their side
   menu headings' icons, no two alike, and

@@ -13,12 +13,11 @@ import { StaffContext } from './context';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { CatalogueLinks } from './retail/catalogue';
 import { RetailHome } from './retail/home';
-import { RetailMenuGroup, SHORTCUTS } from './retail/nav';
 import { CATALOGUE_LINKS, CATALOGUE_SCREENS, SCREENS, SCREEN_CAPABILITY, needsOf } from './retail/permissions';
 
 // Every item of a menu has its own icon (issue #483): two items of one menu never draw the same picture, compared by the drawing
-// itself, so two names for one drawing are caught too. The same item keeps its icon wherever it shows (a retail shortcut and its
-// tile, the Shop and Lending headings and their cards on Home, checked in home-cards.dom.test.tsx), which is why the tiles and
+// itself, so two names for one drawing are caught too. The same item keeps its icon wherever it shows (a shop row of the menu and
+// its tile, the Shop and Lending headings and their cards on Home, checked in home-cards.dom.test.tsx), which is why the tiles and
 // shortcuts read their icon by the screen's name. Business set-up draws its More set-up tiles (#508);
 // setup.dom.test.tsx fails if it ever draws one picture twice.
 
@@ -72,21 +71,20 @@ function tileIcons(me: Me, page: ReactElement): { label: string; icon: string }[
   return [...draw(me, page).matchAll(/<span class="icon-chip">(.*?<\/svg>)?<\/span><strong[^>]*>(.*?)<\/strong>/g)].map((m) => ({ label: m[2] ?? '', icon: m[1] ?? '' }));
 }
 
-/** Every retail shortcut as the side menu's Retail group draws it, as each link's label and drawing. */
-function shortcutIcons(): { label: string; icon: string }[] {
-  const all = SCREENS.filter((s) => s.screen in SHORTCUTS);
-  const html = draw(wholeShop(), <RetailMenuGroup shortcuts={all} />);
-  return [...html.matchAll(/<a [^>]*>(<svg.*?<\/svg>)?<span[^>]*>(.*?)<\/span><\/a>/g)].map((m) => ({ label: `Retail ${m[2] ?? ''}`, icon: m[1] ?? '' }));
-}
-
-// The side menu: its items, the retail shortcuts under Retail as their group draws them, and the two section headings.
+// The side menu (issue #564): its items, the footer's Help and feedback, and the module headings the Home cards and More page use.
 function sideMenu(me: Me) {
-  const shortcuts = shortcutIcons();
-  expect(shortcuts.map((s) => s.label).sort()).toEqual(Object.values(SHORTCUTS).map((l) => `Retail ${l}`).sort());
-  return [...staffAreas(me, { sells: true }), ...shortcuts, ...STAFF_SECTIONS.map((s) => ({ label: `${s.label} heading`, icon: s.icon }))];
+  return [...staffAreas(me, { sells: true }), { label: 'Help and feedback', icon: icons.help }, ...STAFF_SECTIONS.map((s) => ({ label: `${s.label} heading`, icon: s.icon }))];
 }
 
-const AREA_LABELS = ['Home', 'Approvals', 'Loans', 'Members', 'Savings', 'Investments', 'Insights', 'AI assistant', 'Reports', 'Retail', 'SMS', 'Receive payments', 'Users', 'Notifications', 'Feedback', 'Business set-up'];
+const AREA_LABELS = [
+  'Home',
+  'Sell', 'Orders', 'Approvals',
+  'My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories',
+  'Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances',
+  'Loans', 'Members', 'Savings', 'Investments', 'Insights', 'Loan reports',
+  'Reports', 'Staff', 'Receive payments', 'SMS', 'AI assistant', 'Business set-up',
+  'Notifications', 'Feedback',
+];
 
 describe('menu icons (issue #483)', () => {
   it('gives every item of the staff side menu its own icon', () => {

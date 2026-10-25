@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
-import { shortcutsFor } from './nav';
-import { canOpenAccount, canSeeProfit, canUse, holdsAt, screensFor, showRetail } from './permissions';
+import { staffMenu } from '../menu';
+import { SCREENS, canOpenAccount, canSeeProfit, canUse, holdsAt, screensFor, showRetail } from './permissions';
 
 describe('retail permission gating', () => {
   const sales = mockMe('sales');
@@ -97,25 +97,56 @@ describe('retail permission gating', () => {
   });
 });
 
-describe('the retail bottom bar', () => {
-  it('follows the pilot order: Sales, Orders (issue #385), Banked, Savings, Expenses', () => {
-    expect(shortcutsFor(mockMe('admin')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
+// The shop rows of the staff menu (issue #564): every page the session may use, by the same rules as the screens, with no cap.
+describe('the shop rows of the staff menu', () => {
+  const rows = (me: ReturnType<typeof mockMe>) => staffMenu(me, { sells: true }).map((g) => [g.id, g.links.map((l) => l.label)]);
+
+  it('gives an administrator every row of Today, Stock and Money', () => {
+    expect(rows(mockMe('admin'))).toEqual([
+      ['home', ['Home']],
+      ['today', ['Sell', 'Orders']],
+      ['stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
+      ['money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
+      ['lending', []],
+      ['business', ['Reports', 'Business set-up']],
+    ]);
   });
 
-  it('gives a cashier only the shortcuts their permissions allow, then orders and the stock ones', () => {
-    expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
+  it('gives a cashier the cash book rows their permissions allow', () => {
+    expect(rows(mockMe('cashier'))).toEqual([
+      ['home', ['Home']],
+      ['today', ['Sell', 'Orders']],
+      ['stock', ['My stock', 'Items and categories']],
+      ['money', ['Cash book', 'Expenses', 'Customers who owe', 'Savings and advances']],
+      ['lending', []],
+      ['business', ['Reports']],
+    ]);
   });
 
-  it('gives a seller with the till its sale shortcut, the three it records, then orders', () => {
-    expect(shortcutsFor(mockMe('cashier')).map((s) => s.screen)).toEqual(['sale', 'orders', 'banking', 'savings', 'expenses']);
-    // ADR-055: the seeded sales role has no cash book, so it keeps the stock shortcuts.
-    expect(shortcutsFor(mockMe('sales')).map((s) => s.screen)).toEqual(['sale', 'orders', 'stock', 'usage']);
+  // Pages without a row of their own (Usage, Banking, Withdrawals, Advances, Customer accounts and the rest) stay one tap from the
+  // menu: Reports opens the Retail page, whose tiles are every shop page the session may use (ADR-086 decision 3).
+  it.each(['admin', 'cashier', 'sales'])('leaves no shop page out of reach for %s: a row of its own, or a tile behind Reports', (role) => {
+    const me = mockMe(role);
+    const rows = staffMenu(me, { sells: true }).flatMap((g) => g.links.map((l) => l.to));
+    expect(rows).toContain('/staff/retail');
+    const tiles = screensFor(me, { sells: true }).map((s) => s.path);
+    const allowed = SCREENS.filter((s) => canUse(me, s.screen));
+    for (const s of allowed) expect(rows.includes(s.path) || tiles.includes(s.path), s.screen).toBe(true);
+    for (const screen of ['usage', 'banking', 'withdrawals', 'advances', 'customerAccounts'] as const) {
+      if (canUse(me, screen)) expect(tiles, screen).toContain(SCREENS.find((s) => s.screen === screen)?.path);
+    }
   });
 
-  it('keeps the old shortcuts for a user with no cash book permission', () => {
-    const me = mockMe('sales');
-    const plain = { ...me, permissions: (me.permissions ?? []).filter((p) => !/cash|savings|banking|expense/.test(p)) };
-    expect(shortcutsFor(plain).map((s) => s.screen)).toEqual(['sale', 'orders', 'stock', 'usage']);
+  it('gives a seller without the cash book only the rows they may open', () => {
+    // ADR-055: the seeded sales role has no cash book.
+    expect(rows(mockMe('sales'))).toEqual([
+      ['home', ['Home']],
+      ['today', ['Sell', 'Orders']],
+      ['stock', ['My stock', 'Items and categories']],
+      ['money', ['Customers who owe']],
+      ['lending', []],
+      ['business', ['Reports']],
+    ]);
   });
 });
 

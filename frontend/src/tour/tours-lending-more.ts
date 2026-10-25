@@ -514,7 +514,8 @@ export const certificatePage: Tour = {
 export const staffHomePage: Tour = {
   id: 'page-staff-home',
   // Version 3 words the menu step for the phone's bottom tabs (issue #539).
-  version: 3,
+  // Version 4 words it for the grouped menu, which a phone opens from the button at the top left (issue #564).
+  version: 4,
   title: 'This page: staff home',
   audience: () => true,
   autoStart: false,
@@ -530,7 +531,7 @@ export const staffHomePage: Tour = {
       id: 'areas',
       target: 'nav-areas',
       title: 'The menu',
-      body: 'Each item in the menu opens one area, such as members, loans, insights or users. You see the areas your role allows. On a phone, tap More at the bottom.',
+      body: 'Each item in the menu opens one page, grouped under Today, Stock, Money, Lending and Business. You see the pages your role allows. On a phone, tap the menu button at the top left.',
     },
     {
       // Issue #485: on the Takings card, for whoever sees everybody's money and the cash summary (ADR-076 decision 3).

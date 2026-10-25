@@ -46,7 +46,7 @@ const notifications: TourStep = {
   id: 'notifications',
   target: 'nav-notifications',
   title: 'Install the app and get notifications',
-  body: 'Tap Notifications to install BMS on your phone. On a phone it is under More. There you can also turn on a notice for when something needs you, such as an approval.',
+  body: 'Tap Notifications at the bottom of the menu to install BMS on your phone. On a phone the menu is the button at the top left. There you can also turn on a notice for when something needs you, such as an approval.',
 };
 
 // Feedback (issue #447): every member of staff can tell the BMS team an idea, a problem or a question.
@@ -54,7 +54,7 @@ const feedback: TourStep = {
   id: 'feedback',
   target: 'nav-feedback',
   title: 'Tell us what you think',
-  body: 'Tap Feedback to send the BMS team an idea, a problem or a question. Add a picture of the screen if it helps. You see our reply there too. On a phone it is under More, and under Help.',
+  body: 'Tap Help and feedback at the bottom of the menu, then Send feedback. Tell the BMS team an idea, a problem or a question. Add a picture of the screen if it helps. You see our reply there too.',
 };
 
 const insights: TourStep = {
@@ -138,7 +138,12 @@ const branch: TourStep = {
   id: 'branch',
   target: 'branch-picker',
   title: 'Your branch',
-  body: 'The top of the page names your business and the branch you are working in. Tap it to switch branch. What you see and record follows this choice.',
+  body: 'On a laptop the top of the menu names your business and the branch you work in. On a phone it is the top of the page. Tap the branch to switch. What you see and record follows this choice.',
+  // Tap the branch to switch only where there is more than one branch to choose (issue #564).
+  bodyFor: (me) =>
+    (me.branches?.length ?? 0) + (me.all_branches ? 1 : 0) > 1
+      ? 'On a laptop the top of the menu names your business and the branch you work in. On a phone it is the top of the page. Tap the branch to switch. What you see and record follows this choice.'
+      : 'On a laptop the top of the menu names your business and the branch you work in. On a phone it is the top of the page. What you see and record follows this branch.',
 };
 
 // A tenant admin, invited by a colleague or activated from the public sign-up (ADR-024), lands on
@@ -165,7 +170,10 @@ export const adminWelcome: Tour = {
   // Version 22 adds the Find any screen step (issue #551): the Search button at the top.
   // Version 23 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
   // Version 24 words the bottom tabs step for the tabs the person has (issue #544).
-  version: 24,
+  // Version 25 words the menu, Notifications and Feedback steps for the grouped menu and its footer (issue #564).
+  // Version 26 words the branch step for the menu's top on a laptop and the page's top on a phone (issue #564).
+  // Version 27 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
+  version: 27,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -243,7 +251,7 @@ export const adminWelcome: Tour = {
       id: 'modules',
       target: 'nav-areas',
       title: 'Your modules',
-      body: 'Each part of the business you use has its own item in the menu, like Retail or Lending. On a phone, tap More at the bottom. To add or remove one, contact us.',
+      body: 'The menu groups your pages under Today, Stock, Money and Business, with Lending when you use it. On a phone, tap the menu button at the top left. To add or remove a module, contact us.',
     },
     {
       id: 'billing',
@@ -433,7 +441,9 @@ export const retailSales: Tour = {
   // Version 19 adds the Find any screen step (issue #551): the Search button at the top.
   // Version 20 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
   // Version 21 words the bottom tabs step for the tabs the person has (issue #544).
-  version: 21,
+  // Version 22 words the menu, Notifications and Feedback steps for the grouped menu and its footer (issue #564).
+  // Version 23 words the branch and menu steps for the menu's top on a laptop and the drawer on a phone (issue #564).
+  version: 23,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -443,7 +453,7 @@ export const retailSales: Tour = {
       title: 'Welcome',
       body: 'Here is how to sell, check stock and buy stock. It takes about a minute.',
     },
-    { ...branch, optional: true, body: 'Sales and stock are counted per branch. Check that this shows the shop you are in.' },
+    { ...branch, optional: true, body: 'Sales and stock are counted per branch. Check that this shows the shop you are in.', bodyFor: undefined },
     tabs,
     {
       id: 'sale',
@@ -591,8 +601,8 @@ export const retailSales: Tour = {
       target: 'retail-nav',
       module: 'retail',
       optional: true,
-      title: 'Shortcuts',
-      body: 'Your most used retail pages are listed under Retail in the menu. On a phone they are the tabs at the bottom: Sell, My stock, Buy and Money.',
+      title: 'The menu',
+      body: 'Sell and Orders are under Today in the menu, and your stock pages under Stock. On a phone, the menu button at the top left opens it. The tabs at the bottom hold Sell, My stock, Buy and Money.',
     },
     search,
     notifications,
@@ -611,7 +621,10 @@ export const staffWelcome: Tour = {
   // Version 8 adds the Find any screen step (issue #551): the Search button at the top.
   // Version 9 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
   // Version 10 words the bottom tabs step for the tabs the person has (issue #544).
-  version: 10,
+  // Version 11 points the shop step at Today in the grouped menu and words Notifications and Feedback for its footer (issue #564).
+  // Version 12 words the branch step for the menu's top on a laptop and the page's top on a phone (issue #564).
+  // Version 13 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
+  version: 13,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -645,11 +658,11 @@ export const staffWelcome: Tour = {
     },
     {
       id: 'retail',
-      target: 'nav-retail',
+      target: 'retail-nav',
       module: 'retail',
       optional: true,
-      title: 'Retail',
-      body: 'Sales and stock live here.',
+      title: 'Your shop',
+      body: 'Sell and Orders are under Today in the menu, and your stock pages under Stock.',
     },
     search,
     notifications,

@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { type KeyboardEvent, type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, type ReactNode, createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, type Me } from '../api/client';
 import {
@@ -304,6 +304,8 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
 export function useHelpSheet(feedback: boolean): { open: () => void; sheet: ReactNode } {
   const { mainTour, pageTour, start } = useTour();
   const dialog = useRef<HTMLDialogElement>(null);
+  // The top bar's menu and the side menu's footer each hold a sheet (issue #564), so each names its own heading.
+  const title = useId();
 
   function pick(tour: Tour) {
     dialog.current?.close();
@@ -311,8 +313,8 @@ export function useHelpSheet(feedback: boolean): { open: () => void; sheet: Reac
   }
 
   const sheet = (
-    <dialog ref={dialog} className="sheet help-sheet" aria-labelledby="help-title">
-      <h2 id="help-title">Help</h2>
+    <dialog ref={dialog} className="sheet help-sheet" aria-labelledby={title}>
+      <h2 id={title}>Help</h2>
       <div className="form-actions">
         {mainTour && (
           <button type="button" className="btn-primary" onClick={() => pick(mainTour)}>

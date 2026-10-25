@@ -38,7 +38,7 @@ export const SYNONYMS: Record<string, readonly string[]> = {
   '/staff/retail': ['retail', 'shop', 'dduuka'],
   '/staff/sms': ['sms', 'text message', 'message', 'wording'],
   '/staff/payments': ['mobile money', 'momo', 'airtel', 'mtn', 'card', 'payment', 'ssente'],
-  '/staff/users': ['staff', 'user', 'people', 'employee', 'worker', 'team', 'role', 'abakozi'],
+  '/staff/users': ['staff', 'users', 'user', 'people', 'employee', 'worker', 'team', 'role', 'abakozi'],
   '/staff/notifications': ['notification', 'alert', 'install', 'app'],
   '/staff/feedback': ['feedback', 'idea', 'problem', 'question', 'complain', 'support'],
   '/staff/setup': ['setup', 'set up', 'settings', 'business name', 'logo', 'colour', 'color'],

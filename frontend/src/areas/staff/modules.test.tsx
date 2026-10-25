@@ -9,7 +9,7 @@ import { showInsights } from './insights/permissions';
 import { showInvestments } from './lending/investment-state';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
-import { shortcutsFor } from './retail/nav';
+import { staffAreas } from './menu';
 import { capabilityOn, screensFor, sellingBranches, sellsAt, showRetail } from './retail/permissions';
 import { RecordSale } from './retail/sale';
 
@@ -81,12 +81,12 @@ describe('capabilities and branch roles (ADR-033)', () => {
     expect(sellingBranches(me.branches ?? [], roles).map((b) => b.id)).toEqual([B]);
   });
 
-  it('drops the sale screen and shortcut for a user who can sell nowhere', () => {
+  it('drops the sale screen and the Sell row for a user who can sell nowhere', () => {
     const me = admin(['retail'], { retail: ['branch_roles'] });
     expect(screensFor(me, { sells: false }).map((s) => s.screen)).not.toContain('sale');
     expect(screensFor(me, { sells: false }).map((s) => s.screen)).toContain('stock');
-    expect(shortcutsFor(me, { sells: false }).map((s) => s.screen)).not.toContain('sale');
-    expect(shortcutsFor(me).map((s) => s.screen)).toContain('sale');
+    expect(staffAreas(me, { sells: false }).map((l) => l.label)).not.toContain('Sell');
+    expect(staffAreas(me, { sells: true }).map((l) => l.label)).toContain('Sell');
   });
 
   const sale = (me: ReturnType<typeof admin>, branch: string, seeded?: BranchRole[]) => {

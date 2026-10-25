@@ -1,0 +1,95 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--brand:#0077b6;--bg:#f5f7f9;--surface:#fff;--border:#e5e5e5;--text:#1d2939;--muted:#5c6370;--tint:#eef9fe;--scrim:rgba(16,24,40,.62)}
+*{box-sizing:border-box;margin:0}
+body{font-family:'Open Sans',system-ui,sans-serif;color:var(--text);background:var(--bg);font-size:15px}
+svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.nav{display:flex;flex-direction:column;background:var(--surface);height:100%;overflow:hidden}
+.shop{display:flex;align-items:center;gap:12px;padding:20px 16px 16px;border-bottom:1px solid var(--border)}
+.logo{width:40px;height:40px;border-radius:10px;background:var(--tint);color:var(--brand);display:grid;place-items:center;font-weight:600}
+.shop b{display:block;font-weight:600;font-size:16px}.shop small{color:var(--muted);font-size:13px}
+.branch{margin-left:auto;font-size:13px;color:var(--brand);font-weight:600}
+.scroll{overflow:auto;flex:1;padding:8px 8px 4px}
+.group{padding:14px 12px 4px;font-size:12px;color:var(--muted);letter-spacing:.02em}
+a{display:flex;align-items:center;gap:14px;min-height:48px;padding:0 12px;border-radius:10px;color:var(--text);text-decoration:none}
+a.on{background:var(--tint);color:var(--brand);font-weight:600}
+a .n{margin-left:auto;font-size:12px;font-weight:600;color:var(--muted)}
+.foot{border-top:1px solid var(--border);padding:8px}
+.me{display:flex;align-items:center;gap:12px;padding:10px 12px}
+.av{width:36px;height:36px;border-radius:50%;background:#eee;display:grid;place-items:center;font-weight:600;font-size:14px}
+.me small{display:block;color:var(--muted);font-size:13px}
+.out{margin-left:auto;color:var(--muted);font-size:14px}
+/* phone */
+.phone{width:412px;height:900px;position:relative;overflow:hidden;background:var(--bg)}
+.top{height:56px;display:flex;align-items:center;gap:12px;padding:0 8px;background:var(--surface);border-bottom:1px solid var(--border)}
+.top .b{width:48px;height:48px;display:grid;place-items:center}
+.page{padding:16px}.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.big{font-size:40px;font-weight:600;font-variant-numeric:tabular-nums}
+.tabs{position:absolute;bottom:0;left:0;right:0;height:64px;background:var(--surface);border-top:1px solid var(--border);display:flex}
+.tabs div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;color:var(--muted);gap:2px}
+.scrim{position:absolute;inset:0;background:var(--scrim)}
+.drawer{position:absolute;top:0;bottom:0;left:0;width:320px;box-shadow:0 8px 24px rgba(16,24,40,.18)}
+/* laptop */
+.laptop{width:1280px;height:800px;display:flex;background:var(--bg)}
+.side{width:264px;border-right:1px solid var(--border)}
+.main{flex:1;padding:32px}
+.main h1{font-size:24px;font-weight:600;margin-bottom:20px}
+.row{display:flex;gap:16px}.row .card{flex:1}
+.lbl{color:var(--muted);font-size:13px;margin-bottom:6px}
+.laptop .big{font-size:32px}
+#full{width:320px;border:1px solid var(--border)}#full .nav{height:auto}#full .scroll{overflow:visible}
+</style></head><body>
+<template id="menu">
+<div class="nav">
+ <div class="shop"><div class="logo">HE</div><div><b>Your shop</b><small>Owner</small></div><span class="branch">Gayaza ▾</span></div>
+ <div class="scroll">
+  <a class="on"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</a>
+  <div class="group">Today</div>
+  <a><svg viewBox="0 0 24 24"><path d="M6 6h15l-2 9H8L6 3H3"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>Sell</a>
+  <a><svg viewBox="0 0 24 24"><path d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01"/></svg>Orders<span class="n">3</span></a>
+  <div class="group">Stock</div>
+  <a><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8"/></svg>My stock<span class="n">5 low</span></a>
+  <a><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Buy stock</a>
+  <a><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>Count stock</a>
+  <a><svg viewBox="0 0 24 24"><path d="M7 7h13l-4-4M17 17H4l4 4"/></svg>Move stock</a>
+  <a><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Items and categories</a>
+  <div class="group">Money</div>
+  <a><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 9h16M8 14h3"/></svg>Cash book</a>
+  <a><svg viewBox="0 0 24 24"><path d="M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6"/></svg>Expenses</a>
+  <a><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M17 11l2 2 4-4"/></svg>Customers who owe</a>
+  <a><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg>What I owe suppliers</a>
+  <a><svg viewBox="0 0 24 24"><path d="M12 2v6m0 0l3-3m-3 3L9 5M5 12h14v8H5z"/></svg>Savings and advances</a>
+  <div class="group">Business</div>
+  <a><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</a>
+  <a><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 4a3 3 0 0 1 0 6M21 20a6 6 0 0 0-4-5.6"/></svg>Staff</a>
+  <a><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10.4 3V3a2 2 0 1 1 4 0v.1A1.7 1.7 0 0 0 17 4.6l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.4 1.8"/></svg>Business set-up</a>
+ </div>
+ <div class="foot">
+  <a><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/></svg>Notifications<span class="n">2</span></a>
+  <a><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg>Help and feedback</a>
+  <div class="me"><div class="av">HA</div><div>Hillary<small>Owner</small></div><span class="out">Sign out</span></div>
+ </div>
+</div>
+</template>
+
+<div id="p" class="phone">
+ <div class="top"><div class="b"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div><b>Home</b></div>
+ <div class="page"><div class="card"><div class="lbl">Sales today</div><div class="big">UGX 845,000</div></div><div class="card"><div class="lbl">Cash in the till</div><div class="big" style="font-size:28px">UGX 312,500</div></div></div>
+ <div class="tabs"><div>Sell</div><div>My stock</div><div>Buy</div><div>Money</div><div>More</div></div>
+ <div class="scrim"></div>
+ <div class="drawer"></div>
+</div>
+<div style="height:24px"></div><div id="full"></div>
+<div id="l" class="laptop">
+ <div class="side"></div>
+ <div class="main"><h1>Home</h1><div class="row"><div class="card"><div class="lbl">Sales today</div><div class="big">UGX 845,000</div></div><div class="card"><div class="lbl">Cash in the till</div><div class="big">UGX 312,500</div></div><div class="card"><div class="lbl">Customers who owe</div><div class="big">UGX 1,240,000</div></div></div></div>
+</div>
+<script>
+const t=document.getElementById('menu');
+document.querySelector('.drawer').appendChild(t.content.cloneNode(true));
+document.querySelector('.side').appendChild(t.content.cloneNode(true));document.getElementById('full').appendChild(t.content.cloneNode(true));
+</script>
+</body></html>
+
