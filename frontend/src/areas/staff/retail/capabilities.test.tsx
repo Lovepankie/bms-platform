@@ -19,8 +19,6 @@ import { LandedCostsPage } from './landed-costs';
 import { SupplierCreditsPage } from './supplier-credits';
 import { PurchaseOrdersPage } from './purchase-orders';
 import { SupplierBillsPage } from './supplier-bills';
-import { SupplierPaymentsPage } from './supplier-payments';
-import { SupplierPayablesPage } from './supplier-payables';
 
 // Trade slice 2 (issue #192, ADR-033): the profile preset, the administrator's screen, and menus, screens
 // and tours that follow the capabilities. Static markup tests, as the other staff screen tests are.
@@ -216,7 +214,8 @@ describe('a tour per capability starts once when first enabled', () => {
 
 // Optional purchasing (issue #198, ADR-033): everything is off by default, and "off" is today's menu and today's Restock.
 describe('purchasing follows its capability', () => {
-  const NEW_SCREENS = ['purchaseOrders', 'goodsReceived', 'supplierBills', 'supplierPayments', 'supplierPayables', 'landedCosts', 'supplierCredits'];
+  // Supplier payments and What I owe suppliers are not among them since issue #557: they pay what Buy stock bought on credit.
+  const NEW_SCREENS = ['purchaseOrders', 'goodsReceived', 'supplierBills', 'landedCosts', 'supplierCredits'];
   const screens = (me: Me) => screensFor(me).map((s) => s.screen);
 
   it('offers none of the purchasing screens or shortcuts while purchasing is absent, and leaves Restock where it was', () => {
@@ -228,7 +227,7 @@ describe('purchasing follows its capability', () => {
     }
   });
 
-  it('adds exactly the seven screens when it is on, and changes nothing else', () => {
+  it('adds exactly the five screens when it is on, and changes nothing else', () => {
     const off = screens(admin([]));
     const on = screens(admin(['purchasing']));
     expect(on.filter((s) => !off.includes(s)).sort()).toEqual([...NEW_SCREENS].sort());
@@ -259,9 +258,14 @@ describe('purchasing follows its capability', () => {
           <StaffContext.Provider value={{ me, branch: null }}>{node}</StaffContext.Provider>
         </QueryClientProvider>,
       );
-    for (const node of [<PurchaseOrdersPage key="o" />, <GoodsReceivedPage key="g" />, <SupplierBillsPage key="b" />, <SupplierPaymentsPage key="p" />, <SupplierPayablesPage key="r" />, <LandedCostsPage key="l" />, <SupplierCreditsPage key="c" />]) {
+    for (const node of [<PurchaseOrdersPage key="o" />, <GoodsReceivedPage key="g" />, <SupplierBillsPage key="b" />, <LandedCostsPage key="l" />, <SupplierCreditsPage key="c" />]) {
       expect(page(admin([]), node)).toContain('You do not have access');
       expect(page(admin(undefined), node)).toContain('You do not have access');
+    }
+    // Issue #557: paying suppliers and what is owed open without the capability, and still need the payables permission.
+    for (const screen of ['supplierPayments', 'supplierPayables'] as const) {
+      expect(canUse(admin([]), screen), screen).toBe(true);
+      expect(canUse({ ...mockMe('sales'), module_capabilities: { retail: [] } }, screen), screen).toBe(false);
     }
   });
 

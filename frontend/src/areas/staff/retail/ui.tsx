@@ -21,6 +21,14 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 
 export const money = (minor: number): string => formatMinor(minor, RETAIL_CURRENCY);
 
+/**
+ * An amount on the screen, always in tabular figures (docs/ui-rules.md rule 8), so amounts in a list or a statement line up digit
+ * by digit. Use it wherever an amount is drawn; money() stays for words built as text (a label, a toast, an aria-label).
+ */
+export function Money({ minor }: { minor: number }) {
+  return <span className="num">{money(minor)}</span>;
+}
+
 // The look lives in src/app/ui/retail.css with the shared design tokens (#95). The screens used to
 // carry an inline <style> here, which the production CSP (style-src 'self') refuses; this stays as
 // a no-op so a screen that still renders it keeps compiling.

@@ -1061,6 +1061,9 @@ export function createMockRetail(): RetailApi {
       });
       const made: Purchase = { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, ...(body.supplier_id ? { supplier_id: body.supplier_id } : {}), purchased_on: body.purchased_on, payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total, status: 'posted' };
       purchases.push({ ...made, before });
+      if (body.payment_method === 'credit' && body.supplier_id) {
+        purchasingApi.recordCreditRestock({ id: made.id ?? '', purchase_no: made.purchase_no ?? '', supplier_id: body.supplier_id, date: body.purchased_on, total_minor: total });
+      }
       return made;
       })),
 

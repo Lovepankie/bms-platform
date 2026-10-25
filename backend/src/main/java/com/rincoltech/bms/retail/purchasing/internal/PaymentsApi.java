@@ -15,8 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Bodies of the supplier payment and payables routes (purchasing capability; ADR-033, issue #198;
- * docs/specs/trade-capabilities.md sections 7.1 and 8). Amounts are integer minor units.
+ * Bodies of the supplier payment, payables and statement routes (ADR-033, issue #198; open without the purchasing
+ * capability since issue #557, ADR-084; docs/specs/trade-capabilities.md sections 7.1 and 8). Amounts are integer minor
+ * units.
  */
 final class PaymentsApi {
 
@@ -48,6 +49,12 @@ final class PaymentsApi {
             String method,
 
             @NotNull @Positive @Max(OrdersApi.MAX_MINOR) Long amountMinor,
+
+            @Schema(
+                    description =
+                            "The day it was paid, in the business time zone; absent means today. Never in the future, and it pays"
+                                    + " only what was owed on that day (issue #557)")
+            LocalDate paidOn,
 
             @Pattern(regexp = "oldest_first|manual")
             @Schema(
@@ -166,4 +173,51 @@ final class PaymentsApi {
                             + " another), by days past the due date, with the goods received and not yet invoiced beside it."
                             + " The ageing buckets are those of the customer ageing")
     record Payables(LocalDate asOf, String currency, PayableRow totals, List<PayableRow> suppliers) {}
+
+    @Schema(
+            name = "RetailSupplierStatementLine",
+            description =
+                    "kind is purchase (bought on credit in Buy stock), purchase_void, bill (a supplier invoice), bill_void,"
+                            + " credit_note, credit_note_void, payment or payment_reversed (issue #557)")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record StatementLine(
+            LocalDate date,
+            String kind,
+
+            @Schema(description = "Our number: the purchase, invoice, credit note or payment number")
+            String number,
+
+            @Schema(description = "The supplier's invoice or credit note number, or a payment's reference")
+            String reference,
+
+            UUID sourceId,
+
+            @Schema(description = "cash, mobile_money or bank, on a payment and its reversal")
+            String method,
+
+            @Schema(description = "What the line adds to what is owed")
+            long increaseMinor,
+
+            @Schema(description = "What the line takes off what is owed")
+            long decreaseMinor,
+
+            @Schema(description = "Owed after this line") long balanceMinor) {}
+
+    @Schema(
+            name = "RetailSupplierStatement",
+            description = "What happened with one supplier between from and to, with the running balance (issue #557)")
+    record Statement(
+            UUID supplierId,
+            String supplierName,
+            String currency,
+            LocalDate from,
+            LocalDate to,
+
+            @Schema(description = "Owed at the start of from")
+            long openingMinor,
+
+            List<StatementLine> lines,
+
+            @Schema(description = "Opening plus the lines: owed at the end of to, in the caller's branch scope")
+            long closingMinor) {}
 }

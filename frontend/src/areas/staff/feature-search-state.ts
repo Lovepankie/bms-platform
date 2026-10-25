@@ -84,7 +84,7 @@ export const SYNONYMS: Record<string, readonly string[]> = {
   '/staff/retail/goods-received': ['received', 'delivery', 'goods in', 'grn'],
   '/staff/retail/supplier-bills': ['bill', 'supplier invoice'],
   '/staff/retail/supplier-payments': ['pay supplier', 'supplier payment', 'paid'],
-  '/staff/retail/supplier-payables': ['owe suppliers', 'payables', 'creditors', 'debt'],
+  '/staff/retail/supplier-payables': ['owe suppliers', 'payables', 'creditors', 'debt', 'supplier balance', 'credit supplier', 'what i owe'],
   '/staff/retail/landed-costs': ['freight', 'duty', 'clearing', 'transport', 'import'],
   '/staff/retail/supplier-credits': ['send back', 'return to supplier', 'credit note'],
   '/staff/retail/branch-roles': ['store', 'shop', 'branch', 'warehouse'],

@@ -366,15 +366,13 @@ class RetailTradePurchasingIT extends IntegrationTest {
     @Test
     void withTheCapabilityOffEveryRouteIsNotFoundAndTheRestockIsUnchanged() {
         capability("purchasing", false);
+        // Supplier payments, what is owed and the payables report stay open (issue #557, ADR-084): RetailBuyOnCreditIT.
         for (String path : List.of(
                 "/purchase-orders",
                 "/goods-receipts",
                 "/supplier-bills",
-                "/supplier-payments",
-                "/reports/supplier-payables",
                 "/purchasing/settings",
-                "/suppliers/" + supplier + "/unbilled-receipts",
-                "/suppliers/" + supplier + "/open-items")) {
+                "/suppliers/" + supplier + "/unbilled-receipts")) {
             ResponseEntity<JsonNode> r = api.get(path, PAYER + "," + SETTINGS);
             assertThat(r.getStatusCode()).as(path).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(code(r)).as(path).isEqualTo("capability_not_enabled");
@@ -1564,17 +1562,14 @@ class RetailTradePurchasingIT extends IntegrationTest {
                 null,
                 List.of(Map.of("receipt_line_id", any, "qty", "1", "unit_price_minor", 1)));
         bill.put("supplier_id", any);
-        Map<String, Object> payment = Map.of("supplier_id", any, "method", "cash", "amount_minor", 1);
         Map<String, Map<String, Object>> writes = new LinkedHashMap<>();
         writes.put("/goods-receipts", receipt);
         writes.put("/supplier-bills", bill);
         writes.put("/supplier-bills/match", bill);
-        writes.put("/supplier-payments", payment);
         writes.put("/purchase-orders/" + any + "/send", Map.of());
         writes.put("/purchase-orders/" + any + "/cancel", reason);
         writes.put("/goods-receipts/" + any + "/void", reason);
         writes.put("/supplier-bills/" + any + "/void", reason);
-        writes.put("/supplier-payments/" + any + "/reverse", reason);
         writes.forEach((path, body) -> {
             ResponseEntity<JsonNode> r = keyed(path, body, PAYER, "*");
             assertThat(r.getStatusCode()).as(path).isEqualTo(HttpStatus.NOT_FOUND);

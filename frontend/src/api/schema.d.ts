@@ -6979,6 +6979,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/suppliers/{supplier_id}/statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A supplier's statement: opening balance, purchases on credit, invoices, credit notes, payments, voids and reversals with a running balance, closing balance (issue #557) */
+        get: operations["getRetailSupplierStatement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/suppliers/{supplier_id}/unbilled-receipts": {
         parameters: {
             query?: never;
@@ -15109,6 +15126,7 @@ export interface components {
         RetailPurchaseRequest: {
             lines: components["schemas"]["RetailPurchaseLineRequest"][];
             note?: string;
+            /** @description cash, mobile_money, bank, or credit: owed to the supplier, who is then required (issue #557) */
             payment_method: string;
             /**
              * Format: date
@@ -17164,6 +17182,11 @@ export interface components {
             /** @description cash|mobile_money|bank */
             method: string;
             note?: string;
+            /**
+             * Format: date
+             * @description The day it was paid, in the business time zone; absent means today. Never in the future, and it pays only what was owed on that day (issue #557)
+             */
+            paid_on?: string;
             /** @description A bank or mobile money reference */
             reference?: string;
             /** Format: uuid */
@@ -17175,6 +17198,57 @@ export interface components {
         RetailSupplierRequest: {
             contact?: string;
             name: string;
+        };
+        /** @description What happened with one supplier between from and to, with the running balance (issue #557) */
+        RetailSupplierStatement: {
+            /**
+             * Format: int64
+             * @description Opening plus the lines: owed at the end of to, in the caller's branch scope
+             */
+            closing_minor?: number;
+            currency?: string;
+            /** Format: date */
+            from?: string;
+            lines?: components["schemas"]["RetailSupplierStatementLine"][];
+            /**
+             * Format: int64
+             * @description Owed at the start of from
+             */
+            opening_minor?: number;
+            /** Format: uuid */
+            supplier_id?: string;
+            supplier_name?: string;
+            /** Format: date */
+            to?: string;
+        };
+        /** @description kind is purchase (bought on credit in Buy stock), purchase_void, bill (a supplier invoice), bill_void, credit_note, credit_note_void, payment or payment_reversed (issue #557) */
+        RetailSupplierStatementLine: {
+            /**
+             * Format: int64
+             * @description Owed after this line
+             */
+            balance_minor?: number;
+            /** Format: date */
+            date?: string;
+            /**
+             * Format: int64
+             * @description What the line takes off what is owed
+             */
+            decrease_minor?: number;
+            /**
+             * Format: int64
+             * @description What the line adds to what is owed
+             */
+            increase_minor?: number;
+            kind?: string;
+            /** @description cash, mobile_money or bank, on a payment and its reversal */
+            method?: string;
+            /** @description Our number: the purchase, invoice, credit note or payment number */
+            number?: string;
+            /** @description The supplier's invoice or credit note number, or a payment's reference */
+            reference?: string;
+            /** Format: uuid */
+            source_id?: string;
         };
         /** @description Omitted fields are unchanged; an empty contact clears it */
         RetailSupplierUpdate: {
@@ -31136,6 +31210,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSupplierOpenItems"];
+                };
+            };
+        };
+    };
+    getRetailSupplierStatement: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                supplier_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailSupplierStatement"];
                 };
             };
         };

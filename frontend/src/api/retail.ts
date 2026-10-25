@@ -133,6 +133,9 @@ export type SupplierOpenItem = S['RetailSupplierOpenItem'];
 export type SupplierOpenItems = S['RetailSupplierOpenItems'];
 export type SupplierPayables = S['RetailSupplierPayables'];
 export type SupplierPayablesRow = S['RetailSupplierPayablesRow'];
+/** A supplier's statement (issue #557): opening balance, each purchase on credit, invoice, payment, void and reversal with the running balance. */
+export type SupplierStatement = S['RetailSupplierStatement'];
+export type SupplierStatementLine = S['RetailSupplierStatementLine'];
 export type PurchasingSettings = S['RetailPurchasingSettings'];
 export type PurchasingSettingsUpdate = S['RetailPurchasingSettingsUpdate'];
 // JUSTIFICATION-A3: landed costs and supplier credit notes are new API surface (issue #199); nothing existing carries these types.
@@ -361,7 +364,7 @@ export function cashParams({ branchIds, from, to, includeVoided }: CashQuery) {
 }
 
 export type SalePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
-export type PurchasePayment = 'cash' | 'bank' | 'credit';
+export type PurchasePayment = 'cash' | 'mobile_money' | 'bank' | 'credit';
 
 export interface RetailApi {
   listProducts(q: { query?: string; branchId?: string; signal?: AbortSignal }): Promise<Product[]>;
@@ -539,6 +542,8 @@ export interface RetailApi {
   /** The invoices and credit restocks of a supplier that still owe something, oldest due first. */
   supplierOpenItems(supplierId: string): Promise<SupplierOpenItems>;
   supplierPayables(): Promise<SupplierPayables>;
+  /** One supplier's statement between two days, the last 90 days by default (issue #557). */
+  supplierStatement(supplierId: string, q: { from?: string; to?: string }): Promise<SupplierStatement>;
   purchasingSettings(): Promise<PurchasingSettings>;
   /** The tolerances replaced under If-Match with the settings version; an omitted field is unchanged (core.settings.manage). */
   changePurchasingSettings(version: number, body: PurchasingSettingsUpdate): Promise<PurchasingSettings>;
@@ -1226,6 +1231,10 @@ const realRetail: RetailApi = {
 
   async supplierPayables() {
     return unwrap(await api.GET('/api/v1/retail/reports/supplier-payables', { params: { query: {} } }));
+  },
+
+  async supplierStatement(supplierId, { from, to }) {
+    return unwrap(await api.GET('/api/v1/retail/suppliers/{supplier_id}/statement', { params: { path: { supplier_id: supplierId }, query: { from: from || undefined, to: to || undefined } } }));
   },
 
   async purchasingSettings() {

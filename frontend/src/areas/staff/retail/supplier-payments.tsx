@@ -11,7 +11,8 @@ import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { methodWords } from './payables-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
-import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { WORDS } from '../../../app/glossary';
+import { Gate, Problem, Success, Money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -27,7 +28,7 @@ export function PaymentRow({ row, branchName }: { row: SupplierPayment; branchNa
       <p>
         <strong>{row.payment_no}</strong> <StatusBadge words={PAYMENT_STATUS[row.status ?? ''] ?? (row.status ?? '')} warn={row.status === 'reversed'} />
         <br />
-        {row.supplier_name}, {showDate(row.paid_on)}, <strong>{money(row.amount_minor ?? 0)}</strong>
+        {row.supplier_name}, {showDate(row.paid_on)}, <strong><Money minor={row.amount_minor ?? 0} /></strong>
       </p>
       <p className="hint">
         By {methodWords(row.method).toLowerCase()}{row.reference ? `, reference ${row.reference}` : ''}{branchName ? `, from ${branchName}` : ''}.
@@ -87,8 +88,8 @@ export function SupplierPaymentView({ payment, nameOf, payable }: { payment: Sup
         rows={[
           ['Supplier', <SupplierOwed key="s" id={payment.supplier_id} name={payment.supplier_name} payable={payable} />],
           ['Paid on', showDate(payment.paid_on)],
-          ['Amount', money(payment.amount_minor ?? 0)],
-          ['Paid by', methodWords(payment.method)],
+          ['Amount', <Money key="a" minor={payment.amount_minor ?? 0} />],
+          [WORDS.paidHow, methodWords(payment.method)],
           ['From the till or bank of', nameOf(payment.branch_id)],
           ['What it paid', payment.allocation === 'manual' ? 'What was chosen' : 'The oldest first'],
           ...(payment.reference ? [['Reference', payment.reference] as [string, string]] : []),
@@ -112,7 +113,7 @@ export function SupplierPaymentView({ payment, nameOf, payable }: { payment: Sup
                   )}
                 </td>
                 <td>{a.supplier_ref ?? ''}</td>
-                <td className="num">{money(a.amount_minor ?? 0)}</td>
+                <td className="num"><Money minor={a.amount_minor ?? 0} /></td>
               </tr>
             ))}
           </tbody>

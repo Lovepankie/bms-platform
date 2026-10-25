@@ -19,7 +19,8 @@ export type RetailScreen =
   | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer' | 'labels'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
-  // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed.
+  // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed. Payments
+  // and what is owed need no capability since issue #557 (ADR-084): they pay what Buy stock bought on credit.
   | 'purchaseOrders' | 'goodsReceived' | 'supplierBills' | 'supplierPayments' | 'supplierPayables'
   // Landed costs and supplier credit notes (issue #199), also under the purchasing capability.
   | 'landedCosts' | 'supplierCredits'
@@ -47,8 +48,6 @@ export const SCREEN_CAPABILITY: Partial<Record<RetailScreen, string>> = {
   purchaseOrders: 'purchasing',
   goodsReceived: 'purchasing',
   supplierBills: 'purchasing',
-  supplierPayments: 'purchasing',
-  supplierPayables: 'purchasing',
   landedCosts: 'purchasing',
   supplierCredits: 'purchasing',
 };
@@ -350,7 +349,7 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'goodsReceived', path: '/staff/retail/goods-received', label: 'Goods received', hint: 'Deliveries from suppliers, with or without an order' },
   { screen: 'supplierBills', path: '/staff/retail/supplier-bills', label: 'Supplier invoices', hint: 'What suppliers have billed you for the goods received' },
   { screen: 'supplierPayments', path: '/staff/retail/supplier-payments', label: 'Supplier payments', hint: 'Money paid to suppliers, and what each payment cleared' },
-  { screen: 'supplierPayables', path: '/staff/retail/supplier-payables', label: 'What you owe suppliers', hint: 'Owed to each supplier, by how late it is' },
+  { screen: 'supplierPayables', path: '/staff/retail/supplier-payables', label: WORDS.whatIOweSuppliers, hint: 'What each supplier is owed for stock bought on credit, with a total' },
   { screen: 'landedCosts', path: '/staff/retail/landed-costs', label: 'Landed costs', hint: 'Freight, duty and clearing, added to what the goods cost' },
   { screen: 'supplierCredits', path: '/staff/retail/supplier-credits', label: 'Supplier credit notes', hint: 'Goods sent back to a supplier, or money taken off an invoice' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },

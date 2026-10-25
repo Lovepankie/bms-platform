@@ -31,6 +31,14 @@ export const WORDS = {
   buyingPrice: 'Buying price',
   sellingPrice: 'Selling price',
   itemCode: 'Item code',
+  /** How a purchase was paid, on Buy stock (issue #557, D15). */
+  paidHow: 'Paid how',
+  /** Bought now and owed to the supplier; was "Credit (pay the supplier later)". */
+  onCredit: 'On credit',
+  /** The balance of every supplier the shop owes, under the Money tab; was "What you owe suppliers". */
+  whatIOweSuppliers: 'What I owe suppliers',
+  payASupplier: 'Pay a supplier',
+  supplierStatement: 'Supplier statement',
 } as const;
 
 /** "piece" to "pieces", "box" to "boxes": the plural of a unit's name, for the questions below. */

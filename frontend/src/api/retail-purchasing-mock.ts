@@ -44,11 +44,14 @@ export type PurchasingMock = Pick<
   | 'listPurchaseOrders' | 'getPurchaseOrder' | 'createPurchaseOrder' | 'updatePurchaseOrder' | 'sendPurchaseOrder' | 'cancelPurchaseOrder'
   | 'listGoodsReceipts' | 'getGoodsReceipt' | 'createGoodsReceipt' | 'voidGoodsReceipt'
   | 'listSupplierBills' | 'getSupplierBill' | 'createSupplierBill' | 'matchSupplierBill' | 'voidSupplierBill' | 'unbilledReceipts'
-  | 'listSupplierPayments' | 'getSupplierPayment' | 'createSupplierPayment' | 'reverseSupplierPayment' | 'supplierOpenItems' | 'supplierPayables'
+  | 'listSupplierPayments' | 'getSupplierPayment' | 'createSupplierPayment' | 'reverseSupplierPayment' | 'supplierOpenItems' | 'supplierPayables' | 'supplierStatement'
   | 'purchasingSettings' | 'changePurchasingSettings' | 'releaseReceiptHold'
   | 'listLandedCosts' | 'getLandedCost' | 'createLandedCost' | 'previewLandedCost' | 'voidLandedCost'
   | 'listSupplierCredits' | 'getSupplierCredit' | 'createSupplierCredit' | 'voidSupplierCredit'
->;
+> & {
+  /** Buy stock on credit (issue #557): the main mock hands each credit purchase over, so it is owed and can be paid. */
+  recordCreditRestock: (r: { id: string; purchase_no: string; supplier_id: string; date: string; total_minor: number }) => void;
+};
 
 /** An order worth at least this much waits for a second person to approve it (the mock's stand-in for the tenant's threshold). */
 export const MOCK_ORDER_APPROVAL_MINOR = 5_000_000;
@@ -76,6 +79,8 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
   const restocks: Restock[] = [{ id: 'restock0-0000-4000-8000-000000000001', purchase_no: 'P-900001', supplier_id: env.suppliers()[0]?.id ?? '', date: env.today(), total_minor: 12_000, paid_minor: 0 }];
 
   const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.')));
+  // Paying suppliers and what is owed need no capability (issue #557, ADR-084): a shop that buys on credit in Buy stock uses them.
+  const open = <T>(fn: () => T): Promise<T> => env.run(fn);
   const next = (prefix: string): string => {
     const n = (sequence.get(prefix) ?? 0) + 1;
     sequence.set(prefix, n);
@@ -535,14 +540,16 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
       ),
 
     supplierOpenItems: (supplierId) =>
-      gate(() => {
+      open(() => {
         const items = openItems(supplierId);
         return { as_of: env.today(), supplier_id: supplierId, supplier_name: supplierName(supplierId), items, total_open_minor: items.reduce((sum, i) => sum + (i.open_minor ?? 0), 0) };
       }),
     createSupplierPayment: (body, key) =>
-      gate(() =>
+      open(() =>
         env.once(`payment|${key}`, body, (): SupplierPayment => {
-          const items = openItems(body.supplier_id);
+          const paidOn = body.paid_on ?? env.today();
+          if (paidOn > env.today()) env.refuse(422, 'future_date', 'A payment cannot be dated in the future.');
+          const items = openItems(body.supplier_id).filter((i) => (i.date ?? '') <= paidOn);
           const owed = items.reduce((sum, i) => sum + (i.open_minor ?? 0), 0);
           if (body.amount_minor <= 0 || body.amount_minor > 1_000_000_000_000) env.refuse(422, 'amount_out_of_range', 'That amount is out of range.');
           if (body.amount_minor > owed) env.refuse(422, 'payment_exceeds_open', 'That is more than the supplier is owed.');
@@ -566,17 +573,17 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
           const made: SupplierPayment = {
             id: env.nextId('supplier-payment'), payment_no: next('SP'), status: 'posted', supplier_id: body.supplier_id, supplier_name: supplierName(body.supplier_id), branch_id: body.branch_id, currency: 'UGX',
             method: body.method, amount_minor: body.amount_minor, allocation: body.allocation ?? 'oldest_first', ...(body.reference ? { reference: body.reference } : {}), ...(body.note ? { note: body.note } : {}),
-            paid_on: env.today(), allocations: picks.map((p) => ({ amount_minor: p.minor, ...(p.item.kind === 'restock' ? { purchase_id: p.item.id, purchase_no: p.item.number } : { bill_id: p.item.id, bill_no: p.item.number, supplier_ref: p.item.supplier_ref }) })),
+            paid_on: paidOn, allocations: picks.map((p) => ({ amount_minor: p.minor, ...(p.item.kind === 'restock' ? { purchase_id: p.item.id, purchase_no: p.item.number } : { bill_id: p.item.id, bill_no: p.item.number, supplier_ref: p.item.supplier_ref }) })),
             created_at: new Date().toISOString(), created_by: 'mock-user', version: 1,
           };
           payments.push(made);
           return made;
         }),
       ),
-    listSupplierPayments: (q) => gate(() => ({ items: listed(payments, q, (p) => `${p.payment_no} ${p.reference ?? ''}`).map((p) => ({ ...p, allocations: undefined })) })),
-    getSupplierPayment: (id) => gate(() => paymentOf(id)),
+    listSupplierPayments: (q) => open(() => ({ items: listed(payments, q, (p) => `${p.payment_no} ${p.reference ?? ''}`).map((p) => ({ ...p, allocations: undefined })) })),
+    getSupplierPayment: (id) => open(() => paymentOf(id)),
     reverseSupplierPayment: (id, reason, key) =>
-      gate(() =>
+      open(() =>
         env.once(`payment-reverse|${key}`, { id, reason }, () => {
           const p = paymentOf(id);
           const why = reasonOf(reason);
@@ -588,7 +595,7 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
       ),
 
     supplierPayables: () =>
-      gate(() => {
+      open(() => {
         const totals = emptyRow();
         const rows = env.suppliers().flatMap((s): SupplierPayablesRow[] => {
           const row = emptyRow();
@@ -603,6 +610,36 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
         });
         return { as_of: env.today(), currency: 'UGX', suppliers: rows, totals };
       }),
+
+    supplierStatement: (supplierId, { from, to }) =>
+      open(() => {
+        const end = to || env.today();
+        // As the server: the last 90 days by default.
+        const start = from || new Date(Date.parse(`${end}T00:00:00Z`) - 89 * 86_400_000).toISOString().slice(0, 10);
+        type Event = { date: string; kind: string; number: string; reference?: string; source_id: string; method?: string; amount: number };
+        const events: Event[] = [
+          ...restocks.filter((r) => r.supplier_id === supplierId).map((r) => ({ date: r.date, kind: 'purchase', number: r.purchase_no, source_id: r.id, amount: r.total_minor })),
+          ...bills.filter((b) => b.supplier_id === supplierId).flatMap((b): Event[] => [
+            { date: b.bill_date ?? '', kind: 'bill', number: b.bill_no ?? '', reference: b.supplier_ref, source_id: b.id ?? '', amount: b.total_minor ?? 0 },
+            ...(b.status === 'voided' ? [{ date: b.voided_on ?? '', kind: 'bill_void', number: b.bill_no ?? '', reference: b.supplier_ref, source_id: b.id ?? '', amount: -(b.total_minor ?? 0) }] : []),
+          ]),
+          ...payments.filter((p) => p.supplier_id === supplierId).flatMap((p): Event[] => [
+            { date: p.paid_on ?? '', kind: 'payment', number: p.payment_no ?? '', reference: p.reference, source_id: p.id ?? '', method: p.method, amount: -(p.amount_minor ?? 0) },
+            ...(p.status === 'reversed' ? [{ date: p.reversed_on ?? '', kind: 'payment_reversed', number: p.payment_no ?? '', reference: p.reference, source_id: p.id ?? '', method: p.method, amount: p.amount_minor ?? 0 }] : []),
+          ]),
+        ].filter((e) => e.date <= end).sort((a, b) => a.date.localeCompare(b.date));
+        let running = 0;
+        let opening = 0;
+        const lines = events.flatMap((e) => {
+          running += e.amount;
+          if (e.date < start) { opening = running; return []; }
+          return [{ date: e.date, kind: e.kind, number: e.number, ...(e.reference ? { reference: e.reference } : {}), source_id: e.source_id, ...(e.method ? { method: e.method } : {}), increase_minor: Math.max(e.amount, 0), decrease_minor: Math.max(-e.amount, 0), balance_minor: running }];
+        });
+        return { supplier_id: supplierId, supplier_name: supplierName(supplierId), currency: 'UGX', from: start, to: end, opening_minor: opening, lines, closing_minor: running };
+      }),
+    recordCreditRestock: (r) => {
+      restocks.push({ ...r, paid_minor: 0 });
+    },
 
     releaseReceiptHold: (id, reason, key) =>
       gate(() =>

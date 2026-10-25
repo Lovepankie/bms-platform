@@ -19,12 +19,14 @@ const returner = (me: Me) => held(me, SALE_RETURN) && held(me, SALE_READ) && cap
 const accountant = (me: Me) => held(me, SALE_READ) && capable(me, 'customer_accounts');
 const purchaser = (me: Me) => held(me, PURCHASE_CREATE) && capable(me, 'purchasing');
 const payer = (me: Me) => held(me, PAYABLE_MANAGE) && capable(me, 'purchasing');
+/** Paying suppliers, what is owed and the statement need no capability (issue #557, ADR-084). */
+const owner = (me: Me) => held(me, PAYABLE_MANAGE);
 
 const step = (id: string, target: string, title: string, body: string, more: Partial<TourStep> = {}): TourStep => ({ id, target, module: 'retail', title, body, ...more });
 
-const page = (id: string, title: string, path: string, audience: (me: Me) => boolean, steps: TourStep[]): Tour => ({
+const page = (id: string, title: string, path: string, audience: (me: Me) => boolean, steps: TourStep[], version = 1): Tour => ({
   id: `page-${id}`,
-  version: 1,
+  version,
   title: `This page: ${title}`,
   audience,
   autoStart: false,
@@ -106,26 +108,32 @@ export const RETAIL_PURCHASING_TOURS: readonly Tour[] = [
     step('pay', 'bill-pay', 'Pay it', 'Tap Pay this supplier to start a payment for them.', { optional: true }),
     step('credit', 'bill-credit', 'Take a credit note', 'Tap Credit note if the supplier took goods back or charged too much.', { optional: true }),
   ]),
-  page('supplier-payments', 'supplier payments', 'supplier-payments', payer, [
+  page('supplier-payments', 'supplier payments', 'supplier-payments', owner, [
     step('new', 'payments-new', 'Pay a supplier', 'Tap Pay a supplier. Choose who, how much and how you paid.'),
     step('search', 'payments-search', 'Find a payment', 'Type a payment number, a reference or a supplier\'s name.'),
     step('list', 'payments-list', 'Your payments', 'Tap Open on a payment to see what it paid, or to reverse it.'),
-  ]),
-  page('supplier-payment-new', 'pay a supplier', 'supplier-payments/new', payer, [
+  ], 2),
+  page('supplier-payment-new', 'pay a supplier', 'supplier-payments/new', owner, [
     step('supplier', 'payment-supplier', 'Who you are paying', 'Choose the supplier. You then see what they are owed, oldest first.'),
-    step('amount', 'payment-amount', 'How much and how', 'Choose the branch the money comes from, how you paid and the amount.'),
-    step('allocation', 'payment-allocation', 'What it pays', 'Leave it on the oldest first, or choose Let me choose to give an amount to each invoice.'),
+    step('amount', 'payment-amount', 'How much, how and when', 'Choose the branch the money comes from, how you paid, the amount and the day you paid. The day cannot be in the future.'),
+    step('allocation', 'payment-allocation', 'What it pays', 'Leave it on the oldest first, or choose Let me choose to give an amount to each purchase or invoice.'),
     step('save', 'payment-save', 'Save', 'Tap Save payment. The whole amount must clear something the supplier is owed.'),
-  ]),
-  page('supplier-payment', 'one supplier payment', 'supplier-payments/$paymentId', payer, [
+  ], 2),
+  page('supplier-payment', 'one supplier payment', 'supplier-payments/$paymentId', owner, [
     step('summary', 'payment-summary', 'The payment', 'This shows who was paid, how much, how and when. Tap the supplier to see what is still owed to them.'),
-    step('allocations', 'payment-allocations', 'What it paid', 'Each line is an invoice this payment cleared. Tap an invoice number to open it.'),
-    step('reverse', 'payment-reverse', 'Undo it', 'Reverse the payment with a reason. The money goes back and the invoices are owed again.', { optional: true }),
-  ]),
-  page('supplier-payables', 'what you owe suppliers', 'supplier-payables', payer, [
-    step('help', 'payables-help', 'What this shows', 'Everything you owe suppliers, split by how late it is.'),
-    step('report', 'payables-report', 'Supplier by supplier', 'Tap a supplier\'s name to pay them. The last column is goods you received that no invoice covers yet.'),
-    step('links', 'payables-links', 'Go further', 'Open the supplier payments or the supplier invoices from here.'),
+    step('allocations', 'payment-allocations', 'What it paid', 'Each line is a purchase or an invoice this payment cleared.'),
+    step('reverse', 'payment-reverse', 'Undo it', 'Reverse the payment with a reason. The money goes back and the supplier is owed it again.', { optional: true }),
+  ], 2),
+  page('supplier-payables', 'what I owe suppliers', 'supplier-payables', owner, [
+    step('help', 'payables-help', 'What this shows', 'What each supplier is owed for stock bought on credit, less what you paid them.'),
+    step('links', 'payables-links', 'Pay or look back', 'Tap Pay a supplier to record a payment, or Supplier payments to see the ones made.'),
+    step('report', 'payables-report', 'Supplier by supplier', 'The total comes first. Tap Pay on a supplier to pay them, or Statement to see everything with them.'),
+  ], 2),
+  page('supplier-statement', 'a supplier statement', 'suppliers/$supplierId/statement', owner, [
+    step('links', 'supplier-statement-links', 'Pay from here', 'Tap Pay this supplier to record a payment to them.'),
+    step('dates', 'supplier-statement-dates', 'Pick the dates', 'Choose the first and last day. The last 90 days show at first.'),
+    step('lines', 'supplier-statement-lines', 'What happened', 'Each purchase on credit and each payment, with what was owed after it.'),
+    step('share', 'supplier-statement-share', 'Send it', 'Tap Share the statement to send it to the supplier, on WhatsApp or another app.'),
   ]),
   page('landed-cost-new', 'new landed cost', 'landed-costs/new', payer, [
     step('who', 'landed-who', 'Who is owed', 'Choose the forwarder, carrier or agent, and type their invoice number and the dates.'),

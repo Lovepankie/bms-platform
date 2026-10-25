@@ -20,6 +20,8 @@ import { CreditFormView } from '../areas/staff/retail/supplier-credit-new';
 import { SupplierCreditPage, SupplierCreditsPage } from '../areas/staff/retail/supplier-credits';
 import { SupplierPaymentPage, SupplierPaymentsPage } from '../areas/staff/retail/supplier-payments';
 import { SupplierPayablesPage } from '../areas/staff/retail/supplier-payables';
+import { SupplierStatementPage } from '../areas/staff/retail/supplier-statement';
+import { defaultStatementRange } from '../areas/staff/retail/account-state';
 import { describeTours, type Seed } from './test-kit';
 import { RETAIL_PURCHASING_TOURS } from './tours-retail-purchasing';
 
@@ -78,6 +80,11 @@ const seed: Seed = (client) => {
   client.setQueryData(['retail', 'supplier-bill', BILL], bill);
   client.setQueryData(['retail', 'supplier-payment', PAYMENT], payment);
   client.setQueryData(['retail', 'supplier-payables'], { as_of: '2026-10-07', suppliers: [{ supplier_id: SUPPLIER, supplier_name: 'Test Supplier 01', owed_minor: 300000 }], totals: { owed_minor: 300000 } });
+  const range = defaultStatementRange();
+  client.setQueryData(['retail', 'supplier-statement', SUPPLIER, range.from, range.to], {
+    supplier_id: SUPPLIER, supplier_name: 'Test Supplier 01', currency: 'UGX', from: range.from, to: range.to, opening_minor: 0, closing_minor: 300000,
+    lines: [{ date: range.to, kind: 'purchase', number: 'P-900001', source_id: 'p1', increase_minor: 300000, decrease_minor: 0, balance_minor: 300000 }],
+  });
   client.setQueryData(['retail', 'landed-cost', LANDED], landed);
   client.setQueryData(['retail', 'supplier-credit', CREDIT], supplierCredit);
 };
@@ -104,6 +111,7 @@ const PAGES: Record<string, { url: string; screen: () => ReactElement }> = {
   '/staff/retail/supplier-payments/new': { url: '/staff/retail/supplier-payments/new', screen: () => here('/staff/retail/supplier-payments/new') },
   '/staff/retail/supplier-payments/$paymentId': { url: `/staff/retail/supplier-payments/${PAYMENT}`, screen: () => <SupplierPaymentPage /> },
   '/staff/retail/supplier-payables': { url: '/staff/retail/supplier-payables', screen: () => <SupplierPayablesPage /> },
+  '/staff/retail/suppliers/$supplierId/statement': { url: `/staff/retail/suppliers/${SUPPLIER}/statement`, screen: () => <SupplierStatementPage /> },
   '/staff/retail/landed-costs/new': { url: '/staff/retail/landed-costs/new', screen: () => here('/staff/retail/landed-costs/new') },
   '/staff/retail/landed-costs/$landedCostId': { url: `/staff/retail/landed-costs/${LANDED}`, screen: () => <LandedCostPage /> },
   '/staff/retail/supplier-credits': { url: '/staff/retail/supplier-credits', screen: () => <SupplierCreditsPage /> },
@@ -158,6 +166,7 @@ describeTours(
     'page-supplier-payment-new': [BUYER],
     'page-supplier-payment': [BUYER],
     'page-supplier-payables': [BUYER],
+    'page-supplier-statement': [BUYER],
     'page-landed-cost-new': [BUYER],
     'page-landed-cost': [BUYER],
     'page-supplier-credits': [BUYER],

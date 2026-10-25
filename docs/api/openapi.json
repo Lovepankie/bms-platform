@@ -15940,7 +15940,8 @@
             "type" : "string"
           },
           "payment_method" : {
-            "pattern" : "cash|bank|credit",
+            "description" : "cash, mobile_money, bank, or credit: owed to the supplier, who is then required (issue #557)",
+            "pattern" : "cash|mobile_money|bank|credit",
             "type" : "string"
           },
           "purchased_on" : {
@@ -19845,6 +19846,11 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "paid_on" : {
+            "description" : "The day it was paid, in the business time zone; absent means today. Never in the future, and it pays only what was owed on that day (issue #557)",
+            "format" : "date",
+            "type" : "string"
+          },
           "reference" : {
             "description" : "A bank or mobile money reference",
             "maxLength" : 60,
@@ -19882,6 +19888,88 @@
           }
         },
         "required" : [ "name" ]
+      },
+      "RetailSupplierStatement" : {
+        "description" : "What happened with one supplier between from and to, with the running balance (issue #557)",
+        "properties" : {
+          "closing_minor" : {
+            "description" : "Opening plus the lines: owed at the end of to, in the caller's branch scope",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "lines" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailSupplierStatementLine"
+            },
+            "type" : "array"
+          },
+          "opening_minor" : {
+            "description" : "Owed at the start of from",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "supplier_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "supplier_name" : {
+            "type" : "string"
+          },
+          "to" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailSupplierStatementLine" : {
+        "description" : "kind is purchase (bought on credit in Buy stock), purchase_void, bill (a supplier invoice), bill_void, credit_note, credit_note_void, payment or payment_reversed (issue #557)",
+        "properties" : {
+          "balance_minor" : {
+            "description" : "Owed after this line",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "decrease_minor" : {
+            "description" : "What the line takes off what is owed",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "increase_minor" : {
+            "description" : "What the line adds to what is owed",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "kind" : {
+            "type" : "string"
+          },
+          "method" : {
+            "description" : "cash, mobile_money or bank, on a payment and its reversal",
+            "type" : "string"
+          },
+          "number" : {
+            "description" : "Our number: the purchase, invoice, credit note or payment number",
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "The supplier's invoice or credit note number, or a payment's reference",
+            "type" : "string"
+          },
+          "source_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
       },
       "RetailSupplierUpdate" : {
         "description" : "Omitted fields are unchanged; an empty contact clears it",
@@ -42697,6 +42785,50 @@
           }
         },
         "summary" : "What a supplier is owed on invoices and credit restocks in the caller's scope, oldest due first (issue #198)",
+        "tags" : [ "retail-payables" ]
+      }
+    },
+    "/api/v1/retail/suppliers/{supplier_id}/statement" : {
+      "get" : {
+        "operationId" : "getRetailSupplierStatement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "supplier_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailSupplierStatement"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A supplier's statement: opening balance, purchases on credit, invoices, credit notes, payments, voids and reversals with a running balance, closing balance (issue #557)",
         "tags" : [ "retail-payables" ]
       }
     },

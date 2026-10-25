@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SupplierOpenItem, UnbilledReceiptLine } from '../../../api/retail';
+import { businessToday, type SupplierOpenItem, type UnbilledReceiptLine } from '../../../api/retail';
 import {
   AGEING_COLUMNS, allocatedMinor, billLineProblem, billLinesFrom, billLinesTotal, billLineTotal, billProblem, blankBill, blankPayment, buildBillRequest,
   buildPaymentRequest, invoiceSentence, itemAmountProblem, itemKey, lateWords, matchKey, matchReady, methodWords, paymentAmount, paymentProblem, remainingMinor, ticked, varianceWords,
@@ -167,7 +167,7 @@ describe('the payment', () => {
 
   it('builds an oldest first request with no allocations', () => {
     expect(buildPaymentRequest(pay({ reference: ' REF-1 ', note: '' }), items)).toEqual({
-      supplier_id: 's1', branch_id: 'b1', method: 'cash', amount_minor: 20000, allocation: 'oldest_first', reference: 'REF-1',
+      supplier_id: 's1', branch_id: 'b1', method: 'cash', amount_minor: 20000, paid_on: businessToday(), allocation: 'oldest_first', reference: 'REF-1',
     });
   });
 

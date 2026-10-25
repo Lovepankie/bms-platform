@@ -1,21 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { Link, createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { retail, type SupplierOpenItem } from '../../../api/retail';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { PAYABLE_MANAGE, branchesWhere } from './permissions';
 import {
-  KIND_WORDS, PAYMENT_METHODS, allocatedMinor, blankPayment, buildPaymentRequest, itemAmountProblem, itemKey, lateWords, paymentAmount, paymentProblem, remainingMinor,
+  KIND_WORDS, PAYMENT_METHODS, allocatedMinor, blankPayment, buildPaymentRequest, itemAmountProblem, itemKey, lateWords, owedOn, paidOnOf, paymentAmount, paymentProblem, remainingMinor,
   type PaymentForm, type PaymentMethod,
 } from './payables-state';
-import { BranchField, SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
+import { BranchField, Star, SupplierField, useSuppliers, type SupplierOption } from './purchasing-ui';
 import { showDate } from './transfers';
-import { Gate, Problem, money } from './ui';
+import { Gate, Problem, Money, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { FieldsNeededNote } from '../../../app/ui/Field';
+import { WORDS } from '../../../app/glossary';
+import { businessToday } from '../../../api/retail';
 
-// The supplier payment form (the purchasing capability, ADR-033, issue #198): choose the supplier and the branch that pays, how it is
-// paid and the amount. By default the payment clears the oldest first (an invoice or a credit restock, by its due date). Choosing
+// The supplier payment form (ADR-033, issue #198; no capability needed since issue #557): choose the supplier and the branch that
+// pays, how it is paid, the amount and the day it was paid (today or before; it pays only what was owed on that day). By default the payment clears the oldest first (an invoice or a credit restock, by its due date). Choosing
 // instead lets the person give an amount to each one, and the amounts must add up to the payment. Nothing is kept on account: the
 // whole payment clears something the supplier is owed.
 
@@ -26,7 +29,7 @@ function OwedList({ items }: { items: SupplierOpenItem[] }) {
         <li key={itemKey(i)} className="rt-card">
           <strong>{KIND_WORDS[i.kind ?? 'bill']} {i.number}</strong>{i.supplier_ref ? ` (invoice ${i.supplier_ref})` : ''}
           <br />
-          Due {showDate(i.due_date)}, {lateWords(i.days_past_due).toLowerCase()}. Owed <strong>{money(i.open_minor ?? 0)}</strong>
+          Due {showDate(i.due_date)}, {lateWords(i.days_past_due).toLowerCase()}. Owed <strong><Money minor={i.open_minor ?? 0} /></strong>
         </li>
       ))}
     </ul>
@@ -50,24 +53,28 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
   const left = remainingMinor(form);
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="payment-form">
+      <FieldsNeededNote />
       <div className="stack" data-tour="payment-supplier">
-        <SupplierField id="pay-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId, amounts: {} })} />
+        <SupplierField id="pay-supplier" required value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId, amounts: {} })} />
         {form.supplierId !== '' && loadingItems && <p className="loading">Loading</p>}
         {form.supplierId !== '' && items && (
           <section aria-label="What is owed">
-            {items.length === 0 ? <p className="empty-state">This supplier is owed nothing.</p> : <p data-testid="owed-total">This supplier is owed <strong>{money(owed ?? 0)}</strong>.</p>}
+            {items.length === 0 ? <p className="empty-state">This supplier is owed nothing.</p> : <p data-testid="owed-total">This supplier is owed <strong><Money minor={owed ?? 0} /></strong>.</p>}
             {form.allocation === 'oldest_first' && items.length > 0 && <OwedList items={items} />}
           </section>
         )}
       </div>
       <div className="stack" data-tour="payment-amount">
-        <BranchField id="pay-branch" label="Paid from the till or bank of" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />
-        <label htmlFor="pay-method">Paid by</label>
-        <select id="pay-method" value={form.method} onChange={(e) => onChange({ ...form, method: e.target.value as PaymentMethod })}>
+        <BranchField id="pay-branch" required label="Paid from the till or bank of" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />
+        <label htmlFor="pay-method">{WORDS.paidHow}<Star /></label>
+        <select id="pay-method" aria-required value={form.method} onChange={(e) => onChange({ ...form, method: e.target.value as PaymentMethod })}>
           {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
-        <label htmlFor="pay-amount">Amount paid</label>
-        <input id="pay-amount" inputMode="numeric" value={form.amount} onChange={(e) => onChange({ ...form, amount: e.target.value })} />
+        <label htmlFor="pay-amount">Amount paid<Star /></label>
+        <input id="pay-amount" inputMode="numeric" aria-required value={form.amount} onChange={(e) => onChange({ ...form, amount: e.target.value })} />
+        <label htmlFor="pay-date">Date paid<Star /></label>
+        <input id="pay-date" type="date" aria-required max={businessToday()} value={paidOnOf(form)} onChange={(e) => onChange({ ...form, paidOn: e.target.value === businessToday() ? '' : e.target.value, amounts: {} })} />
+        <p className="hint">Today or an earlier day; it pays what was owed that day.</p>
       </div>
       <label htmlFor="pay-ref">Reference, such as a bank or mobile money number (optional)</label>
       <input id="pay-ref" value={form.reference} maxLength={60} onChange={(e) => onChange({ ...form, reference: e.target.value })} />
@@ -93,19 +100,19 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
             return (
               <div key={itemKey(i)} className="rt-card">
                 <label htmlFor={`amt-${itemKey(i)}`}>
-                  Pay on {KIND_WORDS[i.kind ?? 'bill']} {i.number}{i.supplier_ref ? ` (invoice ${i.supplier_ref})` : ''}, due {showDate(i.due_date)}, {lateWords(i.days_past_due).toLowerCase()}, owed {money(i.open_minor ?? 0)}
+                  Pay on {KIND_WORDS[i.kind ?? 'bill']} {i.number}{i.supplier_ref ? ` (invoice ${i.supplier_ref})` : ''}, due {showDate(i.due_date)}, {lateWords(i.days_past_due).toLowerCase()}, owed <Money minor={i.open_minor ?? 0} />
                 </label>
                 <input id={`amt-${itemKey(i)}`} inputMode="numeric" value={text} onChange={(e) => onChange({ ...form, amounts: { ...form.amounts, [itemKey(i)]: e.target.value } })} aria-invalid={bad !== null} />
-                {bad && <p role="alert" className="rt-flag">{bad}</p>}
+                {bad && <p role="alert" className="rt-flag num">{bad}</p>}
               </div>
             );
           })}
-          <p data-testid="pay-remaining" aria-live="polite">
-            Given out {money(allocatedMinor(form.amounts))} of {money(paymentAmount(form) ?? 0)}. {left === 0 ? 'Nothing is left to give out.' : left > 0 ? `${money(left)} is left to give out.` : `${money(-left)} too much is given out.`}
+          <p className="num" data-testid="pay-remaining" aria-live="polite">
+            Given out <Money minor={allocatedMinor(form.amounts)} /> of <Money minor={paymentAmount(form) ?? 0} />. {left === 0 ? 'Nothing is left to give out.' : left > 0 ? `${money(left)} is left to give out.` : `${money(-left)} too much is given out.`}
           </p>
         </section>
       )}
-      {problem && (form.amount.trim() !== '' || form.supplierId !== '') && <p role="alert" className="rt-flag">{problem}</p>}
+      {problem && (form.amount.trim() !== '' || form.supplierId !== '') && <p role="alert" className="rt-flag num">{problem}</p>}
       <Problem error={error} />
       <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="payment-save">Save payment</BusyButton>
 
@@ -132,7 +139,9 @@ export function SupplierPaymentNewPage() {
   }, [wanted, setDraft]);
   const suppliers = useSuppliers(draft.supplierId);
   const open = useQuery({ queryKey: ['retail', 'supplier-open-items', draft.supplierId], queryFn: () => retail.supplierOpenItems(draft.supplierId), enabled: draft.supplierId !== '' });
-  const items = draft.supplierId !== '' ? open.data?.items : undefined;
+  // A payment dated earlier pays only what was bought on or before that day (issue #557).
+  const items = draft.supplierId !== '' && open.data?.items ? owedOn(open.data.items, paidOnOf(draft)) : undefined;
+  const owed = items?.reduce((sum, i) => sum + (i.open_minor ?? 0), 0);
   const save = useMutation({
     mutationFn: () => retail.createSupplierPayment(buildPaymentRequest(draft, items ?? []), key),
     onSuccess: (payment) => {
@@ -142,13 +151,18 @@ export function SupplierPaymentNewPage() {
     },
   });
   return (
-    <Gate screen="supplierPayments" title="Pay a supplier">
+    <Gate screen="supplierPayments" title={WORDS.payASupplier}>
+      <p className="cluster">
+        <Link className="btn btn-sm" to="/staff/retail/supplier-payables">{WORDS.whatIOweSuppliers}</Link>
+        <Link className="btn btn-sm" to="/staff/retail/supplier-payments">Supplier payments</Link>
+        {draft.supplierId !== '' && <Link className="btn btn-sm" to="/staff/retail/suppliers/$supplierId/statement" params={{ supplierId: draft.supplierId }}>Statement</Link>}
+      </p>
       <PaymentFormView
         form={draft}
         suppliers={suppliers}
         branches={branches}
         items={items}
-        owed={open.data?.total_open_minor}
+        owed={owed}
         loadingItems={open.isFetching && !open.data}
         busy={save.isPending}
         error={save.error ?? open.error}

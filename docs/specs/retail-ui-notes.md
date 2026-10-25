@@ -640,6 +640,15 @@ need `core.settings.manage`. Each page has a breadcrumb and a live search where 
   checked against the payment before saving). **A payment** (`/supplier-payments/$paymentId`) lists what it paid and reverses with a reason.
   **What you owe suppliers** (`/supplier-payables`) is the report: per supplier what is owed by days past due, the total, and the goods received
   and not yet invoiced beside it; a row starts a payment for that supplier.
+- **Buy on credit and pay suppliers without purchasing** (issue #557, owner decision D15, ADR-084). Buy stock asks **Paid how** (required): Cash,
+  Mobile money, Bank or On credit (owed to the supplier); On credit marks the supplier required and says "On credit needs a supplier" until one
+  is chosen or typed. **What I owe suppliers** (`/supplier-payables`, under the Money tab, no capability) starts with "You owe suppliers UGX X in
+  all." and lists each supplier owed something with the balance and two 48 px buttons, Pay and Statement; with the purchasing capability the
+  ageing table stays, with a Statement link per row. **Pay a supplier** (`/supplier-payments/new`, no capability) marks the supplier, paying
+  branch, Paid how, amount and **Date paid** required (today at first, nothing later; an earlier day lists only what was owed then) and links to
+  What I owe suppliers and the supplier's statement. **Supplier statement** (`/suppliers/$supplierId/statement`): From and To (the last 90 days
+  at first), owed at the start, a card per purchase on credit, payment, void or reversal with what is owed after it, owed at the end, Pay this
+  supplier, and **Share the statement** (the phone's share options with the statement as text, or WhatsApp).
 - **Retail settings** gains the two tolerances in percent (stored as basis points, shown to two decimals) under `If-Match`, and says when no
   order approval limit is set that any administrator can send any order.
 - `purchasing` is marked ready in `capabilities-state.ts` with its tour (`capability-purchasing`) and a Help page tour (`page-purchase-orders`). The
@@ -1088,10 +1097,11 @@ therefore as far as the existing routes go: Stock, and Past restocks and Stock m
 | `/staff/retail/supplier-credits` | Supplier credit notes | `page-supplier-credits` v1 (added) | none added |
 | `/staff/retail/supplier-credits/$creditId` | Supplier credit note | `page-supplier-credit` v1 (added) | supplier opens its open items |
 | `/staff/retail/supplier-credits/new` | New credit note | `page-supplier-credit-new` v1 (added) | none added |
-| `/staff/retail/supplier-payables` | What you owe suppliers | `page-supplier-payables` v1 (added) | none added |
-| `/staff/retail/supplier-payments` | Supplier payments | `page-supplier-payments` v1 (added) | none added |
-| `/staff/retail/supplier-payments/$paymentId` | Supplier payment | `page-supplier-payment` v1 (added) | supplier opens its open items |
-| `/staff/retail/supplier-payments/new` | Pay a supplier | `page-supplier-payment-new` v1 (added) | none added |
+| `/staff/retail/supplier-payables` | What I owe suppliers | `page-supplier-payables` v2 (issue #557) | Pay a supplier, Supplier payments; per supplier Pay and Statement |
+| `/staff/retail/supplier-payments` | Supplier payments | `page-supplier-payments` v2 (issue #557) | none added |
+| `/staff/retail/supplier-payments/$paymentId` | Supplier payment | `page-supplier-payment` v2 (issue #557) | supplier opens its open items |
+| `/staff/retail/supplier-payments/new` | Pay a supplier | `page-supplier-payment-new` v2 (issue #557) | What I owe suppliers, Supplier payments, the supplier's Statement |
+| `/staff/retail/suppliers/$supplierId/statement` | Supplier statement | `page-supplier-statement` v1 (added, issue #557) | Pay this supplier, What I owe suppliers |
 | `/staff/retail/transfer` | Move stock | `page-transfer` v1 (added) | branch names on the saved summary open Stock |
 | `/staff/retail/transfers` | Stock moves | `page-transfers` v1 (added) | branch names in a move open Stock; link to Move stock |
 | `/staff/retail/usage` | Usage and damage | `page-usage` v1 (added) | "See the stock" link on the saved summary |

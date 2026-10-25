@@ -14,6 +14,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PaymentsApi.Payment;
 import com.rincoltech.bms.retail.purchasing.internal.PaymentsApi.PaymentList;
 import com.rincoltech.bms.retail.purchasing.internal.PaymentsApi.PaymentRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PaymentsApi.ReverseRequest;
+import com.rincoltech.bms.retail.purchasing.internal.PaymentsApi.Statement;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingSettingsService.Settings;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingSettingsService.Update;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,8 +38,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The supplier side of purchasing (purchasing capability; ADR-033, issue #198; chapter 7 section 7.11.20): supplier
- * invoices, supplier payments, what a supplier is owed, the payables report and the two tolerances. Each answers 404
- * {@code capability_not_enabled} while the capability is off. Invoices, payments and the reports are
+ * invoices, supplier payments, what a supplier is owed, the payables report, the supplier statement and the two tolerances.
+ * The invoice and tolerance routes answer 404 {@code capability_not_enabled} while the capability is off; the payments,
+ * what is owed, the payables report and the statement do not (issue #557, ADR-084), since a shop pays what it bought on
+ * credit in Buy stock without the capability. Invoices, payments and the reports are
  * {@code retail.payable.manage}, the administrator's; the tolerances are {@code core.settings.manage}.
  */
 @RestController
@@ -219,6 +222,20 @@ class PayablesController {
             operationId = "listRetailSupplierOpenItems")
     OpenItems openItems(@PathVariable("supplier_id") UUID supplierId) {
         return payments.openItems(supplierId);
+    }
+
+    @GetMapping("/suppliers/{supplier_id}/statement")
+    @RequiresPermission("retail.payable.manage")
+    @Operation(
+            summary =
+                    "A supplier's statement: opening balance, purchases on credit, invoices, credit notes, payments, voids and"
+                            + " reversals with a running balance, closing balance (issue #557)",
+            operationId = "getRetailSupplierStatement")
+    Statement statement(
+            @PathVariable("supplier_id") UUID supplierId,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to) {
+        return payables.statement(supplierId, from, to);
     }
 
     // ---- Report and settings ---------------------------------------------------------------

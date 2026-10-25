@@ -43,6 +43,8 @@ describe('retail permission gating', () => {
         'sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
         'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'controls', 'catalogue',
         'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
+        // Paying suppliers and what is owed need no capability (issue #557): they pay what Buy stock bought on credit.
+        'supplierPayments', 'supplierPayables',
         'settings',
       ],
     );

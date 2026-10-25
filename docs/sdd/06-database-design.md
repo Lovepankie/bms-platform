@@ -2199,7 +2199,7 @@ of all its sales in one statement, and the daily profit sums them without readin
 ### `retail_purchases`, `retail_purchase_lines` (RLS; append-only, `bms_app` SELECT, INSERT)
 
 A purchase: `purchase_no` from the sequence `retail_purchase_no` (`RP00000001`), `supplier_id`
-(required for credit, CHECK), `purchased_on`, `payment_method` (`cash`, `bank`, `credit`),
+(required for credit, CHECK), `purchased_on`, `payment_method` (`cash`, `mobile_money` since V97 (issue #557, ADR-084), `bank`, `credit`),
 `currency`, `total_minor`, `note`, `historical`. A line: `product_id`, `cost_minor`, optional
 `sell_minor`, `qty_total` and `line_total_minor` (the sum of each branch's quantity at the cost,
 rounded per branch). The quantity per branch is the `purchase` movement itself (`source_line_id`

@@ -233,8 +233,8 @@ describe('the supplier payment page', () => {
     await retail.createSupplierBill({ supplier_id: SUPPLIER, supplier_ref: 'INV-1', bill_date: '2026-09-01', due_date: '2026-09-30', total_minor: 35000, lines: [{ receipt_line_id: receipt.lines?.[0]?.id ?? '', qty: '10', unit_price_minor: 3500 }] }, 'k-bill');
     const { router } = mount('/supplier-payments/new', SupplierPaymentNewPage, `/staff/retail/supplier-payments/new?supplier=${SUPPLIER}`);
     expect((await screen.findByTestId('owed-total', undefined, wait)).textContent).toContain('UGX 47,000');
-    expect((screen.getByLabelText('Supplier') as HTMLSelectElement).value).toBe(SUPPLIER);
-    type('Amount paid', '40000');
+    expect((screen.getByLabelText(/^Supplier/) as HTMLSelectElement).value).toBe(SUPPLIER);
+    type(/Amount paid/, '40000');
     click('Save payment');
     await waitFor(() => expect(router.state.location.pathname).toMatch(/\/supplier-payments\/[^/]+$/), wait);
     const payments = (await retail.listSupplierPayments({})).items ?? [];

@@ -193,9 +193,10 @@ const retailSupplierBillsRoute = retailScreen('/supplier-bills', 'Supplier invoi
 const retailSupplierBillNewRoute = retailScreen('/supplier-bills/new', 'New supplier invoice').lazy(() => import('../areas/staff/retail/supplier-bill-new').then((m) => m.Route));
 const retailSupplierBillRoute = retailScreen('/supplier-bills/$billId', 'Supplier invoice').lazy(() => import('../areas/staff/retail/supplier-bills').then((m) => m.DetailRoute));
 const retailSupplierPaymentsRoute = retailScreen('/supplier-payments', 'Supplier payments').lazy(() => import('../areas/staff/retail/supplier-payments').then((m) => m.Route));
-const retailSupplierPaymentNewRoute = retailScreen('/supplier-payments/new', 'Pay a supplier').lazy(() => import('../areas/staff/retail/supplier-payment-new').then((m) => m.Route));
+const retailSupplierPaymentNewRoute = retailScreen('/supplier-payments/new', WORDS.payASupplier).lazy(() => import('../areas/staff/retail/supplier-payment-new').then((m) => m.Route));
 const retailSupplierPaymentRoute = retailScreen('/supplier-payments/$paymentId', 'Supplier payment').lazy(() => import('../areas/staff/retail/supplier-payments').then((m) => m.DetailRoute));
-const retailSupplierPayablesRoute = retailScreen('/supplier-payables', 'What you owe suppliers').lazy(() => import('../areas/staff/retail/supplier-payables').then((m) => m.Route));
+const retailSupplierPayablesRoute = retailScreen('/supplier-payables', WORDS.whatIOweSuppliers).lazy(() => import('../areas/staff/retail/supplier-payables').then((m) => m.Route));
+const retailSupplierStatementRoute = retailScreen('/suppliers/$supplierId/statement', WORDS.supplierStatement).lazy(() => import('../areas/staff/retail/supplier-statement').then((m) => m.Route));
 // Landed costs and supplier credit notes (issue #199), also shown only while the purchasing capability is on.
 const retailLandedCostsRoute = retailScreen('/landed-costs', 'Landed costs').lazy(() => import('../areas/staff/retail/landed-costs').then((m) => m.Route));
 const retailLandedCostNewRoute = retailScreen('/landed-costs/new', 'New landed cost').lazy(() => import('../areas/staff/retail/landed-cost-new').then((m) => m.Route));
@@ -432,6 +433,7 @@ export const router = createRouter({
         retailSupplierPaymentNewRoute,
         retailSupplierPaymentRoute,
         retailSupplierPayablesRoute,
+        retailSupplierStatementRoute,
         retailLandedCostsRoute,
         retailLandedCostNewRoute,
         retailLandedCostRoute,

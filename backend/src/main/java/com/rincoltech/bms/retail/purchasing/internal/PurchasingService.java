@@ -105,6 +105,7 @@ class PurchasingService {
     static String accountFor(String method) {
         return switch (method) {
             case "cash" -> "cash_on_hand";
+            case "mobile_money" -> "mobile_money";
             case "bank" -> "bank";
             case "credit" -> "trade_creditors";
             default -> throw new IllegalArgumentException(method);

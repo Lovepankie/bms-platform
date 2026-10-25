@@ -3,7 +3,7 @@ import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanst
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RetailError, type GoodsReceipt, type PurchaseOrder, type SupplierBillMatch, type SupplierOpenItem, type SupplierPayables } from '../../../api/retail';
+import { RetailError, businessToday, type GoodsReceipt, type PurchaseOrder, type SupplierBillMatch, type SupplierOpenItem, type SupplierPayables } from '../../../api/retail';
 import { retailMessage } from '../../../api/retail-errors';
 import { router as appRouter } from '../../../app/router';
 import { GoodsReceiptView } from './goods-received';
@@ -317,20 +317,20 @@ describe('the supplier payment form', () => {
     expect(screen.getByTestId('owed-total').textContent).toContain('UGX 42,000');
     expect(screen.getByTestId('owed-list').textContent).toContain('11 days late');
     expect(save().getAttribute('data-not-ready')).toBe('true');
-    type('Amount paid', '40000');
+    type(/Amount paid/, '40000');
     expect(save().getAttribute('data-not-ready')).toBeNull();
-    type('Amount paid', '42001');
+    type(/Amount paid/, '42001');
     expect(save().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getAllByRole('alert')[0]?.textContent).toMatch(/owed UGX 42,000/);
-    type('Amount paid', '40000');
+    type(/Amount paid/, '40000');
     fireEvent.click(save());
-    expect(buildPaymentRequest(sent.mock.calls[0]?.[0] as PaymentForm, items)).toEqual({ supplier_id: 's1', branch_id: 'b1', method: 'cash', amount_minor: 40000, allocation: 'oldest_first' });
+    expect(buildPaymentRequest(sent.mock.calls[0]?.[0] as PaymentForm, items)).toEqual({ supplier_id: 's1', branch_id: 'b1', method: 'cash', amount_minor: 40000, paid_on: businessToday(), allocation: 'oldest_first' });
   });
 
   it('lets the person choose, shows what is left to give out, and saves only when it adds up', () => {
     const sent = vi.fn();
     render(<Form onSubmit={sent} />);
-    type('Amount paid', '20000');
+    type(/Amount paid/, '20000');
     fireEvent.click(screen.getByLabelText('Let me choose'));
     expect(screen.getByTestId('pay-manual')).toBeTruthy();
     expect(save().getAttribute('data-not-ready')).toBe('true');
@@ -353,7 +353,7 @@ describe('the supplier payment form', () => {
 
   it('offers cash, mobile money and bank', () => {
     render(<Form onSubmit={() => undefined} />);
-    const method = screen.getByLabelText('Paid by') as HTMLSelectElement;
+    const method = screen.getByLabelText(/Paid how/) as HTMLSelectElement;
     expect(within(method).getAllByRole('option').map((o) => o.textContent)).toEqual(['Cash', 'Mobile money', 'Bank']);
   });
 });
@@ -376,7 +376,7 @@ describe('the payables report', () => {
       expect(screen.getByRole('columnheader', { name: heading })).toBeTruthy();
     }
     const first = within(screen.getByTestId('payable-s1')).getAllByRole('cell').map((c) => c.textContent);
-    expect(first).toEqual(['Test Supplier 01', 'UGX 12,000', 'UGX 20,000', 'UGX 10,000', 'UGX 5,000', 'UGX 3,000', 'UGX 50,000', 'UGX 35,000']);
+    expect(first).toEqual(['Test Supplier 01 Statement', 'UGX 12,000', 'UGX 20,000', 'UGX 10,000', 'UGX 5,000', 'UGX 3,000', 'UGX 50,000', 'UGX 35,000']);
     expect(within(screen.getByTestId('payables-totals')).getByText('UGX 57,000')).toBeTruthy();
     expect(screen.getByTestId('payables-report').textContent).toContain('12 Oct 2026');
     expect(screen.getByRole('link', { name: 'Pay Test Supplier 01' }).getAttribute('href')).toBe('/staff/retail/supplier-payments/new?supplier=s1');

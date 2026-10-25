@@ -28,7 +28,6 @@ import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
-import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -46,7 +45,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Supplier payments (purchasing capability; ADR-033, issue #198; docs/specs/trade-capabilities.md section 7.1). A payment of
+ * Supplier payments (ADR-033, issue #198; docs/specs/trade-capabilities.md section 7.1). Since issue #557 (ADR-084) they need no
+ * capability: a shop that buys on credit in Buy stock pays here, and the invoices of the purchasing capability are simply
+ * more open items when it is on. A payment is dated the day it was paid, today or before, never in the future, and pays
+ * only what was owed on that day; it posts on that day and a cash one leaves that day's till. A payment of
  * cash, mobile money or bank is allocated, when it is recorded, to the supplier's open invoices and credit restocks, oldest
  * due date first or as the caller chose, so a part payment leaves the rest open and one payment can settle several invoices.
  * Every unit of the amount is allocated: nothing is held as a deposit. The supplier's row is locked first, so two payments
@@ -69,7 +71,6 @@ class PaymentsService {
     private final RetailBooks books;
     private final RetailBranchContext branches;
     private final Idempotency idempotency;
-    private final RetailCapabilities capabilities;
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
@@ -81,7 +82,6 @@ class PaymentsService {
             RetailBooks books,
             RetailBranchContext branches,
             Idempotency idempotency,
-            RetailCapabilities capabilities,
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit) {
@@ -91,7 +91,6 @@ class PaymentsService {
         this.books = books;
         this.branches = branches;
         this.idempotency = idempotency;
-        this.capabilities = capabilities;
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
@@ -111,20 +110,43 @@ class PaymentsService {
 
     @Transactional
     Outcome<Payment> create(String key, PaymentRequest r) {
-        capabilities.require(RetailCapabilities.PURCHASING);
         return idempotency.once(key, "POST", PAYMENTS, r, Payment.class, () -> pay(r));
     }
 
     private Payment pay(PaymentRequest r) {
         Principal principal = CurrentPrincipal.require();
+        LocalDate today = clock.today(tenant.profile().timezone());
+        LocalDate paidOn = r.paidOn() == null ? today : r.paidOn();
+        if (paidOn.isAfter(today)) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("paid_on", "future_date", "A payment cannot be dated in the future.")));
+        }
         UUID branch = branches.resolve(PERMISSION, r.branchId());
         if (!suppliers.lockSupplier(r.supplierId())) {
             throw ApiException.validation(
                     List.of(new FieldProblem("supplier_id", "unknown_supplier", "No such supplier.")));
         }
+        // Issue #557: cash paid out leaves the till on the payment's day. The cash book carries unbanked cash forward,
+        // so
+        // a banking that stands on that day or any later one already counted that cash: such a day is not changed after
+        // the fact. Mobile money and bank never touch the till.
+        if (r.method().equals("cash") && repo.cashBankedFrom(branch, paidOn)) {
+            throw ApiException.rule(
+                    "cash_day_banked",
+                    "The cash of " + paidOn
+                            + " at this branch is already banked (by a banking on that day or later), so a"
+                            + " cash payment cannot be dated that day. Choose mobile money or bank if it was paid that way.");
+        }
+        // Issue #557: a payment pays only what was owed on its day, so the statement's running balance never goes below
+        // nothing.
         Map<Target, Open> open = new LinkedHashMap<>();
+        Set<Target> later = new HashSet<>();
         for (Open o : inScope(repo.open(r.supplierId()), principal)) {
-            open.put(new Target(o.kind(), o.id()), o);
+            if (o.date().isAfter(paidOn)) {
+                later.add(new Target(o.kind(), o.id()));
+            } else {
+                open.put(new Target(o.kind(), o.id()), o);
+            }
         }
         boolean manual = "manual".equals(r.allocation());
         boolean given = r.allocations() != null && !r.allocations().isEmpty();
@@ -149,6 +171,11 @@ class PaymentsService {
                 }
                 Target t = a.billId() != null ? new Target("bill", a.billId()) : new Target("restock", a.purchaseId());
                 Open o = open.get(t);
+                if (later.contains(t)) {
+                    problems.add(new FieldProblem(
+                            field, "after_payment_date", "That was bought after the day of this payment."));
+                    continue;
+                }
                 if (o == null) {
                     problems.add(
                             new FieldProblem(field, "unknown_open_item", "That is not an open item of this supplier."));
@@ -195,12 +222,11 @@ class PaymentsService {
                 long owed = open.values().stream().mapToLong(Open::openMinor).sum();
                 throw ApiException.rule(
                         "payment_exceeds_open",
-                        "This supplier is owed " + owed + " on open invoices and stock bought on credit, so "
-                                + r.amountMinor()
+                        "This supplier is owed " + owed + " on open invoices and stock bought on credit"
+                                + (paidOn.isBefore(today) ? " on " + paidOn : "") + ", so " + r.amountMinor()
                                 + " cannot be paid. A payment is always allocated to something that is owed.");
             }
         }
-        LocalDate today = clock.today(tenant.profile().timezone());
         UUID id = UUID.randomUUID();
         Numbered no = lines.next("SP", "retail_supplier_payment_no", branch);
         String reference = PurchasingService.blankToNull(r.reference());
@@ -228,7 +254,7 @@ class PaymentsService {
         long apart = r.amountMinor() - here;
         UUID entry = books.post(new Posting(
                         branch,
-                        today,
+                        paidOn,
                         no.no(),
                         "Supplier payment " + no.no(),
                         PAYMENT,
@@ -245,7 +271,7 @@ class PaymentsService {
             if (!e.getKey().equals(branch)) {
                 books.post(new Posting(
                                 e.getKey(),
-                                today,
+                                paidOn,
                                 no.no(),
                                 "Supplier payment " + no.no() + " made by another branch",
                                 PAYMENT,
@@ -264,7 +290,7 @@ class PaymentsService {
                 no.seq(),
                 branch,
                 r.supplierId(),
-                today,
+                paidOn,
                 tenant.profile().currency(),
                 r.method(),
                 r.amountMinor(),
@@ -290,6 +316,7 @@ class PaymentsService {
         after.put("supplier_id", r.supplierId());
         after.put("method", r.method());
         after.put("amount_minor", r.amountMinor());
+        after.put("paid_on", paidOn.toString());
         after.put("allocations", split.size());
         audit.record(AuditLog.Entry.created("retail.supplier_payment.created", PAYMENT, id, branch, after));
         return view(repo.find(id, false).orElseThrow(), true);
@@ -297,7 +324,6 @@ class PaymentsService {
 
     @Transactional
     Outcome<Payment> reverse(String key, UUID id, ReverseRequest r) {
-        capabilities.require(RetailCapabilities.PURCHASING);
         return idempotency.once(
                 key, "POST", PAYMENTS + "/" + id + "/reverse", r, Payment.class, () -> reverseNow(id, r));
     }
@@ -350,7 +376,6 @@ class PaymentsService {
 
     @Transactional(readOnly = true)
     Payment get(UUID id) {
-        capabilities.require(RetailCapabilities.PURCHASING);
         Principal principal = CurrentPrincipal.require();
         return repo.find(id, false)
                 .filter(x -> principal.may(PERMISSION, x.branchId()))
@@ -368,7 +393,6 @@ class PaymentsService {
             String q,
             Integer limit,
             String cursor) {
-        capabilities.require(RetailCapabilities.PURCHASING);
         if (status != null && !status.equals("posted") && !status.equals("reversed")) {
             throw ApiException.validation(
                     List.of(new FieldProblem("status", "invalid", "status is posted or reversed.")));
@@ -403,7 +427,6 @@ class PaymentsService {
     /** What a supplier is owed on invoices and credit restocks in the caller's scope, oldest due first. */
     @Transactional(readOnly = true)
     OpenItems openItems(UUID supplierId) {
-        capabilities.require(RetailCapabilities.PURCHASING);
         var supplier = suppliers.supplier(supplierId).orElseThrow(ApiException::notFound);
         LocalDate today = clock.today(tenant.profile().timezone());
         List<Open> open = inScope(repo.open(supplierId), CurrentPrincipal.require());

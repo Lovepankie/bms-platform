@@ -1,7 +1,9 @@
 import {
-  RETAIL_CURRENCY,
-  type SupplierBillMatch, type SupplierBillRequest, type SupplierOpenItem, type SupplierPaymentRequest, type UnbilledReceiptLine,
+  RETAIL_CURRENCY, businessToday,
+  type SupplierBillMatch, type SupplierBillRequest, type SupplierOpenItem, type SupplierPaymentRequest, type SupplierStatement, type SupplierStatementLine,
+  type UnbilledReceiptLine,
 } from '../../../api/retail';
+import { WORDS } from '../../../app/glossary';
 import { formatMinor, parseMinor } from '../../../components/money';
 import { lineTotalMinor, milliOf, parseQty, qtyString, showQty } from './maths';
 import { MIN_REASON } from './account-state';
@@ -166,9 +168,20 @@ export interface PaymentForm {
   allocation: Allocation;
   /** The amount typed against each open item for a manual allocation, by `itemKey`. */
   amounts: Record<string, string>;
+  /**
+   * The day it was paid, YYYY-MM-DD, only once the person picked one (issue #557). Empty or absent means today, read when the form is
+   * shown and sent, never stored: a draft left open overnight still pays today, not the day it was started.
+   */
+  paidOn?: string;
 }
 
-export const blankPayment = (supplierId = '', branchId = ''): PaymentForm => ({ supplierId, branchId, method: 'cash', amount: '', reference: '', note: '', allocation: 'oldest_first', amounts: {} });
+export const blankPayment = (supplierId = '', branchId = ''): PaymentForm => ({ supplierId, branchId, method: 'cash', amount: '', reference: '', note: '', allocation: 'oldest_first', amounts: {}, paidOn: '' });
+
+/** The day of the payment: the one picked, or today. */
+export const paidOnOf = (form: PaymentForm): string => form.paidOn || businessToday();
+
+/** What was owed on the day of the payment: a payment pays only what was bought on or before its day, as the server does. */
+export const owedOn = (items: SupplierOpenItem[], day: string): SupplierOpenItem[] => items.filter((i) => (i.date ?? '') <= day);
 
 /** The key of an open item: an invoice and a credit restock may share an id space, so the kind is part of it. */
 export const itemKey = (item: SupplierOpenItem): string => `${item.kind ?? 'bill'}:${item.id ?? ''}`;
@@ -202,6 +215,7 @@ export function itemAmountProblem(item: SupplierOpenItem, text: string | undefin
 export function paymentProblem(form: PaymentForm, items: SupplierOpenItem[] | undefined, owed: number | undefined): string | null {
   if (form.supplierId === '') return 'Choose the supplier.';
   if (form.branchId === '') return 'Choose the branch that pays.';
+  if (paidOnOf(form) > businessToday()) return 'A payment cannot be dated in the future.';
   const amount = paymentAmount(form);
   if (amount === null) return 'Enter the amount paid, in whole shillings.';
   if (form.allocation === 'oldest_first') {
@@ -226,6 +240,7 @@ export function buildPaymentRequest(form: PaymentForm, items: SupplierOpenItem[]
     branch_id: form.branchId,
     method: form.method,
     amount_minor: paymentAmount(form) ?? 0,
+    paid_on: paidOnOf(form),
     allocation: form.allocation,
     ...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
     ...(form.note.trim() ? { note: form.note.trim() } : {}),
@@ -252,3 +267,35 @@ export const AGEING_COLUMNS = [
   { key: 'days61_to90_minor', label: '61 to 90 days late' },
   { key: 'over90_minor', label: 'Over 90 days late' },
 ] as const;
+
+// ---- The supplier statement (issue #557) ------------------------------------------------------------------------------
+
+/** What each kind of statement line is called. */
+export const STATEMENT_WORDS: Record<string, string> = {
+  purchase: `Bought ${WORDS.onCredit.toLowerCase()}`,
+  purchase_void: 'Purchase cancelled',
+  bill: 'Supplier invoice',
+  bill_void: 'Invoice cancelled',
+  credit_note: 'Credit note',
+  credit_note_void: 'Credit note cancelled',
+  payment: 'Paid',
+  payment_reversed: 'Payment undone',
+};
+
+/** "Paid by mobile money SP-HQ-000001" and the like: what happened, how, and our number. */
+export function statementLineWords(l: SupplierStatementLine): string {
+  const what = STATEMENT_WORDS[l.kind ?? ''] ?? l.kind ?? '';
+  const how = l.method ? ` by ${methodWords(l.method).toLowerCase()}` : '';
+  const ref = l.reference ? ` (${l.reference})` : '';
+  return `${what}${how} ${l.number ?? ''}${ref}`.trim();
+}
+
+/** The statement as plain text to send to the supplier: the dates, the opening balance, each line with the balance after it, the closing balance. */
+export function statementText(st: SupplierStatement, businessName = ''): string {
+  const head = [`Statement for ${st.supplier_name ?? ''}${businessName ? ` from ${businessName}` : ''}`, `${st.from} to ${st.to}`, `Owed at the start: ${money(st.opening_minor ?? 0)}`];
+  const lines = (st.lines ?? []).map((l) => {
+    const amount = (l.increase_minor ?? 0) > 0 ? `+${money(l.increase_minor ?? 0)}` : `-${money(l.decrease_minor ?? 0)}`;
+    return `${l.date} ${statementLineWords(l)} ${amount}, owed ${money(l.balance_minor ?? 0)}`;
+  });
+  return [...head, ...lines, `Owed at the end: ${money(st.closing_minor ?? 0)}`].join('\n');
+}

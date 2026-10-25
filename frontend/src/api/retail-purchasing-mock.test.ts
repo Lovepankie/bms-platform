@@ -42,9 +42,10 @@ describe('purchasing in the mock', () => {
     await expect(api.listPurchaseOrders({})).rejects.toMatchObject({ status: 404, code: 'capability_not_enabled' });
     await expect(api.listGoodsReceipts({})).rejects.toMatchObject({ status: 404 });
     await expect(api.listSupplierBills({})).rejects.toMatchObject({ status: 404 });
-    await expect(api.listSupplierPayments({})).rejects.toMatchObject({ status: 404 });
-    await expect(api.supplierPayables()).rejects.toMatchObject({ status: 404 });
     await expect(api.purchasingSettings()).rejects.toMatchObject({ status: 404 });
+    // Paying suppliers and what is owed stay open (issue #557): they pay what Buy stock bought on credit.
+    await expect(api.listSupplierPayments({})).resolves.toBeTruthy();
+    await expect(api.supplierPayables()).resolves.toBeTruthy();
   });
 
   it('keeps an order a draft with its totals, changes it under If-Match, and replays the same key', async () => {

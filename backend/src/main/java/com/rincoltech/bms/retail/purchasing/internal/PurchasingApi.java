@@ -103,7 +103,13 @@ final class PurchasingApi {
             @NotNull @Schema(description = "Not in the future")
             LocalDate purchasedOn,
 
-            @NotNull @Pattern(regexp = "cash|bank|credit") String paymentMethod,
+            @NotNull
+            @Pattern(regexp = "cash|mobile_money|bank|credit")
+            @Schema(
+                    description =
+                            "cash, mobile_money, bank, or credit: owed to the supplier, who is then required (issue #557)")
+            String paymentMethod,
+
             @Size(max = 300) String note,
             @NotEmpty @Size(max = 500) List<@Valid @NotNull PurchaseLineRequest> lines) {}
 

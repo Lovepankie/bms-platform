@@ -95,18 +95,22 @@ export function useSuppliers(chosenId = ''): SupplierOption[] {
   return (suppliers.data ?? []).filter((s) => s.active !== false || s.id === chosenId);
 }
 
-export function SupplierField({ id, label = 'Supplier', value, suppliers, disabled, onChange }: {
+/** The red asterisk after the label of a required field, hidden from a screen reader (which hears aria-required). */
+export const Star = () => <span className="field-star" aria-hidden="true"> *</span>;
+
+export function SupplierField({ id, label = 'Supplier', value, suppliers, disabled, required = false, onChange }: {
   id: string;
   label?: string;
   value: string;
   suppliers: SupplierOption[];
   disabled?: boolean;
+  required?: boolean;
   onChange: (supplierId: string) => void;
 }) {
   return (
     <>
-      <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <label htmlFor={id}>{label}{required && <Star />}</label>
+      <select id={id} value={value} disabled={disabled} aria-required={required || undefined} onChange={(e) => onChange(e.target.value)}>
         <option value="">Choose a supplier</option>
         {suppliers.map((s) => <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>)}
       </select>
@@ -124,18 +128,19 @@ export function SupplierOwed({ id, name, payable }: { id?: string; name?: string
 }
 
 /** Which branch or store a form is for. With only one to choose from it is shown, not asked. */
-export function BranchField({ id, label, value, branches, onChange }: {
+export function BranchField({ id, label, value, branches, required = false, onChange }: {
   id: string;
   label: string;
   value: string;
   branches: { id?: string; name?: string; code?: string }[];
+  required?: boolean;
   onChange: (branchId: string) => void;
 }) {
   if (branches.length === 1) return <p><strong>{label}:</strong> {branchLabel(branches[0])}</p>;
   return (
     <>
-      <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <label htmlFor={id}>{label}{required && <Star />}</label>
+      <select id={id} value={value} aria-required={required || undefined} onChange={(e) => onChange(e.target.value)}>
         <option value="">Choose a branch or store</option>
         {branches.map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
       </select>

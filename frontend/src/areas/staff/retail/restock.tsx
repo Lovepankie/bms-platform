@@ -8,7 +8,7 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { lineTotalMinor, parseQty, qtyString, showDate, showQty } from './maths';
 import { chosenUnitHint, redraftOf } from './restock-correct-state';
-import { Gate, Note, Problem, ProductPicker, money, useProfitAccess } from './ui';
+import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { UNITS, capabilityOn } from './permissions';
@@ -113,11 +113,18 @@ function packSizeOf(l: RestockLine): { pack_size?: string; use_from_now_on?: boo
   return { pack_size: factor, ...(l.fromNowOn && !sameFactor(factor, usual) ? { use_from_now_on: true } : {}) };
 }
 
-const METHODS: { value: PurchasePayment; label: string }[] = [
+/** Paid how (issue #557, D15): the money left the till, a mobile money account or the bank, or the supplier is owed it. */
+export const METHODS: { value: PurchasePayment; label: string }[] = [
   { value: 'cash', label: 'Cash' },
+  { value: 'mobile_money', label: 'Mobile money' },
   { value: 'bank', label: 'Bank' },
-  { value: 'credit', label: 'Credit (pay the supplier later)' },
+  { value: 'credit', label: `${WORDS.onCredit} (owed to the supplier)` },
 ];
+
+/** On credit is owed to someone, so it needs a supplier: one chosen or a new one typed. */
+export function creditNeedsSupplier(method: PurchasePayment, supplierId: string, newSupplier: string): string | null {
+  return method === 'credit' && supplierId === '' && newSupplier.trim() === '' ? 'On credit needs a supplier. Choose one above, or add a new one.' : null;
+}
 
 /** What the restock form keeps with its key in this tab until saved or cleared (#77). */
 export interface RestockDraft {
@@ -212,7 +219,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const patchWhole = (i: number, line: RestockLine) => setLines((ls) => ls.map((l, n) => (n === i ? line : l)));
 
   const problems = lines.map(restockLineProblem);
-  const blocked = lines.length === 0 || problems.some((p) => p !== null);
+  const supplierProblem = creditNeedsSupplier(method, supplierId, newSupplier);
+  const blocked = lines.length === 0 || problems.some((p) => p !== null) || supplierProblem !== null;
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending) save.mutate(); }}>
@@ -220,8 +228,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       <FieldsNeededNote />
 
       <div data-tour="restock-supplier">
-      <label htmlFor="supplier">Supplier</label>
-      <select id="supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+      <label htmlFor="supplier">Supplier{method === 'credit' && <span className="field-star" aria-hidden="true"> *</span>}</label>
+      <select id="supplier" value={supplierId} aria-required={method === 'credit' || undefined} onChange={(e) => setSupplierId(e.target.value)}>
         <option value="">No supplier</option>
         {supplierOptions(suppliers.data ?? [], supplierId).map((s) => (
           <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>
@@ -319,16 +327,18 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       })}
 
       <fieldset data-tour="restock-paid">
-        <legend>How is it paid?</legend>
+        <legend>{WORDS.paidHow}<span className="field-star" aria-hidden="true"> *</span></legend>
         {METHODS.map((m) => (
           <label key={m.value} style={{ fontWeight: 400 }}>
             <input type="radio" name="purchase-method" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={method === m.value} onChange={() => setMethod(m.value)} />
             {m.label}
           </label>
         ))}
+        {method === 'credit' && <p className="hint">The supplier is owed this. Pay them later from Money, {WORDS.whatIOweSuppliers}.</p>}
       </fieldset>
+      {supplierProblem && <p role="alert" className="rt-flag" data-testid="credit-needs-supplier">{supplierProblem}</p>}
 
-      <p className="rt-total" aria-live="polite">Total cost {money(restockTotal(lines))}</p>
+      <p className="rt-total" aria-live="polite" data-testid="restock-total">Total cost <Money minor={restockTotal(lines)} /></p>
       <Problem error={save.error} />
       <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} notReady={blocked}>Save the purchase</BusyButton>
 

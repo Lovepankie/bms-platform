@@ -570,7 +570,10 @@ documents slice is on main). The choices the design left open:
 13. **The payables report without the capability.** Section 8 says that, for a tenant without `purchasing`, credit restocks
     are shown from trade creditors by supplier. That view is deferred: the report, like every route of this slice, is 404
     `capability_not_enabled` while the capability is off, and a tenant that has not switched it on has no payment route for a
-    credit restock either.
+    credit restock either. **Built since (issue #557, owner decision D15, ADR-084):** the supplier payments, the open items and the
+    report need no capability; they read and pay the credit restocks, a payment takes `paid_on` (not in the future, paying only what
+    was owed on that day), and `GET /retail/suppliers/{id}/statement` gives the running balance. Buy stock also takes mobile money
+    (migration V97).
 
 ### 7.5 As built (issue #199, slice 10, migration V48)
 
@@ -657,7 +660,7 @@ All reports are read only, respect branch scope per row, and omit cost, value an
 | Stock by store and shop | `GET /retail/reports/stock-by-location`: per product, the balance in each branch the caller may read, grouped by role (stores, then shops), a subtotal per role and a **combined total**; stock **in transit** (section 9.3) as its own column so the combined total neither double counts nor loses it. Extends `/retail/stock/all-branches`, which stays |
 | Combined total | The sum across all readable branches, quantity and, with profit read, value at cost; the revaluation difference is shown as in valuation |
 | Transfers in flight | `GET /retail/reports/transfers-in-flight` (needs `transfer_receipt`): dispatched and not received, with age, source, destination, lines. Empty by construction when transfers are atomic |
-| Supplier payables | `GET /retail/reports/supplier-payables` (needs `purchasing`): per supplier, open bills by days past due (same buckets as customer ageing; a landed cost invoice is a bill, and a credit note has already come off its invoice) and unbilled receipts (goods received not invoiced). Open credit notes are zero by construction (7.5 item 6). For tenants without `purchasing`, credit restocks are shown from trade creditors by supplier (deferred, section 7.4 item 13) |
+| Supplier payables | `GET /retail/reports/supplier-payables` (no capability since issue #557, ADR-084; invoices only with `purchasing`): per supplier, open bills by days past due (same buckets as customer ageing; a landed cost invoice is a bill, and a credit note has already come off its invoice) and unbilled receipts (goods received not invoiced). Open credit notes are zero by construction (7.5 item 6). For tenants without `purchasing` the same report shows the credit restocks by supplier, and supplier payments pay them (built, issue #557, ADR-084) |
 | Customer ageing | Section 5.2 |
 
 ## 9. Workflow for the wholesaler
@@ -794,12 +797,12 @@ Branch-bound routes check scope per ADR-017. Full catalogue goes in SDD 7.11.23.
 | GET | `/retail/reports/customer-ageing` | `retail.sale.read` | `customer_accounts` |
 | POST (M), GET | `/retail/sales/{id}/documents`, `/retail/documents/{id}` | `retail.document.issue` | `documents` |
 | POST, GET, PATCH | `/retail/quotations`, `/retail/quotations/{id}/convert` | `retail.document.issue`; convert needs `retail.sale.create` | `documents` |
-| POST (M), GET | `/retail/purchase-orders`, `/retail/goods-receipts`, `/retail/supplier-bills`, `/retail/supplier-credits`, `/retail/supplier-payments` | `retail.purchase.create` (orders and receipts), `retail.payable.manage` (bills, credits, payments) | `purchasing` (built, issue #198; the supplier credits are built in issue #199 on their own route; also the order's `PUT`, `send` and `cancel`, the receipt's and the bill's `void`, the payment's `reverse`, `POST /retail/supplier-bills/match`, `GET /retail/suppliers/{id}/unbilled-receipts` and `.../open-items`, and `GET`, `PUT /retail/purchasing/settings`; section 7.4) |
+| POST (M), GET | `/retail/purchase-orders`, `/retail/goods-receipts`, `/retail/supplier-bills`, `/retail/supplier-credits`, `/retail/supplier-payments` | `retail.purchase.create` (orders and receipts), `retail.payable.manage` (bills, credits, payments) | `purchasing` (built, issue #198; since issue #557 (ADR-084) the supplier payments, `.../open-items`, the payables report and the new `GET /retail/suppliers/{id}/statement` need no capability; the supplier credits are built in issue #199 on their own route; also the order's `PUT`, `send` and `cancel`, the receipt's and the bill's `void`, the payment's `reverse`, `POST /retail/supplier-bills/match`, `GET /retail/suppliers/{id}/unbilled-receipts` and `.../open-items`, and `GET`, `PUT /retail/purchasing/settings`; section 7.4) |
 | POST (M), GET | `/retail/landed-costs`, `/retail/landed-costs/{id}`, `/retail/landed-costs/{id}/void`, `POST /retail/landed-costs/preview` | `retail.payable.manage` | `purchasing` (built, issue #199, as its own route and not under a bill: the payee's invoice is created with it; section 7.5) |
 | POST (M), GET | `/retail/supplier-credits`, `/retail/supplier-credits/{id}`, `/retail/supplier-credits/{id}/void` | `retail.payable.manage` | `purchasing` (built, issue #199) |
 | POST (M) | `/retail/goods-receipts/{id}/release-hold` | `retail.purchase.create` | `purchasing` (built, issue #199) |
 | POST (M) | `/retail/transfers/{id}/receive`, `/retail/transfers/{id}/cancel` | `retail.stock.transfer` | `transfer_receipt` |
-| GET | `/retail/reports/stock-by-location`, `/retail/reports/transfers-in-flight`, `/retail/reports/supplier-payables` | `retail.stock.read` (payables: `retail.payable.manage`) | as stated in section 8 |
+| GET | `/retail/reports/stock-by-location`, `/retail/reports/transfers-in-flight`, `/retail/reports/supplier-payables` | `retail.stock.read` (payables: `retail.payable.manage`) | as stated in section 8 (the payables report needs no capability since issue #557) |
 
 New permissions (design only; each is added to the SDD 8 matrix by the migration of the slice that needs it, so the matrix never lists a permission no migration seeds):
 `retail.branch_role.manage`, `retail.pricelist.manage`, `retail.pricelist.use`,

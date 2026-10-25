@@ -22,7 +22,7 @@ import { Hint } from '../../../app/ui/Hint';
 // back) and opens the restock form again with the same lines to enter them right. The server refuses a void when the stock has
 // moved, in plain words; the screens only show the refusal.
 
-const PAYMENT: Record<string, string> = { cash: 'Cash', bank: 'Bank', credit: 'On credit' };
+const PAYMENT: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank', credit: WORDS.onCredit };
 
 /** The branches a restock added stock to. */
 function branchesOf(purchase: Purchase): string[] {

@@ -457,4 +457,145 @@ class PaymentsRepository {
                 rs.getObject("reversal_entry_id", UUID.class),
                 rs.getInt("version"));
     }
+
+    // ---- Statement (issue #557) ----------------------------------------------------------------
+
+    /**
+     * One thing that changed what a supplier is owed: {@code amount} is signed, positive when it adds to the debt.
+     * {@code branchIds} are the branches it belongs to (a credit restock's are every branch its stock went into).
+     */
+    record Event(
+            String kind,
+            LocalDate day,
+            Instant at,
+            String number,
+            String reference,
+            UUID sourceId,
+            String method,
+            long amount,
+            Set<UUID> branchIds) {}
+
+    private static final String RESTOCK_BRANCHES = """
+            ARRAY(SELECT DISTINCT m.branch_id FROM retail_stock_movements m
+                   WHERE m.tenant_id = pu.tenant_id AND m.source_type = 'retail.purchase' AND m.source_id = pu.id
+                     AND m.kind = 'purchase')""";
+
+    /**
+     * Every event of the supplier dated on or before {@code to}, in the order they happened: credit restocks (never
+     * imported ones, which no payment can pay) and their voids, supplier invoices and credit notes and their voids, and
+     * payments and their reversals, each on its own day. Within a day they come in the order they were entered, and a void or
+     * reversal never before what it undoes (its time is the business clock's, the other's the database's).
+     */
+    List<Event> statementEvents(UUID supplierId, LocalDate to) {
+        return jdbc.sql("""
+                        SELECT * FROM (
+                            SELECT 'purchase' AS kind, pu.purchased_on AS day, pu.created_at AS at, pu.purchase_no AS number,
+                                   NULL AS reference, pu.id AS source_id, NULL AS method, pu.total_minor AS amount,
+                                   %1$s AS branches
+                              FROM retail_purchases pu
+                             WHERE pu.supplier_id = :supplier AND pu.payment_method = 'credit' AND NOT pu.historical
+                               AND pu.total_minor > 0
+                            UNION ALL
+                            SELECT 'purchase_void', v.voided_on, greatest(v.created_at, pu.created_at), pu.purchase_no, NULL, pu.id, NULL,
+                                   -pu.total_minor, %1$s
+                              FROM retail_purchase_voids v
+                              JOIN retail_purchases pu ON pu.tenant_id = v.tenant_id AND pu.id = v.purchase_id
+                             WHERE pu.supplier_id = :supplier AND pu.payment_method = 'credit' AND NOT pu.historical
+                               AND pu.total_minor > 0
+                            UNION ALL
+                            SELECT 'bill', b.bill_date, b.created_at, b.bill_no, b.supplier_ref, b.id, NULL, b.total_minor,
+                                   ARRAY[b.branch_id]
+                              FROM retail_supplier_bills b WHERE b.supplier_id = :supplier
+                            UNION ALL
+                            SELECT 'bill_void', b.voided_on, greatest(b.voided_at, b.created_at), b.bill_no, b.supplier_ref, b.id, NULL, -b.total_minor,
+                                   ARRAY[b.branch_id]
+                              FROM retail_supplier_bills b WHERE b.supplier_id = :supplier AND b.status = 'voided'
+                            UNION ALL
+                            SELECT 'credit_note', c.credit_date, c.created_at, c.credit_no, c.supplier_ref, c.id, NULL,
+                                   -c.total_minor, ARRAY[b.branch_id]
+                              FROM retail_supplier_credits c
+                              JOIN retail_supplier_bills b ON b.tenant_id = c.tenant_id AND b.id = c.bill_id
+                             WHERE c.supplier_id = :supplier
+                            UNION ALL
+                            SELECT 'credit_note_void', c.voided_on, greatest(c.voided_at, c.created_at), c.credit_no, c.supplier_ref, c.id, NULL,
+                                   c.total_minor, ARRAY[b.branch_id]
+                              FROM retail_supplier_credits c
+                              JOIN retail_supplier_bills b ON b.tenant_id = c.tenant_id AND b.id = c.bill_id
+                             WHERE c.supplier_id = :supplier AND c.status = 'voided'
+                            UNION ALL
+                            SELECT 'payment', p.paid_on, p.created_at, p.payment_no, p.reference, p.id, p.method,
+                                   -p.amount_minor, ARRAY[p.branch_id]
+                              FROM retail_supplier_payments p WHERE p.supplier_id = :supplier
+                            UNION ALL
+                            SELECT 'payment_reversed', p.reversed_on, greatest(p.reversed_at, p.created_at), p.payment_no, p.reference, p.id, p.method,
+                                   p.amount_minor, ARRAY[p.branch_id]
+                              FROM retail_supplier_payments p WHERE p.supplier_id = :supplier AND p.status = 'reversed'
+                        ) e
+                         WHERE e.day <= :to
+                         ORDER BY e.day, e.at, e.number, e.kind
+                        """.formatted(RESTOCK_BRANCHES))
+                .param("supplier", supplierId)
+                .param("to", Date.valueOf(to))
+                .query((rs, n) -> new Event(
+                        rs.getString("kind"),
+                        rs.getDate("day").toLocalDate(),
+                        instant(rs, "at"),
+                        rs.getString("number"),
+                        rs.getString("reference"),
+                        rs.getObject("source_id", UUID.class),
+                        rs.getString("method"),
+                        rs.getLong("amount"),
+                        uuids(rs.getArray("branches"))))
+                .list();
+    }
+
+    /** What each payment of the supplier paid, per item, with the branches of the item it paid. */
+    record Paid(UUID paymentId, long amount, Set<UUID> itemBranchIds) {}
+
+    List<Paid> paidBySupplier(UUID supplierId) {
+        return jdbc.sql("""
+                        SELECT a.payment_id, a.amount_minor,
+                               CASE WHEN a.bill_id IS NOT NULL
+                                    THEN ARRAY(SELECT b.branch_id FROM retail_supplier_bills b
+                                                WHERE b.tenant_id = a.tenant_id AND b.id = a.bill_id)
+                                    ELSE (SELECT %s FROM retail_purchases pu
+                                           WHERE pu.tenant_id = a.tenant_id AND pu.id = a.purchase_id) END AS branches
+                          FROM retail_supplier_payment_allocations a
+                          JOIN retail_supplier_payments p ON p.tenant_id = a.tenant_id AND p.id = a.payment_id
+                         WHERE p.supplier_id = :supplier
+                        """.formatted(RESTOCK_BRANCHES))
+                .param("supplier", supplierId)
+                .query((rs, n) -> new Paid(
+                        rs.getObject("payment_id", UUID.class),
+                        rs.getLong("amount_minor"),
+                        uuids(rs.getArray("branches"))))
+                .list();
+    }
+
+    private static Set<UUID> uuids(java.sql.Array array) throws SQLException {
+        Set<UUID> out = new java.util.TreeSet<>();
+        if (array != null) {
+            for (Object o : (Object[]) array.getArray()) {
+                out.add((UUID) o);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Whether a banking that stands at the branch is dated on or after {@code day} (issue #557). The cash book carries cash not yet
+     * banked forward, so a banking covers its own day and every earlier one: cash paid out on any of them would change what that
+     * banking was expected to hold.
+     */
+    boolean cashBankedFrom(UUID branchId, LocalDate day) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM retail_cash_bankings
+                                        WHERE tenant_id = current_setting('app.tenant_id')::uuid AND branch_id = :branch
+                                          AND business_date >= :day AND voided_at IS NULL)
+                        """)
+                .param("branch", branchId)
+                .param("day", Date.valueOf(day))
+                .query(Boolean.class)
+                .single();
+    }
 }
