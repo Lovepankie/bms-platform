@@ -45,6 +45,11 @@ contract (chapter 6 section 6.9), so the previous release runs on the newer sche
    The migrate step is a no-op (the schema is already ahead) and the switch happens as usual. On
    staging, start `bms-pull.timer` again once `main` carries the fix or the revert.
 4. Confirm `https://<platform host>/version` shows the old tag, then open an issue for the fix.
+5. If `BMS_MIN_CLIENT_BUILD` is set in `/opt/bms/.env` to a time later than the release you rolled
+   back to (ADR-088), clear it (empty) and recreate the api the usual way. The API already ignores a
+   minimum later than its own build, with a warning in its log at start (`BMS_MIN_CLIENT_BUILD ... is
+   later than this release`), so phones keep working meanwhile; clearing it removes the warning and
+   the doubt.
 
 ## When the rollback itself is unhealthy (`rollback-unhealthy`)
 

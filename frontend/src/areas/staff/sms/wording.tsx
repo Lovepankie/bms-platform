@@ -10,6 +10,7 @@ import {
   type SmsTestResult,
 } from '../../../api/sms';
 import { SEARCH_DELAY_MS } from '../../../app/ui/useLiveSearch';
+import { useUnsavedWork } from '../../../app/unsaved-work';
 import { formatMinor } from '../../../components/money';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
@@ -174,6 +175,7 @@ export function TemplateEditor({ template, canManage, onNotice, tour = false }: 
   });
   const saveError = save.error instanceof SmsError ? save.error : null;
   const dirty = text !== saved;
+  useUnsavedWork(dirty);
   const insert = (name: string) => {
     const el = area.current;
     const token = `{${name}}`;

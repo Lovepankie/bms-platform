@@ -1,4 +1,5 @@
 import createClient, { type Middleware } from 'openapi-fetch';
+import { clientBuildHeader, forceUpdate, updater } from '../app/auto-update';
 import { getAccessToken, refreshSession, tenantHeaders } from '../auth/session';
 import { APP_UPDATING, APP_UPDATING_CHECK, APP_UPDATING_MAYBE_SAVED } from './retail-errors';
 import type { components, paths } from './schema';
@@ -131,10 +132,51 @@ const deployGap: Middleware = {
   },
 };
 
+// The app's build both ways (#576, ADR-088): every request says which app sent it, every answer says which server built it. A
+// 426 app_too_old means the server no longer serves this app.
+const appBuild: Middleware = {
+  onRequest({ request }) {
+    const build = clientBuildHeader();
+    if (build) request.headers.set('Bms-Client-Build', build);
+    return request;
+  },
+  onResponse({ response }) {
+    updater.serverBuild(response.headers.get('Bms-Build'));
+    if (response.status === 426) forceUpdate();
+    return response;
+  },
+};
+
 export { APP_UPDATING, APP_UPDATING_CHECK, APP_UPDATING_MAYBE_SAVED };
 export const api = createClient<paths>({ baseUrl: '/' });
+api.use(appBuild);
 api.use(auth);
 api.use(deployGap);
+
+// A save on its way holds back the app's own reload (ADR-088). It is counted around the whole call, retries included, and ends
+// however the call ends: a middleware that throws (a failed refresh, the deploy-gap words) would skip the middleware hooks.
+// A call that never ends (a phone link that hangs, no answer and no error) stops holding it back after WRITE_HOLD_MS, so one lost
+// request cannot keep the tab on the old app for good.
+export const WRITE_HOLD_MS = 2 * 60_000;
+for (const method of ['POST', 'PUT', 'PATCH', 'DELETE'] as const) {
+  const send = api[method] as (...args: unknown[]) => Promise<unknown>;
+  (api as unknown as Record<string, unknown>)[method] = async (...args: unknown[]) => {
+    let held = true;
+    const release = () => {
+      if (!held) return;
+      held = false;
+      updater.writeEnded();
+    };
+    updater.writeStarted();
+    const expiry = setTimeout(release, WRITE_HOLD_MS);
+    try {
+      return await send(...args);
+    } finally {
+      clearTimeout(expiry);
+      release();
+    }
+  };
+}
 
 /** The problem body of a failed call, for showing its detail (chapter 7 section 7.7). */
 export function problemOf(error: unknown): Problem {

@@ -12,7 +12,11 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN npm run build && mkdir -p /empty
+# The app knows its own build (#576, ADR-088): the sha tag the API reports on /version and in Bms-Build, and the commit time the
+# API compares with BMS_MIN_CLIENT_BUILD. Empty in a local build, which turns both off.
+ARG GIT_SHA=
+ARG GIT_TIME=
+RUN VITE_BMS_BUILD="$GIT_SHA" VITE_BMS_BUILT="$GIT_TIME" npm run build && mkdir -p /empty
 
 FROM caddy:2.11-alpine AS runtime
 COPY --chmod=644 Caddyfile /etc/caddy/Caddyfile

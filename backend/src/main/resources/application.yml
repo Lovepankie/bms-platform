@@ -112,6 +112,11 @@ springdoc:
 
 bms:
   git-sha: ${BMS_GIT_SHA:}
+  # This release's commit time, UTC YYYYMMDDHHMMSS (the image's BMS_GIT_TIME): a BMS_MIN_CLIENT_BUILD later than it is ignored.
+  git-time: ${BMS_GIT_TIME:}
+  # The commit time (UTC YYYYMMDDHHMMSS) of the oldest web app build the API still serves; an older app gets 426 app_too_old and
+  # loads the new one (#576, ADR-088). Empty: every app is served. When to set it: docs/runbooks/deploy.md.
+  min-client-build: ${BMS_MIN_CLIENT_BUILD:}
   tenancy:
     # Chapter 7 section 7.2. Required outside the dev and test profiles; startup fails on a missing
     # or invalid value. Tenant hosts are one label under the zone, for example

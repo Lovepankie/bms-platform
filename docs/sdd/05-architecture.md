@@ -219,7 +219,7 @@ to other modules.
 | `core.ledger` | `...core.ledger` | `LedgerPosting.post` (`post_entry`) |
 | `core.documents` | `...core.documents` | `Documents` (upload, find), the `DocumentAccess` registry, the object storage port with the R2 adapter and the dev and test fake, signed download URLs (#12) |
 | `core.jobs` | `...core.jobs` | `TenantJobs`, db-scheduler tasks (ADR-008) |
-| `core.operations` | `...core.operations` | `/version`, the migrations readiness check, the database role guard |
+| `core.operations` | `...core.operations` | `/version` and the `Bms-Build` header with the 426 `app_too_old` refusal (ADR-088), the migrations readiness check, the database role guard |
 | `lending.manifest` | `...lending.manifest` | The lending module's registration (`ModuleManifest`) |
 | `lending.collateral` | `...lending.collateral` | The collateral register: items, valuations, the append-only custody timeline, photos and scans, and `collateral_release` as an approval action (#13) |
 | `lending.loans` | `...lending.loans` | Origination: draft, edit, guarantors, collateral pledges, submit, return, cancel, appraisal, decision, the status history; registers `CollateralPledges` so pledged items are not released (#41 to #43). Servicing (#108, ADR-026): disbursement, schedule, repayments with R-ALLOC, payoff quote, reversal with re-allocation, closure, write-off and recovery, each posting through `post_entry`; registers the `loan_disbursement`, `repayment_reversal` and `loan_write_off` approval actions; `LoanServicing`, the port for commands without a principal |

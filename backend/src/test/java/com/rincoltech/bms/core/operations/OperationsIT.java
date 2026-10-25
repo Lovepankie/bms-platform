@@ -59,6 +59,18 @@ class OperationsIT extends IntegrationTest {
     }
 
     @Test
+    void everyAnswerNamesTheBuildThatVersionReports() {
+        // #576, ADR-088: the app compares this with its own build; an error answer carries it too.
+        ResponseEntity<String> version = http.getForEntity("/version", String.class);
+        String sha = version.getBody().replaceAll(".*\"git_sha\":\"([^\"]*)\".*", "$1");
+        assertThat(sha).isNotBlank();
+        assertThat(version.getHeaders().getFirst("Bms-Build")).isEqualTo(sha);
+        ResponseEntity<String> api = http.getForEntity("/api/v1/me", String.class);
+        assertThat(api.getStatusCode().is4xxClientError()).isTrue();
+        assertThat(api.getHeaders().getFirst("Bms-Build")).isEqualTo(sha);
+    }
+
+    @Test
     void noActuatorEndpointIsReachableOnTheApplicationPort() {
         assertThat(http.getForEntity("/actuator/health", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);

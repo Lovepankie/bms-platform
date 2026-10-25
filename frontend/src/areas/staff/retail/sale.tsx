@@ -32,6 +32,7 @@ import { addedMessage, useToast } from './toast';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
 import { Hint } from '../../../app/ui/Hint';
+import { useUnsavedWork } from '../../../app/unsaved-work';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -646,6 +647,8 @@ export function RecordSale() {
   const [queued, setQueued] = useState<OutboxItem | null>(null);
   const [received, setReceived] = useState<number>();
   const [round, setRound] = useState(0);
+  // The receipt of the sale just made, with its number, stays until the cashier starts the next sale or leaves (#576, ADR-088).
+  useUnsavedWork(sale !== null || queued !== null);
   return (
     <Gate screen="sale" title="Record a sale">
       {branchId === null ? (

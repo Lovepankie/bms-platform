@@ -20,6 +20,8 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -q package -DskipTests -Dspotless
 
 FROM eclipse-temurin:25-jre AS runtime
 ARG GIT_SHA=unknown
+# The commit time, UTC YYYYMMDDHHMMSS (#576, ADR-088): a BMS_MIN_CLIENT_BUILD later than this release is ignored, as after a rollback.
+ARG GIT_TIME=
 WORKDIR /app
 # Layers from least to most often changed, so a code-only change ships a small layer.
 COPY --from=build /extracted/dependencies/ ./
@@ -32,6 +34,7 @@ COPY --from=build /extracted/application/ ./
 # host does, in deploy/compose.pi-staging.yml). The process runs as uid 10001, which needs no
 # passwd entry, so the runtime stage stays free of RUN steps.
 ENV BMS_GIT_SHA=${GIT_SHA} \
+    BMS_GIT_TIME=${GIT_TIME} \
     SPRING_PROFILES_ACTIVE=server \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=25 -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/urandom"
 USER 10001:10001

@@ -128,8 +128,10 @@ export function classify(status: number, body: unknown): SendOutcome {
   const b = (body ?? {}) as { id?: string; sale_no?: string; code?: string; detail?: string; errors?: { field?: string; message?: string }[] };
   if (status >= 200 && status < 300 && b.id) return { kind: 'sent', sale: { id: b.id, saleNo: b.sale_no ?? '' } };
   if (status === 401) return { kind: 'auth' };
-  if (status === 408 || status === 409 || status === 425 || status === 429 || status >= 500 || status === 0) {
-    return { kind: 'retry', message: b.detail ?? 'The server could not take it just now.', answered: status !== 0 };
+  // 426: this app is too old for the server (#576). The sale waits in the outbox for the new app, which sends it, and the answer
+  // does not count towards giving up: the server never looked at the sale.
+  if (status === 408 || status === 409 || status === 425 || status === 426 || status === 429 || status >= 500 || status === 0) {
+    return { kind: 'retry', message: b.detail ?? 'The server could not take it just now.', answered: status !== 0 && status !== 426 };
   }
   const fields = (b.errors ?? []).map((e) => e.message).filter(Boolean).join(' ');
   return { kind: 'refused', code: b.code, message: [b.detail, fields].filter(Boolean).join(' ') || `Refused by the server (${status}).` };

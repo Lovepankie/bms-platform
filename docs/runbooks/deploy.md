@@ -96,6 +96,45 @@ Caddyfiles. Lines to know:
 The CI test `deploy/tests/no-gap-test.sh` drives the same switch on both compose files under GET
 and POST traffic and fails on any answer that is not 200 within 3 seconds.
 
+## Old apps update by themselves; forcing it (ADR-088)
+
+Every API answer carries `Bms-Build` (the `git_sha` of `/version`). A phone whose app is another
+build fetches the new one in the background and reloads by itself at a safe moment, with a short
+"Updating the app…" toast; a cart on Sell or a form with typed changes holds the reload until the
+next move between screens. Nothing to do for a normal deploy.
+
+**`BMS_MIN_CLIENT_BUILD`** (API, `.env`, empty by default) makes it immediate: an app built before
+it is answered 426 `app_too_old` and shows "A new version of the app is ready. Updating…" until the
+new app has loaded. Set it only for a release that changes the API in a way the previous screens
+cannot handle (a field removed or renamed, a request shape changed, a new required field), never for
+an ordinary release.
+
+1. Deploy the release as usual and check that it is live: `curl -s https://<platform host>/version`
+   names its sha tag. Setting the value before the new web build is served would send every phone
+   to the same old build (one reload a minute stops a loop, but the app would show the update screen).
+2. Take the release commit's time, UTC: `TZ=UTC git show -s --date=format-local:%Y%m%d%H%M%S --format=%cd <commit>`
+   (for example `20261025140000`). Any other format stops the API at start, and the old release keeps
+   serving.
+3. Set `BMS_MIN_CLIENT_BUILD=<that time>` in `/opt/bms/.env` and recreate the api the usual way
+   (`deploy.sh` with the same tag). Check:
+   `curl -s -o /dev/null -w '%{http_code}\n' -H 'Bms-Client-Build: sha-0000000; built=20000101000000' https://<tenant host>/api/v1/me`
+   answers `426`.
+4. Leave it set. A later release does not need it changed unless it breaks old screens again; then
+   raise it to that release's time. Clearing it (empty) serves every build again.
+5. **Before a rollback, clear it** (`docs/runbooks/rollback.md` step 5). A minimum later than the
+   running API's own build (`BMS_GIT_TIME` in its image) is ignored with a warning in the API log,
+   so a rollback with it left in place does not lock phones out, but the setting then means nothing
+   until it is cleared or the newer release is back.
+
+The guard compares the minimum with the **API's** build time, which is the web app's too only
+because `api` and `web` always deploy from the same tag (ADR-006: build once, one tag for every
+image). Never run an api and a web of different releases with `BMS_MIN_CLIENT_BUILD` set. An image
+built without `GIT_TIME` (a manual build) cannot guard a rollback, and the API says so with a warning
+in its log at start.
+
+Requests without a build time (curl, payment callbacks, apps from before #576) are never refused.
+Offline sales queued on a phone stay queued through the update and are sent by the new app.
+
 ## Manual deploy (only when the pipeline is unavailable)
 
 Run exactly what the pipeline runs, on the host: as `deploy` in production, as `bms` on staging.

@@ -94,6 +94,8 @@ services:
       BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
       BMS_SCHEDULER_ENABLED: ${BMS_SCHEDULER_ENABLED:-true}
       BMS_OPENAPI_ENABLED: ${BMS_OPENAPI_ENABLED:-false}
+      # Empty: every app build is served. Set for a release old screens cannot use (#576, docs/runbooks/deploy.md).
+      BMS_MIN_CLIENT_BUILD: ${BMS_MIN_CLIENT_BUILD:-}
       # Staff and platform sign-in keys (chapter 8 section 8.7, ADR-014); the API refuses to start
       # without them. Generate with: docker run --rm <api image> keys
       BMS_TOKEN_SIGNING_JWK: ${BMS_TOKEN_SIGNING_JWK:?}

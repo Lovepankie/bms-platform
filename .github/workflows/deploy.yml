@@ -58,6 +58,7 @@ jobs:
     outputs:
       sha_tag: ${{ steps.tags.outputs.sha_tag }}
       version: ${{ steps.tags.outputs.version }}
+      built: ${{ steps.tags.outputs.built }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -79,6 +80,8 @@ jobs:
         run: |
           commit="$(git rev-parse HEAD)"
           echo "sha_tag=sha-${commit:0:7}" >> "$GITHUB_OUTPUT"
+          # The commit time, UTC YYYYMMDDHHMMSS: the web app sends it, and the API compares it with BMS_MIN_CLIENT_BUILD (#576).
+          echo "built=$(TZ=UTC git show -s --date=format-local:%Y%m%d%H%M%S --format=%cd "$commit")" >> "$GITHUB_OUTPUT"
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then
             if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
               echo "::error::Release tags are vMAJOR.MINOR.PATCH; got $GITHUB_REF_NAME"
@@ -144,7 +147,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ needs.meta.outputs.sha_tag }}
-          build-args: GIT_SHA=${{ needs.meta.outputs.sha_tag }}
+          build-args: |
+            GIT_SHA=${{ needs.meta.outputs.sha_tag }}
+            GIT_TIME=${{ needs.meta.outputs.built }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

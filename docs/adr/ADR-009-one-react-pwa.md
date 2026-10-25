@@ -5,7 +5,9 @@
 Accepted (2026-09-29). Host names refined by ADR-018 (2026-09-29): tenant and platform hosts are
 single labels under the `rincoltech.com` zone, configured at run time, not `<slug>.<base domain>`
 and `app.<base domain>`. Amended by ADR-067 (2026-10-22): retail sales may be made offline, with the sale catalogue and an
-outbox of sales cached per business and per person; every other staff money action stays online only.
+outbox of sales cached per business and per person; every other staff money action stays online only. Amended by ADR-088
+(2026-10-25, issue #576): a running app finds out about a new build and loads it by itself at a safe moment, and the API can
+refuse an app older than `BMS_MIN_CLIENT_BUILD` with 426 `app_too_old`.
 
 ## Context
 

@@ -43,6 +43,20 @@ export function claimReload(now = Date.now(), storage: Storage | null = sessionS
 }
 
 /**
+ * Whether claimReload would succeed now, without claiming (#576): 'free' it would, 'wait' a reload ran less than a minute ago,
+ * 'never' the reloads cannot be counted here. A storage that forgets what it is given reads 'free' and fails the claim itself.
+ */
+export function reloadClaimState(now = Date.now(), storage: Storage | null = sessionStore()): 'free' | 'wait' | 'never' {
+  if (!storage) return 'never';
+  try {
+    const seen = storage.getItem(KEY);
+    return seen && now - Number(seen) < QUIET_MS ? 'wait' : 'free';
+  } catch {
+    return 'never';
+  }
+}
+
+/**
  * How long the new app may take to arrive before the page reloads anyway. An iPhone saving the ~230 files of a new
  * app over mobile data needs far more than the 3 s first chosen, and a reload stops the download, so every tap of
  * "Load the page again" started it over and the phone never got the new app (Hillary's iPhone, 24 Oct 2026).

@@ -138,6 +138,8 @@ services:
       BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
       BMS_SCHEDULER_ENABLED: ${BMS_SCHEDULER_ENABLED:-true}
       BMS_OPENAPI_ENABLED: ${BMS_OPENAPI_ENABLED:-true}
+      # Empty: every app build is served. Set for a release old screens cannot use (#576, docs/runbooks/deploy.md).
+      BMS_MIN_CLIENT_BUILD: ${BMS_MIN_CLIENT_BUILD:-}
       BMS_TOKEN_SIGNING_JWK: ${BMS_TOKEN_SIGNING_JWK:?}
       BMS_DATA_KEY: ${BMS_DATA_KEY:?}
       BMS_DATA_KEY_ID: ${BMS_DATA_KEY_ID:-k1}

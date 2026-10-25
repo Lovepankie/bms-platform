@@ -203,7 +203,10 @@ restarts in place instead. The proxy is recreated only when what it runs changed
 
 The API image carries two commands: the default starts the application; `migrate` applies the
 Flyway migrations as `bms_owner` and exits (ADR-006, ADR-010). The API image also carries the
-commit it was built from (`BMS_GIT_SHA`), shown by `/version` and `/actuator/info`.
+commit it was built from (`BMS_GIT_SHA`), shown by `/version` and `/actuator/info` and sent on every response as
+`Bms-Build`. The web image is built with the same sha tag and the commit time (`GIT_SHA`, `GIT_TIME`), so a running app
+knows its own build, loads a newer one by itself and can be refused with 426 `app_too_old` below `BMS_MIN_CLIENT_BUILD`
+(ADR-088).
 
 Actuator is locked down: all endpoints are disabled except `health` and `info`, which exist only
 on the management port 8081 (never published). The application port exposes `/healthz`

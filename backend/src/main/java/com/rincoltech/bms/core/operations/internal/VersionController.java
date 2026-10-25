@@ -29,6 +29,11 @@ class VersionController {
         this.gitSha = !imageGitSha.isBlank() ? imageGitSha : g != null ? g.getCommitId() : "unknown";
     }
 
+    /** The running build's sha, also sent on every response as {@code Bms-Build} ({@link ClientBuildFilter}). */
+    String gitSha() {
+        return gitSha;
+    }
+
     @GetMapping(path = "/version", produces = "application/json")
     @PublicEndpoint
     @Operation(summary = "Running version and git SHA", tags = "operations")

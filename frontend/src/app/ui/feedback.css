@@ -200,6 +200,41 @@
   }
 }
 
+/* The app is too old for the server (#576, ADR-088): a plain full screen over everything, so nothing more is typed or sent while the
+   new app loads. Words only, on the page colour; no stripe, no gradient, no picture. */
+.app-update-screen {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-toast) + 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4);
+  background: var(--color-bg);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.app-update-words {
+  max-width: 28rem;
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: 1.35;
+}
+
+.app-update-hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.app-update-screen .btn {
+  min-height: var(--tap);
+}
+
 /* The refresh button in the header (#430): icon only on a phone, the words and the last-loaded time from 720px up. */
 .refresh {
   display: flex;
