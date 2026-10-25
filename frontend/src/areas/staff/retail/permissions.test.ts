@@ -108,7 +108,7 @@ describe('the shop rows of the staff menu', () => {
       ['stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
       ['money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
       ['lending', []],
-      ['business', ['Reports', 'Business set-up']],
+      ['business', ['Reports', 'Controls', 'Business set-up']],
     ]);
   });
 

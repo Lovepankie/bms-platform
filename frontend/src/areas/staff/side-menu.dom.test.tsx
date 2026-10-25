@@ -148,7 +148,7 @@ const RETAIL_ONLY: [string, string[]][] = [
   ['Today', ['Sell', 'Orders']],
   ['Stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
   ['Money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
-  ['Business', ['Reports', 'Business set-up']],
+  ['Business', ['Reports', 'Controls', 'Business set-up']],
 ];
 
 describe('the groups and their order (issue #564)', () => {
@@ -182,6 +182,18 @@ describe('the groups and their order (issue #564)', () => {
     // No headed Shop or Lending section that folds, and no nested Retail group: the menu of #471 is gone.
     expect(within(sidebar()).queryByRole('button', { name: 'Shop' })).toBeNull();
     expect(within(sidebar()).queryByRole('link', { name: 'Retail' })).toBeNull();
+  });
+
+  it('lists Controls under Business for a holder of retail.controls.read, current on its page and Reports not (issue #357)', () => {
+    widthIs(false);
+    show(admin, { at: '/staff/retail/controls' });
+    const business = within(sidebar()).getByRole('group', { name: 'Business' });
+    expect(within(business).getByRole('link', { name: 'Controls' }).getAttribute('aria-current')).toBe('page');
+    expect(within(business).getByRole('link', { name: 'Reports' }).getAttribute('aria-current')).toBeNull();
+    cleanup();
+    const seller = { ...admin, permissions: (admin.permissions ?? []).filter((p) => p !== 'retail.controls.read') } as unknown as Me;
+    show(seller);
+    expect(within(sidebar()).queryByRole('link', { name: 'Controls' })).toBeNull();
   });
 
   it('names each group by its heading for a screen reader', () => {

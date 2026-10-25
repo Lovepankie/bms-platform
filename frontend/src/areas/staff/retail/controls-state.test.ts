@@ -108,8 +108,18 @@ describe('a group of a table', () => {
     const r = { approver_id: 'u9', approver_name: 'Test Admin One', approver_status: 'active' };
     expect(approverWords(r, 'voided_sales')).toBe('Cancelled by Test Admin One');
     expect(approverWords(r, 'returns')).toBe('Taken back by Test Admin One');
+    expect(approverWords(r, 'credit_writeoffs')).toBe('Written off by Test Admin One');
     expect(approverWords({ ...r, approver_status: 'deactivated' }, 'voided_sales')).toBe('Cancelled by Test Admin One (deactivated)');
     expect(approverWords({}, 'price_overrides')).toBe('');
+  });
+
+  it('counts credit written off as sales with a rate, after the returns, and keeps the Approver level', () => {
+    const money = (m: number) => `UGX ${m}`;
+    expect(isStockMetric('credit_writeoffs')).toBe(false);
+    expect(groupLine(user({ count: 2, sales_affected: 2, value_minor: 3000, rate_per_100: '40.0' }), 'credit_writeoffs', 'user', money)).toBe('2 sales, UGX 3000, 40.0 per 100 sales');
+    expect(chainFor('credit_writeoffs', ['branch', 'approver'])).toEqual(['branch', 'approver']);
+    const cards = orderedCards([{ metric: 'price_overrides' }, { metric: 'credit_writeoffs' }, { metric: 'returns' }]);
+    expect(cards.map((c) => c.metric)).toEqual(['returns', 'credit_writeoffs', 'price_overrides']);
   });
 
   it('passes what was opened to the level under it; a day narrows to that day', () => {

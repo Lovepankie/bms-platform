@@ -110,6 +110,8 @@ export function staffMenu(me: Me, { sells, counts = {} }: { sells: boolean; coun
         retail
           ? { to: '/staff/retail', label: 'Reports', icon: icons.reports, exact: true, tour: 'nav-retail', section: 'shop' }
           : lendingReports && { to: '/staff/reports', label: 'Reports', icon: icons.reports },
+        // The Controls page (issue #357, ADR-047, ADR-087): what deserves a second look, for holders of retail.controls.read.
+        shopRow(me, 'Controls', 'controls', ['controls']),
         showUsers(me) && { to: '/staff/users', label: 'Staff', icon: icons.user, tour: 'nav-users' },
         showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.receivePayments },
         showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },

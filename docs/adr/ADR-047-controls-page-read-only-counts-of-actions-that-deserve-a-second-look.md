@@ -3,7 +3,8 @@
 ## Status
 
 Proposed (2026-10-20, issue #357 group 1, task #358; not yet accepted by the product owner). Builds on ADR-003, ADR-017 and
-ADR-020. The migration is `V66`, by the merge order of the open pull requests (V64, V65, then this one).
+ADR-020. The migration is `V66`, by the merge order of the open pull requests (V64, V65, then this one). Amended by ADR-087
+(credit write-offs are counted, and the query plans are stated for a large tenant).
 
 ## Context
 
@@ -46,7 +47,7 @@ discipline, the delivery side for the dev team) are separate decisions and pull 
   against: they have counts and values, no rate, no share of sales and no pattern, and a correction has no approver. Asking for the
   Approver level of a metric that has none (changed prices, discounts, below cost, corrections) is a 422.
 - **Left out until their data is on `main`.** Credit write-offs (#349). It becomes one more metric in `ControlsRepository.events`
-  and one more card when its table lands; no other code changes.
+  and one more card when its table lands; no other code changes. Done by ADR-087 (`credit_writeoffs`, from `V64`).
 - **A rate per 100 sales, never only a count, and in the same units.** A rate is the **sales with such an event** over the
   sales entered by the same shop, person or day in the same days (any status, imported history left out), one decimal, half up.
   A sale with two changed lines counts once ("sales with a changed price per 100 sales"); the line count and the value of the

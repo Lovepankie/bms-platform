@@ -652,7 +652,7 @@ Notes:
   `retail.catalogue.manage`. All three of those permissions are administrator-only today. No maker-checker action is registered for the void or
   the correction (ADR-044 decision 5): a tenant approval threshold for them is a follow-up, so section 8.4 is unchanged. The audit entries
   `retail.purchase.voided`, `retail.stock.corrected` and `retail.product.updated` (with the old and new category) carry the reason.
-- `retail.controls.read` (issue #357, ADR-047, migration V66) opens the read-only Controls page: voids, returns, changed prices,
+- `retail.controls.read` (issue #357, ADR-047, migration V66) opens the read-only Controls page: voids, returns, credit write-offs (ADR-087, valued at the amount owed, never the loss), changed prices,
   discounts, sales below cost and sales cancelled at once, by shop, by named person, by day and by reason. It names staff and compares
   them by a rate (a cancelled sale is credited to the person whose sale it was, the approver is shown apart and never ranked), so it is the tenant administrator's alone by default and a business gives it to an owner's or an auditor's custom
   role. It is a read (not money-moving), scoped by branch like every retail permission: a holder sees only the shops of its scope,

@@ -62,7 +62,7 @@ export const SYNONYMS: Record<string, readonly string[]> = {
   '/staff/retail/stock-health': ['reorder', 'dead stock', 'slow', 'running out', 'low stock'],
   '/staff/retail/credit-control': ['credit', 'owe', 'late', 'overdue', 'debt', 'collect', 'bbanja'],
   '/staff/retail/evaluation': ['evaluation', 'worth', 'net worth'],
-  '/staff/retail/controls': ['controls', 'void', 'fraud', 'theft', 'cancelled', 'price changed'],
+  '/staff/retail/controls': ['controls', 'void', 'fraud', 'theft', 'cancelled', 'price changed', 'written off'],
   '/staff/retail/catalogue': ['catalogue', 'catalog', 'item', 'product', 'list'],
   '/staff/retail/banking': ['bank', 'deposit', 'banked'],
   '/staff/retail/savings': ['save', 'savings', 'set aside', 'tereka', 'okutereka'],

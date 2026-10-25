@@ -332,7 +332,7 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'stockHealth', path: '/staff/retail/stock-health', label: 'Stock health', hint: 'Days of cover, reorder, dead stock, lost or damaged stock' },
   { screen: 'creditControl', path: '/staff/retail/credit-control', label: 'Credit control', hint: 'Who owes, how late, payments received' },
   { screen: 'evaluation', path: '/staff/retail/evaluation', label: 'Business evaluation', hint: 'Profit to date and what the stock is worth' },
-  { screen: 'controls', path: '/staff/retail/controls', label: 'Controls', hint: 'Sales cancelled, goods taken back and prices changed, by shop and person' },
+  { screen: 'controls', path: '/staff/retail/controls', label: 'Controls', hint: 'Sales cancelled, goods taken back, credit written off and prices changed, by shop and person' },
   { screen: 'catalogue', path: '/staff/retail/catalogue', label: 'Catalogue', hint: 'Items, categories, units, suppliers and customers who owe' },
   { screen: 'banking', path: '/staff/retail/banking', label: 'Banking', hint: 'Cash banked, and what to expect' },
   { screen: 'savings', path: '/staff/retail/savings', label: 'Savings', hint: 'Set money aside for the day' },

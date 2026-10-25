@@ -10068,7 +10068,7 @@
             "type" : "integer"
           },
           "metric" : {
-            "description" : "voided_sales, quick_cancels, returns, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for",
+            "description" : "voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for",
             "type" : "string"
           },
           "previous_count" : {
@@ -10102,7 +10102,7 @@
             "type" : "boolean"
           },
           "value_minor" : {
-            "description" : "At sale prices; for discounts, the money given up against the price the system chose",
+            "description" : "At sale prices; for discounts, the money given up against the price the system chose; for credit_writeoffs, what the buyer still owed, never the loss",
             "format" : "int64",
             "type" : "integer"
           }
@@ -10297,7 +10297,7 @@
             "type" : "string"
           },
           "approver_name" : {
-            "description" : "Who cancelled the sale, took the goods back or voided the restock; absent for a price, a cost and a correction",
+            "description" : "Who cancelled the sale, took the goods back, wrote it off or voided the restock; absent for a price, a cost and a correction",
             "type" : "string"
           },
           "approver_status" : {

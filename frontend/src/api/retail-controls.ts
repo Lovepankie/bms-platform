@@ -17,7 +17,7 @@ export type ControlsRecord = S['RetailControlsRecord'];
 export type ControlsPatterns = S['RetailControlsPatterns'];
 export type ControlsPattern = S['RetailControlsPattern'];
 
-export type Metric = 'voided_sales' | 'quick_cancels' | 'returns' | 'price_overrides' | 'discounts' | 'below_cost' | 'restock_voids' | 'quantity_corrections';
+export type Metric = 'voided_sales' | 'quick_cancels' | 'returns' | 'credit_writeoffs' | 'price_overrides' | 'discounts' | 'below_cost' | 'restock_voids' | 'quantity_corrections';
 
 /** What the four routes share: the days, the shop (absent means every shop in scope) and the quick-cancel window. */
 export interface ControlsRange {

@@ -56,8 +56,12 @@ class ControlsService {
     static final int MIN_EVENTS = 3;
 
     static final int MIN_OUT_OF = 10;
-    /** The metrics somebody approved: a void, a return, a restock voided. A price, a cost and a correction have no approver. */
-    static final List<String> HAS_APPROVER = List.of("voided_sales", "quick_cancels", "returns", "restock_voids");
+    /**
+     * The metrics somebody approved: a void, a return, a write-off, a restock voided. A price, a cost and a correction have no
+     * approver.
+     */
+    static final List<String> HAS_APPROVER =
+            List.of("voided_sales", "quick_cancels", "returns", "credit_writeoffs", "restock_voids");
 
     /** The one label for a person the users table does not know, on the server and in the screen. */
     static final String UNKNOWN_PERSON = "Unknown person";
@@ -70,6 +74,7 @@ class ControlsService {
             "voided_sales",
             "quick_cancels",
             "returns",
+            "credit_writeoffs",
             "price_overrides",
             "discounts",
             "restock_voids",
@@ -157,10 +162,12 @@ class ControlsService {
         requireMetric(metric, principal, filter);
         List<String> chain = chain(groupBy);
         if (chain.contains("approver") && !HAS_APPROVER.contains(metric)) {
-            throw ApiException.validation(List.of(new FieldProblem(
-                    "group_by",
-                    "invalid",
-                    "approver is a level of voided_sales, quick_cancels, returns and restock_voids.")));
+            throw ApiException.validation(
+                    List.of(
+                            new FieldProblem(
+                                    "group_by",
+                                    "invalid",
+                                    "approver is a level of voided_sales, quick_cancels, returns, credit_writeoffs and restock_voids.")));
         }
         String at = level == null ? chain.getFirst() : level;
         if (!chain.contains(at)) {
@@ -443,8 +450,8 @@ class ControlsService {
             throw ApiException.validation(List.of(new FieldProblem(
                     "metric",
                     "invalid",
-                    "metric is voided_sales, quick_cancels, returns, price_overrides, discounts,"
-                            + " below_cost, restock_voids or quantity_corrections.")));
+                    "metric is voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides,"
+                            + " discounts, below_cost, restock_voids or quantity_corrections.")));
         }
         if (metric.equals("below_cost") && !AnalyticsSupport.profitVisible(principal, filter)) {
             throw new ApiException(

@@ -295,7 +295,7 @@ export function ControlsPage() {
         <OpenSale id={openSale} onClose={() => setOpenSale(null)} />
       ) : (
         <>
-          <Hint>What deserves a second look: sales cancelled, goods taken back and prices changed. Nothing here changes any record.</Hint>
+          <Hint>What deserves a second look: sales cancelled, goods taken back, credit written off and prices changed. Nothing here changes any record.</Hint>
           <div data-tour="controls-period">
             <PeriodPicker
               from={range.from}
@@ -319,7 +319,7 @@ export function ControlsPage() {
             {summary.data && <ControlsCards data={summary.data} metric={chosen} onPick={(m) => { setMetric(m); setOpen(new Map()); }} within={within} />}
           </section>
 
-          <Section title={words.title} hint={`${words.what(within)}${isLineMetric(chosen) ? '' : ' Person is whose sale it was; Approver is who cancelled it or took the goods back.'} Tap a line to open it.`}>
+          <Section title={words.title} hint={`${words.what(within)}${isLineMetric(chosen) ? '' : ' Person is whose sale it was; Approver is who cancelled it, took the goods back or wrote it off.'} Tap a line to open it.`}>
             <div data-tour="controls-tables">
               <GroupBy chain={chain} levels={CONTROLS_LEVELS} names={LEVEL_NAMES} tour="controls-group-by" onChange={(next) => setChain(next)} />
               {shown.length > 0 && ready && (

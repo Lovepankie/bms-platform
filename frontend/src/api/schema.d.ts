@@ -12003,7 +12003,7 @@ export interface components {
         RetailControlsCard: {
             /** Format: int64 */
             count?: number;
-            /** @description voided_sales, quick_cancels, returns, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for */
+            /** @description voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts, below_cost, restock_voids or quantity_corrections; the key to ask groups and records for */
             metric?: string;
             /** Format: int64 */
             previous_count?: number;
@@ -12027,7 +12027,7 @@ export interface components {
             tracked?: boolean;
             /**
              * Format: int64
-             * @description At sale prices; for discounts, the money given up against the price the system chose
+             * @description At sale prices; for discounts, the money given up against the price the system chose; for credit_writeoffs, what the buyer still owed, never the loss
              */
             value_minor?: number;
         };
@@ -12133,7 +12133,7 @@ export interface components {
         RetailControlsRecord: {
             /** Format: uuid */
             approver_id?: string;
-            /** @description Who cancelled the sale, took the goods back or voided the restock; absent for a price, a cost and a correction */
+            /** @description Who cancelled the sale, took the goods back, wrote it off or voided the restock; absent for a price, a cost and a correction */
             approver_name?: string;
             approver_status?: string;
             /** Format: date-time */

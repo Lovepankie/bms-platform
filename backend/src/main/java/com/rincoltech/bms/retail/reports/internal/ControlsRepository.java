@@ -15,8 +15,8 @@ import org.springframework.stereotype.Repository;
 /**
  * Read-only SQL of the Controls page (issue #357, group 1). Every number is a count or a sum over one "events"
  * statement per metric, all in the same column shape, so a card, a group and a record list always agree. The events
- * read the existing tables only: sales (voids), customer returns, and sale lines (changed prices, discounts, lines
- * below cost). Imported history ({@code historical}) is never an event and never a sale in a rate: it was not done
+ * read the existing tables only: sales (voids), customer returns, credit write-offs, sale lines (changed prices, discounts,
+ * lines below cost), voided restocks and stock corrections. Imported history ({@code historical}) is never an event and never a sale in a rate: it was not done
  * by staff in this system. Every statement is bounded by a date window, by the caller's branch scope and by a row
  * limit; row-level security supplies the tenant predicate (ADR-003). Nothing here returns a cost.
  */
@@ -27,6 +27,7 @@ class ControlsRepository {
             "voided_sales",
             "quick_cancels",
             "returns",
+            "credit_writeoffs",
             "price_overrides",
             "discounts",
             "below_cost",
@@ -49,6 +50,15 @@ class ControlsRepository {
 
     ControlsRepository(JdbcClient jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /**
+     * Turns JIT compilation off for the rest of the caller's transaction (ADR-087). The union of the events is a large plan,
+     * and on a tenant with a million sales PostgreSQL spent about five seconds compiling it for a year's cards that ran in a
+     * fraction of that. {@code SET LOCAL} ends with the read-only transaction of {@link ControlsService}.
+     */
+    private void withoutJit() {
+        jdbc.sql("SET LOCAL jit = off").update();
     }
 
     /** What every statement needs. {@code branchIds} null means every branch; an empty list is answered by the caller. */
@@ -118,6 +128,31 @@ class ControlsRepository {
                         + " FROM retail_sale_returns r JOIN retail_sales s ON s.tenant_id = r.tenant_id AND s.id ="
                         + " r.sale_id WHERE r.status = 'completed' AND r.returned_on >= :from AND r.returned_on <="
                         + " :to";
+            // A credit sale written off (ADR-087): on the business day it was written off, credited to the
+            // person whose sale it was, the approver who wrote it off. The value is what the buyer still owed
+            // at the sale's prices, never the loss, which can be a cost. A row is a write-off that was made:
+            // the write-off path inserts it only when it runs (after the second administrator's approval when
+            // one is needed) and the table is append-only (V64), so no row waits for approval. A write-off
+            // whose journal entry was reversed is left out, should a reversal ever be made (found by the
+            // unique (tenant_id, reverses_entry_id) of journal_entries; RetailControlsWriteOffClockIT).
+            case "credit_writeoffs" ->
+                "SELECT 'credit_writeoffs'"
+                        + COLUMNS.formatted(
+                                "w.sale_id",
+                                "s.sale_no",
+                                "CAST(NULL AS text)",
+                                "w.branch_id",
+                                "s.created_by",
+                                "w.written_off_on",
+                                "w.created_at",
+                                "w.reason",
+                                "w.unpaid_minor",
+                                "CAST(NULL AS text)",
+                                "w.created_by")
+                        + " FROM retail_sale_writeoffs w JOIN retail_sales s ON s.tenant_id = w.tenant_id AND s.id ="
+                        + " w.sale_id WHERE NOT s.historical AND w.written_off_on >= :from AND w.written_off_on <= :to"
+                        + " AND NOT EXISTS (SELECT 1 FROM journal_entries r WHERE r.tenant_id = w.tenant_id AND"
+                        + " r.reverses_entry_id = w.journal_entry_id)";
             case "price_overrides" ->
                 "SELECT 'price_overrides'" + lineColumns("l.price_override_reason", "l.line_total_minor") + lines
                         + " AND l.price_source = 'override'";
@@ -260,6 +295,7 @@ class ControlsRepository {
 
     /** Count and value of each metric asked for in the window (the cards). */
     List<Count> counts(List<String> metrics, Window w) {
+        withoutJit();
         Map<String, Object> params = params(w);
         String sql = "SELECT metric, count(*) FILTER (WHERE metric <> 'restock_voids')"
                 + " + count(DISTINCT sale_id) FILTER (WHERE metric = 'restock_voids') AS n,"
@@ -289,6 +325,7 @@ class ControlsRepository {
      * so the list is not a league table.
      */
     List<Cell> groups(String metric, String level, Window w, int offset, int limit) {
+        withoutJit();
         Map<String, Object> params = params(w);
         String key = switch (level) {
             case "branch" -> "coalesce(CAST(ev.branch_id AS text), '')";
@@ -381,6 +418,7 @@ class ControlsRepository {
             long valueMinor) {}
 
     List<Event> events(String metric, Window w, int offset, int limit) {
+        withoutJit();
         Map<String, Object> params = params(w);
         String sql = "SELECT ev.sale_id, ev.sale_no, ev.ref, ev.at, ev.branch_id, b.name AS branch_name, ev.user_id,"
                 + " u.full_name, u.status, ev.approver_id, ua.full_name AS approver_name, ua.status AS approver_status,"
@@ -429,6 +467,7 @@ class ControlsRepository {
      * cancelled or took it back.
      */
     List<PersonCell> personCells(List<String> metrics, Window w) {
+        withoutJit();
         Map<String, Object> params = params(w);
         StringBuilder sales =
                 new StringBuilder("SELECT s.branch_id, s.created_by AS user_id, count(*) AS n FROM retail_sales s"
@@ -483,6 +522,7 @@ class ControlsRepository {
      * so that the count and the lines sold are the same population.
      */
     List<ItemCell> itemCells(boolean cost, Window w) {
+        withoutJit();
         Map<String, Object> params = params(w);
         StringBuilder where =
                 new StringBuilder(" WHERE NOT s.historical AND s.sale_date >= :from AND s.sale_date <= :to");

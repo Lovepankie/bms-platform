@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * Bodies of the Controls page (issue #357, group 1; chapter 7 section 7.11.20): read-only counts of the actions that
- * deserve a second look (voids, returns, changed prices, sales below cost, sales cancelled at once), every one with
+ * deserve a second look (voids, returns, credit write-offs, changed prices, sales below cost, sales cancelled at once), every one with
  * its trend against the period before and a rate per 100 sales so people and shops can be compared. Values are sale
  * prices; nothing here is a cost, and the one card that is judged against cost is left out unless the caller may read
  * profit in every branch covered.
@@ -25,8 +25,9 @@ final class ControlsApi {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record Card(
             @Schema(
-                    description = "voided_sales, quick_cancels, returns, price_overrides, discounts, below_cost,"
-                            + " restock_voids or quantity_corrections; the key to ask groups and records for")
+                    description =
+                            "voided_sales, quick_cancels, returns, credit_writeoffs, price_overrides, discounts,"
+                                    + " below_cost, restock_voids or quantity_corrections; the key to ask groups and records for")
             String metric,
 
             @Schema(
@@ -42,7 +43,8 @@ final class ControlsApi {
 
             @Schema(
                     description =
-                            "At sale prices; for discounts, the money given up against the price the system chose")
+                            "At sale prices; for discounts, the money given up against the price the system chose;"
+                                    + " for credit_writeoffs, what the buyer still owed, never the loss")
             long valueMinor,
 
             long previousCount,
@@ -175,8 +177,8 @@ final class ControlsApi {
 
             @Schema(
                     description =
-                            "Who cancelled the sale, took the goods back or voided the restock; absent for a price, a"
-                                    + " cost and a correction")
+                            "Who cancelled the sale, took the goods back, wrote it off or voided the restock; absent for"
+                                    + " a price, a cost and a correction")
             String approverName,
 
             String approverStatus,

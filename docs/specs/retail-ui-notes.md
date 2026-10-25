@@ -1126,8 +1126,8 @@ No migration beyond the permission; no write anywhere on the page.
 - **Days.** Today, This week (Monday to today), This month (the 1st to today) or Choose days (two dates, at most 366 days). Every count is
   set against the days just before ("the day before", "the 7 days before"). "Cancelled at once means within" is a choice of 2, 5, 10, 15, 30
   or 60 minutes.
-- **Cards.** One tappable card per kind of thing, in a fixed order: Sales cancelled, Cancelled at once, Goods taken back, Prices changed,
-  Discounts given, and Sold below cost (only when the server sent it, that is for someone who may read profit in every shop shown; a line
+- **Cards.** One tappable card per kind of thing, in a fixed order: Sales cancelled, Cancelled at once, Goods taken back, Credit written off,
+  Prices changed, Discounts given, Purchases cancelled, Quantities corrected, and Sold below cost (only when the server sent it, that is for someone who may read profit in every shop shown; a line
   of words says so otherwise). Each shows the count (for a price, a discount or a cost it says "3 lines in 2 sales, lines worth ..."), what it is worth at sale prices, the rate ("2.5 per 100 sales", always sales with such an event per 100 sales entered, so the units match), the trend ("Up 3, from 5
   in the 7 days before"; "None, and none in ...") and its share of the value of sales. A card whose capability is off and never counted says
   "Not switched on for this business, so nothing is recorded" instead of a calm zero. A card is a button: the chosen one sets the table below.
@@ -1160,8 +1160,12 @@ No migration beyond the permission; no write anywhere on the page.
   cards, Group by, the tables and the patterns.
 - **Stock cards.** Restocks cancelled and Quantities corrected (#356) are cards too: a count and a value, no rate (not about sales), no Open sale
   on their records, and no Approver level for a correction.
-- **Not yet.** Credit write-offs (#349) have no card until that table is on `main`; groups
-  2 to 6 of #357 are separate pages.
+- **Credit written off (issue #357, ADR-087).** A card after Goods taken back: the credit sales written off in the days, worth what the
+  buyers still owed (never the loss, which can be a cost), with the rate per 100 sales and the share of sales like the other sale cards.
+  Person is whose sale it was; the record reads "Written off by ..." and opens the sale. Not in the repeat patterns.
+- **Menu.** Controls is a row of the Business group of the grouped menu (#564, ADR-086), after Reports, for a session that may
+  open the page; on the page, Controls is the current row and Reports is not.
+- **Not yet.** Groups 2 to 6 of #357 are separate pages.
 
 ## Sizes and colours (issue #384, ADR-051, FR-RET-51, FR-RET-52)
 
