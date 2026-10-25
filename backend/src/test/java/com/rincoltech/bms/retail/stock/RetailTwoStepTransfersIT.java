@@ -602,12 +602,22 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         UUID id = dispatched("4");
 
         ResponseEntity<JsonNode> flag = putCapabilities(Map.of("transfer_receipt", false));
-        ResponseEntity<JsonNode> profile = putCapabilities(Map.of("profile", "shop"));
+        ResponseEntity<JsonNode> profile = putCapabilities(Map.of("profile", "shops"));
+        // Wholesale has no two-step move, so choosing it would switch the capability off too (issue #424).
+        ResponseEntity<JsonNode> wholesale = putCapabilities(Map.of("profile", "wholesale"));
 
         assertThat(flag.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(code(flag)).isEqualTo("transfers_in_transit");
         assertThat(profile.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(code(profile)).isEqualTo("transfers_in_transit");
+        assertThat(wholesale.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(wholesale)).isEqualTo("transfers_in_transit");
+        // A kind that keeps the two-step move, or the flag sent with the kind, is allowed while stock is on its way.
+        assertThat(putCapabilities(Map.of("profile", "wholesale", "transfer_receipt", true))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(putCapabilities(Map.of("profile", "stores_and_shops")).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
         assertThat(api.get("/settings/capabilities", SETTINGS)
                         .getBody()
                         .get("transfer_receipt")

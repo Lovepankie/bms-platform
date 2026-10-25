@@ -69,17 +69,23 @@ The group also holds two settings that are not capabilities and are never listed
 health (issue #414), `slow_mover_months` (whole, 1 to 24, default 4) and `slow_mover_min_sold` (whole, 0 to 1,000,000, default
 0 meaning off). A profile never changes them.
 
-### 1.2 The tenant profile switch
+### 1.2 The tenant profile switch: the kind of business
 
-`retail.profile` in the same settings group is `shop` (default) or `trade`. A profile is a
-**preset, not a mode**: choosing it writes a bundle of the capability flags, after which an
-administrator can still toggle each flag. The module reads the flags, never the profile, so there
-is no code path "if trade".
+`retail.profile` in the same settings group is the kind of business (issue #424, ADR-092): `shops` (default), `stores_and_shops`,
+`wholesale` or `wholesale_and_shops`. Before issue #424 it was `shop` or `trade`; migration `V103` renamed the stored values
+without changing a flag, judged from the flags (`wholesale_and_shops` with one of the five wholesale tools on; otherwise `trade`
+is `stores_and_shops`, and `shop` is `stores_and_shops` with `transfer_receipt` on, else `shops`). A kind is a **preset, not a mode**: choosing it sets the six flags it governs, after which an administrator
+can still toggle each flag. The module reads the flags, never the profile, so there is no code path "if wholesale".
 
-| Profile | Capabilities switched on by the preset |
-|---|---|
-| `shop` | none (all off) |
-| `trade` | `branch_roles`, `units`, `price_lists`, `customer_accounts`, `returns`, `transfer_receipt`; `documents` and `purchasing` stay off until chosen, because the product owner's rule is that documents are never assumed |
+| Kind | Screen name | Governed flags switched on (the others of the six off) |
+|---|---|---|
+| `shops` | Shops only | none |
+| `stores_and_shops` | Stores and shops | `transfer_receipt` |
+| `wholesale` | Wholesale | `units`, `price_lists`, `customer_accounts`, `documents`, `purchasing` |
+| `wholesale_and_shops` | Wholesale and shops | the five of `wholesale` and `transfer_receipt` |
+
+`branch_roles` and `returns` belong to no kind: a choice leaves them as they are. Whether a branch is a store or a shop is set per
+branch under Branches (ADR-048), whatever the kind; the screen says so. A flag sent in the same change wins over the preset.
 
 Changing the profile or a flag needs `core.settings.manage` (administrators only), is audited
 (`retail.capabilities.changed`, old and new values) and takes effect on the next request.
@@ -906,7 +912,7 @@ Answers written after one pass looking for what breaks.
 | A new column or table slows or changes the sales path | The sale path reads capability flags once per request; with all off it takes the pre-existing code path (no list lookup, no unit conversion, no role lookup). New columns on `retail_sale_lines` are nullable and add no index; the covering index V26 is untouched, so the daily profit query plan is unchanged. The performance benchmark queries k01 to k15 run in the slice that adds columns |
 | A menu or tour shows something new | Nothing renders unless its capability is on; the component test "all off equals today" fails otherwise |
 | A new permission appears and the sales role loses something | A permission that guards existing behaviour (`price.override`) is seeded to every holder of `retail.sale.create`; `pricelist.use` is not, because it names a list other than the customer's own, which no seller could do before. They are only consulted when the capability is on |
-| The profile preset surprises an administrator | `shop` is the default and switches nothing on; `trade` is an explicit choice that lists the flags it will set and asks for confirmation; flags remain individually editable |
+| The profile preset surprises an administrator | `shops` is the default and switches nothing on; every other kind is an explicit choice whose review lists the flags it will set and asks for confirmation; flags remain individually editable |
 | Settings read fails or a flag is absent | Absent reads as off. A failure to read settings fails the request closed, as every settings read does |
 | A plain shop is accidentally given `branch_roles` and a branch is a store | Role changes are an explicit administrator action; the default is `both`; a store can never be created by default |
 

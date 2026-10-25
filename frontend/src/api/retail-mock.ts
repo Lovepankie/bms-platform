@@ -68,6 +68,8 @@ export function mockMe(role: string | undefined): Me & { modules: string[] } {
     mfa_enabled: false,
     unused_recovery_codes: 8,
     modules: ['retail'],
+    // VITE_RETAIL_MOCK_CAPS lists switched-on capabilities for a dev run, so the menus and tiles of a wholesaler can be seen.
+    ...(import.meta.env.VITE_RETAIL_MOCK_CAPS ? { module_capabilities: { retail: import.meta.env.VITE_RETAIL_MOCK_CAPS.split(',') } } : {}),
     // The role the staff menu shows under the person's name (issue #564).
     roles: [{ role_key: role === 'sales' ? 'sales' : role === 'cashier' ? 'cashier' : 'tenant_admin', role_name: role === 'sales' ? 'Seller' : role === 'cashier' ? 'Cashier' : 'Administrator' }],
   };
@@ -162,7 +164,14 @@ const editDistance = (a: string, b: string): number => {
 };
 
 const MOCK_FLAGS = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'documents', 'purchasing', 'transfer_receipt', 'returns'] as const;
-const MOCK_TRADE_PRESET: readonly string[] = ['branch_roles', 'units', 'price_lists', 'customer_accounts', 'returns', 'transfer_receipt'];
+/** The switches each kind of business turns on (BusinessTypes.PRESETS, issue #424); MOCK_GOVERNED are the ones a kind sets. */
+const MOCK_GOVERNED: readonly string[] = ['units', 'price_lists', 'customer_accounts', 'documents', 'purchasing', 'transfer_receipt'];
+const MOCK_PRESETS: Record<string, readonly string[]> = {
+  shops: [],
+  stores_and_shops: ['transfer_receipt'],
+  wholesale: ['units', 'price_lists', 'customer_accounts', 'documents', 'purchasing'],
+  wholesale_and_shops: MOCK_GOVERNED,
+};
 
 /** Issue #493: PREFIX-0001, at least four digits, as bms_next_item_code makes it (V96). */
 export function itemCode(prefix: string, n: number): string {
@@ -218,7 +227,7 @@ export function createMockRetail(): RetailApi {
   // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off.
   const roles = new Map<string, 'store' | 'shop' | 'both'>();
   const roleOf = (branch: string): 'store' | 'shop' | 'both' => roles.get(branch) ?? 'both';
-  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shop', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 1 };
+  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shops', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 1 };
   const twoStep = () => transferReceipt || caps.value['transfer_receipt'] === true;
   const read = (): CapabilitiesRead => ({ capabilities: { ...caps.value, ...Object.fromEntries(MOCK_FLAGS.map((k) => [k, caps.value[k] === true])) }, version: caps.version });
   const balances = new Map<string, number>();
@@ -1248,7 +1257,7 @@ export function createMockRetail(): RetailApi {
       const next: Record<string, unknown> = { ...caps.value };
       if (body.profile) {
         next.profile = body.profile;
-        for (const key of MOCK_FLAGS) next[key] = body.profile === 'shop' ? false : MOCK_TRADE_PRESET.includes(key) ? true : next[key];
+        for (const key of MOCK_GOVERNED) next[key] = (MOCK_PRESETS[body.profile] ?? []).includes(key);
       }
       for (const key of MOCK_FLAGS) if (typeof body[key] === 'boolean') next[key] = body[key];
       // The slow mover rules of Stock health (issue #414), whole numbers in the server's ranges.

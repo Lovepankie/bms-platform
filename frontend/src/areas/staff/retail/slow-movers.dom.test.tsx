@@ -119,10 +119,10 @@ describe('slow movers section', () => {
 });
 
 describe('slow mover settings', () => {
-  const read = { capabilities: { profile: 'shop', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 7 } as never;
+  const read = { capabilities: { profile: 'shops', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 7 } as never;
 
   it('saves both rules with the settings version', async () => {
-    change.mockResolvedValue({ capabilities: { profile: 'shop', slow_mover_months: 6, slow_mover_min_sold: 2 }, version: 8 });
+    change.mockResolvedValue({ capabilities: { profile: 'shops', slow_mover_months: 6, slow_mover_min_sold: 2 }, version: 8 });
     show(<SlowMoverSetting read={read} />);
     const save = screen.getByRole('button', { name: 'Save' });
     expect((save as HTMLButtonElement).disabled).toBe(true);

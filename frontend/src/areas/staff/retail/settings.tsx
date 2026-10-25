@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { retail, type CapabilitiesRead } from '../../../api/retail';
 import { SkeletonList } from '../../../components/states';
 import {
-  CAPABILITIES, changeOf, chooseProfile, draftOf, isChange, requestOf, sentencesOf, toggle,
+  CAPABILITIES, PROFILE_NAMES, changeOf, chooseProfile, draftOf, isChange, requestOf, sentencesOf, toggle,
   type CapabilityKey, type Change, type Draft, type Profile,
 } from './capabilities-state';
 import { CreditRecognitionSetting } from './credit-recognition';
@@ -14,15 +14,20 @@ import { Gate, Problem, Success, changeFailureText, useToast } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Hint } from '../../../app/ui/Hint';
 
-// Retail settings (ADR-033, trade slice 2, issue #192): the administrator chooses the shop or the
-// trade profile and switches each feature on or off. The profile is a preset of the switches, not a
-// mode: after choosing it every switch can still be changed. A change is read back to the administrator
-// before it is saved, and the server audits the old and new values. /me is read again afterwards, so the
-// menus follow at once. Switching a feature off keeps what was recorded with it.
+// Retail settings (ADR-033, trade slice 2, issue #192; issue #424, ADR-092): the administrator says what kind of business this
+// is, named by what the owner has, and switches each feature on or off. The kind is a preset of the switches, not a mode: after
+// choosing it every switch can still be changed. A change is read back to the administrator before it is saved, and the server
+// audits the old and new values. /me is read again afterwards, so the menus follow at once. Switching a feature off keeps what
+// was recorded with it.
 
-const PROFILES: { value: Profile; label: string; hint: string }[] = [
-  { value: 'shop', label: 'Shop', hint: 'One or more shops that sell to customers over the counter. Nothing extra is switched on.' },
-  { value: 'trade', label: 'Trade', hint: 'Stores that feed a shop, packs, price lists, customer accounts, returns and received transfers.' },
+const PROFILES: { value: Profile; hint: string }[] = [
+  { value: 'shops', hint: 'One or more shops that sell over the counter.' },
+  { value: 'stores_and_shops', hint: 'Stores that receive stock and send it to your shops. Any number of each.' },
+  {
+    value: 'wholesale',
+    hint: 'You sell in bulk to other shops: price lists and customer prices, quotations, invoices and delivery notes, credit to shops, packs and purchase orders.',
+  },
+  { value: 'wholesale_and_shops', hint: 'You sell in bulk to other shops, and over the counter in your own shops.' },
 ];
 
 export function ProfileChoice({ draft, disabled, onChoose }: { draft: Draft; disabled?: boolean; onChoose: (profile: Profile) => void }) {
@@ -30,15 +35,18 @@ export function ProfileChoice({ draft, disabled, onChoose }: { draft: Draft; dis
     <fieldset data-tour="retail-profile">
       <legend>What kind of business is this?</legend>
       {PROFILES.map((p) => (
-        <label key={p.value}>
-          <input type="radio" name="retail-profile" checked={draft.profile === p.value} disabled={disabled} onChange={() => onChoose(p.value)} />
+        <label key={p.value} className="rt-choice">
+          <input type="radio" name="retail-profile" value={p.value} checked={draft.profile === p.value} disabled={disabled} onChange={() => onChoose(p.value)} />
           <span>
-            <strong>{p.label}</strong>
+            <strong>{PROFILE_NAMES[p.value]}</strong>
             <span className="hint"> {p.hint}</span>
           </span>
         </label>
       ))}
-      <Hint>Choosing one switches on its features below. You can still change each one.</Hint>
+      <p data-tour="retail-profile-branches">
+        Each branch is set as a store or a shop under <Link to="/staff/setup/branches">Branches</Link>. A store keeps stock and does not sell.
+      </p>
+      <Hint>Choosing one switches its features below on or off. You can still change each one.</Hint>
     </fieldset>
   );
 }
@@ -153,7 +161,7 @@ export function RetailSettings() {
     <Gate screen="settings" title="Retail settings">
       {toast}
       {saved && <Success>Saved. The menus now follow your choice.</Success>}
-      <p>Choose what kind of business this is, and which features to use. Every feature starts off.</p>
+      <p>Say what kind of business this is, and which features to use. Every feature starts off.</p>
       {read.isPending && <SkeletonList label="Loading settings" />}
       <Problem error={read.error} />
       {read.data && <ReturnsThresholdWarning capabilities={read.data.capabilities} />}

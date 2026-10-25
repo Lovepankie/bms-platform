@@ -21,7 +21,8 @@
             "core.jobs",
             "core.notifications",
             "core.operations",
-            "retail.catalogue"
+            "retail.catalogue",
+            "retail.manifest"
         })
 package com.rincoltech.bms.retail.stock;
 

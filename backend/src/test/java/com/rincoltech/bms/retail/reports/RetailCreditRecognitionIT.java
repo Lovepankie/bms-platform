@@ -295,7 +295,7 @@ class RetailCreditRecognitionIT extends IntegrationTest {
                         .get("credit_sale_recognition")
                         .asString())
                 .isEqualTo("on_payment");
-        capability(Map.of("profile", "shop"));
+        capability(Map.of("profile", "shops"));
         assertThat(api.get("/settings/capabilities", SETTINGS)
                         .getBody()
                         .get("credit_sale_recognition")

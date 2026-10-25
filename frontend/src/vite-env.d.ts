@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_RETAIL_MOCK?: string;
   // With the mock on: "sales" or "admin" (default) decides which permissions the fake session holds.
   readonly VITE_RETAIL_MOCK_ROLE?: string;
+  // With the mock on: the switched-on retail capabilities, comma separated, so a wholesaler's menu can be seen (issue #424).
+  readonly VITE_RETAIL_MOCK_CAPS?: string;
   // Set by the web image's build (#576): the build's sha tag, as the API's /version says, and its commit time (UTC YYYYMMDDHHMMSS).
   readonly VITE_BMS_BUILD?: string;
   readonly VITE_BMS_BUILT?: string;

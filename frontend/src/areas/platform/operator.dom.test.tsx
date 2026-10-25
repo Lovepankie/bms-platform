@@ -129,6 +129,35 @@ describe('Businesses', () => {
   });
 });
 
+describe('the kind of business (issue #424)', () => {
+  it('shows the kind the administrator chose in the list and on the Business page', async () => {
+    const wholesaler = { ...DETAIL.tenant, business_type: 'wholesale_and_shops' };
+    api.listBusinesses.mockResolvedValue([wholesaler]);
+    api.businessOverview.mockResolvedValue({ ...DETAIL, tenant: wholesaler });
+    shell(<Businesses />);
+    expect(await screen.findByText('Kind of business: Wholesale and shops')).toBeTruthy();
+    cleanup();
+    shell(<BusinessScreen tenantId="t-1" />);
+    expect((await screen.findByTestId('business-type')).textContent).toBe('Wholesale and shops');
+  });
+
+  it('shows a value it does not know as it is, never a guessed Shops only', async () => {
+    api.businessOverview.mockResolvedValue({ ...DETAIL, tenant: { ...DETAIL.tenant, business_type: 'test_kind' } });
+    shell(<BusinessScreen tenantId="t-1" />);
+    expect((await screen.findByTestId('business-type')).textContent).toBe('test_kind');
+  });
+
+  it('says Shops only, not chosen yet, for a shop business that never chose, and nothing for a lending business', async () => {
+    shell(<BusinessScreen tenantId="t-1" />);
+    expect((await screen.findByTestId('business-type')).textContent).toBe('Shops only (not chosen yet)');
+    cleanup();
+    api.businessOverview.mockResolvedValue({ ...DETAIL, tenant: { ...DETAIL.tenant, modules: ['lending'] } });
+    shell(<BusinessScreen tenantId="t-1" />);
+    expect(await screen.findByText('Test Shop One', { selector: 'h1' })).toBeTruthy();
+    expect(screen.queryByTestId('business-type')).toBeNull();
+  });
+});
+
 describe('the Business page', () => {
   it('asks once, needs a reason, and suspends once', async () => {
     api.suspendBusiness.mockResolvedValue({ ...DETAIL.tenant, subscription_status: 'suspended', status: 'suspended' });

@@ -358,7 +358,17 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'landedCosts', path: '/staff/retail/landed-costs', label: 'Landed costs', hint: 'Freight, duty and clearing, added to what the goods cost' },
   { screen: 'supplierCredits', path: '/staff/retail/supplier-credits', label: 'Supplier credit notes', hint: 'Goods sent back to a supplier, or money taken off an invoice' },
   { screen: 'branchRoles', path: '/staff/retail/branch-roles', label: 'Branch roles', hint: 'Which branches are stores and which are shops' },
-  { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'Shop or trade, and the features you use' },
+  { screen: 'settings', path: '/staff/retail/settings', label: 'Retail settings', hint: 'What kind of business, and the features you use' },
+];
+
+/**
+ * The wholesale tools' pages (issue #424, ADR-092): price lists and customer prices, credit to shops, quotations, invoices and
+ * delivery notes, and purchasing. The Retail page lists them under their own Wholesale heading, as the menu does; each is offered
+ * only while its switch is on (SCREEN_CAPABILITY), so a business of shops only has none.
+ */
+export const WHOLESALE_SCREENS: readonly RetailScreen[] = [
+  'priceLists', 'customerGroups', 'customerAccounts', 'customerAgeing', 'quotations', 'documents',
+  'purchaseOrders', 'goodsReceived', 'supplierBills', 'landedCosts', 'supplierCredits',
 ];
 
 /** The screens under Catalogue, in the order the Catalogue home lists them. */

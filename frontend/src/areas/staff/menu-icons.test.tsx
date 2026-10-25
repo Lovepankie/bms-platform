@@ -13,7 +13,7 @@ import { StaffContext } from './context';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { CatalogueLinks } from './retail/catalogue';
 import { RetailHome } from './retail/home';
-import { CATALOGUE_LINKS, CATALOGUE_SCREENS, SCREENS, SCREEN_CAPABILITY, needsOf } from './retail/permissions';
+import { CATALOGUE_LINKS, CATALOGUE_SCREENS, SCREENS, SCREEN_CAPABILITY, WHOLESALE_SCREENS, needsOf } from './retail/permissions';
 
 // Every item of a menu has its own icon (issue #483): two items of one menu never draw the same picture, compared by the drawing
 // itself, so two names for one drawing are caught too. The same item keeps its icon wherever it shows (a shop row of the menu and
@@ -98,7 +98,9 @@ describe('menu icons (issue #483)', () => {
 
   it('gives every retail tile its own icon, as the Retail page draws them', () => {
     const tiles = tileIcons(wholeShop(), <RetailHome />);
-    expect(tiles.map((t) => t.label)).toEqual(SCREENS.map((s) => s.label));
+    // The wholesale tools' tiles come last, under their own Wholesale heading (issue #424).
+    const wholesale = (s: (typeof SCREENS)[number]) => WHOLESALE_SCREENS.includes(s.screen);
+    expect(tiles.map((t) => t.label)).toEqual([...SCREENS.filter((s) => !wholesale(s)), ...SCREENS.filter(wholesale)].map((s) => s.label));
     expect(clashes(tiles)).toEqual([]);
   });
 

@@ -25,43 +25,86 @@ class RetailCapabilityGroupTest {
     final RetailCapabilityGroup group = groupOn("2026-10-20");
 
     @Test
-    void absentKeysAreOffAndTheProfileIsShop() {
+    void absentKeysAreOffAndTheKindIsShopsOnly() {
         Map<String, Object> g = group.normalise(Map.of(), Map.of());
 
-        assertThat(g.get("profile")).isEqualTo("shop");
+        assertThat(g.get("profile")).isEqualTo("shops");
         assertThat(RetailCapabilityGroup.CAPABILITIES)
                 .allSatisfy(k -> assertThat(g.get(k)).isEqualTo(false));
         assertThat(group.enabledCapabilities(g)).isEmpty();
     }
 
     @Test
-    void theTradeProfileSwitchesOnItsBundleAndLeavesDocumentsAndPurchasingOff() {
-        Map<String, Object> g = group.normalise(Map.of(), Map.of("profile", "trade"));
+    void eachKindSetsTheSwitchesItGovernsAndLeavesBranchRolesAndReturnsAsTheyAre() {
+        Map<String, Object> mine = group.normalise(Map.of(), Map.of("branch_roles", true, "returns", true));
 
-        assertThat(group.enabledCapabilities(g))
+        assertThat(group.enabledCapabilities(group.normalise(mine, Map.of("profile", "shops"))))
+                .containsExactly("branch_roles", "returns");
+        assertThat(group.enabledCapabilities(group.normalise(mine, Map.of("profile", "stores_and_shops"))))
+                .containsExactly("branch_roles", "returns", "transfer_receipt");
+        assertThat(group.enabledCapabilities(group.normalise(mine, Map.of("profile", "wholesale"))))
                 .containsExactly(
-                        "branch_roles", "customer_accounts", "price_lists", "returns", "transfer_receipt", "units");
-        assertThat(g.get("documents")).isEqualTo(false);
-        assertThat(g.get("purchasing")).isEqualTo(false);
+                        "branch_roles",
+                        "customer_accounts",
+                        "documents",
+                        "price_lists",
+                        "purchasing",
+                        "returns",
+                        "units");
+        assertThat(group.enabledCapabilities(group.normalise(mine, Map.of("profile", "wholesale_and_shops"))))
+                .containsExactly(
+                        "branch_roles",
+                        "customer_accounts",
+                        "documents",
+                        "price_lists",
+                        "purchasing",
+                        "returns",
+                        "transfer_receipt",
+                        "units");
     }
 
     @Test
     void aFlagInTheSameChangeWinsOverThePreset() {
-        Map<String, Object> g = group.normalise(Map.of(), Map.of("profile", "trade", "returns", false));
+        Map<String, Object> g = group.normalise(Map.of(), Map.of("profile", "wholesale", "purchasing", false));
 
-        assertThat(g.get("returns")).isEqualTo(false);
-        assertThat(g.get("branch_roles")).isEqualTo(true);
+        assertThat(g.get("purchasing")).isEqualTo(false);
+        assertThat(g.get("price_lists")).isEqualTo(true);
+        assertThat(g.get("profile")).isEqualTo("wholesale");
     }
 
     @Test
-    void aFlagChangeKeepsTheOthersAndTheShopProfileSwitchesEverythingOff() {
-        Map<String, Object> on = group.normalise(Map.of(), Map.of("profile", "trade"));
-        Map<String, Object> documents = group.normalise(on, Map.of("documents", true));
+    void aFlagChangeKeepsTheKindAndTheOtherSwitchesAndShopsOnlySwitchesTheWholesaleToolsOff() {
+        Map<String, Object> on = group.normalise(Map.of(), Map.of("profile", "wholesale_and_shops"));
+        Map<String, Object> roles = group.normalise(on, Map.of("branch_roles", true, "documents", false));
 
-        assertThat(documents.get("documents")).isEqualTo(true);
-        assertThat(documents.get("branch_roles")).isEqualTo(true);
-        assertThat(group.enabledCapabilities(group.normalise(documents, Map.of("profile", "shop"))))
-                .isEmpty();
+        assertThat(roles.get("profile")).isEqualTo("wholesale_and_shops");
+        assertThat(roles.get("documents")).isEqualTo(false);
+        assertThat(roles.get("units")).isEqualTo(true);
+        assertThat(group.enabledCapabilities(group.normalise(roles, Map.of("profile", "shops"))))
+                .containsExactly("branch_roles");
+    }
+
+    @Test
+    void aShopOrTradeProfileWrittenBeforeTheKindsReadsAsTheKindItBecameWithEverySwitchAsItWas() {
+        Map<String, Object> shop = group.normalise(Map.of("profile", "shop", "returns", true), Map.of());
+        assertThat(shop.get("profile")).isEqualTo("shops");
+        assertThat(group.enabledCapabilities(shop)).containsExactly("returns");
+        assertThat(group.normalise(Map.of("profile", "shop", "units", true), Map.of())
+                        .get("profile"))
+                .isEqualTo("wholesale_and_shops");
+        assertThat(group.normalise(Map.of("profile", "shop", "transfer_receipt", true), Map.of())
+                        .get("profile"))
+                .isEqualTo("stores_and_shops");
+
+        Map<String, Object> storesOnly = Map.of("profile", "trade", "branch_roles", true, "transfer_receipt", true);
+        assertThat(group.normalise(storesOnly, Map.of()).get("profile")).isEqualTo("stores_and_shops");
+        assertThat(group.enabledCapabilities(group.normalise(storesOnly, Map.of())))
+                .containsExactly("branch_roles", "transfer_receipt");
+
+        Map<String, Object> trade = Map.of("profile", "trade", "branch_roles", true, "units", true, "returns", true);
+        assertThat(group.normalise(trade, Map.of()).get("profile")).isEqualTo("wholesale_and_shops");
+        assertThat(group.enabledCapabilities(group.normalise(trade, Map.of())))
+                .containsExactly("branch_roles", "returns", "units");
     }
 
     @Test
@@ -93,7 +136,10 @@ class RetailCapabilityGroupTest {
                 .isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> group.normalise(Map.of(), Map.of("units", "yes")))
                 .isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> group.normalise(Map.of(), Map.of("profile", "wholesale")))
+        // The names from before the kinds are refused on a write: a stale screen reads the page again.
+        assertThatThrownBy(() -> group.normalise(Map.of(), Map.of("profile", "trade")))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> group.normalise(Map.of(), Map.of("profile", "shop")))
                 .isInstanceOf(ApiException.class);
     }
 
@@ -114,9 +160,9 @@ class RetailCapabilityGroupTest {
         Map<String, Object> on = group.normalise(Map.of(), Map.of("credit_sale_recognition", "on_payment"));
 
         assertThat(on.get("credit_sale_recognition")).isEqualTo("on_payment");
-        assertThat(group.normalise(on, Map.of("profile", "trade")).get("credit_sale_recognition"))
+        assertThat(group.normalise(on, Map.of("profile", "wholesale")).get("credit_sale_recognition"))
                 .isEqualTo("on_payment");
-        assertThat(group.normalise(on, Map.of("profile", "shop")).get("credit_sale_recognition"))
+        assertThat(group.normalise(on, Map.of("profile", "shops")).get("credit_sale_recognition"))
                 .isEqualTo("on_payment");
         assertThat(group.normalise(on, Map.of("returns", true)).get("credit_sale_recognition"))
                 .isEqualTo("on_payment");
@@ -137,7 +183,7 @@ class RetailCapabilityGroupTest {
         assertThat(group.enabledCapabilities(on)).contains("credit_on_payment");
         // Reading it again changes nothing, and a profile or flag change leaves the day alone.
         assertThat(group.normalise(on, Map.of())).isEqualTo(on);
-        assertThat(group.normalise(on, Map.of("profile", "trade")).get("credit_recognition_effective_from"))
+        assertThat(group.normalise(on, Map.of("profile", "wholesale")).get("credit_recognition_effective_from"))
                 .isEqualTo("2026-10-21");
         // Asking for on_payment again, even on a later day, does not move the day.
         assertThat(groupOn("2026-10-22")

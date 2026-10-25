@@ -7909,6 +7909,10 @@
             "description" : "The business's own address, where its staff sign in",
             "type" : "string"
           },
+          "business_type" : {
+            "description" : "The kind of business its administrator chose (issue #424, ADR-092): the profile a module's settings group stores, read through that module's group, for retail shops, stores_and_shops, wholesale or wholesale_and_shops; null when none was saved (a retail business is then shops)",
+            "type" : "string"
+          },
           "created_at" : {
             "format" : "date-time",
             "type" : "string"
@@ -9805,7 +9809,8 @@
             "type" : "boolean"
           },
           "profile" : {
-            "enum" : [ "shop", "trade" ],
+            "description" : "What kind of business this is (issue #424, ADR-092): a preset of the switches, never a mode; shops (the default), stores_and_shops, wholesale or wholesale_and_shops",
+            "enum" : [ "shops", "stores_and_shops", "wholesale", "wholesale_and_shops" ],
             "type" : "string"
           },
           "purchasing" : {
@@ -23719,7 +23724,8 @@
             "type" : "boolean"
           },
           "profile" : {
-            "enum" : [ "shop", "trade" ],
+            "description" : "The kind of business: sets units, price_lists, customer_accounts, documents, purchasing and transfer_receipt to its preset (branch_roles and returns are left as they are); a flag sent in the same change wins",
+            "enum" : [ "shops", "stores_and_shops", "wholesale", "wholesale_and_shops" ],
             "type" : "string"
           },
           "purchasing" : {
@@ -42035,7 +42041,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Switch retail capabilities or choose the shop or trade profile; audited with old and new values",
+        "summary" : "Switch retail capabilities or choose the kind of business; audited with old and new values",
         "tags" : [ "retail-stock" ]
       }
     },

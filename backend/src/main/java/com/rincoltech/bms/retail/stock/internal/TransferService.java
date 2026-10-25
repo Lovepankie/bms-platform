@@ -15,6 +15,7 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
+import com.rincoltech.bms.retail.manifest.BusinessTypes;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -666,7 +667,10 @@ class TransferService {
             return;
         }
         Object flag = proposed.get(RetailCapabilities.TRANSFER_RECEIPT);
-        boolean off = Boolean.FALSE.equals(flag) || ("shop".equals(proposed.get("profile")) && flag == null);
+        boolean off = Boolean.FALSE.equals(flag)
+                || (flag == null
+                        && proposed.get("profile") instanceof String type
+                        && BusinessTypes.switchesOff(type, RetailCapabilities.TRANSFER_RECEIPT));
         if (off && repo.anyInTransit()) {
             throw ApiException.rule(
                     "transfers_in_transit",

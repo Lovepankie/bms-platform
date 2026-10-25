@@ -213,7 +213,7 @@ function render(me: Me, path: string | undefined): string {
   // What Close the business reads (issue #571): no request yet, seen by the owner.
   client.setQueryData(['closure'], { status: 'none', cooling_off_days: 30, can_change: true });
   // What the retail settings screens read, so their targets are in the static markup.
-  client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
+  client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shops' }, version: 1 });
   client.setQueryData(['retail', 'branch-roles'], (me.branches ?? []).map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: 'both', can_sell: true })));
   const branch = path === undefined ? (me.default_branch_id ?? null) : (me.branches?.[0]?.id ?? null);
   return renderToString(
@@ -344,6 +344,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'capability-transfer-receipt': [TRADER],
   'capability-units': [ADMIN],
   'capability-price-lists': [PRICER],
+  'capability-wholesale': [PRICER],
   'page-price-lists': [PRICER],
   'capability-customer-accounts': [LENDER],
   'page-accounts': [LENDER],

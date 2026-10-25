@@ -6713,7 +6713,7 @@ export interface paths {
         };
         /** The tenant's retail capabilities, absent keys off */
         get: operations["getRetailCapabilities"];
-        /** Switch retail capabilities or choose the shop or trade profile; audited with old and new values */
+        /** Switch retail capabilities or choose the kind of business; audited with old and new values */
         put: operations["updateRetailCapabilities"];
         post?: never;
         delete?: never;
@@ -11095,6 +11095,8 @@ export interface components {
         PlatformTenant: {
             /** @description The business's own address, where its staff sign in */
             address?: string;
+            /** @description The kind of business its administrator chose (issue #424, ADR-092): the profile a module's settings group stores, read through that module's group, for retail shops, stores_and_shops, wholesale or wholesale_and_shops; null when none was saved (a retail business is then shops) */
+            business_type?: string;
             /** Format: date-time */
             created_at?: string;
             currency?: string;
@@ -11987,8 +11989,11 @@ export interface components {
             customer_accounts?: boolean;
             documents?: boolean;
             price_lists?: boolean;
-            /** @enum {string} */
-            profile?: "shop" | "trade";
+            /**
+             * @description What kind of business this is (issue #424, ADR-092): a preset of the switches, never a mode; shops (the default), stores_and_shops, wholesale or wholesale_and_shops
+             * @enum {string}
+             */
+            profile?: "shops" | "stores_and_shops" | "wholesale" | "wholesale_and_shops";
             purchasing?: boolean;
             returns?: boolean;
             /**
@@ -19126,8 +19131,11 @@ export interface components {
             customer_accounts?: boolean;
             documents?: boolean;
             price_lists?: boolean;
-            /** @enum {string} */
-            profile?: "shop" | "trade";
+            /**
+             * @description The kind of business: sets units, price_lists, customer_accounts, documents, purchasing and transfer_receipt to its preset (branch_roles and returns are left as they are); a flag sent in the same change wins
+             * @enum {string}
+             */
+            profile?: "shops" | "stores_and_shops" | "wholesale" | "wholesale_and_shops";
             purchasing?: boolean;
             returns?: boolean;
             /**

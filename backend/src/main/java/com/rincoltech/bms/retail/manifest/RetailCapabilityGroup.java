@@ -17,9 +17,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * The tenant settings group {@code retail.capabilities} (ADR-033, docs/specs/trade-capabilities.md
- * section 1): eight booleans, absent meaning off, the profile {@code shop} or {@code trade}, and the policy
- * {@code credit_sale_recognition} ({@code on_sale} by default, or {@code on_payment}; ADR-043).
- * A profile is a preset that writes a bundle of the flags in one change; the module reads the
+ * section 1): eight booleans, absent meaning off, the profile (the kind of business, {@link BusinessTypes}; issue #424,
+ * ADR-092), and the policy {@code credit_sale_recognition} ({@code on_sale} by default, or {@code on_payment}; ADR-043).
+ * A profile is a preset that sets the switches it governs in one change; the module reads the
  * flags and never the profile. The core stores the group and calls this class to validate it.
  * It also holds the two slow mover rules of the stock health report (issue #414): {@code slow_mover_months}
  * (1 to 24, default 4) and {@code slow_mover_min_sold} (units sold in 90 days, 0 to 1,000,000, default 0 meaning off).
@@ -75,9 +75,6 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
             "purchasing",
             "transfer_receipt",
             "returns");
-    /** What choosing the trade profile switches on; documents and purchasing stay as they are. */
-    static final Set<String> TRADE_PRESET =
-            Set.of("branch_roles", "units", "price_lists", "customer_accounts", "returns", "transfer_receipt");
 
     @Override
     public String moduleKey() {
@@ -92,7 +89,11 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
     @Override
     public Map<String, Object> normalise(Map<String, Object> current, Map<String, Object> proposed) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put(PROFILE, current.get(PROFILE) instanceof String p && isProfile(p) ? p : "shop");
+        // A profile from before issue #424 (shop or trade) is read as the kind it became, so a row an older server
+        // wrote during a
+        // deploy reads the way migration V103 rewrote the others.
+        String stored = current.get(PROFILE) instanceof String p ? p : null;
+        out.put(PROFILE, BusinessTypes.isType(stored) ? stored : BusinessTypes.fromLegacy(stored, current));
         String mode =
                 current.get(CREDIT_RECOGNITION) instanceof String c && CREDIT_RECOGNITIONS.contains(c) ? c : "on_sale";
         out.put(CREDIT_RECOGNITION, mode);
@@ -133,8 +134,9 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
                 }
             } else if (!key.equals(PROFILE) && !CAPABILITIES.contains(key)) {
                 problems.add(new FieldProblem(key, "unknown", "Not a retail capability."));
-            } else if (key.equals(PROFILE) && !(value instanceof String p && isProfile(p))) {
-                problems.add(new FieldProblem(PROFILE, "invalid", "Use shop or trade."));
+            } else if (key.equals(PROFILE) && !(value instanceof String p && BusinessTypes.isType(p))) {
+                problems.add(new FieldProblem(
+                        PROFILE, "invalid", "Use shops, stores_and_shops, wholesale or wholesale_and_shops."));
             } else if (!key.equals(PROFILE) && !(value instanceof Boolean)) {
                 problems.add(new FieldProblem(key, "invalid", "Use true or false."));
             }
@@ -168,12 +170,9 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         }
         if (proposed.get(PROFILE) instanceof String profile) {
             out.put(PROFILE, profile);
-            for (String key : CAPABILITIES) {
-                if (profile.equals("shop")) {
-                    out.put(key, false);
-                } else if (TRADE_PRESET.contains(key)) {
-                    out.put(key, true);
-                }
+            // The kind sets the switches it governs; branch roles and returns are left as they are.
+            for (String key : BusinessTypes.GOVERNED) {
+                out.put(key, BusinessTypes.PRESETS.get(profile).contains(key));
             }
         }
         for (String key : CAPABILITIES) {
@@ -214,9 +213,5 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         } catch (java.time.format.DateTimeParseException e) {
             return false;
         }
-    }
-
-    private static boolean isProfile(String p) {
-        return p.equals("shop") || p.equals("trade");
     }
 }

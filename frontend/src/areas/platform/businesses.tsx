@@ -8,6 +8,7 @@ import {
   formatDay,
   formatMoment,
   MODULES,
+  businessTypeLabel,
   moduleLabel,
   STATUSES,
   statusBadge,
@@ -41,6 +42,7 @@ export function BusinessCards({ items, today }: { items: Business[]; today: stri
             <p className="ln-item-facts">
               <span>Plan: {b.plan_name ?? b.plan_code}</span>
               <span>Modules: {(b.modules ?? []).map(moduleLabel).join(', ') || 'none'}</span>
+              {businessTypeLabel(b) && <span>Kind of business: {businessTypeLabel(b)}</span>}
               <span>Owner: {b.owner_email ?? 'not set'}</span>
               <span>Last sign-in: {b.last_sign_in_at ? formatMoment(b.last_sign_in_at) : 'never'}</span>
               <span>Since {formatDay(b.created_at)}</span>

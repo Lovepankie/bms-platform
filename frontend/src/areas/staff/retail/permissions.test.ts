@@ -107,6 +107,7 @@ describe('the shop rows of the staff menu', () => {
       ['today', ['Sell', 'Orders']],
       ['stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
       ['money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
+      ['wholesale', []],
       ['lending', []],
       ['business', ['Reports', 'Controls', 'Business set-up']],
     ]);
@@ -118,6 +119,7 @@ describe('the shop rows of the staff menu', () => {
       ['today', ['Sell', 'Orders']],
       ['stock', ['My stock', 'Items and categories']],
       ['money', ['Cash book', 'Expenses', 'Customers who owe', 'Savings and advances']],
+      ['wholesale', []],
       ['lending', []],
       ['business', ['Reports']],
     ]);
@@ -144,6 +146,7 @@ describe('the shop rows of the staff menu', () => {
       ['today', ['Sell', 'Orders']],
       ['stock', ['My stock', 'Items and categories']],
       ['money', ['Customers who owe']],
+      ['wholesale', []],
       ['lending', []],
       ['business', ['Reports']],
     ]);

@@ -100,7 +100,7 @@ class RetailBranchRolesIT extends IntegrationTest {
         assertThat(api.sell(t.headOffice(), "cash", product, "1").getStatusCode())
                 .isEqualTo(HttpStatus.CREATED);
         JsonNode group = api.get("/settings/capabilities", SETTINGS).getBody();
-        assertThat(group.get("profile").asString()).isEqualTo("shop");
+        assertThat(group.get("profile").asString()).isEqualTo("shops");
         assertThat(group.get("branch_roles").asBoolean()).isFalse();
     }
 
@@ -233,44 +233,71 @@ class RetailBranchRolesIT extends IntegrationTest {
         assertThat(scoped.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
-    /** Spec 1.1 and 1.2: absent keys are off, a profile writes a preset, flags stay toggleable, audited. */
+    /**
+     * Spec 1.1 and 1.2, issue #424: absent keys are off, a kind of business writes its preset of the switches it governs, branch
+     * roles and returns are left as they are, flags stay toggleable, and every change is audited.
+     */
     @Test
-    void theProfileIsAPresetOfTheFlagsAndEveryChangeIsAudited() {
-        assertThat(putCapabilities(Map.of("profile", "trade"), ADMIN).getStatusCode())
+    void theKindOfBusinessIsAPresetOfTheFlagsAndEveryChangeIsAudited() {
+        assertThat(putCapabilities(Map.of("profile", "wholesale"), ADMIN).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
         // An unknown key never reaches the group: the request body refuses unknown properties (400).
         // The group's own refusal of unknown keys is covered by RetailCapabilityGroupTest.
         ResponseEntity<JsonNode> unknown = putCapabilities(Map.of("unknown_flag", true), SETTINGS);
         assertThat(unknown.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(code(unknown)).isEqualTo("malformed_request");
-        assertThat(putCapabilities(Map.of("profile", "wholesale"), SETTINGS).getStatusCode())
+        // The names from before the kinds are refused on a write.
+        ResponseEntity<JsonNode> oldName = putCapabilities(Map.of("profile", "trade"), SETTINGS);
+        assertThat(oldName.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(oldName)).isEqualTo("validation_failed");
+        assertThat(oldName.getBody().toString()).contains("profile");
+        assertThat(putCapabilities(Map.of("profile", "shop"), SETTINGS).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
 
-        JsonNode trade = putCapabilities(Map.of("profile", "trade"), SETTINGS).getBody();
-        assertThat(trade.get("profile").asString()).isEqualTo("trade");
-        for (String on :
-                List.of("branch_roles", "units", "price_lists", "customer_accounts", "returns", "transfer_receipt")) {
-            assertThat(trade.get(on).asBoolean()).as(on).isTrue();
+        assertThat(putCapabilities(Map.of("returns", true), SETTINGS).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        JsonNode wholesale =
+                putCapabilities(Map.of("profile", "wholesale"), SETTINGS).getBody();
+        assertThat(wholesale.get("profile").asString()).isEqualTo("wholesale");
+        for (String on : List.of("units", "price_lists", "customer_accounts", "documents", "purchasing", "returns")) {
+            assertThat(wholesale.get(on).asBoolean()).as(on).isTrue();
         }
-        assertThat(trade.get("documents").asBoolean()).isFalse();
-        assertThat(trade.get("purchasing").asBoolean()).isFalse();
+        assertThat(wholesale.get("transfer_receipt").asBoolean()).isFalse();
+        assertThat(wholesale.get("branch_roles").asBoolean()).isFalse();
+
+        JsonNode stores = putCapabilities(Map.of("profile", "stores_and_shops", "price_lists", true), SETTINGS)
+                .getBody();
+        assertThat(stores.get("profile").asString()).isEqualTo("stores_and_shops");
+        assertThat(stores.get("transfer_receipt").asBoolean()).isTrue();
+        assertThat(stores.get("price_lists").asBoolean())
+                .as("a flag sent with the kind wins")
+                .isTrue();
+        assertThat(stores.get("documents").asBoolean()).isFalse();
+        assertThat(stores.get("returns").asBoolean())
+                .as("returns belong to no kind")
+                .isTrue();
 
         JsonNode tweaked = putCapabilities(Map.of("returns", false, "documents", true), SETTINGS)
                 .getBody();
+        assertThat(tweaked.get("profile").asString()).isEqualTo("stores_and_shops");
         assertThat(tweaked.get("returns").asBoolean()).isFalse();
         assertThat(tweaked.get("documents").asBoolean()).isTrue();
-        assertThat(tweaked.get("branch_roles").asBoolean()).isTrue();
 
-        JsonNode shop = putCapabilities(Map.of("profile", "shop"), SETTINGS).getBody();
-        assertThat(shop.get("branch_roles").asBoolean()).isFalse();
-        assertThat(shop.get("documents").asBoolean()).isFalse();
-        assertThat(TestDatabase.owner()
-                        .sql(
-                                "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.capabilities.changed'")
-                        .params(t.tenantId())
-                        .query(Long.class)
-                        .single())
-                .isEqualTo(3);
+        JsonNode shops = putCapabilities(Map.of("profile", "shops"), SETTINGS).getBody();
+        assertThat(shops.get("profile").asString()).isEqualTo("shops");
+        for (String off :
+                List.of("units", "price_lists", "customer_accounts", "documents", "purchasing", "transfer_receipt")) {
+            assertThat(shops.get(off).asBoolean()).as(off).isFalse();
+        }
+        List<String> kinds = TestDatabase.owner()
+                .sql(
+                        "SELECT coalesce(data #>> '{before,profile}', '') || '>' || (data #>> '{after,profile}') FROM audit_log"
+                                + " WHERE tenant_id = ? AND action = 'retail.capabilities.changed' ORDER BY created_at, id")
+                .params(t.tenantId())
+                .query(String.class)
+                .list();
+        assertThat(kinds).hasSize(5);
+        assertThat(kinds).contains("shops>wholesale", "wholesale>stores_and_shops", "stores_and_shops>shops");
     }
 
     /** A write without the current settings version is refused like PATCH /settings. */

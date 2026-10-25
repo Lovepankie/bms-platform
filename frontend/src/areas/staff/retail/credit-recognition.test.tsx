@@ -66,7 +66,7 @@ describe('the setting', () => {
     const client = new QueryClient();
     const html = renderToString(
       <QueryClientProvider client={client}>
-        <CreditRecognitionSetting read={{ capabilities: { profile: 'shop' }, version: 1 }} />
+        <CreditRecognitionSetting read={{ capabilities: { profile: 'shops' }, version: 1 }} />
       </QueryClientProvider>,
     );
     expect(html).toContain('When the sale is made');
@@ -84,13 +84,13 @@ describe('the setting', () => {
   it('says since when the saved rule stands', () => {
     const html = renderToString(
       <QueryClientProvider client={new QueryClient()}>
-        <CreditRecognitionSetting read={{ capabilities: { profile: 'shop', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2026-10-20' }, version: 2 }} />
+        <CreditRecognitionSetting read={{ capabilities: { profile: 'shops', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2026-10-20' }, version: 2 }} />
       </QueryClientProvider>,
     );
     expect(html).toContain('This rule has stood since 2026-10-20');
     const future = renderToString(
       <QueryClientProvider client={new QueryClient()}>
-        <CreditRecognitionSetting read={{ capabilities: { profile: 'shop', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2999-01-01' }, version: 2 }} />
+        <CreditRecognitionSetting read={{ capabilities: { profile: 'shops', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2999-01-01' }, version: 2 }} />
       </QueryClientProvider>,
     );
     expect(future).toContain('This rule will stand from 2999-01-01');
@@ -103,7 +103,7 @@ describe('the setting', () => {
     expect(ruleStarted({ credit_sale_recognition: 'on_sale' }, '2026-10-20')).toBe(false);
     const started = renderToString(
       <QueryClientProvider client={new QueryClient()}>
-        <CreditRecognitionSetting read={{ capabilities: { profile: 'shop', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2026-10-20' }, version: 2 }} />
+        <CreditRecognitionSetting read={{ capabilities: { profile: 'shops', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2026-10-20' }, version: 2 }} />
       </QueryClientProvider>,
     );
     expect(started).toContain(CANNOT_SWITCH_OFF);
@@ -111,7 +111,7 @@ describe('the setting', () => {
     expect(started).not.toContain('Review change');
     const pending = renderToString(
       <QueryClientProvider client={new QueryClient()}>
-        <CreditRecognitionSetting read={{ capabilities: { profile: 'shop', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2999-01-01' }, version: 2 }} />
+        <CreditRecognitionSetting read={{ capabilities: { profile: 'shops', credit_sale_recognition: 'on_payment', credit_recognition_effective_from: '2999-01-01' }, version: 2 }} />
       </QueryClientProvider>,
     );
     expect(pending).not.toContain(CANNOT_SWITCH_OFF);
@@ -122,7 +122,7 @@ describe('the setting', () => {
   it('starts on the buyer pays choice when that is saved', () => {
     const html = renderToString(
       <QueryClientProvider client={new QueryClient()}>
-        <CreditRecognitionSetting read={{ capabilities: { profile: 'shop', credit_sale_recognition: 'on_payment' }, version: 2 }} />
+        <CreditRecognitionSetting read={{ capabilities: { profile: 'shops', credit_sale_recognition: 'on_payment' }, version: 2 }} />
       </QueryClientProvider>,
     );
     expect(html).toMatch(/checked=""[^>]*\/><span><strong>When the buyer pays/);

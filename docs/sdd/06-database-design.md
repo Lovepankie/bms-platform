@@ -484,7 +484,9 @@ scheduled cancellation, which the billing run leaves out (ADR-075 decision 8).
 
 Reads for the operator across tenants (`V75`, definer functions owned by `bms_owner`):
 `platform_tenant_overview()` (every tenant with its plan, subscription dates, modules, the
-first tenant admin as the owner and the latest staff sign-in), `platform_tenant_admins(tenant)`
+first tenant admin as the owner and the latest staff sign-in; since `V103` also `profile_groups`, the `module_groups`
+entries of the modules the tenant has on that store a `profile`, which the server reads through each module's group to give
+the operator `business_type`, ADR-092), `platform_tenant_admins(tenant)`
 and `platform_tenant_outbox(tenant, limit)` (the outbox rows of one tenant, never their
 parameters).
 
@@ -2352,7 +2354,9 @@ Built: `retail_branch_roles` (issue #191, migration V37). One row per branch at 
 SELECT, INSERT and UPDATE. A missing row means `both`. The migration backfills `both` for the branches
 of tenants that have the retail module, so a populated database changes in no way; correctness never
 depends on the backfill. The capability flags are not a table: they live in `tenant_settings.settings`
-under `module_groups.retail` (opaque to the core, validated by `retail.manifest`). Design only, no
+under `module_groups.retail` (opaque to the core, validated by `retail.manifest`); its `profile` is the kind of business
+(`shops`, `stores_and_shops`, `wholesale`, `wholesale_and_shops`), renamed from `shop` and `trade` by `V103` without changing a
+flag (issue #424, ADR-092). Design only, no
 migration yet: everything else below, except the two-step transfer (issue #193, migration V38:
 `received_at`, `received_by` and `shortage_entry_id` on `retail_transfers`, `received_qty` on
 `retail_transfer_lines`, below).

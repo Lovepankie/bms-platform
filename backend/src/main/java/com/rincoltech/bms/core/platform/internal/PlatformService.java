@@ -10,6 +10,7 @@ import com.rincoltech.bms.core.platform.internal.PlatformController.FirstAdminIn
 import com.rincoltech.bms.core.platform.internal.PlatformController.TenantResponse;
 import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleManifest;
+import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
@@ -39,6 +40,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Tenant lifecycle for platform operators. Every change is written to {@code platform_audit_log};
@@ -65,6 +68,8 @@ class PlatformService implements TenantProvisioning {
     private final TransactionTemplate transactions;
     private final Set<String> moduleKeys;
     private final GoLiveDate goLive;
+    private final Map<String, ModuleSettingsGroup> settingsGroups;
+    private final ObjectMapper mapper;
 
     PlatformService(
             JdbcClient jdbc,
@@ -74,6 +79,8 @@ class PlatformService implements TenantProvisioning {
             PlatformAuditLog platformAudit,
             PlatformTransactionManager transactionManager,
             List<ModuleManifest> manifests,
+            List<ModuleSettingsGroup> settingsGroups,
+            ObjectMapper mapper,
             GoLiveDate goLive) {
         this.goLive = goLive;
         this.jdbc = jdbc;
@@ -83,6 +90,31 @@ class PlatformService implements TenantProvisioning {
         this.platformAudit = platformAudit;
         this.transactions = new TransactionTemplate(transactionManager);
         this.moduleKeys = manifests.stream().map(ModuleManifest::key).collect(Collectors.toUnmodifiableSet());
+        this.settingsGroups = settingsGroups.stream()
+                .collect(Collectors.toUnmodifiableMap(ModuleSettingsGroup::moduleKey, g -> g, (a, b) -> a));
+        this.mapper = mapper;
+    }
+
+    /**
+     * The kind of business (issue #424, ADR-092): the profile of the first stored settings group, by module key, read through that
+     * module's own group, so a value an older server wrote reads as the kind it is. Null when no group stores a profile.
+     */
+    private String businessType(String profileGroups) {
+        if (profileGroups == null) {
+            return null;
+        }
+        Map<String, Object> stored = mapper.readValue(profileGroups, new TypeReference<Map<String, Object>>() {});
+        for (String key : new java.util.TreeSet<>(stored.keySet())) {
+            ModuleSettingsGroup group = settingsGroups.get(key);
+            if (group != null && stored.get(key) instanceof Map<?, ?> m) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> values = (Map<String, Object>) m;
+                if (group.normalise(values, Map.of()).get("profile") instanceof String kind) {
+                    return kind;
+                }
+            }
+        }
+        return null;
     }
 
     private static final List<String> STATUSES = List.of("trial", "active", "past_due", "suspended", "cancelled");
@@ -588,7 +620,8 @@ class PlatformService implements TenantProvisioning {
                 instant(rs.getTimestamp("last_sign_in_at")),
                 hosts.tenantOrigin(slug),
                 rs.getString("suspended_from"),
-                rs.getBoolean("is_pilot"));
+                rs.getBoolean("is_pilot"),
+                businessType(rs.getString("profile_groups")));
     }
 
     static Instant instant(Timestamp t) {

@@ -43,7 +43,13 @@ class CapabilitiesController {
 
     @Schema(name = "RetailCapabilities")
     record CapabilitiesResponse(
-            @Schema(allowableValues = {"shop", "trade"}) String profile,
+            @Schema(
+                    allowableValues = {"shops", "stores_and_shops", "wholesale", "wholesale_and_shops"},
+                    description =
+                            "What kind of business this is (issue #424, ADR-092): a preset of the switches, never a mode;"
+                                    + " shops (the default), stores_and_shops, wholesale or wholesale_and_shops")
+            String profile,
+
             boolean branchRoles,
             boolean units,
             boolean priceLists,
@@ -93,7 +99,14 @@ class CapabilitiesController {
     /** Omitted fields are unchanged; choosing a profile first writes its preset of the flags. */
     @Schema(name = "UpdateRetailCapabilitiesRequest")
     record UpdateRequest(
-            @Schema(allowableValues = {"shop", "trade"}) String profile,
+            @Schema(
+                    allowableValues = {"shops", "stores_and_shops", "wholesale", "wholesale_and_shops"},
+                    description =
+                            "The kind of business: sets units, price_lists, customer_accounts, documents, purchasing and"
+                                    + " transfer_receipt to its preset (branch_roles and returns are left as they are);"
+                                    + " a flag sent in the same change wins")
+            String profile,
+
             Boolean branchRoles,
             Boolean units,
             Boolean priceLists,
@@ -121,7 +134,7 @@ class CapabilitiesController {
     @PutMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @RequiresPermission("core.settings.manage")
     @Operation(
-            summary = "Switch retail capabilities or choose the shop or trade profile; audited with old and new values",
+            summary = "Switch retail capabilities or choose the kind of business; audited with old and new values",
             operationId = "updateRetailCapabilities")
     ResponseEntity<CapabilitiesResponse> update(
             @RequestHeader(name = "If-Match", required = false) String ifMatch, @Valid @RequestBody UpdateRequest r) {

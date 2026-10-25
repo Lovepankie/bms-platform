@@ -1,15 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { Me } from '../../../api/client';
 import { mockMe } from '../../../api/retail-mock';
+import { router as appRouter } from '../../../app/router';
 import { type Progress, capabilityTourFor, mainTourFor } from '../../../tour/model';
 import { TOURS, adminWelcome, branchRolesCapability } from '../../../tour/tours';
 import { StaffContext } from '../context';
 import { BranchRoles } from './branch-roles';
 import {
-  CAPABILITIES, KEYS, TRADE_PRESET, changeOf, chooseProfile, draftOf, isChange, requestOf, sentencesOf, toggle,
+  CAPABILITIES, GOVERNED, KEYS, PRESETS, PROFILE_KEYS, WHOLESALE_TOOLS, changeOf, chooseProfile, draftOf, isChange, requestOf, sentencesOf, toggle,
 } from './capabilities-state';
 import { staffAreas } from '../menu';
 import { SCREENS, SCREEN_CAPABILITY, canUse, screensFor } from './permissions';
@@ -23,57 +25,75 @@ import { SupplierBillsPage } from './supplier-bills';
 // Trade slice 2 (issue #192, ADR-033): the profile preset, the administrator's screen, and menus, screens
 // and tours that follow the capabilities. Static markup tests, as the other staff screen tests are.
 
-const renderToString = (node: ReactElement) => render(node).replaceAll('<!-- -->', '');
+// The settings page links to Branches, so every page is drawn inside the app's router.
+const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/retail/settings'] }) });
+const renderToString = (node: ReactElement) => render(<RouterContextProvider router={router}>{node}</RouterContextProvider>).replaceAll('<!-- -->', '');
 
 const admin = (capabilities?: string[]): Me => ({ ...mockMe('admin'), modules: ['retail'], module_capabilities: capabilities ? { retail: capabilities } : undefined });
 
-describe('the profile is a preset of the flags (spec 1.2)', () => {
-  it('starts as a shop with every feature off', () => {
+describe('the kind of business is a preset of the flags (spec 1.2, issue #424)', () => {
+  it('starts as shops only with every feature off', () => {
     const d = draftOf(undefined);
-    expect(d.profile).toBe('shop');
+    expect(d.profile).toBe('shops');
     expect(KEYS.filter((k) => d.flags[k])).toEqual([]);
     expect(isChange(changeOf(d, d))).toBe(false);
   });
 
-  it('switches on the trade bundle and leaves documents and purchasing off', () => {
-    const d = chooseProfile(draftOf(undefined), 'trade');
-    expect(KEYS.filter((k) => d.flags[k]).sort()).toEqual([...TRADE_PRESET].sort());
-    expect(d.flags.documents).toBe(false);
+  it('offers the four kinds, named by what the owner has, in this order', () => {
+    expect(PROFILE_KEYS).toEqual(['shops', 'stores_and_shops', 'wholesale', 'wholesale_and_shops']);
+  });
+
+  it('sets each kind\'s switches the same way as the server (BusinessTypes.PRESETS)', () => {
+    const on = (p: (typeof PROFILE_KEYS)[number]) => KEYS.filter((k) => chooseProfile(draftOf(undefined), p).flags[k]).sort();
+    expect(on('shops')).toEqual([]);
+    expect(on('stores_and_shops')).toEqual(['transfer_receipt']);
+    expect(on('wholesale')).toEqual(['customer_accounts', 'documents', 'price_lists', 'purchasing', 'units']);
+    expect(on('wholesale_and_shops')).toEqual(['customer_accounts', 'documents', 'price_lists', 'purchasing', 'transfer_receipt', 'units']);
+    expect([...WHOLESALE_TOOLS].sort()).toEqual(on('wholesale'));
+    for (const p of PROFILE_KEYS) for (const k of PRESETS[p]) expect(GOVERNED).toContain(k);
+  });
+
+  it('leaves branch roles and returns as they are whatever kind is chosen', () => {
+    const mine = toggle(toggle(draftOf(undefined), 'returns', true), 'branch_roles', true);
+    for (const p of PROFILE_KEYS) {
+      expect(chooseProfile(mine, p).flags.returns).toBe(true);
+      expect(chooseProfile(mine, p).flags.branch_roles).toBe(true);
+    }
+    expect(KEYS.filter((k) => chooseProfile(chooseProfile(mine, 'wholesale'), 'shops').flags[k]).sort()).toEqual(['branch_roles', 'returns']);
+  });
+
+  it('keeps every flag editable after a kind is chosen', () => {
+    const d = toggle(chooseProfile(draftOf(undefined), 'wholesale'), 'purchasing', false);
+    expect(d.profile).toBe('wholesale');
     expect(d.flags.purchasing).toBe(false);
-  });
-
-  it('keeps a flag the administrator switched on when the trade profile is chosen, and the shop profile clears all', () => {
-    const withDocs = toggle(draftOf(undefined), 'documents', true);
-    expect(chooseProfile(withDocs, 'trade').flags.documents).toBe(true);
-    expect(KEYS.filter((k) => chooseProfile(chooseProfile(withDocs, 'trade'), 'shop').flags[k])).toEqual([]);
-  });
-
-  it('keeps every flag editable after a profile is chosen', () => {
-    const d = toggle(chooseProfile(draftOf(undefined), 'trade'), 'returns', false);
-    expect(d.profile).toBe('trade');
-    expect(d.flags.returns).toBe(false);
     expect(d.flags.units).toBe(true);
   });
 
-  it('describes a change for the confirmation, and sends the profile and the flags that changed', () => {
+  it('describes a change for the confirmation, and sends the kind and the flags that changed', () => {
     const saved = draftOf(undefined);
-    const change = changeOf(saved, chooseProfile(saved, 'trade'));
-    expect(change.profile).toBe('trade');
-    expect(change.on.sort()).toEqual([...TRADE_PRESET].sort());
-    expect(requestOf(change)).toMatchObject({ profile: 'trade', branch_roles: true, units: true });
-    expect(requestOf(change)).not.toHaveProperty('documents');
-    expect(sentencesOf(change).join(' ')).toContain('Branch roles');
-    const back = changeOf(chooseProfile(saved, 'trade'), saved);
-    expect(requestOf(back)).toMatchObject({ profile: 'shop', branch_roles: false });
+    const change = changeOf(saved, chooseProfile(saved, 'wholesale'));
+    expect(change.profile).toBe('wholesale');
+    expect(change.on.sort()).toEqual([...WHOLESALE_TOOLS].sort());
+    expect(requestOf(change)).toMatchObject({ profile: 'wholesale', price_lists: true, units: true });
+    expect(requestOf(change)).not.toHaveProperty('transfer_receipt');
+    expect(sentencesOf(change).join(' ')).toContain('This business becomes Wholesale.');
+    expect(sentencesOf(change).join(' ')).toContain('Price lists');
+    const back = changeOf(chooseProfile(saved, 'wholesale'), saved);
+    expect(requestOf(back)).toMatchObject({ profile: 'shops', price_lists: false });
     expect(sentencesOf(back).join(' ')).toContain('is kept');
   });
 
-  it('shows the administrator the flags a trade preset sets before anything is saved', () => {
+  it('shows the administrator the flags a kind sets before anything is saved', () => {
     const saved = draftOf(undefined);
-    const html = renderToString(<ChangeReview change={changeOf(saved, chooseProfile(saved, 'trade'))} onConfirm={() => undefined} onBack={() => undefined} />);
-    for (const k of TRADE_PRESET) expect(html).toContain(CAPABILITIES.find((c) => c.key === k)?.label);
+    const html = renderToString(<ChangeReview change={changeOf(saved, chooseProfile(saved, 'stores_and_shops'))} onConfirm={() => undefined} onBack={() => undefined} />);
+    expect(html).toContain('This business becomes Stores and shops.');
+    expect(html).toContain('Receive transfers');
     expect(html).not.toContain('Invoices and quotations');
     expect(html).toContain('Confirm');
+  });
+
+  it('reads a kind it does not know as shops only', () => {
+    expect(draftOf({ profile: 'trade' } as never).profile).toBe('shops');
   });
 });
 
@@ -130,7 +150,7 @@ describe('menus and screens follow the capabilities (ADR-033)', () => {
 });
 
 describe('the administrator screen', () => {
-  const settings = (me: Me, saved: Record<string, unknown> = { profile: 'shop' }) => {
+  const settings = (me: Me, saved: Record<string, unknown> = { profile: 'shops' }) => {
     const client = new QueryClient();
     client.setQueryData(['retail', 'capabilities'], { capabilities: saved, version: 3 });
     return renderToString(
@@ -142,18 +162,31 @@ describe('the administrator screen', () => {
     );
   };
 
-  it('lists the profile and all eight features, every one off for a new shop', () => {
+  it('asks what kind of business this is, with the four kinds and all eight features, every one off for a new shop', () => {
     const html = settings(admin([]));
-    expect(html).toContain('Shop');
-    expect(html).toContain('Trade');
+    expect(html).toContain('What kind of business is this?');
+    for (const name of ['Shops only', 'Stores and shops', 'Wholesale', 'Wholesale and shops']) expect(html).toContain(`<strong>${name}</strong>`);
+    expect(html).toContain('One or more shops that sell over the counter.');
+    expect(html).toContain('Any number of each.');
+    expect(html).toContain('price lists and customer prices, quotations, invoices and delivery notes, credit to shops, packs and purchase orders');
+    expect(html).not.toContain('Trade');
+    expect(html).toMatch(/checked="" value="shops"/);
     for (const c of CAPABILITIES) expect(html).toContain(c.label);
     expect(html).not.toContain('checked=""><span><strong>Branch roles');
     expect(html).toContain('Review changes');
   });
 
   it('shows what is saved', () => {
-    const html = settings(admin(['branch_roles']), { profile: 'trade', branch_roles: true });
+    const html = settings(admin(['branch_roles']), { profile: 'wholesale_and_shops', branch_roles: true });
     expect(html).toMatch(/checked=""[^>]*\/?><span><strong>Branch roles/);
+    expect(html).toMatch(/checked="" value="wholesale_and_shops"/);
+    expect(html).not.toMatch(/checked="" value="shops"/);
+  });
+
+  it('says that each branch is set as a store or a shop under Branches, with the link', () => {
+    const html = settings(admin([]));
+    expect(html).toContain('Each branch is set as a store or a shop under');
+    expect(html).toContain('href="/staff/setup/branches"');
   });
 
   it('says plainly when the pages of a feature are not released, and only then', () => {
@@ -228,12 +261,14 @@ describe('purchasing follows its capability', () => {
     }
   });
 
-  it('adds exactly the five screens when it is on, and changes nothing else', () => {
+  it('adds exactly the five screens when it is on, and only Purchase orders under Wholesale in the menu (issue #424)', () => {
     const off = screens(admin([]));
     const on = screens(admin(['purchasing']));
     expect(on.filter((s) => !off.includes(s)).sort()).toEqual([...NEW_SCREENS].sort());
     expect(off.filter((s) => !on.includes(s))).toEqual([]);
-    expect(menu(admin(['purchasing']))).toEqual(menu(admin([])));
+    const added = menu(admin(['purchasing'])).filter((to) => !menu(admin([])).includes(to));
+    expect(added).toEqual(['/staff/retail/purchase-orders']);
+    expect(menu(admin([])).filter((to) => !menu(admin(['purchasing'])).includes(to))).toEqual([]);
   });
 
   it('gives orders and goods received to the restock permission, and the money screens to administrators only', () => {
@@ -272,7 +307,7 @@ describe('purchasing follows its capability', () => {
 
   it('shows the purchasing block of the settings only while it is on', () => {
     const client = new QueryClient();
-    client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
+    client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shops' }, version: 1 });
     client.setQueryData(['retail', 'purchasing-settings'], { bill_tolerance_bp: 100, over_receipt_bp: 0, version: 1 });
     const settings = (me: Me) =>
       renderToString(

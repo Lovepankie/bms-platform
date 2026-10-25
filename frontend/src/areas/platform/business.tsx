@@ -39,6 +39,7 @@ import {
   METHODS,
   methodLabel,
   MODULES,
+  businessTypeLabel,
   moduleLabel,
   type PaymentForm,
   paymentFormFor,
@@ -96,6 +97,12 @@ export function BusinessFacts({ detail }: { detail: BusinessDetail }) {
       <dd>
         {b.currency}, {b.timezone}
       </dd>
+      {businessTypeLabel(b) && (
+        <>
+          <dt>Kind of business</dt>
+          <dd data-testid="business-type">{businessTypeLabel(b)}</dd>
+        </>
+      )}
     </dl>
   );
 }

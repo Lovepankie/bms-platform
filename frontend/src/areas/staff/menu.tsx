@@ -12,14 +12,15 @@ import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
 import { showReceivePayments } from './payments/state';
 import { showReports } from './reports/permissions';
-import { SCREENS, canUse, showRetail, type RetailScreen } from './retail/permissions';
+import { CATALOGUE_LINKS, SCREENS, UNITS, canUse, capabilityOn, showRetail, type RetailScreen } from './retail/permissions';
 import { showSms } from './sms/state';
 import { showUsers } from './users/state';
 
 // The staff menu's groups and items (issue #564, owner decisions D38 and D44, ADR-086), apart from the layout in route.tsx so a
 // test reads them without loading the staff area (issue #483). One list, grouped the way a shop owner thinks: Home, then Today,
-// Stock, Money, Lending (when the business has it) and Business, each item filtered by the same permission rules as before. The
-// sidebar from 720px and the phone drawer both draw it; Notifications and Help and feedback are in the menu's footer.
+// Stock, Money, Wholesale (when a wholesale tool is on), Lending (when the business has it) and Business, each item filtered by
+// the same permission rules as before. The sidebar from 720px and the phone drawer both draw it; Notifications and Help and
+// feedback are in the menu's footer.
 
 /**
  * The modules of a business with both, Shop and Lending (issue #471). The menu no longer heads them (issue #564); the Home cards
@@ -36,7 +37,7 @@ export interface MenuCounts {
   low?: number;
 }
 
-const pathOf = (screen: RetailScreen) => SCREENS.find((s) => s.screen === screen)?.path ?? '';
+const pathOf = (screen: RetailScreen) => [...SCREENS, ...CATALOGUE_LINKS].find((s) => s.screen === screen)?.path ?? '';
 
 /** A retail row: the first of `screens` the session may use, under its menu name; none when it may use none of them. */
 function shopRow(me: Me, label: string, icon: keyof typeof icons, screens: RetailScreen[], extra: Partial<MenuLink> = {}): MenuLink | false {
@@ -88,6 +89,21 @@ export function staffMenu(me: Me, { sells, counts = {} }: { sells: boolean; coun
         shopRow(me, WORDS.customersWhoOwe, 'creditSales', ['creditSales', 'customerAccounts']),
         shopRow(me, WORDS.whatIOweSuppliers, 'supplierPayables', ['supplierPayables']),
         shopRow(me, 'Savings and advances', 'savings', ['savings', 'advances']),
+      ],
+    },
+    {
+      // The wholesale tools (issue #424, ADR-092): shown while one of their switches is on, whatever kind of business was chosen,
+      // since the menu reads the switches and never the kind (ADR-033). A business of shops only has none of them on, so no group.
+      id: 'wholesale',
+      label: 'Wholesale',
+      tour: 'nav-wholesale',
+      links: [
+        shopRow(me, 'Price lists', 'priceLists', ['priceLists', 'customerGroups']),
+        shopRow(me, 'Credit to shops', 'customerAccounts', ['customerAccounts', 'customerAgeing']),
+        shopRow(me, 'Quotations', 'quotations', ['quotations']),
+        shopRow(me, 'Invoices and delivery notes', 'documents', ['documents']),
+        capabilityOn(me, 'retail', UNITS) && shopRow(me, WORDS.packs, 'units', ['products']),
+        shopRow(me, 'Purchase orders', 'purchaseOrders', ['purchaseOrders', 'goodsReceived', 'supplierBills']),
       ],
     },
     {

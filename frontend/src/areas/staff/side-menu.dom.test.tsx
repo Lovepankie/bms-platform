@@ -196,6 +196,40 @@ describe('the groups and their order (issue #564)', () => {
     expect(within(sidebar()).queryByRole('link', { name: 'Controls' })).toBeNull();
   });
 
+  it('adds a Wholesale group after Money while a wholesale tool is on, and none for shops only (issue #424)', () => {
+    const scope = { all_branches: true, branch_ids: [] };
+    const permissions = [...new Set([...(admin.permissions ?? []), ...SCREENS.flatMap((s) => needsOf(s.screen)), 'retail.catalogue.manage'])];
+    const wholesaler = (tools: string[]) =>
+      ({ ...admin, permissions, permission_scopes: Object.fromEntries(permissions.map((p) => [p, scope])), module_capabilities: { retail: tools } }) as unknown as Me;
+    widthIs(false);
+    show(wholesaler(['units', 'price_lists', 'customer_accounts', 'documents', 'purchasing']));
+    const groups = groupsOf(sidebar());
+    expect(groups.map(([heading]) => heading)).toEqual(['', 'Today', 'Stock', 'Money', 'Wholesale', 'Business']);
+    expect(groups[4]).toEqual([
+      'Wholesale',
+      ['Price lists', 'Credit to shops', 'Quotations', 'Invoices and delivery notes', 'Cartons, boxes and other packs', 'Purchase orders'],
+    ]);
+    const wholesale = within(sidebar()).getByRole('group', { name: 'Wholesale' });
+    expect(within(wholesale).getByRole('link', { name: 'Price lists' }).getAttribute('href')).toBe('/staff/retail/price-lists');
+    expect(within(wholesale).getByRole('link', { name: 'Cartons, boxes and other packs' }).getAttribute('href')).toBe('/staff/retail/catalogue/products');
+    cleanup();
+    // The group reads the switches, never the kind: one tool on shows its row alone; a store and shop business with only the two-step
+    // move on, or shops only, has no Wholesale group.
+    show(wholesaler(['price_lists']));
+    expect(groupsOf(sidebar()).find(([heading]) => heading === 'Wholesale')).toEqual(['Wholesale', ['Price lists']]);
+    cleanup();
+    show(wholesaler(['transfer_receipt']));
+    expect(groupsOf(sidebar()).map(([heading]) => heading)).not.toContain('Wholesale');
+    cleanup();
+    show(wholesaler([]));
+    expect(groupsOf(sidebar()).map(([heading]) => heading)).not.toContain('Wholesale');
+  });
+
+  it('shows a seller no Wholesale group even with every wholesale tool on', () => {
+    const seller = { ...mockMe('sales'), tours: TOURS_OFF, module_capabilities: { retail: ['units', 'price_lists', 'customer_accounts', 'documents', 'purchasing'] } } as unknown as Me;
+    expect(staffMenu(seller, { sells: true }).find((g) => g.id === 'wholesale')?.links).toEqual([]);
+  });
+
   it('names each group by its heading for a screen reader', () => {
     widthIs(false);
     show(admin);

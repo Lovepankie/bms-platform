@@ -1,5 +1,6 @@
 import type { Business, Plan, PlanPrice, SavePlanRequest, SubscriptionStatus } from '../../api/operator';
 import { formatMinor, parseMinor } from '../../components/money';
+import { PROFILE_NAMES, profileName, type Profile } from '../staff/retail/capabilities-state';
 
 // The rules and the plain words of the operator screens (issue #407), kept apart from the screens so they are tested without a
 // browser: what each status means, what the subscription line says, what an action will do before the operator confirms it, the
@@ -52,6 +53,17 @@ export const MODULES: { key: string; label: string }[] = [
 
 export function moduleLabel(key: string): string {
   return MODULES.find((m) => m.key === key)?.label ?? key;
+}
+
+/**
+ * The kind of business its administrator chose in Retail settings (issue #424, ADR-092), in the words the business reads; one that
+ * never chose is Shops only, the default. Null for a business without the shop module, which has no kind.
+ */
+export function businessTypeLabel(b: { modules?: string[]; business_type?: string | null }): string | null {
+  if (!(b.modules ?? []).includes('retail')) return null;
+  // The server sends the kind already read through the retail group; a value it does not know is shown as it is, never guessed.
+  if (!b.business_type) return `${profileName(null)} (not chosen yet)`;
+  return PROFILE_NAMES[b.business_type as Profile] ?? b.business_type;
 }
 
 // ---- dates ------------------------------------------------------------------------------------------

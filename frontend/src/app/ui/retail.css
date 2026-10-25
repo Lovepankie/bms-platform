@@ -28,6 +28,26 @@
   margin: var(--space-2) 0 0;
 }
 
+/* The kind of business on Retail settings (issue #424): each choice is a whole row to tap, at least 48px, its name above its words. */
+.rt label.rt-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-3) 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.rt label.rt-choice > input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.rt label.rt-choice strong {
+  display: block;
+}
+
 .rt-row {
   display: flex;
   flex-wrap: wrap;
