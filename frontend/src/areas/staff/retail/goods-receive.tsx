@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
+import { createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type GoodsReceiptRequest, type Product, type PurchaseOrder } from '../../../api/retail';
@@ -20,6 +20,7 @@ import { showQty } from './maths';
 import { Gate, Problem, ProductPicker, money } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
+import { Hint } from '../../../app/ui/Hint';
 
 // Goods received (the purchasing capability, ADR-033, issue #198): what arrived from a supplier, against an order or with none (a
 // "blind" receipt, which needs the supplier). Saving puts the goods into stock at the cost typed and, when a new selling price
@@ -140,7 +141,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
           <input type="checkbox" checked={form.hold === true} onChange={(e) => onChange({ ...form, hold: e.target.checked })} />
           <span>Hold until the landed cost is in</span>
         </label>
-        <p className="hint">Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</p>
+        <Hint full>Tick this when freight or duty is still to come. The delivery shows as held, not costed, until you add the landed cost or release the hold.</Hint>
       </div>
       {picker && <div data-tour="receive-items">{picker}</div>}
       <h2>What arrived</h2>
@@ -153,7 +154,7 @@ export function ReceiveFormView({ form, blind, order, suppliers, branches, picke
       <p className="rt-total" aria-live="polite" data-testid="receive-total">Worth {money(receiveTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton busy={busy ?? false} type="submit" className="rt-primary" disabled={problem !== null} data-tour="receive-save">Save goods received</BusyButton>
+      <BusyButton busy={busy ?? false} type="submit" className="rt-primary" notReady={problem !== null} data-tour="receive-save">Save goods received</BusyButton>
     </form>
   );
 }
@@ -188,7 +189,6 @@ export function ReceiveAgainstOrderPage() {
   const open = order.data?.status === 'sent' || order.data?.status === 'partly_received';
   return (
     <Gate screen="goodsReceived" title={order.data?.order_no ? `Receive goods for ${order.data.order_no}` : 'Receive goods'}>
-      <p><Link to="/staff/retail/purchase-orders/$orderId" params={{ orderId }}>Back to the order</Link></p>
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {order.data && !open && <p className="empty-state">Goods can be received only against an order that has been sent and is not yet complete.</p>}
@@ -229,8 +229,7 @@ export function ReceiveBlindPage() {
   );
   return (
     <Gate screen="goodsReceived" title="Receive goods without an order">
-      <p><Link to="/staff/retail/goods-received">Back to goods received</Link></p>
-      <p className="hint">Use this when goods arrive with no purchase order. Choose the supplier, add what arrived and what it cost.</p>
+      <Hint>Use this when goods arrive with no purchase order. Choose the supplier, add what arrived and what it cost.</Hint>
       <ReceiveFormView form={draft} blind suppliers={suppliers} branches={branches} picker={picker} busy={save.isPending} error={save.error} onChange={(f) => setDraft(() => f)} onSubmit={() => save.mutate()} />
       {draft.lines.length > 0 && !save.isPending && <button type="button" className="btn-ghost" onClick={() => { discard(); save.reset(); }}>Clear this form</button>}
     </Gate>

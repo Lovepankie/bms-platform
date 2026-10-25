@@ -13,6 +13,8 @@ import { SALE_RETURN, canOpenAccount, canUse, holdsAt } from './permissions';
 import { DISPOSITION_WORDS, reasonWords, returnedWords, settledWords, type Disposition } from './returns-state';
 import { showDate } from './transfers';
 import { Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // One credit note (returns capability, ADR-033, issue #201), on screen: the goods that came back, what each was credited,
 // where they went, and how the credit was settled. The printable credit note (a PDF under this number) shows while the documents capability is on. A
@@ -88,7 +90,7 @@ export function VoidPanel({ busy, error, onVoid }: { busy?: boolean; error?: unk
     >
       <label htmlFor="void-reason">Why is it voided? (at least {MIN_REASON} characters)</label>
       <input id="void-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-      <p className="hint">The goods it put back come off the shelf again, and the money or the balance goes back as it was. This only works while those goods are still in stock.</p>
+      <Hint full>The goods it put back come off the shelf again, and the money or the balance goes back as it was. This only works while those goods are still in stock.</Hint>
       <Problem error={error} />
       <p className="cluster">
         <BusyButton busy={busy ?? false} type="submit" disabled={reasonOf(reason) === null}>Void it</BusyButton>
@@ -125,14 +127,13 @@ export function CreditNotePage() {
     return (
       <main className="rt">
         <h1>Credit note</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
   return (
     <main className="rt rt-wide">
       <h1>{note.data?.credit_note_no ?? 'Credit note'}</h1>
-      <p><Link to="/staff/retail/returns">Back to customer returns</Link></p>
       {note.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={note.error} />
       {message && <Success>{message}</Success>}

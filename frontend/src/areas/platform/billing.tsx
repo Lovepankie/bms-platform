@@ -88,7 +88,7 @@ function SettingsForm({ current }: { current: BillingSettings }) {
         </p>
       )}
       {done && <p role="status">{done}</p>}
-      <BusyButton type="submit" className="btn-primary" busy={save.isPending} disabled={!valid}>
+      <BusyButton type="submit" className="btn-primary" busy={save.isPending} notReady={!valid}>
         Save
       </BusyButton>
     </form>

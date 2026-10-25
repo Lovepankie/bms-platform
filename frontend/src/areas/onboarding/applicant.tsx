@@ -104,7 +104,7 @@ export function ApplicantPage({
               <label htmlFor="reply">Your answer</label>
               <textarea id="reply" value={reply} onChange={(e) => onReplyChange(e.target.value)} rows={4} maxLength={1000} required />
             </div>
-            <BusyButton className="btn-brand" type="submit" busy={replying} disabled={reply.trim().length === 0}>
+            <BusyButton className="btn-brand" type="submit" busy={replying} notReady={reply.trim().length === 0}>
               Send answer
             </BusyButton>
           </form>

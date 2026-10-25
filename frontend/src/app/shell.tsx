@@ -139,7 +139,11 @@ export function Footer() {
   );
 }
 
-export function Shell({ brand = PLATFORM_BRAND, actions, children }: { brand?: ShellBrand; actions?: ReactNode; children: ReactNode }) {
+/**
+ * The shell around every route. `bar` is false in the staff area, whose own top bar is the one bar (issue #526); `footer` is
+ * false on its working screens, so the Powered-by footer shows on the public pages and on More and the settings pages only.
+ */
+export function Shell({ brand = PLATFORM_BRAND, actions, bar = true, footer = true, children }: { brand?: ShellBrand; actions?: ReactNode; bar?: boolean; footer?: boolean; children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     const vars = themeVars(brand);
@@ -159,9 +163,9 @@ export function Shell({ brand = PLATFORM_BRAND, actions, children }: { brand?: S
 
   return (
     <div className="app-shell">
-      <BrandBar brand={brand} actions={actions} />
+      {bar && <BrandBar brand={brand} actions={actions} />}
       <div className="app-content">{children}</div>
-      <Footer />
+      {footer && <Footer />}
       <BusyAnnouncer />
     </div>
   );

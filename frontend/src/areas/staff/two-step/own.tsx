@@ -85,7 +85,7 @@ export function OwnTwoStep({ blocking = false }: { blocking?: boolean }) {
             <input type="password" autoComplete="current-password" value={password} disabled={busy} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <p className="cluster" data-tour="twostep-turn-on">
-            <BusyButton type="button" className="btn-primary btn-lg" busy={busy} disabled={password === ''} onClick={() => void start()}>
+            <BusyButton type="button" className="btn-primary btn-lg" busy={busy} notReady={password === ''} onClick={() => void start()}>
               Turn on two-step sign-in
             </BusyButton>
             {!blocking && (

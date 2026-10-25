@@ -19,6 +19,7 @@ import { newLine, withUnit } from './sale-state';
 import { SaleLineCard } from './sale';
 import { ScreenLink } from './screen-link';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // Customer orders with delivery (issue #385, ADR-052): orders that come by WhatsApp, Instagram, Facebook, a phone call or at the
 // counter. Saving an order keeps its items aside so the till cannot sell them; nothing is paid yet. The order is packed, sent out
@@ -88,7 +89,7 @@ export function DeliverPanel({ order, onDone }: { order: Order; onDone: (d: Deli
       <input id={`deliver-note-${order.id}`} value={form.note} maxLength={500} onChange={(e) => setForm({ ...form, note: e.target.value })} />
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={deliver.error} />
-      <BusyButton busy={deliver.isPending} type="button" className="rt-primary" disabled={problem !== null} onClick={() => deliver.mutate()}>
+      <BusyButton busy={deliver.isPending} type="button" className="rt-primary" notReady={problem !== null} onClick={() => deliver.mutate()}>
         Save: delivered and paid
       </BusyButton>
     </fieldset>
@@ -268,7 +269,7 @@ export function OrderForm({ branchId, onSaved }: { branchId: string; onSaved: (o
         <ProductPicker id="order-search" branchId={branchId} showPrice onAdd={add} />
       </div>
       <h2>Items</h2>
-      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
+      {draft.lines.length === 0 && <EmptyState title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
       {draft.lines.map((l, i) => (
         <SaleLineCard
           key={`${l.product.id}-${i}`}
@@ -294,10 +295,10 @@ export function OrderForm({ branchId, onSaved }: { branchId: string; onSaved: (o
         <input id="order-notes" value={draft.notes} maxLength={500} onChange={(e) => update({ notes: e.target.value })} />
       </fieldset>
       <p className="rt-total" aria-live="polite">Items {money(items)}, delivery {money(fee)}, total {money(items + fee)}</p>
-      <p className="hint">Saving keeps these items aside, so they are not sold at the till. Nothing is paid until the order is delivered.</p>
+      <Hint full>Saving keeps these items aside, so they are not sold at the till. Nothing is paid until the order is delivered.</Hint>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={problem !== null} data-tour="order-save">
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={problem !== null} data-tour="order-save">
         Save the order
       </BusyButton>
       {draft.lines.length > 0 && !save.isPending && <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this order</button>}
@@ -323,7 +324,7 @@ const queryOf = (view: View): Pick<OrderQuery, 'status' | 'due'> =>
   view === 'today' ? { due: 'today' } : view === 'overdue' ? { due: 'overdue' } : view === 'all' ? {} : { status: view };
 
 export function OrdersPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const single = useSingleBranch();
   const { me } = useStaff();
@@ -357,8 +358,7 @@ export function OrdersPage() {
   ];
   return (
     <Gate screen="orders" title="Orders" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <p className="hint" data-tour="orders-help">Orders that come by WhatsApp, Instagram, Facebook, a phone call or at the counter. Saving an order keeps its items aside. The money is taken when it is delivered, and then it is a normal sale.</p>
+      <Hint tour="orders-help">Orders that come by WhatsApp, Instagram, Facebook, a phone call or at the counter. Saving an order keeps its items aside. The money is taken when it is delivered, and then it is a normal sale.</Hint>
       <div className="rt-row" data-tour="orders-board" aria-label="Orders at each step">
         {tiles.map((t) => (
           <button key={t.view} type="button" className={view === t.view ? 'btn-sm rt-primary' : 'btn-sm'} aria-pressed={view === t.view} onClick={() => setView(t.view)}>

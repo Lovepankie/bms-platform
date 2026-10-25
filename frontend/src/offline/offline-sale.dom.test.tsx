@@ -4,6 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../api/retail';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // Record a sale with the network off (issue #458, ADR-067; NFR-OFF-07): the items come from the phone's copy, a credit sale
 // is not offered, the sale goes to the outbox with every price as charged, the provisional receipt shows, and once the
 // phone is online the server's number replaces it. A sale whose answer was lost locks the form and is kept as it was sent,
@@ -95,7 +98,7 @@ describe('Record a sale offline', () => {
     // The buyer's name typed offline goes with the sale.
     fireEvent.change(screen.getByLabelText("Or the buyer's name"), { target: { value: 'Test Buyer 21' } });
     const save = screen.getByRole('button', { name: 'Save on this phone' }) as HTMLButtonElement;
-    await waitFor(() => expect(save.disabled).toBe(false));
+    await waitFor(() => expect(ready(save)).toBe(true));
     fireEvent.click(save);
 
     expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
@@ -157,7 +160,7 @@ describe('Record a sale offline', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
     fireEvent.click(await screen.findByRole('option', { name: /^Test Bulb 9W/ }));
     const save = screen.getByRole('button', { name: /^Record sale/ }) as HTMLButtonElement;
-    await waitFor(() => expect(save.disabled).toBe(false));
+    await waitFor(() => expect(ready(save)).toBe(true));
     fireEvent.click(save);
 
     // The answer is lost: the form is locked, so the cashier cannot change the lines and send them under the same id.

@@ -1,17 +1,22 @@
 import type { ReactNode } from 'react';
-import { illustrations, type IllustrationName } from './illustrations';
+import { illustrations } from './illustrations';
 
 // The shared state components (#106, docs/ui/design-system.md): an empty list, a finished or failed
-// step, a branded loader and skeleton rows. Each states its meaning in words; the illustration and
-// the motion only help, and the motion stops under prefers-reduced-motion (base.css).
+// step, a branded loader and skeleton rows. Each states its meaning in words; the illustration of a
+// finished step and the motion only help, and the motion stops under prefers-reduced-motion (base.css).
 
-export function EmptyState({ art, title, children, action }: { art: IllustrationName; title: string; children?: ReactNode; action?: ReactNode }) {
+/**
+ * An empty list in one plain line (issue #526): the title and its one short follow-on sentence read as one line, with at most
+ * one action under it. No illustration and no dashed box, the same look as the kit's EmptyState (.empty-line in kit.css).
+ */
+export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="empty-state empty-state-art">
-      <span className="state-art">{illustrations[art]}</span>
-      <p className="state-title">{title}</p>
-      {children && <p className="state-text">{children}</p>}
-      {action && <div className="state-action">{action}</div>}
+    <div className="empty-line">
+      <p>
+        {title}
+        {children && <> {children}</>}
+      </p>
+      {action}
     </div>
   );
 }

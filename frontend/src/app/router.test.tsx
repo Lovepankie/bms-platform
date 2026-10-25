@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { router as appRouter, showsRefresh } from './router';
+import { router as appRouter, showsFooter, showsRefresh } from './router';
 
 // The real composition of the header (issue #430): the refresh button is drawn by the app's own root layout on the screens with
 // data, and not on the public pages or the operator's sign-in and setup forms. Deleting it from the layout fails this.
@@ -18,11 +18,24 @@ async function header(path: string): Promise<string> {
 }
 
 describe('where the header shows the refresh button', () => {
-  it('draws it from the root layout on the staff, member and platform data screens', async () => {
-    for (const path of ['/staff', '/staff/retail/sales', '/member', '/platform']) {
+  it('draws it from the root layout on the member and platform data screens', async () => {
+    for (const path of ['/member', '/platform']) {
       expect(showsRefresh(path), path).toBe(true);
       expect(await header(path), path).toContain('data-tour="refresh"');
     }
+  });
+
+  // Issue #526: the staff area's own top bar is its one bar; Refresh is in its menu (top-bar.dom.test.tsx).
+  it('draws no brand bar in the staff area, which has its own top bar', async () => {
+    for (const path of ['/staff', '/staff/retail/sales']) {
+      expect(showsRefresh(path), path).toBe(false);
+      expect(await header(path), path).not.toContain('class="brand-bar"');
+    }
+  });
+
+  it('draws the Powered-by footer on public pages and on More and the settings pages only', () => {
+    for (const path of ['/', '/sign-in', '/member', '/staff/more', '/staff/setup', '/staff/retail/settings']) expect(showsFooter(path), path).toBe(true);
+    for (const path of ['/staff', '/staff/retail/sale', '/staff/retail/stock', '/staff/money']) expect(showsFooter(path), path).toBe(false);
   });
 
   it('leaves it off public pages and the operator sign-in and setup forms', async () => {

@@ -7,7 +7,8 @@ import { discarded, failedCount, waiting, waitingWords, type OutboxItem } from '
 import { useOffline, useOnline, useOutbox } from './offline-context';
 
 // The status in the staff bar (issue #458, ADR-067 decision 10): a dot, green online, grey offline, amber while sending,
-// with the state in words (Online, Offline, Syncing) and "3 waiting to sync" beside it ("3 waiting" on a narrow screen). Tapping it opens a sheet of the queued and failed sales with Sync now and, for a
+// with the state in words (Online, Offline, Syncing) and "3 waiting to sync" beside it ("3 waiting" on a narrow screen). Since
+// issue #526 it is drawn only while offline, sending, or with sales waiting or failed; online with nothing waiting shows nothing. Tapping it opens a sheet of the queued and failed sales with Sync now and, for a
 // manager (retail.offline.resolve), the sales other people's phones could not record. Nothing is drawn for a person who
 // does not sell.
 
@@ -54,21 +55,27 @@ export function SyncStatus() {
   const failed = failedCount(outbox.items);
   const state = dotState(online, outbox.syncing);
   const words = statusWords(state, list.length, failed);
+  // Online with nothing waiting draws no dot for a seller (issue #526): the bar stays quiet until the dot has news. A manager
+  // (retail.offline.resolve) always has it, since its sheet is where other phones' refused sales and the clashes are settled.
+  // The sheet stays mounted, so one open while the last sale is sent stays open and says nothing is waiting.
+  const news = offline.manager || state !== 'online' || list.length > 0 || failed > 0;
   return (
-    <div className="sync-status" data-tour="sync-status">
-      <button type="button" className="btn-ghost btn-sm sync-button" aria-haspopup="dialog" aria-label={words} title={words} onClick={() => openSheet(sheet.current)}>
-        <span className={`sync-dot sync-dot-${state}`} data-testid="sync-dot" data-state={state} aria-hidden="true" />
-        {/* The state in words beside the dot, so it never rests on colour alone (WCAG 1.4.1); the button's name says it all. */}
-        <span className="sync-word" data-testid="sync-word" aria-hidden="true">
-          {DOT_WORDS[state]}
-        </span>
-        {list.length > 0 && (
-          <span className="sync-count" aria-hidden="true">
-            <span className="sync-long">{waitingWords(list.length)}</span>
-            <span className="sync-short">{list.length} waiting</span>
+    <div className="sync-status">
+      {news && (
+        <button type="button" className="btn-ghost btn-sm sync-button" aria-haspopup="dialog" aria-label={words} title={words} data-tour="sync-status" onClick={() => openSheet(sheet.current)}>
+          <span className={`sync-dot sync-dot-${state}`} data-testid="sync-dot" data-state={state} aria-hidden="true" />
+          {/* The state in words beside the dot, so it never rests on colour alone (WCAG 1.4.1); the button's name says it all. */}
+          <span className="sync-word" data-testid="sync-word" aria-hidden="true">
+            {DOT_WORDS[state]}
           </span>
-        )}
-      </button>
+          {list.length > 0 && (
+            <span className="sync-count" aria-hidden="true">
+              <span className="sync-long">{waitingWords(list.length)}</span>
+              <span className="sync-short">{list.length} waiting</span>
+            </span>
+          )}
+        </button>
+      )}
       <dialog ref={sheet} className="sheet sync-sheet" aria-labelledby="sync-title">
         <SyncSheet online={online} onClose={() => closeSheet(sheet.current)} />
       </dialog>

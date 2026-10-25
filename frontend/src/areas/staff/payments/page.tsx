@@ -5,6 +5,8 @@ import { type MerchantAccount, payments } from '../../../api/payments';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { STATUS_WORDS, canChangePaymentAccount, codeProblem, credentialProblem, failureWords, nextStep, showReceivePayments } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // "Receive payments" (extras slice A7, issue #233; ADR-035 amendment of 2026-10-18): money owed to the business lands only in
 // the business's own Pesapal account. A business administrator enters the consumer key and secret (the secret is write-only: it
@@ -76,10 +78,10 @@ export function CredentialsForm({ account, busy, error, onSave }: {
   return (
     <section className="rt-card stack" aria-labelledby="receive-form" data-tour="payments-credentials">
       <h2 id="receive-form">{account.credentials_saved ? 'Change the key and secret' : 'Enter the key and secret'}</h2>
-      <p className="hint">
+      <Hint full>
         You find both in your own Pesapal account, under the API keys of your business. The secret cannot be shown again after you save it.
         Because this changes where your members' payments go, you are asked for a code from your authenticator app.
-      </p>
+      </Hint>
       <form
         className="stack"
         aria-label="Consumer key and secret"
@@ -111,7 +113,7 @@ export function CredentialsForm({ account, busy, error, onSave }: {
         <CodeField id="receive-code" value={code} onChange={setCode} problem={codeBad} />
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
         <p>
-          <BusyButton type="submit" className="rt-primary" busy={busy} disabled={!ready}>Save the key and secret</BusyButton>
+          <BusyButton type="submit" className="rt-primary" busy={busy} notReady={!ready}>Save the key and secret</BusyButton>
         </p>
       </form>
     </section>
@@ -146,7 +148,7 @@ export function RemoveAccount({ busy, error, onRemove }: { busy: boolean; error:
           <p className="alert alert-warning">Collecting stops until you connect an account again. Payments already made are not affected.</p>
           <CodeField id="remove-code" value={code} onChange={setCode} problem={code === '' ? null : codeProblem(code)} />
           <p className="cluster">
-            <BusyButton type="submit" className="rt-primary" busy={busy} disabled={codeProblem(code) !== null}>Yes, remove it</BusyButton>
+            <BusyButton type="submit" className="rt-primary" busy={busy} notReady={codeProblem(code) !== null}>Yes, remove it</BusyButton>
             <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={() => { setConfirming(false); setCode(''); }}>Keep it</button>
           </p>
         </form>
@@ -198,7 +200,7 @@ export function ReceivePaymentsPage() {
     return (
       <main className="rt ln">
         <h1>Receive payments</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
@@ -217,7 +219,7 @@ export function ReceivePaymentsPage() {
       {account && canChange && account.credentials_saved && account.status !== 'verified' && (
         <section className="rt-card stack" aria-labelledby="receive-test" data-tour="payments-test">
           <h2 id="receive-test">Test the connection</h2>
-          <p className="hint">We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</p>
+          <Hint>We ask Pesapal for access with your key and secret and tell it where to report payments. Nothing is charged.</Hint>
           {test.error && <p role="alert" className="alert alert-danger">{messageOf(test.error)}</p>}
           <p>
             <BusyButton type="button" className="rt-primary" busy={test.isPending} disabled={busy || !account.host_ready} onClick={() => test.mutate()}>

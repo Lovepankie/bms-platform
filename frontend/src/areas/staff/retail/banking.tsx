@@ -13,6 +13,8 @@ import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
+import { ActionBar } from '../../../app/ui/ActionBar';
+import { Hint } from '../../../app/ui/Hint';
 
 // Cash banked (FR-RET-21 to FR-RET-23). The server works out what to expect: every caller sees "Cash
 // expected" (takings less what was paid out of the till). Only a caller with retail.profit.read also gets
@@ -28,7 +30,7 @@ export function ExpectedFigures({ expected, date }: { expected: BankingExpected;
         <span>Cash expected</span>
         <strong>{money(expected.cash_expected_minor ?? 0)}</strong>
       </p>
-      <p className="hint">Takings less what was paid out of the till for expenses and advances, plus advance repayments received.</p>
+      <Hint>Takings less what was paid out of the till for expenses and advances, plus advance repayments received.</Hint>
       {expected.cash_purchases_minor !== undefined && <p className="rt-row"><span>Stock bought with cash, at cost</span><strong>{money(expected.cash_purchases_minor)}</strong></p>}
       {expected.savings_minor !== undefined && <p className="rt-row"><span>Savings set aside</span><strong>{money(expected.savings_minor)}</strong></p>}
       {expected.expected_minor !== undefined && <p className="rt-row"><span>Expected to bank</span><strong>{money(expected.expected_minor)}</strong></p>}
@@ -65,9 +67,11 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
       <label htmlFor="banking-reference">Bank reference (optional)</label>
       <input id="banking-reference" maxLength={100} value={draft.reference} onChange={(e) => setDraft((d) => ({ ...d, reference: e.target.value }))} />
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={blocked}>
-        Save banking
-      </BusyButton>
+      <ActionBar>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={blocked}>
+          Save banking
+        </BusyButton>
+      </ActionBar>
     </form>
   );
 }
@@ -141,7 +145,6 @@ export function BankingScreen() {
         </Saved>
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(b) => { setSaved(b); show('Banking recorded.', 'success'); }} />
         </>
       )}
@@ -209,7 +212,7 @@ export function BankingReportView({ days }: { days: BankingDay[] }) {
       {imported.length > 0 && (
         <section aria-label="Imported days">
           <h2>Days imported from the old app <ImportedBadge /></h2>
-          <p className="hint">These days are shown for reference. They are not part of the unbanked total above.</p>
+          <Hint full>These days are shown for reference. They are not part of the unbanked total above.</Hint>
           <BankingDays days={imported} />
         </section>
       )}
@@ -226,7 +229,7 @@ export function BankingReportScreen() {
   });
   return (
     <Gate screen="bankingReport" title="Banking report">
-      <p><ScreenLink screen="banking" to="/staff/retail/banking" tour="banking-back-link">Record banking</ScreenLink></p>
+      <p><ScreenLink screen="banking" to="/staff/retail/banking" tour="banking-back-link" action>Record banking</ScreenLink></p>
       <div data-tour="banking-report-window"><WindowFields id="banking-report" window={window} /></div>
       {report.isError && <Problem error={report.error} />}
       {report.isPending && <p className="loading">Loading</p>}

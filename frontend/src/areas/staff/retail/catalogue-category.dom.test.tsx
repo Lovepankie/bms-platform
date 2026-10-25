@@ -8,6 +8,9 @@ import { mockMe, prefixBase } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // Items added inside a category (issue #493, owner decisions D14 and D16): the category page lists its items and adds one with the
 // category fixed (no dropdown), the Item code may be left empty for the category's next code, the Items form asks for the
 // category first, and the Categories list shows each code start and opens the category. Fabricated items.
@@ -153,7 +156,7 @@ describe('the item form outside a category', () => {
     expect(description.getAttribute('aria-required')).toBe('true');
     expect(screen.getByLabelText('Item code').getAttribute('aria-required')).toBeNull();
     const add = screen.getByRole('button', { name: /^Add item/ }) as HTMLButtonElement;
-    expect(add.disabled).toBe(false);
+    expect(ready(add)).toBe(true);
     fireEvent.click(add);
     expect(document.activeElement).toBe(category);
     expect(await screen.findByText('Choose a category.')).toBeTruthy();

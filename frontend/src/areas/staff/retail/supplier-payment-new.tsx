@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { retail, type SupplierOpenItem } from '../../../api/retail';
 import { useStaff } from '../context';
@@ -107,7 +107,7 @@ export function PaymentFormView({ form, suppliers, branches, items, owed, loadin
       )}
       {problem && (form.amount.trim() !== '' || form.supplierId !== '') && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="payment-save">Save payment</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="payment-save">Save payment</BusyButton>
 
     </form>
   );
@@ -143,7 +143,6 @@ export function SupplierPaymentNewPage() {
   });
   return (
     <Gate screen="supplierPayments" title="Pay a supplier">
-      <p><Link to="/staff/retail/supplier-payments">Back to supplier payments</Link></p>
       <PaymentFormView
         form={draft}
         suppliers={suppliers}

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useSyncExternalStore, type ButtonHTMLAttributes, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes, type MouseEvent } from 'react';
+import { focusFirstMissing } from './Field';
 
 // The one busy button (#456): every button that writes (a sale, a payment, an invitation, a sign-in)
 // shows a small spinner in its end padding while its request runs and cannot be pressed twice. The label
@@ -51,15 +52,46 @@ export function BusyAnnouncer({ modal = false }: { modal?: boolean }) {
   );
 }
 
+// The main action of a form (issue #526, docs/ui-rules.md rule 6) never looks off while its fields are not yet right: the form
+// passes `notReady` (never `disabled`) for that, and the button stays enabled and in its fill, and a press, or Enter in a field,
+// sends nothing and takes the person to the first missing or wrong field instead (rule 10); where no field is marked, one line
+// under it says to check the fields above. It carries data-not-ready while so. `disabled` keeps its plain meaning, for a block
+// that is not about the fields (another request running, a server not set up, a person who may only look).
+
+/**
+ * Scrolls to and focuses the first missing or wrong field of the button's own form; false when none, or when the button sits in
+ * no form, so a press never jumps to an unrelated field elsewhere on the page.
+ */
+function leadToMissing(button: HTMLButtonElement | null): boolean {
+  const root = button?.form ?? null;
+  return root ? focusFirstMissing(root) : false;
+}
+
 // The longest a press or submit holds a button whose busy never turns on (an onClick that never settles).
 const HOLD_MAX = 10_000;
 
-export type BusyButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { busy: boolean };
+export type BusyButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  busy: boolean;
+  /** The form's fields are not yet right: a press goes to the first missing or wrong field instead of sending (issue #526). */
+  notReady?: boolean;
+};
 
-export function BusyButton({ busy, disabled, className, onClick, children, ...rest }: BusyButtonProps) {
+export function BusyButton({ busy, disabled, notReady: fieldsNotReadyProp, className, onClick, children, ...rest }: BusyButtonProps) {
+  const fieldsNotReadyGiven = fieldsNotReadyProp !== undefined;
+  const fieldsNotReady = fieldsNotReadyProp === true;
   const button = useRef<HTMLButtonElement>(null);
   const busyNow = useRef(busy);
   busyNow.current = busy;
+  const notReady = fieldsNotReady && !busy && !disabled;
+  // A button whose form passes notReady at all (true or false) may need to say why a press sent nothing.
+  const canNudge = fieldsNotReadyGiven;
+  const notReadyNow = useRef(notReady);
+  notReadyNow.current = notReady;
+  // A press while not ready that found no field to go to: the line under the button says what to do.
+  const [nudge, setNudge] = useState(false);
+  useEffect(() => {
+    if (!notReady) setNudge(false);
+  }, [notReady]);
   // A second press can land before the pending state renders (a double click is two events in one
   // task), so a press holds the button until busy shows, or until the press's own work is over (an
   // onClick that awaits or throws) and one more task has passed (a form that refused its input). A
@@ -87,7 +119,13 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
     const owner = button.current?.form;
     if (!owner || (rest.type !== undefined && rest.type !== 'submit')) return;
     const drop = (e: SubmitEvent) => {
-      if (busyNow.current || (held.current && e.submitter !== button.current)) {
+      // Only a submit this button sends (a press, or Enter in a field, whose submitter is the form's first submit button) waits
+      // for the fields; another submit button of the form keeps working.
+      if (notReadyNow.current && (!e.submitter || e.submitter === button.current)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setNudge(!leadToMissing(button.current));
+      } else if (busyNow.current || (held.current && e.submitter !== button.current)) {
         e.preventDefault();
         e.stopImmediatePropagation();
       } else if (!held.current) {
@@ -117,6 +155,11 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
   }
 
   function press(e: MouseEvent<HTMLButtonElement>) {
+    if (notReadyNow.current) {
+      e.preventDefault();
+      setNudge(!leadToMissing(button.current));
+      return;
+    }
     if (busyNow.current || held.current) {
       e.preventDefault();
       return;
@@ -131,7 +174,7 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
     }
   }
 
-  return (
+  const control = (
     <button
       ref={button}
       {...rest}
@@ -139,10 +182,23 @@ export function BusyButton({ busy, disabled, className, onClick, children, ...re
       disabled={busy ? undefined : disabled}
       aria-disabled={busy || rest['aria-disabled'] || undefined}
       aria-busy={busy || undefined}
+      data-not-ready={notReady || undefined}
       onClick={press}
     >
       {children}
       {busy && <span className="busy-spinner" aria-hidden="true" />}
     </button>
+  );
+  // One shape always, so the nudge never remounts the button (focus stays on it); a button that may nudge keeps its status line
+  // mounted and empty until there is something to say, so a screen reader hears the words when they come.
+  return (
+    <>
+      {control}
+      {canNudge && (
+        <span className={nudge ? 'busy-nudge' : 'busy-nudge busy-nudge-empty'} role="status">
+          {nudge ? 'Fill in or correct the fields above first.' : ''}
+        </span>
+      )}
+    </>
   );
 }

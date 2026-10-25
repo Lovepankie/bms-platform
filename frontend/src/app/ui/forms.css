@@ -123,9 +123,10 @@ label:has(> input[type='checkbox']) {
   cursor: pointer;
 }
 
+/* The chosen row: its edge in the brand colour on the plain surface, no lavender tint (issue #526). */
 label:has(> input:checked) {
   border-color: var(--color-accent);
-  background: var(--color-accent-tint);
+  background: var(--color-surface);
 }
 
 label:has(> input:focus-visible) {

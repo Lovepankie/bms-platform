@@ -5,6 +5,8 @@ import { StaffContext } from '../context';
 import { showPercent } from './maths';
 import { canUse } from './permissions';
 import { money } from './ui';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { Hint } from '../../../app/ui/Hint';
 
 // Shared pieces of the analytics screens (issue #149): a date range with the server's 366 day limit,
 // bars and sparklines drawn as inline SVG (no chart library; the figures are always in the text
@@ -16,14 +18,14 @@ export const MAX_RANGE_DAYS = 366;
 export function ToStock({ children }: { children: ReactNode }) {
   const staff = useContext(StaffContext);
   const router = useRouter({ warn: false });
-  return router && staff && canUse(staff.me, 'stock') ? <Link to="/staff/retail/stock">{children}</Link> : <>{children}</>;
+  return router && staff && canUse(staff.me, 'stock') ? <Link className="figure-link" to="/staff/retail/stock">{children}</Link> : <>{children}</>;
 }
 
 /** A total that opens the All sales page (or Credit sales with `credit`), for a session that may read sales; plain text otherwise (issue #336). */
 export function ToSales({ children, credit = false }: { children: ReactNode; credit?: boolean }) {
   const staff = useContext(StaffContext);
   const router = useRouter({ warn: false });
-  return router && staff && canUse(staff.me, 'salesHistory') ? <Link to={credit ? '/staff/retail/credit-sales' : '/staff/retail/sales'}>{children}</Link> : <>{children}</>;
+  return router && staff && canUse(staff.me, 'salesHistory') ? <Link className="figure-link" to={credit ? '/staff/retail/credit-sales' : '/staff/retail/sales'}>{children}</Link> : <>{children}</>;
 }
 
 /** The default range: the last 30 days, ending today in the business's timezone. */
@@ -41,16 +43,18 @@ export function rangeProblem(from: string, to: string): string | null {
   return null;
 }
 
+/** The days of a report: the one PeriodPicker (issue #526), within the server's 366 day limit. */
 export function DateRange({ from, to, onFrom, onTo }: { from: string; to: string; onFrom: (v: string) => void; onTo: (v: string) => void }) {
-  const problem = rangeProblem(from, to);
   return (
-    <>
-      <div className="rt-row">
-        <div><label htmlFor="range-from">From</label><input id="range-from" type="date" value={from} onChange={(e) => onFrom(e.target.value)} /></div>
-        <div><label htmlFor="range-to">To</label><input id="range-to" type="date" value={to} onChange={(e) => onTo(e.target.value)} /></div>
-      </div>
-      {problem && <p role="alert" className="rt-flag">{problem}</p>}
-    </>
+    <PeriodPicker
+      from={from}
+      to={to}
+      maxDays={MAX_RANGE_DAYS}
+      onChange={(range) => {
+        onFrom(range.from);
+        onTo(range.to);
+      }}
+    />
   );
 }
 
@@ -71,7 +75,7 @@ export function Section({ title, hint, children }: { title: string; hint?: strin
   return (
     <section className="an-section">
       <h2>{title}</h2>
-      {hint && <p className="hint">{hint}</p>}
+      {hint && <Hint>{hint}</Hint>}
       {children}
     </section>
   );

@@ -15,6 +15,10 @@ import { usePersistedDraft, newIdempotencyKey } from './idempotency';
 import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt, sellingBranches } from './permissions';
 import { openMadePdf } from './documents-ui';
 import { Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
+import { showDate } from './maths';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { Hint } from '../../../app/ui/Hint';
 
 // One credit buyer's account (customer_accounts capability, ADR-033, issue #196): the limit and the terms, what is owed,
 // payment on account, the payments taken, and the statement. A seller opens it from Credit buyers or Credit control; the
@@ -35,7 +39,7 @@ export function AccountSummary({ account, canManage, busy, error, onSave }: {
   return (
     <section aria-label="Account" className="rt-card" data-tour="account-summary">
       <p className="rt-total" data-testid="owed">{account.balance_minor && account.balance_minor > 0 ? `Owes ${money(account.balance_minor)}` : 'Owes nothing'}</p>
-      <p className="hint">Counted over the branches you may read. A payment on account pays these sales.</p>
+      <Hint>Counted over the branches you may read. A payment on account pays these sales.</Hint>
       {(account.delivery_fees ?? []).length > 0 && (
         <div data-testid="delivery-fees-owed">
           <p className="rt-total">Also owes {money(account.delivery_fees_owed_minor ?? 0)} of delivery fees, paid on each order:</p>
@@ -65,7 +69,7 @@ export function AccountSummary({ account, canManage, busy, error, onSave }: {
           <input id="credit-limit" inputMode="numeric" value={form.limit} onChange={(e) => setForm({ ...form, limit: e.target.value })} aria-invalid={problem !== null} />
           <label htmlFor="credit-terms">Payment terms in days (leave empty for none)</label>
           <input id="credit-terms" inputMode="numeric" value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} aria-invalid={problem !== null} />
-          <p className="hint">A credit sale to this buyer is refused above the limit unless someone who may override gives a reason. The terms set the date a sale falls due.</p>
+          <Hint full>A credit sale to this buyer is refused above the limit unless someone who may override gives a reason. The terms set the date a sale falls due.</Hint>
           {problem && <p role="alert" className="rt-flag">{problem}</p>}
           <p className="cluster">
             <BusyButton busy={busy ?? false} type="submit" disabled={problem !== null}>Save</BusyButton>
@@ -148,7 +152,7 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
             <div className="stack" data-testid="pay-manual">
               {payable.map((s) => (
                 <div key={s.sale_id}>
-                  <label htmlFor={`alloc-${s.sale_id}`}>{s.sale_no}, {s.sale_date}, owes {money(s.balance_minor ?? 0)}</label>
+                  <label htmlFor={`alloc-${s.sale_id}`}>{s.sale_no}, {showDate(s.sale_date)}, owes {money(s.balance_minor ?? 0)}</label>
                   <input id={`alloc-${s.sale_id}`} inputMode="numeric" value={rowOf(s.sale_id ?? '').text} onChange={(e) => setRow(s.sale_id ?? '', e.target.value)} />
                 </div>
               ))}
@@ -156,7 +160,7 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
           )}
           {problem && amountText !== '' && <p role="alert" className="rt-flag">{problem}</p>}
           <Problem error={error} />
-          <BusyButton busy={busy ?? false} type="submit" className="rt-primary" disabled={problem !== null}>Save payment</BusyButton>
+          <BusyButton busy={busy ?? false} type="submit" className="rt-primary" notReady={problem !== null}>Save payment</BusyButton>
         </form>
       )}
     </section>
@@ -184,7 +188,7 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
           <p>
             <strong>{r.receipt_no}</strong> {r.status === 'reversed' && <span className="badge badge-warning">Reversed</span>}
             <br />
-            {money(r.amount_minor ?? 0)} by {methodWords(r.method)} on {r.paid_on}, received at {nameOf(r.branch_id)}.
+            {money(r.amount_minor ?? 0)} by {methodWords(r.method)} on {showDate(r.paid_on)}, received at {nameOf(r.branch_id)}.
           </p>
           <p className="hint">
             {(r.allocations ?? []).map((a) => `${a.sale_no} ${money(a.amount_minor ?? 0)}`).join(', ')}
@@ -198,7 +202,7 @@ export function ReceiptList({ items, canReverse, busy, error, nameOf, onReverse 
             <form className="stack" onSubmit={(e) => { e.preventDefault(); const why = reasonOf(reason); if (why && !busy) { onReverse(r, why); setReversing(null); } }}>
               <label htmlFor={`reverse-${r.id}`}>Why is it reversed? (at least {MIN_REASON} characters)</label>
               <input id={`reverse-${r.id}`} value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-              <p className="hint">The sales owe this money again. To pay different sales, take the payment again afterwards.</p>
+              <Hint full>The sales owe this money again. To pay different sales, take the payment again afterwards.</Hint>
               <p className="cluster">
                 <BusyButton busy={busy ?? false} type="submit" disabled={reasonOf(reason) === null}>Reverse this payment</BusyButton>
                 <button type="button" className="btn-ghost" onClick={() => setReversing(null)}>Cancel</button>
@@ -243,9 +247,9 @@ export function StatementView({ statement }: { statement: Statement }) {
       {imported && (imported.sales ?? []).length > 0 && (
         <section aria-label="Before system start" data-testid="before-system-start">
           <h3>Before system start</h3>
-          <p className="hint">These credit sales were brought in from the old records. They are not in the accounts of this system, so they are listed apart and are not in the closing balance above.</p>
+          <Hint full>These credit sales were brought in from the old records. They are not in the accounts of this system, so they are listed apart and are not in the closing balance above.</Hint>
           <ul>
-            {(imported.sales ?? []).map((s) => <li key={s.sale_id}>{s.sale_no}, {s.sale_date}: {money(s.total_minor ?? 0)}</li>)}
+            {(imported.sales ?? []).map((s) => <li key={s.sale_id}>{s.sale_no}, {showDate(s.sale_date)}: {money(s.total_minor ?? 0)}</li>)}
           </ul>
           <p className="rt-total">With these, the buyer owes {money(statement.balance_minor ?? 0)}.</p>
         </section>
@@ -303,14 +307,13 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
     return (
       <main className="rt">
         <h1>Customer account</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
   return (
     <main className="rt rt-wide">
       <h1>{account.data?.name ?? 'Customer account'}</h1>
-      <p><Link to="/staff/retail/catalogue/buyers">Back to customers who owe</Link></p>
       {account.isPending && <SkeletonList label="Loading the account" />}
       <Problem error={account.error} />
       {message && <Success>{message}</Success>}
@@ -348,10 +351,7 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
       </section>
       <section aria-label="Statement" data-tour="account-statement">
         <h2>Statement</h2>
-        <div className="rt-row">
-          <div><label htmlFor="st-from">From</label><input id="st-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-          <div><label htmlFor="st-to">To</label><input id="st-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        </div>
+        <PeriodPicker from={from} to={to} label="Days of the statement" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
         {!ranged && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
         {statement.isPending && ranged && <SkeletonList label="Loading the statement" />}
         <Problem error={statement.error} />

@@ -73,22 +73,3 @@ export function CurrentShop({ me, branch }: { me: Me; branch: string | null }) {
     </div>
   );
 }
-
-export function BranchPicker({ me, branch, onChoose }: { me: Me; branch: string | null; onChoose: (selection: string) => void }) {
-  const active = (me.branches ?? []).find((b) => b.id === branch);
-  return (
-    <label className="branch-picker" data-tour="branch-picker">
-      {active && <ShopLogo url={active.logo_url} name={branchLabel(active)} />}
-      Branch{' '}
-      <select value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
-        {me.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
-        {(me.branches ?? []).map((b) => (
-          <option key={b.id} value={b.id}>
-            {branchLabel(b)}
-            {b.stocks_goods === false ? ' (no stock)' : b.sells_goods === false ? ' (store)' : ''}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}

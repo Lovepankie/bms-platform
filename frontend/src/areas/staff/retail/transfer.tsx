@@ -15,6 +15,10 @@ import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { chosenPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { ActionBar } from '../../../app/ui/ActionBar';
+import { showDate } from './maths';
+import { RowChevron } from '../../../app/ui/ListRow';
+import { Hint } from '../../../app/ui/Hint';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -105,7 +109,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       </select>
       </div>
       {destinations.length === 0 && <p>You have no other branch to move stock to.</p>}
-      {sends && <p className="hint">The stock leaves this branch now. The other branch counts it once they receive it.</p>}
+      {sends && <Hint full>The stock leaves this branch now. The other branch counts it once they receive it.</Hint>}
 
       <div data-tour="transfer-search">
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />
@@ -136,12 +140,11 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
 
       {problem && draft.lines.length > 0 && <p>{problem}</p>}
       <Problem error={save.error} />
-      <span data-tour="transfer-save">
-        <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null}>
+      <ActionBar>
+        <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={problem !== null} data-tour="transfer-save">
           {sends ? 'Send stock' : 'Move stock'}
         </BusyButton>
-
-      </span>
+      </ActionBar>
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}
@@ -157,7 +160,7 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
   return (
     <section aria-label="Saved">
       <h2>{HEADING[transfer.status ?? 'completed'] ?? 'Stock moved'}</h2>
-      <p>From <ToStock>{label(transfer.from_branch_id)}</ToStock> to <ToStock>{label(transfer.to_branch_id)}</ToStock> on {transfer.transfer_date}.</p>
+      <p>From <ToStock>{label(transfer.from_branch_id)}</ToStock> to <ToStock>{label(transfer.to_branch_id)}</ToStock> on {showDate(transfer.transfer_date)}.</p>
       {transfer.status === 'in_transit' && <p>It is on its way. It is in neither branch's stock until the other branch receives it (see On the way).</p>}
       <ul>
         {(transfer.lines ?? []).map((l) => {
@@ -200,7 +203,7 @@ export function MoveStock() {
       ) : (
         <TransferForm key={`${branchId}-${round}`} fromBranchId={branchId} onSaved={setDone} prefill={round === 0 ? prefill : null} />
       )}
-      <p><Link to={'/staff/retail/transfers' as never}>See stock moves</Link></p>
+      <Link className="link-row" to={'/staff/retail/transfers' as never}>See stock moves<RowChevron /></Link>
     </Gate>
   );
 }

@@ -9,6 +9,7 @@ import { newIdempotencyKey } from './idempotency';
 import { showDate } from './maths';
 import { DOCUMENT_ISSUE, canIssueDocuments, holdsAt } from './permissions';
 import { Problem, money } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // The parts of the optional documents screens that more than one page shows (documents capability, ADR-033, issue #197):
 // opening a document's PDF, the card of a document, the numbered series, and the documents of one sale. A document is an
@@ -122,7 +123,7 @@ export function DocumentCard({ doc, branchName, term = '' }: { doc: RetailDocume
         {doc.type === 'quotation' && doc.valid_until ? `, valid until ${showDate(doc.valid_until)}` : ''}
         {branchName ? `, ${branchName}` : ''}
       </p>
-      {doc.status === 'void' && <p className="hint">Its sale or quotation was cancelled. The PDF stays as it was issued.</p>}
+      {doc.status === 'void' && <Hint full>Its sale or quotation was cancelled. The PDF stays as it was issued.</Hint>}
       <PdfButton doc={doc} />
     </li>
   );
@@ -180,7 +181,7 @@ export function SeriesPanel({ series, canEdit, busy, onSave }: { series: Documen
   return (
     <section aria-label="Document numbers" data-tour="document-numbers">
       <h2>Document numbers</h2>
-      <p className="hint">Each document is numbered in its branch: the prefix, the branch code and a counter that never skips and never repeats. Changing a prefix changes later numbers only.</p>
+      <Hint full>Each document is numbered in its branch: the prefix, the branch code and a counter that never skips and never repeats. Changing a prefix changes later numbers only.</Hint>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {shown.map((s) => <SeriesRow key={s.type} series={s} canEdit={canEdit} busy={busy} onSave={onSave} />)}
       </ul>
@@ -212,7 +213,7 @@ export function SaleDocuments({ saleId, status, branchId }: { saleId: string; st
   return (
     <section aria-label="Documents of this sale" data-tour="sale-documents">
       <h2>Documents</h2>
-      <p className="hint">The till receipt is the default. Make an invoice or a delivery note only when the buyer needs one.</p>
+      <Hint>The till receipt is the default. Make an invoice or a delivery note only when the buyer needs one.</Hint>
       {docs.isPending && <p className="loading">Loading</p>}
       <Problem error={docs.error} />
       {items.length > 0 && <ul style={{ listStyle: 'none', padding: 0 }}>{items.map((d) => <DocumentCard key={d.id} doc={d} />)}</ul>}
@@ -248,7 +249,7 @@ export function TransferDocument({ transferId, branchId, status }: { transferId:
   return (
     <section aria-label="Delivery note of this move" data-tour="transfer-document">
       <h2>Delivery note</h2>
-      <p className="hint">Quantities only, never prices. For the person who carries the stock.</p>
+      <Hint>Quantities only, never prices. For the person who carries the stock.</Hint>
       {made ? (
         <ul style={{ listStyle: 'none', padding: 0 }}><DocumentCard doc={made} /></ul>
       ) : (

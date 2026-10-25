@@ -89,7 +89,7 @@ export function CollateralList() {
       {pages.isPending && branch !== null && <p className="loading">Loading collateral</p>}
       <Problem error={pages.error} />
       {pages.data && all.length === 0 ? (
-        <EmptyState art="noProducts" title="No collateral registered." action={add ? <Link to="/staff/lending/collateral/new" className="btn">Register the first item</Link> : undefined}>
+        <EmptyState title="No collateral registered." action={add ? <Link to="/staff/lending/collateral/new" className="btn">Register the first item</Link> : undefined}>
           Land titles, logbooks and other security appear here once they are registered.
         </EmptyState>
       ) : (

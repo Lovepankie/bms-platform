@@ -83,7 +83,7 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
   });
   const t = transfer.data;
-  useCrumbTail(t ? `Move of ${t.transfer_date}` : undefined, onClose);
+  useCrumbTail(t ? `Move of ${showDate(t.transfer_date)}` : undefined, onClose);
   const mayCancel = canUse(me, 'transfer') && (t?.status === 'completed' || t?.status === 'received');
   return (
     <section>
@@ -116,7 +116,7 @@ export function StockMoves() {
   });
   return (
     <Gate screen="transfers" title="Stock moves">
-      {!open && canUse(me, 'transfer') && <p data-tour="transfers-new"><Link to="/staff/retail/transfer">Move stock to another branch</Link></p>}
+      {!open && canUse(me, 'transfer') && <p data-tour="transfers-new"><Link className="btn btn-primary" to="/staff/retail/transfer">Move stock to another branch</Link></p>}
       <div data-tour="transfers-list">
       {open ? (
         <TransferDetail id={open} onClose={() => setOpen(null)} />

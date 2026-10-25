@@ -18,7 +18,7 @@ const TYPES: DocumentType[] = ['invoice', 'delivery_note', 'quotation'];
 
 export function DocumentsPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const queryClient = useQueryClient();
   const search = useLiveSearch();
@@ -40,7 +40,6 @@ export function DocumentsPage() {
   });
   return (
     <Gate screen="documents" title="Documents" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint" data-tour="documents-help">
         Open a sale to make its invoice or delivery note, or <Link to="/staff/retail/quotations">make a quotation</Link>. The till receipt stays the default: a sale never needs a document.
       </p>

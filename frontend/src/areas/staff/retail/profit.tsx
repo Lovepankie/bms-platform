@@ -2,11 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type DailyProfit, type DailyProfitRow, type Valuation } from '../../../api/retail';
-import { showPercent, showQty } from './maths';
+import { showDate, showPercent, showQty } from './maths';
 import { SkeletonList } from '../../../components/states';
+import { KeyFigure, KeyFigureRow } from '../../../app/ui/KeyFigure';
 import { ToSales, ToStock } from './analytics-ui';
 import { BranchRequired, CategoryLabel, Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
 import { needsOf } from './permissions';
+import { PeriodPicker } from '../../../app/ui/PeriodPicker';
+import { Hint } from '../../../app/ui/Hint';
 
 // Stock value (FR-RET-09) is a stock read; its cost columns arrive only with retail.profit.read.
 // Daily profit (FR-RET-10) needs retail.profit.read (the Gate), and the server refuses it otherwise.
@@ -18,17 +21,19 @@ const hasCost = (x: { value_at_cost_minor?: number; expected_profit_minor?: numb
 type Sums = { sales?: number; cost?: number; profit?: number; bp?: number };
 
 /** The headline figures of a valuation as a small two column table, so no figure wraps on a phone. */
+/** The stock at price as the key figure (issue #526), with the cost and the profit expected under it for a reader of costs. */
 function Headline({ sums }: { sums: Sums }) {
   const withCost = sums.cost !== undefined;
   return (
-    <div className="table-wrap"><table>
-      <tbody>
-        {withCost && <tr><td>At cost</td><td className="num">{money(sums.cost ?? 0)}</td></tr>}
-        <tr><td>At price</td><td className="num">{money(sums.sales ?? 0)}</td></tr>
-        {withCost && <tr><td>Expected profit</td><td className="num">{money(sums.profit ?? 0)}</td></tr>}
-        {withCost && <tr><td>Expected profit % (over cost)</td><td className="num">{showPercent(sums.bp)}</td></tr>}
-      </tbody>
-    </table></div>
+    <KeyFigure label="Stock at price" value={money(sums.sales ?? 0)} tour="valuation-total">
+      {withCost && (
+        <>
+          <KeyFigureRow label="At cost" value={money(sums.cost ?? 0)} />
+          <KeyFigureRow label="Expected profit" value={money(sums.profit ?? 0)} />
+          <KeyFigureRow label="Expected profit % (over cost)" value={showPercent(sums.bp)} />
+        </>
+      )}
+    </KeyFigure>
   );
 }
 
@@ -151,7 +156,7 @@ export function BranchTotals({ valuation, nameOf }: { valuation: Valuation; name
 }
 
 export function ValuationPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const valuation = useQuery({
     queryKey: ['retail', 'valuation', all ? 'all' : branchId],
@@ -162,9 +167,9 @@ export function ValuationPage() {
     <Gate screen="valuation" title="Stock value">
       {!all && branchId === null ? <BranchRequired permissions={needsOf('valuation')} /> : (
         <>
-          <p className="branch-line" data-tour="valuation-branch">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
+          {/* The key figure carries valuation-total once loaded; until then the skeleton holds its place for the tour. */}
+          {valuation.isPending && <div data-tour="valuation-total"><SkeletonList label="Loading stock value" /></div>}
           <div data-tour="valuation-figures">
-          {valuation.isPending && <SkeletonList label="Loading stock value" />}
           <Problem error={valuation.error} />
           {valuation.data && (
             <>
@@ -238,7 +243,7 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
     byDay.set(r.date ?? '', add(byDay.get(r.date ?? '') ?? none(), r));
     byBranch.set(r.branch_id ?? '', add(byBranch.get(r.branch_id ?? '') ?? none(), r));
   }
-  const days = [...byDay.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([date, f]) => ({ key: date, name: date, f }));
+  const days = [...byDay.entries()].sort(([x], [y]) => x.localeCompare(y)).map(([date, f]) => ({ key: date, name: showDate(date), f }));
   // ADR-043: with credit sales counted when the buyer pays, Sales becomes Received (money collected) and the profit is that of
   // the money received; what was sold, and what is still owed, come beside it.
   const onPayment = report.credit_sale_recognition === 'on_payment';
@@ -246,8 +251,8 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
   const atSale = report.counted_at_sale_minor ?? 0;
   return (
     <>
-      <p className="rt-total">{onPayment && atSale === 0 ? 'Profit from money received, for the period' : 'Profit for the period'} {money(report.profit_minor ?? 0)}</p>
-      <p className="hint"><ToSales>See the sales behind it</ToSales></p>
+      <KeyFigure label={onPayment && atSale === 0 ? 'Profit from money received, for the period' : 'Profit for the period'} value={money(report.profit_minor ?? 0)} />
+      <p><ToSales>See the sales behind it</ToSales></p>
       {onPayment && (
         <ul className="an-stats" data-testid="credit-recognition-summary">
           <li className="an-stat"><span className="an-stat-label">Sold</span><strong className="an-stat-value num">{money(report.sold_minor ?? 0)}</strong><span className="hint">Everything sold, credit included</span></li>
@@ -264,21 +269,21 @@ export function ProfitTable({ report, nameOf }: { report: DailyProfit; nameOf?: 
         </>
       )}
       <FiguresTable label="Day" onPayment={onPayment} rows={days} />
-      {onPayment && <p className="hint">A credit sale counts on the day the buyer pays, with its share of the profit. A part payment gives part of the profit. Savings use this profit.</p>}
+      {onPayment && <Hint>A credit sale counts on the day the buyer pays, with its share of the profit. A part payment gives part of the profit. Savings use this profit.</Hint>}
       {report.credit_recognition_starts_on && (
         <p className="hint" data-testid="credit-starts-on">
           {onPayment
-            ? `Credit sales entered and dated before ${report.credit_recognition_starts_on} count as they did, on the day of the sale.`
-            : `From ${report.credit_recognition_starts_on}, credit sales will count when the buyer pays.`}
+            ? `Credit sales entered and dated before ${showDate(report.credit_recognition_starts_on)} count as they did, on the day of the sale.`
+            : `From ${showDate(report.credit_recognition_starts_on)}, credit sales will count when the buyer pays.`}
         </p>
       )}
-      <p className="hint">Usage and damage reports count here. A debt written off is a loss on the day it was written off. The stock count difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</p>
+      <Hint>Usage and damage reports count here. A debt written off is a loss on the day it was written off. The stock count difference is the value of what a count found missing (a minus) or extra (a plus), at cost, on the day the count was committed.</Hint>
     </>
   );
 }
 
 export function ProfitPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   // The last seven days in the business's timezone, the server's own business date (#112 item 9).
   const [to, setTo] = useState(() => businessToday());
@@ -292,11 +297,7 @@ export function ProfitPage() {
     <Gate screen="profit" title="Daily profit" wide>
       {!all && branchId === null ? <BranchRequired permissions={needsOf('profit')} /> : (
         <>
-          <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-          <div className="rt-row" data-tour="profit-range">
-            <div><label htmlFor="from">From</label><input id="from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-            <div><label htmlFor="to">To</label><input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-          </div>
+          <PeriodPicker from={from} to={to} tour="profit-range" onChange={(range) => { setFrom(range.from); setTo(range.to); }} />
           {from > to && <p role="alert" className="rt-flag">The start date must not be after the end date.</p>}
           <div data-tour="profit-figures">
           {profit.isPending && from <= to && <SkeletonList label="Loading profit" />}

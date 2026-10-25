@@ -8,6 +8,7 @@ import { branchLabel } from '../../../auth/branch';
 import { EmptyState, SkeletonList } from '../../../components/states';
 import { showQty } from './maths';
 import { CategoryLabel, Gate, Problem, money, useIsPhone, useProfitAccess } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // Stock by store and shop (ADR-033, capability branch_roles): every product's balance in each branch
 // the user may read, the stores first and then the shops, a subtotal per role, the stock on its way
@@ -45,7 +46,7 @@ export function LocationTable({ report }: { report: StockByLocation }) {
   const groups = groupsOf(report.branches ?? []);
   const items = report.items ?? [];
   const cost = items.some((r) => r.value_minor !== undefined);
-  if (items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code.</EmptyState>;
+  if (items.length === 0) return <EmptyState title="No items found.">Try another name or code.</EmptyState>;
   const columnsOf = (g: { branches: LocationBranch[] }) => g.branches.length + (g.branches.length > 1 ? 1 : 0);
   return (
     <div className="table-wrap" tabIndex={0}>
@@ -91,7 +92,7 @@ export function LocationTable({ report }: { report: StockByLocation }) {
 export function LocationList({ report }: { report: StockByLocation }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const items = report.items ?? [];
-  if (items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code.</EmptyState>;
+  if (items.length === 0) return <EmptyState title="No items found.">Try another name or code.</EmptyState>;
   const groups = groupsOf(report.branches ?? []);
   return (
     <ul style={{ listStyle: 'none', padding: 0 }}>
@@ -165,7 +166,7 @@ export function StockByLocationPage() {
   const finding = report.isPlaceholderData || report.isFetching;
   return (
     <Gate screen="stockByLocation" title="Stores and shops" wide>
-      <p className="hint">Every store and shop you can read, the stores first. Stock on its way is in neither count; it has its own column.</p>
+      <Hint>Every store and shop you can read, the stores first. Stock on its way is in neither count; it has its own column.</Hint>
       <div data-tour="location-search">
         <SearchBox id="location-search" label="Search by name, code or category" search={search} fetching={finding} count={report.data?.items?.length} />
       </div>

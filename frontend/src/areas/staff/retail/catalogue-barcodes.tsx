@@ -7,6 +7,7 @@ import { checkBarcode, code128Widths, ean13Modules, formatName, isEan13 } from '
 import { UNITS, capabilityOn, holds } from './permissions';
 import { Problem } from './ui';
 import { activePacks } from './units-state';
+import { Hint } from '../../../app/ui/Hint';
 
 // The barcodes of an item on its edit form (ADR-070, issue #345; FR-RET-68): several per item, each for the item's own
 // unit or one of its pack sizes. The format is read from the code and its check digit checked here, as the server does.
@@ -89,7 +90,7 @@ export function BarcodeEditor({ product }: { product: Product }) {
   return (
     <fieldset data-testid="barcode-editor" data-tour="item-barcodes" onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
       <legend>Barcodes</legend>
-      <p className="hint">Scan the barcode on the item into the box, or type it. A scan when selling, buying stock or counting then finds this item.</p>
+      <Hint>Scan the barcode on the item into the box, or type it. A scan when selling, buying stock or counting then finds this item.</Hint>
       {list.length === 0 && <p className="empty-state">No barcode yet.</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {list.map((b) => (

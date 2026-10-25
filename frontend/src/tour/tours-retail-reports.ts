@@ -107,14 +107,15 @@ export const transfersPage: Tour = {
 
 export const valuationPage: Tour = {
   id: 'page-valuation',
-  version: 1,
+  // Version 2 trades the Which branch step, now the title of the top bar, for the stock at price in large figures (issue #526).
+  version: 2,
   title: 'This page: stock value',
   audience: (me) => held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/valuation',
   steps: [
-    retail({ id: 'branch', target: 'valuation-branch', title: 'Which branch', body: 'The figures are for the branch chosen at the top of the page. Choose All branches to see every branch.' }),
-    retail({ id: 'figures', target: 'valuation-figures', title: 'What your stock is worth', body: 'See the value at price, by category and by item. If you may see costs, you also see the cost and the profit you expect. Tap an item to open it in Stock.' }),
+    retail({ id: 'total', target: 'valuation-total', title: 'What your stock is worth', body: 'The large figure is your stock at the price you sell it, for the branch at the top of the page.' }),
+    retail({ id: 'figures', target: 'valuation-figures', title: 'By category and item', body: 'See the value at price, by category and by item. If you may see costs, you also see the cost and the profit you expect. Tap an item to open it in Stock.' }),
   ],
 };
 

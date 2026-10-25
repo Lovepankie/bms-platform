@@ -63,15 +63,24 @@ describe('the status dot', () => {
     expect(statusWords('online', 0, 0)).toBe('Online');
   });
 
-  it('is green with no count when nothing waits', async () => {
+  // Issue #526: online with nothing waiting, the bar says nothing; the dot comes back with news.
+  it('draws no dot online when nothing waits', async () => {
     const offline = testOffline(seller, { online: true });
     show(offline);
-    const dot = await screen.findByTestId('sync-dot');
-    expect(dot.getAttribute('data-state')).toBe('online');
-    expect(screen.getByRole('button', { name: 'Online' })).toBeTruthy();
+    await act(async () => undefined);
+    expect(screen.queryByTestId('sync-dot')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Online' })).toBeNull();
+    expect(screen.queryByText(/^\d+ waiting to sync$/)).toBeNull();
+  });
+
+  it('is green online, with the state in words, while a sale waits', async () => {
+    const offline = testOffline(seller, { online: true });
+    if (!offline) throw new Error('a seller sells offline');
+    await withItems(offline, [item('a', 1, { attempts: 1, nextAttemptAt: Date.now() + 60_000 })]);
+    show(offline);
+    expect((await screen.findByTestId('sync-dot')).getAttribute('data-state')).toBe('online');
     // The state is in words beside the dot, not in its colour alone.
     expect(screen.getByTestId('sync-word').textContent).toBe('Online');
-    expect(screen.queryByText(/^\d+ waiting to sync$/)).toBeNull();
   });
 
   it('is grey offline with the count waiting, and follows the connection', async () => {
@@ -87,7 +96,7 @@ describe('the status dot', () => {
     expect(screen.getByTestId('sync-dot').getAttribute('data-state')).toBe('online');
   });
 
-  it('is amber while a sale is on its way, then green with the count gone', async () => {
+  it('is amber while a sale is on its way, then gone with the count', async () => {
     let answer: (v: { status: number; body: unknown }) => void = () => {};
     const offline = testOffline(seller, {
       online: true,
@@ -105,7 +114,7 @@ describe('the status dot', () => {
       answer({ status: 201, body: { id: 's1', sale_no: 'RS00000001' } });
       await run;
     });
-    expect(screen.getByTestId('sync-dot').getAttribute('data-state')).toBe('online');
+    expect(screen.queryByTestId('sync-dot')).toBeNull();
     expect(screen.queryByText(/^\d+ waiting to sync$/)).toBeNull();
   });
 

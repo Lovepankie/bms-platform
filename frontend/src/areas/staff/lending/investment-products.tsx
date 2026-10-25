@@ -175,7 +175,7 @@ function ProductForm({ product, currency, onDone }: { product?: InvestmentProduc
       )}
       {problem && d.rate !== '' && <p className="field-hint">{problem}</p>}
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="submit" className="rt-primary btn-block" disabled={!!problem || d.name.trim() === ''}>
+      <BusyButton busy={save.isPending} type="submit" className="rt-primary btn-block" notReady={!!problem || d.name.trim() === ''}>
         {product ? 'Save changes' : 'Create product'}
       </BusyButton>
       {product && <p className="field-hint">Investments already opened keep the terms they were opened on.</p>}

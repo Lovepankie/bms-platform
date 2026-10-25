@@ -17,6 +17,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { Field, FieldsNeededNote } from '../../../app/ui/Field';
 import { WORDS, howManyInEach, plural, useFromNowOn } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
+import { RowChevron } from '../../../app/ui/ListRow';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -329,7 +330,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
 
       <p className="rt-total" aria-live="polite">Total cost {money(restockTotal(lines))}</p>
       <Problem error={save.error} />
-      <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} disabled={blocked}>Save the purchase</BusyButton>
+      <BusyButton type="submit" className="rt-primary" data-tour="restock-save" busy={save.isPending} notReady={blocked}>Save the purchase</BusyButton>
 
       {lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this purchase</button>
@@ -360,7 +361,7 @@ export function RestockSaved({ purchase, context, onNew }: { purchase: Purchase;
     <section aria-label="Purchase saved">
       <h2>Purchase saved{purchase.purchase_no ? ` (${purchase.purchase_no})` : ''}</h2>
       <p>
-        From {context.supplierName || 'no supplier'}, bought on {purchase.purchased_on}: {count} {count === 1 ? 'item' : 'items'}, total cost{' '}
+        From {context.supplierName || 'no supplier'}, bought on {showDate(purchase.purchased_on)}: {count} {count === 1 ? 'item' : 'items'}, total cost{' '}
         {money(purchase.total_minor ?? 0)}.
       </p>
       {(purchase.lines ?? []).some((l) => l.unit) && (
@@ -413,7 +414,7 @@ export function RestockPage() {
   const again = (useRouterState({ select: (state) => state.location.search }) as { again?: string }).again;
   return (
     <Gate screen="restock" title={WORDS.buyStock}>
-      <p data-tour="restock-past"><Link to="/staff/retail/restocks">Past purchases, to correct a mistake</Link></p>
+      <Link className="link-row" data-tour="restock-past" to="/staff/retail/restocks">Past purchases, to correct a mistake<RowChevron /></Link>
       {done ? (
         <RestockSaved purchase={done.purchase} context={done.context} onNew={() => { setDone(null); setRound((n) => n + 1); }} />
       ) : typeof again === 'string' && again !== '' ? (

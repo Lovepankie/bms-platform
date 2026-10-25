@@ -14,6 +14,7 @@ import { WhoCanDoWhat } from './who-can-do-what';
 import { ResetPanel } from './reset-panel';
 import { TransferOwner } from './transfer-owner';
 import { canActOn, canManageUsers, canResetSignIn, contactLine, matchesSearch, offeredChoices, ownershipTargets, roleChoices, roleLines, showUsers, statusWords } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Staff users (issue #319; FR-IAM-01, FR-IAM-02, FR-IAM-08): who works in the business, what each person may do, and who has not
 // joined yet. Anyone who may read the list sees it; an administrator also invites, sends a new link, changes roles and deactivates.
@@ -51,7 +52,7 @@ export function UsersScreen() {
     return (
       <main className="rt ln">
         <h1>Staff users</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

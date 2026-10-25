@@ -12,6 +12,8 @@ import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Landed costs (the purchasing capability, issue #199): the freight, duty, clearing and insurance of a delivery, owed to someone
 // other than the supplier and spread over the goods received so each item's cost includes them. The list, found by our number, the
@@ -48,10 +50,10 @@ export function LandedCostsPage() {
   const list = useCursorList(['retail', 'landed-costs', query, status], (cursor, signal) => retail.listLandedCosts({ query, status, cursor, signal }));
   return (
     <Gate screen="landedCosts" title="Landed costs">
-      <p className="hint" data-tour="landed-help">
+      <Hint tour="landed-help">
         Freight, import duty, clearing and insurance are part of what goods really cost you. Record them here against the deliveries they belong to,
         and they are shared over the items, so each item&apos;s cost includes its share. The person you owe is paid like any supplier.
-      </p>
+      </Hint>
       <p className="cluster">
         <Link className="btn rt-primary" to="/staff/retail/landed-costs/new" data-tour="landed-new">New landed cost</Link>
         <Link className="btn-sm" to="/staff/retail/goods-received">Goods received</Link>
@@ -205,7 +207,7 @@ export function LandedCostPage() {
     return (
       <main className="rt">
         <h1>Landed cost</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
@@ -213,7 +215,6 @@ export function LandedCostPage() {
   return (
     <main className="rt rt-wide">
       <h1>{c?.landed_no ?? 'Landed cost'}</h1>
-      <p><Link to="/staff/retail/landed-costs">Back to landed costs</Link></p>
       {cost.isPending && <SkeletonList label="Loading the landed cost" />}
       <Problem error={cost.error} />
       {message && <Success>{message}</Success>}

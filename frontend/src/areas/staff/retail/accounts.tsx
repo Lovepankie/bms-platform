@@ -5,6 +5,7 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Customer } from '../../../api/retail';
 import { limitWords, termsWords } from './account-state';
 import { Gate, Problem, money } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // Customer accounts (customer_accounts capability, ADR-033, issue #196): the credit buyers with what each owes, the limit and
 // the terms. It is the administrator's page (retail.credit.manage); a seller opens one buyer's account from Credit buyers.
@@ -39,7 +40,7 @@ function AccountsPage() {
   const people = (rows.data?.pages ?? []).flatMap((p) => p.items ?? []);
   return (
     <Gate screen="customerAccounts" title="Customer accounts">
-      <p className="hint" data-tour="accounts-help">Open a buyer to set their credit limit and payment terms, take a payment, or read their statement.</p>
+      <Hint tour="accounts-help">Open a buyer to set their credit limit and payment terms, take a payment, or read their statement.</Hint>
       <p><Link to="/staff/retail/customer-ageing">See what every buyer owes, by how late it is</Link></p>
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />

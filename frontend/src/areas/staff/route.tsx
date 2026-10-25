@@ -3,7 +3,7 @@ import { Outlet, createLazyRoute, useNavigate, useRouterState } from '@tanstack/
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
 import { loadRetailMock, retailMockEnabled } from '../../api/retail';
-import { BusyButton } from '../../app/ui/BusyButton';
+import { useShellBrand } from '../../app/branding';
 import { endPendingLogout, getAccessToken, logoutPending, markLogoutPending, refreshFailedOffline, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { OfflineProvider, lastProfile, useOfflineSupport, waitingNow } from '../../offline/offline-context';
 import { SignOutWarning } from '../../offline/sign-out-warning';
@@ -12,13 +12,13 @@ import { InstallPrompt } from '../../install/InstallPrompt';
 import { NewLogoCard } from '../../install/NewIcon';
 import { createPush } from '../../push/push';
 import { TurnOnCard } from '../../push/TurnOnCard';
-import { HelpMenu, TourProvider } from '../../tour/host';
+import { TourProvider } from '../../tour/host';
 import { CrumbProvider, StaffBreadcrumbs } from '../../components/breadcrumbs';
-import { icons } from '../../components/icons';
 import { SideNav, useIsPhone } from '../../components/side-menu';
 import { BrandLoader } from '../../components/states';
 import { BillingBanner } from './billing/banner';
-import { BranchPicker, CurrentShop, useActiveBranch } from './branch-picker';
+import { CurrentShop, useActiveBranch } from './branch-picker';
+import { BranchTitle, OfflineBanner, TopMenu } from './top-bar';
 import { StaffContext, useOptionalStaff } from './context';
 import { FeatureSearch } from './feature-search';
 import { PlanNotice } from './plan';
@@ -201,9 +201,11 @@ export function StaffSideNav({ me }: { me: Me }) {
 }
 
 /**
- * Who is signed in, Search (issue #551), Help, the branch switcher and Sign out. Below 720px Sign out moves to the More tab's page (it stays here while
- * two-step set-up blocks the page, which has no tabs) and Sell is the first bottom tab (issue #539, which replaced the phone's menu button and one-tap Sell of issue #455). With StaffSideNav and the tab bar it
- * carries the data-tour anchors the first-run tours light up (tour/tours.ts).
+ * The one top bar of the staff area (issue #526, replacing the brand bar and the staff bar of two rows): the business and the
+ * branch in use as the title, which switches branch; Search (issue #551); the Online dot only while it has something to say;
+ * and one menu holding who is signed in, Help, Refresh, Light or dark and Sign out. Below 720px Sign out moves to the More
+ * tab's page (it stays in the menu while two-step set-up blocks the page, which has no tabs) and Sell is the first bottom tab
+ * (issue #539). With StaffSideNav and the tab bar it carries the data-tour anchors the first-run tours light up (tour/tours.ts).
  */
 export function StaffBar({
   me,
@@ -219,28 +221,24 @@ export function StaffBar({
   onSignOut: () => void;
   /** True while signing out runs: Sign out shows its spinner and takes no second press. */
   busy?: boolean;
-  /** Sign out in the bar on a phone too: while two-step set-up blocks the page there are no tabs and no More page to reach it. */
+  /** Sign out in the menu on a phone too: while two-step set-up blocks the page there are no tabs and no More page to reach it. */
   signOutInBar?: boolean;
 }) {
   const phone = useIsPhone();
+  const logo = useShellBrand().logoSrc;
   return (
-    <header className="staff-bar">
-      <div className="staff-bar-top">
-        <span className="staff-user">
-          <span className="avatar">{icons.user}</span>
-          <span className="staff-user-name">{me.full_name}</span>
-        </span>
-        <SyncStatus />
-        <FeatureSearch me={me} />
-        <HelpMenu feedback />
-        <BranchPicker me={me} branch={branch} onChoose={onBranch} />
-        {(!phone || signOutInBar) && (
-          <BusyButton type="button" className="btn-ghost btn-sm" busy={busy} onClick={onSignOut}>
-            Sign out
-          </BusyButton>
-        )}
-      </div>
-    </header>
+    <>
+      <header className="staff-bar">
+        <div className="staff-bar-top">
+          {!phone && logo && <img className="top-logo" src={logo} alt="" />}
+          <BranchTitle me={me} branch={branch} onChoose={onBranch} />
+          <SyncStatus />
+          <FeatureSearch me={me} />
+          <TopMenu me={me} busy={busy} onSignOut={onSignOut} signOut={!phone || signOutInBar} />
+        </div>
+      </header>
+      <OfflineBanner />
+    </>
   );
 }
 

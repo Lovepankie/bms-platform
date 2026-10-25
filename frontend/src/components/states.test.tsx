@@ -21,11 +21,10 @@ describe('illustrations', () => {
 });
 
 describe('state components', () => {
-  it('an empty state shows its drawing, title and help', () => {
-    const html = renderToStaticMarkup(<EmptyState art="noSales" title="No sales yet.">Sales appear here.</EmptyState>);
-    expect(html).toContain('class="empty-state empty-state-art"');
-    expect(html).toContain('No sales yet.');
-    expect(html).toContain('Sales appear here.');
+  // Issue #526: one plain line, no drawing and no dashed box.
+  it('an empty state is one plain line of its title and help, with no drawing', () => {
+    const html = renderToStaticMarkup(<EmptyState title="No sales yet.">Sales appear here.</EmptyState>);
+    expect(html).toBe('<div class="empty-line"><p>No sales yet. Sales appear here.</p></div>');
   });
 
   it('an error panel is an alert and a success panel a status', () => {

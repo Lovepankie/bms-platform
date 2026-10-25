@@ -1,5 +1,6 @@
 import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
 import { milliOf, qtyString, showQty } from './maths';
+import { Hint } from '../../../app/ui/Hint';
 
 // Item lists grouped by category as expandable sections (the stock list and the catalogue items; the item pickers
 // list matches only while something is typed and are never grouped, issue #534).
@@ -140,7 +141,7 @@ export function GroupControls<T>({ state, paged = false }: { state: CategoryGrou
           </>
         )}
       </div>
-      {state.grouped && paged && <p className="hint">Grouped within the items loaded so far. Show more items loads the rest.</p>}
+      {state.grouped && paged && <Hint>Grouped within the items loaded so far. Show more items loads the rest.</Hint>}
     </>
   );
 }

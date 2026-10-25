@@ -9,6 +9,7 @@ import { useStaff } from '../context';
 import { duplicateReasonOf, existingOf } from './catalogue-names';
 import { Gate, ProductPicker, Problem, money, useProfitAccess } from './ui';
 import { WORDS } from '../../../app/glossary';
+import { Hint } from '../../../app/ui/Hint';
 
 // Items with sizes and colours (issue #384, ADR-051): the owner of a baby clothes shop chooses the sizes and the prints once and
 // every combination becomes a variant with its own code, price and stock. A variant is an item of its own everywhere else (sale,
@@ -164,10 +165,10 @@ export function OptionBoxes({ sizes, colours, onSizes, onColours, prefix }: { si
     <>
       <label htmlFor={`${prefix}-sizes`}>Sizes</label>
       <input id={`${prefix}-sizes`} value={sizes} onChange={(e) => onSizes(e.target.value)} autoComplete="off" placeholder="0-3m, 3-6m, 6-12m" />
-      <p className="hint">Separate them with commas, smallest first. Leave empty if it comes in one size.</p>
+      <Hint>Separate them with commas, smallest first. Leave empty if it comes in one size.</Hint>
       <label htmlFor={`${prefix}-colours`}>Colours or prints</label>
       <input id={`${prefix}-colours`} value={colours} onChange={(e) => onColours(e.target.value)} autoComplete="off" placeholder="Blue, Pink, Stars" />
-      <p className="hint">Separate them with commas. Leave empty if it comes in one colour.</p>
+      <Hint>Separate them with commas. Leave empty if it comes in one colour.</Hint>
     </>
   );
 }
@@ -213,7 +214,6 @@ export function NewFamilyPage() {
   };
   return (
     <Gate screen="products" title="Add an item with sizes and colours">
-      <p><Link to={'/staff/retail/catalogue/products' as never}>Back to Items</Link></p>
       <p>Use this for something you sell in several sizes, colours or prints, such as a romper in 0-3m, 3-6m and 6-12m. Each size and colour gets its own code, price and stock, and you choose them once here.</p>
       <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <div data-tour="sizes-name">
@@ -221,7 +221,7 @@ export function NewFamilyPage() {
           <input id="sizes-item-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Baby romper" />
           <label htmlFor="sizes-item-code">Short code</label>
           <input id="sizes-item-code" value={baseCode} maxLength={24} onChange={(e) => setBaseCode(e.target.value)} autoComplete="off" placeholder="ROMP" />
-          <p className="hint">Every size and colour gets a code that starts with this, such as ROMP-03M-BLUE. You can change each one below.</p>
+          <Hint>Every size and colour gets a code that starts with this, such as ROMP-03M-BLUE. You can change each one below.</Hint>
           <label htmlFor="sizes-item-category">Category</label>
           <select id="sizes-item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
             <option value="">Choose a category</option>
@@ -236,12 +236,12 @@ export function NewFamilyPage() {
             <>
               <label htmlFor="sizes-item-cost">Buying price ({RETAIL_CURRENCY})</label>
               <input id="sizes-item-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} autoComplete="off" aria-invalid={costMinor === null} />
-              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</p>
+              <Hint>What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</Hint>
             </>
           )}
           <label htmlFor="sizes-item-sell">Selling price ({RETAIL_CURRENCY})</label>
           <input id="sizes-item-sell" inputMode="numeric" value={sell} onChange={(e) => setSell(e.target.value)} autoComplete="off" aria-invalid={sell.trim() !== '' && sellMinor === null} />
-          <p className="hint">Every size and colour starts at these prices. Change any of them in the list below, for example when a bigger size costs more.</p>
+          <Hint>Every size and colour starts at these prices. Change any of them in the list below, for example when a bigger size costs more.</Hint>
         </div>
         <div data-tour="sizes-options">
           <OptionBoxes prefix="sizes-item" sizes={sizes} colours={colours} onSizes={setSizes} onColours={setColours} />
@@ -252,7 +252,7 @@ export function NewFamilyPage() {
         </section>
         {problem && preview.rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
         {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}
-        <BusyButton busy={save.isPending} type="submit" className="rt-primary" data-tour="sizes-save" disabled={!complete}>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" data-tour="sizes-save" notReady={!complete}>
           {preview.rows.length > 0 ? `Make these ${preview.rows.length}` : 'Make them'}
         </BusyButton>
       </form>
@@ -292,7 +292,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
   return (
     <section className="rt-card" aria-label="Give this item sizes and colours">
       <h3>Give this item sizes and colours</h3>
-      <p className="hint">The stock you hold now becomes one of them. It keeps its code, prices, stock and history. The others start with no stock, at its prices.</p>
+      <Hint full>The stock you hold now becomes one of them. It keeps its code, prices, stock and history. The others start with no stock, at its prices.</Hint>
       <label htmlFor="make-size">Size of the stock you hold now</label>
       <input id="make-size" value={size} maxLength={30} onChange={(e) => setSize(e.target.value)} autoComplete="off" placeholder="0-3m" />
       <label htmlFor="make-colour">Colour or print of the stock you hold now</label>
@@ -300,7 +300,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
       <OptionBoxes prefix="make" sizes={sizes} colours={colours} onSizes={setSizes} onColours={setColours} />
       <p>{plan.length === 0 ? 'Nothing else will be made yet.' : `Also made, at ${money(product.sell_minor ?? 0)}: ${plan.map((p) => `${variantLabel(p.size, p.colour)} (${p.code})`).join(', ')}.`}</p>
       <Problem error={save.error} />
-      <BusyButton busy={save.isPending} type="button" className="rt-primary" disabled={!ready} onClick={() => save.mutate()}>Give it sizes and colours</BusyButton>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" notReady={!ready} onClick={() => save.mutate()}>Give it sizes and colours</BusyButton>
       <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
     </section>
   );
@@ -365,7 +365,6 @@ export function JoinPage() {
   const change = (i: number, patch: Partial<JoinRow>) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <Gate screen="products" title="Join items as sizes of one item">
-      <p><Link to={'/staff/retail/catalogue/products' as never}>Back to Items</Link></p>
       <p>Use this when you already have one item per size or colour, such as Cable 1.5mm and Cable 2.5mm. Each keeps its code, price, stock and history, and they show together as one item.</p>
       {target ? (
         <section data-tour="join-target" aria-label="The item they join">
@@ -380,7 +379,7 @@ export function JoinPage() {
           </div>
           <section data-tour="join-existing" aria-label="Or join an item that has sizes already">
             <h2>Or join an item that has sizes already</h2>
-            <p className="hint">Search for any one of its sizes and add it here; the items you pick below then become more sizes of that item.</p>
+            <Hint>Search for any one of its sizes and add it here; the items you pick below then become more sizes of that item.</Hint>
             <ProductPicker
               id="join-target-search" showStock={false} addLabel="Join this item"
               onAdd={(p) => {
@@ -428,7 +427,7 @@ export function JoinPage() {
       </section>
       {problem && rows.length > 0 && <p role="note" className="alert alert-warning">{problem}</p>}
       {save.error && <NameTaken error={save.error} busy={save.isPending} onAnyway={(reason) => save.mutate(reason)} />}
-      <BusyButton busy={save.isPending} type="button" className="rt-primary" data-tour="join-save" disabled={problem !== null} onClick={() => save.mutate(undefined)}>
+      <BusyButton busy={save.isPending} type="button" className="rt-primary" data-tour="join-save" notReady={problem !== null} onClick={() => save.mutate(undefined)}>
         Join them as one item
       </BusyButton>
     </Gate>

@@ -67,3 +67,11 @@ export function ListRow({ title, meta, amount, to, onClick, chevron = to !== und
     </li>
   );
 }
+
+/**
+ * The chevron of a link to another screen drawn as a row (issue #526): a related screen is a row or a tile with this chevron,
+ * never an underlined word. Put it last inside a Link with the class link-row; the look is .link-row in src/app/ui/kit.css.
+ */
+export function RowChevron() {
+  return <span className="list-row-chevron" aria-hidden="true">{icons.chevron}</span>;
+}

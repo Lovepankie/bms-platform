@@ -11,6 +11,7 @@ import { Problem } from '../retail/ui';
 import { INVESTMENTS_OPEN, PRODUCTS_MANAGE, investmentBadge, may, percent, showInvestments } from './investment-state';
 import { money, words } from './loan-state';
 import { showSavings } from './savings-permissions';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Investments (FR-INV-02, FR-INV-12): find an investment by its account number, the member's
 // number, name or phone, filter by status, and open it; the member tab lists one member's investments.
@@ -25,7 +26,7 @@ export function InvestmentsGate({ title, children }: { title: string; children: 
     return (
       <main className="rt ln">
         <h1>{title}</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

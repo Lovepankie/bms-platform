@@ -16,6 +16,8 @@ import {
 import { showDate } from './transfers';
 import { Problem, Success, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { NoAccess } from '../../../app/ui/EmptyState';
+import { Hint } from '../../../app/ui/Hint';
 
 // Take goods back against a sale (returns capability, ADR-033, issue #201). Each line of the sale shows what was sold, what has
 // come back already and what can still come back; the person enters a quantity, the reason and where the goods go, then how the
@@ -85,7 +87,7 @@ export function ReturnRow({ line, row, back, branches, onChange }: {
                   </select>
                 </>
               )}
-              {row.disposition === 'write_off' && <p className="hint">Damaged goods never go back into stock. Their cost is written off.</p>}
+              {row.disposition === 'write_off' && <Hint full>Damaged goods never go back into stock. Their cost is written off.</Hint>}
             </>
           )}
           {problem && <p role="alert" className="rt-flag">{problem}</p>}
@@ -163,7 +165,7 @@ export function ReturnFormView({ sale, back, form: chosen, branches, usualIsStor
       </section>
       {problem && planned.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="return-save">Record the return</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="return-save">Record the return</BusyButton>
 
     </form>
   );
@@ -199,7 +201,7 @@ export function ReturnNewPage() {
     return (
       <main className="rt">
         <h1>Take goods back</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
@@ -207,7 +209,6 @@ export function ReturnNewPage() {
   return (
     <main className="rt rt-wide">
       <h1>Take goods back</h1>
-      <p><Link to="/staff/retail/returns">Back to customer returns</Link></p>
       {(sale.isPending || earlier.isPending) && <SkeletonList label="Loading the sale" />}
       <Problem error={sale.error ?? earlier.error} />
       {outcome?.executed && outcome.sale_return && (

@@ -40,13 +40,6 @@ export const UNKNOWN_PERSON = 'Unknown person';
 
 export type PeriodKind = 'today' | 'week' | 'month' | 'custom';
 
-export const PERIODS: { kind: PeriodKind; label: string }[] = [
-  { kind: 'today', label: 'Today' },
-  { kind: 'week', label: 'This week' },
-  { kind: 'month', label: 'This month' },
-  { kind: 'custom', label: 'Choose days' },
-];
-
 /** The days of a period, both ends counted: today; Monday to today; the 1st to today; or the two days the person typed. */
 export function periodRange(kind: PeriodKind, today: string, custom: { from: string; to: string }): { from: string; to: string } {
   if (kind === 'today') return { from: today, to: today };

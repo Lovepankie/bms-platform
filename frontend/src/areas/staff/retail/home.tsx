@@ -6,6 +6,7 @@ import { RetailDashboard } from './dashboard';
 import { OwnSales } from './own-sales';
 import { ALL_SELLERS, canUse, holds, screensFor, showRetail } from './permissions';
 import { useCanSellAnywhere } from './ui';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // The Retail landing page: one big tile per screen the session may use. Nothing else is listed.
 
@@ -28,7 +29,7 @@ export function RetailHome() {
         </div>
       </div>
       {dashboard && ownerFirst && <RetailDashboard />}
-      {screens.length === 0 && <p className="empty-state">You do not have access to any retail pages.</p>}
+      {screens.length === 0 && <NoAccess what="any retail pages" />}
       {screens.length > 0 && (
         <TileGrid label="Retail pages" tour="retail-tiles">
           {screens.map((s) => (

@@ -7,6 +7,7 @@ import { canUse } from './permissions';
 import { AGEING_COLUMNS } from './payables-state';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useIsPhone } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // What you owe suppliers (the purchasing capability, ADR-033, issue #198): one line for each supplier with what is owed split by how
 // late it is (not yet due, 1 to 30, 31 to 60, 61 to 90 and over 90 days past the due date), the total owed, and the goods received
@@ -89,9 +90,9 @@ export function SupplierPayablesPage() {
   const report = useQuery({ queryKey: ['retail', 'supplier-payables'], queryFn: () => retail.supplierPayables(), enabled: canUse(me, 'supplierPayables') });
   return (
     <Gate screen="supplierPayables" title="What you owe suppliers" wide>
-      <p className="hint" data-tour="payables-help">
+      <Hint tour="payables-help">
         Everything you owe suppliers, by how late it is. It counts supplier invoices and stock bought on credit in Buy stock.
-      </p>
+      </Hint>
       <p className="cluster" data-tour="payables-links">
         <Link className="btn-sm" to="/staff/retail/supplier-payments">Supplier payments</Link>
         <Link className="btn-sm" to="/staff/retail/supplier-bills">Supplier invoices</Link>

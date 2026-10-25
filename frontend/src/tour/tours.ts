@@ -30,20 +30,12 @@ const isSeller = (me: Me) => held(me, SELL) && !isTenantAdmin(me);
 /** A retail capability the tenant switched on (ADR-033); /me lists them per module. */
 const capable = (me: Me, capability: string) => (me.module_capabilities?.['retail'] ?? []).includes(capability);
 
+// The one menu at the top right of the staff top bar (issue #526): Help, Refresh, Light or dark and Sign out live in it.
 const help: TourStep = {
   id: 'help',
-  target: 'help-menu',
-  title: 'Help is always here',
-  body: 'Lost? Tap Help to take this tour again, or to see a short tour of the page you are on.',
-};
-
-// The refresh button in the header (issue #430): the installed app has no browser reload.
-const refresh: TourStep = {
-  id: 'refresh',
-  target: 'refresh',
-  optional: true,
-  title: 'Refresh the page',
-  body: 'The installed app has no reload button, so tap Refresh at the top to get the latest figures. If it cannot refresh, or you are offline, it says so and keeps the figures you already have. On a wider screen it also says when the page was last updated.',
+  target: 'top-menu',
+  title: 'Your menu',
+  body: 'Tap the round button at the top right. Help takes this tour again or shows a tour of the page you are on. Refresh gets the latest figures, since the installed app has no reload button. Theme sets Light, Dark or Same as my phone, kept on this device.',
 };
 
 // The Notifications and app page (ADR-050): install BMS as an app and turn on notifications on this device. Everyone signed in has it.
@@ -60,14 +52,6 @@ const feedback: TourStep = {
   target: 'nav-feedback',
   title: 'Tell us what you think',
   body: 'Tap Feedback to send the BMS team an idea, a problem or a question. Add a picture of the screen if it helps. You see our reply there too. On a phone it is under More, and under Help.',
-};
-
-// The theme button in the header (issues #429 and #452): Light, Dark or Same as my phone, kept on this device. Every area has it.
-const theme: TourStep = {
-  id: 'theme',
-  target: 'theme-select',
-  title: 'Light or dark',
-  body: 'Tap the sun, moon or phone at the top right to choose Light, Dark or Same as my phone. Your choice is kept on this device.',
 };
 
 const insights: TourStep = {
@@ -131,7 +115,7 @@ const branch: TourStep = {
   id: 'branch',
   target: 'branch-picker',
   title: 'Your branch',
-  body: 'Pick the branch you are working in. What you see and record follows this choice.',
+  body: 'The top of the page names your business and the branch you are working in. Tap it to switch branch. What you see and record follows this choice.',
 };
 
 // A tenant admin, invited by a colleague or activated from the public sign-up (ADR-024), lands on
@@ -156,7 +140,8 @@ export const adminWelcome: Tour = {
   // Version 20 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
   // Version 21 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 22 adds the Find any screen step (issue #551): the Search button at the top.
-  version: 22,
+  // Version 23 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
+  version: 23,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -399,8 +384,6 @@ export const adminWelcome: Tour = {
     search,
     notifications,
     feedback,
-    refresh,
-    theme,
     help,
   ],
 };
@@ -424,7 +407,8 @@ export const retailSales: Tour = {
   // Version 17 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
   // Version 18 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 19 adds the Find any screen step (issue #551): the Search button at the top.
-  version: 19,
+  // Version 20 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
+  version: 20,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -496,7 +480,7 @@ export const retailSales: Tour = {
       module: 'retail',
       optional: true,
       title: 'Online or offline',
-      body: 'This dot says if you are online: green is online, grey is offline, amber is sending. With no network you can still save a cash, mobile money or bank sale. It stays on this phone and is sent once you are back online. Tap the dot to see what is waiting.',
+      body: 'A dot shows at the top only when there is news. Grey is offline, amber is sending, and a number is sales waiting. With no network you can still save a cash, mobile money or bank sale. It stays on this phone and is sent once you are back online. Tap the dot to see what is waiting.',
     },
     {
       id: 'credit-payments',
@@ -588,8 +572,6 @@ export const retailSales: Tour = {
     search,
     notifications,
     feedback,
-    refresh,
-    theme,
     help,
   ],
 };
@@ -602,7 +584,8 @@ export const staffWelcome: Tour = {
   // Version 6 adds the Feedback step (issue #447): send the BMS team an idea, a problem or a question.
   // Version 7 adds the bottom tabs step (issue #539) and words the phone steps for the tabs and More.
   // Version 8 adds the Find any screen step (issue #551): the Search button at the top.
-  version: 8,
+  // Version 9 puts Help, Refresh and Light or dark in the one menu of the top bar, and the branch in its title (issue #526).
+  version: 9,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -645,8 +628,6 @@ export const staffWelcome: Tour = {
     search,
     notifications,
     feedback,
-    refresh,
-    theme,
     help,
   ],
 };
@@ -654,7 +635,8 @@ export const staffWelcome: Tour = {
 export const salePage: Tour = {
   id: 'page-sale',
   // Version 2 adds the Online or offline step (issue #458, ADR-067); version 3 the Scan here step (issue #345, ADR-070).
-  version: 3,
+  // Version 4 words the Online or offline step for the dot that shows only when there is news (issue #526).
+  version: 4,
   title: 'This page: record a sale',
   audience: (me) => held(me, SELL),
   autoStart: false,

@@ -1,6 +1,7 @@
 import { Link, Outlet, createLazyRoute } from '@tanstack/react-router';
 import { useStaff } from '../context';
 import { showSms } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // The SMS pages (extras slice B3, issue #218): settings, the opt-out list and the wording, under one heading with a small
 // menu. Who sees what is decided by the server; the menu only hides what the session cannot open.
@@ -11,7 +12,7 @@ export function SmsLayout() {
     return (
       <main className="rt ln">
         <h1>Text messages (SMS)</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

@@ -6,6 +6,7 @@ import { type Choice, type Policy, twoStep } from '../../../api/two-step';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { DEFAULT_GRACE, canManageTwoStep, choiceOf, deadlineWords, differs, graceChoices, needsProof, policyOf, ready, reviewLines } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Two-step sign-in (issue #348; ADR-046): who must use a code from their phone as well as their password. It is optional until an
 // administrator chooses otherwise. Three choices (nobody, chosen roles, everyone), a grace period, and a plain-words review that is read
@@ -45,7 +46,7 @@ export function TwoStepPolicyScreen() {
     return (
       <main className="rt ln" data-tour="twostep-page">
         <h1>Two-step sign-in</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
@@ -214,7 +215,7 @@ export function TwoStepPolicyScreen() {
             </label>
           )}
           <p className="cluster">
-            <BusyButton type="button" className="rt-primary" busy={busy} disabled={savedState !== null && needsProof(savedState, choice, new Date()) && proof.trim() === ''} onClick={() => void save()}>
+            <BusyButton type="button" className="rt-primary" busy={busy} notReady={savedState !== null && needsProof(savedState, choice, new Date()) && proof.trim() === ''} onClick={() => void save()}>
               {choice.policy === 'off' ? 'Yes, make it optional' : 'Yes, save this'}
             </BusyButton>
             <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={() => setReviewing(false)}>

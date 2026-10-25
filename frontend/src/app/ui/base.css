@@ -6,13 +6,19 @@
   box-sizing: border-box;
 }
 
+/* The page colour fills the whole viewport, past the end of a short page too, so no white band shows under it (issue #526). */
 html {
+  min-height: 100%;
+  background: var(--color-bg);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
+/* Every figure in tabular digits (issue #526, docs/ui-rules.md rule 8): set once here, so an amount in a sentence, a table or
+   a card lines up and never jitters, whatever its class. */
 body {
   margin: 0;
+  font-variant-numeric: tabular-nums;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);

@@ -78,12 +78,12 @@ describe('starting a savings collection', () => {
     expect(screen.getAllByText(/own payment account/).length).toBeGreaterThan(0);
     expect(screen.getByText(/the savings account/)).toBeTruthy();
     const button = screen.getByRole('button', { name: 'Make the payment link' }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: '50000' } });
     fireEvent.change(screen.getByLabelText("Payer's mobile number"), { target: { value: '12345' } });
-    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText("Payer's mobile number"), { target: { value: '0700000219' } });
-    expect(button.disabled).toBe(false);
+    expect(button.getAttribute('data-not-ready')).toBeNull();
   });
 
   it('starts a deposit for the account, shows the link and the QR code, and removes the payer number from the tab', async () => {

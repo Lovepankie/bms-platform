@@ -425,9 +425,9 @@ describe('the opt-out list', () => {
     // The first click only opens the confirmation: nothing is sent until a reason is given and it is confirmed.
     const confirm = await screen.findByRole('button', { name: 'Lift the opt-out' });
     expect(api.removeOptOut).not.toHaveBeenCalled();
-    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect((confirm as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Why is it lifted?'), { target: { value: 'ab' } });
-    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect((confirm as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Why is it lifted?'), { target: { value: 'Member asked at the counter' } });
     fireEvent.click(confirm);
     await waitFor(() => expect(api.removeOptOut).toHaveBeenCalledWith(row().id, 'Member asked at the counter'));
@@ -476,7 +476,7 @@ describe('the member\'s text-message choice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Change to: stop reminders' }));
     expect(api.setMemberOptOut).not.toHaveBeenCalled();
     const confirm = screen.getByRole('button', { name: 'Narrow the opt-out' }) as HTMLButtonElement;
-    expect(confirm.disabled).toBe(true);
+    expect(confirm.getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Why is it narrowed?'), { target: { value: 'Member asked for reminders only' } });
     api.setMemberOptOut.mockResolvedValue({ opted_out: true, scope: 'reminders', recipient_masked: null, since: '2031-03-10T07:00:00Z' });
     fireEvent.click(confirm);

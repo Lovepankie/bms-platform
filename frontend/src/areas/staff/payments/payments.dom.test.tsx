@@ -61,7 +61,7 @@ describe('connecting the account', () => {
     expect(screen.getAllByText(/your own/).length).toBeGreaterThan(0);
     expect((screen.getByLabelText('Consumer secret') as HTMLInputElement).type).toBe('password');
     expect(screen.queryByRole('button', { name: 'Test connection' })).toBeNull();
-    expect((screen.getByRole('button', { name: 'Save the key and secret' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save the key and secret' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
   });
 
   it('refuses a value with a space before anything is sent, then saves and clears the secret box', async () => {
@@ -71,9 +71,9 @@ describe('connecting the account', () => {
     fireEvent.change(screen.getByLabelText('Consumer key'), { target: { value: 'invented-key-0001' } });
     fireEvent.change(screen.getByLabelText('Consumer secret'), { target: { value: 'has a space' } });
     expect(screen.getAllByText(/with no spaces/).length).toBeGreaterThan(0);
-    expect((screen.getByRole('button', { name: 'Save the key and secret' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save the key and secret' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change(screen.getByLabelText('Consumer secret'), { target: { value: 'invented-secret-0001' } });
-    expect((screen.getByRole('button', { name: 'Save the key and secret' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save the key and secret' }) as HTMLButtonElement).getAttribute('data-not-ready')).toBe('true');
     fireEvent.change((document.getElementById('receive-code') as HTMLInputElement), { target: { value: '123456' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save the key and secret' }));
     await waitFor(() => expect(api.save).toHaveBeenCalledWith('invented-key-0001', 'invented-secret-0001', '123456'));
@@ -137,7 +137,12 @@ describe('testing the connection', () => {
     api.account.mockResolvedValue({ ...saved, host_ready: false });
     shell(<ReceivePaymentsPage />);
     expect(await screen.findAllByText(/not set up on this system yet/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement).disabled).toBe(true);
+    // Review of #559: a server not set up is a plain disabled button, never the fields nudge (there are no fields to fill).
+    const test = screen.getByRole('button', { name: 'Test connection' }) as HTMLButtonElement;
+    expect(test.disabled).toBe(true);
+    expect(test.getAttribute('data-not-ready')).toBeNull();
+    fireEvent.click(test);
+    expect(screen.queryByText('Fill in or correct the fields above first.')).toBeNull();
   });
 });
 
@@ -178,7 +183,7 @@ describe('who sees what', () => {
 
   it('opens nothing for someone without settings access', () => {
     shell(<ReceivePaymentsPage />, ['core.approvals.read']);
-    expect(screen.getByText('You do not have access to this page.')).toBeTruthy();
+    expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();
     expect(api.account).not.toHaveBeenCalled();
   });
 });

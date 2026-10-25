@@ -252,7 +252,7 @@ function CountSheet({ branchId }: { branchId: string }) {
           </p>
         </div>
       )}
-      <BusyButton type="button" className="rt-primary" busy={review.isPending} disabled={entered.length === 0 || bad} onClick={finish} data-tour="count-review">
+      <BusyButton type="button" className="rt-primary" busy={review.isPending} notReady={entered.length === 0 || bad} onClick={finish} data-tour="count-review">
         {`Review the difference (${entered.length} counted)`}
       </BusyButton>
 
@@ -261,14 +261,13 @@ function CountSheet({ branchId }: { branchId: string }) {
 }
 
 export function StocktakePage() {
-  const { branchId, branchName } = useStockingBranch();
+  const { branchId } = useStockingBranch();
   return (
     <Gate screen="stocktake" title={WORDS.countStock}>
       {branchId === null ? (
         <BranchRequired permissions={needsOf('stocktake')} stocking />
       ) : (
         <>
-          <p className="branch-line">Branch: <strong>{branchName}</strong></p>
           <CountSheet key={branchId} branchId={branchId} />
         </>
       )}

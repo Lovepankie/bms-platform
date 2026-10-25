@@ -8,7 +8,7 @@ import { retail, type Customer, type Supplier } from '../../../api/retail';
 import { useStaff } from '../context';
 import { BuyerAccount } from './buyer-account';
 import { BuyerPricing } from './buyer-pricing';
-import { AddPanel, BackToCatalogue } from './catalogue';
+import { AddPanel } from './catalogue';
 import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
@@ -130,7 +130,6 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   });
   return (
     <>
-      <BackToCatalogue />
       {note && <p className="hint">{note}</p>}
       {canAdd && (
         <div data-tour="person-add">
@@ -140,7 +139,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
           <input id={`new-${queryKey}-name`} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" />
           <label htmlFor={`new-${queryKey}-contact`}>Phone or other contact (optional)</label>
           <input id={`new-${queryKey}-contact`} value={contact} maxLength={100} onChange={(e) => setContact(e.target.value)} autoComplete="off" />
-          <BusyButton busy={add.isPending} type="submit" className="rt-primary" disabled={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
+          <BusyButton busy={add.isPending} type="submit" className="rt-primary" notReady={name.trim() === ''}>{`Add ${noun}`}</BusyButton>
         </form>
         <Problem error={add.error} />
         </AddPanel>

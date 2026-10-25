@@ -45,7 +45,7 @@ export function StaffHome() {
           {members.isError && <p role="alert" className="alert alert-danger">Could not load members.</p>}
           {members.data && found.length === 0 && search.term && <NoResults term={search.term} onClear={search.clear} noun="members" />}
           {members.data && found.length === 0 && !search.term && (
-            <EmptyState art="noApplications" title="No members yet.">Members of this branch appear here.</EmptyState>
+            <EmptyState title="No members yet.">Members of this branch appear here.</EmptyState>
           )}
           {members.data && found.length > 0 && (
             <SearchResults fetching={fetching}>

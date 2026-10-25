@@ -10,6 +10,7 @@ import { Problem } from '../retail/ui';
 import { money, statusBadge, words } from './loan-state';
 import { canBringIn } from './existing-loans-state';
 import { showLending } from './permissions';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Loans (FR-DIS, FR-REP): find a loan by its number, the member's number, name or phone, filter by
 // status, and open it. The search runs as you type (useLiveSearch, #241). The list follows the branch
@@ -23,7 +24,7 @@ export function LendingGate({ title, children }: { title: string; children: Reac
   return (
     <main className="rt ln">
       <h1>{title}</h1>
-      {showLending(me) ? children : <p className="empty-state">You do not have access to this page.</p>}
+      {showLending(me) ? children : <NoAccess />}
     </main>
   );
 }

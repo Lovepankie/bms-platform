@@ -261,3 +261,104 @@ describe('design guard, the rules the kit holds every screen to', () => {
     expect([...kit.matchAll(/animation:\s*[\w-]+\s+400ms/g)]).toHaveLength(2);
   });
 });
+
+// Phase 3a of the UI rework (issue #526): the cross-cutting fixes, each held here so a screen cannot bring the old look back.
+describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
+  /** The declarations of every rule whose selector matches `selector`, across the design layer. */
+  const rulesFor = (selector: RegExp) =>
+    stylesheets.flatMap((f) => [...code(relative(SRC, f)).matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, sel]) => selector.test(sel as string)).map(([, sel, body]) => ({ file: relative(SRC, f), sel: (sel as string).trim(), body: body as string })));
+
+  // Item 5: an empty list, a "nothing in range" and a no-access line are one plain line, never a dashed box.
+  it('draws no empty state as a box: no dashed edge, and no border at all', () => {
+    const empty = rulesFor(/empty/);
+    expect(empty.length).toBeGreaterThan(1);
+    for (const { file, sel, body } of empty) {
+      expect(body, `${file}: ${sel}`).not.toMatch(/dashed/);
+      expect(body, `${file}: ${sel}`).not.toMatch(/(^|[;\s])border(-style|-width)?\s*:\s*(?!0|none)/);
+    }
+  });
+
+  it('keeps every no-access line on the one NoAccess, which says who can give access and links Home', () => {
+    for (const file of components.map((f) => relative(SRC, f))) {
+      expect(code(file), file).not.toMatch(/<p className="empty-state">You do not have access/);
+    }
+    const kitFile = code('app/ui/EmptyState.tsx');
+    expect(kitFile).toMatch(/The owner or an administrator of the business can give it to you/);
+    expect(kitFile).toMatch(/Go to Home/);
+  });
+
+  // Item 13: an information note is neutral grey with the info icon: no lavender, indigo or brand tint, which reads as a status.
+  it('draws the info note neutral, with its icon, and no chosen row in a tint', () => {
+    const info = rulesFor(/^\s*\.alert-info\s*$/);
+    expect(info).toHaveLength(1);
+    expect(info[0]?.body).toMatch(/background: var\(--color-neutral-tint\)/);
+    expect(info[0]?.body).not.toMatch(/accent|primary|brand|info-tint/);
+    expect(rulesFor(/\.alert-info::before/)[0]?.body).toMatch(/mask:/);
+    expect(rulesFor(/label:has\(> input:checked\)/)[0]?.body).not.toMatch(/accent-tint|info-tint/);
+  });
+
+  // Item 6: the main action is brand filled and never looks off; on a phone it sticks full width at the bottom.
+  it('keeps the main action of the forms of the audit in the sticky ActionBar, and never greys one whose fields are not ready', () => {
+    for (const screen of ['banking', 'expenses', 'savings', 'withdrawals', 'usage', 'transfer', 'catalogue-import', 'labels', 'sale']) {
+      expect(code(`areas/staff/retail/${screen}.tsx`), screen).toMatch(/<ActionBar\b|<SaleBar\b/);
+    }
+    const phone = code('app/ui/kit.css').match(/@media \(max-width: 719px\) \{\s*\.action-bar \{([^}]*)\}/)?.[1] ?? '';
+    expect(phone).toMatch(/position: sticky;\s*bottom: 0;/);
+    const busy = code('app/ui/BusyButton.tsx');
+    // A form passes notReady while its fields are not right (the button stays enabled); disabled keeps its plain meaning.
+    expect(busy).toMatch(/const notReady = fieldsNotReady && !busy && !disabled;/);
+    expect(busy).toMatch(/data-not-ready=\{notReady \|\| undefined\}/);
+    expect(busy).toMatch(/focusFirstMissing/);
+  });
+
+  // Item 8: a date range is the one PeriodPicker (Today, This week, This month, Custom in a sheet), never two bare date fields,
+  // and dates read "23 Oct 2026" through the one formatter, showDate.
+  it('draws every date range with the PeriodPicker and formats dates in one place', () => {
+    for (const file of components.map((f) => relative(SRC, f)).filter((f) => f !== 'app/ui/PeriodPicker.tsx')) {
+      expect(code(file).match(/>From<\/label>[^\n]{0,40}\n?[^\n]{0,200}type="date"|>From<\/label><input [^>]*type="date"/)?.[0] ?? null, file).toBeNull();
+    }
+    expect(code('areas/staff/retail/maths.ts')).toMatch(/export \{ showDate \} from '\.\.\/\.\.\/\.\.\/app\/ui\/PeriodPicker'/);
+  });
+
+  // Item 10: a related screen is a row with a chevron, an action a button; never an underlined word.
+  it('draws links to other screens as chevron rows and figures that open rows without an underline', () => {
+    expect(code('areas/staff/retail/screen-link.tsx')).toMatch(/action \? 'btn btn-primary' : 'link-row'/);
+    for (const sel of [/^\s*\.link-row\s*$/, /^\s*\.figure-link\s*$/]) expect(rulesFor(sel)[0]?.body).toMatch(/text-decoration: none/);
+    expect(code('areas/staff/retail/analytics-ui.tsx').match(/<Link className="figure-link"/g)).toHaveLength(2);
+    expect(code('areas/staff/home-cards.tsx')).not.toMatch(/<Link to="[^"]*">Open the/);
+  });
+
+  // Item 14: every figure in tabular digits, amounts only through formatMinor, and the key figure at the display size.
+  it('draws figures tabular everywhere, formats money in one place, and shows the key figure large', () => {
+    expect(rulesFor(/^\s*body\s*$/).map((r) => r.body).join('')).toMatch(/font-variant-numeric: tabular-nums/);
+    const value = rulesFor(/^\s*\.key-figure-value\s*$/)[0]?.body ?? '';
+    expect(value).toMatch(/font-size: var\(--text-display\)/);
+    expect(value).toMatch(/font-variant-numeric: tabular-nums/);
+    for (const file of components.map((f) => relative(SRC, f)).filter((f) => !/mock/.test(f))) {
+      expect(code(file).match(/`UGX \$\{|Intl\.NumberFormat\([^)]*currency/)?.[0] ?? null, file).toBeNull();
+    }
+    for (const screen of ['areas/staff/home-cards.tsx', 'areas/staff/retail/profit.tsx', 'areas/staff/retail/savings.tsx', 'areas/staff/retail/credit-control.tsx']) {
+      expect(code(screen), screen).toMatch(/<KeyFigure\b/);
+    }
+  });
+
+  // Item 15: a help text is one line on screen, the rest behind the info button of the kit's Hint.
+  it('draws no help paragraph of more than one sentence, or longer than a line, outside the Hint', () => {
+    for (const file of components.map((f) => relative(SRC, f)).filter((f) => f.startsWith('areas/'))) {
+      for (const [, text] of code(file).matchAll(/<p className="hint"(?: data-tour="[^"]*")?>([^<>{}]+)<\/p>/g)) {
+        const long = (text as string).trim().length > 90 || ((text as string).match(/[.!?](\s|$)/g) ?? []).length > 1;
+        expect(long ? `${file}: ${text}` : null).toBeNull();
+      }
+    }
+    expect(rulesFor(/^\s*\.hint-line > \.hint\s*$/)[0]?.body).toMatch(/white-space: nowrap;[\s\S]*text-overflow: ellipsis/);
+  });
+
+  // Item 3: on a phone the crumb is one back link with no slash before it.
+  it('draws no slash before the one crumb a phone shows', () => {
+    const nav = code('app/ui/navigation.css');
+    const phone = nav.slice(nav.indexOf('.breadcrumbs li:not(.crumb-parent)'));
+    expect(phone).toMatch(/\.breadcrumbs li\.crumb-parent::before \{\s*content: none;/);
+    expect(nav).toMatch(/\.breadcrumbs li \+ li::before/);
+    expect(nav).not.toMatch(/\.breadcrumbs li::before/);
+  });
+});

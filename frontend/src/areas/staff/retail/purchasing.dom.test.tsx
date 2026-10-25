@@ -18,6 +18,9 @@ import { BillFormView } from './supplier-bill-new';
 import { PaymentFormView } from './supplier-payment-new';
 import { PayablesReport } from './supplier-payables';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // The purchasing forms as a person uses them (the purchasing capability, ADR-033, issue #198): an order totals as items are added and
 // waits for a supplier, a receipt starts from what is still to come and shows the server's refusal in plain words, an invoice shows
 // the check against the goods received and asks why when it differs, a payment checks a chosen split, and the report totals what
@@ -41,20 +44,20 @@ describe('the purchase order form', () => {
   it('waits for a supplier and an item, totals the lines as they are typed, and saves a draft', () => {
     const sent = vi.fn();
     render(<Form onSubmit={sent} />);
-    expect(button('Save draft order').disabled).toBe(true);
+    expect(button('Save draft order').getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByTestId('order-total').textContent).toContain('UGX 0');
     type('Supplier', 's1');
     fireEvent.click(button('Add Test bulb'));
     expect(screen.getByTestId('order-line-0')).toBeTruthy();
     // The item's own cost is suggested; the quantity is the person's to type.
     expect((screen.getByLabelText(/Cost of one piece of Test bulb/) as HTMLInputElement).value).toBe('3500');
-    expect(button('Save draft order').disabled).toBe(true);
+    expect(button('Save draft order').getAttribute('data-not-ready')).toBe('true');
     type(/How many Test bulb/, '10');
     expect(screen.getByTestId('order-line-total-0').textContent).toContain('UGX 35,000');
     expect(screen.getByTestId('order-total').textContent).toContain('UGX 35,000');
     type(/Cost of one piece of Test bulb/, '3400');
     expect(screen.getByTestId('order-total').textContent).toContain('UGX 34,000');
-    expect(button('Save draft order').disabled).toBe(false);
+    expect(button('Save draft order').getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(button('Save draft order'));
     expect(buildOrderRequest(sent.mock.calls[0]?.[0] as OrderForm)).toEqual({ supplier_id: 's1', branch_id: 'b1', lines: [{ product_id: 'p1', qty: '10.000', cost_minor: 3400 }] });
   });
@@ -161,12 +164,12 @@ describe('the goods received form', () => {
   it('refuses a quantity that is not a number, and a new price that is not an amount', () => {
     render(<Form onSubmit={() => undefined} />);
     type(/Received of Test bulb/, 'many');
-    expect(button('Save goods received').disabled).toBe(true);
+    expect(button('Save goods received').getAttribute('data-not-ready')).toBe('true');
     type(/Received of Test bulb/, '3');
     type(/New selling price of Test bulb/, 'cheap');
-    expect(button('Save goods received').disabled).toBe(true);
+    expect(button('Save goods received').getAttribute('data-not-ready')).toBe('true');
     type(/New selling price of Test bulb/, '6500');
-    expect(button('Save goods received').disabled).toBe(false);
+    expect(button('Save goods received').getAttribute('data-not-ready')).toBeNull();
   });
 
   it('asks for the supplier only when there is no order, and offers only the branches given', () => {
@@ -178,7 +181,7 @@ describe('the goods received form', () => {
     expect(screen.getByLabelText('Supplier')).toBeTruthy();
     const where = screen.getByLabelText('The goods go into') as HTMLSelectElement;
     expect(within(where).getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a branch or store', 'Test Branch A (BR1)', 'Test Store B (ST2)']);
-    expect(button('Save goods received').disabled).toBe(true);
+    expect(button('Save goods received').getAttribute('data-not-ready')).toBe('true');
   });
 });
 
@@ -206,7 +209,7 @@ describe('a delivery on screen', () => {
     type(/Why is it voided/, 'abcd');
     expect(go.disabled).toBe(true);
     type(/Why is it voided/, 'Wrong delivery');
-    expect(go.disabled).toBe(false);
+    expect(ready(go)).toBe(true);
     expect(screen.getByRole('alert').textContent).toMatch(/already on a supplier invoice/i);
     fireEvent.click(go);
     expect(onSubmit).toHaveBeenCalledWith('Wrong delivery');
@@ -240,7 +243,7 @@ describe('the supplier invoice form', () => {
     expect(screen.getByLabelText(/Bill Test bulb/)).toBeTruthy();
     expect(screen.getByLabelText(/Bill Test cable/)).toBeTruthy();
     expect(screen.queryByLabelText(/Quantity billed/)).toBeNull();
-    expect(button('Save supplier invoice').disabled).toBe(true);
+    expect(button('Save supplier invoice').getAttribute('data-not-ready')).toBe('true');
     fireEvent.click(screen.getByLabelText(/Bill Test bulb/));
     expect((screen.getByLabelText(/Quantity billed of Test bulb/) as HTMLInputElement).value).toBe('10');
     expect((screen.getByLabelText(/Supplier's price for one piece/) as HTMLInputElement).value).toBe('3500');
@@ -265,7 +268,7 @@ describe('the supplier invoice form', () => {
     render(<Form m={match({ variance_minor: 0, total_minor: 35000 })} onSubmit={sent} />);
     fill();
     type('Invoice total, as printed', '36000');
-    expect(button('Save supplier invoice').disabled).toBe(false);
+    expect(button('Save supplier invoice').getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(button('Save supplier invoice'));
     expect(buildBillRequest(sent.mock.calls[0]?.[0] as BillForm)).toMatchObject({ supplier_ref: 'INV-77', total_minor: 36000, lines: [{ receipt_line_id: 'rl1', qty: '10.000', unit_price_minor: 3600 }] });
   });
@@ -275,11 +278,11 @@ describe('the supplier invoice form', () => {
     render(<Form m={match({ reason_required: true })} onSubmit={sent} />);
     fill();
     expect(screen.getByTestId('bill-reason-required').textContent).toMatch(/say why/i);
-    expect(button('Save supplier invoice').disabled).toBe(true);
+    expect(button('Save supplier invoice').getAttribute('data-not-ready')).toBe('true');
     type(/Why does the invoice differ/, 'abcd');
-    expect(button('Save supplier invoice').disabled).toBe(true);
+    expect(button('Save supplier invoice').getAttribute('data-not-ready')).toBe('true');
     type(/Why does the invoice differ/, 'Price rose');
-    expect(button('Save supplier invoice').disabled).toBe(false);
+    expect(button('Save supplier invoice').getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(button('Save supplier invoice'));
     expect(buildBillRequest(sent.mock.calls[0]?.[0] as BillForm)).toMatchObject({ variance_reason: 'Price rose' });
   });
@@ -288,7 +291,7 @@ describe('the supplier invoice form', () => {
     render(<Form m={match({ total_mismatch: true })} onSubmit={() => undefined} />);
     fill();
     expect(screen.getByTestId('bill-total-mismatch').textContent).toMatch(/not the sum of the lines/i);
-    expect(button('Save supplier invoice').disabled).toBe(true);
+    expect(button('Save supplier invoice').getAttribute('data-not-ready')).toBe('true');
   });
 
   it('shows no reason box when none is needed', () => {
@@ -313,11 +316,11 @@ describe('the supplier payment form', () => {
     render(<Form onSubmit={sent} />);
     expect(screen.getByTestId('owed-total').textContent).toContain('UGX 42,000');
     expect(screen.getByTestId('owed-list').textContent).toContain('11 days late');
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     type('Amount paid', '40000');
-    expect(save().disabled).toBe(false);
+    expect(save().getAttribute('data-not-ready')).toBeNull();
     type('Amount paid', '42001');
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getAllByRole('alert')[0]?.textContent).toMatch(/owed UGX 42,000/);
     type('Amount paid', '40000');
     fireEvent.click(save());
@@ -330,18 +333,18 @@ describe('the supplier payment form', () => {
     type('Amount paid', '20000');
     fireEvent.click(screen.getByLabelText('Let me choose'));
     expect(screen.getByTestId('pay-manual')).toBeTruthy();
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('UGX 20,000 is left to give out');
     type(/Pay on Supplier invoice SB-000001/, '8000');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('UGX 12,000 is left to give out');
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     type(/Pay on Stock bought on credit P-000009/, '13000');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('UGX 1,000 too much');
     expect(screen.getAllByRole('alert')[0]?.textContent).toMatch(/at most UGX 12,000/i);
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
     type(/Pay on Stock bought on credit P-000009/, '12000');
     expect(screen.getByTestId('pay-remaining').textContent).toContain('Nothing is left to give out');
-    expect(save().disabled).toBe(false);
+    expect(save().getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(save());
     expect(buildPaymentRequest(sent.mock.calls[0]?.[0] as PaymentForm, items)).toMatchObject({
       allocation: 'manual', amount_minor: 20000, allocations: [{ bill_id: 'b1', amount_minor: 8000 }, { purchase_id: 'r9', amount_minor: 12000 }],

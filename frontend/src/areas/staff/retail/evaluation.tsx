@@ -6,6 +6,7 @@ import { SkeletonList } from '../../../components/states';
 import { Choice, DateRange, Empty, Section, ToStock, defaultRange, percentOrNone, rangeProblem } from './analytics-ui';
 import { showQty } from './maths';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // Business evaluation (issue #149, step 5): profit to date for a period, what the stock on hand is
 // worth at today's prices beyond its cost, and the pace of the last 30 days. Formulas on current prices
@@ -93,7 +94,7 @@ export function EvaluationView({ data, nameOf }: { data: Evaluation; nameOf: (id
 }
 
 export function EvaluationPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
@@ -108,8 +109,7 @@ export function EvaluationPage() {
   return (
     <Gate screen="evaluation" title="Business evaluation" wide>
       <p role="note" className="alert alert-info">This is an estimate from today's prices and the last 30 days of sales. It is not a forecast or a promise.</p>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <p className="hint">The dates choose the period for profit to date. The stock is as of today and the pace is always the last 30 days.</p>
+      <Hint>The dates choose the period for profit to date. The stock is as of today and the pace is always the last 30 days.</Hint>
       <div data-tour="evaluation-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="evaluation-top"><Choice id="ev-top" label="Rows to show" value={top} options={TOPS} onChange={setTop} /></div>
       <div data-tour="evaluation-results">

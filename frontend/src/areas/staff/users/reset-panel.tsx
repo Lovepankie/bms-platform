@@ -82,7 +82,7 @@ export function ResetPanel({ user, mfaEnabled, onSend, onCancel }: {
       {problem && <p role="alert" className="field-error">{problem}</p>}
       {error && <p role="alert" className="alert alert-danger">{error}</p>}
       <p className="cluster">
-        <BusyButton type="submit" className="rt-primary" busy={busy} disabled={!ready}>Make the link</BusyButton>
+        <BusyButton type="submit" className="rt-primary" busy={busy} notReady={!ready}>Make the link</BusyButton>
         <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </p>
     </form>

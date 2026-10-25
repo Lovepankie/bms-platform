@@ -7,6 +7,7 @@ import { useStaff } from '../context';
 import { NOT_UTF8, readCsvText } from '../retail/catalogue-import';
 import { Note, Problem, Success } from '../retail/ui';
 import { IMPORT_COLUMNS, IMPORT_TEMPLATE, canBringIn } from './existing-loans-state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Import existing loans from a CSV file (issue #466, FR-EXL-06, ADR-071), on the pattern of the item import (#146): download
 // the template, choose or paste the file, check it (nothing is saved), read what would come in, what is skipped and what is
@@ -87,7 +88,7 @@ export function ExistingLoansImport({ api = existingLoans }: { api?: ExistingLoa
     return (
       <main className="rt ln">
         <h1>Import existing loans</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }
@@ -107,7 +108,7 @@ export function ExistingLoansImport({ api = existingLoans }: { api?: ExistingLoa
       <textarea id="exl-text" data-tour="existing-import-text" rows={8} value={text} spellCheck={false} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="existing-import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
+      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="existing-import-check" notReady={text.trim() === ''} onClick={() => check.mutate()}>
         Check the file
       </BusyButton>
       {current && <LoanImportReport result={current} />}

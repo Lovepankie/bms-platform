@@ -232,7 +232,7 @@ describe('the daily profit report', () => {
     expect(summary).not.toContain('not collected');
     expect(html).not.toContain('Profit from money received');
     // The 2026-10-10 row: Sold, Received (the 400 deposit that day), then what counted for profit.
-    const cells = /<td>2026-10-10<\/td><td class="num">([^<]*)<\/td><td class="num">([^<]*)<\/td><td class="num">([^<]*)<\/td>/.exec(html);
+    const cells = /<td>10 Oct 2026<\/td><td class="num">([^<]*)<\/td><td class="num">([^<]*)<\/td><td class="num">([^<]*)<\/td>/.exec(html);
     expect(cells?.slice(1, 4)).toEqual(['UGX 1,000', 'UGX 400', 'UGX 1,000']);
   });
 

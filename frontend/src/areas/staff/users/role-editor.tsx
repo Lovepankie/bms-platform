@@ -93,7 +93,7 @@ export function RoleEditor({ user, self = false, roles, branches, onSave, onCanc
         </p>
       )}
       <p className="cluster">
-        <BusyButton type="submit" className={confirming ? 'btn-danger' : 'rt-primary'} busy={busy} disabled={!ready}>
+        <BusyButton type="submit" className={confirming ? 'btn-danger' : 'rt-primary'} busy={busy} notReady={!ready}>
           {confirming ? 'Yes, remove my administrator role' : 'Save the roles'}
         </BusyButton>
         <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>

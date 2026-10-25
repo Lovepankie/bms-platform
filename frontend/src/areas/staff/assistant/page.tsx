@@ -5,6 +5,7 @@ import { advisor, type AdvisorSettings } from '../../../api/advisor';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { SETTINGS_MANAGE, canConfigureAdvisor } from '../insights/permissions';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // The AI assistant's settings (extras slice C3, issue #226; ADR-037; spec 5.2): the switch with the acknowledgement of what is
 // sent and where, the two daily caps (a cap of 0 stops every call), and what was used today. Off until a business administrator
@@ -96,7 +97,7 @@ export function AssistantCaps({ saved, busy, error, onSave }: { saved: AdvisorSe
         <input id="assistant-token-cap" inputMode="numeric" value={tokens} onChange={(e) => setTokens(e.target.value)} aria-invalid={!valid} />
         {!valid && <p role="alert" className="field-error">Use a whole number, 0 or more.</p>}
         {error && <p role="alert" className="alert alert-danger">{error}</p>}
-        <p><BusyButton type="submit" className="rt-primary" busy={busy} disabled={!valid}>Save the limit</BusyButton></p>
+        <p><BusyButton type="submit" className="rt-primary" busy={busy} notReady={!valid}>Save the limit</BusyButton></p>
       </form>
     </section>
   );
@@ -118,7 +119,7 @@ export function AssistantSettingsPage() {
     return (
       <main className="rt ln">
         <h1>AI assistant</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

@@ -7,6 +7,9 @@ import { useStaff } from '../context';
 import { Bars, Choice, DateRange, Empty, Section, ToSales, defaultRange, rangeProblem } from './analytics-ui';
 import { canOpenAccount } from './permissions';
 import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone } from './ui';
+import { showDate } from './maths';
+import { KeyFigure } from '../../../app/ui/KeyFigure';
+import { Hint } from '../../../app/ui/Hint';
 
 // Credit control (issue #149, step 4): what credit buyers owe, how late it is, and what was paid in a
 // range. The owing and overdue tests are those of the credit sales list (a completed credit sale whose
@@ -39,7 +42,8 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
   const payments = data.payments ?? [];
   return (
     <>
-      <p className="rt-total">Owed by customers {money(totals.owed_minor ?? 0)} <ToSales credit>See the credit sales</ToSales></p>
+      <KeyFigure label="Owed by customers" value={money(totals.owed_minor ?? 0)} />
+      <p><ToSales credit>See the credit sales</ToSales></p>
       <p className="hint">{data.buyer_count ?? 0} {data.buyer_count === 1 ? 'buyer owes' : 'buyers owe'} this, as of {data.as_of}. Days are counted from the due date; a sale with no due date counts as not yet due.</p>
       <Section title="Ageing">
         <Bars label="Owed by age" rows={BUCKETS.map((b) => ({ key: b.key, name: b.label, value: totals[b.key] ?? 0, text: money(totals[b.key] ?? 0) }))} />
@@ -87,8 +91,8 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
               <tbody>
                 {overdue.map((o) => (
                   <tr key={o.sale_id}>
-                    <td>{accounts && o.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: o.customer_id }} aria-label={`Open the account of ${o.buyer_name}`}>{o.buyer_name}</Link> : o.buyer_name}<br /><span className="hint">{o.sale_no}, {nameOf(o.branch_id)}{phone ? `, due ${o.due_date}` : ''}</span></td>
-                    {!phone && <td>{o.due_date}</td>}
+                    <td>{accounts && o.customer_id ? <Link to="/staff/retail/accounts/$customerId" params={{ customerId: o.customer_id }} aria-label={`Open the account of ${o.buyer_name}`}>{o.buyer_name}</Link> : o.buyer_name}<br /><span className="hint">{o.sale_no}, {nameOf(o.branch_id)}{phone ? `, due ${showDate(o.due_date)}` : ''}</span></td>
+                    {!phone && <td>{showDate(o.due_date)}</td>}
                     <td className="num">{o.days_overdue} days</td>
                     <td className="num">{money(o.outstanding_minor ?? 0)}</td>
                   </tr>
@@ -130,7 +134,7 @@ export function CreditControlView({ data, nameOf, sort, accounts = false }: { da
 
 export function CreditControlPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
@@ -145,8 +149,7 @@ export function CreditControlPage() {
   });
   return (
     <Gate screen="creditControl" title="Credit control" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <p className="hint">The dates choose which payments are listed. What is owed is always as of today.</p>
+      <Hint>The dates choose which payments are listed. What is owed is always as of today.</Hint>
       <div data-tour="credit-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="credit-sort">
         <Choice id="cc-sort" label="Overdue list" value={sort} options={[...SORTS]} onChange={setSort} />

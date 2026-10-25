@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Stepper, stepped } from './Stepper';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // The quantity control (#520): minus and plus around a labelled number field, within min and max, with the keyboard.
 
 afterEach(cleanup);
@@ -46,7 +49,7 @@ describe('Stepper', () => {
     const less = screen.getByRole('button', { name: 'One less Sugar' }) as HTMLButtonElement;
     less.focus();
     fireEvent.click(less);
-    expect(less.disabled).toBe(false);
+    expect(ready(less)).toBe(true);
     expect(document.activeElement).toBe(less);
   });
 

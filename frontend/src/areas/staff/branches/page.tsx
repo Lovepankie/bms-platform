@@ -8,6 +8,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { money, useBranchRoles } from '../retail/ui';
 import { branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, sellsGoods, showBranches, visibleBranches } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Branches (issue #329; ADR-041): which branches are open, close one without losing its history, reopen it, and say that a branch
 // keeps no goods (a head office). Everyone who may read branches sees the list; an administrator also closes, reopens and switches.
@@ -47,7 +48,7 @@ export function BranchesScreen() {
     return (
       <main className="rt ln">
         <h1>Branches</h1>
-        <p className="empty-state">You do not have access to this page.</p>
+        <NoAccess />
       </main>
     );
   }

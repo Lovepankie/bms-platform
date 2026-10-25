@@ -6,6 +6,8 @@ import { SkeletonList } from '../../../components/states';
 import { Choice, DateRange, Empty, Section, ToSales, ToStock, defaultRange, percentOrNone, rangeProblem } from './analytics-ui';
 import { showPercent, showQty } from './maths';
 import { Gate, Problem, money, useBranchView, useIsPhone } from './ui';
+import { showDate } from './maths';
+import { Hint } from '../../../app/ui/Hint';
 
 // Margins (issue #149, step 2): profit and margin by item and category for a range, items sold under a
 // target margin, and what a price change did. Cost is the snapshot on each sale line, never today's
@@ -63,7 +65,7 @@ function PriceChanges({ items }: { items: PriceChangeImpact[] }) {
           <li key={c.product_id} className="rt-card">
             <strong><ToStock>{c.description}</ToStock></strong>
             <span className="hint">{c.code}</span>
-            <p>Price {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {c.changed_on}</p>
+            <p>Price {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {showDate(c.changed_on)}</p>
             <p>Before: <Pace units={c.units_before} days={c.days_before} />, margin {percentOrNone(c.margin_before_bp) || 'n/a'}</p>
             <p>After: <Pace units={c.units_after} days={c.days_after} />, margin {percentOrNone(c.margin_after_bp) || 'n/a'}</p>
           </li>
@@ -81,7 +83,7 @@ function PriceChanges({ items }: { items: PriceChangeImpact[] }) {
           <tr key={c.product_id}>
             <td>
               <ToStock>{c.description}</ToStock><br />
-              <span className="hint">{c.code}: {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {c.changed_on}</span>
+              <span className="hint">{c.code}: {money(c.old_sell_minor ?? 0)} to {money(c.new_sell_minor ?? 0)} on {showDate(c.changed_on)}</span>
             </td>
             <td className="num"><Pace units={c.units_before} days={c.days_before} /></td>
             <td className="num"><Pace units={c.units_after} days={c.days_after} /></td>
@@ -108,7 +110,7 @@ export function MarginsView({ data }: { data: Margins }) {
           <tr><td>Margin (profit over sales)</td><td className="num">{percentOrNone(totals.margin_bp)}</td></tr>
         </tbody>
       </table></div>
-      <p className="hint">Margin is profit as a share of what was sold for. Cost is what each item cost when it was sold, not today's cost.</p>
+      <Hint>Margin is profit as a share of what was sold for. Cost is what each item cost when it was sold, not today's cost.</Hint>
 
       <Section title={`Sold below ${showPercent(data.target_bp)} margin`} hint="Lowest margin first. An item that sold for nothing counts.">
         <MarginTable title="Item" rows={below.items ?? []} flag={data.target_bp} />
@@ -125,7 +127,7 @@ export function MarginsView({ data }: { data: Margins }) {
 }
 
 export function MarginsPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -139,7 +141,6 @@ export function MarginsPage() {
   });
   return (
     <Gate screen="margins" title="Margins" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <div data-tour="margins-range"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>
       <div className="rt-row" data-tour="margins-target">
         <Choice id="mg-target" label="Margin target" value={target} options={TARGETS} onChange={setTarget} />

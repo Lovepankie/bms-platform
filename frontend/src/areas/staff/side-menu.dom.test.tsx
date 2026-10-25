@@ -212,7 +212,9 @@ describe('the drawer on a phone, with the staff areas (issue #455)', () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     );
-    const button = await screen.findByRole('button', { name: 'Sign out' }, { timeout: 5000 });
+    // Sign out is in the top bar's one menu (issue #526).
+    fireEvent.click(await screen.findByRole('button', { name: /^Menu for / }, { timeout: 5000 }));
+    const button = screen.getByRole('button', { name: 'Sign out' });
     fireEvent.click(button);
     await waitFor(() => expect(logout).toHaveBeenCalledWith('/api/v1/auth/logout'));
     expect(button.getAttribute('aria-busy')).toBe('true');
@@ -223,6 +225,7 @@ describe('the drawer on a phone, with the staff areas (issue #455)', () => {
     widthIs(false);
     let finish = () => undefined as void;
     show(officer, { signingOut: new Promise<void>((resolve) => (finish = resolve)) });
+    fireEvent.click(screen.getByRole('button', { name: /^Menu for / }));
     const button = screen.getByRole('button', { name: 'Sign out' });
     fireEvent.click(button);
     expect(button.getAttribute('aria-busy')).toBe('true');
@@ -456,7 +459,7 @@ describe('the staff sidebar from 720px', () => {
       .getAllByRole('link')
       .map((a) => a.textContent);
 
-  it('shows the sidebar with the areas and no tabs, no menu button, and Sign out in the staff bar', () => {
+  it('shows the sidebar with the areas and no tabs, no drawer button, and Sign out in the menu of the top bar', () => {
     show(admin);
     const nav = within(sidebar()).getByRole('navigation', { name: 'Staff areas' });
     expect(nav.getAttribute('data-tour')).toBe('nav-areas');
@@ -465,6 +468,7 @@ describe('the staff sidebar from 720px', () => {
     expect(screen.getAllByRole('navigation', { name: 'Staff areas' })).toHaveLength(1);
     expect(document.querySelector('.tabs')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Menu' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Menu for / }));
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Sell' })).toBeNull();
     expect(screen.queryByRole('complementary')).toBeNull();

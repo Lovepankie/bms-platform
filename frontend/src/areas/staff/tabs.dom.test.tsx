@@ -288,6 +288,7 @@ describe('the bottom tabs on a phone (issue #539)', () => {
         </QueryClientProvider>
       </RouterContextProvider>,
     );
+    fireEvent.click(screen.getByRole('button', { name: /^Menu for / }));
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(signOut).toHaveBeenCalledTimes(1);
   });
@@ -398,9 +399,10 @@ describe('the tab bar styles', () => {
   });
 
   it('lifts the sale bar and the save bar on top of it, never under it', () => {
-    const retailCss = read('retail.css');
+    const kitCss = read('kit.css');
     const lendingCss = read('lending.css');
-    expect(retailCss).toMatch(/\.has-tab-bar \.sale-bar \{\s*bottom: var\(--tab-bar\);/);
+    // The sale's bar is the kit's ActionBar since issue #526.
+    expect(kitCss).toMatch(/\.has-tab-bar \.action-bar \{\s*bottom: var\(--tab-bar\);/);
     expect(lendingCss).toMatch(/\.has-tab-bar \.mf-savebar \{\s*bottom: var\(--tab-bar\);/);
     expect(read('feedback.css')).toMatch(/var\(--tab-bar, 0px\)/);
   });

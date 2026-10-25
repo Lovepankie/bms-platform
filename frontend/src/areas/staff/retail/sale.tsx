@@ -11,7 +11,6 @@ import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../
 import type { OutboxItem } from '../../../offline/outbox';
 import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
-import { ShopLogo } from '../branch-picker';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
@@ -30,6 +29,9 @@ import { receivedFor, receivedProblem } from './sale-change-state';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { useToast } from './toast';
+import { ActionBar } from '../../../app/ui/ActionBar';
+import { showDate } from './maths';
+import { Hint } from '../../../app/ui/Hint';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -59,7 +61,7 @@ export function Receipt({ sale, received }: { sale: Sale; /** Cash the customer 
     <section aria-label="Sale receipt">
       <h2>Sale saved</h2>
       <p>
-        Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {sale.sale_date}
+        Paid by {METHODS.find((m) => m.value === sale.payment_method)?.label ?? sale.payment_method} on {showDate(sale.sale_date)}
         {sale.buyer_name ? `, buyer ${sale.buyer_name}` : ''}
       </p>
       <div className="table-wrap" tabIndex={0}><table>
@@ -90,7 +92,7 @@ export function Receipt({ sale, received }: { sale: Sale; /** Cash the customer 
       {(sale.balance_minor ?? 0) > 0 && (
         <p>
           Still to pay: <strong>{money(sale.balance_minor ?? 0)}</strong>
-          {sale.due_date ? ` by ${sale.due_date}` : ''}
+          {sale.due_date ? ` by ${showDate(sale.due_date)}` : ''}
         </p>
       )}
       {canProfit && sale.profit_minor !== undefined && <p>Profit on this sale: {money(sale.profit_minor)}</p>}
@@ -103,34 +105,12 @@ export function tapFeedback() {
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
 }
 
-/**
- * The sale's one primary action (#508, docs/ui-rules.md rule 6): on a phone a bar stuck full width to the bottom of the screen,
- * its button carrying the live total, so the amount and Record sale are always in reach; from 720px it sits under the total.
- */
+/** The sale's one primary action (#508): the kit's ActionBar, its button carrying the live total. */
 export function SaleBar({ children }: { children: ReactNode }) {
-  // While the bar sticks (a phone), its measured height is --bottom-bar on the page, so the toast rises above it and a field
-  // scrolled into view stops above it, without :has() and at any font size; cleared when the bar goes.
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    const root = document.documentElement;
-    if (!el) return;
-    const measure = () => {
-      if (getComputedStyle(el).position === 'sticky') root.style.setProperty('--bottom-bar', `${Math.ceil(el.getBoundingClientRect().height)}px`);
-      else root.style.removeProperty('--bottom-bar');
-    };
-    measure();
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(el);
-    return () => {
-      observer?.disconnect();
-      root.style.removeProperty('--bottom-bar');
-    };
-  }, []);
   return (
-    <div ref={ref} className="sale-bar" data-testid="sale-bar">
+    <ActionBar className="sale-bar" testId="sale-bar">
       {children}
-    </div>
+    </ActionBar>
   );
 }
 
@@ -197,8 +177,8 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
         </p>
       )}
       {noPrice && <p role="alert" className="rt-flag">This item has no price in the list.</p>}
-      {price && !price.canOverride && <p className="hint">The price comes from the price list. You do not have permission to change it.</p>}
-      {offlinePrice && !offlinePrice.canType && <p className="hint">Offline, the price saved on this phone is used. You do not have permission to change it.</p>}
+      {price && !price.canOverride && <Hint full>The price comes from the price list. You do not have permission to change it.</Hint>}
+      {offlinePrice && !offlinePrice.canType && <Hint full>Offline, the price saved on this phone is used. You do not have permission to change it.</Hint>}
       {changedOffline && !offlinePrice?.canType && onReset && <p><button type="button" className="btn-sm" onClick={onReset}>Use the price saved on this phone</button></p>}
       {(override || (changedOffline && offlinePrice?.canType)) && onReason && (
         <div>
@@ -413,7 +393,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           </span>
         )}
       </h2>
-      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Type an item above and tap it in the list, or scan it.</EmptyState>}
+      {draft.lines.length === 0 && <EmptyState title="No items yet.">Search or scan to add.</EmptyState>}
       {pricesOn && resolution.data?.price_list && !checking && (
         <p className="hint" data-tour="sale-price-list" data-testid="price-list-in-force">
           Priced from the list {resolution.data.price_list}{resolution.data.origin === 'customer_group' ? ' (the customer group)' : resolution.data.origin === 'customer' ? ' (the customer)' : ''}.
@@ -524,7 +504,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
               <input id="buyer-contact" inputMode="tel" value={draft.newBuyerContact} onChange={(e) => update({ newBuyerContact: e.target.value })} />
               {accountsOn && (
                 <>
-                  <BusyButton type="button" className="rt-primary" busy={addBuyer.isPending} disabled={draft.newBuyerName.trim() === ''} onClick={() => addBuyer.mutate()}>
+                  <BusyButton type="button" className="rt-primary" busy={addBuyer.isPending} notReady={draft.newBuyerName.trim() === ''} onClick={() => addBuyer.mutate()}>
                     Add this buyer
                   </BusyButton>
                   <Problem error={addBuyer.error} />
@@ -556,7 +536,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
             <>
               <label htmlFor="credit-reason">Why is this sale allowed? (at least 5 characters)</label>
               <input id="credit-reason" value={draft.creditReason ?? ''} maxLength={300} onChange={(e) => update({ creditReason: e.target.value })} />
-              <p className="hint">Save the sale again to sell above the limit. The reason is kept with the sale.</p>
+              <Hint full>Save the sale again to sell above the limit. The reason is kept with the sale.</Hint>
             </>
           ) : (
             <p>Ask someone who may allow it, take a payment first, or sell for less.</p>
@@ -569,7 +549,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           {mayKeepOnPhone(draft.sent) ? (
             <>
               <p>The server did not answer. The sale may or may not be saved. Keep it on this phone and it is sent once.</p>
-              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+              <Hint full>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
               <BusyButton type="button" busy={keep.isPending} onClick={() => keep.mutate()}>
                 Keep it on this phone
               </BusyButton>
@@ -577,14 +557,14 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           ) : (
             <>
               <p>The server did not answer. The sale may or may not be saved. A credit sale needs the internet: tap Try again when you are online, and it is saved once.</p>
-              <p className="hint">The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</p>
+              <Hint full>The items and the payment cannot be changed now, so the same sale is sent. To sell something else, clear this sale.</Hint>
             </>
           )}
         </div>
       )}
       {keep.error && <p role="alert" className="alert alert-danger">This phone could not keep the sale: {keep.error.message}</p>}
       <SaleBar>
-        <BusyButton type="submit" className="rt-primary sale-bar-action" busy={save.isPending || keep.isPending} disabled={problem !== null && !locked} data-tour="sale-save">
+        <BusyButton type="submit" className="rt-primary sale-bar-action" busy={save.isPending || keep.isPending} notReady={problem !== null && !locked} data-tour="sale-save">
           {offlineMode && mayKeepOnPhone(draft.sent) ? 'Save on this phone' : lost ? 'Try again' : (
             <>
               <span>Record sale</span>
@@ -686,9 +666,6 @@ export function RecordSale() {
         </>
       ) : (
         <>
-          <p className="branch-line">
-            <ShopLogo url={(me.branches ?? []).find((b) => b.id === branchId)?.logo_url} name={branchName} /> Branch: <strong>{branchName}</strong>
-          </p>
           <NoStockHere branchId={branchId} />
           <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued} />
         </>

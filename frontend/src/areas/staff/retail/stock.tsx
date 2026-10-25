@@ -18,6 +18,7 @@ import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
 import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } from './list-chain-state';
 import { GroupedStock, type StockFilter } from './stock-grouped';
 import { keptWords } from './orders-state';
+import { Hint } from '../../../app/ui/Hint';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
 // exists only for a session holding retail.profit.read: showCost is the screen's choice and the server
@@ -43,7 +44,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
   const [corrected, setCorrected] = useState<string | null>(null);
   const g = useCategoryGroups({ screen: 'stock', items: rows, categoryOf: (r) => r.category, subtotalOf: stockSubtotal, resetKey: filterKey, searching, pending });
   const grouping = g.active && !flat;
-  if (rows.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
+  if (rows.length === 0) return <EmptyState title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const showCategory = !grouping && phone;
   const columns = 3 + (!phone && !grouping ? 1 : 0) + (showCost ? 1 : 0);
   const row = (r: StockRow) => (
@@ -110,7 +111,7 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
   const showCost = mayCost && data.items.some((r) => r.cost_minor !== undefined);
   const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
   const grouping = g.active && !flat;
-  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
+  if (data.items.length === 0) return <EmptyState title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const row = (r: AllBranchesStock['items'][number]) => (
     <tr key={r.product_id}>
       <td>{r.description}{!grouping && <><br /><CategoryLabel category={r.category} /></>}</td>
@@ -146,7 +147,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const g = useCategoryGroups({ screen: 'stock', items: data.items, categoryOf: (r) => r.category, subtotalOf: totalsSubtotal, resetKey: filterKey, searching, pending });
   const grouping = g.active && !flat;
-  if (data.items.length === 0) return <EmptyState art="noProducts" title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
+  if (data.items.length === 0) return <EmptyState title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const names = Object.fromEntries(data.branches.map((b) => [b.id ?? '', branchName(b)]));
   const card = (r: AllBranchesStock['items'][number]) => {
         const id = r.product_id ?? '';
@@ -200,7 +201,7 @@ export function StockLevelFilter({ level, onChange }: { level: StockLevel | ''; 
     <>
       <Segmented label="Show" options={LEVELS} value={level} onChange={onChange} />
       {level === 'out' && <p className="hint">Items you have stocked with none left, or less than none.</p>}
-      {level === 'low' && <p className="hint">Items you have stocked that are at or below their minimum, or 5 or fewer without one, including those out of stock.</p>}
+      {level === 'low' && <Hint>Items you have stocked that are at or below their minimum, or 5 or fewer without one, including those out of stock.</Hint>}
     </>
   );
 }
@@ -237,7 +238,7 @@ function StockRows({ sel, filter, all, branchId }: { sel: ListSelection; filter:
 
 export function StockPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName: name } = useBranchView();
+  const { all, branchId } = useBranchView();
   const canProfit = useProfitAccess();
   const phone = useIsPhone();
   const list = useListView(listUser(me), 'stock', STOCK_ORDER);
@@ -274,7 +275,6 @@ export function StockPage() {
   const narrowing = { pending: result.isPlaceholderData, searching: query !== '', filterKey: [all ? 'all' : branchId, query, categoryId, negativeOnly, level, showInactive].join('|') };
   return (
     <Gate screen="stock" title="Stock">
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : name}</strong></p>
       {!all && branchId !== null && <NoStockHere branchId={branchId} />}
       <ViewSwitch view={list.view} onChange={list.setView} />
       <StockLevelFilter level={level} onChange={setLevel} />

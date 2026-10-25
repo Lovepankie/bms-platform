@@ -8,6 +8,7 @@ import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useStaff } from '../context';
 import { LiftConfirm } from './lift';
 import { mayManageSettings, mayReadNotifications } from './state';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // The SMS opt-out list (extras slice B3, issue #218; ADR-036 decision 8): who is not to be texted. A row is about a member
 // (it follows the member to any number; staff make these on the member's own page) or about a number alone (a person who
@@ -120,7 +121,7 @@ function AddNumber({ onAdded }: { onAdded: () => void }) {
       {error?.fields.reason && <p role="alert" className="field-error">{error.fields.reason}</p>}
       {add.isSuccess && <p role="status" className="alert alert-success">Added.</p>}
       <p>
-        <BusyButton type="submit" className="rt-primary" busy={add.isPending} disabled={phone.trim() === ''}>
+        <BusyButton type="submit" className="rt-primary" busy={add.isPending} notReady={phone.trim() === ''}>
           Add to the list
         </BusyButton>
       </p>
@@ -209,7 +210,7 @@ export function OptOutsScreen() {
     },
     onError: refresh,
   });
-  if (!allowed) return <p className="empty-state">You do not have access to the opt-out list.</p>;
+  if (!allowed) return <NoAccess what="the opt-out list" />;
   const canManage = mayManageSettings(me);
   const items = (pages.data?.pages ?? []).flatMap((p) => p.items);
   const fetching = pages.isPlaceholderData || (pages.isFetching && !pages.isFetchingNextPage);

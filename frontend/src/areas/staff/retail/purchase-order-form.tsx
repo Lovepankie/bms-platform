@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
+import { createLazyRoute, getRouteApi, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { retail, type Product } from '../../../api/retail';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
@@ -15,6 +15,7 @@ import { BranchField, SupplierField, useSuppliers, type SupplierOption } from '.
 import { showQty } from './maths';
 import { Gate, Problem, ProductPicker, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Hint } from '../../../app/ui/Hint';
 
 // The purchase order form (the purchasing capability, ADR-033, issue #198): the supplier, the date it is expected, and the items
 // with how many and what one costs. Saving makes a DRAFT; nothing is ordered and no stock moves until the order is sent. The cost
@@ -68,7 +69,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
   const setLine = (i: number, line: OrderLineForm) => onChange({ ...form, lines: form.lines.map((l, n) => (n === i ? line : l)) });
   return (
     <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }} data-tour="order-form">
-      <p className="hint">Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</p>
+      <Hint full>Saving makes a draft. Nothing is ordered, and no stock moves, until you send the order.</Hint>
       <div className="stack" data-tour="order-supplier">
         <SupplierField id="order-supplier" value={form.supplierId} suppliers={suppliers} onChange={(supplierId) => onChange({ ...form, supplierId })} />
         {branches.length > 0 && <BranchField id="order-branch" label="Goods are expected at" value={form.branchId} branches={branches} onChange={(branchId) => onChange({ ...form, branchId })} />}
@@ -88,7 +89,7 @@ export function OrderFormView({ form, suppliers, branches, picker, busy, error, 
       <p className="rt-total" aria-live="polite" data-testid="order-total">Order total {money(orderTotal(form.lines))}</p>
       {problem && form.lines.length > 0 && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
-      <BusyButton type="submit" className="rt-primary" busy={busy === true} disabled={problem !== null} data-tour="order-save">{submitLabel}</BusyButton>
+      <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null} data-tour="order-save">{submitLabel}</BusyButton>
 
     </form>
   );
@@ -132,7 +133,6 @@ export function PurchaseOrderNewPage() {
   const picker = useItemPicker((line) => setDraft((d) => ({ ...d, lines: [...d.lines, line] })));
   return (
     <Gate screen="purchaseOrders" title="New purchase order">
-      <p><Link to="/staff/retail/purchase-orders">Back to purchase orders</Link></p>
       <OrderFormView form={draft} suppliers={suppliers} branches={branches} picker={picker} busy={save.isPending} error={save.error} onChange={(f) => setDraft(() => f)} onSubmit={() => save.mutate()} />
       {draft.lines.length > 0 && !save.isPending && <button type="button" className="btn-ghost" onClick={() => { discard(); save.reset(); }}>Clear this order</button>}
     </Gate>
@@ -187,7 +187,6 @@ export function PurchaseOrderEditPage() {
   const picker = useItemPicker((line) => setForm((f) => (f ? { ...f, lines: [...f.lines, line] } : f)));
   return (
     <Gate screen="purchaseOrders" title={order.data?.order_no ? `Change ${order.data.order_no}` : 'Change purchase order'}>
-      <p><Link to="/staff/retail/purchase-orders/$orderId" params={{ orderId }}>Back to the order</Link></p>
       {order.isPending && <SkeletonList label="Loading the order" />}
       <Problem error={order.error} />
       {order.data && order.data.status !== 'draft' && <p className="empty-state">This order has been sent, so it can no longer be changed.</p>}

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { type NotificationSettings, type NotificationSettingsChange, notificationSettingsApi } from '../../../api/notification-settings';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
+import { Hint } from '../../../app/ui/Hint';
 
 // Business set-up > Notifications (issue #412, ADR-057): what the business sends by push, each everyday notice on or off, and when
 // the daily closing summary goes. Everyone still turns notifications on for their own device in Notifications and app; this page only
@@ -117,7 +118,7 @@ export function BusinessNotificationsScreen() {
             </BusyButton>
           </p>
         )}
-        <p className="hint">A quarter hour, at the latest 23:30. If the server was down at that time, the summary comes the next morning as yesterday's.</p>
+        <Hint>A quarter hour, at the latest 23:30. If the server was down at that time, the summary comes the next morning as yesterday's.</Hint>
         {!canChange && <p className="hint">Only an administrator can change these.</p>}
       </section>
     </main>

@@ -15,6 +15,7 @@ import { draftTotal, newLine, withUnit } from './sale-state';
 import { SaleLineCard } from './sale';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { Hint } from '../../../app/ui/Hint';
 
 // Quotations (documents capability, ADR-033, issue #197): prices offered to a buyer until a date. A quotation reserves no stock and
 // posts nothing; it is numbered and its PDF stored like every document, and it can be made into a sale (and its invoice) once,
@@ -57,7 +58,7 @@ export function ConvertPanel({ form, hasTerms, busy, onChange, onConvert }: { fo
         <input type="checkbox" checked={form.invoice} onChange={(e) => onChange({ ...form, invoice: e.target.checked })} /> Also make the invoice
       </label>
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
-      <BusyButton type="button" className="rt-primary" busy={busy === true} disabled={problem !== null} onClick={onConvert}>
+      <BusyButton type="button" className="rt-primary" busy={busy === true} notReady={problem !== null} onClick={onConvert}>
         Make the sale
       </BusyButton>
     </fieldset>
@@ -124,7 +125,7 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
         {open && canSell && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'convert' ? null : 'convert')}>Make it a sale</button>}
         {open && <button type="button" className="btn-sm" onClick={() => setPanel(panel === 'cancel' ? null : 'cancel')}>Cancel</button>}
       </div>
-      {q.expired && <p className="hint">The last day has passed, so it cannot be made into a sale. Make a new quotation.</p>}
+      {q.expired && <Hint full>The last day has passed, so it cannot be made into a sale. Make a new quotation.</Hint>}
       {panel === 'convert' && <ConvertPanel form={form} hasTerms={hasTerms} busy={convert.isPending} onChange={setForm} onConvert={() => convert.mutate()} />}
       {panel === 'cancel' && (
         <fieldset>
@@ -198,7 +199,7 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
         <ProductPicker id="quote-search" showPrice showStock={false} onAdd={add} />
       </div>
       <h2>Items</h2>
-      {draft.lines.length === 0 && <EmptyState art="noSales" title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
+      {draft.lines.length === 0 && <EmptyState title="No items yet.">Type an item above and tap it in the list.</EmptyState>}
       {draft.lines.map((l, i) => (
         <SaleLineCard
           key={`${l.product.id}-${i}`}
@@ -212,10 +213,10 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
         />
       ))}
       <p className="rt-total" aria-live="polite">Total {money(draftTotal(draft.lines))}</p>
-      <p className="hint">Stock is not reserved. A price list, if the buyer has one, prices the items as it would on a sale.</p>
+      <Hint full>Stock is not reserved. A price list, if the buyer has one, prices the items as it would on a sale.</Hint>
       {problem && draft.lines.length > 0 && <Note>{problem}</Note>}
       <Problem error={save.error} />
-      <BusyButton type="submit" className="rt-primary" busy={save.isPending} disabled={problem !== null} data-tour="quotation-save">
+      <BusyButton type="submit" className="rt-primary" busy={save.isPending} notReady={problem !== null} data-tour="quotation-save">
         Save quotation
       </BusyButton>
 
@@ -227,7 +228,7 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
 type Status = 'all' | 'open' | 'converted' | 'cancelled';
 
 export function QuotationsPage() {
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const nameOf = useBranchName();
   const single = useSingleBranch();
   const { me } = useStaff();
@@ -249,8 +250,7 @@ export function QuotationsPage() {
   const fetching = list.isPlaceholderData || (list.isFetching && !list.isFetchingNextPage && list.fetchStatus !== 'idle');
   return (
     <Gate screen="quotations" title="Quotations" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
-      <p className="hint" data-tour="quotations-help">A quotation offers prices until a date. It reserves no stock and posts nothing. When the buyer says yes, make it a sale here.</p>
+      <Hint tour="quotations-help">A quotation offers prices until a date. It reserves no stock and posts nothing. When the buyer says yes, make it a sale here.</Hint>
       {atStore && <p className="hint">{single.branchName} is a store, and a store does not sell or quote. Choose a shop to make a quotation.</p>}
       {!making && !atStore && (
         <button type="button" className="rt-primary" disabled={single.branchId === null} data-tour="quotation-new" onClick={() => setMaking(true)}>

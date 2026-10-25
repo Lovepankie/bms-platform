@@ -591,3 +591,213 @@ button.list-row:focus-visible {
 .kit-example > button {
   margin-bottom: var(--space-3);
 }
+
+/* KeyFigure (issue #526): the one key amount of a screen. The label small and muted above it, the amount at the display size in
+   tabular figures, the rows behind it plain, label left and amount right. No card, no tint: it sits on the page. */
+.key-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-5);
+}
+
+.key-figure-label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.key-figure-value {
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: var(--leading-tight);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.key-figure-rows {
+  margin: var(--space-3) 0 0;
+}
+
+.key-figure-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.key-figure-row dt {
+  color: var(--color-text-muted);
+}
+
+.key-figure-row dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ActionBar (issue #526, the sale's bar of #508 made shared): the one primary action. On a phone it sticks full width to the
+   bottom, edge to edge over the page gutter and on top of the bottom tabs, its button full width; from 720px it sits in the form. */
+.action-bar {
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 719px) {
+  .action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--z-nav);
+    margin: var(--space-3) calc(-1 * var(--space-4)) 0;
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom));
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .action-bar > :is(.rt-primary, .btn-primary, .btn-brand) {
+    display: flex;
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .action-bar .rt-primary {
+    margin-top: 0;
+  }
+
+  /* Over the bottom tabs (issue #539): the bar stops on top of them, and they take the home indicator inset. */
+  .has-tab-bar .action-bar {
+    bottom: var(--tab-bar);
+    padding-bottom: var(--space-3);
+  }
+}
+
+/* PeriodPicker (issue #526): the Segmented of Today, This week, This month and Custom, and the days in force under it in words.
+   On Custom the days are a quiet button that opens the sheet again. */
+.period-picker {
+  margin: 0 0 var(--space-4);
+}
+
+.period-picker .segmented {
+  display: flex;
+  flex-wrap: nowrap;
+  margin: 0 0 var(--space-2);
+}
+
+/* The four choices stay on one row at 360px: equal widths, the small text size, no wrap inside a choice. */
+.period-picker .segmented > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px var(--space-1);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.period-days {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+button.period-days {
+  min-height: var(--tap);
+  padding-inline: 0;
+  color: var(--color-link);
+}
+
+/* A link to another screen (issue #526): a row with its label and a chevron on the plain surface, the whole row the target,
+   never an underlined word. Rows side by side wrap; on a phone each takes the full width. */
+.link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.link-row:hover {
+  background: var(--color-hover);
+  text-decoration: none;
+}
+
+.link-row .list-row-chevron {
+  margin-left: auto;
+}
+
+.link-rows,
+.cluster:has(> .link-row),
+p:has(> .link-row:only-child) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+@media (max-width: 719px) {
+  .link-rows,
+  .cluster:has(> .link-row) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* A figure or a word that opens the rows behind it (issue #526): the link colour and a small chevron, no underline. */
+.figure-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-link);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.figure-link::after {
+  content: '';
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Hint (issue #526): a help text shows one line, cut with an ellipsis, and the info button beside it opens the rest. */
+.hint-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-3);
+}
+
+.hint-line > .hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.hint-open > .hint {
+  white-space: normal;
+}
+
+.hint-more {
+  flex: none;
+  min-width: var(--tap);
+  margin: calc(-1 * var(--space-3)) 0;
+  padding: 0;
+  color: var(--color-text-muted);
+}
+
+.hint-more svg {
+  width: 20px;
+  height: 20px;
+}

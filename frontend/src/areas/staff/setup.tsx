@@ -11,6 +11,7 @@ import { DataExportCard } from './data-export';
 import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
 import { PlanCard } from './plan';
+import { Hint } from '../../app/ui/Hint';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
 // tenant admin lands on until it is dismissed. The logo is checked and re-encoded by the API; the
@@ -377,10 +378,10 @@ export function Setup() {
             <label htmlFor="go-live-date">The day the app became your register (only the Owner of the business changes it)</label>
             <input id="go-live-date" type="date" disabled={busy} defaultValue={current.go_live_date ?? ''}
               onBlur={(e) => { if (e.target.value && e.target.value !== current.go_live_date) setGoLive(e.target.value); }} />
-            <p className="hint">
+            <Hint full>
               Loans given out before this day can be brought in from your paper register with their real dates. Until it is set, the day an
               administrator first signed in counts.
-            </p>
+            </Hint>
           </fieldset>
         )}
 

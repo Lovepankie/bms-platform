@@ -6,6 +6,7 @@ import { useStaff } from '../context';
 import { ChangeLine, ChartLegend, RangeChart, RangePicker, type ChartPoint } from './range-ui';
 import { daysBetween, previousWords, rangeDays, rangeTitle, readRange, shortDate, stepWords, writeRange, type RangeChoice, type RangeDays } from './range-state';
 import { money } from './ui';
+import { Hint } from '../../../app/ui/Hint';
 
 // A seller's own figures on the Retail home (issue #399, ADR-055), over the range of issue #428. The server counts only the sales
 // this person made (the sales summary of someone without retail.sale.all_sellers), so nothing here is anyone else's, and no cost,
@@ -139,7 +140,7 @@ export function OwnSales() {
       <h2>Your sales, {title}</h2>
       <RangePicker value={choice} onChange={pick} today={today} />
       {now.isPending && <p className="loading">Adding up your sales</p>}
-      {now.isError && <p className="hint">Your figures could not be loaded. Open your sales below.</p>}
+      {now.isError && <Hint full>Your figures could not be loaded. Open your sales below.</Hint>}
       {figures && (
         <>
           <div className="rc-headline">

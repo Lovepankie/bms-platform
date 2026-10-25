@@ -23,13 +23,17 @@ back to what opened it.
 ## Actions
 
 6. One primary action per screen. On a phone it is sticky and full width at the bottom, and it carries the live amount.
+   It sits in the kit's `ActionBar` and is brand filled. It never looks off because of its fields: while they are not yet
+   right the form passes `notReady`, the button stays enabled, sends nothing, and a press takes the person to the first missing
+   field (issue #526). `disabled` stays for a block that is not about the fields.
 7. Writes are optimistic, with Undo.
 
 ## Money and type
 
 8. Every amount uses tabular figures (`font-variant-numeric: tabular-nums`) and goes through one money formatter
    (`formatMinor`, `money()` on the retail screens). UGX shows no decimals. The key amount on a screen is large: 40 to 56px,
-   semibold.
+   semibold, with its label small above it: the kit's `KeyFigure`. Tabular figures are set once on the body. Dates read
+   "23 Oct 2026" through the one formatter, `showDate`.
 9. At most 4 text sizes plus 1 display size, and 2 weights.
 
 ## Forms
@@ -64,7 +68,8 @@ back to what opened it.
     a blocking dialog.
     Every toast names its tone: the check of `success` only where a write succeeded, `info` for a refusal (an item already on
     the sale) or a change that waits for approval, `error` for a failure. `show()` has no default tone.
-16. Status colours are only for real status.
+16. Status colours are only for real status. An information note is neutral grey with the info icon, never a lavender or brand
+    tint.
 
 ## Words
 
@@ -77,3 +82,20 @@ back to what opened it.
     reads source, not the rendered page: words built at run time and the backend's refusals are not checked by it, so a
     new backend message a person reads is worded from this list by hand. Routes, API fields, permission names and error codes
     keep their old names; only words a person sees change. A tour whose words change takes a new version.
+
+## Shell and navigation (issue #526)
+
+19. The staff area has one 56px top bar: the business and the branch in use as its title, which switches branch; Search; and
+    one menu for who is signed in, Help, Refresh, the theme and Sign out. The Online dot shows only when it has news (offline,
+    sending, sales waiting), and always for a manager, whose sheet settles other phones' sales, and an offline banner sits under the bar while the device has no network. The Powered-by footer
+    shows only on More and the settings pages, and the page colour fills the viewport.
+20. A phone shows one crumb, a back chevron and "Back to" the parent, with no slash; a screen never adds a second Back to
+    link under its title, nor a "Branch: X" line, since the top bar names the branch: a write screen records at exactly that
+    branch or asks for one (`useSingleBranch`, `useStockingBranch`, held by `branch-scope.test.tsx`).
+21. An empty list, a "nothing in this range" and a no-access state are one plain line with at most one action, with no
+    border or box. The no-access line (`NoAccess`) says who can give access and links Home.
+22. A date range is the one `PeriodPicker`: Today, This week, This month and Custom, Custom in the kit's Sheet.
+23. A related screen is a row with a chevron (`link-row`, `ScreenLink`) or a tile; an action is a button; a figure that opens
+    the rows behind it is link coloured with a chevron. No navigation is an underlined word.
+24. A help text is one line (`Hint`); the rest is behind its info button or in Help. A warning or a consequence that changes
+    what the person does next is never cut (`Hint full`, or a `Note`).

@@ -151,6 +151,6 @@ describe('Change the items on the order page', () => {
     await screen.findByLabelText(/Quantity/);
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
     expect(screen.getByText(/cancel the order/i)).toBeTruthy();
-    expect(save().disabled).toBe(true);
+    expect(save().getAttribute('data-not-ready')).toBe('true');
   });
 });

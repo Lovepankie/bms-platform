@@ -19,6 +19,7 @@ import {
   updateBody, type MemberDraft,
 } from './member-state';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
+import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Create and edit a member (issue #280, FR-MEM-01 to FR-MEM-04, FR-MEM-09, FR-MEM-10). One column, big inputs, a sticky save
 // bar. Before anything is saved the screen asks the server for likely duplicates by phone, national ID and name and shows
@@ -275,7 +276,7 @@ function NewMember() {
   const { me } = useStaff();
   return (
     <MembersGate title="Add a member" tourId="member-new">
-      {mayCreateMember(me) ? <MemberForm /> : <p className="empty-state">You do not have access to add members.</p>}
+      {mayCreateMember(me) ? <MemberForm /> : <NoAccess what="add members" />}
     </MembersGate>
   );
 }
@@ -291,7 +292,7 @@ function EditMember() {
     <MembersGate title="Change member details" tourId="member-edit">
       {member.isPending && <p className="loading">Loading the member</p>}
       <Problem error={member.error} />
-      {member.data && (mayEditMember(me, member.data.branch_id) ? <MemberForm member={member.data} /> : <p className="empty-state">You do not have access to change this member.</p>)}
+      {member.data && (mayEditMember(me, member.data.branch_id) ? <MemberForm member={member.data} /> : <NoAccess what="change this member" />)}
     </MembersGate>
   );
 }

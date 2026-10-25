@@ -5,6 +5,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Barcode, type Product } from '../../../api/retail';
 import { BarcodeSvg } from './catalogue-barcodes';
 import { Gate, Problem, ProductPicker, money } from './ui';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Barcode labels (ADR-070, issue #345; FR-RET-68): choose items and how many labels of each, make a shop code for an
 // item that has none (an EAN-13 from 210 since issue #524), and print an A4 sheet of 3 by 8 labels with the name, the
@@ -78,14 +79,14 @@ export function LabelsPage() {
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={safe} onChange={(e) => setSafe(e.target.checked)} />
         My printer cannot print to the edge: keep 4 mm clear inside each label
       </label>
-      <p>
-        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} disabled={rows.length === 0} onClick={() => make.mutate()}>
+      <ActionBar>
+        <BusyButton type="button" className="rt-primary" data-tour="labels-make" busy={make.isPending} notReady={rows.length === 0} onClick={() => make.mutate()}>
           Make the labels
-        </BusyButton>{' '}
+        </BusyButton>
         <button type="button" data-tour="labels-print" disabled={sheet.length === 0} onClick={() => window.print()}>
           Print
         </button>
-      </p>
+      </ActionBar>
       {sheet.length > 0 && (
         <div className={safe ? 'label-sheet label-safe' : 'label-sheet'} data-testid="label-sheet" aria-label="Label sheet">
           {sheet.map((l, i) => (

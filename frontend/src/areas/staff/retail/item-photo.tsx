@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail } from '../../../api/retail';
+import { Hint } from '../../../app/ui/Hint';
 
 // Item photos (issue #384, ADR-053): a small picture of an item in the item lists, the sale screen and the item's page, read
 // from the app's own origin (GET /retail/photos/{id}) as a blob, since the content security policy allows no other image host.
@@ -78,7 +79,7 @@ export function PhotoEditor({ inputId, photoId, shownId, label, onUpload, onClea
   return (
     <div className="rt-photo-editor" data-tour={tour}>
       <ItemPhoto photoId={shownId ?? photoId} label={label} size={160} />
-      {!photoId && shownId && <p className="hint">This shows the item's photo. Add one here for this size alone.</p>}
+      {!photoId && shownId && <Hint>This shows the item's photo. Add one here for this size alone.</Hint>}
       <label htmlFor={id}>{photoId ? 'Change the photo' : 'Add a photo'}</label>
       <input
         id={id}
@@ -95,7 +96,7 @@ export function PhotoEditor({ inputId, photoId, shownId, label, onUpload, onClea
           if (input.current) input.current.value = '';
         }}
       />
-      <p className="hint">A PNG, JPEG or WebP picture up to 5 MB. It shows in the item list and when you pick the item in a sale.</p>
+      <Hint>A PNG, JPEG or WebP picture up to 5 MB. It shows in the item list and when you pick the item in a sale.</Hint>
       {upload.isPending && <p className="loading">Sending the photo</p>}
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       {(upload.error || clear.error) && <p role="alert" className="rt-flag">{((upload.error ?? clear.error) as Error).message}</p>}

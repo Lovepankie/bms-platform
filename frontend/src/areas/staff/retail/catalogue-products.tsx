@@ -9,7 +9,6 @@ import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Fiel
 import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
-import { BackToCatalogue } from './catalogue';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { PackEditor } from './catalogue-packs';
 import { BarcodeEditor } from './catalogue-barcodes';
@@ -20,6 +19,7 @@ import { StockMinimumEditor } from './stock-minimum';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
+import { Hint } from '../../../app/ui/Hint';
 
 // Items (#146): list with search, category and active filters; add and edit an item's code,
 // description, category, unit and whether it is on sale (issue #493: added inside a category, the item
@@ -284,7 +284,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
               <label htmlFor="item-inactive">
                 <input id="item-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
               </label>
-              <p className="hint">An inactive item is not offered when selling, buying or moving stock, and leaves the stock list unless you ask for inactive items. It is never deleted: its history and reports stay.</p>
+              <Hint full>An inactive item is not offered when selling, buying or moving stock, and leaves the stock list unless you ask for inactive items. It is never deleted: its history and reports stay.</Hint>
               {!active && (product.stock_branches ?? 0) > 0 && (
                 <p role="note" className="alert alert-warning">{inactiveWarning(product.stock_on_hand, product.stock_branches)}</p>
               )}
@@ -312,7 +312,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
             <>
               <label htmlFor="item-cost">Buying price ({RETAIL_CURRENCY})</label>
               <input id="item-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-invalid={costMinor === null} autoComplete="off" />
-              <p className="hint">What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</p>
+              <Hint>What you pay the supplier for one. Leave 0 if you do not know it yet; buying stock sets it.</Hint>
             </>
           ) : null}
           <Field
@@ -397,7 +397,7 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
           <>
             <label htmlFor="price-cost">Last paid ({RETAIL_CURRENCY})</label>
             <input id="price-cost" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} aria-invalid={costMinor === null} autoComplete="off" />
-            <p className="hint">The last price you paid for one, to help set the selling price. Profit uses the average buying price of the stock in each shop, which every purchase keeps up to date.</p>
+            <Hint>The last price you paid for one, to help set the selling price. Profit uses the average buying price of the stock in each shop, which every purchase keeps up to date.</Hint>
           </>
         )}
         <label htmlFor="price-sell">New selling price ({RETAIL_CURRENCY})</label>
@@ -406,7 +406,7 @@ export function PriceForm({ product, onSaved, onCancel }: { product: Product; on
         <label htmlFor="price-reason">Why is the price changing?</label>
         <input id="price-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} autoComplete="off" />
         <Problem error={save.error} />
-        <BusyButton busy={save.isPending} type="submit" className="rt-primary" disabled={!valid}>Save the new price</BusyButton>
+        <BusyButton busy={save.isPending} type="submit" className="rt-primary" notReady={!valid}>Save the new price</BusyButton>
         <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
       </form>
       <h2>Price history</h2>
@@ -450,11 +450,10 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink>} />;
   return (
     <>
-      <BackToCatalogue />
       <p className="cluster">
         <button type="button" onClick={onAdd} data-tour="product-add">Add an item</button>
-        <Link className="btn-sm" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>
-        <Link className="btn-sm" to={SIZES_JOIN as never} data-tour="product-join-sizes">Join items as sizes of one item</Link>
+        <Link className="btn" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>
+        <Link className="btn" to={SIZES_JOIN as never} data-tour="product-join-sizes">Join items as sizes of one item</Link>
       </p>
       <div data-tour="product-search"><SearchBox id="items-search" label="Search by name, code or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} /></div>
       <div className="rt-row" data-tour="product-filters">

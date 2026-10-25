@@ -6,6 +6,9 @@ import type { AccountPayment, CustomerAccount, OpenSale } from '../../../api/ret
 import { AccountSummary, PaymentPanel, ReceiptList, blankPayment } from './account';
 import { buildPaymentRequest, settledPayment, type PaymentForm } from './account-state';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // The account forms as a person uses them (ADR-033, issue #196): the preview of where a payment goes follows what is typed,
 // the save button waits for a form the server would accept, a chosen split is checked, and a reversal needs its reason.
 // Fabricated names and amounts.
@@ -67,15 +70,15 @@ describe('the date of a payment on account', () => {
 describe('taking a payment on account', () => {
   it('waits for an amount, previews the oldest sales first, and refuses more than can be paid', () => {
     render(<Panel onSubmit={() => undefined} />);
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     type('Amount received', '1500');
-    expect(saveButton().disabled).toBe(false);
+    expect(saveButton().getAttribute('data-not-ready')).toBeNull();
     const preview = screen.getByTestId('pay-preview').textContent ?? '';
     expect(preview.indexOf('RS-b')).toBeLessThan(preview.indexOf('RS-c'));
     expect(preview).toContain('UGX 1,000');
     expect(preview).toContain('UGX 500');
     type('Amount received', '1801');
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByRole('alert').textContent).toContain('At most UGX 1,800');
   });
 
@@ -94,13 +97,13 @@ describe('taking a payment on account', () => {
     type('Amount received', '900');
     fireEvent.click(screen.getByLabelText('Choose which sales it pays'));
     expect(screen.getByTestId('pay-manual')).toBeTruthy();
-    expect(saveButton().disabled).toBe(true);
-    type(/RS-c, 2026-02-05/, '600');
-    type(/RS-b, 2026-01-05/, '200');
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
+    type(/RS-c, 5 Feb 2026/, '600');
+    type(/RS-b, 5 Jan 2026/, '200');
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
     expect(screen.getByRole('alert').textContent).toMatch(/add up/i);
-    type(/RS-b, 2026-01-05/, '300');
-    expect(saveButton().disabled).toBe(false);
+    type(/RS-b, 5 Jan 2026/, '300');
+    expect(saveButton().getAttribute('data-not-ready')).toBeNull();
     fireEvent.click(saveButton());
     expect(buildPaymentRequest(sent.mock.calls[0]?.[0] as PaymentForm).allocations).toEqual([
       { sale_id: 'c', amount_minor: 600 },
@@ -112,7 +115,7 @@ describe('taking a payment on account', () => {
     render(<Panel onSubmit={() => undefined} />);
     type('Amount received', '900');
     type('Date received', '2026-04-02');
-    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().getAttribute('data-not-ready')).toBe('true');
   });
 });
 
@@ -131,7 +134,7 @@ describe('reversing a payment', () => {
     type(/Why is it reversed/, 'oops');
     expect(go.disabled).toBe(true);
     type(/Why is it reversed/, ' Wrong buyer ');
-    expect(go.disabled).toBe(false);
+    expect(ready(go)).toBe(true);
     fireEvent.click(go);
     expect(reversed).toHaveBeenCalledWith(receipt, 'Wrong buyer');
   });
@@ -151,7 +154,7 @@ describe('setting the limit and the terms', () => {
     expect(save.disabled).toBe(true);
     type(/Payment terms/, '45');
     type(/Credit limit/, '');
-    expect(save.disabled).toBe(false);
+    expect(ready(save)).toBe(true);
     fireEvent.click(save);
     expect(saved).toHaveBeenCalledWith({ limit: '', terms: '45' });
   });

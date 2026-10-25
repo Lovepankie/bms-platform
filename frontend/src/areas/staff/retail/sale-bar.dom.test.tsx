@@ -172,7 +172,8 @@ describe('the sale screen stylesheet', () => {
 
   it('sticks the bar full width to the bottom of a phone, lifts the toast above it and keeps focused fields clear of it', () => {
     const retail = css('retail.css');
-    const phone = retail.match(/@media \(max-width: 719px\) \{\s*\.sale-bar \{([^}]*)\}/);
+    // The bar is the kit's ActionBar since issue #526: the sale's bar is one of its uses.
+    const phone = css('kit.css').match(/@media \(max-width: 719px\) \{\s*\.action-bar \{([^}]*)\}/);
     expect(phone?.[1]).toMatch(/position: sticky;\s*bottom: 0;/);
     expect(phone?.[1]).toMatch(/margin: [^;]*calc\(-1 \* var\(--space-4\)\)/);
     // The height comes from SaleBar's measure, never a fixed figure behind :has().

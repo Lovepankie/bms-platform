@@ -3,8 +3,8 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ImportResult } from '../../../api/retail';
-import { BackToCatalogue } from './catalogue';
 import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
+import { ActionBar } from '../../../app/ui/ActionBar';
 
 // Import items from a file (#146), for a new client, administrators only. Paste the rows or choose a
 // CSV file, check it first (nothing is saved), read what would be added, skipped and wrong, then add
@@ -92,7 +92,6 @@ export function ImportPage() {
   };
   return (
     <Gate screen="importer" title="Import items">
-      <BackToCatalogue />
       <div data-tour="import-note">
         <Note>
           The first row names the columns: code, description, category, unit{profit ? ', buying price (if you wish)' : ''}, selling price. Then one item on each row. Leave a code empty, or leave out the code column, and the app gives the item the next code of its category, such as BLB-0001.
@@ -105,9 +104,11 @@ export function ImportPage() {
       <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
       {warning && <p role="alert" className="alert alert-warning">{warning}</p>}
       <Problem error={check.error} />
-      <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" disabled={text.trim() === ''} onClick={() => check.mutate()}>
-        Check the file
-      </BusyButton>
+      <ActionBar>
+        <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate()}>
+          Check the file
+        </BusyButton>
+      </ActionBar>
       {current && <ImportReport result={current} />}
       {current && current.errors === 0 && (current.added ?? 0) === 0 && <p className="empty-state">There is nothing new to add.</p>}
       {current && (current.errors ?? 0) > 0 && <p role="alert" className="alert alert-danger">Fix the rows with a problem in your file and check it again. Nothing is added while a row has a problem.</p>}

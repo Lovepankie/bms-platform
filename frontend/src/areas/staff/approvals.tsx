@@ -10,6 +10,7 @@ import { BusyButton } from '../../app/ui/BusyButton';
 import { useCollateralApi } from '../../api/lending-context';
 import { custodyWords, typeWords } from './lending/collateral-state';
 import { money as lendingMoney } from './lending/loan-state';
+import { Hint } from '../../app/ui/Hint';
 
 // The approvals inbox (FR-APR-05, FR-APR-06): pending requests the user may decide or made, in
 // the active branch. Approve executes the action at once; reject needs a note. The maker sees
@@ -72,9 +73,9 @@ function Row({ item, id }: { item: Approval; id: string }) {
           </>
         )}
         {item.action_type === 'loan_bring_in' && (
-          <p className="hint">
+          <Hint full>
             Approving puts this loan from the paper register in the books. No arrears SMS goes to the borrower in the 7 days after it comes in, so the business can speak to them first.
-          </p>
+          </Hint>
         )}
         {item.action_type === 'collateral_release' && item.subject_id && (
           <>
@@ -127,7 +128,7 @@ export function Approvals() {
       <div data-tour="approvals-list">
       {pending.isPending && <SkeletonList label="Loading approvals" />}
       {pending.isError && <p role="alert" className="alert alert-danger">Could not load approvals.</p>}
-      {pending.data && items.length === 0 && <EmptyState art="nothingWaiting" title="Nothing waiting.">Requests for your approval appear here.</EmptyState>}
+      {pending.data && items.length === 0 && <EmptyState title="Nothing waiting.">Requests for your approval appear here.</EmptyState>}
       {items.length > 0 && (
         <div className="table-wrap table-cards" tabIndex={0}>
           <table>

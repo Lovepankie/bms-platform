@@ -88,7 +88,7 @@ export function CustomerAgeingView({ data, rows, accounts = false }: { data: Cus
 
 export function CustomerAgeingPage() {
   const { me } = useStaff();
-  const { all, branchId, branchName } = useBranchView();
+  const { all, branchId } = useBranchView();
   const [top, setTop] = useState(20);
   const search = useLiveSearch();
   const report = useQuery({
@@ -99,7 +99,6 @@ export function CustomerAgeingPage() {
   const rows = report.data ? matchingBuyers(report.data.customers ?? [], search.term) : [];
   return (
     <Gate screen="customerAgeing" title="Customer ageing" wide>
-      <p className="branch-line">Branch: <strong>{all ? 'All branches' : branchName}</strong></p>
       <p className="hint" data-tour="ageing-help">What each customer who owes has to pay, as of today, by how late it is.</p>
       <p><ScreenLink screen="creditSales" to="/staff/retail/credit-sales">Credit sales</ScreenLink></p>
       <div className="rt-row" data-tour="ageing-top">

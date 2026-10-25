@@ -15,6 +15,9 @@ import { CollateralForm } from './collateral-form';
 import { MemberForm } from './member-form';
 import { usePhotoQueue } from './photo-queue';
 
+/** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
+const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
+
 // A save whose answer may have been lost (issue #280): the raw failure a dropped connection really gives, a look at what was saved
 // that itself can fail, and no second record in any of those cases. Also the shared phone box when the check did not find anyone,
 // a phone that was not changed, and a photo still being shrunk. Fabricated names, numbers and amounts.
@@ -151,7 +154,7 @@ describe('the shared phone box', () => {
     mount(<MemberForm member={holder} onSaved={() => undefined} />, { ...mock.api, duplicateCheck: check }, undefined, updateOnly);
     type(/^Work or business/, 'Test trader');
     const save = screen.getByRole('button', { name: /Save changes/ }) as HTMLButtonElement;
-    expect(save.disabled).toBe(false);
+    expect(ready(save)).toBe(true);
     fireEvent.click(save);
     await waitFor(() => expect(mock.calls.update).toHaveLength(1));
     expect(check).not.toHaveBeenCalled();

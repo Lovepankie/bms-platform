@@ -129,7 +129,7 @@ describe('the payment on account', () => {
   it('lists the sales to choose from when the cashier chooses', () => {
     const html = panel({ ...blankPayment(branch, '2026-04-01'), amount: '900', manual: true });
     expect(html).toContain('data-testid="pay-manual"');
-    expect(html).toContain('RS-b, 2026-01-05, owes UGX 1,000');
+    expect(html).toContain('RS-b, 5 Jan 2026, owes UGX 1,000');
     expect(html).not.toContain('RS-old');
   });
 
@@ -150,7 +150,7 @@ describe('the payments taken', () => {
   it('lists each payment with where it went and offers a reversal to whoever may', () => {
     const html = list([receipt()]);
     expect(html).toContain('RC00000001');
-    expect(html).toContain('UGX 1,500 by Cash on 2026-04-01, received at Test Branch A');
+    expect(html).toContain('UGX 1,500 by Cash on 1 Apr 2026, received at Test Branch A');
     expect(html).toContain('RS-b UGX 1,000, RS-c UGX 500');
     expect(html).toContain('aria-label="Reverse payment RC00000001"');
     expect(list([receipt()], false)).not.toContain('Reverse payment');
@@ -193,7 +193,7 @@ describe('the statement', () => {
   it('lists imported sales apart, under their own title, and does not put them in the closing balance', () => {
     const html = view(statement);
     expect(html).toContain('Before system start');
-    expect(html).toContain('RS-old, 2025-11-01: UGX 700');
+    expect(html).toContain('RS-old, 1 Nov 2025: UGX 700');
     expect(html).toContain('not in the closing balance');
     expect(html).toContain('the buyer owes UGX 900');
     expect(view({ ...statement, before_system_start: undefined })).not.toContain('Before system start');
