@@ -240,6 +240,19 @@ owner rule (ADR-062 decision 9). A business with no Owner yet (one with no activ
 rules of before until the operator assigns one. Two-step sign-in is not forced on the Owner; the
 Users screen prompts the Owner to turn it on.
 
+Outside the Users routes the Owner alone asks for a module, stops one, cancels the subscription
+(read only after the last day paid for, data kept) and undoes a change still to come (ADR-073,
+403 `owner_only` for any other administrator, who reads the Plan and billing page only;
+`SelfServePlanIT`), and moves the go-live date (ADR-071;
+`ExistingLoansIT.frExl03_theGoLiveDateGuardsAgainstBackdatingNewLending`, which refuses a
+non-Owner administrator with 403 `owner_only`). Subscription reminders
+and receipts go to the Owner's own email (`BillingAutomationIT` asserts the recipient), and by SMS to
+the Owner's phone where the platform's billing SMS is on (ADR-075); there is no
+separate billing contact and no request to close the business: both not yet built
+(#571). A staff account is never deleted, the Owner's included: it is deactivated, and the
+application role holds neither `DELETE` nor `TRUNCATE` on `users`
+(`TenantOwnerIT.staffAccountsAreNeverDeleted`).
+
 ### 8.3.2 Permission matrix
 
 `Y` = granted. Blank = not granted. TA tenant admin, BM branch manager, LO loan officer,

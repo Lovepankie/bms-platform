@@ -204,6 +204,14 @@ class SelfServePlanIT extends IntegrationTest {
         assertRefused(
                 withPassword(b.api(), "/api/v1/plan/cancel", b.adminSession()), HttpStatus.FORBIDDEN, "owner_only");
         assertRefused(
+                b.api()
+                        .post(
+                                "/api/v1/plan/module-requests",
+                                Map.of("module", "retail", "password", Api.PASSWORD),
+                                b.adminSession().accessToken()),
+                HttpStatus.FORBIDDEN,
+                "owner_only");
+        assertRefused(
                 withPassword(b.api(), "/api/v1/plan/cancel", b.cashierSession()),
                 HttpStatus.FORBIDDEN,
                 "permission_denied");

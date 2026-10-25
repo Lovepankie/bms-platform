@@ -99,4 +99,27 @@ makes another administrator the Owner. Each owner-only check reads the Owner onc
 **Watch for:** a business left with no Owner after V79 (the WARNING lines; the operator assigns one on the Business page); an Owner
 who never turns on two-step sign-in (the prompt is the only nudge; a policy can still require it, ADR-046); any new route that changes
 a staff user must ask whether it touches an administrator and call the same owner rule; the plan and billing contact and closing the
-business, named in #325 as the Owner's, are not part of this change.
+business, named in #325 as the Owner's, were not part of this change; the note below says which are now built (the plan) and
+which are not yet built (a billing contact, a request to close the business, and a list for the operator of the businesses the
+backfill gave an Owner or left without one).
+
+## Note: what issue #325 asked for and where it is (25 Oct 2026)
+
+Issue #325 (owner request of 19 Oct 2026) sketched the Owner before this decision. Most of it is on `main`; three parts are not
+yet built and stay open on #325 as follow-ups, all three tracked in #571. No new migration or ADR is added for what is built.
+
+| #325 asked for | On `main` | Test |
+|---|---|---|
+| The person who signs up is the Owner, also when the operator invites the first administrator | `UserService.inviteFirstAdmin` calls `Owners.markFirstOwner`; an invitation accepted in a business with no Owner calls `Owners.claimIfFirstAdmin` | `TenantOwnerIT.theFirstAdministratorOfANewBusinessIsItsOwner`, `theOnlyAdministratorToJoinABusinessWithNoOwnerBecomesItsOwner` |
+| A per-business owner marker, `tenants.owner_user_id` | Held as `users.is_owner` (`V79__tenant_owner.sql`), one per business by the index `users_one_owner` (owner decision of 22 Oct 2026) | `TenantOwnerIT.theDatabaseKeepsOneOwnerWhoStaysAnAdministrator` |
+| The Owner holds every administrator permission | The Owner keeps `tenant_admin`: the triggers `users_owner_is_admin` and `user_role_assignments_owner_keeps_admin` (`V79__tenant_owner.sql`) | `TenantOwnerIT.theDatabaseRefusesDeletingTheOwnersAdministratorRole` |
+| Not deactivated, demoted, given other roles or a new contact by an administrator | `Owners.requireMayChangeAdmin`, called from `UserService`, answers 403 `owner_protected` | `TenantOwnerIT.anAdministratorCannotChangeTheOwnerOrAnotherAdministrator` |
+| Administrators manage everyone except the Owner | Narrowed by the owner decision of 22 Oct 2026: administrators manage every member of staff who is not an administrator; only the Owner manages the other administrators (`Owners.requireOwner`, 403 `owner_only`) | `TenantOwnerIT.anAdministratorCannotChangeTheOwnerOrAnotherAdministrator`, `theOwnerManagesTheAdministratorsAndMustTransferBeforeStepping` |
+| Only the Owner transfers ownership, to an active administrator, with the step-up and an audit row | `POST /users/{user_id}/transfer-ownership` (`UserController`), audited `core.user.ownership_transferred`, under the per-business advisory lock (`Owners.lockExclusive`) | `TenantOwnerIT.theOwnerTransfersOwnershipToAnActiveAdministrator`, `anOwnerWithTwoStepSignInTransfersWithACode`, `twoTransfersAtOnceLeaveExactlyOneOwner` |
+| Only the Owner manages the plan | `PlanService.requireOwner` (403 `owner_only`) on `POST /plan/module-requests`, `POST /plan/modules/{module}/stop`, `POST /plan/cancel` (each with the step-up) and `POST /plan/changes/{change_id}/undo` (`PlanController`) | `SelfServePlanIT.onlyTheOwnerChangesThePlan` (module request, stop and cancel by an administrator: 403 `owner_only`), `stopAndCancelWithoutTheStepUpOrByANonOwnerAreRefused` (stop, cancel and undo by an administrator who is not the Owner: 403 `owner_only`; and without the step-up) |
+| Only the Owner manages a billing contact | Not yet built (#571) | None |
+| Only the Owner asks to close the business | Not yet built (#571) | None |
+| The Users screen shows an Owner badge and hides destructive actions on the Owner | `frontend/src/areas/staff/users/page.tsx` (the badge), `state.ts` (which actions are offered), `transfer-owner.tsx` | `users.dom.test.tsx` (the Owner badge and hidden actions), `state.test.ts` |
+| Staff accounts are deactivated, never deleted | No route deletes a user (`UserController` has no `DELETE`); the application role holds no `DELETE` on `users` (`V1__foundation.sql`, `bms_grant_app('users', 'SELECT, INSERT, UPDATE')`) | `TenantOwnerIT.staffAccountsAreNeverDeleted` (a `DELETE /users/{user_id}` by the Owner answers 405 for a cashier, an administrator and the Owner, and the rows stay; `has_table_privilege` is false for `DELETE` and `TRUNCATE` on `users`, inherited roles and `PUBLIC` included). Not covered: a row removed by a foreign-key cascade or a definer function; none deletes users today |
+| Backfill to the first active administrator by `created_at` | `V79__tenant_owner.sql`. **Differs from #325:** the active administrator whose email is the recorded sign-up email comes first (the person who signed up, the point of #325), else the earliest active administrator by `created_at`; each assignment is a platform log row and a business left with none is a WARNING in the migration log | `MigrationOrderIT.ownerMigrationGivesEveryBusinessWithAnActiveAdministratorExactlyOneOwner` |
+| The backfilled businesses listed for the operator to confirm | Not yet built (#571): no screen lists the businesses the backfill gave an Owner, or left without one | None |

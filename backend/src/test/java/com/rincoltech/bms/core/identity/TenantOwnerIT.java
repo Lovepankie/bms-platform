@@ -442,6 +442,41 @@ class TenantOwnerIT extends IntegrationTest {
         assertThat(owners(other.tenantId())).containsExactly(otherAdmin);
     }
 
+    /**
+     * Issue #325: a member of staff, the Owner included, is deactivated and never deleted. No route deletes a user, even for
+     * the Owner, who holds every administrator permission; and the application role cannot, directly, through a role it is
+     * a member of or through PUBLIC.
+     */
+    @Test
+    void staffAccountsAreNeverDeleted() {
+        for (UUID target : List.of(cashier, adminA, owner)) {
+            ResponseEntity<JsonNode> r =
+                    api.call(HttpMethod.DELETE, "/api/v1/users/" + target, null, ownerSession.accessToken());
+            assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        }
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM users WHERE id IN (?, ?, ?)")
+                        .params(cashier, adminA, owner)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(3L);
+        // has_table_privilege fails on a role that does not exist and follows inherited roles and PUBLIC.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT has_table_privilege('bms_app', 'public.users', 'UPDATE')")
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
+        for (String privilege : List.of("DELETE", "TRUNCATE")) {
+            assertThat(TestDatabase.owner()
+                            .sql("SELECT has_table_privilege('bms_app', 'public.users', ?)")
+                            .param(privilege)
+                            .query(Boolean.class)
+                            .single())
+                    .as(privilege)
+                    .isFalse();
+        }
+    }
+
     /** NFR-ISO-01: the Owner of one business cannot see, change or hand ownership to the staff of another. */
     @Test
     void theOwnerRulesNeverReachAnotherBusiness() {
