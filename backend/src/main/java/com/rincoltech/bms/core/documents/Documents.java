@@ -173,6 +173,13 @@ public interface Documents {
     void deleteReportObject(UUID documentId);
 
     /**
+     * Deletes every stored file of the bound business from the object store, for the purge of a removed business's kept
+     * records (owner decision D46, ADR-090); the rows are the purge's. Runs outside any transaction it holds open; a file that
+     * cannot be deleted is logged by its key and counted out. Returns the files deleted.
+     */
+    int deleteAllStoredFiles();
+
+    /**
      * The bytes of a generated report's stored object, for the weekly email that carries the business's workbook (ADR-074);
      * empty when the object is gone. Refuses any document that is not of type {@code report}, and an object larger than
      * {@code maxBytes} (the caller attaches only a small file and links to a larger one). Only {@code core.reporting} calls it

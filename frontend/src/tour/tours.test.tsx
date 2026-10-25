@@ -51,6 +51,7 @@ import { FeedbackPage } from '../areas/staff/feedback/page';
 import { ReferralsPage } from '../areas/staff/referrals/page';
 import { BusinessNotificationsScreen } from '../areas/staff/notifications/business';
 import { BillingScreen } from '../areas/staff/billing/page';
+import { CloseScreen } from '../areas/staff/close/page';
 import { TwoStepPolicyScreen } from '../areas/staff/two-step/page';
 import { UsersScreen } from '../areas/staff/users/page';
 import { FEATURES, type Tour, stepsFor } from './model';
@@ -110,6 +111,8 @@ function screen(path: string | undefined): ReactElement {
       return <BusinessNotificationsScreen />;
     case '/staff/setup/billing':
       return <BillingScreen />;
+    case '/staff/setup/close':
+      return <CloseScreen />;
     case '/staff/retail':
       return <RetailHome />;
     case '/staff/retail/sale':
@@ -207,6 +210,8 @@ function render(me: Me, path: string | undefined): string {
     state: 'active', paid_until: '2026-11-30', grace_days: 7, how_to_pay: 'Test: pay to the test account',
     payments: [{ id: 'p1', amount_minor: 10000, currency: 'UGX', method: 'mtn_momo', paid_on: '2026-11-01', months: 1, period_start: '2026-11-01', period_end: '2026-11-30', receipt_no: 'RT-2026-000001' }],
   });
+  // What Close the business reads (issue #571): no request yet, seen by the owner.
+  client.setQueryData(['closure'], { status: 'none', cooling_off_days: 30, can_change: true });
   // What the retail settings screens read, so their targets are in the static markup.
   client.setQueryData(['retail', 'capabilities'], { capabilities: { profile: 'shop' }, version: 1 });
   client.setQueryData(['retail', 'branch-roles'], (me.branches ?? []).map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: 'both', can_sell: true })));
@@ -312,6 +317,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-two-step': [ADMIN],
   'page-business-notifications': [ADMIN],
   'page-billing': [ADMIN],
+  'page-close': [ADMIN],
   'page-members': [CLERK, OFFICER],
   'page-member-new': [CLERK],
   'page-member': [CLERK, CHECKER],

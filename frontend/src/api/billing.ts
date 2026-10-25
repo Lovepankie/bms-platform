@@ -14,6 +14,8 @@ export type BillingSettings = S['BillingSettings'];
 export type BillingSettingsRequest = S['BillingSettingsRequest'];
 export type DueForSuspension = S['DueForSuspension'];
 export type DueItem = S['DueForSuspensionItem'];
+export type BillingContact = S['BillingContact'];
+export type BillingContactRequest = S['BillingContactRequest'];
 
 function fail(error: unknown, fallback: string): never {
   const problem = problemOf(error);
@@ -24,6 +26,20 @@ function fail(error: unknown, fallback: string): never {
 export async function billingView(): Promise<BillingView> {
   const { data, error } = await api.GET('/api/v1/billing');
   if (error || !data) fail(error, 'Could not load the plan and billing.');
+  return data;
+}
+
+/** The Owner names who gets the reminders and receipts (issue #571, ADR-090); sign-in contacts never change. */
+export async function setBillingContact(body: BillingContactRequest): Promise<BillingView> {
+  const { data, error } = await api.PUT('/api/v1/billing/contact', { body });
+  if (error || !data) fail(error, 'Could not save the billing contact.');
+  return data;
+}
+
+/** The Owner removes the billing contact: reminders and receipts go to the Owner again. */
+export async function clearBillingContact(): Promise<BillingView> {
+  const { data, error } = await api.DELETE('/api/v1/billing/contact');
+  if (error || !data) fail(error, 'Could not remove the billing contact.');
   return data;
 }
 

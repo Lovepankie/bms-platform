@@ -8,6 +8,8 @@ export const AREAS: MenuLink[] = [
   { to: '/platform/businesses', label: 'Businesses', icon: icons.building },
   { to: '/platform/plans', label: 'Plans and prices', icon: icons.priceLists },
   { to: '/platform/billing', label: 'Due for suspension', icon: icons.calendar },
+  { to: '/platform/closures', label: 'Businesses closing', icon: icons.lock },
+  { to: '/platform/no-owner', label: 'Businesses with no owner', icon: icons.people },
   { to: '/platform/outbox', label: 'Messages not sent', icon: icons.bell },
   { to: '/platform/feedback', label: 'Feedback', icon: icons.chat },
 ];

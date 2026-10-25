@@ -68,6 +68,8 @@ class EmailLayoutTest {
         p.put("receipt_no", "RT-2026-000001");
         p.put("amount", "UGX 10,000");
         p.put("period", "1 Nov 2026 to 30 Nov 2026");
+        // Closing the business (issue #571, ADR-090).
+        p.put("remove_after", "24 November 2026");
         // The weekly copy of the business's data (issue #334).
         p.put("as_of", "19 Oct 2026");
         p.put("expires_on", "18 Nov 2026");

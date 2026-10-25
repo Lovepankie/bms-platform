@@ -277,6 +277,12 @@ bms:
       issuer-address: ${BMS_PLATFORM_BILLING_ISSUER_ADDRESS:}
       issuer-contact: ${BMS_PLATFORM_BILLING_ISSUER_CONTACT:}
       issuer-tax-id: ${BMS_PLATFORM_BILLING_ISSUER_TAX_ID:}
+    # Closing a business (issue #571, ADR-090, owner decision D46): the Owner's request waits this many days before the
+    # operator may remove it, and the money records a removed business kept are deleted this many years after the end of the
+    # financial year of its removal, by the daily job (off in the integration tests, which call it themselves).
+    closure-cooling-off-days: ${BMS_PLATFORM_CLOSURE_COOLING_OFF_DAYS:30}
+    closed-retention-years: ${BMS_CLOSED_RETENTION_YEARS:5}
+    closed-retention-job-enabled: ${BMS_PLATFORM_CLOSED_RETENTION_JOB_ENABLED:true}
 
 # Background jobs on PostgreSQL (ADR-008). BMS_SCHEDULER_ENABLED=false turns polling off in an
 # instance that should only serve HTTP, if a separate worker instance is ever split out.

@@ -71,11 +71,11 @@ afterEach(() => {
   Object.defineProperty(navigator, 'userAgent', { value: REAL_AGENT, configurable: true });
 });
 
-function show({ card = false, modules, permissions = ['core.settings.manage'], extra }: { card?: boolean; modules?: string[]; permissions?: string[]; extra?: ReactNode } = {}) {
+function show({ card = false, modules, permissions = ['core.settings.manage'], extra, owner = false }: { card?: boolean; modules?: string[]; permissions?: string[]; extra?: ReactNode; owner?: boolean } = {}) {
   const me = mockMe('owner');
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me: { ...me, permissions, modules: modules ?? me.modules }, branch: null, chooseBranch: () => {} }}>
+      <StaffContext.Provider value={{ me: { ...me, permissions, modules: modules ?? me.modules, is_owner: owner }, branch: null, chooseBranch: () => {} }}>
         {card && <NewLogoCard />}
         <Setup />
         {extra}
@@ -142,6 +142,25 @@ describe('the set-up note on the new icon', () => {
 });
 
 // ADR-071, issue #466: a lending business sets the day the app became its register; existing loans come in only from before it.
+describe('the end of the financial year (ADR-090)', () => {
+  it('is June until the Owner chooses another month, saved as financial_year_end_month', async () => {
+    delete settings.financial_year_end_month;
+    show({ owner: true });
+    const select = (await screen.findByLabelText('The month your financial year ends in')) as HTMLSelectElement;
+    expect(select.value).toBe('6');
+    expect(select.disabled).toBe(false);
+    fireEvent.change(select, { target: { value: '12' } });
+    await waitFor(() => expect(settings.financial_year_end_month).toBe(12));
+    expect(await screen.findByText('The financial year ends on the last day of December.')).toBeTruthy();
+  });
+
+  it('is shown to another administrator, who cannot change it', async () => {
+    show();
+    const select = (await screen.findByLabelText('The month your financial year ends in')) as HTMLSelectElement;
+    expect(select.disabled).toBe(true);
+  });
+});
+
 describe('the go-live date', () => {
   it('is offered to a lending business and saved as go_live_date', async () => {
     client.PATCH.mockClear();
@@ -307,7 +326,7 @@ describe('the set-up menu icons', () => {
     await wholePage();
     const tiles = within(screen.getByRole('list', { name: 'More set-up' })).getAllByRole('listitem');
     expect(tiles.map((t) => t.querySelector('.tile-label')?.textContent)).toEqual([
-      'Branches', 'Users', 'Two-step sign-in', 'Two-step for yourself', 'Notifications for the business', 'Referrals', 'Text messages',
+      'Branches', 'Users', 'Two-step sign-in', 'Two-step for yourself', 'Notifications for the business', 'Referrals', 'Text messages', 'Close the business',
     ]);
     for (const t of tiles) {
       expect(t.querySelector('.icon-chip svg')).not.toBeNull();

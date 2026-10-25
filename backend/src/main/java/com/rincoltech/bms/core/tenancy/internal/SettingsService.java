@@ -110,6 +110,10 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
             // owner lock comes first in the transaction (ADR-062).
             guard.requireOwner("set the go-live date");
         }
+        if (request.financialYearEndMonth() != null) {
+            // ADR-090: the retention of a closed business's money records counts from the end of its financial year.
+            guard.requireOwner("set the end of the financial year");
+        }
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
@@ -687,6 +691,9 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
                 s.get("mfa_enforce_from") == null ? null : Instant.parse((String) s.get("mfa_enforce_from")),
                 tenant.profile().timezone().getId(),
                 s.get("go_live_date") == null ? null : LocalDate.parse((String) s.get("go_live_date")),
+                s.get("financial_year_end_month") == null
+                        ? null
+                        : ((Number) s.get("financial_year_end_month")).intValue(),
                 version);
     }
 }

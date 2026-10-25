@@ -137,8 +137,13 @@ class PlanService {
 
     /** The banner and the read-only notice every member of staff sees: when the subscription ends, or ended. */
     PlanStatusResponse status() {
-        return transactions.execute(status ->
-                new PlanStatusResponse(cancellationOn(), subscription().endedOn()));
+        return transactions.execute(status -> new PlanStatusResponse(
+                cancellationOn(),
+                subscription().endedOn(),
+                jdbc.sql("SELECT remove_after FROM tenant_closures WHERE status IN ('requested', 'removing')")
+                        .query(LocalDate.class)
+                        .optional()
+                        .orElse(null)));
     }
 
     /**
@@ -774,7 +779,7 @@ class PlanService {
      * One email per active platform operator, in a savepoint inside the caller's transaction: a failure is logged and the
      * change is kept (the operator also sees it in the console lists).
      */
-    private void tellOperators(String change) {
+    void tellOperators(String change) {
         try {
             savepoint.executeWithoutResult(tx -> {
                 record Operator(UUID id, String email) {}

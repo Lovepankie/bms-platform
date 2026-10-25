@@ -925,6 +925,46 @@
           }
         }
       },
+      "BillingContact" : {
+        "description" : "Who gets the reminders and receipts; never a sign-in contact",
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "phone" : {
+            "type" : "string"
+          },
+          "updated_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
+      "BillingContactRequest" : {
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "full_name" : {
+            "maxLength" : 120,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "phone" : {
+            "description" : "A Ugandan mobile number for SMS reminders, optional",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "email", "full_name" ]
+      },
       "BillingNotice" : {
         "properties" : {
           "overdue_since" : {
@@ -1038,6 +1078,17 @@
             "description" : "Months charged for a year, or null",
             "format" : "int32",
             "type" : "integer"
+          },
+          "billing_contact" : {
+            "$ref" : "#/components/schemas/BillingContact"
+          },
+          "bills_go_to" : {
+            "description" : "The name reminders and receipts are written to now, or null when nobody gets them",
+            "type" : "string"
+          },
+          "can_change_contact" : {
+            "description" : "Whether the caller is the Owner, who alone changes the billing contact",
+            "type" : "boolean"
           },
           "currency" : {
             "type" : "string"
@@ -1212,6 +1263,45 @@
           }
         }
       },
+      "BusinessClosure" : {
+        "description" : "The request to close the business, if one is open",
+        "properties" : {
+          "can_change" : {
+            "description" : "Whether the caller is the Owner, who alone asks to close and cancels",
+            "type" : "boolean"
+          },
+          "cooling_off_days" : {
+            "description" : "The days between the request and the first day of removal",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "export_run_id" : {
+            "description" : "The full data export made for the Owner with the request, or null",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "remove_after" : {
+            "description" : "The first day the platform operator may remove the business",
+            "format" : "date",
+            "type" : "string"
+          },
+          "requested_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "none or requested",
+            "type" : "string"
+          }
+        }
+      },
       "BusinessDetail" : {
         "properties" : {
           "admins" : {
@@ -1342,6 +1432,11 @@
       "BusinessPlanStatus" : {
         "description" : "For the banner and the read-only notice every member of staff sees",
         "properties" : {
+          "closing_remove_after" : {
+            "description" : "While the Owner's request to close the business is open: the first day it may be removed; the business is read only (ADR-090)",
+            "format" : "date",
+            "type" : "string"
+          },
           "ended_on" : {
             "description" : "When the subscription has ended: the day it ended; the business is read only",
             "format" : "date",
@@ -1385,6 +1480,21 @@
         "properties" : {
           "reason" : {
             "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "ClosureStepUp" : {
+        "description" : "The authenticator code when the Owner has two-step sign-in, else the password",
+        "properties" : {
+          "password" : {
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "totp_code" : {
+            "maxLength" : 20,
             "minLength" : 0,
             "type" : "string"
           }
@@ -6859,6 +6969,25 @@
           }
         }
       },
+      "OwnerCandidate" : {
+        "description" : "An active administrator of a business with no Owner",
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "full_name" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "last_login_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }
+      },
       "PasswordResetCompleteRequest" : {
         "properties" : {
           "password" : {
@@ -7288,6 +7417,86 @@
           "totp_code" : {
             "maxLength" : 20,
             "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformClosure" : {
+        "properties" : {
+          "cancelled_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "keep_until" : {
+            "description" : "When removed: the day after which the kept money records may be deleted",
+            "format" : "date",
+            "type" : "string"
+          },
+          "removable" : {
+            "description" : "Whether the cooling-off period is over in the business's own time zone",
+            "type" : "boolean"
+          },
+          "remove_after" : {
+            "description" : "The first day the business may be removed",
+            "format" : "date",
+            "type" : "string"
+          },
+          "removed_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "removed_by_name" : {
+            "type" : "string"
+          },
+          "requested_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "requested_by_name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "requested, cancelled, removing or removed",
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "tenant_name" : {
+            "type" : "string"
+          },
+          "tenant_slug" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PlatformClosureRemoved" : {
+        "properties" : {
+          "closure_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "erased" : {
+            "additionalProperties" : {
+              "description" : "Rows deleted or anonymised, by area",
+              "format" : "int32",
+              "type" : "integer"
+            },
+            "description" : "Rows deleted or anonymised, by area",
+            "type" : "object"
+          },
+          "keep_until" : {
+            "description" : "The day after which the kept money records may be deleted",
+            "format" : "date",
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
             "type" : "string"
           }
         }
@@ -22986,6 +23195,11 @@
             "description" : "True when the business has a name: the one given at onboarding or one the admin saved",
             "type" : "boolean"
           },
+          "financial_year_end_month" : {
+            "description" : "The month the business's financial year ends in (1 to 12), or null for June, the end of the Uganda tax year; the retention of a closed business's money records counts from it (ADR-090)",
+            "format" : "int32",
+            "type" : "integer"
+          },
           "go_live_date" : {
             "description" : "The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)",
             "format" : "date",
@@ -23092,6 +23306,35 @@
               "$ref" : "#/components/schemas/TenantSmsSenderId"
             },
             "type" : "array"
+          }
+        }
+      },
+      "TenantWithoutOwner" : {
+        "properties" : {
+          "admins" : {
+            "description" : "Its active administrators, oldest first; any one of them can be made the Owner",
+            "items" : {
+              "$ref" : "#/components/schemas/OwnerCandidate"
+            },
+            "type" : "array"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "slug" : {
+            "type" : "string"
+          },
+          "status" : {
+            "description" : "active or suspended",
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "format" : "uuid",
+            "type" : "string"
           }
         }
       },
@@ -23665,6 +23908,13 @@
             "maxLength" : 100,
             "minLength" : 1,
             "type" : "string"
+          },
+          "financial_year_end_month" : {
+            "description" : "The month the financial year ends in, 1 to 12; only the Owner sets it, 403 owner_only otherwise (ADR-090)",
+            "format" : "int32",
+            "maximum" : 12,
+            "minimum" : 1,
+            "type" : "integer"
           },
           "go_live_date" : {
             "description" : "The go-live date, today or earlier; only the Owner of the business sets it, 403 owner_only otherwise (ADR-071)",
@@ -24436,6 +24686,52 @@
         "tags" : [ "billing" ]
       }
     },
+    "/api/v1/billing/contact" : {
+      "delete" : {
+        "operationId" : "clearBillingContact",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BillingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only: remove the billing contact, so reminders and receipts go to the Owner again (ADR-090)",
+        "tags" : [ "billing" ]
+      },
+      "put" : {
+        "operationId" : "setBillingContact",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BillingContactRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BillingView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only: name the person who gets the reminders and receipts; sign-in contacts are never changed (ADR-090)",
+        "tags" : [ "billing" ]
+      }
+    },
     "/api/v1/billing/notice" : {
       "get" : {
         "operationId" : "billingNotice",
@@ -25052,6 +25348,71 @@
         },
         "summary" : "The tenant's logo image (public, cacheable)",
         "tags" : [ "branding" ]
+      }
+    },
+    "/api/v1/closure" : {
+      "get" : {
+        "operationId" : "getClosure",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BusinessClosure"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The open request to close the business, if any, and whether the caller may change it (ADR-090)",
+        "tags" : [ "closure" ]
+      },
+      "post" : {
+        "operationId" : "requestClosure",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ClosureStepUp"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BusinessClosure"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only, with the step-up: ask to close the business; read only at once, a full data export for the Owner, removal by the platform operator after the cooling-off (ADR-090)",
+        "tags" : [ "closure" ]
+      }
+    },
+    "/api/v1/closure/cancel" : {
+      "post" : {
+        "operationId" : "cancelClosure",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BusinessClosure"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Owner only: cancel the request to close the business before it is removed (ADR-090)",
+        "tags" : [ "closure" ]
       }
     },
     "/api/v1/data-export" : {
@@ -31624,6 +31985,66 @@
         "tags" : [ "platform" ]
       }
     },
+    "/api/v1/platform/closures" : {
+      "get" : {
+        "operationId" : "platformClosures",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/PlatformClosure"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The open requests to close a business, soonest removable first, and those of the last 180 days (ADR-090)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/closures/{closure_id}/remove" : {
+      "post" : {
+        "operationId" : "platformRemoveClosedBusiness",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "closure_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PlatformStepUpRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PlatformClosureRemoved"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Remove a business whose Owner asked to close it, once the cooling-off is over, with a reason; deletes or anonymises its personal data and keeps its money records anonymised until a date; needs a current code from the operator's own authenticator (ADR-090)",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/feedback" : {
       "get" : {
         "operationId" : "platformListFeedback",
@@ -32672,6 +33093,28 @@
           }
         },
         "summary" : "Create a tenant with head office, modules and an invited first admin (FR-TEN-01)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/without-owner" : {
+      "get" : {
+        "operationId" : "platformTenantsWithoutOwner",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/TenantWithoutOwner"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every active or suspended business with no Owner, with its active administrators, so the operator sets the Owner (ADR-062, ADR-090)",
         "tags" : [ "platform" ]
       }
     },

@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.reporting.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.operations.Idempotency;
+import com.rincoltech.bms.core.reporting.DataExports;
 import com.rincoltech.bms.core.reporting.ReportDefinition;
 import com.rincoltech.bms.core.reporting.internal.RunService.Requested;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
@@ -25,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  * fetched like any report file, through {@code POST /documents/{id}/download-url}, by the person it was made for.
  */
 @Service
-class DataExportService {
+class DataExportService implements DataExports {
 
     static final String AUDIT_SETTINGS = "core.data_export.settings_changed";
 
@@ -89,6 +90,12 @@ class DataExportService {
                     return made.run();
                 });
         return new Requested(outcome.body(), created.get() && !outcome.replayed());
+    }
+
+    @Override
+    @Transactional
+    public UUID requestFullCopy(UUID requester) {
+        return queue(requester).run().id();
     }
 
     private Requested queue(UUID requester) {

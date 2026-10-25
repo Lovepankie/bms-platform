@@ -71,7 +71,15 @@ export function cancelSentence(plan: When): string {
 }
 
 /** The banner or notice for every member of staff, or null when the subscription goes on. */
-export function endNotice(status: { ends_on?: string | null; ended_on?: string | null } | undefined): { tone: 'warning' | 'danger'; text: string } | null {
+export function endNotice(
+  status: { ends_on?: string | null; ended_on?: string | null; closing_remove_after?: string | null } | undefined,
+): { tone: 'warning' | 'danger'; text: string } | null {
+  if (status?.closing_remove_after) {
+    return {
+      tone: 'danger',
+      text: `The owner asked to close this business. It is read only: you can sign in, look at everything and download your data, but not add or change anything. Rincol Tech may remove it from ${dayWords(status.closing_remove_after)}. The owner can cancel the closing in Business set-up.`,
+    };
+  }
   if (status?.ended_on) {
     return {
       tone: 'danger',

@@ -76,6 +76,41 @@ vi.mock('../api/billing', async (original) => {
 
 const { DueForSuspensionPage } = await import('../areas/platform/billing');
 
+vi.mock('../api/closure', async (original) => {
+  const real = await original<typeof import('../api/closure')>();
+  return {
+    ...real,
+    platformClosures: () =>
+      Promise.resolve([
+        {
+          id: 'c-1',
+          tenant_id: 't-3',
+          tenant_slug: 'test-shop-three',
+          tenant_name: 'Test Shop Three',
+          status: 'requested',
+          requested_at: '2026-09-20T08:00:00Z',
+          requested_by_name: 'Test Owner 03',
+          remove_after: '2026-10-20',
+          removable: true,
+        },
+      ]),
+    tenantsWithoutOwner: () =>
+      Promise.resolve([
+        {
+          tenant_id: 't-4',
+          slug: 'test-shop-four',
+          name: 'Test Shop Four',
+          status: 'active',
+          created_at: '2026-09-01T08:00:00Z',
+          admins: [{ id: 'u-4', full_name: 'Test Admin 04', email: 'admin04@example.test' }],
+        },
+      ]),
+  };
+});
+
+const { ClosuresPage } = await import('../areas/platform/closures');
+const { NoOwnerPage } = await import('../areas/platform/no-owner');
+
 const FEEDBACK = {
   id: 'f-1',
   tenant_id: 't-1',
@@ -123,6 +158,8 @@ describe('operator page tours', () => {
     expect(pageTourFor(TOURS, OPERATOR, '/platform/plans')?.id).toBe('page-operator-plans');
     expect(pageTourFor(TOURS, OPERATOR, '/platform/feedback')?.id).toBe('page-operator-feedback');
     expect(pageTourFor(TOURS, OPERATOR, '/platform/billing')?.id).toBe('page-operator-billing');
+    expect(pageTourFor(TOURS, OPERATOR, '/platform/closures')?.id).toBe('page-operator-closures');
+    expect(pageTourFor(TOURS, OPERATOR, '/platform/no-owner')?.id).toBe('page-operator-no-owner');
     expect(pageTourFor(TOURS, mockMe('admin'), '/platform/plans')).toBeUndefined();
   });
 
@@ -135,6 +172,8 @@ describe('operator page tours', () => {
     ['page-operator-business', () => <BusinessScreen tenantId="t-1" />, 'Make a reset link'],
     ['page-operator-plans', () => <PlansScreen />, 'Test Small'],
     ['page-operator-billing', () => <DueForSuspensionPage />, 'Test Shop Two'],
+    ['page-operator-closures', () => <ClosuresPage />, 'Test Shop Three'],
+    ['page-operator-no-owner', () => <NoOwnerPage />, 'Test Shop Four'],
     [
       'page-operator-feedback',
       () => <FeedbackInbox load={() => Promise.resolve([FEEDBACK])} save={() => Promise.resolve(FEEDBACK)} loadScreenshot={() => Promise.resolve(new Blob())} />,

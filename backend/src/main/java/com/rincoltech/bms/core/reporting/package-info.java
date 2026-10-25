@@ -15,6 +15,8 @@
  * <p>"Download my data" (issue #334 step 1, ADR-074) is a report of this module that every business has: the whole business
  * as one workbook, a sheet per table, from the core's Branches sheet and the sheets each vertical adds through a
  * {@link com.rincoltech.bms.core.reporting.DataExportSection}, and a weekly copy emailed to the Owner through the outbox.
+ * Public API also {@link com.rincoltech.bms.core.reporting.DataExports}: the full workbook queued for the Owner who asks to close
+ * the business (issue #571, ADR-090).
  */
 @ApplicationModule(
         id = "core.reporting",

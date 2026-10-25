@@ -16,6 +16,10 @@
  * grace period and list of businesses due for suspension (nothing is suspended automatically), the receipt of every payment,
  * mailed through the outbox of {@code core.notifications} and rendered by {@code core.documents}, and the Owner's Plan and
  * billing page on the business's own host ({@code /api/v1/billing}).
+ * The rest of the Owner's powers (issue #571, ADR-090): a billing contact the reminders and receipts go to instead of the Owner,
+ * the Owner's request to close the business (read only at once, a full data export through the public port of
+ * {@code core.reporting}, cancellable) and the operator's removal after the cooling-off, which calls every module's
+ * {@link com.rincoltech.bms.kernel.PersonalDataEraser}; and the operator's list of businesses with no Owner.
  * Public API: {@link com.rincoltech.bms.core.platform.TenantProvisioning}, the one tenant creation
  * path, which onboarding's Activate uses (ADR-024).
  */
@@ -32,7 +36,8 @@
             "core.notifications",
             "core.documents",
             "core.jobs",
-            "core.referrals"
+            "core.referrals",
+            "core.reporting"
         })
 package com.rincoltech.bms.core.platform;
 

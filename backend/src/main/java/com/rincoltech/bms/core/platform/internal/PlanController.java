@@ -131,7 +131,12 @@ class PlanController {
             LocalDate endsOn,
 
             @Schema(description = "When the subscription has ended: the day it ended; the business is read only")
-            LocalDate endedOn) {}
+            LocalDate endedOn,
+
+            @Schema(
+                    description =
+                            "While the Owner's request to close the business is open: the first day it may be removed; the business is read only (ADR-090)")
+            LocalDate closingRemoveAfter) {}
 
     @Schema(
             name = "PlanModuleAsk",

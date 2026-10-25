@@ -39,6 +39,9 @@ import org.springframework.test.context.TestPropertySource;
  * and ended {@code expired}, and a paid one was leased far beyond the test clock, so the test's own ticks could no
  * longer take it and it never reached {@code needs_attention}. The payment tests call {@code PaymentPoller.tick}
  * themselves.
+ *
+ * <p>Nor the purge of the money records removed businesses kept ({@code core.platform.closed-retention}, ADR-090): the tests
+ * call {@code ClosureService.purgeDue} themselves.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -49,7 +52,8 @@ import org.springframework.test.context.TestPropertySource;
             "bms.platform.billing-job-enabled=false",
             "bms.data-export.weekly-enabled=false",
             "bms.platform.plan-changes-job-enabled=false",
-            "bms.payments.poller-enabled=false"
+            "bms.payments.poller-enabled=false",
+            "bms.platform.closed-retention-job-enabled=false"
         })
 @AutoConfigureTestRestTemplate
 public abstract class IntegrationTest {

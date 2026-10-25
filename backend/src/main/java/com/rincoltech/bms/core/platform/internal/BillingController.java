@@ -6,6 +6,11 @@ import com.rincoltech.bms.kernel.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -13,15 +18,19 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * {@code /api/v1/billing} on the business's own host (issue #480, ADR-075): the Owner's Plan and billing page, read only for
  * every administrator (the Owner is one, ADR-062), the receipt of each payment, and the overdue banner every signed-in staff
- * user sees. Payments are still recorded by the platform operator only.
+ * user sees. Payments are still recorded by the platform operator only. The Owner names a billing contact, who then gets the
+ * reminders and receipts instead of the Owner (issue #571, ADR-090).
  */
 @RestController
 @RequestMapping(path = "/api/v1/billing", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -87,7 +96,29 @@ class BillingController {
             @Schema(description = "The operator's words on how to pay, or null")
             String howToPay,
 
-            @Schema(description = "Newest first") List<BillingPayment> payments) {}
+            @Schema(description = "Newest first") List<BillingPayment> payments,
+
+            @Schema(
+                    description =
+                            "The person the Owner named for reminders and receipts, or null: then they go to the Owner")
+            BillingContact billingContact,
+
+            @Schema(description = "The name reminders and receipts are written to now, or null when nobody gets them")
+            String billsGoTo,
+
+            @Schema(description = "Whether the caller is the Owner, who alone changes the billing contact")
+            boolean canChangeContact) {}
+
+    @Schema(name = "BillingContact", description = "Who gets the reminders and receipts; never a sign-in contact")
+    record BillingContact(String fullName, String email, String phone, Instant updatedAt) {}
+
+    @Schema(name = "BillingContactRequest")
+    record BillingContactRequest(
+            @NotBlank @Size(max = 120) String fullName,
+            @NotBlank @Email @Size(max = 254) String email,
+
+            @Schema(description = "A Ugandan mobile number for SMS reminders, optional") @Size(max = 20)
+            String phone) {}
 
     @Schema(name = "BillingNotice")
     record BillingNotice(
@@ -105,6 +136,26 @@ class BillingController {
             operationId = "billingView")
     BillingView view() {
         return billing.view();
+    }
+
+    @PutMapping(path = "/contact", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @RequiresPermission("core.settings.manage")
+    @Operation(
+            summary =
+                    "Owner only: name the person who gets the reminders and receipts; sign-in contacts are never changed (ADR-090)",
+            operationId = "setBillingContact")
+    BillingView setContact(@Valid @RequestBody BillingContactRequest request) {
+        return billing.setContact(request);
+    }
+
+    @DeleteMapping("/contact")
+    @RequiresPermission("core.settings.manage")
+    @Operation(
+            summary =
+                    "Owner only: remove the billing contact, so reminders and receipts go to the Owner again (ADR-090)",
+            operationId = "clearBillingContact")
+    BillingView clearContact() {
+        return billing.clearContact();
     }
 
     @GetMapping("/notice")

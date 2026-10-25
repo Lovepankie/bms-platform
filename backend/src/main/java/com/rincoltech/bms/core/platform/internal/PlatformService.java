@@ -436,6 +436,37 @@ class PlatformService implements TenantProvisioning {
                 }));
     }
 
+    /** The businesses with no Owner and their active administrators, in the order the definer function gives (ADR-090). */
+    List<PlatformController.TenantWithoutOwner> tenantsWithoutOwner() {
+        record Row(PlatformController.TenantWithoutOwner tenant, PlatformController.OwnerCandidate admin) {}
+        List<Row> rows = transactions.execute(status -> jdbc.sql("SELECT * FROM platform_tenants_without_owner()")
+                .query((rs, n) -> new Row(
+                        new PlatformController.TenantWithoutOwner(
+                                rs.getObject("tenant_id", UUID.class),
+                                rs.getString("tenant_slug"),
+                                rs.getString("tenant_name"),
+                                rs.getString("tenant_status"),
+                                rs.getTimestamp("created_at").toInstant(),
+                                new ArrayList<>()),
+                        rs.getObject("admin_id") == null
+                                ? null
+                                : new PlatformController.OwnerCandidate(
+                                        rs.getObject("admin_id", UUID.class),
+                                        rs.getString("admin_name"),
+                                        rs.getString("admin_email"),
+                                        instant(rs.getTimestamp("admin_last_login_at")))))
+                .list());
+        Map<UUID, PlatformController.TenantWithoutOwner> byTenant = new LinkedHashMap<>();
+        for (Row row : rows) {
+            PlatformController.TenantWithoutOwner tenant =
+                    byTenant.computeIfAbsent(row.tenant().tenantId(), id -> row.tenant());
+            if (row.admin() != null) {
+                tenant.admins().add(row.admin());
+            }
+        }
+        return List.copyOf(byTenant.values());
+    }
+
     /** Read-only: what {@link #transferOwnership} would refuse, checked before the operator's authenticator code is spent. */
     void requireOwnerCandidate(UUID tenantId, UUID userId) {
         transactions.execute(status -> tenant(tenantId));

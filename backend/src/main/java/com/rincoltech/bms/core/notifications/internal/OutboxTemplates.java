@@ -434,6 +434,50 @@ class OutboxTemplates {
                     "Open the operator portal",
                     "You got this email because you are a BMS platform operator."));
 
+    // Closing the business (issue #571, ADR-090): the Owner is told the request was made, with the day the platform
+    // operator may
+    // remove the business, and told again when the request is cancelled.
+    private static final Map<String, Template> EMAIL_CLOSURE = Map.of(
+            "platform.closure_requested",
+            new Template(
+                    "{business_name}: your request to close the business",
+                    """
+                    Hello {owner_name},
+
+                    You asked to close {business_name} on BMS. From now on it is read only: everyone can still sign in, \
+                    look at everything and download the data, but nobody can add or change anything.
+
+                    A full copy of your data is being prepared. Save it from Download my data in Business set-up:
+
+                    {link}
+
+                    Rincol Tech may remove the business from {remove_after}. Removal deletes the names, phone numbers, \
+                    ID numbers and other personal details. The money records the law requires are kept without them \
+                    for a time, then deleted. Until the removal you can cancel the closing in Business set-up, and \
+                    the business works again as before.
+
+                    If you did not ask for this, sign in and cancel it now, and call Rincol Tech.
+
+                    Rincol Tech
+                    """,
+                    "Open Business set-up",
+                    "You got this email because you are the owner of {business_name} on BMS."),
+            "platform.closure_cancelled",
+            new Template(
+                    "{business_name}: the closing was cancelled",
+                    """
+                    Hello {owner_name},
+
+                    The request to close {business_name} was cancelled. The business works again as before and \
+                    nothing will be removed.
+
+                    {link}
+
+                    Rincol Tech
+                    """,
+                    "Open Business set-up",
+                    "You got this email because you are the owner of {business_name} on BMS."));
+
     // Subscription billing (issue #480, ADR-075): the reminders to the Owner of a business before the last day paid for
     // or
     // the last day of the free month, and the receipt of a payment the operator recorded (the PDF is attached when the
@@ -460,7 +504,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."),
+                    "You got this email because you receive the bills of {business_name} on BMS."),
             "billing.due_in_1",
             new Template(
                     "Your BMS subscription is due tomorrow",
@@ -480,7 +524,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."),
+                    "You got this email because you receive the bills of {business_name} on BMS."),
             "billing.due_today",
             new Template(
                     "Your BMS subscription is due today",
@@ -500,7 +544,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."),
+                    "You got this email because you receive the bills of {business_name} on BMS."),
             "billing.trial_in_7",
             new Template(
                     "Your free month of BMS ends in 7 days",
@@ -520,7 +564,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."),
+                    "You got this email because you receive the bills of {business_name} on BMS."),
             "billing.trial_in_1",
             new Template(
                     "Your free month of BMS ends tomorrow",
@@ -540,7 +584,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."),
+                    "You got this email because you receive the bills of {business_name} on BMS."),
             "billing.trial_today",
             new Template(
                     "Your free month of BMS ends today",
@@ -560,7 +604,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."),
+                    "You got this email because you receive the bills of {business_name} on BMS."),
             "billing.receipt",
             new Template(
                     "Receipt {receipt_no} for your BMS subscription",
@@ -577,7 +621,7 @@ class OutboxTemplates {
                     Rincol Tech
                     """,
                     "Open Plan and billing",
-                    "You got this email because you are the owner of {business_name} on BMS."));
+                    "You got this email because you receive the bills of {business_name} on BMS."));
 
     private static final Map<String, Template> EMAIL = emailTemplates();
 
@@ -591,6 +635,7 @@ class OutboxTemplates {
         all.putAll(EMAIL_DATA_EXPORT);
         all.putAll(EMAIL_PLAN);
         all.putAll(EMAIL_BILLING);
+        all.putAll(EMAIL_CLOSURE);
         return Map.copyOf(all);
     }
 

@@ -106,6 +106,11 @@ class SettingsController {
                             "The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)")
             LocalDate goLiveDate,
 
+            @Schema(
+                    description =
+                            "The month the business's financial year ends in (1 to 12), or null for June, the end of the Uganda tax year; the retention of a closed business's money records counts from it (ADR-090)")
+            Integer financialYearEndMonth,
+
             int version) {}
 
     /** Omitted (or null) fields are unchanged (chapter 7 section 7.5). */
@@ -154,6 +159,13 @@ class SettingsController {
                     description =
                             "The go-live date, today or earlier; only the Owner of the business sets it, 403 owner_only otherwise (ADR-071)")
             LocalDate goLiveDate,
+
+            @Min(1)
+            @Max(12)
+            @Schema(
+                    description =
+                            "The month the financial year ends in, 1 to 12; only the Owner sets it, 403 owner_only otherwise (ADR-090)")
+            Integer financialYearEndMonth,
 
             @Size(max = 20)
             @Schema(

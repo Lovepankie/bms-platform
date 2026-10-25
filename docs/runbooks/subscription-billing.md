@@ -12,7 +12,11 @@ by hand (issue #480, ADR-075). Payments are still recorded by the operator on th
 | The first quarter hour after midnight following the last day | The subscription becomes overdue (`past_due`); the business keeps working | The Business page history: `platform.tenant.subscription_overdue`, with no operator |
 | While overdue and within the grace period | Every member of the business's staff sees "overdue since ...; pay by ..." | |
 | After the grace period | The business appears in Due for suspension (`/platform/billing`) | Due for suspension |
-| When you record a payment | A numbered receipt (`RT-<year>-<number>`) is emailed to the Owner as a PDF | The Business page, Emails sent; the Owner's Plan and billing page |
+| When you record a payment | A numbered receipt (`RT-<year>-<number>`) is emailed to the Owner (or the billing contact the Owner named, ADR-090) as a PDF | The Business page, Emails sent; the Owner's Plan and billing page |
+
+**Who gets them (ADR-090).** When the Owner named a billing contact on Plan and billing (an accountant, say), the reminders and
+receipts go to that person instead of the Owner. It never changes anyone's sign-in. A business that asked to close gets no
+reminder and is never made overdue (`docs/runbooks/closing-a-business.md`).
 
 **Nothing is ever suspended by itself.** A pilot (complimentary) business, a suspended or cancelled business and one already overdue
 get no reminder. A business with no Owner gets no email: give it an Owner first (Business page, the owner rescue). The

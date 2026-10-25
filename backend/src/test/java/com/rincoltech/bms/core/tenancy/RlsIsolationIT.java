@@ -21,7 +21,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  * bms_app, never as the owner. Tables are enumerated from the catalogue, so a tenant-owned table
  * added by a later migration is covered without touching this file.
  */
-class RlsIsolationIT {
+public class RlsIsolationIT {
 
     static TestDatabase.Fixture a;
     static TestDatabase.Fixture b;
@@ -43,7 +43,7 @@ class RlsIsolationIT {
      * evaluated against rows, so an empty table would pass the fail-closed test vacuously;
      * {@link #everyTenantOwnedTableHasAFactoryRow} fails when a new table is added without one.
      */
-    static void seedOneRowInEveryTable(TestDatabase.Fixture t) {
+    public static void seedOneRowInEveryTable(TestDatabase.Fixture t) {
         JdbcClient owner = TestDatabase.owner();
         UUID user = UUID.randomUUID();
         owner.sql(
@@ -681,7 +681,7 @@ class RlsIsolationIT {
                         INSERT INTO retail_documents (id, tenant_id, created_by, type, number, seq_no, branch_id, issue_date,
                                                       sale_id, buyer_name, currency, total_minor, snapshot)
                         VALUES (?, ?, ?, 'invoice', 'TAX-HQ-000001', 1, ?, DATE '2026-01-15', ?, 'Test Buyer 01', 'UGX', 150,
-                                '{"v": 1}')
+                                '{"v": 1, "buyer": {"name": "Test Buyer 01", "contact": "+256700000004", "tin": "1000000001"}}')
                         """)
                 .params(UUID.randomUUID(), t.tenantId(), user, t.headOffice(), sale)
                 .update();
@@ -1073,6 +1073,18 @@ class RlsIsolationIT {
                         INSERT INTO referral_commission_lines (id, tenant_id, referral_id, kind, amount_minor, currency, note)
                         VALUES (?, ?, ?, 'manual', 1000, 'UGX', 'Test commission')
                         """).params(UUID.randomUUID(), t.tenantId(), referral).update();
+        // The billing contact and a cancelled request to close the business (migration V102, #571).
+        owner.sql("""
+                        INSERT INTO billing_contacts (tenant_id, full_name, email, phone_e164, updated_by)
+                        VALUES (?, 'Test Accountant 01', ?, '+256700000091', ?)
+                        """)
+                .params(t.tenantId(), "acct-" + t.slug() + "@example.test", user)
+                .update();
+        owner.sql("""
+                        INSERT INTO tenant_closures (id, tenant_id, status, requested_by, remove_after, cancelled_by,
+                                                     cancelled_at)
+                        VALUES (?, ?, 'cancelled', ?, DATE '2026-12-01', ?, now())
+                        """).params(UUID.randomUUID(), t.tenantId(), user, user).update();
     }
 
     /**
@@ -1406,7 +1418,7 @@ class RlsIsolationIT {
                 .update();
     }
 
-    static List<String> tenantOwnedTables() {
+    public static List<String> tenantOwnedTables() {
         return TestDatabase.owner().sql("""
                         SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
                          WHERE n.nspname = 'public' AND c.relkind = 'r'

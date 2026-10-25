@@ -310,6 +310,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/contact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Owner only: name the person who gets the reminders and receipts; sign-in contacts are never changed (ADR-090) */
+        put: operations["setBillingContact"];
+        post?: never;
+        /** Owner only: remove the billing contact, so reminders and receipts go to the Owner again (ADR-090) */
+        delete: operations["clearBillingContact"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/notice": {
         parameters: {
             query?: never;
@@ -495,6 +513,41 @@ export interface paths {
         get: operations["getBrandingLogo"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The open request to close the business, if any, and whether the caller may change it (ADR-090) */
+        get: operations["getClosure"];
+        put?: never;
+        /** Owner only, with the step-up: ask to close the business; read only at once, a full data export for the Owner, removal by the platform operator after the cooling-off (ADR-090) */
+        post: operations["requestClosure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/closure/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Owner only: cancel the request to close the business before it is removed (ADR-090) */
+        post: operations["cancelClosure"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3049,6 +3102,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/closures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The open requests to close a business, soonest removable first, and those of the last 180 days (ADR-090) */
+        get: operations["platformClosures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/closures/{closure_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove a business whose Owner asked to close it, once the cooling-off is over, with a reason; deletes or anonymises its personal data and keeps its money records anonymised until a date; needs a current code from the operator's own authenticator (ADR-090) */
+        post: operations["platformRemoveClosedBusiness"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/feedback": {
         parameters: {
             query?: never;
@@ -3539,6 +3626,23 @@ export interface paths {
         put?: never;
         /** Create a tenant with head office, modules and an invited first admin (FR-TEN-01) */
         post: operations["platformCreateTenant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/without-owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every active or suspended business with no Owner, with its active administrators, so the operator sets the Owner (ADR-062, ADR-090) */
+        get: operations["platformTenantsWithoutOwner"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7923,6 +8027,21 @@ export interface components {
             /** Format: date-time */
             to?: string;
         };
+        /** @description Who gets the reminders and receipts; never a sign-in contact */
+        BillingContact: {
+            email?: string;
+            full_name?: string;
+            phone?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        BillingContactRequest: {
+            /** Format: email */
+            email: string;
+            full_name: string;
+            /** @description A Ugandan mobile number for SMS reminders, optional */
+            phone?: string;
+        };
         BillingNotice: {
             /** Format: date */
             overdue_since?: string;
@@ -7983,6 +8102,11 @@ export interface components {
              * @description Months charged for a year, or null
              */
             annual_months?: number;
+            billing_contact?: components["schemas"]["BillingContact"];
+            /** @description The name reminders and receipts are written to now, or null when nobody gets them */
+            bills_go_to?: string;
+            /** @description Whether the caller is the Owner, who alone changes the billing contact */
+            can_change_contact?: boolean;
             currency?: string;
             /** Format: int32 */
             grace_days?: number;
@@ -8078,6 +8202,33 @@ export interface components {
             /** @description #FFFFFF or #111111, the readable text colour on themePrimary; null with it */
             theme_text?: string;
         };
+        /** @description The request to close the business, if one is open */
+        BusinessClosure: {
+            /** @description Whether the caller is the Owner, who alone asks to close and cancels */
+            can_change?: boolean;
+            /**
+             * Format: int32
+             * @description The days between the request and the first day of removal
+             */
+            cooling_off_days?: number;
+            /**
+             * Format: uuid
+             * @description The full data export made for the Owner with the request, or null
+             */
+            export_run_id?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: date
+             * @description The first day the platform operator may remove the business
+             */
+            remove_after?: string;
+            /** Format: date-time */
+            requested_at?: string;
+            requested_by_name?: string;
+            /** @description none or requested */
+            status?: string;
+        };
         BusinessDetail: {
             admins?: components["schemas"]["TenantAdmin"][];
             /** @description Newest first, at most 50 */
@@ -8140,6 +8291,11 @@ export interface components {
         BusinessPlanStatus: {
             /**
              * Format: date
+             * @description While the Owner's request to close the business is open: the first day it may be removed; the business is read only (ADR-090)
+             */
+            closing_remove_after?: string;
+            /**
+             * Format: date
              * @description When the subscription has ended: the day it ended; the business is read only
              */
             ended_on?: string;
@@ -8161,6 +8317,11 @@ export interface components {
         /** @description The reason is required only when the branch still holds stock or has transfers on their way (422 branch_close_needs_reason says which). */
         CloseBranchRequest: {
             reason?: string;
+        };
+        /** @description The authenticator code when the Owner has two-step sign-in, else the password */
+        ClosureStepUp: {
+            password?: string;
+            totp_code?: string;
         };
         Collateral: {
             /** Format: uuid */
@@ -10499,6 +10660,15 @@ export interface components {
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
         };
+        /** @description An active administrator of a business with no Owner */
+        OwnerCandidate: {
+            email?: string;
+            full_name?: string;
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            last_login_at?: string;
+        };
         PasswordResetCompleteRequest: {
             password: string;
             token: string;
@@ -10705,6 +10875,51 @@ export interface components {
         PlanStepUp: {
             password?: string;
             totp_code?: string;
+        };
+        PlatformClosure: {
+            /** Format: date-time */
+            cancelled_at?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: date
+             * @description When removed: the day after which the kept money records may be deleted
+             */
+            keep_until?: string;
+            /** @description Whether the cooling-off period is over in the business's own time zone */
+            removable?: boolean;
+            /**
+             * Format: date
+             * @description The first day the business may be removed
+             */
+            remove_after?: string;
+            /** Format: date-time */
+            removed_at?: string;
+            removed_by_name?: string;
+            /** Format: date-time */
+            requested_at?: string;
+            requested_by_name?: string;
+            /** @description requested, cancelled, removing or removed */
+            status?: string;
+            /** Format: uuid */
+            tenant_id?: string;
+            tenant_name?: string;
+            tenant_slug?: string;
+        };
+        PlatformClosureRemoved: {
+            /** Format: uuid */
+            closure_id?: string;
+            /** @description Rows deleted or anonymised, by area */
+            erased?: {
+                [key: string]: number;
+            };
+            /**
+             * Format: date
+             * @description The day after which the kept money records may be deleted
+             */
+            keep_until?: string;
+            /** Format: uuid */
+            tenant_id?: string;
         };
         PlatformFeedbackItem: {
             app_version?: string;
@@ -18675,6 +18890,11 @@ export interface components {
             /** @description True when the business has a name: the one given at onboarding or one the admin saved */
             display_name_set?: boolean;
             /**
+             * Format: int32
+             * @description The month the business's financial year ends in (1 to 12), or null for June, the end of the Uganda tax year; the retention of a closed business's money records counts from it (ADR-090)
+             */
+            financial_year_end_month?: number;
+            /**
              * Format: date
              * @description The day the app became the business's register: as the Owner or the operator set it, else the business date of the first administrator sign-in, stored then; null before either. An existing loan is brought in only with a disbursement date before it (ADR-071)
              */
@@ -18740,6 +18960,18 @@ export interface components {
         };
         TenantSmsSenderIds: {
             items?: components["schemas"]["TenantSmsSenderId"][];
+        };
+        TenantWithoutOwner: {
+            /** @description Its active administrators, oldest first; any one of them can be made the Owner */
+            admins?: components["schemas"]["OwnerCandidate"][];
+            /** Format: date-time */
+            created_at?: string;
+            name?: string;
+            slug?: string;
+            /** @description active or suspended */
+            status?: string;
+            /** Format: uuid */
+            tenant_id?: string;
         };
         /** @description How the user left a guided tour, and its version then */
         TourState: {
@@ -18980,6 +19212,11 @@ export interface components {
             approval_validity_days?: number;
             disabled_collateral_types?: string[];
             display_name?: string;
+            /**
+             * Format: int32
+             * @description The month the financial year ends in, 1 to 12; only the Owner sets it, 403 owner_only otherwise (ADR-090)
+             */
+            financial_year_end_month?: number;
             /**
              * Format: date
              * @description The go-live date, today or earlier; only the Owner of the business sets it, 403 owner_only otherwise (ADR-071)
@@ -19480,6 +19717,50 @@ export interface operations {
             };
         };
     };
+    setBillingContact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingContactRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingView"];
+                };
+            };
+        };
+    };
+    clearBillingContact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingView"];
+                };
+            };
+        };
+    };
     billingNotice: {
         parameters: {
             query?: never;
@@ -19950,6 +20231,70 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    getClosure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessClosure"];
+                };
+            };
+        };
+    };
+    requestClosure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosureStepUp"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessClosure"];
+                };
+            };
+        };
+    };
+    cancelClosure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessClosure"];
                 };
             };
         };
@@ -24419,6 +24764,52 @@ export interface operations {
             };
         };
     };
+    platformClosures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformClosure"][];
+                };
+            };
+        };
+    };
+    platformRemoveClosedBusiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                closure_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformStepUpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformClosureRemoved"];
+                };
+            };
+        };
+    };
     platformListFeedback: {
         parameters: {
             query?: {
@@ -25180,6 +25571,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CreatedTenant"];
+                };
+            };
+        };
+    };
+    platformTenantsWithoutOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantWithoutOwner"][];
                 };
             };
         };

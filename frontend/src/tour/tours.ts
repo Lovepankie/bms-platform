@@ -1298,7 +1298,7 @@ export const businessNotificationsPage: Tour = {
 // Business set-up > Plan and billing (issue #480, ADR-075): the plan, what is paid, how to pay and the receipts.
 export const billingPage: Tour = {
   id: 'page-billing',
-  version: 1,
+  version: 2,
   title: 'This page: plan and billing',
   audience: (me) => held(me, 'core.billing.read'),
   autoStart: false,
@@ -1317,10 +1317,40 @@ export const billingPage: Tour = {
       body: 'How to pay Rincol Tech. When a payment is recorded you get a receipt by email.',
     },
     {
+      id: 'contact',
+      target: 'billing-contact',
+      title: 'Who gets the bills',
+      body: 'The owner can send the reminders and receipts to someone else, such as an accountant. Sign-in stays as it is.',
+    },
+    {
       id: 'payments',
       target: 'billing-payments',
       title: 'Payments and receipts',
       body: 'Every payment recorded for your business. Tap a receipt to save it as a PDF.',
+    },
+  ],
+};
+
+// Business set-up > Close the business (issue #571, ADR-090): what closing means, then a review step and the owner's own proof.
+export const closePage: Tour = {
+  id: 'page-close',
+  version: 1,
+  title: 'This page: close the business',
+  audience: (me) => held(me, 'core.settings.manage'),
+  autoStart: false,
+  page: '/staff/setup/close',
+  steps: [
+    {
+      id: 'about',
+      target: 'close-about',
+      title: 'Only for stopping for good',
+      body: 'Closing removes the business and its personal data after a waiting period. To stop paying and keep everything, cancel the subscription instead.',
+    },
+    {
+      id: 'review',
+      target: 'close-continue',
+      title: 'Check first',
+      body: 'The next step lists exactly what happens and asks for your own password or code. Until the removal, the owner can cancel.',
     },
   ],
 };
@@ -1907,7 +1937,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, billingPage, notificationsPage, feedbackPage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

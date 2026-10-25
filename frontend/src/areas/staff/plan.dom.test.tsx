@@ -124,6 +124,13 @@ describe('the end of the subscription', () => {
     expect(await screen.findByText(/ended on 1 December 2099\. It is read only/)).toBeTruthy();
   });
 
+  it('tells every member of staff that the business is closing and read only (issue #571)', () => {
+    const notice = endNotice({ closing_remove_after: '2099-12-01', ends_on: '2099-11-01' });
+    expect(notice?.tone).toBe('danger');
+    expect(notice?.text).toMatch(/The owner asked to close this business\. It is read only/);
+    expect(notice?.text).toMatch(/Rincol Tech may remove it from 1 December 2099/);
+  });
+
   it('says nothing while the subscription goes on, and at once when nothing is paid ahead', () => {
     expect(endNotice({})).toBeNull();
     const now = { changes_take_effect_on: '2099-01-01', applies_at_once: true };

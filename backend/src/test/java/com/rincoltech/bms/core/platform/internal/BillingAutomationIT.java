@@ -785,4 +785,115 @@ class BillingAutomationIT extends IntegrationTest {
                         .asString())
                 .isEqualTo("none");
     }
+
+    /**
+     * FR-SUB-13 (ADR-090): the Owner names a billing contact; reminders and receipts go to it instead of the Owner, the Owner's
+     * own sign-in contact does not change, only the Owner may set it, and removing it sends billing to the Owner again.
+     */
+    @Test
+    void frSub13_remindersAndReceiptsGoToTheBillingContactAndSignInIsUntouched() {
+        Business b = business("active", null, LocalDate.of(2026, 11, 8), false);
+        UUID admin = Api.staff(b.fixture(), Api.email("bill-admin"), new Api.Role("tenant_admin", null));
+        Api api = Api.tenant(http, b.fixture().slug());
+        String adminToken = api.signIn(
+                        admin,
+                        TestDatabase.owner()
+                                .sql("SELECT email FROM users WHERE id = ?")
+                                .param(admin)
+                                .query(String.class)
+                                .single(),
+                        Api.PASSWORD,
+                        null)
+                .accessToken();
+        String ownerToken = token(b);
+        String accountant = Api.email("bill-acct");
+        Map<String, Object> contact = new LinkedHashMap<>();
+        contact.put("full_name", "Test Accountant");
+        contact.put("email", accountant);
+        contact.put("phone", "0700 000 009");
+
+        ResponseEntity<JsonNode> refused = api.call(HttpMethod.PUT, "/api/v1/billing/contact", contact, adminToken);
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("owner_only");
+        assertThat(api.get("/api/v1/billing", adminToken)
+                        .getBody()
+                        .get("can_change_contact")
+                        .asBoolean())
+                .isFalse();
+        Map<String, Object> badPhone = new LinkedHashMap<>(contact);
+        badPhone.put("phone", "12345");
+        assertThat(api.call(HttpMethod.PUT, "/api/v1/billing/contact", badPhone, ownerToken)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        ResponseEntity<JsonNode> set = api.call(HttpMethod.PUT, "/api/v1/billing/contact", contact, ownerToken);
+        assertThat(set.getStatusCode()).as("%s", set.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(set.getBody().get("billing_contact").get("email").asString()).isEqualTo(accountant);
+        assertThat(set.getBody().get("billing_contact").get("phone").asString()).isEqualTo("+256700000009");
+        assertThat(set.getBody().get("bills_go_to").asString()).isEqualTo("Test Accountant");
+        assertThat(set.getBody().get("can_change_contact").asBoolean()).isTrue();
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'core.billing.contact_changed'")
+                        .param(b.id())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+
+        run(b);
+        assertThat(reminders(b)).containsExactly("due_in_7");
+        assertThat(emails(b, "billing.due_in_7")).as("not the Owner").isZero();
+        assertThat(TestDatabase.owner()
+                        .sql("""
+                                SELECT count(*) FROM notification_outbox
+                                 WHERE tenant_id = ? AND template_key = 'billing.due_in_7' AND recipient = ?
+                                   AND params ->> 'owner_name' = 'Test Accountant'
+                                """)
+                        .params(b.id(), accountant)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount_minor", 10000);
+        body.put("method", "mtn_momo");
+        body.put("reference", "TEST-REF-571");
+        body.put("paid_on", "2026-11-01");
+        body.put("months", 1);
+        body.put("reason", "Test: seen on the statement");
+        ResponseEntity<JsonNode> paid = platform.call(
+                HttpMethod.POST,
+                "/api/v1/platform/tenants/" + b.id() + "/payments",
+                body,
+                operator.accessToken(),
+                Map.of("Idempotency-Key", "pay-" + UUID.randomUUID()));
+        assertThat(paid.getStatusCode()).as("%s", paid.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(emails(b, "billing.receipt")).isZero();
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT count(*) FROM notification_outbox WHERE tenant_id = ? AND template_key = 'billing.receipt'"
+                                        + " AND recipient = ?")
+                        .params(b.id(), accountant)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+
+        Map<String, Object> owner = TestDatabase.owner()
+                .sql("SELECT email, contact_changed_at FROM users WHERE id = ?")
+                .param(b.ownerId())
+                .query()
+                .singleRow();
+        assertThat(owner.get("email")).as("the Owner's sign-in email").isEqualTo(b.ownerEmail());
+        assertThat(owner.get("contact_changed_at")).isNull();
+
+        ResponseEntity<JsonNode> cleared = api.call(HttpMethod.DELETE, "/api/v1/billing/contact", null, ownerToken);
+        assertThat(cleared.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(cleared.getBody().get("billing_contact").isNull()).isTrue();
+        assertThat(cleared.getBody().get("bills_go_to").asString())
+                .isEqualTo(TestDatabase.owner()
+                        .sql("SELECT full_name FROM users WHERE id = ?")
+                        .param(b.ownerId())
+                        .query(String.class)
+                        .single());
+    }
 }

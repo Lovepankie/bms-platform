@@ -174,6 +174,70 @@ export const dueForSuspensionPage: Tour = {
   ],
 };
 
+// Businesses closing (issue #571, ADR-090).
+export const closuresPage: Tour = {
+  id: 'page-operator-closures',
+  version: 1,
+  title: 'This page: businesses closing',
+  audience: forOperator,
+  autoStart: false,
+  page: '/platform/closures',
+  steps: [
+    {
+      id: 'intro',
+      target: 'closures-intro',
+      title: 'The owner asks, you remove',
+      body: 'An owner who closes their business asks from Business set-up. The business is read only at once and the owner gets a copy of the data.',
+    },
+    {
+      id: 'list',
+      target: 'closures-list',
+      title: 'Waiting, then removable',
+      body: 'Each request shows the day it can be removed. Until then the owner can cancel it.',
+      optional: true,
+    },
+    {
+      id: 'remove',
+      target: 'closures-remove',
+      title: 'Removing',
+      body: 'Removal needs your own code and a reason. Personal data goes; money records stay without names until the date shown. It cannot be undone.',
+      optional: true,
+    },
+  ],
+};
+
+// Businesses with no owner (issue #571, ADR-062).
+export const noOwnerPage: Tour = {
+  id: 'page-operator-no-owner',
+  version: 1,
+  title: 'This page: businesses with no owner',
+  audience: forOperator,
+  autoStart: false,
+  page: '/platform/no-owner',
+  steps: [
+    {
+      id: 'intro',
+      target: 'no-owner-intro',
+      title: 'Every business needs an owner',
+      body: 'Only the owner changes the plan, closes the business and manages the administrators. These businesses have none yet.',
+    },
+    {
+      id: 'list',
+      target: 'no-owner-list',
+      title: 'Their administrators',
+      body: 'Each business with its active administrators, when they last signed in.',
+      optional: true,
+    },
+    {
+      id: 'set',
+      target: 'no-owner-set',
+      title: 'Set the owner',
+      body: 'Choose the administrator who owns the business. It needs your own code and a reason, kept in both histories.',
+      optional: true,
+    },
+  ],
+};
+
 // Feedback from every business (issue #447, ADR-065).
 export const feedbackInboxPage: Tour = {
   id: 'page-operator-feedback',
@@ -212,4 +276,4 @@ export const feedbackInboxPage: Tour = {
   ],
 };
 
-export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, dueForSuspensionPage, feedbackInboxPage];
+export const OPERATOR_TOURS: readonly Tour[] = [businessesPage, businessPage, plansPage, dueForSuspensionPage, closuresPage, noOwnerPage, feedbackInboxPage];

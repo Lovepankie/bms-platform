@@ -395,6 +395,9 @@ export function actionSentence(action: Action, b: Business, value?: string, plan
   }
 }
 
+/** What a confirm says when the operator's own code is missing or not 6 digits. */
+export const CODE_PROBLEM = 'Type the 6 digit code from your own authenticator app.';
+
 export function reasonProblem(reason: string): string | undefined {
   const t = reason.trim();
   if (t.length < 5) return 'Say why in a few words (at least 5 characters). It is kept with the change.';

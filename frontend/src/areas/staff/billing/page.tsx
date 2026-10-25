@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { billingView, downloadReceipt } from '../../../api/billing';
 import { formatMinor } from '../../../components/money';
 import { formatDay } from '../../platform/operator-state';
+import { BillingContactCard } from './contact';
 import { METHOD_LABELS, priceSentence, STATE_LABELS, stateBadge, stateSentence } from './billing-state';
 
 // Business set-up > Plan and billing (issue #480, ADR-075, FR-SUB-12): the plan, its price, the subscription's state and dates, how
 // to pay and every payment with its receipt. Read only for the Owner and the administrators: payments are recorded by Rincol Tech.
+// The Owner alone names who gets the bills (issue #571, ADR-090).
 
 export function BillingScreen() {
   const view = useQuery({ queryKey: ['billing'], queryFn: billingView });
@@ -49,6 +51,7 @@ export function BillingScreen() {
           for may lead to the business being suspended (read only); nothing is ever deleted.
         </p>
       </section>
+      <BillingContactCard view={v} />
       <section className="rt-card stack" aria-labelledby="billing-payments" data-tour="billing-payments">
         <h2 id="billing-payments">Payments</h2>
         {problem && (

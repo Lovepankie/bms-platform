@@ -1,19 +1,26 @@
 package com.rincoltech.bms.core.platform.internal;
 
+import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.audit.PlatformAuditLog;
 import com.rincoltech.bms.core.documents.Documents;
+import com.rincoltech.bms.core.identity.TenantAdmins;
 import com.rincoltech.bms.core.notifications.EmailAttachments;
 import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.core.platform.internal.BillingAdminController.DueForSuspension;
 import com.rincoltech.bms.core.platform.internal.BillingAdminController.SettingsRequest;
 import com.rincoltech.bms.core.platform.internal.BillingAdminController.SettingsResponse;
+import com.rincoltech.bms.core.platform.internal.BillingController.BillingContact;
+import com.rincoltech.bms.core.platform.internal.BillingController.BillingContactRequest;
 import com.rincoltech.bms.core.platform.internal.BillingController.BillingNotice;
 import com.rincoltech.bms.core.platform.internal.BillingController.BillingPayment;
 import com.rincoltech.bms.core.platform.internal.BillingController.BillingView;
 import com.rincoltech.bms.core.platform.internal.PlatformController.TenantResponse;
 import com.rincoltech.bms.kernel.AmountInWords;
+import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.TenantContext;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,6 +39,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -45,6 +53,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Owner's Plan and billing page. Nothing here suspends a business: after the grace period it is listed, and the operator
  * suspends it by hand with the existing route. Amounts come from the price book ({@link PriceBookService}); a late payment's
  * paid period starts on the day it is recorded (V75), so what is due is the price of the next month, not the late days.
+ * Reminders and receipts go to the billing contact the Owner named, else to the Owner (issue #571, ADR-090); the billing
+ * contact is never a sign-in contact.
  */
 @Service
 class BillingService {
@@ -76,6 +86,8 @@ class BillingService {
     private final BusinessClock clock;
     private final Outbox outbox;
     private final Documents documents;
+    private final TenantAdmins admins;
+    private final AuditLog tenantAudit;
     private final TransactionTemplate transactions;
     private final TransactionTemplate reads;
     private final boolean smsEnabled;
@@ -92,6 +104,8 @@ class BillingService {
             BusinessClock clock,
             Outbox outbox,
             Documents documents,
+            TenantAdmins admins,
+            AuditLog tenantAudit,
             PlatformTransactionManager transactionManager,
             @Value("${bms.platform.billing.sms-enabled:false}") boolean smsEnabled,
             @Value("${bms.platform.billing.issuer-name:Rincol Tech}") String issuerName,
@@ -105,6 +119,8 @@ class BillingService {
         this.clock = clock;
         this.outbox = outbox;
         this.documents = documents;
+        this.admins = admins;
+        this.tenantAudit = tenantAudit;
         this.transactions = new TransactionTemplate(transactionManager);
         this.reads = new TransactionTemplate(transactionManager);
         this.reads.setReadOnly(true);
@@ -322,6 +338,21 @@ class BillingService {
         return owners.stream().findFirst();
     }
 
+    /** The billing contact the Owner named (issue #571, ADR-090); a test runs it against its own copy of the table. */
+    static final String CONTACT_SELECT = "SELECT full_name, email, phone_e164 FROM billing_contacts";
+
+    /**
+     * Who billing is written to in the bound business: the billing contact when the Owner named one, otherwise the Owner, as
+     * before. Never a sign-in contact: changing it changes nothing about where sign-in codes or reset links go.
+     */
+    private Optional<Owner> recipient() {
+        Optional<Owner> contact = jdbc.sql(CONTACT_SELECT)
+                .query((rs, n) ->
+                        new Owner(rs.getString("full_name"), rs.getString("email"), rs.getString("phone_e164")))
+                .optional();
+        return contact.isPresent() ? contact : owner();
+    }
+
     /**
      * Queues one reminder for the business, once: the row in {@code subscription_reminders} and the outbox rows commit
      * together, and a second pass finds the row and queues nothing. Email to the Owner; SMS too only when the platform's
@@ -343,7 +374,7 @@ class BillingService {
                     if (!stillDue(due)) {
                         return false;
                     }
-                    Optional<Owner> owner = owner();
+                    Optional<Owner> owner = recipient();
                     List<String> channels = new ArrayList<>();
                     if (owner.isPresent() && owner.get().email() != null) {
                         channels.add(Outbox.EMAIL);
@@ -437,9 +468,9 @@ class BillingService {
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * In the payment's own transaction, bound to its tenant: numbers the receipt and queues the email to the Owner with the
-     * receipt attached (read when it is sent). Returns the receipt number. A business with no Owner, or an Owner with no
-     * email, gets the receipt on its page only.
+     * In the payment's own transaction, bound to its tenant: numbers the receipt and queues the email to the billing contact,
+     * else the Owner, with the receipt attached (read when it is sent). Returns the receipt number. A business with neither,
+     * or an Owner with no email, gets the receipt on its page only.
      */
     String issueReceipt(TenantResponse tenant, PlatformController.PaymentResponse payment, LocalDate today) {
         String receiptNo = jdbc.sql("""
@@ -459,7 +490,7 @@ class BillingService {
                         today)
                 .query(String.class)
                 .single();
-        Optional<Owner> owner = owner();
+        Optional<Owner> owner = recipient();
         if (owner.isPresent() && owner.get().email() != null) {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("owner_name", owner.get().fullName());
@@ -593,7 +624,106 @@ class BillingService {
                 late && due != null ? due.plusDays(settings.graceDays()) : null,
                 settings.graceDays(),
                 settings.howToPay(),
-                payments);
+                payments,
+                contact().orElse(null),
+                recipient().map(Owner::fullName).orElse(null),
+                isOwner());
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The billing contact (issue #571, ADR-090), the Owner's alone, bound to the caller's business.
+    // ---------------------------------------------------------------------------------------------
+
+    private Optional<BillingContact> contact() {
+        return jdbc.sql("SELECT full_name, email, phone_e164, updated_at FROM billing_contacts")
+                .query((rs, n) -> new BillingContact(
+                        rs.getString("full_name"),
+                        rs.getString("email"),
+                        rs.getString("phone_e164"),
+                        rs.getTimestamp("updated_at").toInstant()))
+                .optional();
+    }
+
+    private boolean isOwner() {
+        UUID actor = CurrentPrincipal.require().userId();
+        return admins.owner().map(o -> o.userId().equals(actor)).orElse(false);
+    }
+
+    private UUID requireOwner() {
+        if (!isOwner()) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "owner_only",
+                    "Owner only",
+                    "Only the Owner of the business can choose who gets the bills.");
+        }
+        return CurrentPrincipal.require().userId();
+    }
+
+    /**
+     * The Owner names the person who gets reminders and receipts, with an email and an optional phone; audited with before and
+     * after. Sign-in is untouched: no user, credential or sign-in contact is read or changed here.
+     */
+    @Transactional
+    BillingView setContact(BillingContactRequest request) {
+        UUID actor = requireOwner();
+        String phone = null;
+        if (request.phone() != null && !request.phone().isBlank()) {
+            phone = PhoneNumbers.forSms(request.phone())
+                    .orElseThrow(() -> ApiException.validation(List.of(new FieldProblem(
+                            "phone", "invalid", "Enter a Ugandan mobile number, for example 0700 000 000."))));
+        }
+        BillingContact before = contact().orElse(null);
+        String name = request.fullName().trim();
+        String email = request.email().trim();
+        jdbc.sql("""
+                        INSERT INTO billing_contacts (tenant_id, full_name, email, phone_e164, updated_by)
+                        VALUES (current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
+                        ON CONFLICT (tenant_id) DO UPDATE
+                           SET full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone_e164 = EXCLUDED.phone_e164,
+                               updated_by = EXCLUDED.updated_by, updated_at = now()
+                        """).params(name, email, phone, actor).update();
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("full_name", name);
+        after.put("email", email);
+        after.put("phone", phone);
+        tenantAudit.record(new AuditLog.Entry(
+                "core.billing.contact_changed",
+                "core.billing_contact",
+                TenantContext.require(),
+                null,
+                contactData(before),
+                after));
+        return view();
+    }
+
+    /** The Owner removes the billing contact: billing goes to the Owner again. Audited; nothing when there is none. */
+    @Transactional
+    BillingView clearContact() {
+        requireOwner();
+        BillingContact before = contact().orElse(null);
+        if (before != null) {
+            jdbc.sql("DELETE FROM billing_contacts").update();
+            tenantAudit.record(new AuditLog.Entry(
+                    "core.billing.contact_changed",
+                    "core.billing_contact",
+                    TenantContext.require(),
+                    null,
+                    contactData(before),
+                    Map.of()));
+        }
+        return view();
+    }
+
+    private static Map<String, Object> contactData(BillingContact contact) {
+        if (contact == null) {
+            return Map.of();
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("full_name", contact.fullName());
+        data.put("email", contact.email());
+        data.put("phone", contact.phone());
+        return data;
     }
 
     /** The banner every signed-in staff user of an overdue business sees; state {@code none} otherwise. */

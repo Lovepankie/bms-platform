@@ -240,6 +240,25 @@ owner rule (ADR-062 decision 9). A business with no Owner yet (one with no activ
 rules of before until the operator assigns one. Two-step sign-in is not forced on the Owner; the
 Users screen prompts the Owner to turn it on.
 
+**The rest of the Owner's powers (ADR-090, issue #571, migration `V102`).** Three more acts ride on `core.settings.manage` and
+are the Owner's alone (403 `owner_only` for every other administrator, and for everyone while a business has no Owner):
+naming or removing the **billing contact** (FR-SUB-13; no step-up, audited; it is never a sign-in contact, so it cannot be used to
+receive a reset link or a code), **asking to close the business** (FR-TEN-09; the owner step-up, the authenticator code else the
+password, as for the transfer) and **cancelling** that request. From the request the business is read only (423
+`business_closing`, the exports, sign-in and the cancel allowed). **Removal** is the platform operator's, after the cooling-off
+period (30 days), with the operator's own authenticator code and a reason: the Owner's request and the operator's confirmation are
+the two people. The removal begins in `platform_begin_tenant_removal`, which refuses a transaction bound to a business, computes the
+business's date itself and authenticates the operator in the database (an active account with two-step sign-in, a live platform
+session of theirs and an authenticator code used in the last two minutes); only a request so begun (`removing`) can be erased.
+Every BEFORE UPDATE or DELETE row trigger of the business's tables lets a change through only when `bms_erasing` holds: the
+statement runs as `bms_owner` inside one of V102's definer functions, the transaction was marked for this business and its
+request is `removing` (or `purging`, the daily purge of the kept records after `keep_until`, owner decision D46); the application
+role can neither move a request past `requested` (the `tenant_closures_guard` trigger) nor mark or erase a request the operator
+did not begin (`app_mark_tenant_removal`, `bms_removing_tenant`). Because `bms_owner` bypasses row-level security, every
+statement of the erasers and the purge names the business. While a request is open the business is also left out of the
+scheduled jobs and the outbox's SMS and push, as a suspended one is. The operator lists the businesses with no Owner (`GET
+/platform/tenants/without-owner`) and sets onewith the existing `make-owner` route.
+
 Outside the Users routes the Owner alone asks for a module, stops one, cancels the subscription
 (read only after the last day paid for, data kept) and undoes a change still to come (ADR-073,
 403 `owner_only` for any other administrator, who reads the Plan and billing page only;

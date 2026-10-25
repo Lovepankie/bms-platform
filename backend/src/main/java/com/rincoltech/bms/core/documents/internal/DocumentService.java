@@ -480,6 +480,24 @@ class DocumentService implements Documents {
     }
 
     @Override
+    public int deleteAllStoredFiles() {
+        List<String> keys =
+                ownTransaction.execute(s -> jdbc.sql("SELECT object_key FROM documents ORDER BY created_at, id")
+                        .query(String.class)
+                        .list());
+        int deleted = 0;
+        for (String key : keys) {
+            try {
+                storage.delete(key);
+                deleted++;
+            } catch (RuntimeException e) {
+                log.warn("could not delete object {} of a purged business", key, e);
+            }
+        }
+        return deleted;
+    }
+
+    @Override
     public Optional<byte[]> readReportObject(UUID documentId, long maxBytes) {
         var row = ownTransaction.execute(s -> jdbc.sql(
                         "SELECT object_key, doc_type, size_bytes FROM documents WHERE id = ?")

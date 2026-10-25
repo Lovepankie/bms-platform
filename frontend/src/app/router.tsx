@@ -96,6 +96,10 @@ const staffBusinessNotificationsRoute = createRoute({ getParentRoute: () => staf
 const staffBillingRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/billing', staticData: { crumb: 'Plan and billing' } }).lazy(() =>
   import('../areas/staff/billing/page').then((m) => m.Route),
 );
+// Close the business (issue #571, ADR-090): the Owner's request, its review step and its cancel. Under Business set-up in the trail.
+const staffCloseRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/close', staticData: { crumb: 'Close the business' } }).lazy(() =>
+  import('../areas/staff/close/page').then((m) => m.Route),
+);
 // Referrals (issue #464, ADR-069): the business's own link to the sign-up and the businesses it referred. Under Business set-up.
 const staffReferralsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/setup/referrals', staticData: { crumb: 'Referrals' } }).lazy(() =>
   import('../areas/staff/referrals/page').then((m) => m.Route),
@@ -346,6 +350,14 @@ const platformPlansRoute = createRoute({ getParentRoute: () => platformRoute, pa
 const platformBillingRoute = createRoute({ getParentRoute: () => platformRoute, path: '/billing' }).lazy(() =>
   import('../areas/platform/billing').then((m) => m.Route),
 );
+// Businesses closing (issue #571, ADR-090): the Owners' requests and the removal after the cooling-off.
+const platformClosuresRoute = createRoute({ getParentRoute: () => platformRoute, path: '/closures' }).lazy(() =>
+  import('../areas/platform/closures').then((m) => m.Route),
+);
+// Businesses with no owner (issue #571, ADR-062): Set the owner.
+const platformNoOwnerRoute = createRoute({ getParentRoute: () => platformRoute, path: '/no-owner' }).lazy(() =>
+  import('../areas/platform/no-owner').then((m) => m.Route),
+);
 // Feedback from every business (issue #447, ADR-065).
 const platformFeedbackRoute = createRoute({ getParentRoute: () => platformRoute, path: '/feedback' }).lazy(() =>
   import('../areas/platform/feedback').then((m) => m.Route),
@@ -362,7 +374,7 @@ export const router = createRouter({
     forgotPasswordRoute,
     resetPasswordRoute,
     acceptInvitationRoute,
-    staffRoute.addChildren([staffHomeRoute, staffMoneyRoute, staffMoreRoute, staffKitRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffReferralsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
+    staffRoute.addChildren([staffHomeRoute, staffMoneyRoute, staffMoreRoute, staffKitRoute, staffApprovalsRoute, staffSetupRoute, staffBranchesRoute, staffTwoStepPolicyRoute, staffBusinessNotificationsRoute, staffBillingRoute, staffCloseRoute, staffReferralsRoute, staffOwnTwoStepRoute, staffRetailRoute.addChildren([
         retailHomeRoute,
         retailSaleRoute,
         retailCreditSalesRoute,
@@ -485,6 +497,8 @@ export const router = createRouter({
       platformBusinessRoute,
       platformPlansRoute,
       platformBillingRoute,
+      platformClosuresRoute,
+      platformNoOwnerRoute,
       platformFeedbackRoute,
     ]),
   ]),

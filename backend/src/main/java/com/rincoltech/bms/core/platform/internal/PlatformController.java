@@ -354,6 +354,32 @@ class PlatformController {
         return new TenantList(service.tenants(q, status, module));
     }
 
+    @Schema(name = "OwnerCandidate", description = "An active administrator of a business with no Owner")
+    record OwnerCandidate(UUID id, String fullName, String email, Instant lastLoginAt) {}
+
+    @Schema(name = "TenantWithoutOwner")
+    record TenantWithoutOwner(
+            UUID tenantId,
+            String slug,
+            String name,
+
+            @Schema(description = "active or suspended") String status,
+
+            Instant createdAt,
+
+            @Schema(description = "Its active administrators, oldest first; any one of them can be made the Owner")
+            List<OwnerCandidate> admins) {}
+
+    @GetMapping("/tenants/without-owner")
+    @RequiresPermission("platform.tenants.read")
+    @Operation(
+            summary =
+                    "Every active or suspended business with no Owner, with its active administrators, so the operator sets the Owner (ADR-062, ADR-090)",
+            operationId = "platformTenantsWithoutOwner")
+    List<TenantWithoutOwner> tenantsWithoutOwner() {
+        return service.tenantsWithoutOwner();
+    }
+
     @PostMapping("/tenants")
     @RequiresPermission("platform.tenants.manage")
     @Operation(
