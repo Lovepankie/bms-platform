@@ -167,6 +167,169 @@
 }
 
 /*
+ * The category picker (frontend/src/areas/staff/retail/category-picker.tsx, #578). The field is a button drawn as a select;
+ * its choices open in the kit's Sheet on a phone and in .cp-pop under the field on a wider screen. Rows are at least 48px,
+ * the chosen one is tinted and ticked, the one the arrow keys reached has the focus ring. No stripe on any edge.
+ */
+.cp-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0 40px 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: none;
+  color: var(--color-text);
+  font-weight: var(--weight-regular);
+  text-align: left;
+  position: relative;
+}
+
+.cp-trigger::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--color-text-muted);
+  border-bottom: 2px solid var(--color-text-muted);
+  transform: translateY(-70%) rotate(45deg);
+}
+
+.cp-trigger:hover {
+  background: var(--color-surface);
+}
+
+.cp-trigger[aria-invalid='true'] {
+  border-color: var(--color-danger);
+  background: var(--color-danger-tint);
+}
+
+.cp-placeholder {
+  color: var(--color-text-muted);
+}
+
+.cp-trigger-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-pop {
+  z-index: var(--z-dropdown);
+  width: max(var(--radix-popover-trigger-width), 280px);
+  max-width: calc(100vw - 32px);
+  max-height: min(420px, var(--radix-popover-content-available-height));
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  animation: cb-in 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.cp-pop:focus {
+  outline: none;
+}
+
+.cp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cp-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-link);
+  font-weight: var(--weight-semibold);
+}
+
+.cp-add-row > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.cp-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cp-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* A touch screen keeps :hover on the last row tapped, which would read as a second choice. */
+@media (hover: hover) {
+  .cp-option:hover {
+    background: var(--color-hover);
+  }
+}
+
+.cp-option[aria-selected='true'] {
+  background: var(--color-accent-tint);
+  font-weight: var(--weight-semibold);
+}
+
+.cp-active {
+  box-shadow: inset 0 0 0 2px var(--color-focus);
+}
+
+.cp-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cp-tick {
+  display: inline-flex;
+  flex: none;
+  color: var(--color-link);
+}
+
+.cp-tick > svg {
+  width: 20px;
+  height: 20px;
+}
+
+.cp-taken > p,
+.cp-empty > p {
+  margin: var(--space-2) 0;
+  color: var(--color-text-muted);
+}
+
+.cp-add > h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-pop {
+    animation: none;
+  }
+}
+
+/*
  * Feature search (issue #551, src/areas/staff/feature-search.tsx): the Search button in the staff bar, an icon alone on a phone,
  * the full width button at the top of the More page, and the picker inside its sheet, where the list sits in the flow of the
  * sheet rather than over it, so the sheet scrolls it and nothing is cut off.

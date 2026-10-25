@@ -11,7 +11,7 @@ import { chosenUnitHint, redraftOf } from './restock-correct-state';
 import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
-import { useItemAdded } from './toast';
+import { ScreenToast, useItemAdded } from './toast';
 import { UNITS, capabilityOn } from './permissions';
 import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, deliveredFactor, packPriceMinor, sameFactor } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
@@ -198,7 +198,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   /** A new line of the item at its current prices, with the quantity at this branch. */
   const lineOf = (p: Product, qty: string): RestockLine => ({ product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: qty } : {} });
   // Every add says so (issue #498): a short toast with the quantity at this branch, and the line flashes once.
-  const { added, already, flashOf, toast } = useItemAdded();
+  const { added, already, flashOf, show, toast } = useItemAdded();
   // The lines as of the last add, as on the sale: a scan answered after a render, or two before one, sees the latest.
   const current = useRef(lines);
   current.current = lines;
@@ -271,7 +271,9 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       <div data-tour="restock-search">
       <ProductPicker id="restock-search" showStock={false} onAdd={add} />
       </div>
-      <NewItemHere id="restock-new" askCost qtyLabel={hereBranch ? `Quantity bought (${branchLabel(hereBranch)})` : undefined} onAdded={addNew} />
+      <ScreenToast.Provider value={show}>
+        <NewItemHere id="restock-new" askCost qtyLabel={hereBranch ? `Quantity bought (${branchLabel(hereBranch)})` : undefined} onAdded={addNew} />
+      </ScreenToast.Provider>
       <ScanBar id="restock-scan" onFound={scanAdd} autoFocus toasts />
 
       <h2>Items</h2>

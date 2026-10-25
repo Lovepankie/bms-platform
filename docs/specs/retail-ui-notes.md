@@ -1258,6 +1258,41 @@ own: the order is copied from the chat, so the form asks for the phone first and
 - Tours: `page-stock-health` v2 adds the Slow movers step (`health-slow`), `page-retail-settings` v4 the settings step
   (`retail-slow-movers`).
 
+## Category picker (issue #578, FR-UXN-10)
+
+The pilot tenant found the category select on Add an item a long list with no search and no way to add a category,
+and showed the sheet of their old AppSheet app: Search, New, the list and Done. Every place a category is chosen now uses one
+`CategoryPicker` (`frontend/src/areas/staff/retail/category-picker.tsx`).
+
+- **Where.** Add an item and an item's own form (Items), the new item on Buy stock and Count stock, Add an item with sizes and
+  colours, Change the name or category of an item with sizes, and the Category filters of Items and Stock (with All
+  categories first and no Add). Expense categories are a different list and keep their select.
+- **The field.** Looks like a select and names the chosen category, or "Choose a category". It is required where the
+  category is, with the red asterisk; a Save with no category goes to it.
+- **Phone (below 720px).** The kit's Sheet at full height, "Choose a category": the search box with the cursor in it, Add a
+  new category, the list in rows of at least 48px with the chosen one tinted and ticked (no stripe), and Done. A tap on a
+  row chooses it and closes the sheet; Done or a swipe down closes it as it was.
+- **Laptop.** The same search, Add row and list open under the field in a card (Radix Popover), as wide as the field or at
+  least 280px.
+- **Search.** Any part of the name, whatever the case, on the categories already loaded (no request per key). Names show as
+  the owner typed them. Nothing matching says `No category called "Rice". Add it?` with an Add Rice button, or without the
+  question and the button for someone who cannot add.
+- **Add a new category.** Only for `retail.catalogue.manage`. A short form in place: Name of the new category (the search
+  text filled in), and the line "Item codes here will start with RCE, like RCE-0001, made by the app." from the code start
+  suggestion as the name is typed. No code is typed (#562). Add category creates it (`POST /retail/categories`), chooses it,
+  closes the picker and shows the dark toast "Added the category Rice. Its item codes start with RCE." It is the screen's own
+  toast (`ScreenToast` in `retail/toast.tsx`), so a screen never shows two; the picker says the same in a live region by the
+  field. The new category goes
+  into every category list the screens keep (the catalogue's and the Stock filter's) before they are fetched again, so the
+  field and the item code line name it at once.
+- **A name already used.** Checked against every category, switched-off ones too, whatever the case, before anything is
+  sent: "There is already a category called Bulbs." with Choose Bulbs, or "There is already a category called Torches
+  (switched off)." with Switch Torches on and choose it. A name another phone added a moment ago is refused by the server and
+  reads "A category with this name already exists." in place.
+- **Keyboard and screen reader.** The field is a combobox that opens with a press, Enter, Space or the down arrow. The search
+  is a combobox over the listbox "Categories": Up, Down, Home and End move the highlight (aria-activedescendant), Enter
+  chooses it (or the only match), Escape closes, and the focus goes back to the field. The number found is announced.
+
 ## Item pickers (issue #534, FR-UXN-07)
 
 Hatibu (HATS Gayaza) found the always-open list of items under the search box confusing, and asked for the AppSheet dropdown:

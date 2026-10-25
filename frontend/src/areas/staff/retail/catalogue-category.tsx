@@ -8,6 +8,7 @@ import { useCrumbLabel, useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Editing, ProductCard, ProductForm } from './catalogue-products';
 import { ScreenLink } from './screen-link';
+import { ScreenToast } from './toast';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useProfitAccess, useToast } from './ui';
 
 // One category (issue #493, owner decisions D14 and D16): its items, and Add an item, which opens the item form with this category
@@ -138,7 +139,9 @@ export function CategoryPage({ categoryId }: { categoryId: string }) {
         </>
       )}
       {category && view.mode === 'new' && <ProductForm category={category} onSaved={saved} onCancel={back} onOpen={open} />}
-      {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}
+      <ScreenToast.Provider value={show}>
+        {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}
+      </ScreenToast.Provider>
       {toast}
     </Gate>
   );

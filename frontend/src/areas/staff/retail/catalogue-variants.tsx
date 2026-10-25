@@ -7,7 +7,9 @@ import { MAX_VARIANTS, planVariants, repeatedCodes, splitOptions, variantKey, va
 import { parseMinor } from '../../../components/money';
 import { useStaff } from '../context';
 import { duplicateReasonOf, existingOf } from './catalogue-names';
-import { Gate, ProductPicker, Problem, money, useProfitAccess } from './ui';
+import { CategoryPicker } from './category-picker';
+import { ScreenToast } from './toast';
+import { Gate, ProductPicker, Problem, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -179,6 +181,7 @@ export function OptionBoxes({ sizes, colours, onSizes, onColours, prefix }: { si
  */
 export function NewFamilyPage() {
   const profit = useProfitAccess();
+  const { show, toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const categories = useQuery({ queryKey: ['retail', 'catalogue', 'categories'], queryFn: () => retail.listCategories() });
@@ -223,11 +226,9 @@ export function NewFamilyPage() {
         <div data-tour="sizes-name">
           <label htmlFor="sizes-item-name">What is it called?</label>
           <input id="sizes-item-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Baby romper" />
-          <label htmlFor="sizes-item-category">Category</label>
-          <select id="sizes-item-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Choose a category</option>
-            {(categories.data ?? []).filter((c) => c.active !== false).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <ScreenToast.Provider value={show}>
+            <CategoryPicker id="sizes-item-category" categories={(categories.data ?? []).filter((c) => c.active !== false)} value={categoryId} onChange={setCategoryId} />
+          </ScreenToast.Provider>
           <label htmlFor="sizes-item-unit">{WORDS.countedIn}</label>
           <select id="sizes-item-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
             <option value="">Choose a unit</option>
@@ -257,6 +258,7 @@ export function NewFamilyPage() {
           {preview.rows.length > 0 ? `Make these ${preview.rows.length}` : 'Make them'}
         </BusyButton>
       </form>
+      {toast}
     </Gate>
   );
 }

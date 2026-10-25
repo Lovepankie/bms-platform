@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { icons } from '../../../components/icons';
 import { announceToSheet } from '../../../app/ui/announce';
 
@@ -11,6 +11,14 @@ import { announceToSheet } from '../../../app/ui/announce';
 export const TOAST_MS = 4000;
 
 export type ToastTone = 'success' | 'error' | 'info';
+
+export type ShowToast = (message: string, tone: ToastTone) => void;
+
+/**
+ * The screen's own toast, for a part inside the screen that writes on its own (the category picker's Add, #578), so a screen
+ * shows one toast and never two stacked. The screen wraps that part in a provider with its `show`.
+ */
+export const ScreenToast = createContext<ShowToast | null>(null);
 
 const TONE_ICON = { success: icons.check, error: icons.error, info: icons.info } as const;
 
@@ -68,6 +76,8 @@ export function useItemAdded(): {
   added: (key: string, name: string | undefined, qty?: string) => void;
   already: (message: string) => void;
   flashOf: (key: string) => ReactNode;
+  /** The same toast, for anything else the screen says (ScreenToast). */
+  show: ShowToast;
   toast: ReactNode;
 } {
   const { show, toast } = useToast(2500);
@@ -82,5 +92,5 @@ export function useItemAdded(): {
   );
   const already = useCallback((message: string) => show(message, 'info'), [show]);
   const flashOf = (key: string) => (flash?.key === key ? <span key={flash.n} className="line-added" aria-hidden="true" data-testid="line-added" onAnimationEnd={() => setFlash(null)} /> : null);
-  return { added, already, flashOf, toast };
+  return { added, already, flashOf, show, toast };
 }

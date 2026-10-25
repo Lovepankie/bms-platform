@@ -9,6 +9,7 @@ import { useOnline } from '../../../offline/offline-context';
 import { useStaff } from '../context';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { parseCount, parseQty } from './maths';
+import { CategoryPicker } from './category-picker';
 import { Problem, money } from './ui';
 
 // Add an item while buying or counting stock (issue #505): under the item search, "Not in the list? Add it here" opens a
@@ -207,18 +208,14 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
       <h3 id={`${id}-title`}>Add a new item</h3>
       <FieldsNeededNote />
       <ItemCodeLine id={`${id}-code`} category={chosen} />
-      <Field
+      <CategoryPicker
         id={`${id}-category`}
-        label="Category"
+        categories={(categories.data ?? []).filter((c) => c.active !== false)}
+        value={categoryId}
+        onChange={setCategoryId}
         required
         error={categoryId === '' ? 'Choose a category.' : null}
         showError={showErrors}
-        control={(props) => (
-          <select {...props} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">Choose a category</option>
-            {(categories.data ?? []).filter((c) => c.active !== false).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        )}
       />
       <Field
         id={`${id}-description`}

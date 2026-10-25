@@ -18,6 +18,8 @@ import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
 import { StockMinimumEditor } from './stock-minimum';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
+import { CategoryPicker } from './category-picker';
+import { ScreenToast } from './toast';
 import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
@@ -203,19 +205,15 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
         <p data-tour="item-category-fixed">Category: <strong>{fixed.name}</strong></p>
       ) : !variant && (
         // Hatibu, 23 Oct 2026: the category comes first, before the description, so the code can follow from it.
-        <Field
+        <CategoryPicker
           id="item-category"
-          label="Category"
+          categories={categoryChoices}
+          value={categoryId}
+          onChange={setCategoryId}
           required
           error={categoryId === '' ? 'Choose a category.' : null}
           showError={showErrors}
           hint={movedFrom ? `Moving it from ${movedFrom} keeps its item code.` : undefined}
-          control={(props) => (
-            <select {...props} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">Choose a category</option>
-              {categoryChoices.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? ' (switched off)' : ''}</option>)}
-            </select>
-          )}
         />
       )}
       {product
@@ -442,11 +440,7 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
       <div data-tour="product-search"><SearchBox id="items-search" label="Search by name, code or category" search={search} fetching={finding} count={page.data ? items.length : undefined} more={page.hasNextPage} /></div>
       <div className="rt-row" data-tour="product-filters">
         <div>
-          <label htmlFor="items-category">Category</label>
-          <select id="items-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-            <option value="">All categories</option>
-            {(categories.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <CategoryPicker id="items-category" categories={categories.data ?? []} value={categoryId} onChange={setCategoryId} noneLabel="All categories" allowAdd={false} />
         </div>
         <div>
           <label htmlFor="items-active">Show</label>
@@ -482,8 +476,10 @@ export function ProductsPage() {
     <Gate screen="products" title="Items">
       {message && view.mode === 'list' && <Success>{message}</Success>}
       {view.mode === 'list' && <ProductList onAdd={() => { setMessage(null); setView({ mode: 'new' }); }} onEdit={(id) => { setMessage(null); setView({ mode: 'edit', id }); }} onPrice={(id) => { setMessage(null); setView({ mode: 'price', id }); }} />}
-      {view.mode === 'new' && <ProductForm onSaved={saved} onCancel={back} onOpen={open} />}
-      {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}
+      <ScreenToast.Provider value={show}>
+        {view.mode === 'new' && <ProductForm onSaved={saved} onCancel={back} onOpen={open} />}
+        {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}
+      </ScreenToast.Provider>
       {toast}
     </Gate>
   );

@@ -16,7 +16,7 @@ import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
-import { useItemAdded } from './toast';
+import { ScreenToast, useItemAdded } from './toast';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -85,7 +85,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   const [counts, setCounts] = useState<Record<string, string>>({});
   // Every pick, scan or new item says so (issue #498): a short toast with the count it now has, and the line flashes once.
   // The counts as of the last add are kept, as on the sale, so a scan answered after a render sees the latest.
-  const { added, flashOf, toast } = useItemAdded();
+  const { added, flashOf, show, toast } = useItemAdded();
   const current = useRef(counts);
   current.current = counts;
   /** Adds `milli` to the item's count and says so. */
@@ -242,7 +242,9 @@ function CountSheet({ branchId }: { branchId: string }) {
           )}
         />
       </div>
-      <NewItemHere id="count-new" counting askCost={profit} qtyLabel="How many you counted" onAdded={addNew} />
+      <ScreenToast.Provider value={show}>
+        <NewItemHere id="count-new" counting askCost={profit} qtyLabel="How many you counted" onAdded={addNew} />
+      </ScreenToast.Provider>
       <ScanBar id="count-scan" branchId={branchId} onFound={scanAdd} autoFocus toasts />
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />

@@ -124,13 +124,14 @@ describe('stock screen', () => {
     vi.unstubAllGlobals();
   });
 
-  it('offers a category select with All categories', () => {
+  it('offers the category picker with All categories (#578)', () => {
     const client = new QueryClient();
     client.setQueryData(['retail', 'categories'], [{ id: 'c1', name: 'Cables' }, { id: 'c2', name: 'Lighting' }]);
     const html = page('sales', <StockPage />, client);
     expect(html).toContain('for="stock-category"');
     expect(html).toContain('All categories');
-    expect(html).toContain('>Lighting</option>');
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('id="stock-category"');
   });
 });
 

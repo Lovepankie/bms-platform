@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockMe, prefixBase } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
+import { chooseCategory } from '../../../test-utils/category-picker';
 
 /** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
 const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
@@ -25,6 +26,8 @@ const createCategory = vi.fn();
 const updateProduct = vi.fn();
 const bulbs = { id: 'c1', name: 'Bulbs', active: true, product_count: 1, version: 3, code_prefix: 'BLB', next_code: 'BLB-0002' };
 const lamps = { id: 'c2', name: 'Lamps', active: true, product_count: 0, version: 1, code_prefix: 'LMP', next_code: 'LMP-0001' };
+// What the server lists; an inline add (#578) puts its category here, as the server would.
+let cats: Record<string, unknown>[] = [bulbs, lamps];
 const bulb = { id: 'p1', code: 'BLB-0001', description: 'Test bulb 9W', category_id: 'c1', category: 'Bulbs', unit_id: 'u1', unit: 'piece', sell_minor: 5000, active: true, version: 1 };
 
 vi.mock('../../../api/retail', async (original) => {
@@ -33,7 +36,7 @@ vi.mock('../../../api/retail', async (original) => {
     ...real,
     retail: {
       ...real.retail,
-      listCategories: () => Promise.resolve([bulbs, lamps]),
+      listCategories: () => Promise.resolve(cats),
       listUnits: () => Promise.resolve([{ id: 'u1', name: 'piece', active: true, product_count: 1, version: 1 }]),
       listCatalogue: (...a: unknown[]) => listCatalogue(...a),
       getProduct: () => Promise.resolve(bulb),
@@ -60,6 +63,7 @@ afterEach(() => {
   listCatalogue.mockReset();
   createCategory.mockReset();
   updateProduct.mockReset();
+  cats = [bulbs, lamps];
 });
 
 const admin = mockMe('admin');
@@ -134,9 +138,27 @@ describe('the category page', () => {
 });
 
 describe('the item form outside a category', () => {
+  it('adds a category inline from Add an item: the field names it and the code line gives its first code (#578)', async () => {
+    const rice = { id: 'c9', name: 'Rice', active: true, product_count: 0, version: 1, code_prefix: 'RCE', next_code: 'RCE-0001' };
+    createCategory.mockImplementation(async () => { cats = [...cats, rice]; return rice; });
+    screenOf(<ProductForm onSaved={() => undefined} onCancel={() => undefined} />);
+    await screen.findByRole('option', { name: 'piece' });
+    const category = screen.getByRole('combobox', { name: /^Category/ });
+    fireEvent.click(category);
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Search categories' }), { target: { value: 'Rice' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Rice' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
+    await waitFor(() => expect(category.textContent).toBe('Rice'));
+    expect(createCategory).toHaveBeenCalledWith('Rice');
+    expect(screen.getByTestId('item-code').textContent).toBe('Item code: RCE-0001, made by the app');
+    // Still so once the list has been fetched again.
+    await waitFor(() => expect(screen.getByTestId('item-code').textContent).toBe('Item code: RCE-0001, made by the app'));
+    expect(category.textContent).toBe('Rice');
+  });
+
   it('asks for the category first, marks the needed fields and goes to the first one missing', async () => {
     screenOf(<ProductForm onSaved={() => undefined} onCancel={() => undefined} />);
-    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
+    await screen.findByRole('option', { name: 'piece' });
     expect(document.querySelector('form .fields-needed')?.textContent).toBe('Fields marked * are needed.');
     const category = screen.getByLabelText(/^Category/);
     const description = screen.getByLabelText(/^Description/);
@@ -154,15 +176,14 @@ describe('the item form outside a category', () => {
     expect(await screen.findByText('Choose a category.')).toBeTruthy();
     expect(createProduct).not.toHaveBeenCalled();
     // Once a category is chosen the line names its next code.
-    fireEvent.change(category, { target: { value: 'c2' } });
+    await chooseCategory(category, 'Lamps');
     expect(screen.getByTestId('item-code').textContent).toBe('Item code: LMP-0001, made by the app');
   });
 
   it('on an item\'s own page lets it move to another category and says it keeps its code', async () => {
     updateProduct.mockResolvedValue({ ...bulb, category_id: 'c2', category: 'Lamps', version: 2 });
     screenOf(<ProductForm product={bulb} onSaved={() => undefined} onCancel={() => undefined} />);
-    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
-    fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: 'c2' } });
+    await chooseCategory(screen.getByLabelText(/^Category/), 'Lamps');
     expect(screen.getByText('Moving it from Bulbs keeps its item code.')).toBeTruthy();
     // Issue #562: the code is shown read-only and never sent.
     expect(screen.getByTestId('item-code').textContent).toBe('Item code: BLB-0001. It never changes.');

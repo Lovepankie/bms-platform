@@ -18,6 +18,7 @@ import { ListGroupBy, ViewSwitch, useListView } from './list-chain';
 import { STOCK_NAMES, STOCK_ORDER, listUser, withoutShop, type ListSelection } from './list-chain-state';
 import { GroupedStock, type StockFilter } from './stock-grouped';
 import { keptWords } from './orders-state';
+import { CategoryPicker } from './category-picker';
 import { Hint } from '../../../app/ui/Hint';
 
 // Stock per branch (FR-RET-03): balances with a negative flag and a search box. The cost column
@@ -281,13 +282,7 @@ export function StockPage() {
       <div data-tour="stock-search">
         <SearchBox id="stock-search" label="Search by name, code or category" search={search} fetching={finding} count={shown} />
       </div>
-      <label htmlFor="stock-category">Category</label>
-      <select id="stock-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-        <option value="">All categories</option>
-        {(categories.data ?? []).map((c) => (
-          <option key={c.id} value={c.id}>{c.name}</option>
-        ))}
-      </select>
+      <CategoryPicker id="stock-category" categories={categories.data ?? []} value={categoryId} onChange={setCategoryId} noneLabel="All categories" allowAdd={false} />
       <label style={{ fontWeight: 400 }}>
         <input type="checkbox" style={{ width: 'auto', minHeight: 24, marginRight: 8 }} checked={negativeOnly} onChange={(e) => setNegativeOnly(e.target.checked)} />
         Show only negative stock

@@ -8,7 +8,8 @@ check. The fuller design system is `docs/ui/design-system.md`.
 The component kit (issue #520) carries these rules: `Segmented`, `Stepper`, `Field`, `MoneyInput`, `ListRow` and `Card`,
 `Sheet`, `EmptyState`, `Skeleton` and `SuccessScreen` in `frontend/src/app/ui`, styled in `kit.css` and shown together on
 `/staff/kit` (administrators only). A new screen is built from them. Dialogs and sheets use `@radix-ui/react-dialog`
-(the kit's `Sheet`) and the pick-one control uses `@radix-ui/react-toggle-group` (`Segmented`), both styled only with our
+(the kit's `Sheet`), the pick-one control uses `@radix-ui/react-toggle-group` (`Segmented`), and a searchable list that opens
+under its field on a wider screen uses `@radix-ui/react-popover` (the category picker, issue #578), all styled only with our
 token CSS: no shadcn, no Tailwind. The sheet keeps live regions audible, closes by a swipe only on touch, and gives focus
 back to what opened it.
 

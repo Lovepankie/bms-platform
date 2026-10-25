@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { chooseCategory } from '../../../test-utils/category-picker';
 
 // The duplicate-name handling of the Items form (issue #352): the same name is refused in the owner's words with a way to open the
 // item, an administrator may add it anyway with a reason, a close name is a warning, and a press of Save sends one request.
@@ -53,8 +54,8 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
 
 async function fillIn(description: string) {
   fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: description } });
-  await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(2));
-  fireEvent.change(screen.getByLabelText(/^Category/), { target: { value: 'c1' } });
+  await screen.findByRole('option', { name: 'piece' });
+  await chooseCategory(screen.getByLabelText(/^Category/), 'Fittings');
   fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
   fireEvent.change(screen.getByLabelText(/Selling price/), { target: { value: '12000' } });
 }

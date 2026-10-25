@@ -377,6 +377,16 @@ button.list-row:focus-visible {
     transform: translateX(-50%);
   }
 
+  /* A picker's sheet (#578) opens at full height, so its list does not jump as the search narrows it. */
+  .sheet-panel.sheet-tall {
+    height: 90vh;
+    height: 90dvh;
+  }
+
+  .sheet-tall .sheet-body {
+    flex: 1 1 auto;
+  }
+
   .sheet-actions {
     flex-direction: column;
   }

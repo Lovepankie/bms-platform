@@ -6,6 +6,7 @@ import type { Me } from '../../../api/client';
 import { type Product, type StockRow } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { chooseCategory } from '../../../test-utils/category-picker';
 
 // Issue #505: under the item search on Buy stock and Count stock, "Not in the list? Add it here" opens a short form in the
 // AppSheet order and one Save makes the item and puts it on the purchase or the count. Only retail.catalogue.manage sees it;
@@ -15,10 +16,13 @@ import { StaffContext } from '../context';
 vi.setConfig({ testTimeout: 20000 });
 
 const createProduct = vi.fn();
+const createCategory = vi.fn();
 const similarProducts = vi.fn();
 const getProduct = vi.fn();
 const listStock = vi.fn();
 const bulbs = { id: 'c1', name: 'Bulbs', active: true, product_count: 1, version: 3, code_prefix: 'BLB', next_code: 'BLB-0002' };
+// What the server lists; an inline add (#578) puts its category here, as the server would.
+let cats: Record<string, unknown>[] = [bulbs];
 const made: Product = { id: 'p9', code: 'BLB-0002', description: 'Test bulb 12W', category_id: 'c1', category: 'Bulbs', unit_id: 'u1', unit: 'piece', sell_minor: 9000, cost_minor: 6000, active: true, version: 1 };
 
 vi.mock('@tanstack/react-router', async (original) => {
@@ -32,7 +36,9 @@ vi.mock('../../../api/retail', async (original) => {
     ...real,
     retail: {
       ...real.retail,
-      listCategories: () => Promise.resolve([bulbs]),
+      listCategories: () => Promise.resolve(cats),
+      createCategory: (...a: unknown[]) => createCategory(...a),
+      suggestCategoryPrefix: () => Promise.resolve('RCE'),
       listUnits: () => Promise.resolve([{ id: 'u1', name: 'piece', active: true, product_count: 1, version: 1 }]),
       listSuppliers: () => Promise.resolve([]),
       listProducts: () => Promise.resolve([]),
@@ -51,6 +57,8 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
   createProduct.mockReset();
+  createCategory.mockReset();
+  cats = [bulbs];
   similarProducts.mockReset();
   getProduct.mockReset();
   listStock.mockReset();
@@ -71,9 +79,8 @@ const field = (label: RegExp) => within(form()).getByLabelText(label) as HTMLInp
 /** Opens the form and fills every field in the AppSheet order. */
 async function fill(qtyLabel: RegExp, qty: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
-  await within(form()).findByRole('option', { name: 'Bulbs' });
   await within(form()).findByRole('option', { name: 'piece' });
-  fireEvent.change(field(/^Category/), { target: { value: 'c1' } });
+  await chooseCategory(field(/^Category/), 'Bulbs');
   fireEvent.change(field(/^Description/), { target: { value: 'Test bulb 12W' } });
   fireEvent.change(field(/^Counted in/), { target: { value: 'u1' } });
   fireEvent.change(field(/^Buying price/), { target: { value: '6000' } });
@@ -84,10 +91,29 @@ async function fill(qtyLabel: RegExp, qty: string) {
 const save = () => fireEvent.click(within(form()).getByRole('button', { name: 'Save the item' }));
 
 describe('Buy stock: add an item that is not in the list', () => {
+  it('adds a category inline: the field names it and the code line gives its first code (#578)', async () => {
+    const rice = { id: 'c9', name: 'Rice', active: true, product_count: 0, version: 1, code_prefix: 'RCE', next_code: 'RCE-0001' };
+    createCategory.mockImplementation(async () => { cats = [...cats, rice]; return rice; });
+    open(<RestockForm />);
+    fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
+    await within(form()).findByRole('option', { name: 'piece' });
+    fireEvent.click(field(/^Category/));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a new category' }));
+    fireEvent.change(screen.getByLabelText(/^Name of the new category/), { target: { value: 'Rice' } });
+    expect(await screen.findByText('RCE', { selector: 'strong' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
+    await waitFor(() => expect(field(/^Category/).textContent).toBe('Rice'));
+    expect(within(form()).getByTestId('restock-new-code').textContent).toBe('Item code: RCE-0001, made by the app');
+    expect(createCategory).toHaveBeenCalledWith('Rice');
+    // Buy stock's own toast says it, once: the picker draws none of its own.
+    expect([...document.querySelectorAll('.toast')].map((t) => t.textContent)).toEqual(['Added the category Rice. Its item codes start with RCE.']);
+    expect(createProduct).not.toHaveBeenCalled();
+  });
+
   it('shows the fields in the AppSheet order, the code as text made by the app and the category taking the cursor', async () => {
     open(<RestockForm />);
     fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
-    await within(form()).findByRole('option', { name: 'Bulbs' });
+    await within(form()).findByRole('option', { name: 'piece' });
     const labels = [...form().querySelectorAll('label')].map((l) => l.textContent?.replace(/\s*\*$/, '').trim());
     expect(labels).toEqual(['Category', 'Description', 'Counted in', 'Buying price (UGX)', 'Selling price (UGX)', expect.stringMatching(/^Quantity bought/)]);
     expect(document.activeElement).toBe(field(/^Category/));
@@ -96,7 +122,7 @@ describe('Buy stock: add an item that is not in the list', () => {
     expect(code.compareDocumentPosition(field(/^Category/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(code.textContent).toBe('Item code: made by the app once you choose the category');
     expect(within(form()).queryByLabelText(/Item code/)).toBeNull();
-    fireEvent.change(field(/^Category/), { target: { value: 'c1' } });
+    await chooseCategory(field(/^Category/), 'Bulbs');
     expect(code.textContent).toBe('Item code: BLB-0002, made by the app');
     expect(within(form()).getAllByRole('button', { name: 'Save the item' })).toHaveLength(1);
   });
@@ -104,14 +130,14 @@ describe('Buy stock: add an item that is not in the list', () => {
   it('marks the needed fields with a red asterisk and aria-required, and a Save with gaps goes to the first', async () => {
     open(<RestockForm />);
     fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
-    await within(form()).findByRole('option', { name: 'Bulbs' });
+    await within(form()).findByRole('option', { name: 'piece' });
     expect(within(form()).getByText(/Fields marked/)).toBeTruthy();
     for (const label of [/^Category/, /^Description/, /^Counted in/, /^Buying price/, /^Selling price/, /^Quantity bought/]) {
       const control = field(label);
       expect(control.getAttribute('aria-required'), String(label)).toBe('true');
       expect(form().querySelector(`label[for="${control.id}"] .field-star`)?.getAttribute('aria-hidden')).toBe('true');
     }
-    fireEvent.change(field(/^Category/), { target: { value: 'c1' } });
+    await chooseCategory(field(/^Category/), 'Bulbs');
     save();
     expect(document.activeElement).toBe(field(/^Description/));
     expect(within(form()).getByText('Type what the item is.')).toBeTruthy();
@@ -220,9 +246,9 @@ describe('Buy stock: add an item that is not in the list', () => {
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
-    await within(form()).findByRole('option', { name: 'Bulbs' });
+    await within(form()).findByRole('option', { name: 'piece' });
     expect(within(form()).queryByLabelText(/^Quantity bought/)).toBeNull();
-    fireEvent.change(field(/^Category/), { target: { value: 'c1' } });
+    await chooseCategory(field(/^Category/), 'Bulbs');
     fireEvent.change(field(/^Description/), { target: { value: 'Test bulb 12W' } });
     fireEvent.change(field(/^Counted in/), { target: { value: 'u1' } });
     fireEvent.change(field(/^Buying price/), { target: { value: '6000' } });

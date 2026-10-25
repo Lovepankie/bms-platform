@@ -8,6 +8,7 @@ import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 import { pickItem } from '../../../test-utils/item-picker';
+import { chooseCategory } from '../../../test-utils/category-picker';
 
 // The screen that makes an item with sizes and colours (issue #384): the sizes and prints typed once give the list of what will
 // be made, each with its code and price the owner may change, and Save sends exactly that list. Fabricated items.
@@ -76,10 +77,10 @@ describe('an item with sizes and colours', () => {
     fireEvent.change(screen.getByLabelText('What is it called?'), { target: { value: 'Test romper' } });
     // Issue #562: no code is asked; the codes start with the category's next code.
     expect(screen.queryByLabelText(/code/i)).toBeNull();
-    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
+    await screen.findByRole('option', { name: 'piece' });
     fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m' } });
     expect(document.getElementById('variant-0-code')?.textContent).toBe('Item code: made by the app once you choose the category');
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
+    await chooseCategory(screen.getByLabelText('Category'), 'Baby wear');
     fireEvent.change(screen.getByLabelText('Counted in'), { target: { value: 'u1' } });
     fireEvent.change(document.getElementById('sizes-item-sell') as HTMLInputElement, { target: { value: '9000' } });
     fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m, 3-6m' } });
@@ -101,8 +102,8 @@ describe('an item with sizes and colours', () => {
 
   it('says in plain words when two would share a code', async () => {
     screenOf(<NewFamilyPage />);
-    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(3));
-    fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'c1' } });
+    await screen.findByRole('option', { name: 'piece' });
+    await chooseCategory(screen.getByLabelText('Category'), 'Baby wear');
     fireEvent.change(screen.getByLabelText('Sizes'), { target: { value: '0-3m, 03m' } });
     expect(screen.getByRole('note').textContent).toContain('Two of them would have the code BBW-0007-03M. Spell one of the sizes or colours differently');
   });

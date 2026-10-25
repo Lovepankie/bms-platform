@@ -190,6 +190,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   for none (it changes on the category's page). No permission added. Tests: `RetailItemCodesIT`, `RetailVariantsIT`,
   `VariantGridTest`, `catalogue-category.dom.test.tsx`, `new-item-here.dom.test.tsx`,
   `catalogue-variants.dom.test.tsx`, `catalogue-import.dom.test.tsx`, `design-guard.test.ts`.
+- **Built (one category picker, issue #578, FR-UXN-10):** PWA only, no migration, no API change. `CategoryPicker`
+  (`frontend/src/areas/staff/retail/category-picker.tsx`) replaces the category select of Add an item, the item form, Buy stock's
+  and Count stock's new item, the sizes and colours forms and the Items and Stock filters: a full height Sheet on a phone and a
+  `@radix-ui/react-popover` list on a wider screen, with a search over any part of the name, Add a new category for
+  `retail.catalogue.manage` (name only; the code start is the app's, from `prefix-suggestion`), the new one chosen at once with a
+  dark toast, and `No category called "X". Add it?`. Tests `category-picker.dom.test.tsx`; other tests choose a category
+  with `chooseCategory` (`frontend/src/test-utils/category-picker.ts`).
 - **Built (a buying pack's size per delivery, issue #554, owner decision D23, ADR-082, FR-RET-72):** no migration. A restock line and a
   goods received line in a pack take `pack_size` (how many base units each pack held in this delivery, at least 1), kept in the line's existing
   `unit_factor`; stock, the cost per base unit and the branch's average (ADR-079) use it, and every later reading of the line (voids, supplier

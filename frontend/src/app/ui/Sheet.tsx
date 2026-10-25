@@ -17,13 +17,15 @@ const FOCUSABLE = 'a[href], button:not(:disabled), input:not(:disabled), select:
 // How far down the top must be dragged, in px, to close the sheet rather than spring back.
 const SWIPE_CLOSE = 96;
 
-export function Sheet({ open, onClose, title, children, actions }: {
+export function Sheet({ open, onClose, title, children, actions, tall = false }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   /** The buttons at the foot, the primary one first. */
   actions?: ReactNode;
+  /** Opens at full height on a phone whatever its content, as a picker whose list a search narrows (#578). */
+  tall?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   // What had focus when the sheet opened, given it back on close (Radix gives it back only to a Dialog.Trigger).
@@ -75,7 +77,7 @@ export function Sheet({ open, onClose, title, children, actions }: {
           <Dialog.Overlay className="sheet-scrim" />
           <Dialog.Content
             ref={panel}
-            className="sheet-panel"
+            className={tall ? 'sheet-panel sheet-tall' : 'sheet-panel'}
             aria-describedby={undefined}
             onCloseAutoFocus={(e) => {
               e.preventDefault();
