@@ -966,6 +966,14 @@ Accepted (this list is the ADR index):
 - ADR-082 A buying pack's size is kept per delivery: a restock or goods received line in a pack says how many pieces each pack held,
   kept in its `unit_factor` and used for stock and the average; "use from now on" (with `retail.catalogue.manage`) changes the usual size;
   selling packs keep their size; an order counts packs whatever each held (proposed, #554, owner decision D23; FR-RET-72; no migration)
+- ADR-083 Deploys switch api and web without a gap: a new container starts beside the old one (`--scale 2 --no-recreate`) and the
+  old one stops only once the new one is healthy, else the new one is removed; Caddy finds both through `dynamic a` upstreams with a
+  30 second retry of refused connections and no keep-alive; the proxy keeps its image unless its binary, Caddyfiles or settings
+  changed; a second API JVM only while its own memory limit plus 64 MB is free below `MemoryHigh` (on the Pi, whose slice is
+  1500/1600 MB since D37, staging overlaps on every deploy; with less free it restarts in place and says so); the incoming web
+  build's hashed files go into `web_assets` before the web overlap; tested under Compose 2.26.1; Caddy marks only a failed dial
+  with `Bms-Not-Delivered`, the only case the PWA calls "Nothing was saved yet", any other proxy error or dropped write reads as
+  maybe saved, and a keyed request is retried once (proposed, #496, owner decision D36; no migration)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared

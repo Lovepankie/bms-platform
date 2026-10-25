@@ -22,6 +22,16 @@
 #
 #   postgres 176  api 448  web 32  proxy 32  cloudflared 48  (migrate 160, only during a deploy;
 #   keep-assets 32 runs alone, before the switch, ADR-078)
+#
+# During a switch a second api and a second web run beside the old ones until the new ones are healthy
+# (ADR-083). deploy.sh starts the second api only while its own limit plus 64 MB (512 MB) is free below
+# the slice's MemoryHigh and on the host, so the new JVM's start-up peak can never bring the slice's OOM
+# killer onto the old api or postgres (reclaim, a slowdown, stays possible); otherwise it restarts the
+# api in place, with the old short gap. With the slice at MemoryHigh=1500M, MemoryMax=1600M (D37) and the
+# stack using about 790 MB, about 710 MB is free, so the overlap is the expected path on this host: two api
+# containers for the length of each switch, 1216 MB by limits at most. An in-place restart here means the
+# slice has filled up; see docs/runbooks/deploy.md.
+# BMS_ROLL_MIN_FREE_MB in .env replaces the limit with a measured start-up peak (memory.peak).
 
 name: bms
 
@@ -247,6 +257,12 @@ services:
       BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
     mem_limit: 32m
     cpus: 0.5
+    # deploy.sh starts a new web container beside the old one and stops the old one once this passes (ADR-083).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
     # Hashed files of earlier builds, read-only; the Caddyfile falls back to them (ADR-078).
     volumes:
       - type: volume

@@ -62,3 +62,30 @@ describe('the staff sign-in button (#456)', () => {
     expect(fetchImpl.seen).toHaveLength(1);
   });
 });
+
+// Issue #496: while a deploy switches the server over, the proxy answers 502 or the connection drops. The page says the app
+// is updating instead of 'Something went wrong', and what was typed stays in the form for the next try.
+describe('signing in while the app is updating (#496)', () => {
+  const typeAndSubmit = () => {
+    fireEvent.change(screen.getByLabelText('Email or phone'), { target: { value: 'staff01@example.test' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'test-password-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+  };
+
+  it.each([
+    ['a 502 from the proxy', () => Promise.resolve(new Response(null, { status: 502 }))],
+    ['a 504 page from Cloudflare', () => Promise.resolve(new Response('<html>Gateway time-out</html>', { status: 504, headers: { 'content-type': 'text/html' } }))],
+    ['a dropped connection', () => Promise.reject(new TypeError('Failed to fetch'))],
+  ])('says the app is updating on %s and keeps the form filled', async (_name, answer) => {
+    fetchImpl.seen = [];
+    fetchImpl.next = answer;
+    shell();
+    typeAndSubmit();
+    await screen.findByText('The app is updating. Nothing was saved yet. Try again in a minute.');
+    expect(screen.queryByText(/Something went wrong/)).toBeNull();
+    expect((screen.getByLabelText('Email or phone') as HTMLInputElement).value).toBe('staff01@example.test');
+    expect((screen.getByLabelText('Password') as HTMLInputElement).value).toBe('test-password-01');
+    // Sign-in carries no Idempotency-Key, so it is not sent again by itself.
+    expect(fetchImpl.seen).toHaveLength(1);
+  });
+});

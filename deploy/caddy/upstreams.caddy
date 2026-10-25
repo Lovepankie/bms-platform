@@ -1,0 +1,41 @@
+# How the proxy finds the api and web containers; imported by Caddyfile and Caddyfile.tunnel (ADR-083, issue #496).
+#
+# A deploy starts the new api (or web) container beside the running one and stops the old one only once the new one is
+# healthy, so for a while the service name resolves to two containers. `dynamic a` asks Docker's DNS for every
+# container of the service each second, instead of one address fixed at start. A container that refuses the
+# connection (the old JVM closes its port the moment its graceful stop begins) is marked down for 2 seconds and the
+# request goes to another one; when none answers, the request waits and tries again for up to 30 seconds before the
+# proxy gives up with a 502. Only a connection that failed is retried, so a request is never sent to the API twice.
+# Keep-alive to the containers is off: a POST written on a pooled connection that the old container closes at that
+# moment cannot be retried safely, while a fresh connection on Docker's own network costs a fraction of a millisecond.
+(upstream) {
+	dynamic a {args[0]} 8080 {
+		refresh 1s
+		versions ipv4
+	}
+	lb_try_duration 30s
+	lb_try_interval 250ms
+	fail_duration 2s
+	transport http {
+		dial_timeout 2s
+		keepalive off
+	}
+}
+
+# Marks the 502, 503 or 504 that proves the request never reached an api or web container: the dial failed (refused,
+# timed out, no address) or no container was up, for every try within lb_try_duration. Only then does the answer carry
+# the header Bms-Not-Delivered: 1 and the app_updating problem, which the PWA reads as "Nothing was saved yet". Any
+# other proxy error (a container that took the request and then reset or was killed at the end of its stop grace
+# period, which Caddy reports as EOF or a reset) keeps its bare status, which the PWA reads as "may have been saved".
+# Imported inside each site block of Caddyfile and Caddyfile.tunnel (ADR-083).
+(not_delivered) {
+	handle_errors 502 503 504 {
+		@not_delivered expression `{http.error.message}.matches("^(dial tcp|no upstreams available)")`
+		handle @not_delivered {
+			header Content-Type application/problem+json
+			header Cache-Control no-store
+			header Bms-Not-Delivered 1
+			respond `{"code":"app_updating","detail":"The app is updating. Nothing was saved yet. Try again in a minute."}` {err.status_code}
+		}
+	}
+}

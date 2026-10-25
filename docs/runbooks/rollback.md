@@ -5,7 +5,9 @@
 ## Automatic rollback
 
 `deploy.sh` rolls back by itself when a new release does not pass the readiness gate: it
-switches `api`, `web` and `proxy` back to the tag in `state/current_tag`, waits for it to be
+switches `api`, `web` and `proxy` back to the tag in `state/current_tag` with the same gap-free
+switch as a deploy (ADR-083; a new container that never got healthy was already removed, and the
+old one never stopped serving), waits for it to be
 ready, records `failed-health` and `rolled-back-to` in `state/history.log`, and exits 1. Before
 switching back it keeps the failed build's hashed web files in `bms_web_assets`, so a phone that
 loaded that build in the meantime still works (ADR-078). Nothing

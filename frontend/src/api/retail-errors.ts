@@ -144,12 +144,24 @@ const BY_CODE: Record<string, string> = {
   unauthenticated: 'Your session has ended. Sign in again.',
 };
 
+/** What a person reads while a deploy switches the server over (issue #496). */
+export const APP_UPDATING = 'The app is updating. Nothing was saved yet. Try again in a minute.';
+/** The same, for a write with an Idempotency-Key that may have reached the server (a reset, a dropped connection or a 409 in progress): the key makes a retry safe. */
+export const APP_UPDATING_MAYBE_SAVED = 'The app is updating, so this may not have been saved. Trying again in a minute is safe.';
+/** The same, for a write without a key that may have reached the server: it may have been saved, so check before saving again. */
+export const APP_UPDATING_CHECK = 'The app is updating, so this may have been saved. Check before you try again.';
+
 const BY_STATUS: Record<number, string> = {
   401: 'Your session has ended. Sign in again.',
   403: BY_CODE['permission_denied'] ?? '',
   404: 'That could not be found.',
   428: 'This could not be saved safely. Reload the page and try again.',
   429: 'Too many requests. Wait a moment and try again.',
+  // A bare proxy error during a deploy (issue #496, ADR-083): it may have reached the server, so never "nothing was saved".
+  // The API client already words these from what they prove; this is the fallback when no body came through.
+  502: APP_UPDATING_CHECK,
+  503: APP_UPDATING_CHECK,
+  504: APP_UPDATING_CHECK,
 };
 
 /** The message to show a person for a failed retail call. */

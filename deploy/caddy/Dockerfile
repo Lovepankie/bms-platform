@@ -32,7 +32,7 @@ RUN mkdir -p /empty
 FROM caddy:2.11.4-alpine
 COPY --from=build /out/caddy /usr/bin/caddy
 # --chmod: the image must not depend on the umask of the host that built it (the non-root Caddy has to read these).
-COPY --chmod=644 caddy/Caddyfile caddy/Caddyfile.tunnel /etc/caddy/
+COPY --chmod=644 caddy/Caddyfile caddy/Caddyfile.tunnel caddy/upstreams.caddy /etc/caddy/
 COPY compose.pi-staging.yml deploy.sh backup.sh restore-drill.sh monitor.sh pull-staging.sh /usr/share/bms-deploy/
 COPY postgres /usr/share/bms-deploy/postgres
 COPY sql /usr/share/bms-deploy/sql

@@ -91,12 +91,16 @@ for file in compose.yml compose.pi-staging.yml; do
         || { echo "FAIL $file: keep-assets must have pull_policy: never"; exit 1; }
 done
 
-# The two functions under test, exactly as deploy.sh defines them.
-eval "$(sed -n '/^keep_outgoing_assets() {/,/^}/p; /^switch_to() {/,/^}/p' "$REPO/deploy/deploy.sh")"
-if ! declare -F keep_outgoing_assets > /dev/null || ! declare -F switch_to > /dev/null; then
-    echo "FAIL could not read keep_outgoing_assets and switch_to out of deploy/deploy.sh"
-    exit 1
-fi
+# The functions under test, exactly as deploy.sh defines them, with the gap-free switch they call (ADR-083).
+eval "$(sed -n '/^log() {/p; /^\(keep_outgoing_assets\|keep_incoming_assets\|free_memory_mb\|roll_need_mb\|wait_healthy\|roll\|switch_proxy\|proxy_fingerprint\|switch_to\)() {/,/^}/p' "$REPO/deploy/deploy.sh")"
+for fn in log keep_outgoing_assets roll switch_to; do
+    if ! declare -F "$fn" > /dev/null; then
+        echo "FAIL could not read $fn out of deploy/deploy.sh"
+        exit 1
+    fi
+done
+# shellcheck disable=SC2034 # read by roll and wait_healthy, copied out of deploy.sh above
+READY_TIMEOUT=60 ROLL_MIN_FREE_MB=0 ROLL_MARGIN_MB=64 SLICE_DIR=/nonexistent
 
 # GET a path inside the web container; prints the status line and headers, then the body.
 fetch() {

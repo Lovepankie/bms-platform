@@ -89,7 +89,7 @@ export function asFormError(e: unknown): FormError {
   const stopped = (e as { name?: string } | null)?.name === 'AbortError';
   return stopped
     ? new FormError('The request was stopped.', 0, 'aborted')
-    : new FormError('The connection dropped before an answer came back. Check the connection.', 0, 'network');
+    : new FormError(problemOf(e).code === 'app_updating' ? (problemOf(e).detail as string) : 'The connection dropped before an answer came back. Check the connection.', 0, 'network');
 }
 
 /** The same client with every call's failures as FormError, so a screen sees a lost answer as one (status 0), never a raw TypeError. */

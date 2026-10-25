@@ -174,6 +174,8 @@ services:
       BMS_REPORTS_XLSX_ROW_CAP: ${BMS_REPORTS_XLSX_ROW_CAP:-200000}
       BMS_REPORTS_PDF_ROW_CAP: ${BMS_REPORTS_PDF_ROW_CAP:-3000}
       BMS_REPORTS_MAX_FILE_BYTES: ${BMS_REPORTS_MAX_FILE_BYTES:-67108864}
+    # During a deploy a second api runs beside this one until it is healthy (ADR-083): deploy.sh starts it
+    # only while this limit plus 64 MB of the VM's memory is available, else it restarts in place.
     mem_limit: 1536m
     # Report runs (ADR-038): a stop interrupts the running reports and gives them 15 seconds to close; Docker would kill at 10.
     stop_grace_period: 30s
@@ -201,6 +203,12 @@ services:
       BMS_TENANT_HOST_PATTERN: ${BMS_TENANT_HOST_PATTERN:?}
       BMS_PLATFORM_HOST: ${BMS_PLATFORM_HOST:?}
     mem_limit: 64m
+    # deploy.sh starts a new web container beside the old one and stops the old one once this passes (ADR-083).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
     # Hashed files of earlier builds, read-only; the Caddyfile falls back to them (ADR-078).
     volumes:
       - type: volume

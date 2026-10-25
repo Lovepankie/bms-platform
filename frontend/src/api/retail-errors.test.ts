@@ -91,7 +91,9 @@ describe('retail problem details in plain words', () => {
   it('falls back on the status when there is no body', () => {
     expect(retailMessage(undefined, 403)).toMatch(/do not have permission/i);
     expect(retailMessage(undefined, 401)).toMatch(/sign in/i);
-    expect(retailMessage(undefined, 503)).toMatch(/server had a problem/i);
+    expect(retailMessage(undefined, 500)).toMatch(/server had a problem/i);
+    // The proxy with no API behind it during a deploy (issue #496).
+    expect(retailMessage(undefined, 503)).toBe('The app is updating, so this may have been saved. Check before you try again.');
     expect(retailMessage({}, 418)).toBe('The request failed.');
   });
 });

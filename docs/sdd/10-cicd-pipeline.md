@@ -215,15 +215,20 @@ Actions run shows the pointer move; staging's own result is in `state/history.lo
 | 3 | Refuse a release built before `state/current_created` unless `state/allow_downgrade` exists (ADR-018 finding L1) | Exit 1, `refused-downgrade` recorded; nothing changed |
 | 4 | Start PostgreSQL if needed; wait until healthy | Exit non-zero; nothing changed |
 | 5 | `docker compose run --rm migrate` (Flyway as `bms_owner`) | Exit 1; old containers still serving; `failed-migration` recorded |
-| 6 | First run the outgoing `web` image (its local ID, `pull_policy: never`, 60 s at most) once as `keep-assets`, which prunes the `web_assets` volume of files that left the live build more than 14 days ago and copies its hashed files in (ADR-078); then `docker compose up --no-deps` only the named application services (`api`, `web`, `proxy`, plus `cloudflared` on staging via `BMS_EDGE_SERVICES`): `postgres` is never in this list, so it is never recreated by an application deploy, whatever else changed in `.env` (ADR-018 finding M4) | A failed `keep-assets` is a warning only; the switch goes on |
+| 6 | First run the outgoing `web` image (its local ID, `pull_policy: never`, 60 s at most) once as `keep-assets`, which prunes the `web_assets` volume of files that left the live build more than 14 days ago and copies its hashed files in (ADR-078); then switch only the named application services (`api`, `web`, `proxy`, plus `cloudflared` on staging via `BMS_EDGE_SERVICES`): `postgres` is never in this list, so it is never recreated by an application deploy, whatever else changed in `.env` (ADR-018 finding M4). `api` and `web` switch without a gap (ADR-083): before web, the incoming web image also runs `keep-assets` so the old container can serve the new build's hashed files during the overlap (if it fails, web restarts in place); a new container starts beside the old one (`up --no-deps --no-recreate --scale <service>=2`), and once its health check passes the old one gets its graceful stop and is removed; a service whose container already runs the image asked for goes to Compose's own `up`, a no-op unless `.env` changed it. A second api starts only while its own memory limit plus 64 MB is free on the host and below `bms.slice`'s `MemoryHigh` (or `BMS_ROLL_MIN_FREE_MB`, a measured start-up peak); otherwise the api restarts in place. The proxy keeps its image when its caddy binary and Caddyfiles are unchanged (Compose's `up` still applies a settings change); the others take `docker compose up --no-deps` | A failed `keep-assets` is a warning only; the switch goes on. A new `api` or `web` that is not healthy within `READY_TIMEOUT` is removed and the old one keeps serving; go to 8 |
 | 7 | Wait up to `READY_TIMEOUT` (240 s) for the API health check (`/readyz`: database and migrations at head), and for `web` and `api` to answer through the proxy container | Go to 8 |
-| 8 | Keep the failed build's hashed web files as in 6 (20 s at most), then switch back to the previous tag's already-verified digests, wait for it to be ready, record `failed-health` and `rolled-back-to`, exit 1 | Record `rollback-unhealthy`, exit 1; follow `docs/runbooks/rollback.md` |
+| 8 | Keep the failed build's hashed web files as in 6 (20 s at most), then switch back to the previous tag's already-verified digests the same way (no gap; a service whose new container was refused in 6 is already on them), wait for it to be ready, record `failed-health` and `rolled-back-to`, exit 1 | Record `rollback-unhealthy`, exit 1; follow `docs/runbooks/rollback.md` |
 | 9 | Write the tag and its build time to `state/current_tag` and `state/current_created` (temp file, `sync`, rename, so a power loss never leaves a truncated file, ADR-018 finding L7); append `deployed` to `state/history.log` | |
 
 Migrations are never reversed on rollback, so they are expand and contract (chapter 6 section
 6.9). Re-running the script with the live tag is a no-op that passes the gate. A deploy
-recreates the API container, so there is a short outage while the JVM starts (NFR-AVL-03
-allows 30 seconds; measured locally at under 10).
+no longer stops the API or the PWA (ADR-083): the old container serves until the new one is
+healthy, the proxy finds both through Docker's DNS and moves a refused connection to the other,
+and `deploy/tests/no-gap-test.sh` proves in CI that requests keep getting 200 within 3 seconds
+through a switch, a refused release and a rollback. A gap is left only when the api restarts in
+place for lack of memory or the proxy itself changes; Caddy then holds a request for up to 30
+seconds, and the PWA says the app is updating and retries a keyed write once (NFR-AVL-03 allows
+30 seconds).
 
 ## 10.8 Security of the pipeline
 

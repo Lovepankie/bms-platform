@@ -20,6 +20,8 @@
 	}
 }
 
+import upstreams.caddy
+
 (security_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -48,12 +50,17 @@
 		max_size 6MB
 	}
 
+	# A proxy error that proves nothing reached a container says so (ADR-083).
+	import not_delivered
+
 	# The callback host carries provider callbacks only (chapter 7 section 7.2).
 	@callbackHost host {$BMS_CALLBACK_HOST}
 	handle @callbackHost {
 		@callbacks path /api/v1/payments/callbacks/* /api/v1/payments/return/* /api/v1/channels/*
 		handle @callbacks {
-			reverse_proxy api:8080
+			reverse_proxy {
+				import upstream api
+			}
 		}
 		respond 404
 	}
@@ -62,11 +69,15 @@
 	# header, which Caddy passes through unchanged.
 	@backend path /api/* /healthz /readyz /version
 	handle @backend {
-		reverse_proxy api:8080
+		reverse_proxy {
+			import upstream api
+		}
 	}
 
 	# Everything else is the PWA.
 	handle {
-		reverse_proxy web:8080
+		reverse_proxy {
+			import upstream web
+		}
 	}
 }

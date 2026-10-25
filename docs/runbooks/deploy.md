@@ -66,6 +66,36 @@ The volume holds copies only; deleting it (`docker volume rm bms_web_assets` whi
 loses nothing but those copies. The CI test `deploy/tests/keep-assets-test.sh` runs the same switch
 against both compose files with three small builds.
 
+## No gap during the switch (ADR-083)
+
+`deploy.sh` starts the new `api` and `web` container beside the running one and stops the old one
+only once the new one is healthy, so the site keeps answering through a deploy and a rollback. The
+deploy log shows `starting a new api container beside the running one` and `api switched` (the
+same for web), and `proxy unchanged; kept running` when the proxy image holds the same caddy and
+Caddyfiles. Lines to know:
+
+- `the new api container is not healthy; removing it, the old one keeps serving`: the release did
+  not start. Its last 40 log lines follow; the previous release is still live and the rollback
+  finds nothing to change.
+- `<n> MB free, a second api needs <m> MB; restarting api in place (a short gap)`: the host, or
+  `bms.slice` below its `MemoryHigh`, had less than the api's own memory limit plus 64 MB free, so
+  the api restarted as before. Caddy holds requests for up to 30 seconds and the app says it is
+  updating. On the Pi this is not expected since the slice was raised to 1500/1600 MB (decision
+  D37): measured 24 Oct 2026 at about 790 MB in use, it has about 710 MB free below `MemoryHigh`,
+  and a normal deploy runs two `api` containers for the length of the switch. If this line appears,
+  check `cat /sys/fs/cgroup/bms.slice/memory.current` and what grew in the slice.
+  `BMS_ROLL_MIN_FREE_MB` in `.env` can replace the api's limit with a measured start-up peak plus a
+  margin.
+- `warning: the incoming web files were not kept; restarting web in place (a short gap)`: the
+  new build's hashed files could not be copied into `bms_web_assets` before the switch, so web was
+  not overlapped (the old container could not have served them). Nothing else to do; check disk space
+  if it repeats.
+- During a switch `docker compose ps` shows two `api` (or `web`) containers, numbered on; that is
+  expected. Two left after a deploy means it was interrupted: the next deploy removes the extra one.
+
+The CI test `deploy/tests/no-gap-test.sh` drives the same switch on both compose files under GET
+and POST traffic and fails on any answer that is not 200 within 3 seconds.
+
 ## Manual deploy (only when the pipeline is unavailable)
 
 Run exactly what the pipeline runs, on the host: as `deploy` in production, as `bms` on staging.

@@ -18,7 +18,10 @@
 #      application deploy, whatever else changed in the compose file or .env (ADR-018 finding M4).
 #      Just before each switch, the outgoing web build's hashed files are copied into the web_assets
 #      volume, which the new web container keeps serving, so a phone on the previous app copy still
-#      loads its screens (ADR-078);
+#      loads its screens (ADR-078). api and web switch without a gap (ADR-083): the new container
+#      starts beside the old one, and the old one stops only once the new one is healthy; a new one
+#      that never gets healthy is removed and the old one keeps serving. The proxy is recreated only
+#      when what it runs changed (its binary, its Caddyfiles or its compose settings);
 #   5. wait for the API's readiness (database reachable, migrations at head) and for web behind
 #      the proxy, up to READY_TIMEOUT seconds;
 #   6. on failure, switch back to the previously recorded tag and exit non-zero. Migrations are
@@ -60,6 +63,17 @@ mkdir -p "$STATE_DIR"
 READY_TIMEOUT="${READY_TIMEOUT:-240}"
 # Seconds the keep-assets step may take before a switch (ADR-078); the rollback allows 20.
 KEEP_ASSETS_TIMEOUT="${BMS_KEEP_ASSETS_TIMEOUT:-60}"
+# ADR-083: a second API JVM runs beside the old one only while enough memory is free, both on the host
+# and below bms.slice's MemoryHigh where that cgroup exists (the staging Pi); otherwise the api restarts
+# in place, with the short gap that Caddy's retries and the app's own retry cover. Enough is, by default,
+# the api container's own memory limit plus ROLL_MARGIN_MB: the new JVM can never use more than its limit
+# (its own cgroup stops it first, killing only the new container), so the overlap cannot bring the slice's
+# OOM killer onto the old api or postgres whatever the JVM's start-up peak (it can still cause reclaim, since
+# the inactive file cache counts as free). BMS_ROLL_MIN_FREE_MB replaces the limit
+# with a measured peak (memory.peak of a new api container), at the operator's risk.
+ROLL_MIN_FREE_MB="${BMS_ROLL_MIN_FREE_MB:-}"
+ROLL_MARGIN_MB="${BMS_ROLL_MARGIN_MB:-64}"
+SLICE_DIR="${BMS_SLICE_DIR:-/sys/fs/cgroup/bms.slice}"
 COMPOSE=(docker compose --project-name bms --file compose.yml --env-file "$ENV_FILE")
 
 log() { echo "[deploy $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
@@ -157,7 +171,7 @@ fi
 # reload, never the deploy or the rollback.
 keep_outgoing_assets() {
     local limit="$1" id image="" name="bms-keep-assets-$$"
-    id="$("${COMPOSE[@]}" ps --quiet web 2>/dev/null || true)"
+    id="$("${COMPOSE[@]}" ps --quiet web 2>/dev/null | head -n 1 || true)"
     if [[ -n "$id" ]]; then
         image="$(docker inspect --format '{{.Image}}' "$id" 2>/dev/null || true)"
     fi
@@ -171,16 +185,182 @@ keep_outgoing_assets() {
     fi
 }
 
-# The argument is keep_outgoing_assets' time limit: the rollback passes a shorter one.
+# Free memory in MB: the host's MemAvailable, or what bms.slice still allows below its MemoryHigh (where
+# throttling and reclaim begin; MemoryMax when no MemoryHigh is set) when that is less. The slice's
+# inactive file cache counts as free, since the kernel drops it before it would kill anything.
+free_memory_mb() {
+    local free limit current cache
+    free="$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null || true)"
+    free="${free:-0}"
+    if [[ -r "$SLICE_DIR/memory.current" ]]; then
+        limit="$(cat "$SLICE_DIR/memory.high" 2>/dev/null || true)"
+        [[ "$limit" =~ ^[0-9]+$ ]] || limit="$(cat "$SLICE_DIR/memory.max" 2>/dev/null || true)"
+        current="$(cat "$SLICE_DIR/memory.current")"
+        cache="$(awk '$1 == "inactive_file" { print $2 }' "$SLICE_DIR/memory.stat" 2>/dev/null || true)"
+        current=$(( current - ${cache:-0} ))
+        if [[ "$limit" =~ ^[0-9]+$ ]] && (( (limit - current) / 1048576 < free )); then
+            free=$(( (limit - current) / 1048576 ))
+        fi
+    fi
+    echo "$free"
+}
+
+# MB a second api needs free: BMS_ROLL_MIN_FREE_MB when set, else the running api container's memory limit
+# (the new one gets the same) plus ROLL_MARGIN_MB, for the second web and the old containers' growth.
+roll_need_mb() {
+    local limit
+    if [[ -n "$ROLL_MIN_FREE_MB" ]]; then
+        echo "$ROLL_MIN_FREE_MB"
+        return
+    fi
+    limit="$(docker inspect --format '{{.HostConfig.Memory}}' "$1" 2>/dev/null || echo 0)"
+    (( limit > 0 )) || limit=$(( 2048 * 1048576 ))
+    echo $(( limit / 1048576 + ROLL_MARGIN_MB ))
+}
+
+# Waits until a container's health check passes; fails at once if it reports unhealthy or stops.
+wait_healthy() {
+    local id="$1" deadline=$((SECONDS + READY_TIMEOUT)) status
+    while (( SECONDS < deadline )); do
+        status="$(docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}healthy{{end}}{{else}}stopped{{end}}' "$id" 2>/dev/null || echo stopped)"
+        case "$status" in
+            healthy) return 0 ;;
+            unhealthy | stopped) return 1 ;;
+        esac
+        sleep 2
+    done
+    return 1
+}
+
+# ADR-083: switch one service without a gap. The new container starts beside the running one (Compose
+# names it with the next number), and the proxy finds both through Docker's DNS (deploy/caddy/upstreams.caddy).
+# Once the new one is healthy the old one gets its graceful stop and is removed. A new container that
+# never gets healthy is removed and the old one keeps serving, so the deploy fails with nothing changed.
+# A service whose running container already runs the image asked for (an idempotent re-run) is handed to
+# Compose's own `up`, which leaves it alone unless .env changed its settings. Compose 2.26.1's `config --hash`
+# does not match the label its own `up` compares (found by deploy/tests/no-gap-test.sh), so it is not used.
+roll() {
+    local service="$1" old count new id free need image_var
+    old="$("${COMPOSE[@]}" ps --quiet "$service" 2>/dev/null || true)"
+    count="$(wc -w <<< "$old")"
+    image_var="$(tr '[:lower:]' '[:upper:]' <<< "$service")_IMAGE"
+    if (( count == 0 )) || { (( count == 1 )) \
+            && [[ "$(docker inspect --format '{{.Config.Image}}' "$old")" == "${!image_var:-}" ]]; }; then
+        "${COMPOSE[@]}" up --detach --no-deps "$service" || return 1
+        return 0
+    fi
+    if [[ "$service" == api ]]; then
+        free="$(free_memory_mb)" need="$(roll_need_mb "$(head -n 1 <<< "$old")")"
+        if (( free < need )); then
+            log "${free} MB free, a second api needs ${need} MB; restarting api in place (a short gap)"
+            "${COMPOSE[@]}" up --detach --no-deps "$service" || return 1
+            # As below: the freed address must not reach the next new container while the proxy still lists it.
+            sleep 3
+            return 0
+        fi
+        log "${free} MB free, a second api needs ${need} MB"
+    fi
+    if [[ "$service" == web ]] && ! keep_incoming_assets "${KEEP_LIMIT:-60}"; then
+        # Without them, a page from the new web could ask the old one for files it does not have.
+        log "warning: the incoming web files were not kept; restarting web in place (a short gap)"
+        "${COMPOSE[@]}" up --detach --no-deps "$service" || return 1
+        sleep 3
+        return 0
+    fi
+    # A stopped container of the service (left by an interrupted deploy) would be started again instead of
+    # a new one, so it goes first.
+    for id in $("${COMPOSE[@]}" ps --all --quiet "$service"); do
+        grep -qx "$id" <<< "$old" || docker rm --force "$id" > /dev/null
+    done
+    log "starting a new ${service} container beside the running one"
+    "${COMPOSE[@]}" up --detach --no-deps --no-recreate --scale "${service}=$((count + 1))" "$service"
+    new=""
+    for id in $("${COMPOSE[@]}" ps --all --quiet "$service"); do
+        grep -qx "$id" <<< "$old" || new="$id"
+    done
+    if [[ -z "$new" ]]; then
+        log "no new ${service} container was started"
+        return 1
+    fi
+    if ! wait_healthy "$new"; then
+        log "the new ${service} container is not healthy; removing it, the old one keeps serving. Its last log lines:"
+        docker logs --tail 40 "$new" 2>&1 || true
+        docker rm --force "$new" > /dev/null 2>&1 || true
+        return 1
+    fi
+    for id in $old; do
+        # docker stop gives the container its own stop_grace_period, as Compose would.
+        docker stop "$id" > /dev/null && docker rm "$id" > /dev/null
+    done
+    # Docker may hand the freed address to the next container started (the new web, say) while the proxy still
+    # lists it under this service for up to a second (refresh 1s in upstreams.caddy), so let that pass first.
+    sleep 3
+    log "${service} switched"
+}
+
+# The proxy cannot run twice (it holds ports 80 and 443 on the production VM), so its image is replaced only
+# when what it runs changed: its caddy binary or its Caddyfiles. Every release builds a new proxy image digest
+# even when those are the same, and recreating it would stop all traffic for a moment (ADR-083). When they are
+# the same, Compose's own `up` runs with the running image's reference, so it still applies a change of the
+# proxy's settings in .env (recreating it, as before) and otherwise leaves it alone.
+switch_proxy() {
+    local id image ref running
+    id="$("${COMPOSE[@]}" ps --quiet proxy 2>/dev/null | head -n 1 || true)"
+    if [[ -n "$id" ]]; then
+        image="$(docker inspect --format '{{.Image}}' "$id")"
+        ref="$(docker inspect --format '{{.Config.Image}}' "$id")"
+        running="$(proxy_fingerprint "$image")"
+        if [[ -n "$running" && "$running" == "$(proxy_fingerprint "$PROXY_IMAGE")" ]]; then
+            log "proxy unchanged; kept running"
+            PROXY_IMAGE="$ref" "${COMPOSE[@]}" up --detach --no-deps proxy
+            return
+        fi
+    fi
+    "${COMPOSE[@]}" up --detach --no-deps proxy
+}
+
+# What the proxy runs, as one hash: its environment, command, entrypoint and user, its caddy binary and everything in
+# /etc/caddy. Empty when the image cannot be read; switch_proxy never counts an empty hash as a match, so the proxy is
+# then recreated as before.
+proxy_fingerprint() {
+    local config files
+    config="$(docker image inspect --format '{{json .Config.Env}}{{json .Config.Cmd}}{{json .Config.Entrypoint}}{{.Config.User}}' "$1" 2>/dev/null)" || return 0
+    files="$(docker run --rm --network none --entrypoint sh "$1" -c 'set -o pipefail; cat /usr/bin/caddy /etc/caddy/* | sha256sum' 2>/dev/null)" || return 0
+    [[ -n "$config" && -n "$files" ]] || return 0
+    printf '%s\n%s\n' "$config" "$files" | sha256sum | cut -d' ' -f1
+}
+
+# ADR-083: while the old and the new web container both take requests, a page loaded from the new one may ask the old
+# one for the new build's hashed files. So, before the new container starts, the incoming image (WEB_IMAGE, verified
+# and pulled by this deploy; pull_policy: never) copies its own hashed files into web_assets, which the old container
+# also serves from /srv/previous. The same run as keep_outgoing_assets, by the incoming image instead of the outgoing.
+keep_incoming_assets() {
+    local limit="$1" name="bms-keep-incoming-$$"
+    if ! KEEP_ASSETS_IMAGE="$WEB_IMAGE" timeout --kill-after=5 "$limit" "${COMPOSE[@]}" --profile keep-assets \
+            run --rm -T --name "$name" keep-assets < /dev/null; then
+        docker rm --force "$name" > /dev/null 2>&1 || true
+        return 1
+    fi
+}
+
+# The argument is the keep-assets steps' time limit: the rollback passes a shorter one.
 switch_to() {
+    local service
+    KEEP_LIMIT="$1"
     keep_outgoing_assets "$1"
-    "${COMPOSE[@]}" up --detach --no-deps "${APP_SERVICES[@]}"
+    for service in "${APP_SERVICES[@]}"; do
+        case "$service" in
+            api | web) roll "$service" || return 1 ;;
+            proxy) switch_proxy || return 1 ;;
+            *) "${COMPOSE[@]}" up --detach --no-deps "$service" || return 1 ;;
+        esac
+    done
 }
 
 wait_ready() {
     local deadline=$((SECONDS + READY_TIMEOUT)) id status
     while (( SECONDS < deadline )); do
-        id="$("${COMPOSE[@]}" ps --quiet api || true)"
+        id="$("${COMPOSE[@]}" ps --quiet api | head -n 1 || true)"
         status="$( [[ -n "$id" ]] && docker inspect --format '{{.State.Health.Status}}' "$id" 2>/dev/null || echo missing)"
         if [[ "$status" == "healthy" ]] \
             && "${COMPOSE[@]}" exec -T proxy wget -q --spider http://web:8080/ < /dev/null \
@@ -208,9 +388,7 @@ if ! "${COMPOSE[@]}" --profile migrate run --rm -T migrate < /dev/null; then
 fi
 
 log "switching application containers to ${TAG}"
-switch_to "$KEEP_ASSETS_TIMEOUT"
-
-if wait_ready; then
+if switch_to "$KEEP_ASSETS_TIMEOUT" && wait_ready; then
     write_state "$STATE_DIR/current_tag" "$TAG"
     write_state "$STATE_DIR/current_created" "$API_CREATED"
     record "$TAG" "deployed"
@@ -241,8 +419,7 @@ previous_proxy_digest="$(docker image inspect --format '{{ index .RepoDigests 0 
 export API_IMAGE="$previous_api_digest"
 export WEB_IMAGE="$previous_web_digest"
 export PROXY_IMAGE="$previous_proxy_digest"
-switch_to 20
-if wait_ready; then
+if switch_to 20 && wait_ready; then
     record "$PREVIOUS" "rolled-back-to"
     log "rolled back to ${PREVIOUS}; ${TAG} is NOT live"
 else
