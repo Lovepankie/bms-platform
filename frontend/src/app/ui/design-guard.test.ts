@@ -354,6 +354,21 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(rulesFor(/^\s*\.hint-line > \.hint\s*$/)[0]?.body).toMatch(/white-space: nowrap;[\s\S]*text-overflow: ellipsis/);
   });
 
+  // Issue #575: a normal settings screen draws no status colour. A note about a default (returns with no approval limit) is one
+  // neutral Hint line, the long explanation behind the Hint's info button, and links nowhere until a screen sets the limit.
+  it('draws the Retail settings screens without an amber note, and the returns note as a Hint', () => {
+    for (const file of ['settings', 'purchasing-settings', 'credit-recognition', 'slow-movers']) {
+      // A badge that marks an unsaved change ("Will be switched on") is real status and may stay amber.
+      // A class as a string or a template literal, or a tone prop, in amber or a warning tone.
+      const amber = /className=(?:"[^"]*|\{`[^`]*)(?:(?:alert|text|note|hint)-warning|amber)|tone=(?:"|\{['"`])(?:warning|amber)/;
+      expect(code(`areas/staff/retail/${file}.tsx`).match(amber)?.[0] ?? null, file).toBeNull();
+    }
+    const note = code('areas/staff/retail/settings.tsx').match(/export function ReturnsThresholdWarning[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(note).toMatch(/<Hint>\s*Returns need no second administrator yet\. /);
+    expect(note).not.toMatch(/<Link\b|<a\b/);
+    expect(note).not.toMatch(/tone=|warning|amber/);
+  });
+
   // Item 3: on a phone the crumb is one back link with no slash before it.
   it('draws no slash before the one crumb a phone shows', () => {
     const nav = code('app/ui/navigation.css');

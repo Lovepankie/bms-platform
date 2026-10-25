@@ -171,10 +171,16 @@ describe('a credit note on screen', () => {
   });
 });
 
-describe('the settings warning', () => {
-  it('says so while returns are on and no approval limit is set, and stays quiet otherwise', () => {
+describe('the settings note', () => {
+  it('says so in one neutral Hint line while returns are on and no approval limit is set, and stays quiet otherwise', () => {
     const { unmount } = render(<ReturnsThresholdWarning capabilities={{ returns: true } as never} />);
-    expect(screen.getByTestId('returns-no-threshold').textContent).toMatch(/no approval limit/i);
+    const note = screen.getByTestId('returns-no-threshold');
+    expect(note.textContent).toMatch(/^Returns need no second administrator yet\. /);
+    expect(note.textContent).toMatch(/no approval limit/i);
+    expect(note.getAttribute('role')).toBe('note');
+    // No screen sets the limit yet, so the note offers no link that would lead nowhere.
+    expect(note.querySelector('a')).toBeNull();
+    expect(note.querySelector('.alert, .alert-warning')).toBeNull();
     unmount();
     render(<ReturnsThresholdWarning capabilities={{ returns: true, returns_approval_threshold_minor: 500 } as never} />);
     expect(screen.queryByTestId('returns-no-threshold')).toBeNull();

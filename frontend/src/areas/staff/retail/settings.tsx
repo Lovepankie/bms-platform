@@ -127,16 +127,21 @@ function Editor({ read, onSaved, onEdit }: { read: CapabilitiesRead; onSaved: ()
 
 /**
  * While customer returns are on and the business has set no approval threshold for them, one administrator can refund cash up to
- * the whole of a sale with no second person. That is the default on purpose (the system invents no amount), so it is said here.
+ * the whole of a sale with no second person. That is the default on purpose (the system invents no amount), so it is said here, as
+ * one neutral Hint line (issue #575: no status colour on a normal screen); the full explanation is behind the Hint's info button.
+ * No screen sets the limit yet (the approval limits screen is #343), so the Hint offers no link: a link that leads to no field
+ * would promise an action it cannot keep. Add the link when #343 ships.
  */
 export function ReturnsThresholdWarning({ capabilities }: { capabilities: CapabilitiesRead['capabilities'] }) {
   if (capabilities.returns !== true || (capabilities.returns_approval_threshold_minor ?? 0) > 0) return null;
   return (
-    <p role="note" className="alert alert-warning" data-testid="returns-no-threshold">
-      Customer returns have no approval limit. Any administrator can refund up to the whole of a sale, and void a return, with no second person. To ask for a second
-      administrator above an amount, set the approval limit for customer returns in the business settings. The limit counts the returns of one sale
-      together, not a person's returns across sales, so many small returns on different sales still need no second administrator.
-    </p>
+    <div role="note" data-testid="returns-no-threshold">
+      <Hint>
+        Returns need no second administrator yet. With no approval limit, any administrator can refund up to the whole of a sale, and void
+        a return, alone. The limit counts the returns of one sale together, not a person&apos;s returns across sales, so many small returns
+        on different sales still need no second administrator.
+      </Hint>
+    </div>
   );
 }
 

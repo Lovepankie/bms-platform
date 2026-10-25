@@ -245,6 +245,19 @@ Later changes to the unit files arrive in `/opt/bms/systemd/` with each release;
 `/etc/systemd/system/` and `systemctl daemon-reload` when a release changes them (`bms-pull.service`
 now logs a notice when the shipped units differ from the installed ones, ADR-018 finding L2).
 
+**Cron is an accepted way to run the timer jobs (issue #580).** The nightly backup always runs from the
+`bms` user's crontab (01:15, section 8.5). The weekly restore drill may run from the timer or from that
+crontab (Sunday 03:30); the staging host uses cron for both, and nothing on the host needs to change.
+The puller's unit check accepts this: a unit that is not installed at all, whose service's `ExecStart`
+script a line of the `bms` user's crontab runs (a commented-out line does not count), is not named in the
+log. An installed unit that differs from the shipped one is always named. Do not run a job both ways: if
+you later install `bms-restore-drill.timer`, remove its cron line in the same change.
+
+The puller keeps the images of the live and previous release and every image a container uses, running
+or stopped, and removes the other release images. Under ADR-083 the proxy keeps an older release's image
+while its caddy binary and Caddyfiles are unchanged, so that image stays until the proxy is recreated;
+Docker never has to refuse a removal (`deploy/tests/cleanup-test.sh`).
+
 ### 8.5 First deploy and checks
 
 If the hosted runners are unavailable (for example the organisation's private-repo minutes are used up),
@@ -278,4 +291,9 @@ crontab -u bms -e
 ```
 
 Run `/opt/bms/backup.sh` once as `bms` and confirm the file appears in R2 under `staging/`. Then install
-`bms-monitor.timer` and `bms-restore-drill.timer` (`docs/runbooks/monitoring-and-alerts.md` section 2).
+`bms-monitor.timer` and `bms-restore-drill.timer` (`docs/runbooks/monitoring-and-alerts.md` section 2), or
+run the drill from the same crontab instead of its timer (section 8.4 says why both are accepted):
+
+```bash
+30 3 * * 0 /opt/bms/restore-drill.sh >> /opt/bms/state/restore-drill.log 2>&1
+```

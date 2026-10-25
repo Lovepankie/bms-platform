@@ -54,6 +54,8 @@ systemctl list-timers 'bms-*'
 ```
 
 On production, remove the old drill line from the deploy user's crontab if one was added by hand; keep the `backup.sh` cron line.
+On staging the drill may run from the `bms` user's crontab (Sunday 03:30) instead of its timer; the puller accepts either
+(`provision-host.md` section 8.4, issue #580). Never both.
 
 Add to `/opt/bms/.env` (all optional except the Telegram pair):
 

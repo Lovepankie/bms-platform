@@ -137,6 +137,9 @@ jobs:
         run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo koalaman/shellcheck:v0.10.0 -x deploy/*.sh deploy/tests/*.sh deploy/postgres/initdb/*.sh
       - name: Host script tests
         run: bash deploy/tests/monitor-test.sh
+      - name: Staging image clean-up and unit check
+        # Issue #580: pull-staging.sh keeps every image a container uses and accepts the drill from cron.
+        run: bash deploy/tests/cleanup-test.sh
       - name: Web files of the previous build survive a deploy
         # ADR-078, issue #525: three small web builds through deploy.sh's switch and both compose files.
         run: bash deploy/tests/keep-assets-test.sh
