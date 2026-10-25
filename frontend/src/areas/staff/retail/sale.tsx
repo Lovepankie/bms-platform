@@ -28,7 +28,7 @@ import { ChangePanel, ReceiptChange } from './sale-change';
 import { receivedFor, receivedProblem } from './sale-change-state';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
-import { useToast } from './toast';
+import { addedMessage, useToast } from './toast';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
 import { Hint } from '../../../app/ui/Hint';
@@ -304,7 +304,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     lines.current = next;
     setDraft((d) => ({ ...d, lines: next }));
     mark(next.length - 1, true);
-    show(`Added ${p.description}`, 'success');
+    show(addedMessage(p.description, next[next.length - 1]?.qty), 'success');
   };
   // A scan (issue #345) adds the item at 1, or one more to its line in the pack the barcode is on; a pack it cannot
   // use is refused, never sold as one piece: ScanBar shows the refusal as a warning and no toast is raised.
@@ -317,7 +317,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     lines.current = next;
     setDraft((d) => ({ ...d, lines: next }));
     if (index >= 0) mark(index, created);
-    show(created ? `Added ${p.description}` : `One more ${p.description}`, 'success');
+    // Issue #498: the toast says the line's quantity now, and a screen reader hears the same through the toast's live region.
+    show(addedMessage(p.description, next[index]?.qty), 'success');
   };
 
   const total = draftTotal(shown.lines);
@@ -382,7 +383,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       <div data-tour="sale-search">
         {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />}
       </div>
-      <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} autoFocus />
+      <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} autoFocus toasts />
 
       <h2>
         Items{' '}

@@ -112,7 +112,7 @@ describe('FR-RET-68 scanning on the sale form', () => {
     await retail.addBarcode(LAMP, { code: EAN });
     screenOf(<SaleForm branchId={BRANCH} />);
     scan(EAN);
-    await waitFor(() => expect(screen.getByText('Added LED bulb 9W screw.')).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('.toast')?.textContent).toBe('Added LED bulb 9W screw, now 1'));
     expect(qtyOf(0)).toBe('1');
     expect(document.querySelector('.toast')?.className).toBe('toast toast-success');
     const badge = document.querySelector('.count-badge');
@@ -234,7 +234,7 @@ describe('FR-RET-68 scanning on the stock count', () => {
     await screen.findByText(EMPTY_COUNT);
     fireEvent.change(search, { target: { value: 'solar' } });
     scan(EAN);
-    await waitFor(() => expect(document.querySelector('.scan-bar')?.textContent).toContain('Added'));
+    await waitFor(() => expect(document.querySelector('.toast')?.textContent).toBe('Added LED bulb 9W screw, now 1'));
     await waitFor(() => expect((document.getElementById(`count-${LAMP}`) as HTMLInputElement | null)?.value).toBe('1'));
     expect((search as HTMLInputElement).value).toBe('');
   });
@@ -314,7 +314,7 @@ describe('FR-RET-68 the Scan box', () => {
     expect(lookUp).toHaveBeenCalledTimes(2);
     expect(lookUp).toHaveBeenLastCalledWith(EAN, BRANCH);
     expect(screen.queryByRole('button', { name: 'Fake camera read' })).toBeNull();
-    expect(screen.getByText('Added LED bulb 9W screw.')).toBeTruthy();
+    expect(document.querySelector('.toast')?.textContent).toBe('Added LED bulb 9W screw, now 2');
   });
 
   it.each([

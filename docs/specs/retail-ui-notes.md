@@ -1395,8 +1395,17 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
   anywhere else: with the cursor in a quantity, price or count field, whatever is typed stays in that field and Enter submits the
   form as usual (a scan made there types the code into the field, as any typing would). There is no scanner setting in
   Notifications and app. A found item is added at 1 or its line gains one, in the pack the barcode is on (the sale and the restock,
-  with pack sizes on); on the stock count it adds one to the count, or the pack factor, and clears the search so the counted line shows, marked with an outline and scrolled into view; an item not on the branch's count sheet is refused with "<item> is not on the count sheet of this branch." "Added <item>." is read out politely, with a
-  short beep and buzz where the device allows. On the restock the quantity goes to the branch chosen at the top; with none chosen a scan says "Choose the branch at the top of the page first".
+  with pack sizes on); on the stock count it adds one to the count, or the pack factor, and clears the search so the counted line shows, marked with an outline and scrolled into view; an item not on the branch's count sheet is refused with "<item> is not on the count sheet of this branch." On goods received the Scan box itself says "Added <item>." politely; on the
+  sale, restock, move stock and stock count forms the form's dark toast says it instead (issue #498, below), so it is heard once. A
+  scan gives a short beep and buzz where the device allows. On the restock the quantity goes to the branch chosen at the top; with none chosen a scan says "Choose the branch at the top of the page first".
+- **Item added (issue #498, Hillary, 23 Oct 2026).** On Sell, Buy stock, Move stock and Count stock every add, picked from the
+  search, scanned, or a new item made on the form, raises the dark toast (`useItemAdded` in `toast.tsx`, 2.5 seconds) with the
+  quantity the line now has: "Added <item>, now 3" (the count on Count stock, the quantity at the chosen branch on Buy stock). A line
+  with no quantity yet (a pick on Buy stock, an uncounted item picked on Count stock) says "Added <item>. Type how many." The line
+  added or topped up flashes once (`.line-added`, a tint fading over 1.2s on `--ease-out`; under reduced motion a still tint that goes
+  in one step), and a phone that can buzzes for 10ms. The toast is the live region a screen reader hears. An item already on the
+  purchase or the move, picked again, gets an info toast ("<item> is already on the purchase. Change its quantity below.") with no
+  flash, as on the sale.
 - **Unknown code:** "No item has the barcode <code>." An administrator gets **Add this barcode to a product**: the item search
   opens, Choose puts the barcode on that item and adds it to the form. For a code that looks like spreadsheet damage (all digits of
   6, 7, 9, 10, 11 or 14, such as a GTIN-14 or a UPC-E) the search shows "This code is exactly as printed (Code 128)", as the item
@@ -1420,7 +1429,7 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
   row's `barcode format` is `code128`; on the item form the same code offers "This code is exactly as printed (Code 128)".
 - Tours: a **Scan here** step on the Scan box in `retail-sales` (version 15, from version 14's Scan step), `page-sale` (version 3),
   `page-restock` (version 2), `page-transfer` (version 2) and `page-stocktake` (version 2); `page-labels` version 1.
-- Tests: `barcode-state.test.ts`, `scan.dom.test.tsx` (the Scan box; 1256 typed fast into a quantity, price or count field stays
+- Tests: `barcode-state.test.ts`, `scan.dom.test.tsx`, `item-added.dom.test.tsx` (#498) (the Scan box; 1256 typed fast into a quantity, price or count field stays
   there, submits normally and is never looked up), `camera-scan.test.ts`; backend `BarcodesTest`, `RetailBarcodesIT`.
 
 ## Shop Home summary cards (issue #485, ADR-076, FR-UXN-06)

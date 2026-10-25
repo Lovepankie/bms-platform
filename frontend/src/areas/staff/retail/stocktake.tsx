@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -16,6 +16,7 @@ import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
+import { useItemAdded } from './toast';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -82,6 +83,19 @@ function CountSheet({ branchId }: { branchId: string }) {
   const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   const [counts, setCounts] = useState<Record<string, string>>({});
+  // Every pick, scan or new item says so (issue #498): a short toast with the count it now has, and the line flashes once.
+  // The counts as of the last add are kept, as on the sale, so a scan answered after a render sees the latest.
+  const { added, flashOf, toast } = useItemAdded();
+  const current = useRef(counts);
+  current.current = counts;
+  /** Adds `milli` to the item's count and says so. */
+  const countUp = (p: Pick<Product, 'id' | 'description'>, milli: number) => {
+    const id = p.id ?? '';
+    const now = plusOne(current.current[id], milli);
+    current.current = { ...current.current, [id]: now };
+    setCounts((c) => ({ ...c, [id]: now }));
+    added(id, p.description, now);
+  };
   const [draft, setDraft] = useState<Stocktake | null>(null);
   // The line the last scan counted, marked so the counter sees which one went up; the cursor stays in the Scan box.
   const [scanned, setScanned] = useState<string | null>(null);
@@ -114,7 +128,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       return `${product.description ?? 'The item'} is saved, but it is not on the count sheet of this branch${sheet.isError ? ', which could not be read again' : ''}. Find it in the search to count it, or count it at its own branch.`;
     }
     list(id);
-    setCounts((c) => ({ ...c, [id]: plusOne(c[id], parseCount(qty) ?? 0) }));
+    countUp(product, parseCount(qty) ?? 0);
     setDone((d) => (d.includes(id) ? d : [...d, id]));
     setScanned(id);
   };
@@ -128,7 +142,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     const pack = unitsOn ? chosenPack(p, unitId) : undefined;
     if (unitId && !pack) return PACK_UNUSABLE;
     search.clear();
-    setCounts((c) => ({ ...c, [id]: plusOne(c[id], pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000) }));
+    countUp(p, pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000);
     setDone((d) => (d.includes(id) ? d : [...d, id]));
     setScanned(id);
     return undefined;
@@ -180,8 +194,9 @@ function CountSheet({ branchId }: { branchId: string }) {
   const line = (r: StockRow, waiting: boolean) => {
     const id = r.product_id ?? '';
     return (
-      <div key={id} className={id === scanned ? 'rt-card scan-hit' : 'rt-card'} data-testid={id === scanned ? 'scan-hit' : undefined}
+      <div key={id} className={id === scanned ? 'rt-card line-card scan-hit' : 'rt-card line-card'} data-testid={id === scanned ? 'scan-hit' : undefined}
         ref={id === scanned ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}>
+        {flashOf(id)}
         <label htmlFor={`count-${id}`}>{r.description} ({r.unit})</label>
         <CategoryLabel category={r.category} />
         <div className="count-entry">
@@ -215,7 +230,7 @@ function CountSheet({ branchId }: { branchId: string }) {
           search={search}
           results={found}
           optionKey={(r) => r.product_id ?? ''}
-          onPick={(r) => { list(r.product_id ?? ''); setScanned(r.product_id ?? ''); setFocusOn((f) => ({ id: r.product_id ?? '', pick: (f?.pick ?? 0) + 1 })); }}
+          onPick={(r) => { list(r.product_id ?? ''); added(r.product_id ?? '', r.description, current.current[r.product_id ?? '']); setScanned(r.product_id ?? ''); setFocusOn((f) => ({ id: r.product_id ?? '', pick: (f?.pick ?? 0) + 1 })); }}
           renderOption={(r) => (
             <>
               <span className="cb-text">
@@ -228,7 +243,7 @@ function CountSheet({ branchId }: { branchId: string }) {
         />
       </div>
       <NewItemHere id="count-new" counting askCost={profit} qtyLabel="How many you counted" onAdded={addNew} />
-      <ScanBar id="count-scan" branchId={branchId} onFound={scanAdd} autoFocus />
+      <ScanBar id="count-scan" branchId={branchId} onFound={scanAdd} autoFocus toasts />
       {stock.isPending && <SkeletonList label="Loading stock" />}
       <Problem error={stock.error} />
       {stock.data && (
@@ -255,6 +270,7 @@ function CountSheet({ branchId }: { branchId: string }) {
       <BusyButton type="button" className="rt-primary" busy={review.isPending} notReady={entered.length === 0 || bad} onClick={finish} data-tour="count-review">
         {`Review the difference (${entered.length} counted)`}
       </BusyButton>
+      {toast}
 
     </>
   );

@@ -61,9 +61,10 @@ type Outcome = { kind: 'added'; name: string } | { kind: 'refused'; message: str
 /**
  * The Scan box and the camera button over a form's lines. `onFound` gets the item, with its balance at `branchId` when
  * given, and the pack the barcode is on (absent for the item's own unit); it returns a message instead when the form
- * cannot take the scan (a pack it cannot use, an item not on the sheet), shown in place of Added.
+ * cannot take the scan (a pack it cannot use, an item not on the sheet), shown in place of Added. A form that raises its own
+ * toast for the add (`toasts`, issue #498) says Added there, so it is seen and heard once, with the quantity the line now has.
  */
-export function ScanBar({ id, branchId, onFound, autoFocus = false }: { id: string; branchId?: string; onFound: (product: Product, unitId?: string) => string | void; autoFocus?: boolean }) {
+export function ScanBar({ id, branchId, onFound, autoFocus = false, toasts = false }: { id: string; branchId?: string; onFound: (product: Product, unitId?: string) => string | void; autoFocus?: boolean; toasts?: boolean }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const offline = useOffline();
@@ -185,7 +186,7 @@ export function ScanBar({ id, branchId, onFound, autoFocus = false }: { id: stri
       <p id={`${id}-hint`} className="hint">A barcode scanner types into this box. You can also type the barcode and press Enter.</p>
       {!cameraSupported() && insecureAddress() && <p className="hint">The camera works only on the secure (https) address.</p>}
       <p aria-live="polite" className="hint">
-        {busy ? 'Looking up' : outcome?.kind === 'added' ? `Added ${outcome.name}.` : ''}
+        {busy ? 'Looking up' : outcome?.kind === 'added' && !toasts ? `Added ${outcome.name}.` : ''}
       </p>
       {outcome?.kind === 'unknown' && (
         <div role="alert" className="alert alert-warning" data-testid="scan-unknown">

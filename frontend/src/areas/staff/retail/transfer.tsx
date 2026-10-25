@@ -13,6 +13,7 @@ import { TRANSFER, TRANSFER_RECEIPT, UNITS, capabilityOn, holdsAt, needsOf } fro
 import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
+import { useItemAdded } from './toast';
 import { chosenPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
@@ -62,8 +63,23 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
     },
   });
   const update = (patch: Partial<TransferDraft>) => setDraft((d) => ({ ...d, ...patch }));
-  const add = (p: Product) =>
-    setDraft((d) => (d.lines.some((l) => l.product.id === p.id) ? d : { ...d, lines: [...d.lines, { product: p, qty: '1' }] }));
+  // Every add says so (issue #498): a short toast with the quantity to move, and the line flashes once. The lines as of the
+  // last add are kept, as on the sale, so a scan answered after a render, or two before one, sees the latest.
+  const { added, already, flashOf, toast } = useItemAdded();
+  const current = useRef(draft.lines);
+  current.current = draft.lines;
+  const land = (p: Product, next: TransferDraft['lines']) => {
+    current.current = next;
+    setDraft((d) => ({ ...d, lines: next }));
+    added(p.id ?? '', p.description, next.find((l) => l.product.id === p.id)?.qty);
+  };
+  const add = (p: Product) => {
+    if (current.current.some((l) => l.product.id === p.id)) {
+      already(`${p.description} is already on the move. Change its quantity below.`);
+      return;
+    }
+    land(p, [...current.current, { product: p, qty: '1' }]);
+  };
   // A scan (issue #345): the item at 1, or one more on its line; a move is counted in the item's own unit, so a barcode
   // on a pack adds the pack's factor (a carton of 12 adds 12). A pack it cannot use is refused, never moved as one piece.
   const unitsOn = capabilityOn(me, 'retail', UNITS);
@@ -71,7 +87,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
     const pack = unitsOn ? chosenPack(p, unitId) : undefined;
     if (unitId && !pack) return PACK_UNUSABLE;
     const step = pack ? (parseQty(pack.factor ?? '') ?? 1000) : 1000;
-    setDraft((d) => ({ ...d, lines: scanInto(d.lines, p, undefined, (l) => ({ ...l, qty: plusOne(l.qty, step) }), () => ({ product: p, qty: plusOne('', step) })) }));
+    land(p, scanInto(current.current, p, undefined, (l) => ({ ...l, qty: plusOne(l.qty, step) }), () => ({ product: p, qty: plusOne('', step) })));
     return undefined;
   };
   // Memoised so the prefill effect below does not run again on every render.
@@ -114,14 +130,15 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       <div data-tour="transfer-search">
       <ProductPicker id="transfer-search" branchId={fromBranchId} onAdd={add} />
       </div>
-      <ScanBar id="transfer-scan" branchId={fromBranchId} onFound={scanAdd} autoFocus />
+      <ScanBar id="transfer-scan" branchId={fromBranchId} onFound={scanAdd} autoFocus toasts />
 
       <h2 data-tour="transfer-items">Items to move</h2>
       {draft.lines.length === 0 && <p>No items yet. Type an item above and tap it in the list, or scan it.</p>}
       {draft.lines.map((l, i) => {
         const hint = transferLineHint(l);
         return (
-          <div key={l.product.id} className="rt-card">
+          <div key={l.product.id} className="rt-card line-card">
+            {flashOf(l.product.id ?? '')}
             <strong>{l.product.description}</strong>
             <label htmlFor={`tq-${i}`}>Quantity ({l.product.unit})</label>
             <input id={`tq-${i}`} inputMode="decimal" value={l.qty} aria-invalid={hint !== null}
@@ -148,6 +165,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       {(draft.lines.length > 0 || draft.toBranchId !== '') && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this form</button>
       )}
+      {toast}
     </form>
   );
 }

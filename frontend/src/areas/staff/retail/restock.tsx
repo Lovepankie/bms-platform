@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute, useRouterState } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { RETAIL_CURRENCY, businessToday, retail, type Product, type Supplier, type Purchase, type PurchasePayment, type PurchaseRequest } from '../../../api/retail';
 import { branchLabel } from '../../../auth/branch';
 import { parseMinor } from '../../../components/money';
@@ -10,7 +10,8 @@ import { lineTotalMinor, parseQty, qtyString, showDate, showQty } from './maths'
 import { chosenUnitHint, redraftOf } from './restock-correct-state';
 import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } from './ui';
 import { ScanBar } from './scan';
-import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
+import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
+import { useItemAdded } from './toast';
 import { UNITS, capabilityOn } from './permissions';
 import { activePacks, baseCostMinor, baseQtyMilli, chosenPack, deliveredFactor, packPriceMinor, sameFactor } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
@@ -196,15 +197,32 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const here = branch && branches.some((b) => b.id === branch) ? branch : undefined;
   /** A new line of the item at its current prices, with the quantity at this branch. */
   const lineOf = (p: Product, qty: string): RestockLine => ({ product: p, cost: p.cost_minor !== undefined ? String(p.cost_minor) : '', sell: p.sell_minor !== undefined ? String(p.sell_minor) : '', qtyByBranch: here ? { [here]: qty } : {} });
-  const add = (p: Product) =>
-    setLines((ls) => (ls.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0) ? ls : [...ls, lineOf(p, '')]));
+  // Every add says so (issue #498): a short toast with the quantity at this branch, and the line flashes once.
+  const { added, already, flashOf, toast } = useItemAdded();
+  // The lines as of the last add, as on the sale: a scan answered after a render, or two before one, sees the latest.
+  const current = useRef(lines);
+  current.current = lines;
+  /** Puts the new lines on the draft and says which line changed and what it now holds here. */
+  const land = (p: Product, next: RestockLine[]) => {
+    const { index } = touchedLine(current.current, next);
+    current.current = next;
+    setLines(() => next);
+    if (index >= 0) added(String(index), p.description, here ? next[index]?.qtyByBranch[here] : undefined);
+  };
+  const add = (p: Product) => {
+    if (current.current.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0)) {
+      already(`${p.description} is already on the purchase. Change its quantity below.`);
+      return;
+    }
+    land(p, [...current.current, lineOf(p, '')]);
+  };
   const scanAdd = (p: Product, unitId?: string) => {
     const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
     if (unitId && !unit) return PACK_UNUSABLE;
     // Without a stocking branch chosen at the top, the scanned quantity would go nowhere.
     if (!here) return 'Choose the branch at the top of the page first, so the scanned item is counted there.';
     const fresh = lineOf(p, '1');
-    setLines((ls) => scanInto(ls, p, unit, (l) => ({ ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } }), () => (unit ? withUnit(fresh, unit) : fresh)));
+    land(p, scanInto(current.current, p, unit, (l) => ({ ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here]) } }), () => (unit ? withUnit(fresh, unit) : fresh)));
     return undefined;
   };
   // Issue #505: an item added here goes on the purchase with what was typed for it and its quantity at this branch. An item already
@@ -212,7 +230,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const addNew = ({ product, qty, cost, sell }: AddedItem) => {
     const milli = qty ? parseQty(qty) : null;
     const fresh = { ...lineOf(product, qty), ...(cost ? { cost } : {}), ...(sell !== undefined ? { sell } : {}) };
-    setLines((ls) => scanInto(ls, product, undefined, (l) => (here && milli ? { ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here], milli) } } : l), () => fresh));
+    land(product, scanInto(current.current, product, undefined, (l) => (here && milli ? { ...l, qtyByBranch: { ...l.qtyByBranch, [here]: plusOne(l.qtyByBranch[here], milli) } } : l), () => fresh));
   };
   const hereBranch = branches.find((b) => b.id === here);
   const patch = (i: number, change: Partial<RestockLine>) => setLines((ls) => ls.map((l, n) => (n === i ? { ...l, ...change } : l)));
@@ -254,7 +272,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       <ProductPicker id="restock-search" showStock={false} onAdd={add} />
       </div>
       <NewItemHere id="restock-new" askCost qtyLabel={hereBranch ? `Quantity bought (${branchLabel(hereBranch)})` : undefined} onAdded={addNew} />
-      <ScanBar id="restock-scan" onFound={scanAdd} autoFocus />
+      <ScanBar id="restock-scan" onFound={scanAdd} autoFocus toasts />
 
       <h2>Items</h2>
       {lines.length === 0 && <p className="empty-state">No items yet. Type an item above and tap it in the list, or scan it.</p>}
@@ -268,7 +286,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
         const newCost = enteredCost !== null && pack ? (factor ? baseCostMinor(enteredCost, factor) : null) : enteredCost;
         const sizeDiffers = pack !== undefined && factor !== null && factor !== undefined && !sameFactor(factor, pack.factor);
         return (
-          <div key={`${l.product.id}-${i}`} className="rt-card">
+          <div key={`${l.product.id}-${i}`} className="rt-card line-card">
+            {flashOf(String(i))}
             <strong>{l.product.description}</strong>
             {packs.length > 0 && (
               <div>
@@ -345,6 +364,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       {lines.length > 0 && !save.isPending && (
         <button type="button" onClick={() => { discard(); save.reset(); }}>Clear this purchase</button>
       )}
+      {toast}
     </form>
   );
 }

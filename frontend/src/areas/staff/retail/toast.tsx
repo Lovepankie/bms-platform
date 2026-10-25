@@ -51,3 +51,36 @@ export function useToast(ms: number = TOAST_MS, silent = false): { show: (messag
   );
   return { show, toast: shown ? <Toast message={shown.message} tone={shown.tone} silent={silent} /> : null };
 }
+
+/** What the toast says when an item goes on a form's lines (issue #498): the quantity it now has, or that one is still to type. */
+export function addedMessage(name: string | undefined, qty?: string): string {
+  const what = name || 'the item';
+  return qty && qty.trim() !== '' ? `Added ${what}, now ${qty.trim()}` : `Added ${what}. Type how many.`;
+}
+
+/**
+ * Every add on Buy stock, Move stock and Count stock says so, as the sale does (issue #498): the toast above, raised for a
+ * pick from the search and for a scan alike, and the line added or topped up flashes once (`.line-added` of
+ * app/ui/feedback.css, still under reduced motion). `flashOf(key)` is rendered inside the line's card; `n` changes on every
+ * add, so a second scan of the same item flashes again, and the flash unmounts when it has run.
+ */
+export function useItemAdded(): {
+  added: (key: string, name: string | undefined, qty?: string) => void;
+  already: (message: string) => void;
+  flashOf: (key: string) => ReactNode;
+  toast: ReactNode;
+} {
+  const { show, toast } = useToast(2500);
+  const [flash, setFlash] = useState<{ key: string; n: number } | null>(null);
+  const added = useCallback(
+    (key: string, name: string | undefined, qty?: string) => {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10);
+      setFlash((f) => ({ key, n: (f?.n ?? 0) + 1 }));
+      show(addedMessage(name, qty), 'success');
+    },
+    [show],
+  );
+  const already = useCallback((message: string) => show(message, 'info'), [show]);
+  const flashOf = (key: string) => (flash?.key === key ? <span key={flash.n} className="line-added" aria-hidden="true" data-testid="line-added" onAnimationEnd={() => setFlash(null)} /> : null);
+  return { added, already, flashOf, toast };
+}

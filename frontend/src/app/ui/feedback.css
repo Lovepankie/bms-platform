@@ -433,15 +433,19 @@
   cursor: pointer;
 }
 
-/* A line just added to a sale flashes once, so the eye finds it (Hillary, 23 Oct 2026). The flash is its own element,
-   keyed by the add, so a repeat scan flashes again and the card never keeps a marker. */
+/* A line just added to a sale, a purchase, a move or a count flashes once, so the eye finds it (Hillary, 23 Oct 2026; #498).
+   The flash is its own element, keyed by the add, so a repeat scan flashes again and the card never keeps a marker. It sits
+   behind the line's words and fields (the card isolates it, so it paints over the card's own background only), so the new
+   quantity reads at full contrast while it fades. */
 .line-card {
   position: relative;
+  isolation: isolate;
 }
 
 .line-added {
   position: absolute;
   inset: 0;
+  z-index: -1;
   border-radius: inherit;
   background: var(--color-success-tint);
   pointer-events: none;
