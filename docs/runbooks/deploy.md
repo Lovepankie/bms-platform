@@ -96,6 +96,13 @@ Caddyfiles. Lines to know:
 The CI test `deploy/tests/no-gap-test.sh` drives the same switch on both compose files under GET
 and POST traffic and fails on any answer that is not 200 within 3 seconds.
 
+**postgres is not restarted by a deploy.** Before #587 every staging deploy recreated postgres: its `initdb` bind
+mount pointed into `releases/<tag>/`, so the path (and the service's config hash) changed with each release. It now mounts
+the host's fixed `/opt/bms/postgres/initdb` (`BMS_HOST_ROOT`, default `/opt/bms`), which `pull-staging.sh` seeds on a new
+host (or when the folder is empty) and refreshes in place after each good deploy; `deploy.sh` gets the same root as
+`BMS_HOST_ROOT`. The first deploy after #587 still recreates postgres once, because the mount path changes that one time. A `Container bms-postgres-1 Recreate` line in the deploy log now means the
+postgres image or its settings really changed; check `POSTGRES_IMAGE` in `.env` and the postgres block of the compose file.
+
 ## Old apps update by themselves; forcing it (ADR-088)
 
 Every API answer carries `Bms-Build` (the `git_sha` of `/version`). A phone whose app is another

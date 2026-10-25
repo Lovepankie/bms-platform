@@ -54,6 +54,19 @@ write_state() {
 # run from this user's crontab instead (the restore drill, Sunday 03:30, as docs/runbooks/provision-host.md section 8.5
 # allows), so a unit that is not installed at all, whose service's ExecStart script a crontab line runs, is the installed
 # way and is not named. deploy/tests/cleanup-test.sh runs this function with a stub crontab.
+# Copies a release's postgres/initdb into the host's fixed $ROOT/postgres/initdb, the folder compose mounts into
+# postgres. It updates the folder in place (never removes and re-creates it) so the mount keeps pointing at it,
+# drops files the release no longer has, and leaves everything readable by the postgres uid despite UMask=0077.
+sync_initdb() {
+    local from="$1/postgres/initdb" to="$ROOT/postgres/initdb" f
+    mkdir -p "$to"
+    for f in "$to"/* "$to"/.[!.]*; do
+        [[ -e "$f" && ! -e "$from/$(basename "$f")" ]] && rm -rf "$f"
+    done
+    cp -R "$from/." "$to/"
+    chmod -R a+rX "$ROOT/postgres"
+}
+
 unit_drift_notices() {
     local units="$1" installed="$2" jobs unit name script
     jobs="$(crontab -l 2>/dev/null | grep -v '^[[:space:]]*#' || true)"
@@ -182,9 +195,16 @@ done
 # The unit runs with UMask=0077, but the postgres container (another uid) must read initdb/ and sql/.
 # Both hold no secrets, only scripts and SQL.
 chmod -R a+rX "$release_dir/postgres" "$release_dir/sql"
+# postgres mounts the host's fixed postgres/initdb (compose.pi-staging.yml), which is refreshed only after a deploy
+# succeeds. On a new host it is missing, or empty when a compose command ran first (Docker creates a missing bind
+# source as an empty folder), so seed it from this release before the first deploy. The seed comes from a release
+# that has not deployed yet; if that deploy fails the seed stays until the next good deploy refreshes it.
+if [[ -z "$(ls -A "$ROOT/postgres/initdb" 2> /dev/null)" ]]; then
+    sync_initdb "$release_dir"
+fi
 
 status=0
-DOCKER_CONFIG="$ROOT/dockercfg" BMS_STATE_DIR="$ROOT/state" BMS_COSIGN_PUBKEY="$ROOT/cosign.pub" BMS_ENV_FILE="$ROOT/.env" \
+BMS_HOST_ROOT="$ROOT" DOCKER_CONFIG="$ROOT/dockercfg" BMS_STATE_DIR="$ROOT/state" BMS_COSIGN_PUBKEY="$ROOT/cosign.pub" BMS_ENV_FILE="$ROOT/.env" \
     BMS_EDGE_SERVICES="cloudflared" \
     "$release_dir/deploy.sh" "$tag" || status=$?
 case "$status" in
@@ -198,9 +218,12 @@ case "$status" in
         for script in deploy.sh backup.sh restore-drill.sh monitor.sh pull-staging.sh; do
             install -m 755 "$release_dir/$script" "$script.new" && mv -f "$script.new" "$script"
         done
-        for dir in postgres sql systemd; do
+        for dir in sql systemd; do
             rm -rf "$dir" && cp -R "$release_dir/$dir" "$dir"
         done
+        # postgres/initdb is bind-mounted into the running postgres, so it is updated in place, never removed.
+        rm -rf postgres/recommended && mkdir -p postgres && cp -R "$release_dir/postgres/recommended" postgres/recommended
+        sync_initdb "$release_dir"
         # ADR-018 finding L2: this user has no privilege to install unit files itself, so at least
         # make drift visible in this job's own log instead of silent (docs/runbooks/provision-host.md
         # section 8.4 still requires a human to copy a changed unit and run daemon-reload).

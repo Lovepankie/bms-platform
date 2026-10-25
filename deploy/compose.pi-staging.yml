@@ -93,7 +93,11 @@ services:
     cpus: 1.0
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+      # The host's fixed copy, not this release's own (releases/<tag>/postgres/initdb): a bind source that changes with
+      # every release changes the service's config hash, so Compose recreated (restarted) postgres on every deploy.
+      # An absolute path, so deploy.sh (run from releases/<tag>/) and the top-level compose.yml mount the same folder.
+      # initdb only runs on an empty data volume anyway.
+      - ${BMS_HOST_ROOT:-/opt/bms}/postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d bms"]
       interval: 10s

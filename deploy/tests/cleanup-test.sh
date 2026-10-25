@@ -6,6 +6,7 @@
 #   - unit_drift_notices names a unit that differs from the installed copy, but not one left uninstalled because the
 #     bms user's crontab runs its job (the restore drill, Sunday 03:30).
 #   - deploy/systemd/bms.slice cites ADR-083 as merged.
+#   - postgres mounts the host's fixed postgres/initdb, so a deploy never recreates it.
 # Run: bash deploy/tests/cleanup-test.sh
 set -uo pipefail
 
@@ -171,6 +172,41 @@ if grep -q "pending ADR-083" "$HERE/../systemd/bms.slice"; then
     fail "deploy/systemd/bms.slice still says pending ADR-083"
 else
     ok "bms.slice cites ADR-083 as merged"
+fi
+
+# 12. postgres mounts the host's fixed initdb, never a path inside the release: a per-release bind source changes the
+#     service's config hash and made every deploy recreate (restart) postgres.
+mount="$(grep -E '/docker-entrypoint-initdb\.d' "$HERE/../compose.pi-staging.yml")"
+if grep -qE '^\s*-\s*\$\{BMS_HOST_ROOT:-/opt/bms\}/postgres/initdb:' <<< "$mount"; then
+    ok "postgres mounts the host's fixed postgres/initdb"
+else
+    fail "postgres initdb mount is not the host's fixed path: $mount"
+fi
+# Run pull-staging.sh's own sync_initdb against a scratch host: it seeds an empty folder, refreshes in place (the
+# folder postgres has mounted stays the same folder), drops files a release no longer has, and leaves it readable.
+sandbox="$(mktemp -d)"
+eval "$(sed -n '/^sync_initdb() {/,/^}/p' "$HERE/../pull-staging.sh")"
+mkdir -p "$sandbox/rel/postgres/initdb" "$sandbox/host/postgres/initdb"
+echo roles > "$sandbox/rel/postgres/initdb/01-roles.sh"
+inode() { stat -c %i "$1" 2> /dev/null || stat -f %i "$1"; }
+before="$(inode "$sandbox/host/postgres/initdb")"
+touch "$sandbox/host/postgres/initdb/00-stale.sh"
+# shellcheck disable=SC2034 # ROOT is read by the sync_initdb loaded above
+(umask 0077 && ROOT="$sandbox/host" && sync_initdb "$sandbox/rel")
+after="$(inode "$sandbox/host/postgres/initdb")"
+mode="$(stat -c %a "$sandbox/host/postgres/initdb/01-roles.sh" 2> /dev/null || stat -f %Lp "$sandbox/host/postgres/initdb/01-roles.sh")"
+if [[ -f "$sandbox/host/postgres/initdb/01-roles.sh" && ! -e "$sandbox/host/postgres/initdb/00-stale.sh" \
+    && "$before" == "$after" && $(( 8#$mode & 8#004 )) -ne 0 ]]; then
+    ok "sync_initdb seeds and refreshes postgres/initdb in place, readable by postgres"
+else
+    fail "sync_initdb: roles=$(ls "$sandbox/host/postgres/initdb") inode $before->$after mode $mode"
+fi
+rm -rf "$sandbox"
+# shellcheck disable=SC2016 # the literal $ROOT is what the script must contain
+if grep -qF 'BMS_HOST_ROOT="$ROOT" ' "$HERE/../pull-staging.sh"; then
+    ok "deploy.sh gets BMS_HOST_ROOT from the same ROOT the seed uses"
+else
+    fail "pull-staging.sh does not pass BMS_HOST_ROOT=\$ROOT to deploy.sh"
 fi
 
 echo
