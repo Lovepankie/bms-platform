@@ -2,6 +2,9 @@ package com.rincoltech.bms.retail.purchasing.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
+import com.rincoltech.bms.retail.purchasing.internal.OrdersRepository.LineRow;
 import com.rincoltech.bms.retail.purchasing.internal.OrdersRepository.OrderRow;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.util.LinkedHashMap;
@@ -23,11 +26,13 @@ class OrderSending {
     private final OrdersRepository repo;
     private final RetailCapabilities capabilities;
     private final AuditLog audit;
+    private final RetailCatalogue catalogue;
 
-    OrderSending(OrdersRepository repo, RetailCapabilities capabilities, AuditLog audit) {
+    OrderSending(OrdersRepository repo, RetailCapabilities capabilities, AuditLog audit, RetailCatalogue catalogue) {
         this.repo = repo;
         this.capabilities = capabilities;
         this.audit = audit;
+        this.catalogue = catalogue;
     }
 
     /** Executed by the approval: the maker sent it, the checker approved it. The order must still be a draft. */
@@ -38,7 +43,26 @@ class OrderSending {
         markSent(o, makerId, approvalId, checkerId);
     }
 
+    /**
+     * ADR-094 (issue #376): an order is sent only while every item on it is active, as a new order line must be (ADR-045
+     * decision 2). Checked before a checker is asked and again when the approval sends it, since switching an item off
+     * does not move the order's version.
+     */
+    void requireActiveItems(OrderRow o) {
+        for (LineRow l : repo.lines(o.id())) {
+            if (!catalogue.find(l.productId()).map(ProductSnapshot::active).orElse(false)) {
+                throw ApiException.rule(
+                        "product_inactive",
+                        "Item " + l.code() + " is inactive, so this order cannot be sent. Switch it on again on the"
+                                + " Items screen, or take it off the order first.");
+            }
+        }
+    }
+
     void markSent(OrderRow o, UUID by, UUID approvalId, UUID approvedBy) {
+        if (o.status().equals("draft")) {
+            requireActiveItems(o);
+        }
         if (!o.status().equals("draft") || repo.markSent(o.id(), by, approvalId, approvedBy) == 0) {
             throw new ApiException(
                     HttpStatus.CONFLICT,

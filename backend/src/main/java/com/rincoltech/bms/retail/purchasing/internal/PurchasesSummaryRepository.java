@@ -83,9 +83,8 @@ class PurchasesSummaryRepository {
         StringBuilder sql = new StringBuilder("SELECT " + key + " AS grp,");
         sql.append(" count(DISTINCT p.id) FILTER (WHERE " + live + ") AS purchases_count,");
         sql.append(" count(DISTINCT p.id) FILTER (WHERE v.id IS NOT NULL) AS voided_count,");
-        // What the card shows: a line entered in a pack is its pack quantity (rounded to three places, per branch) at
-        // the
-        // pack cost, any other line the base quantity at the cost per base unit.
+        // What the card shows: a line entered in a pack is its pack quantity (rounded to three places, per branch)
+        // at the pack cost, any other line the base quantity at the cost per base unit.
         String value = "CASE WHEN l.unit_id IS NULL THEN round(m.qty * l.cost_minor)"
                 + " ELSE round(round(m.qty / l.unit_factor, 3) * l.unit_cost_minor) END";
         sql.append(

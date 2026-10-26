@@ -1184,9 +1184,13 @@ export function createMockRetail(): RetailApi {
         items: purchases
           .filter((p) => (!from || (p.purchased_on ?? '') >= from) && (!to || (p.purchased_on ?? '') <= to) && (!status || p.status === status)
             && (!supplierId || (p.supplier_id ?? NO_SUPPLIER) === supplierId)
-            && (!branchId || (p.lines ?? []).some((l) => (l.qty_by_branch ?? []).some((b) => b.branch_id === branchId)))
-            && (!productId || (p.lines ?? []).some((l) => l.product_id === productId))
-            && (!category || (p.lines ?? []).some((l) => categoryId(products.get(l.product_id ?? '')?.category ?? '') === category)))
+            // One line must match the branch, the item and the category together, as the server's movement row does (#372).
+            && (!(branchId || productId || category) || (p.lines ?? []).some((l) => {
+              const product = products.get(l.product_id ?? '');
+              return (!branchId || (l.qty_by_branch ?? []).some((b) => b.branch_id === branchId))
+                && (!productId || l.product_id === productId || product?.familyId === productId)
+                && (!category || categoryId(product?.category ?? '') === category);
+            })))
           .map(({ before: _before, ...p }) => p)
           .reverse(),
       })),

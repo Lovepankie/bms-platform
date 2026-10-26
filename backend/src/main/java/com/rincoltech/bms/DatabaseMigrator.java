@@ -1,6 +1,7 @@
 package com.rincoltech.bms;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.flywaydb.core.api.output.MigrateResult;
 
 /**
@@ -14,15 +15,21 @@ public final class DatabaseMigrator {
     private DatabaseMigrator() {}
 
     public static MigrateResult migrate(String url, String user, String password) {
+        return configure(url, user, password).load().migrate();
+    }
+
+    /**
+     * The one Flyway configuration every environment migrates with, so a test that replays migrations on its own
+     * database (issue #573) takes it, adding only a target, and cannot drift from it.
+     */
+    public static FluentConfiguration configure(String url, String user, String password) {
         return Flyway.configure()
                 .dataSource(url, user, password)
                 .locations("classpath:db/migration")
                 // Each migration runs in its own transaction; a failure leaves the schema at the
                 // last good version and the deploy stops before switching containers.
                 .validateMigrationNaming(true)
-                .cleanDisabled(true)
-                .load()
-                .migrate();
+                .cleanDisabled(true);
     }
 
     static int runFromEnvironment() {

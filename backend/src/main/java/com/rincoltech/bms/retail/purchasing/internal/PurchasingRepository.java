@@ -270,10 +270,10 @@ class PurchasingRepository {
             sql.append(" AND p.created_by = :createdBy");
             params.put("createdBy", createdBy);
         }
-        // Which restocks are listed (issue #350): one movement row must match the branch, the category and the item
-        // asked
-        // for together, as the grouped summary counts them, so a scoped caller cannot probe for what went to branches
-        // outside their scope. What each restock then shows is scoped by the caller's own branches (branchIds) alone.
+        // Which restocks are listed (issue #350): one movement row must match the branch, the category and the
+        // item asked for together, as the grouped summary counts them, so a scoped caller cannot probe for what went
+        // to branches outside their scope. What each restock then shows is scoped by the caller's own branches
+        // (branchIds) alone.
         if (listedBranches != null || categoryId != null || productId != null) {
             sql.append(" AND EXISTS (SELECT 1 FROM retail_stock_movements m");
             if (categoryId != null) {

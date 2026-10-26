@@ -537,7 +537,11 @@ class UserService implements TenantAdmins {
         return after;
     }
 
-    /** FR-IAM-08: deactivation ends every session at once; the next request is refused. */
+    /**
+     * FR-IAM-08: deactivation ends every session at once; the next request is refused. It takes the user out of the
+     * {@code users_staff_phone} index, so a later reactivation must call {@link #checkUnique} and map the index's refusal
+     * through {@link #duplicateContact} (ADR-085, issue #573).
+     */
     @Transactional
     UserResponse deactivate(UUID userId) {
         owners.lockShared();

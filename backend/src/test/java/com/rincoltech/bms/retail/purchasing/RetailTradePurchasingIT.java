@@ -1992,11 +1992,19 @@ class RetailTradePurchasingIT extends IntegrationTest {
 
     /** Marks a product inactive, as the Items screen does (issue #342). */
     void switchOff(UUID id) {
+        setActive(id, false);
+    }
+
+    void switchOn(UUID id) {
+        setActive(id, true);
+    }
+
+    void setActive(UUID id, boolean active) {
         String etag = api.get("/products/" + id, ADMIN).getHeaders().getETag();
         assertThat(api.call(
                                 HttpMethod.PATCH,
                                 "/products/" + id,
-                                Map.of("active", false),
+                                Map.of("active", active),
                                 ADMIN,
                                 "*",
                                 Map.of("If-Match", etag))
@@ -2016,5 +2024,49 @@ class RetailTradePurchasingIT extends IntegrationTest {
                 null, hq, List.of(Map.<String, Object>of("product_id", product, "qty", "1", "cost_minor", 100)));
         assertThat(blind.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(blind.getBody().toString()).contains("product_inactive");
+    }
+
+    /** ADR-094 (issue #376): a draft holding an item switched off since is not sent, nor sent later by its approval. */
+    @Test
+    void aDraftWithAnItemSwitchedOffSinceIsNotSentNorSentByItsApproval() {
+        UUID id = uuid(draft(hq, orderLine(product, "1", 100)), "id");
+        switchOff(product);
+        ResponseEntity<JsonNode> refused = sendRaw(id);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("product_inactive");
+        assertThat(order(id).get("status").asString()).isEqualTo("draft");
+        switchOn(product);
+
+        threshold(1_000);
+        UUID big = uuid(draft(hq, orderLine(product, "10", 100)), "id");
+        ResponseEntity<JsonNode> asked = sendRaw(big);
+        assertThat(asked.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        switchOff(product);
+        RetailTestSupport checker = new RetailTestSupport(http, t);
+        String approval = asked.getBody().get("approval_id").asString();
+        ResponseEntity<JsonNode> decided = decide(approval, checker, BUYER + ",core.approvals.read");
+        assertThat(decided.getStatusCode()).as("%s", decided.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(code(decided)).isEqualTo("product_inactive");
+        assertThat(order(big).get("status").asString()).isEqualTo("draft");
+        // ADR-091: a refusal ends the request as stale with the reason, so it is never approved later as it stood; once
+        // the item is switched on again the maker sends the order again and a new request is asked.
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM approval_requests WHERE id = ?::uuid")
+                        .param(approval)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("stale");
+        switchOn(product);
+        ResponseEntity<JsonNode> redecided = decide(approval, checker, BUYER + ",core.approvals.read");
+        assertThat(redecided.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(code(redecided)).isEqualTo("invalid_status_transition");
+        assertThat(order(big).get("status").asString()).isEqualTo("draft");
+        ResponseEntity<JsonNode> again = sendRaw(big);
+        assertThat(again.getStatusCode()).as("%s", again.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(again.getBody().get("approval_id").asString()).isNotEqualTo(approval);
+        ResponseEntity<JsonNode> approved =
+                decide(again.getBody().get("approval_id").asString(), checker, BUYER + ",core.approvals.read");
+        assertThat(approved.getStatusCode()).as("%s", approved.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(order(big).get("status").asString()).isEqualTo("sent");
     }
 }

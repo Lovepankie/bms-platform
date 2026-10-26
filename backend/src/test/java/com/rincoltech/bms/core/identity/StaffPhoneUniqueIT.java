@@ -3,6 +3,7 @@ package com.rincoltech.bms.core.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rincoltech.bms.DatabaseMigrator;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.testsupport.Api;
@@ -20,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -143,61 +147,77 @@ class StaffPhoneUniqueIT extends IntegrationTest {
     }
 
     /**
-     * Issue #323: V98 run again on a database that already has two invited or active staff users with one phone stops with a
+     * Issue #323: V98 run on a database that already has two invited or active staff users with one phone stops with a
      * message naming the business and how many phones are shared, never the phone, and changes nothing. A deactivated user
-     * sharing the phone does not stop it. Run in one transaction that is rolled back, so the shared database is untouched.
+     * sharing the phone does not stop it. Replayed on a scratch database at V97 (issue #573), so the migration's lock on
+     * users never reaches the shared database the other tests use.
      */
     @Test
     void theMigrationStopsOnExistingDuplicatesAndNamesTheBusinessNotThePhone() throws Exception {
         String migration = new ClassPathResource("db/migration/V98__users_staff_phone_unique.sql")
                 .getContentAsString(StandardCharsets.UTF_8);
-        UUID first = insertStaff(t.tenantId(), "+256700000044", "active");
-        UUID second;
-        try (Connection c = TestDatabase.ownerDataSource().getConnection()) {
-            c.setAutoCommit(false);
-            try (Statement s = c.createStatement()) {
-                s.execute("SET LOCAL lock_timeout = '5s'");
-                s.execute("DROP INDEX users_staff_phone");
-                second = UUID.randomUUID();
-                s.execute("INSERT INTO users (id, tenant_id, kind, full_name, phone_e164, status) VALUES ('" + second
-                        + "', '" + t.tenantId()
-                        + "', 'staff', 'Test Staff Deactivated', '+256700000044', 'deactivated')");
-                s.execute("SAVEPOINT only_deactivated");
-                s.execute(migration);
-                s.execute("ROLLBACK TO SAVEPOINT only_deactivated");
-                s.execute("UPDATE users SET status = 'invited' WHERE id = '" + second + "'");
+        String database = "v98_replay_" + UUID.randomUUID().toString().replace("-", "");
+        try {
+            String url = TestDatabase.scratchDatabase(database);
+            DataSource ownerAtV97 = new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD);
+            // The migrate container's own configuration (DatabaseMigrator), with only the target added.
+            assertThat(DatabaseMigrator.configure(url, "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .target("97")
+                            .load()
+                            .migrate()
+                            .targetSchemaVersion)
+                    .isEqualTo("97");
+            JdbcClient owner = JdbcClient.create(ownerAtV97);
+            UUID tenant = UUID.randomUUID();
+            owner.sql("INSERT INTO tenants (id, slug, name, plan_id)"
+                            + " VALUES (?, 'v98-replay', 'Test Tenant V98', '00000000-0000-4000-8000-000000000001')")
+                    .param(tenant)
+                    .update();
+            UUID first = insertStaff(owner, tenant, "+256700000044", "active");
+            UUID second = insertStaff(owner, tenant, "+256700000044", "deactivated");
+            try (Connection c = ownerAtV97.getConnection()) {
+                c.setAutoCommit(false);
+                try (Statement s = c.createStatement()) {
+                    s.execute("SAVEPOINT only_deactivated");
+                    s.execute(migration);
+                    s.execute("ROLLBACK TO SAVEPOINT only_deactivated");
+                    s.execute("UPDATE users SET status = 'invited' WHERE id = '" + second + "'");
 
-                assertThatThrownBy(() -> s.execute(migration))
-                        .isInstanceOf(SQLException.class)
-                        .hasMessageContaining(
-                                "V98: 1 phone number(s) are each held by more than one invited or active staff user")
-                        .hasMessageContaining(t.tenantId().toString())
-                        .hasMessageContaining("Nothing was changed")
-                        .hasMessageNotContaining("700000044")
-                        .satisfies(e ->
-                                assertThat(((SQLException) e).getSQLState()).isEqualTo("23505"));
-            } finally {
-                c.rollback();
+                    assertThatThrownBy(() -> s.execute(migration))
+                            .isInstanceOf(SQLException.class)
+                            .hasMessageContaining(
+                                    "V98: 1 phone number(s) are each held by more than one invited or active staff user")
+                            .hasMessageContaining(tenant.toString())
+                            .hasMessageContaining("Nothing was changed")
+                            .hasMessageNotContaining("700000044")
+                            .satisfies(e ->
+                                    assertThat(((SQLException) e).getSQLState()).isEqualTo("23505"));
+                } finally {
+                    c.rollback();
+                }
             }
+            assertThat(owner.sql(
+                                    "SELECT count(*) FROM users WHERE id IN (?, ?) AND status IN ('active', 'deactivated')")
+                            .params(first, second)
+                            .query(Long.class)
+                            .single())
+                    .isEqualTo(2);
+            assertThat(owner.sql("SELECT count(*) FROM pg_indexes WHERE indexname = 'users_staff_phone'")
+                            .query(Long.class)
+                            .single())
+                    .isZero();
+        } finally {
+            TestDatabase.dropScratchDatabase(database);
         }
-        assertThat(staffWithPhone("+256700000044")).isEqualTo(1);
-        assertThat(TestDatabase.owner()
-                        .sql("SELECT count(*) FROM users WHERE id = ?")
-                        .param(first)
-                        .query(Long.class)
-                        .single())
-                .isEqualTo(1);
-        assertThat(TestDatabase.owner()
-                        .sql("SELECT count(*) FROM pg_indexes WHERE indexname = 'users_staff_phone'")
-                        .query(Long.class)
-                        .single())
-                .isEqualTo(1);
     }
 
     UUID insertStaff(UUID tenantId, String e164, String status) {
+        return insertStaff(TestDatabase.owner(), tenantId, e164, status);
+    }
+
+    static UUID insertStaff(JdbcClient owner, UUID tenantId, String e164, String status) {
         UUID id = UUID.randomUUID();
-        TestDatabase.owner()
-                .sql("INSERT INTO users (id, tenant_id, kind, full_name, phone_e164, status)"
+        owner.sql("INSERT INTO users (id, tenant_id, kind, full_name, phone_e164, status)"
                         + " VALUES (?, ?, 'staff', 'Test Staff Existing', ?, ?)")
                 .params(id, tenantId, e164, status)
                 .update();

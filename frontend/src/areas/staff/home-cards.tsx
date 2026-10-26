@@ -47,6 +47,7 @@ export function homeParts(me: Me, branch: string | null = null) {
   const summary = retail && canUse(me, 'salesHistory');
   const sales = summary && (one ? holdsAt(me, ALL_SELLERS, one) : holds(me, ALL_SELLERS));
   const lendingOn = !me.modules || me.modules.includes('lending');
+  const money = moneyBranches(me, one);
   return {
     summary,
     sales,
@@ -54,11 +55,18 @@ export function homeParts(me: Me, branch: string | null = null) {
     orders: retail && canUse(me, 'orders'),
     // A line per shop is for a session that sees every seller's sales in more than one branch, over All branches.
     branches: sales && !one && branchesWhere(me, ALL_SELLERS).length > 1,
-    // The takings are the cash summary's figures, so they also need its permissions (ADR-076 decision 3).
-    takings: sales && canUse(me, 'cashSummary') && (one ? holdsAt(me, 'retail.cashbook.read', one) : holds(me, 'retail.cashbook.read')),
+    // The takings are the cash summary's figures, so they also need its permissions (ADR-076 decision 3): the cash book read in
+    // every branch the money covers, as the server checks, over All branches those where every seller's sales are read (#489).
+    takings: sales && canUse(me, 'cashSummary') && money.length > 0 && money.every((b) => holdsAt(me, 'retail.cashbook.read', b)),
     loans: showLending(me),
     approvals: lendingOn && permissions.includes('core.approvals.read'),
   };
+}
+
+/** The branches the Home money figures cover: the one chosen, else every branch where the session reads every seller's sales. */
+function moneyBranches(me: Me, one: string | null): string[] {
+  if (one) return [one];
+  return branchesWhere(me, 'retail.sale.read').filter((b) => holdsAt(me, ALL_SELLERS, b.id)).map((b) => b.id ?? '');
 }
 
 function Figure({ label, query, children }: { label: string; query: { isPending: boolean; isError: boolean }; children: () => ReactNode }) {
@@ -72,6 +80,7 @@ function Figure({ label, query, children }: { label: string; query: { isPending:
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+// A way of paying the PWA does not name yet reads Other, never its raw key (#489).
 const METHODS: Record<string, string> = { cash: 'Cash', mobile_money: 'Mobile money', bank: 'Bank' };
 
 type Parts = ReturnType<typeof homeParts>;
@@ -159,7 +168,7 @@ function TakingsCard({ home }: { home: Summary }) {
           {/* The total as the key figure, the cash, mobile money and bank behind it in rows (issue #526). */}
           <KeyFigure label="Total" value={retailMoney(takings?.total_minor ?? 0)}>
             {(takings?.methods ?? []).map((m) => (
-              <KeyFigureRow key={m.method} label={METHODS[m.method ?? ''] ?? m.method} value={retailMoney(m.amount_minor ?? 0)} />
+              <KeyFigureRow key={m.method} label={METHODS[m.method ?? ''] ?? 'Other'} value={retailMoney(m.amount_minor ?? 0)} />
             ))}
           </KeyFigure>
           {(takings?.methods ?? []).every((m) => !m.sales_minor && !m.payments_minor && !m.fees_minor && !m.out_minor) && (

@@ -185,6 +185,17 @@ describe('the past restocks, grouped', () => {
     expect(listPurchases).not.toHaveBeenCalled();
   });
 
+  it('asks the summary and the restocks for the status chosen in Show (#372)', async () => {
+    writeChainOf(user, 'restocks', ['supplier']);
+    show(<RestocksPage />);
+    fireEvent.change(await screen.findByLabelText('Show'), { target: { value: 'voided' } });
+    fireEvent.click(await screen.findByRole('radio', { name: 'Grouped' }));
+    fireEvent.click(await head(/Test Supplier 01/));
+    await screen.findByText('RP00000001');
+    expect(purchasesSummary.mock.calls.map((c) => c[0]).find((q) => q.level === 'supplier')).toMatchObject({ status: 'voided' });
+    expect(listPurchases).toHaveBeenLastCalledWith(expect.objectContaining({ supplierId: 's1', status: 'voided' }));
+  });
+
   it('leaves the cost out when the server sent none', async () => {
     writeChainOf(user, 'restocks', ['year']);
     purchasesSummary.mockImplementation(purchaseAnswer(false));

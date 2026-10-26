@@ -78,6 +78,11 @@ describe('what was opened above a level', () => {
     expect(wholeRestocksNote({ supplierId: 's1' })).toBeNull();
   });
 
+  it("says a shop's restocks still show every shop the caller can see and their full total (#372)", () => {
+    expect(wholeRestocksNote({ branchId: 'b1' })).toBe("Whole purchases that include this shop. Each shows the quantities and the total for every shop you can see.");
+    expect(wholeRestocksNote({ branchId: 'b1', itemId: 'p1' })).toBe("Whole purchases that include this item. Each shows the quantities and the total for every shop you can see.");
+  });
+
   it('offers the restocks on a day, on every level of a chain with no day, and above a last item level', () => {
     expect(offersRestocks(['branch', 'day', 'item'], 1)).toBe(true);
     expect(offersRestocks(['branch', 'day', 'item'], 0)).toBe(false);

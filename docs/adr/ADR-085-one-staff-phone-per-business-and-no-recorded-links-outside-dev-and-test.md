@@ -54,5 +54,11 @@ message an operator can act on, and the phone never reaches the deploy log.
 longer has a list of sent messages to inspect; an operator who needs a link asks the administrator who saw it.
 
 **Watch for:** a new staff write path must still call `checkUnique` for the friendly answer and catch `DuplicateKeyException`
-for the race. A new `Notifier` adapter must keep the same rule: no parameter that carries a link is stored or logged.
+for the race, mapping it through `UserService.duplicateContact`. No path moves a deactivated user back to active today; one
+that does (a reactivation) puts the user back in the index, so it must do both, or it answers 500, with a test that
+reactivating a user whose phone an active user now holds gives 409 `duplicate_phone` (issue #573). `DriverArchitectureTest`
+keeps `org.postgresql` out of every class but `UserService`. V98's `lock_timeout` bounds only the migration's own wait for
+its lock; a write that arrives meanwhile waits for that wait to end, or for the migration to commit. V98 also sets
+`row_security` back to `on` rather than to what it found; both are noted here because an applied migration is never
+edited (its checksum would stop the deploy). A new `Notifier` adapter must keep the same rule: no parameter that carries a link is stored or logged.
 `NotifierProfileIT` fails if a recording adapter is reachable in the `server` profile.

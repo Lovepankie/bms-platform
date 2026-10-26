@@ -978,8 +978,9 @@ restock opened for correction and closed finds the same groups open. Nothing is 
   in that order). Every line shows how many restocks, how many were voided and are not counted, what was bought at cost only when the
   server sent it, and at the item level the quantity bought with its unit. The restocks of the last opened group, and "Show the
   restocks here" on a day, on any level of a chain with no day and above a last item level, are the screen's own cards, so **Correct
-  this restock** and its void work inside the groups. Under a category or an item the cards are whole restocks that include it
-  (their totals can be more than the line above). The From, To and Show filters of the page apply to the groups and the cards.
+  this restock** and its void work inside the groups. Under a shop, a category or an item the cards are whole restocks that include
+  it (their totals can be more than the line above); under a shop the note also says each card shows the quantities and the total for
+  every shop the person can see (#372). The From, To and Show filters of the page apply to the groups and the cards.
   Restocks with no supplier are one group, "No supplier".
 - Components: `list-chain.tsx` (the view switch, Group by, the tree), `list-chain-state.ts` (levels, remembered choice, selection),
   `stock-grouped.tsx`, `restocks-grouped.tsx`. The tours `page-stock` (version 3) and `page-restocks` (version 2) have a Grouped step
@@ -1516,8 +1517,8 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
 
 - **Where.** The staff Home (`/staff`), after the Shop card and before the Lending card. Every shop figure on Home, the Shop card's
   included, comes from one read, `GET /retail/reports/home`, under the branch chosen in the header (All branches sends none).
-- **Takings today.** A line each for Cash and Mobile money, then Bank or any other way only when it moved money today, and the
-  Total. Read as the cash book reads a day, so it agrees with the cash summary: sales paid at the sale, payments on credit sales and
+- **Takings today.** A line each for Cash and Mobile money, then Bank or any other way only when it moved money today (a way the
+  PWA does not name yet reads Other, never its key; #489), and the Total. Read as the cash book reads a day, so it agrees with the cash summary: sales paid at the sale, payments on credit sales and
   delivery fees in; cancelled sales, reversed payments on account and refunds on goods taken back (yesterday's sale refunded today
   included) out. Nothing taken: "No money taken yet today." Link: Open the cash summary. The card is drawn
   only for a session that may read the cash summary (`retail.cashbook.read` in the branches covered and `retail.till.close`,
@@ -1531,7 +1532,7 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
   sold nothing. Only with All branches chosen, for a session that sees every seller's sales in more than one branch; the server
   leaves the lines out over fewer than two shops. Link: Open the shop dashboard.
 - **Who sees what.** The four cards and Sales today are money: they need `retail.sale.all_sellers` in the branches covered
-  (ADR-055); Takings today needs besides what the cash summary needs (`retail.cashbook.read` there and `retail.till.close`), so a
+  (ADR-055); Takings today needs besides what the cash summary needs (`retail.cashbook.read` in every branch the money covers, as the server checks, and `retail.till.close`; #489), so a
   Supervisor without the till sees no Takings card; a seller sees no money card, and now sees Low on stock (with `retail.stock.read`) and the open orders (with
   `retail.order.manage`) on the Shop card. A session with the orders permission and no sales read still reads the orders board.
 - **States.** "Loading" while the read is on its way, "Could not load" in each card when it fails, the other cards unchanged. A

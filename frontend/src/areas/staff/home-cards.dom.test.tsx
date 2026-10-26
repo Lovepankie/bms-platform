@@ -308,6 +308,36 @@ describe('the shop summary cards (issue #485)', () => {
     expect(within(takings).getByRole('link').getAttribute('href')).toBe('/staff/retail/cash-summary');
   });
 
+  it('names a way of paying it does not know Other, never its raw key (#489)', async () => {
+    calls.home.mockResolvedValue({ ...HOME, takings: { total_minor: 1_000, methods: [{ method: 'test_wallet', amount_minor: 1_000, sales_minor: 1_000, payments_minor: 0, fees_minor: 0, out_minor: 0 }] } });
+    show(both);
+    const takings = await screen.findByRole('article', { name: 'Takings today' });
+    expect(await within(takings).findByText('Other')).toBeTruthy();
+    expect(takings.textContent).not.toContain('test_wallet');
+  });
+
+  it('offers the takings only where the cash book is read in every branch the money covers, as the server checks (#489)', () => {
+    const [a, b] = (admin.branches ?? []).map((x) => x.id as string);
+    const scope = (ids: string[]) => ({ all_branches: false, branch_ids: ids });
+    const scoped = (cashbook: string[]) => ({
+      ...admin,
+      permissions: ['retail.sale.read', 'retail.sale.all_sellers', 'retail.cashbook.read', 'retail.till.close'],
+      permission_scopes: {
+        'retail.sale.read': scope([a as string, b as string]), 'retail.sale.all_sellers': scope([a as string, b as string]),
+        'retail.cashbook.read': scope(cashbook), 'retail.till.close': scope(cashbook),
+      },
+    } as unknown as Me);
+    const one = scoped([a as string]);
+    expect(homeParts(one, a as string).takings).toBe(true);
+    expect(homeParts(one, b as string).takings).toBe(false);
+    expect(homeParts(one, null).takings).toBe(false);
+    expect(homeParts(scoped([a as string, b as string]), null).takings).toBe(true);
+    const noTill = { ...one, permissions: ['retail.sale.read', 'retail.sale.all_sellers', 'retail.cashbook.read'] } as unknown as Me;
+    expect(homeParts(noTill, a as string).takings).toBe(false);
+    // No branch in view at all: nothing to be covered, so no Takings card.
+    expect(homeParts({ ...scoped([a as string, b as string]), branches: [] } as unknown as Me, null).takings).toBe(false);
+  });
+
   it('shows what customers owe, how many, and the oldest due date, linking to credit control', async () => {
     show(both);
     const credit = await screen.findByRole('article', { name: 'Credit owed' });
@@ -349,7 +379,7 @@ describe('the shop summary cards (issue #485)', () => {
     const [a] = (admin.branches ?? []).map((x) => x.id as string);
     const oneShop = {
       ...both,
-      permission_scopes: { 'retail.sale.all_sellers': { all_branches: false, branch_ids: [a] }, 'retail.sale.read': { all_branches: false, branch_ids: [a] } },
+      permission_scopes: { 'retail.sale.all_sellers': { all_branches: false, branch_ids: [a] }, 'retail.sale.read': { all_branches: false, branch_ids: [a] }, 'retail.cashbook.read': { all_branches: false, branch_ids: [a] } },
     } as unknown as Me;
     show(oneShop, 'all');
     expect(await screen.findByRole('article', { name: 'Takings today' })).toBeTruthy();

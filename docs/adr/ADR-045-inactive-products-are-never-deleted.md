@@ -22,4 +22,4 @@ The owner asked to delete products the business no longer sells. History and ana
 
 **Worse:** stock held by an inactive product is out of the default stock list, so a forgotten balance is seen only through the warning, the Show inactive items switch or the reports.
 
-**Watch for:** a new route that adds a product to a document must call the same check; a purchase order drafted before an item went inactive can still be received, since goods already on the way are not refused here.
+**Watch for:** a new route that adds a product to a document must call the same check; a purchase order sent before an item went inactive can still be received, since goods already on the way are not refused here; a draft holding an item switched off since is not sent (ADR-094, issue #376).

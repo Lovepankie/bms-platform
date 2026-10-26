@@ -1107,6 +1107,9 @@ Accepted (this list is the ADR index):
   selling price, a count against the records; Confirm records an audit row and saves, Change keeps the form; Did you mean and the
   category of similar items while a new item is named; Confirm re-checks the screen and is recorded after the save; no AI
   (proposed, #353; migration `V104`, indexes only)
+- ADR-094 A purchase order is sent only while every item on it is active: `POST /retail/purchase-orders/{id}/send` refuses a
+  draft holding an inactive item with 422 `product_inactive`, checked before a checker is asked and again when the approval
+  sends it (the request then ends stale, ADR-091); goods against an order already sent are still received (proposed, #376; amends ADR-045; no migration)
 - ADR-046 Two-step sign-in is optional by default (migration `V67`) and a tenant policy can require it for everyone or for chosen roles after a grace
   period; one deadline, enforced-now versus due-by, the forgotten-password rules unchanged (proposed, #348; FR-IAM-06, FR-IAM-16)
 - ADR-063 Production is created by Terraform on production day (`infra/production/`, a Hetzner root and an AWS root over shared

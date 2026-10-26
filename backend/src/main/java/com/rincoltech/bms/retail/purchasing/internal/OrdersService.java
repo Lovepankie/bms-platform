@@ -204,6 +204,8 @@ class OrdersService {
         }
         Approvals.Rule rule = approvals.rule(PurchaseOrderAction.TYPE);
         if (rule.asks(o.totalMinor())) {
+            // ADR-094: refused before a checker is asked; a direct send is checked once, in markSent.
+            sending.requireActiveItems(o);
             Approvals.Outcome a = approvals.request(
                     new ActionRequest(
                             PurchaseOrderAction.TYPE,

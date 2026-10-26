@@ -520,6 +520,30 @@ class RetailHomeSummaryIT extends IntegrationTest {
         assertCashIsTheCashSummarys(home("", TILL, "*").get("takings"));
     }
 
+    /**
+     * Issue #489: a credit sale made today and paid 200 in cash today cannot then be voided today (422
+     * {@code sale_has_payments}), so the 200 stays in today's cash on the card and in the cash summary, which agree.
+     */
+    @Test
+    void aCreditSalePaidInCashTodayCannotBeVoidedAndItsCashStaysAsTheCashSummarySays() {
+        JsonNode before = method(home("", TILL, "*").get("takings"), "cash");
+        UUID sale = d.sell(t.headOffice(), "credit", d.p2, "2", 0);
+        pay(sale, 200, "cash");
+        ResponseEntity<JsonNode> voided =
+                api.post("/sales/" + sale + "/void", Map.of("reason", "Test void of a paid credit sale"), ADMIN);
+        assertThat(voided.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(voided.getBody().get("code").asString()).isEqualTo("sale_has_payments");
+        JsonNode takings = home("", TILL, "*").get("takings");
+        JsonNode cash = method(takings, "cash");
+        assertThat(cash.get("amount_minor").asLong())
+                .isEqualTo(before.get("amount_minor").asLong() + 200);
+        assertThat(cash.get("payments_minor").asLong())
+                .isEqualTo(before.get("payments_minor").asLong() + 200);
+        assertThat(cash.get("out_minor").asLong())
+                .isEqualTo(before.get("out_minor").asLong());
+        assertCashIsTheCashSummarys(takings);
+    }
+
     @Test
     void aPaymentCountsOnItsOwnDateWhateverTheHourItWasEnteredInKampala() {
         UUID sale = d.sell(t.headOffice(), "credit", d.p2, "4", 2);

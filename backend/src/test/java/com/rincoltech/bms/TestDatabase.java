@@ -52,6 +52,50 @@ public final class TestDatabase {
         return new DriverManagerDataSource(url(), "bms_app", APP_PASSWORD);
     }
 
+    /**
+     * A new, empty database in the same container, given every database-level step {@code 01-roles.sh} gives {@code bms}
+     * (owner, public schema owner, the revokes and grants); the script's other steps create the two roles, which belong to
+     * the whole server, and it creates no extension and sets no setting. For a test that replays a migration, so its locks
+     * never reach the shared database; it calls {@link #dropScratchDatabase} when done. Returns the database's JDBC URL.
+     */
+    public static String scratchDatabase(String name) {
+        requireScratchName(name);
+        superuser(POSTGRES.getDatabaseName())
+                .sql("CREATE DATABASE " + name + " OWNER bms_owner")
+                .update();
+        JdbcClient scratch = superuser(name);
+        scratch.sql("ALTER SCHEMA public OWNER TO bms_owner").update();
+        scratch.sql("REVOKE ALL ON DATABASE " + name + " FROM PUBLIC").update();
+        scratch.sql("GRANT CONNECT, TEMPORARY ON DATABASE " + name + " TO bms_app")
+                .update();
+        scratch.sql("REVOKE CREATE ON SCHEMA public FROM PUBLIC").update();
+        scratch.sql("GRANT USAGE ON SCHEMA public TO bms_app").update();
+        return urlOf(name);
+    }
+
+    public static void dropScratchDatabase(String name) {
+        requireScratchName(name);
+        superuser(POSTGRES.getDatabaseName())
+                .sql("DROP DATABASE IF EXISTS " + name + " WITH (FORCE)")
+                .update();
+    }
+
+    /** The name goes into DDL unquoted, so only lower case letters, digits and underscores are taken. */
+    private static void requireScratchName(String name) {
+        if (!name.matches("[a-z0-9_]+")) {
+            throw new IllegalArgumentException("A scratch database name is lower case letters, digits and underscores");
+        }
+    }
+
+    private static String urlOf(String database) {
+        return "jdbc:postgresql://" + POSTGRES.getHost() + ":" + POSTGRES.getMappedPort(5432) + "/" + database;
+    }
+
+    private static JdbcClient superuser(String database) {
+        return JdbcClient.create(
+                new DriverManagerDataSource(urlOf(database), POSTGRES.getUsername(), POSTGRES.getPassword()));
+    }
+
     /** bms_owner bypasses RLS: for arranging fixtures and asserting on raw rows only. */
     public static JdbcClient owner() {
         return JdbcClient.create(ownerDataSource());

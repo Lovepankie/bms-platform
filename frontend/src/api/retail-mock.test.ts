@@ -60,6 +60,19 @@ describe('retail mock adapter (real response shapes)', () => {
     expect((await api.listStock({ branchId: branch, negativeOnly: true })).every((r) => r.negative)).toBe(true);
   });
 
+  it('lists a restock for a shop and an item only when one line holds that item at that shop (#372)', async () => {
+    const api = createMockRetail();
+    const [p1, p2] = await api.listProducts({});
+    const other = '00000000-0000-4000-8000-0000000000a2';
+    const restock = await api.createPurchase({ purchased_on: '2026-10-06', payment_method: 'cash', lines: [
+      { product_id: p1?.id ?? '', cost_minor: 1, sell_minor: 2, qty_by_branch: [{ branch_id: branch, qty: '1.000' }] },
+      { product_id: p2?.id ?? '', cost_minor: 1, sell_minor: 2, qty_by_branch: [{ branch_id: other, qty: '1.000' }] },
+    ] }, 'restock-key-372');
+    const ids = async (q: { branchId: string; productId: string }) => (await api.listPurchases(q)).items?.map((r) => r.id);
+    expect(await ids({ branchId: branch, productId: p1?.id ?? '' })).toContain(restock.id);
+    expect(await ids({ branchId: other, productId: p1?.id ?? '' })).not.toContain(restock.id);
+  });
+
   it('works out a stock-take variance and commits it once', async () => {
     const api = createMockRetail();
     const [row] = await api.listStock({ branchId: branch });

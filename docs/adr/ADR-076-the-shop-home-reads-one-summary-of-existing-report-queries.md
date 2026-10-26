@@ -66,10 +66,12 @@ without any money figure.
 **Worse:** the Home summary is a second place that reads the dashboard and credit control queries, so a change to either rule
 changes Home too (on purpose). The takings repeat the rules of `JdbcCashSales` in `retail.reports` (which may not read
 `retail.sales`), so a change to how the cash book counts a kind of money must change both; `RetailHomeSummaryIT` compares the cash
-line with `GET /retail/reports/cash/daily` and fails if they part. A session with `retail.order.manage` and no sales read still asks the orders board.
+line with `GET /retail/reports/cash/daily` and fails if they part. Only cash is cross-checked that way: the cash summary
+has no mobile money or bank line, so those two lines are checked against their own expected figures alone (#489). A session with `retail.order.manage` and no sales read still asks the orders board.
 
 **Watch for:** the reversals of payments on account, the refunds and the fees paid on an account have no index on their day; those
-tables hold one row per receipt, return or order and are read by bench query k17, though its seed holds none of them yet (#488). The top items of the week scan the sale lines
+tables hold one row per receipt, return or order and are read by bench query k17 (`scripts/db-bench/queries/k17-home-takings.sql`), though its seed holds none of them yet; the
+payments part has its index since issue #488 (`V100`). The top items of the week scan the sale lines
 of up to seven days; if it shows in the database benchmarks, the week
-can move to the sales summary's grouped read. A new way of paying appears on the takings card on its own, labelled by its key until
-the PWA names it.
+can move to the sales summary's grouped read. A new way of paying appears on the takings card on its own, labelled Other until the PWA
+names it, never by its raw key (#489).
