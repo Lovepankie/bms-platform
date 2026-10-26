@@ -279,6 +279,7 @@ final class OpenAiCompatibleClient implements LlmClient {
 
     @Override
     public String toString() {
-        return "OpenAiCompatibleClient[model=" + model + "]";
+        // The endpoint holds no secret (the key is a header), and shows where a client calls.
+        return "OpenAiCompatibleClient[endpoint=" + endpoint + ", model=" + model + "]";
     }
 }

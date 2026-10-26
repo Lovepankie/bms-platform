@@ -111,6 +111,8 @@ jobs:
         include:
           - image: api
             context: backend
+            # The help articles Ask BMS answers from (ADR-096): the Dockerfile copies them from this named context.
+            build_contexts: help=frontend/src/help/articles
           - image: web
             context: frontend
           - image: proxy
@@ -144,6 +146,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
+          build-contexts: ${{ matrix.build_contexts }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ needs.meta.outputs.sha_tag }}

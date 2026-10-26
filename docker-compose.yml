@@ -48,6 +48,9 @@ services:
     <<: *logging
     build:
       context: ./backend
+      # The help articles Ask BMS answers from (ADR-096), copied in by the Dockerfile.
+      additional_contexts:
+        help: ./frontend/src/help/articles
       args:
         GIT_SHA: local
     image: bms-platform-api:local

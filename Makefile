@@ -57,7 +57,7 @@ fmt:
 
 ## Build the three images exactly as CI does.
 build:
-	docker build --build-arg GIT_SHA=$$(git rev-parse --short HEAD) -t bms-platform-api:local backend
+	docker build --build-arg GIT_SHA=$$(git rev-parse --short HEAD) --build-context help=frontend/src/help/articles -t bms-platform-api:local backend
 	docker build -t bms-platform-web:local frontend
 	docker build -t bms-platform-proxy:local -f deploy/caddy/Dockerfile deploy
 

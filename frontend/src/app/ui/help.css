@@ -71,3 +71,9 @@
 .help-ask .btn {
   min-height: var(--tap);
 }
+
+/* Ask BMS (issue #20, ADR-096): the answer keeps the line breaks of its numbered steps. */
+.help-answer {
+  margin: 0 0 var(--space-3);
+  white-space: pre-line;
+}

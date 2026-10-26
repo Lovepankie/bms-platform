@@ -674,6 +674,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/help/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether Ask BMS is on for this business, and the corpus revision */
+        get: operations["getAskStatus"];
+        put?: never;
+        /** Ask how to do something: an answer phrased from the help articles the caller may read, citing one, or the matching articles; 403 ask_bms_off while it is off for the business; 429 ask_rate_limited past the person's questions an hour */
+        post: operations["askBms"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/payment-methods": {
         parameters: {
             query?: never;
@@ -8125,6 +8143,32 @@ export interface components {
              * @description The earliest pending promise to pay, if any
              */
             promised_date?: string;
+        };
+        AskAnswer: {
+            /** @description The answer to show; null for articles and no_match */
+            answer?: string;
+            /** @description The matching articles the asker may read, best first */
+            articles?: components["schemas"]["AskArticle"][];
+            cited?: components["schemas"]["AskArticle"];
+            revision?: string;
+            /** @description model: phrased from the cited article; cache: the same answer as before; articles: no answer was phrased, the matching articles are listed; other_role: the best match is a job for another role; no_match: no article matches */
+            source?: string;
+        };
+        /** @description The matching articles the asker may read, best first */
+        AskArticle: {
+            id?: string;
+            title?: string;
+        };
+        AskRequest: {
+            /** @description The asker's language, for example en; the articles' language is used when there is none */
+            locale?: string;
+            question: string;
+        };
+        AskStatus: {
+            /** @description Ask BMS is on for this business; while false the box is not shown */
+            enabled?: boolean;
+            /** @description The help corpus revision the server answers from (ADR-095) */
+            revision?: string;
         };
         /** @description Identifiers in data are masked (FR-AUD-05) */
         AuditEvent: {
@@ -20770,6 +20814,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    getAskStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskStatus"];
+                };
+            };
+        };
+    };
+    askBms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskAnswer"];
                 };
             };
         };

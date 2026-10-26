@@ -1542,6 +1542,18 @@ The business's own referrals, for its owner and administrators. The operator's s
 |---|---|---|---|
 | GET | `/referrals` | `core.referrals.read` | `{code, link, items, totals}`: the business's referral code, the public sign-up link with it (`{platform origin}/sign-up?ref=CODE`), and for each business it referred, newest first, `referred_name`, `joined_at`, `status` (`applied` for a confirmed application not activated yet, `active`, `paying`, `suspended` or `cancelled` (its subscription), or `ended` for a referral moved to another referrer that carries lines) and `totals` per currency (`earned_minor`, `paid_minor`, `due_minor`); `totals` adds them up. Nothing else of the referred business. FR-REF-01, FR-REF-07 |
 
+### 7.11.28 Ask BMS (`/help/ask`, ADR-096, issue #20)
+
+Open to every signed-in member of staff (`@AuthenticatedEndpoint(kind = "staff")`, like How do I...?): no matrix permission; what
+an answer may draw on is filtered to the caller's own permissions and modules. Off for a business until the platform lists its
+id in `BMS_HELP_ASK_TENANTS` (`docs/runbooks/ask-bms.md`). Not transactional: a question may wait on a provider (at most 10
+seconds each) with no database connection held.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/help/ask` | authenticated staff | `AskStatus`: `enabled` (the box is drawn only while true) and the corpus `revision` (ADR-095) |
+| POST | `/help/ask` | authenticated staff | `{question (3 to 300 characters), locale (optional, for example en-UG)}`. 200 `AskAnswer`: `source` (`model`, `cache`, `articles`, `other_role`, `no_match`), `answer` (text for `model`, `cache` and `other_role`), `cited` (`{id, title}` of the article a `model` or `cache` answer comes from, to link), `articles` (the matching articles the caller may read, best first) and `revision`. 403 `ask_bms_off` while off; 400 `validation_failed` for a question out of bounds; 429 `ask_rate_limited` past `BMS_HELP_ASK_USER_HOURLY_QUESTIONS` (30) questions of the caller in an hour, on every path. A provider problem is never an error: the articles are shown (FR-HLP-06 to FR-HLP-10) |
+
 ## 7.12 Example: record a repayment
 
 ```http

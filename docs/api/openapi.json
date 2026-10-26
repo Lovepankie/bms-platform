@@ -929,6 +929,70 @@
           }
         }
       },
+      "AskAnswer" : {
+        "properties" : {
+          "answer" : {
+            "description" : "The answer to show; null for articles and no_match",
+            "type" : "string"
+          },
+          "articles" : {
+            "description" : "The matching articles the asker may read, best first",
+            "items" : {
+              "$ref" : "#/components/schemas/AskArticle"
+            },
+            "type" : "array"
+          },
+          "cited" : {
+            "$ref" : "#/components/schemas/AskArticle"
+          },
+          "revision" : {
+            "type" : "string"
+          },
+          "source" : {
+            "description" : "model: phrased from the cited article; cache: the same answer as before; articles: no answer was phrased, the matching articles are listed; other_role: the best match is a job for another role; no_match: no article matches",
+            "type" : "string"
+          }
+        }
+      },
+      "AskArticle" : {
+        "description" : "The matching articles the asker may read, best first",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "AskRequest" : {
+        "properties" : {
+          "locale" : {
+            "description" : "The asker's language, for example en; the articles' language is used when there is none",
+            "maxLength" : 10,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "question" : {
+            "maxLength" : 300,
+            "minLength" : 3,
+            "type" : "string"
+          }
+        },
+        "required" : [ "question" ]
+      },
+      "AskStatus" : {
+        "properties" : {
+          "enabled" : {
+            "description" : "Ask BMS is on for this business; while false the box is not shown",
+            "type" : "boolean"
+          },
+          "revision" : {
+            "description" : "The help corpus revision the server answers from (ADR-095)",
+            "type" : "string"
+          }
+        }
+      },
       "AuditEvent" : {
         "description" : "Identifiers in data are masked (FR-AUD-05)",
         "properties" : {
@@ -25993,6 +26057,52 @@
         },
         "summary" : "The screenshot of one of the caller's own feedback items",
         "tags" : [ "feedback" ]
+      }
+    },
+    "/api/v1/help/ask" : {
+      "get" : {
+        "operationId" : "getAskStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AskStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether Ask BMS is on for this business, and the corpus revision",
+        "tags" : [ "help" ]
+      },
+      "post" : {
+        "operationId" : "askBms",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AskAnswer"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask how to do something: an answer phrased from the help articles the caller may read, citing one, or the matching articles; 403 ask_bms_off while it is off for the business; 429 ask_rate_limited past the person's questions an hour",
+        "tags" : [ "help" ]
       }
     },
     "/api/v1/ledger/payment-methods" : {

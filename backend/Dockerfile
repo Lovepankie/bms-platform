@@ -14,6 +14,10 @@ WORKDIR /src
 COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline
 COPY src ./src
+# The How do I...? articles Ask BMS answers from (ADR-095, ADR-096), from the `help` build context (frontend/src/help/articles,
+# named by deploy.yml and docker-compose.yml), where pom.xml's resource looks for them: ../frontend/src/help/articles.
+COPY --from=help . /frontend/src/help/articles/
+RUN ls /frontend/src/help/articles/*.md > /dev/null
 # Tests, formatting and the architecture checks run in CI (mvn verify) before any image is built.
 RUN --mount=type=cache,target=/root/.m2 mvn -B -q package -DskipTests -Dspotless.check.skip=true \
     && java -Djarmode=tools -jar target/bms-api.jar extract --layers --destination /extracted

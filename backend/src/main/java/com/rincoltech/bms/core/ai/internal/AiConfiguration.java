@@ -1,13 +1,13 @@
 package com.rincoltech.bms.core.ai.internal;
 
 import com.rincoltech.bms.core.ai.LlmClient;
+import com.rincoltech.bms.core.ai.LlmClientFactory;
 import com.rincoltech.bms.core.ai.LlmException;
 import com.rincoltech.bms.core.ai.LlmException.Kind;
 import com.rincoltech.bms.core.ai.RecordingLlmClient;
 import com.rincoltech.bms.kernel.BusinessClock;
 import java.net.URI;
 import java.time.Duration;
-import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -57,23 +57,15 @@ class AiConfiguration {
                     "AI provider off: BMS_AI_BASE_URL, BMS_AI_API_KEY and BMS_AI_MODEL must all be set (values not logged)");
             return new UnavailableLlmClient();
         }
-        if (!wellFormedKey(p.apiKey())) {
-            log.warn("AI provider off: the API key has whitespace or control characters (value not logged)");
-            return new UnavailableLlmClient();
-        }
-        if (!acceptableBaseUrl(p.baseUrl(), devOrTest)) {
-            log.warn("AI provider off: the base URL must be https with a host and no credentials (value not logged)");
-            return new UnavailableLlmClient();
-        }
-        return new OpenAiCompatibleClient(
-                OpenAiCompatibleClient.endpointOf(p.baseUrl()),
-                p.apiKey(),
-                p.model().strip(),
-                Duration.ofSeconds(p.budgetSeconds()),
-                mapper,
-                System::nanoTime,
-                pause -> Thread.sleep(pause),
-                () -> ThreadLocalRandom.current().nextDouble());
+        return OpenAiCompatibleFactory.build(
+                        p.baseUrl(), p.apiKey(), p.model(), Duration.ofSeconds(p.budgetSeconds()), devOrTest, mapper)
+                .orElseGet(UnavailableLlmClient::new);
+    }
+
+    /** The same adapter and checks for a caller with its own providers (Ask BMS, ADR-096). */
+    @Bean
+    LlmClientFactory llmClientFactory(Environment environment, ObjectMapper mapper) {
+        return new OpenAiCompatibleFactory(environment.acceptsProfiles(Profiles.of("dev", "test")), mapper);
     }
 
     /** One breaker for the process: five failures in a row open it for 60 seconds (spec 5.7). */

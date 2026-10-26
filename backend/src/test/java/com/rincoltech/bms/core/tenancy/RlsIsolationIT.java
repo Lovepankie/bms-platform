@@ -1090,6 +1090,26 @@ public class RlsIsolationIT {
                                                      cancelled_at)
                         VALUES (?, ?, 'cancelled', ?, DATE '2026-12-01', ?, now())
                         """).params(UUID.randomUUID(), t.tenantId(), user, user).update();
+        // Ask BMS (migration V108, #20): a question in the spend log (a hash, never text) and a cached answer.
+        owner.sql("""
+                        INSERT INTO help_ask_questions (id, tenant_id, user_id, asked_at, question_hash, locale, outcome,
+                                                        provider, model, counted, cited_article, cost_currency)
+                        VALUES (?, ?, ?, now(), repeat('b', 64), 'en', 'model', 'gemini', 'test-model', true,
+                                'invite-someone', 'USD')
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        owner.sql("""
+                        INSERT INTO help_ask_answers (tenant_id, cache_key, answer, cited_article, provider, model, revision,
+                                                      created_at, expires_at)
+                        VALUES (?, repeat('c', 64), 'Open Staff and tap Invite someone.', 'invite-someone', 'gemini',
+                                'test-model', '0123456789abcdef', now(), now() + interval '1 day')
+                        """).param(t.tenantId()).update();
+        owner.sql("""
+                        INSERT INTO help_ask_tickets (id, tenant_id, user_id, at, kind) VALUES (?, ?, ?, now(), 'provider')
+                        """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        owner.sql("""
+                        INSERT INTO help_ask_spend (id, tenant_id, provider, model, reserved_at, cost_micro, cost_currency)
+                        VALUES (?, ?, 'gemini', 'test-model', now(), 0, 'USD')
+                        """).params(UUID.randomUUID(), t.tenantId()).update();
     }
 
     /**

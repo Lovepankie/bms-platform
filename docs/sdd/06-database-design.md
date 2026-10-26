@@ -672,6 +672,49 @@ one item, so the operator's screenshot read can bind it) and `platform_feedback_
 The status and the reply change only through `platform_feedback_set_status`, the linked issue only through
 `platform_feedback_set_linked_issue`.
 
+### `help_ask_questions` (RLS)
+
+(ADR-096; migration `V108`, issue #20) The Ask BMS question log: one row per question.
+`id uuid` PK, `tenant_id`, `user_id uuid NOT NULL` (FK `(tenant_id, user_id)` to `users`), `asked_at timestamptz NOT NULL`,
+`question_hash char(64)` (SHA-256 hex of the scrubbed, normalised question; **never the text**), `locale varchar(10)`, `outcome`
+(`model`, `cache`, `articles`, `other_role`, `no_match`), `fallback_reason` (`no_provider`, `all_failed`, `daily_cap`,
+`not_in_articles`; set exactly for `articles`), `provider` (`gemini`, `groq`, `deepseek`; the one that answered and billed, set for
+`model`, possible for `articles`, null otherwise: there is no other name, so no Anthropic one), `model varchar(100)`, `failures
+text[]` (the providers tried before, as `name:reason`), `counted boolean` (it went to the providers), `cited_article
+varchar(80)`, `input_tokens`, `output_tokens`, `cost_micro bigint` (estimated, from the operator's prices, every call of the
+question), `cost_currency char(3)`, `latency_ms`. Index `(tenant_id, asked_at)`. Grants `SELECT, INSERT` only. The limits count
+`help_ask_tickets` and the monthly cap sums `help_ask_spend`.
+
+### `help_ask_tickets` (RLS)
+
+(ADR-096; migration `V108`, issue #20) The Ask BMS limits, written before the work they count, under the business's
+transaction advisory lock: `kind` `ask` for every question (the per-person hourly limit) and `provider` for every question
+that goes on to the providers (the business's daily cap). `id`, `tenant_id`, `user_id` (FK `(tenant_id, user_id)` to `users`),
+`at`. Partial indexes `(tenant_id, user_id, at) WHERE kind = 'ask'` and `(tenant_id, at) WHERE kind = 'provider'`. Grants
+`SELECT, INSERT`.
+
+### `help_ask_spend` (RLS)
+
+(ADR-096; migration `V108`, issue #20) One row per provider call: `provider`, `model`, `reserved_at`, `settled_at` (null while
+the call is in flight: the row then holds its reservation, the most the call can cost), `input_tokens`, `output_tokens`,
+`cost_micro`, `cost_currency`. Written before the call (a paid provider's reservation under one platform-wide advisory lock,
+refused past the monthly cap) and settled after it with what the provider reported; a call that may have been billed but
+reported nothing keeps its reservation. Index `(provider, reserved_at)`. Grants `SELECT, INSERT, UPDATE` (the settlement). The
+`SECURITY DEFINER` function `help_ask_platform_spend(provider, currency, from)` sums it across every business in the cap's
+currency, one number and no row. An answer with no usage is settled at its reservation.
+The removal of a closed business (ADR-090) calls `help_erase_personal_data()` (SECURITY DEFINER, only inside a confirmed
+removal, through `bms_removing_tenant`), which deletes the business's `help_ask_answers` and `help_ask_tickets`; the question
+log and the spend rows go with the purge.
+
+### `help_ask_answers` (RLS)
+
+(ADR-096; migration `V108`, issue #20) The Ask BMS answer cache. PK `(tenant_id, cache_key)`; `cache_key char(64)` (SHA-256 hex of
+the prompt version, the provider and model chain, the corpus revision, the permission matrix version, the locale, the asker's
+roles, permission set and modules and the normalised question), `answer text` (1 to 2000 characters, phrased from the help
+articles only), `cited_article varchar(80)`, `provider`, `model`, `revision varchar(16)`, `created_at`, `expires_at` (after
+`created_at`; 30 days by default, a safety net, since any change is a new key). Grants `SELECT, INSERT, UPDATE`: the update
+replaces only a row past its expiry under the same key (`ON CONFLICT ... WHERE expires_at <= the new created_at`).
+
 ### `subscription_module_requests` (RLS)
 
 (ADR-073; migration `V90`, issue #472) One row per module the Owner asked for. `module_key text NOT NULL` (`^[a-z]{2,30}$`),

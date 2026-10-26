@@ -655,6 +655,16 @@ class BusinessClosureIT extends IntegrationTest {
         ResponseEntity<JsonNode> removed = remove(op, closureId, code(op));
         assertThat(removed.getStatusCode()).as("%s", removed.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(removed.getBody().get("erased").get("core").asInt()).isPositive();
+        // Ask BMS (ADR-096): the factory's cached answer and limit ticket go with the removal; the question log and the
+        // spend
+        // rows (a user id, hashes and counts) stay for the purge, which deletes every row of the business below.
+        assertThat(removed.getBody().get("erased").get("help").asInt()).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM help_ask_answers WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM help_ask_tickets WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM help_ask_questions WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
         assertThat(withPersonalData(t.tenantId()))
                 .as("tables still holding personal data")
                 .isEmpty();
@@ -693,6 +703,10 @@ class BusinessClosureIT extends IntegrationTest {
             }
         }
         assertThat(kept).as("tables still holding rows after the purge").isEmpty();
+        assertThat(count("SELECT count(*) FROM help_ask_questions WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(count("SELECT count(*) FROM help_ask_spend WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
         assertThat(count(
                         "SELECT count(*) FROM tenant_closures WHERE id = ? AND status = 'purged' AND purged_at IS NOT NULL",
                         closureId))

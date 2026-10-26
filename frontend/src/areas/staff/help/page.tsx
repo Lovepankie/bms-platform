@@ -1,16 +1,18 @@
 import { Link, createLazyRoute } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, ListRow, RowList } from '../../../app/ui/ListRow';
 import { SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { JOBS, articleById, articleVisible, articlesFor, searchArticles, type Article, type Inline } from '../../../help/corpus';
 import { useStaff } from '../context';
+import { AskBms, useAskEnabled } from './ask';
 
 // How do I...? (issue #598, ADR-095): short articles with pictures for the jobs a person does in BMS, under Help and feedback.
 // The articles ship with the app (src/help), so the page and its pictures work offline once the app is installed, and nothing is
 // sent anywhere while a person searches. A person sees only the articles their permissions allow. "Not answered? Ask us" opens
-// Feedback with what they searched for already typed.
+// Feedback with what they searched for already typed. While the platform has Ask BMS on for the business (issue #20, ADR-096),
+// an Ask BMS box above the search answers a question from these articles and links the one it comes from.
 
 function Words({ runs }: { runs: Inline }) {
   return <>{runs.map((r, i) => (r.strong ? <strong key={i}>{r.text}</strong> : <span key={i}>{r.text}</span>))}</>;
@@ -36,10 +38,13 @@ export function HowDoIPage() {
   const mine = useMemo(() => articlesFor(me), [me]);
   const search = useLiveSearch({ urlParam: 'q' });
   const found = useMemo(() => searchArticles(mine, search.term), [mine, search.term]);
+  const askEnabled = useAskEnabled();
+  const [asked, setAsked] = useState('');
   return (
     <main className="rt ln stack help-page">
       <h1>How do I...?</h1>
       <p>Short answers with pictures, for the jobs you do in BMS. They work without the internet too.</p>
+      {askEnabled && <AskBms onAsked={setAsked} />}
       <form role="search" data-tour="help-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox id="help-q" label="What do you want to do?" search={search} fetching={false} count={search.term ? found.length : undefined} hint="For example: move stock, invite, count" />
       </form>
@@ -66,7 +71,7 @@ export function HowDoIPage() {
           </div>
         )}
       </SearchResults>
-      <AskUs text={search.text} />
+      <AskUs text={search.text.trim() ? search.text : asked} />
     </main>
   );
 }

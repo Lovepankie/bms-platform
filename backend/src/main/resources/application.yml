@@ -231,6 +231,39 @@ bms:
     price-output-micro-per-million: ${BMS_AI_PRICE_OUTPUT_MICRO_PER_MILLION:0}
     price-currency: ${BMS_AI_PRICE_CURRENCY:USD}
     enabled-tenants: ${BMS_AI_ENABLED_TENANTS:}
+  # Ask BMS (issue #20, ADR-096, docs/runbooks/ask-bms.md): answers phrased from the help articles by a small model, providers
+  # tried cheapest first. Off for every business until BMS_HELP_ASK_TENANTS names it; with no key at all the matching
+  # articles are shown. Keys come from the host environment only. The provider allow-list (one host each for gemini, groq
+  # and deepseek) is a constant in AskProviders, not configuration; Claude is never used (startup refuses anything naming
+  # Anthropic or Claude). DeepSeek is skipped until both of its prices are set.
+  help:
+    ask:
+      enabled-tenants: ${BMS_HELP_ASK_TENANTS:}
+      daily-questions: ${BMS_HELP_ASK_DAILY_QUESTIONS:100}
+      user-hourly-questions: ${BMS_HELP_ASK_USER_HOURLY_QUESTIONS:30}
+      budget-seconds: ${BMS_HELP_ASK_BUDGET_SECONDS:10}
+      max-tokens: ${BMS_HELP_ASK_MAX_TOKENS:400}
+      cache-days: ${BMS_HELP_ASK_CACHE_DAYS:30}
+      cost-currency: ${BMS_HELP_ASK_COST_CURRENCY:USD}
+      deepseek-monthly-cost-micro: ${BMS_HELP_ASK_DEEPSEEK_MONTHLY_COST_MICRO:5000000}
+      gemini:
+        base-url: ${BMS_HELP_ASK_GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
+        api-key: ${BMS_HELP_ASK_GEMINI_API_KEY:}
+        model: ${BMS_HELP_ASK_GEMINI_MODEL:gemini-2.5-flash-lite}
+        price-input-micro-per-million: ${BMS_HELP_ASK_GEMINI_PRICE_INPUT_MICRO_PER_MILLION:0}
+        price-output-micro-per-million: ${BMS_HELP_ASK_GEMINI_PRICE_OUTPUT_MICRO_PER_MILLION:0}
+      groq:
+        base-url: ${BMS_HELP_ASK_GROQ_BASE_URL:https://api.groq.com/openai/v1}
+        api-key: ${BMS_HELP_ASK_GROQ_API_KEY:}
+        model: ${BMS_HELP_ASK_GROQ_MODEL:llama-3.1-8b-instant}
+        price-input-micro-per-million: ${BMS_HELP_ASK_GROQ_PRICE_INPUT_MICRO_PER_MILLION:0}
+        price-output-micro-per-million: ${BMS_HELP_ASK_GROQ_PRICE_OUTPUT_MICRO_PER_MILLION:0}
+      deepseek:
+        base-url: ${BMS_HELP_ASK_DEEPSEEK_BASE_URL:https://api.deepseek.com}
+        api-key: ${BMS_HELP_ASK_DEEPSEEK_API_KEY:}
+        model: ${BMS_HELP_ASK_DEEPSEEK_MODEL:deepseek-chat}
+        price-input-micro-per-million: ${BMS_HELP_ASK_DEEPSEEK_PRICE_INPUT_MICRO_PER_MILLION:0}
+        price-output-micro-per-million: ${BMS_HELP_ASK_DEEPSEEK_PRICE_OUTPUT_MICRO_PER_MILLION:0}
   # JUSTIFICATION-A3: the two new configuration groups (bms.pesapal, bms.payments) for slice #213 are new settings, not wrapped code.
   # Payment collections through Pesapal (ADR-035, spec 3.11). Nothing here collects by default: with no credentials the
   # gateway is off, and startup refuses any base URL that could reach the live provider from outside production (only the

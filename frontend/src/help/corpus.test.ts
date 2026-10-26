@@ -68,13 +68,19 @@ describe('the help corpus', () => {
   });
 
   it('has as its revision the first 16 hex digits of the SHA-256 of each file name and its bytes, in name order (ADR-095)', () => {
-    const hash = createHash('sha256');
-    for (const name of readdirSync(ARTICLE_DIR).filter((n) => n.endsWith('.md')).sort()) {
-      hash.update(`${name}\0`);
-      hash.update(readFileSync(new URL(name, ARTICLE_DIR)));
-      hash.update('\0');
-    }
-    expect(REVISION).toBe(hash.digest('hex').slice(0, 16));
+    const revisionOf = (files: [string, Buffer][]) => {
+      const hash = createHash('sha256');
+      for (const [name, bytes] of [...files].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+        hash.update(`${name}\0`);
+        hash.update(bytes);
+        hash.update('\0');
+      }
+      return hash.digest('hex').slice(0, 16);
+    };
+    const names = readdirSync(ARTICLE_DIR).filter((n) => n.endsWith('.md'));
+    expect(REVISION).toBe(revisionOf(names.map((n) => [n, readFileSync(new URL(n, ARTICLE_DIR))])));
+    // The same two files give the same value in the server's HelpArticlesTest, so Ask BMS (#20) names the same corpus.
+    expect(revisionOf([['b.md', Buffer.from('y')], ['a.md', Buffer.from('x')]])).toBe('a2bb2ea5e9574e21');
   });
 
   it('names only permissions the database seeds and screens the app routes', () => {
