@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { RetailError, retail, type StockRow } from '../../../api/retail';
+import { RetailError, isWaiting, retail, type StockRow } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showWhen } from './catalogue-products';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { holds, holdsAt } from './permissions';
 import { REASONS, correctionRequest, correctionWords, differenceWords, movementTitle, quantityProblem, signedQty, type ReasonCode } from './stock-correct-state';
-import { Problem, Success } from './ui';
+import { Problem, Success, WaitingForApproval } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
 import { WORDS } from '../../../app/glossary';
@@ -25,7 +25,7 @@ export const CATALOGUE_MANAGE = 'retail.catalogue.manage';
 type Choice = 'quantity' | 'category' | 'other' | 'history';
 
 /** The right quantity and a reason: the server posts the difference as a correction. */
-function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: string; onDone: (message: string) => void }) {
+function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; branchId: string; onDone: (message: string) => void; onWaiting: (what: string) => void }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const current = row.qty ?? '0';
@@ -72,7 +72,9 @@ function QuantityForm({ row, branchId, onDone }: { row: StockRow; branchId: stri
     onSuccess: (done) => {
       discard();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
-      onDone(`${row.description} is now ${showQty(done.new_qty ?? '0')} ${row.unit ?? ''} (it was ${showQty(done.old_qty ?? '0')}). The correction is in its history. It does not count as lost or damaged stock.`);
+      // ADR-091: a correction worth the business's amount waits for an administrator; the quantity stays as it is until then.
+      if (isWaiting(done)) onWaiting(`Changing ${row.description} to ${showQty(draft.qty)} ${row.unit ?? ''} waits for an administrator.`);
+      else onDone(`${row.description} is now ${showQty(done.new_qty ?? '0')} ${row.unit ?? ''} (it was ${showQty(done.old_qty ?? '0')}). The correction is in its history. It does not count as lost or damaged stock.`);
     },
     onError: (error) => {
       // The shelf moved while the form was open: read the list again, and type against the new quantity with a new key.
@@ -205,9 +207,11 @@ export function CorrectItem({ row, branchId, onClose }: { row: StockRow; branchI
   const { me } = useStaff();
   const [choice, setChoice] = useState<Choice | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState<string | null>(null);
   const mayQuantity = holdsAt(me, STOCK_COUNT, branchId);
   const mayCategory = holds(me, CATALOGUE_MANAGE);
-  const done = (text: string) => { setMessage(text); setChoice(null); };
+  const done = (text: string) => { setWaiting(null); setMessage(text); setChoice(null); };
+  const wait = (what: string) => { setMessage(null); setWaiting(what); setChoice(null); };
   const choices: { id: Choice; label: string; show: boolean }[] = [
     { id: 'quantity', label: 'The quantity is wrong', show: mayQuantity },
     { id: 'category', label: 'The category is wrong', show: mayCategory },
@@ -218,17 +222,18 @@ export function CorrectItem({ row, branchId, onClose }: { row: StockRow; branchI
     <section className="rt-card" aria-label={`Correct ${row.description}`} data-testid="correct-item">
       <h3>Correct {row.description}</h3>
       {message && <Success>{message}</Success>}
+      {waiting && <WaitingForApproval what={waiting} />}
       <div className="cluster">
         <Segmented
           label="What is wrong"
           options={choices.filter((c) => c.show).map((c) => ({ value: c.id, label: c.label }))}
           value={choice}
           clearable
-          onChange={(id) => { setMessage(null); setChoice(id); }}
+          onChange={(id) => { setMessage(null); setWaiting(null); setChoice(id); }}
         />
         <button type="button" className="btn-ghost btn-sm" onClick={onClose}>Close</button>
       </div>
-      {choice === 'quantity' && <QuantityForm row={row} branchId={branchId} onDone={done} />}
+      {choice === 'quantity' && <QuantityForm row={row} branchId={branchId} onDone={done} onWaiting={wait} />}
       {choice === 'category' && <CategoryForm row={row} onDone={done} />}
       {choice === 'history' && <History row={row} branchId={branchId} />}
       {choice === 'other' && (

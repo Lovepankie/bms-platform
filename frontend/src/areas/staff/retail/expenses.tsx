@@ -3,7 +3,7 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
-import { businessToday, retail, type Expense, type ExpenseGroup } from '../../../api/retail';
+import { businessToday, isWaiting, retail, type Expense, type ExpenseGroup } from '../../../api/retail';
 import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { MIN_EXPLANATION, activeCategories, itemsOf, needsExplanation, planExpense } from './expenses-state';
@@ -12,7 +12,7 @@ import { PartyPicker, useCashParties } from './party-picker';
 import { CASHBOOK_READ, holds, needsOf } from './permissions';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
-import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
+import { BranchRequired, Gate, Problem, WaitingForApproval, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
 
@@ -22,7 +22,7 @@ import { ActionBar } from '../../../app/ui/ActionBar';
 
 interface ExpenseDraft { date: string; categoryId: string; itemId: string; partyId: string; amount: string; explanation: string }
 
-export function ExpenseForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Expense) => void }) {
+export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string; onSaved?: (saved: Expense) => void; onWaiting?: (amountMinor: number) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const { key, draft, setDraft, finish } = usePersistedDraft<ExpenseDraft>(`expense:${me.user_id ?? ''}:${branchId}`, {
@@ -39,7 +39,9 @@ export function ExpenseForm({ branchId, onSaved }: { branchId: string; onSaved?:
     onSuccess: (saved) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
-      onSaved?.(saved);
+      // ADR-091: an expense worth the business's amount waits for an administrator and is not in the cash book until then.
+      if (isWaiting(saved)) onWaiting?.(saved.amount_minor ?? 0);
+      else onSaved?.(saved);
     },
   });
   const update = (patch: Partial<ExpenseDraft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -131,6 +133,7 @@ export function ExpensesScreen() {
   const { branchId, branchName } = useSingleBranch();
   const [saved, setSaved] = useSavedFor<Expense>(branchId);
   const [round, setRound] = useState(0);
+  const [waiting, setWaiting] = useState<number | null>(null);
   const { show, toast } = useToast();
   return (
     <Gate screen="expenses" title="Expenses">
@@ -141,6 +144,11 @@ export function ExpensesScreen() {
       <div data-tour="expense-form">
       {branchId === null ? (
         <BranchRequired permissions={needsOf('expenses')} />
+      ) : waiting !== null ? (
+        <section aria-label="Expense sent for approval" className="stack">
+          <WaitingForApproval what={`The expense of ${money(waiting)} is not in the cash book yet.`} />
+          <button type="button" className="rt-primary" onClick={() => { setWaiting(null); setRound((n) => n + 1); }}>Record another expense</button>
+        </section>
       ) : saved ? (
         <Saved title="Expense recorded" again="Record another expense" onAgain={() => { setSaved(null); setRound((n) => n + 1); }}>
           <p>
@@ -150,7 +158,7 @@ export function ExpensesScreen() {
         </Saved>
       ) : (
         <>
-          <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.', 'success'); }} />
+          <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.', 'success'); }} onWaiting={(amount) => { setWaiting(amount); show('Sent for approval.', 'info'); }} />
         </>
       )}
       </div>

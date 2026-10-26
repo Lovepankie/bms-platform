@@ -1,7 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
+import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.kernel.Versions;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
@@ -33,12 +33,12 @@ class CapabilitiesController {
 
     private final RetailCapabilities capabilities;
     private final TransferService transfers;
-    private final TenantSettings settings;
+    private final Approvals approvals;
 
-    CapabilitiesController(RetailCapabilities capabilities, TransferService transfers, TenantSettings settings) {
+    CapabilitiesController(RetailCapabilities capabilities, TransferService transfers, Approvals approvals) {
         this.capabilities = capabilities;
         this.transfers = transfers;
-        this.settings = settings;
+        this.approvals = approvals;
     }
 
     @Schema(name = "RetailCapabilities")
@@ -80,8 +80,9 @@ class CapabilitiesController {
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(
                     description =
-                            "Read only: the tenant's approval threshold for customer returns (action retail_sale_return),"
-                                    + " present only when one is set; while it is absent a return needs no second administrator")
+                            "Read only: the amount from which a customer return needs a second administrator (action"
+                                    + " retail_sale_return, ADR-091), present only while returns ask for approval (0: every return);"
+                                    + " while it is absent a return needs no second administrator")
             Long returnsApprovalThresholdMinor,
 
             @Schema(
@@ -164,7 +165,7 @@ class CapabilitiesController {
     }
 
     private CapabilitiesResponse response(Map<String, Object> g) {
-        long threshold = settings.approvalThresholdMinor("retail_sale_return");
+        Approvals.Rule returns = approvals.rule("retail_sale_return");
         return new CapabilitiesResponse(
                 (String) g.get("profile"),
                 flag(g, "branch_roles"),
@@ -177,7 +178,7 @@ class CapabilitiesController {
                 flag(g, "returns"),
                 g.get(RetailCapabilities.CREDIT_RECOGNITION) instanceof String c ? c : RetailCapabilities.ON_SALE,
                 g.get("credit_recognition_effective_from") instanceof String d ? LocalDate.parse(d) : null,
-                threshold > 0 ? threshold : null,
+                returns.on() ? returns.thresholdMinor() : null,
                 g.get("slow_mover_months") instanceof Number m ? m.intValue() : 4,
                 g.get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0);
     }

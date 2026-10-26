@@ -1273,6 +1273,30 @@ export const twoStepPage: Tour = {
   ],
 };
 
+// Business set-up > Approval rules (issue #343, ADR-091): which actions need an administrator first, and from what amount.
+export const approvalRulesPage: Tour = {
+  id: 'page-approval-rules',
+  version: 1,
+  title: 'This page: approval rules',
+  audience: isTenantAdmin,
+  autoStart: false,
+  page: '/staff/setup/approvals',
+  steps: [
+    {
+      id: 'intro',
+      target: 'approval-rules-intro',
+      title: 'A second person first',
+      body: 'Choose which actions wait for an administrator before they happen. While one waits, nothing changes, and the administrators are told.',
+    },
+    {
+      id: 'save',
+      target: 'approval-rules-save',
+      title: 'Read it back, then confirm',
+      body: 'Before you save, you read the change in plain words and confirm it with your own password or code. It is recorded with your name.',
+    },
+  ],
+};
+
 // Business set-up > Notifications for the business (issue #412): what the business sends by push, and when the daily summary goes.
 export const businessNotificationsPage: Tour = {
   id: 'page-business-notifications',
@@ -1980,7 +2004,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, wholesaleGroup, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

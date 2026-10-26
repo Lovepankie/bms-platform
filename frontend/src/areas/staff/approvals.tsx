@@ -16,6 +16,28 @@ import { Hint } from '../../app/ui/Hint';
 // the active branch. Approve executes the action at once; reject needs a note. The maker sees
 // their own requests and may cancel them, but never decide them (FR-APR-02).
 
+/** Each action in words, as the checker decides it (issue #343): the action type stays only for one this screen does not know. */
+export const ACTION_WORDS: Record<string, string> = {
+  retail_sale_void: 'Void a sale',
+  retail_stock_correction: 'Correct a stock quantity',
+  retail_expense: 'Record an expense',
+  retail_sale_return: 'Take goods back from a customer',
+  retail_sale_return_void: 'Void a customer return',
+  retail_sale_write_off: 'Write off what a buyer owes',
+  retail_purchase_order: 'Send a purchase order',
+  loan_disbursement: 'Pay out a loan',
+  loan_write_off: 'Write off a loan',
+  loan_bring_in: 'Bring in a loan from the paper register',
+  loan_bring_in_reversal: 'Undo a loan brought in',
+  repayment_reversal: 'Reverse a repayment',
+  charge_waiver: 'Waive a charge',
+  savings_withdrawal: 'Pay out savings',
+  savings_reversal: 'Reverse a savings entry',
+  investment_funding: 'Take in an investment',
+  investment_early_withdrawal: 'Pay out an investment early',
+  investment_reversal: 'Reverse an investment entry',
+};
+
 /**
  * What a request is, in words a checker can decide on. A collateral release names the item, what it is worth and where it is now, read
  * from the item itself (the list carries no payload, so who collects it is not shown here); other types keep their identifier until their screen gives them words.
@@ -24,7 +46,7 @@ export function What({ item }: { item: Approval }) {
   const api = useCollateralApi();
   const release = item.action_type === 'collateral_release';
   const detail = useQuery({ queryKey: ['collateral', 'one', item.subject_id], queryFn: () => api.get(item.subject_id ?? ''), enabled: release && !!item.subject_id, retry: false });
-  if (!release) return <>{item.action_type}</>;
+  if (!release) return <>{ACTION_WORDS[item.action_type ?? ''] ?? item.action_type}</>;
   const c = detail.data?.item;
   return (
     <>

@@ -1,9 +1,9 @@
 package com.rincoltech.bms.retail.purchasing.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -46,8 +46,9 @@ class PurchasingSettingsService {
 
             @Schema(
                     description =
-                            "Read only: the approval threshold for sending a purchase order (action retail_purchase_order),"
-                                    + " present only when one is set; while it is absent an order needs no second administrator")
+                            "Read only: the amount from which sending a purchase order needs a second administrator (action"
+                                    + " retail_purchase_order, ADR-091), present only while purchase orders ask for approval (0: every"
+                                    + " order); while it is absent an order needs no second administrator")
             Long orderApprovalThresholdMinor,
 
             @Schema(
@@ -65,19 +66,19 @@ class PurchasingSettingsService {
             Boolean requireCostingBeforeSale) {}
 
     private final JdbcClient jdbc;
-    private final TenantSettings tenantSettings;
+    private final Approvals approvals;
     private final RetailCapabilities capabilities;
     private final AuditLog audit;
     private final CurrentTenant tenant;
 
     PurchasingSettingsService(
             JdbcClient jdbc,
-            TenantSettings tenantSettings,
+            Approvals approvals,
             RetailCapabilities capabilities,
             AuditLog audit,
             CurrentTenant tenant) {
         this.jdbc = jdbc;
-        this.tenantSettings = tenantSettings;
+        this.approvals = approvals;
         this.capabilities = capabilities;
         this.audit = audit;
         this.tenant = tenant;
@@ -159,8 +160,9 @@ class PurchasingSettingsService {
         return current();
     }
 
+    /** ADR-091: the amount from which an order waits, while purchase orders ask for approval (0: every order); else none. */
     private Long threshold() {
-        long t = tenantSettings.approvalThresholdMinor(PurchaseOrderAction.TYPE);
-        return t > 0 ? t : null;
+        Approvals.Rule rule = approvals.rule(PurchaseOrderAction.TYPE);
+        return rule.on() ? rule.thresholdMinor() : null;
     }
 }

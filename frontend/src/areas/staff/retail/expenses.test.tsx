@@ -165,9 +165,10 @@ describe('expenses against the mock', () => {
     const code = async (body: Parameters<typeof mock.createExpense>[0], key: string) => ((await mock.createExpense(body, key).catch((e: unknown) => e)) as RetailError).code;
     expect(await code({ branch_id: branch, category_id: utilities.id!, item_id: others.id!, amount_minor: 1000 }, 'e1')).toBe('explanation_required');
     expect(await code({ branch_id: branch, category_id: transport.id!, item_id: others.id!, amount_minor: 1000 }, 'e2')).toBe('item_not_in_category');
-    const saved = await mock.createExpense({ branch_id: branch, category_id: utilities.id!, item_id: others.id!, amount_minor: 1000, explanation: 'Generator oil' }, 'e3');
+    // The mock never asks for approval, so it answers with the expense.
+    const saved = (await mock.createExpense({ branch_id: branch, category_id: utilities.id!, item_id: others.id!, amount_minor: 1000, explanation: 'Generator oil' }, 'e3')) as Expense;
     expect(saved.category_name).toBe('Utilities');
-    expect((await mock.createExpense({ branch_id: branch, category_id: utilities.id!, item_id: others.id!, amount_minor: 1000, explanation: 'Generator oil' }, 'e3')).id).toBe(saved.id);
+    expect(((await mock.createExpense({ branch_id: branch, category_id: utilities.id!, item_id: others.id!, amount_minor: 1000, explanation: 'Generator oil' }, 'e3')) as Expense).id).toBe(saved.id);
   });
 
   it('adds a beneficiary on the fly and refuses a duplicate in plain words', async () => {
@@ -198,7 +199,7 @@ describe('expenses against the mock', () => {
     const cats = await mock.listExpenseCategories({ activeOnly: true });
     const transport = cats[0]!;
     const fuel = transport.items![0]!;
-    const one = await mock.createExpense({ branch_id: branch, business_date: today, category_id: transport.id!, item_id: fuel.id!, amount_minor: 30000 }, 'r1');
+    const one = (await mock.createExpense({ branch_id: branch, business_date: today, category_id: transport.id!, item_id: fuel.id!, amount_minor: 30000 }, 'r1')) as Expense;
     await mock.createExpense({ branch_id: branch, business_date: today, category_id: transport.id!, item_id: fuel.id!, amount_minor: 20000 }, 'r2');
     const before = await mock.expensesReport({ groupBy: 'category', from: today, to: today });
     expect(before.total_minor).toBe(50000);

@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.cashbook.internal;
 
+import com.rincoltech.bms.core.approvals.ApprovalWaiting;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.Advance;
@@ -28,12 +29,16 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.Withdrawal;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.WithdrawalPage;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.WithdrawalRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -279,10 +284,36 @@ class CashbookController {
             operationId = "createRetailExpense",
             description =
                     "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied")
-    ResponseEntity<Expense> createExpense(
+    @ApiResponse(
+            responseCode = "201",
+            description = "The expense, recorded",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = Expense.class)))
+    @ApiResponse(
+            responseCode = "202",
+            description =
+                    "Expenses ask for approval and the amount reaches the business's amount (ADR-091): the expense waits for an"
+                            + " administrator and is not in the cash book yet",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApprovalWaiting.class)))
+    ResponseEntity<?> createExpense(
             @RequestHeader(name = KEY, required = false) String key, @Valid @RequestBody ExpenseRequest request) {
-        Outcome<Expense> outcome = expenses.create(key, request);
-        return created(outcome, "/api/v1/retail/expenses/" + outcome.body().id());
+        Outcome<ExpenseService.ExpenseOutcome> outcome = expenses.create(key, request);
+        ExpenseService.ExpenseOutcome body = outcome.body();
+        if (body.waiting() != null) {
+            ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.ACCEPTED);
+            if (outcome.replayed()) {
+                response.header("Idempotent-Replayed", "true");
+            }
+            return response.body(body.waiting());
+        }
+        return created(
+                new Outcome<>(body.expense(), outcome.replayed()),
+                "/api/v1/retail/expenses/" + body.expense().id());
     }
 
     @GetMapping("/expenses")

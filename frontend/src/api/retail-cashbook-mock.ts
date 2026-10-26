@@ -1,5 +1,5 @@
 import type {
-  Advance, AdvanceParty, Banking, BankingDay, CashDailyRow, CashParty, CashQuery, Expense, ExpenseCategory, ExpenseGroup, RetailApi, Savings, Withdrawal,
+  Advance, AdvanceParty, ApprovalWaiting, Banking, BankingDay, CashDailyRow, CashParty, CashQuery, Expense, ExpenseCategory, ExpenseGroup, RetailApi, Savings, Withdrawal,
 } from './retail';
 import { RetailError, daysBefore } from './retail';
 import { retailMessage } from './retail-errors';
@@ -23,6 +23,8 @@ export interface CashbookEnv {
   run: <T>(fn: () => T) => Promise<T>;
   once: <T>(key: string, request: unknown, make: () => T) => T;
   nextId: (prefix: string) => string;
+  /** Issue #343: the 202 of an action the mock is told to keep waiting for an administrator, or null. */
+  waiting: (actionType: string, amountMinor: number) => ApprovalWaiting | null;
 }
 
 type Keys = 'savingsSuggestion' | 'createSavings' | 'listSavings' | 'voidSavings' | 'bankingExpected' | 'createBanking' | 'listBankings' | 'voidBanking'
@@ -286,13 +288,15 @@ export function createCashbookMock(env: CashbookEnv): Pick<RetailApi, Keys> {
       }),
 
     createExpense: (body, key) =>
-      run(() => once(`expense|${key}`, body, (): Expense => {
+      run(() => once(`expense|${key}`, body, (): Expense | ApprovalWaiting => {
         const r = base(body.branch_id, body.business_date, 'x');
         const category = categories.find((c) => c.id === body.category_id);
         const item = category?.items?.find((i) => i.id === body.item_id);
         if (!category || !item) refuse(422, 'item_not_in_category', 'The item is not in the category.');
         if (!category?.active) refuse(422, 'category_inactive', 'Inactive.');
         if (item?.requires_explanation && (body.explanation ?? '').trim().length < 3) refuse(422, 'explanation_required', 'Explanation required.');
+        const waits = env.waiting('retail_expense', body.amount_minor);
+        if (waits) return waits;
         const row = { ...r, amount: body.amount_minor, category_id: body.category_id, item_id: body.item_id, ...(body.party_id ? { party_id: body.party_id } : {}), ...(body.explanation ? { explanation: body.explanation } : {}) };
         expenses.push(row);
         return expenseRow(row);

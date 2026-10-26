@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.sales.internal;
 
+import com.rincoltech.bms.core.approvals.ApprovalWaiting;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.Customer;
@@ -19,6 +20,9 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.UpdateCustomerRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.VoidRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesSummaryApi.Summary;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -160,9 +164,30 @@ class SalesController {
 
     @PostMapping("/sales/{sale_id}/void")
     @RequiresPermission("retail.sale.void")
-    @Operation(summary = "Void a sale by reversal (FR-RET-04)", operationId = "voidRetailSale")
-    Sale voidSale(@PathVariable("sale_id") UUID id, @Valid @RequestBody VoidRequest request) {
-        return service.voidSale(id, request);
+    @Operation(
+            summary = "Void a sale by reversal (FR-RET-04), or ask an administrator first (ADR-091)",
+            operationId = "voidRetailSale")
+    @ApiResponse(
+            responseCode = "200",
+            description = "The sale, voided",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = Sale.class)))
+    @ApiResponse(
+            responseCode = "202",
+            description =
+                    "Sale voids ask for approval and this sale's total reaches the amount: the void waits for an administrator and"
+                            + " nothing changed yet",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApprovalWaiting.class)))
+    ResponseEntity<?> voidSale(@PathVariable("sale_id") UUID id, @Valid @RequestBody VoidRequest request) {
+        SalesService.VoidOutcome outcome = service.voidSale(id, request);
+        return outcome.waiting() != null
+                ? ResponseEntity.status(HttpStatus.ACCEPTED).body(outcome.waiting())
+                : ResponseEntity.ok(outcome.sale());
     }
 
     @PostMapping("/sales/{sale_id}/payments")

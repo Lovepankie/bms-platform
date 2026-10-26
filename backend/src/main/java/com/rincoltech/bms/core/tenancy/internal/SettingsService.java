@@ -2,6 +2,8 @@ package com.rincoltech.bms.core.tenancy.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
+import com.rincoltech.bms.core.tenancy.ApprovalAmountsChanged;
+import com.rincoltech.bms.core.tenancy.ApprovalRuleStore;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
@@ -48,11 +50,12 @@ import tools.jackson.databind.ObjectMapper;
  * is validated and audited with the before and after values of the keys that changed.
  */
 @Service
-class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
+class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, ApprovalRuleStore {
 
     static final Map<String, Integer> DEFAULT_APPRAISAL_WEIGHTS =
             Map.of("repayment_history", 40, "affordability", 30, "collateral_cover", 20, "exposure", 10);
     private static final String MODULE_GROUPS = "module_groups";
+    private static final String APPROVAL_SWITCHES = "approval_switches";
     private static final Pattern ACTION_TYPE = Pattern.compile("^[a-z][a-z0-9_]{2,62}$");
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
 
@@ -100,7 +103,7 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
 
     /**
      * @param proved the administrator's proof was checked before this transaction (it is needed when the change relaxes the
-     *     two-step rule); the row is read again under its lock, and a change that relaxes it without that proof is refused
+     *     two-step rule or changes an approval amount, ADR-091); the row is read again under its lock, and a change that relaxes it without that proof is refused
      */
     @Transactional
     SettingsResponse update(String ifMatch, UpdateSettingsRequest request, boolean proved) {
@@ -124,7 +127,8 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
         }
         Map<String, Object> changes = plan(stored, request);
         boolean relaxes = relaxes(stored.values(), changes);
-        if (relaxes && !proved) {
+        boolean amounts = changesThresholds(resolve(stored.values(), stored.version()), request);
+        if ((relaxes || amounts) && !proved) {
             throw ApiException.rule("proof_required", "Confirm that it is you, then save again.");
         }
         SettingsResponse after = write(stored, changes);
@@ -324,27 +328,17 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
     }
 
     /**
-     * The administrators with a device are told when a safeguard is loosened (ADR-050): the amount that needs a second person
-     * raised for an action. The person who changed it is not told. The
-     * names of the actions are the ones the approvals inbox shows.
+     * The approval amounts that changed go to the approvals module (ADR-050, ADR-091 decision 8), which tells the administrators
+     * with a device when a rule was loosened: a higher amount, or 0 switching an action off by its default. The person who
+     * changed it is not told.
      */
     private void announceWeakening(SettingsResponse before, SettingsResponse after) {
-        UUID by = CurrentPrincipal.get().map(Principal::userId).orElse(null);
-        List<String> raised = after.approvalThresholdsMinor().entrySet().stream()
-                .filter(e -> e.getValue() > before.approvalThresholdsMinor().getOrDefault(e.getKey(), 0L))
-                .map(e -> e.getKey().replace('_', ' '))
-                .sorted()
-                .toList();
-        if (!raised.isEmpty()) {
-            events.publishEvent(new PushNotice(
-                    "core.approval_policy_weakened",
-                    "settings-v" + after.version(),
-                    new PushNotice.Holders("core.settings.manage", null, by),
-                    Map.of(
-                            "action_label",
-                            String.join(", ", raised.subList(0, Math.min(3, raised.size()))),
-                            "path",
-                            "/staff/setup")));
+        if (!before.approvalThresholdsMinor().equals(after.approvalThresholdsMinor())) {
+            events.publishEvent(new ApprovalAmountsChanged(
+                    before.approvalThresholdsMinor(),
+                    after.approvalThresholdsMinor(),
+                    CurrentPrincipal.get().map(Principal::userId).orElse(null),
+                    after.version()));
         }
     }
 
@@ -353,6 +347,55 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate {
     public long approvalThresholdMinor(String actionType) {
         Long threshold = current().approvalThresholdsMinor().get(actionType);
         return threshold == null ? 0 : threshold;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    public Map<String, Boolean> approvalSwitches() {
+        Map<String, Boolean> out = new TreeMap<>();
+        ((Map<String, Object>) load(false).values().getOrDefault(APPROVAL_SWITCHES, Map.of()))
+                .forEach((k, v) -> out.put(k, Boolean.TRUE.equals(v)));
+        return out;
+    }
+
+    @Override
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public int saveApprovalRules(
+            Map<String, Boolean> switches, Map<String, Long> thresholdsMinor, int expectedVersion) {
+        Stored stored = lock();
+        if (stored.version() != expectedVersion) {
+            throw Versions.conflict(stored.version());
+        }
+        Map<String, Object> next = new TreeMap<>(stored.values());
+        Map<String, Object> on = new TreeMap<>((Map<String, Object>) next.getOrDefault(APPROVAL_SWITCHES, Map.of()));
+        on.putAll(switches);
+        Map<String, Object> amounts =
+                new TreeMap<>((Map<String, Object>) next.getOrDefault("approval_thresholds_minor", Map.of()));
+        amounts.putAll(thresholdsMinor);
+        next.put(APPROVAL_SWITCHES, on);
+        next.put("approval_thresholds_minor", amounts);
+        jdbc.sql("UPDATE tenant_settings SET settings = CAST(? AS jsonb), updated_at = now(), version = version + 1")
+                .param(mapper.writeValueAsString(next))
+                .update();
+        return stored.version() + 1;
+    }
+
+    /**
+     * Whether a {@code PATCH /settings} changes an approval amount, which needs the administrator's proof as the approval rules do
+     * (ADR-091 decision 7). Read without a lock, before the transaction; {@link #update} decides again on the locked row.
+     */
+    @Transactional(readOnly = true)
+    boolean changesThresholds(UpdateSettingsRequest request) {
+        return changesThresholds(current(), request);
+    }
+
+    private static boolean changesThresholds(SettingsResponse before, UpdateSettingsRequest request) {
+        return request.approvalThresholdsMinor() != null
+                && request.approvalThresholdsMinor().entrySet().stream()
+                        .anyMatch(e -> !Objects.equals(
+                                e.getValue(), before.approvalThresholdsMinor().getOrDefault(e.getKey(), 0L)));
     }
 
     @Override

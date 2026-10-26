@@ -43,7 +43,7 @@ only retail has this need.
 1. **The cash book is a sub-domain of the retail module**: the package `retail.cashbook`, tables
    prefixed `retail_`, copying the shape of `lending.members` and of `retail.sales`. It uses core
    modules only and never touches lending packages. Its declared `allowedDependencies` (Spring
-   Modulith, `ModularityTest`) are exactly: `kernel`, `core.tenancy`, `core.audit`, `core.ledger`,
+   Modulith, `ModularityTest`) are exactly: `kernel`, `core.tenancy`, `core.approvals` (the expense approval, added by #343, ADR-091), `core.audit`, `core.ledger`,
    `core.documents`, `core.operations` (the shared Idempotency, added by #177), `retail.sales` (the day's cash sales and payments), `retail.purchasing` (cash
    restocks), `retail.reports` (the daily profit, read only for callers with `retail.profit.read`) and
    `retail.stock` (the posting helpers; the idempotency helper moved to `core.operations` in #177); it must not depend on `lending.*`, and

@@ -348,6 +348,15 @@ class RetailTradePurchasingIT extends IntegrationTest {
                 .update();
     }
 
+    /** ADR-091: the switch an administrator saves on the approval rules, written as the store writes it. */
+    void switched(boolean on) {
+        TestDatabase.owner().sql("""
+                        UPDATE tenant_settings SET settings = settings || jsonb_build_object('approval_switches',
+                               coalesce(settings->'approval_switches', '{}'::jsonb) || jsonb_build_object('retail_purchase_order', ?))
+                         WHERE tenant_id = ?
+                        """).params(on, t.tenantId()).update();
+    }
+
     ResponseEntity<JsonNode> decide(String approval, RetailTestSupport who, String perms) {
         return http.exchange(
                 "/api/v1/approvals/" + approval + "/approve",
@@ -575,6 +584,35 @@ class RetailTradePurchasingIT extends IntegrationTest {
         assertThat(sendRaw(uuid(draft(hq, orderLine(product, "100", 100)), "id"))
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+    }
+
+    /** ADR-091: the switch on the approval rules decides; the amount only counts while it is on. */
+    @Test
+    void theApprovalRulesSwitchDecidesWhetherAnOrderWaits() {
+        // Switched off with an amount set: a large order is sent at once, and a large delivery needs no order.
+        threshold(1_000);
+        switched(false);
+        assertThat(sendRaw(uuid(draft(hq, orderLine(product, "100", 100)), "id"))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        blind(hq, product, "50", 100);
+        // Switched on with no amount: every order waits, and every delivery needs an order.
+        threshold(0);
+        switched(true);
+        ResponseEntity<JsonNode> asked = sendRaw(uuid(draft(hq, orderLine(product, "1", 100)), "id"));
+        assertThat(asked.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(asked.getBody().get("executed").asBoolean()).isFalse();
+        Map<String, Object> l = new LinkedHashMap<>();
+        l.put("product_id", product);
+        l.put("qty", "1");
+        l.put("cost_minor", 100);
+        Map<String, Object> b = new LinkedHashMap<>();
+        b.put("supplier_id", supplier);
+        b.put("branch_id", hq);
+        b.put("lines", List.of(l));
+        ResponseEntity<JsonNode> blindOne = keyed("/goods-receipts", b, BUYER, "*");
+        assertThat(blindOne.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(blindOne)).isEqualTo("blind_receipt_over_limit");
     }
 
     @Test

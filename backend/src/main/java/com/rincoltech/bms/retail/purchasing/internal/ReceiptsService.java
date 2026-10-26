@@ -1,10 +1,10 @@
 package com.rincoltech.bms.retail.purchasing.internal;
 
+import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -89,7 +89,7 @@ class ReceiptsService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
-    private final TenantSettings tenantSettings;
+    private final Approvals approvals;
 
     ReceiptsService(
             ReceiptsRepository repo,
@@ -108,7 +108,7 @@ class ReceiptsService {
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit,
-            TenantSettings tenantSettings) {
+            Approvals approvals) {
         this.repo = repo;
         this.landed = landed;
         this.orderRepo = orderRepo;
@@ -125,7 +125,7 @@ class ReceiptsService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
-        this.tenantSettings = tenantSettings;
+        this.approvals = approvals;
     }
 
     @Transactional
@@ -385,17 +385,19 @@ class ReceiptsService {
     }
 
     /**
-     * With an approval threshold set for purchase orders (retail_purchase_order), goods cannot be received past what a second
+     * While purchase orders ask for approval (retail_purchase_order, ADR-091), goods cannot be received past what a second
      * person authorised, or the threshold would limit nothing: a receipt with no order is refused when it is worth the
      * threshold or more (raise an order, which a second person approves), and a receipt against an order is refused when the
      * value received on it, with this receipt, would pass the order's value plus the over-receipt tolerance (a price above the
-     * order's is as much an over-receipt as a quantity above it). With no threshold set neither limit applies.
+     * order's is as much an over-receipt as a quantity above it). With the approval off neither limit applies; on with no amount,
+     * every delivery needs an order.
      */
     private void limitUnauthorised(OrderRow order, List<Item> items) {
-        long threshold = tenantSettings.approvalThresholdMinor(PurchaseOrderAction.TYPE);
-        if (threshold <= 0) {
+        Approvals.Rule rule = approvals.rule(PurchaseOrderAction.TYPE);
+        if (!rule.on()) {
             return;
         }
+        long threshold = rule.thresholdMinor();
         long total = items.stream().mapToLong(x -> x.planned().lineTotal()).reduce(0, Math::addExact);
         if (order == null) {
             if (total >= threshold) {

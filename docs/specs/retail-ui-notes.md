@@ -1568,3 +1568,19 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
 - `glossary.test.ts` fails when SKU, variance, shrinkage, UOM or restock (any case), or a retired label, shows in the
   source strings or JSX text of a screen, in a tour or in the menu help. It reads source, not the rendered page: words
   built at run time and the backend's refusals are worded by hand. The tours whose words changed took a new version.
+
+## Approval rules and actions that wait (issue #343, ADR-091, FR-APR-09)
+
+- **Approval rules** (Business set-up, `/staff/setup/approvals`, administrators): the business's actions grouped as Shop and
+  Lending, one card each. A retail action has a checkbox "Ask an administrator first" and, while on, "<action> from this amount"
+  (the one money field; 0 means every one, or for credit write-offs "a second administrator when the business has two or more", ADR-043's rule). A lending action reads "Always on" and shows only its amount. One Hint line per card says
+  what happens while it waits. Below the shop list: "Selling below cost is not an approval", with a link to Staff users. Review and
+  save reads each change back as "Sale voids: a second person from UGX 50,000 (was no second person).", says when the other
+  administrators will be told, and asks for the administrator's own password, or the authenticator code when they have one.
+- **While an action waits** (void a sale, correct a quantity, record an expense): a neutral note, not a success: "Sent for
+  approval. <what> Nothing changes until an administrator approves it." and the row "See it, or cancel it, on Approvals". The void
+  button stays away; the expense form offers Record another expense.
+- **Approvals** names every action in words ("Void a sale", "Correct a stock quantity", "Record an expense"); an unknown type keeps
+  its identifier.
+- **Retail settings** returns Hint (#575) now links to the returns row of the approval rules ("Set a returns limit in Approval
+  rules").

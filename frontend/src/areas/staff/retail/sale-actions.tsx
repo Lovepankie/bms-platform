@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { RetailError, retail, type Sale } from '../../../api/retail';
+import { RetailError, isWaiting, retail, type Sale } from '../../../api/retail';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
@@ -9,7 +9,7 @@ import {
   IMPORTED_FULL, IMPORTED_SHORT, MIN_REASON, PAY_METHODS, blankPay, buildPayRequest, fullPay, importedAndOwing, keyReused, owedMinor, paidWords, payFailureWords, payProblem,
   saleMovedOn, settledDate, takesPayment, typedAmount, voidBlocked, voidReasonOf, type PayForm,
   WRITE_OFF_CHECKER, WRITE_OFF_PENDING, canWriteOff, writeOffAlreadyPending, writeOffFailureWords, writeOffMovedOn, writeOffReasonOf, writeOffAmount, writeOffWarning, writeOffWords, } from './sale-actions-state';
-import { Problem, Success, money } from './ui';
+import { Problem, Success, WaitingForApproval, money } from './ui';
 
 // Two actions on a sale, for a shop owner (issues #326 and #327): take a payment on a credit sale, from the credit sales list and from
 // the sale itself, and void a sale from the sale itself. The API checks every rule again under the sale's lock; the screens only save a
@@ -191,11 +191,14 @@ export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: 
   const [open, setOpen] = useState(false);
   // Voided, or found already voided: the button stays away until the reloaded sale says Voided.
   const [done, setDone] = useState(false);
+  // ADR-091: the void waits for an administrator; the sale stays as it is until then, and the button stays away.
+  const [waiting, setWaiting] = useState(false);
   const sending = useRef(false);
   const send = useMutation({
     mutationFn: (reason: string) => retail.voidSale(sale.id ?? '', reason),
-    onSuccess: () => {
-      setDone(true);
+    onSuccess: (outcome) => {
+      if (isWaiting(outcome)) setWaiting(true);
+      else setDone(true);
       setOpen(false);
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
@@ -209,6 +212,7 @@ export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: 
     },
     onSettled: () => { sending.current = false; },
   });
+  if (waiting) return <WaitingForApproval what="The void of this sale waits for an administrator." />;
   if (sale.status !== 'completed' || done || !holdsAt(me, SALE_VOID, sale.branch_id)) return null;
   const blocked = voidBlocked(sale);
   if (blocked) return <p className="hint" data-testid="void-blocked">{blocked}</p>;

@@ -119,7 +119,9 @@ class SettingsController {
             @Size(min = 1, max = 100) String displayName,
             @Size(max = 500) String receiptFooter,
 
-            @Schema(description = "Action type to amount in minor units; below it no checker is needed (FR-APR-04)")
+            @Schema(
+                    description =
+                            "Action type to amount in minor units; below it no checker is needed (FR-APR-04). A change needs totp_code or password (ADR-091); the approval rules screen uses PUT /settings/approvals")
             Map<String, Long> approvalThresholdsMinor,
 
             @Min(1) @Max(90) Integer approvalValidityDays,
@@ -170,13 +172,13 @@ class SettingsController {
             @Size(max = 20)
             @Schema(
                     description =
-                            "Needed to turn two-step sign-in off or narrow it, from an administrator who has an authenticator: its current code (ADR-046). Never stored or logged")
+                            "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged")
             String totpCode,
 
             @Size(max = 200)
             @Schema(
                     description =
-                            "Needed to turn two-step sign-in off or narrow it, from an administrator with no authenticator: their own current password (ADR-046). Never stored or logged")
+                            "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged")
             String password) {}
 
     @GetMapping
@@ -195,12 +197,14 @@ class SettingsController {
     ResponseEntity<SettingsResponse> update(
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @Valid @RequestBody UpdateSettingsRequest request) {
-        // Relaxing the two-step rule needs the proof of the admin reset of a sign-in, before the transaction (ADR-046).
-        boolean relaxes = service.relaxesTwoStep(request);
-        if (relaxes) {
+        // Relaxing the two-step rule needs the proof of the admin reset of a sign-in, before the transaction (ADR-046),
+        // and so
+        // does changing an approval amount (ADR-091 decision 7).
+        boolean proves = service.relaxesTwoStep(request) || service.changesThresholds(request);
+        if (proves) {
             guard.requireProof(request.totpCode(), request.password());
         }
-        SettingsResponse settings = service.update(ifMatch, request, relaxes);
+        SettingsResponse settings = service.update(ifMatch, request, proves);
         return ResponseEntity.ok().eTag(String.valueOf(settings.version())).body(settings);
     }
 

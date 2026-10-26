@@ -665,9 +665,9 @@ class OutboxTemplates {
             Map.entry(
                     "core.approval_policy_weakened",
                     new Template(
-                            "An approval limit was raised",
-                            "The amount that can be done without a second person was raised for {action_label}. If you did"
-                                    + " not expect this, check Business set-up.")),
+                            "An approval rule was loosened",
+                            "Fewer of these now need a second person: {action_label}. If you did not expect this, check"
+                                    + " Approval rules in Business set-up.")),
             Map.entry(
                     "core.signin_policy_weakened",
                     new Template(

@@ -1,4 +1,5 @@
 import type {
+  ApprovalWaiting,
   Barcode,
   AllBranchesRow, Category, EntryConfirmation, EntryNorms, NameHints, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
@@ -81,6 +82,22 @@ let transferReceipt = false;
 /** Forces the two-step transfer on for every mock instance, besides the capability a mock instance's settings switch (ADR-033). */
 export function setMockTransferReceipt(on: boolean): void {
   transferReceipt = on;
+}
+
+/**
+ * Issue #343, ADR-091: the approval rules live on the server. In the mock, the action types named here (by a test, or by
+ * VITE_RETAIL_MOCK_APPROVALS in development) wait for an administrator, answering as the server's 202 does, so the screens'
+ * "Sent for approval" can be seen. None by default, as on a business that never switched one on.
+ */
+let waitingActions = new Set<string>((import.meta.env.VITE_RETAIL_MOCK_APPROVALS ?? '').split(',').filter(Boolean));
+
+export function setMockApprovals(actionTypes: string[]): void {
+  waitingActions = new Set(actionTypes);
+}
+
+/** The 202 of an action that waits in the mock, or null when it happens at once. */
+export function mockWaiting(actionType: string, amountMinor: number, id: string): ApprovalWaiting | null {
+  return waitingActions.has(actionType) ? { approval_id: id, action_type: actionType, amount_minor: amountMinor, currency: 'UGX' } : null;
 }
 
 /** The staff layout tells the mock what the session may see; the real API decides by itself. */
@@ -480,7 +497,7 @@ export function createMockRetail(): RetailApi {
     ...documentsApi,
     ...returnsApi,
     ...purchasingApi,
-    ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId }),
+    ...createCashbookMock({ profit: () => profitAccess, today, sold, branchIds: MOCK_BRANCHES.map((b) => b.id), delay, run, once, nextId, waiting: (type, amount) => mockWaiting(type, amount, nextId('apr')) }),
 
     listProducts: ({ query, branchId }) =>
       delay([...products.values()].filter((p) => p.active !== false && matches(p, query)).map((p): Product => {
@@ -986,6 +1003,8 @@ export function createMockRetail(): RetailApi {
         const sale = sales.find((x) => x.id === saleId) ?? refuse(404, 'not_found', 'That could not be found.');
         if (sale.status === 'voided') refuse(409, 'sale_voided', 'This sale has been voided already.');
         if (sale.payment_method === 'credit' && (sale.paid_minor ?? 0) > 0) refuse(422, 'sale_has_payments', 'A credit sale with payments against it cannot be voided.');
+        const waiting = mockWaiting('retail_sale_void', sale.total_minor ?? 0, nextId('apr'));
+        if (waiting) return waiting;
         (sale.lines ?? []).forEach((l) => move(sale.branch_id ?? BRANCH_A, l.product_id ?? '', toMilli(l.qty ?? '0')));
         sale.status = 'voided';
         sale.void_reason = reason.trim();
@@ -1146,7 +1165,10 @@ export function createMockRetail(): RetailApi {
         const next = toMilli(body.new_qty);
         if (next < 0) refuse(422, 'validation_failed', 'The quantity cannot be below none.');
         if (toMilli(body.expected_qty) !== was) refuse(409, 'stock_moved', `The quantity changed while you were typing: it is ${plainQty(fromMilli(was))} ${p.unit} now. Look at the list again and type the right quantity.`, { current_qty: fromMilli(was) });
+        // The server refuses a correction that changes nothing before it asks for approval, so the mock does too.
         if (next === was) refuse(422, 'quantity_unchanged', `The quantity is ${plainQty(fromMilli(was))} ${p.unit} already. Type the right quantity.`);
+        const waiting = mockWaiting('retail_stock_correction', Math.round((Math.abs(next - was) * p.costMinor) / 1000), nextId('apr'));
+        if (waiting) return waiting;
         move(body.branch_id, p.id, next - was);
         const label = body.reason_code === 'entry_mistake' ? 'Entry mistake' : 'Miscount';
         const id = nextId('c');

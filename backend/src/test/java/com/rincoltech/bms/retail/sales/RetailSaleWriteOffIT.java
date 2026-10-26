@@ -664,6 +664,24 @@ class RetailSaleWriteOffIT extends IntegrationTest {
         assertThat(sale(s).get("write_off").get("unpaid_minor").asLong()).isEqualTo(1_000);
     }
 
+    /**
+     * ADR-091: switched off on the approval rules, a write-off never waits, even with two administrators and an amount, and it is
+     * still flagged and told (ADR-043 decision 10) with the reason approval_switched_off.
+     */
+    @Test
+    void switchedOffAWriteOffNeverWaitsAndIsStillFlaggedAndTold() {
+        activeAdmins(2);
+        threshold(500);
+        TestDatabase.owner().sql("""
+                        UPDATE tenant_settings SET settings = settings
+                               || '{"approval_switches": {"retail_sale_write_off": false}}'::jsonb WHERE tenant_id = ?
+                        """).param(t.tenantId()).update();
+        UUID s = creditSale(1, 1);
+        JsonNode written = writeOffOk(s);
+        assertThat(noSecondPerson(written)).isEqualTo("approval_switched_off");
+        assertThat(told(written)).isEqualTo(2);
+    }
+
     @Test
     void withASingleActiveAdministratorTheWriteOffIsAllowedAloneAndTheAuditRowSaysSo() {
         activeAdmins(1);

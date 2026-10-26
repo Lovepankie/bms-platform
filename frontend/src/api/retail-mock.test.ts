@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RetailError, businessToday } from './retail';
-import { createMockRetail, mockMe, setMockProfitAccess } from './retail-mock';
+import { RetailError, businessToday, isWaiting } from './retail';
+import { createMockRetail, mockMe, setMockApprovals, setMockProfitAccess } from './retail-mock';
 
 const branch = mockMe('admin').branches?.[0]?.id ?? '';
 const cash = (productId: string, qty: string) => ({ branch_id: branch, payment_method: 'cash', lines: [{ product_id: productId, qty }] });
@@ -235,5 +235,23 @@ describe('retail mock adapter (real response shapes)', () => {
     expect(JSON.stringify(page)).not.toMatch(/cost|profit/i);
     expect(JSON.stringify(await api.getSale(page.items?.[0]?.id ?? ''))).not.toMatch(/cost|profit/i);
     setMockProfitAccess(true);
+  });
+});
+
+describe('the mock approval rules (issue #343)', () => {
+  it('refuses a correction that changes nothing before it answers waiting, as the server does', async () => {
+    setMockApprovals(['retail_stock_correction']);
+    try {
+      const api = createMockRetail();
+      const branch = mockMe('admin').branches?.[0]?.id ?? '';
+      const row = (await api.listStock({ branchId: branch }))[0];
+      const qty = row?.qty ?? '0';
+      const same = { branch_id: branch, product_id: row?.product_id ?? '', new_qty: qty, expected_qty: qty, reason_code: 'miscount' as const };
+      await expect(api.correctStock(same, 'k1')).rejects.toMatchObject({ code: 'quantity_unchanged' });
+      const changed = await api.correctStock({ ...same, new_qty: String(Number(qty) + 1) }, 'k2');
+      expect(isWaiting(changed)).toBe(true);
+    } finally {
+      setMockApprovals([]);
+    }
   });
 });

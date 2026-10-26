@@ -1,5 +1,6 @@
 package com.rincoltech.bms.retail.stock.internal;
 
+import com.rincoltech.bms.core.approvals.ApprovalWaiting;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
@@ -13,6 +14,9 @@ import com.rincoltech.bms.retail.stock.internal.StockSummaryApi.Summary;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageReport;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -137,15 +141,33 @@ class StockController {
             summary =
                     "Correct the quantity of an item at a branch with a reason; an adjustment that is not shrinkage (issue #351); M",
             operationId = "correctRetailStockQuantity")
-    ResponseEntity<Correction> correct(
+    @ApiResponse(
+            responseCode = "201",
+            description = "The correction, made",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = Correction.class)))
+    @ApiResponse(
+            responseCode = "202",
+            description =
+                    "Stock corrections ask for approval and the value of the difference reaches the amount (ADR-091): the"
+                            + " correction waits for an administrator and the quantity is unchanged",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ApprovalWaiting.class)))
+    ResponseEntity<?> correct(
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CorrectionRequest request) {
-        Outcome<Correction> outcome = corrections.correct(idempotencyKey, request);
-        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
+        Outcome<StockCorrectionService.CorrectionOutcome> outcome = corrections.correct(idempotencyKey, request);
+        StockCorrectionService.CorrectionOutcome body = outcome.body();
+        ResponseEntity.BodyBuilder response =
+                ResponseEntity.status(body.waiting() != null ? HttpStatus.ACCEPTED : HttpStatus.CREATED);
         if (outcome.replayed()) {
             response.header("Idempotent-Replayed", "true");
         }
-        return response.body(outcome.body());
+        return body.waiting() != null ? response.body(body.waiting()) : response.body(body.correction());
     }
 
     @PostMapping("/usage")

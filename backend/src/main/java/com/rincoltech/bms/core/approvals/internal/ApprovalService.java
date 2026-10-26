@@ -95,6 +95,12 @@ class ApprovalService implements Approvals {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Outcome request(ActionRequest request) {
+        return request(request, rule(action(request.actionType())));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Outcome request(ActionRequest request, Rule decided) {
         Principal maker = CurrentPrincipal.require();
         ApprovalAction action = action(request.actionType());
         if (!maker.may(action.makerPermission(), request.branchId())) {
@@ -103,13 +109,18 @@ class ApprovalService implements Approvals {
         if ((request.amountMinor() == null) != (request.currency() == null)) {
             throw new IllegalArgumentException("amount and currency go together");
         }
-        if (action.thresholdApplies()
-                && request.thresholdMinor() != null
-                && request.thresholdMinor() < settings.approvalThresholdMinor(action.actionType())) {
+        // ADR-091: the rule is read once, by the caller when it decided to ask (so a switch saved a moment later never
+        // turns a
+        // request it answered as waiting into one that ran), else here. Switched off, the action runs at once.
+        boolean off = !decided.on();
+        if (off
+                || (action.thresholdApplies()
+                        && request.thresholdMinor() != null
+                        && request.thresholdMinor() < decided.thresholdMinor())) {
             action.execute(new ApprovalAction.Execution(
                     null, request.branchId(), request.subjectId(), request.payload(), maker.userId(), null));
             audit.record(new AuditLog.Entry(
-                    "core.approval.executed_below_threshold",
+                    off ? "core.approval.executed_switched_off" : "core.approval.executed_below_threshold",
                     action.subjectType(),
                     request.subjectId(),
                     request.branchId(),
@@ -155,14 +166,36 @@ class ApprovalService implements Approvals {
                 "core.approval_waiting",
                 id.toString(),
                 new PushNotice.Holders(action.checkerPermission(), request.branchId(), maker.userId()),
-                Map.of("action_label", label(action.actionType()), "path", "/staff/approvals")));
+                Map.of("action_label", action.label(), "path", "/staff/approvals")));
         return new Outcome(false, id);
     }
 
-    /** "retail_purchase_order" read as "Retail purchase order": the action's name as a person says it. */
-    static String label(String actionType) {
-        String words = actionType.replace('_', ' ');
-        return words.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + words.substring(1);
+    @Override
+    @Transactional(readOnly = true)
+    public Rule rule(String actionType) {
+        return rule(action(actionType));
+    }
+
+    /**
+     * ADR-091: the stored switch, else the action's default for its stored amount; an action that is not switchable always asks.
+     * The amount is the stored threshold of an action that has one, else 0.
+     */
+    Rule rule(ApprovalAction action) {
+        long threshold = action.thresholdApplies() ? settings.approvalThresholdMinor(action.actionType()) : 0;
+        return ruleAt(action, threshold, settings.approvalSwitches().get(action.actionType()));
+    }
+
+    /** The rule of an action at a given amount and stored switch (null when none was saved). */
+    static Rule ruleAt(ApprovalAction action, long thresholdMinor, Boolean stored) {
+        if (!action.switchable()) {
+            return new Rule(true, thresholdMinor);
+        }
+        return new Rule(stored != null ? stored : action.onByDefault(thresholdMinor), thresholdMinor);
+    }
+
+    /** The registered actions, for the approval rules (ADR-091). */
+    java.util.Collection<ApprovalAction> actions() {
+        return actions.values();
     }
 
     @Transactional
@@ -286,6 +319,14 @@ class ApprovalService implements Approvals {
         } catch (RequestSupersededException e) {
             throw e;
         } catch (ApiException e) {
+            // ADR-091: one stale policy for the actions the approval rules govern. What was asked no longer passes as
+            // it
+            // stands (a 4xx refusal), so the request goes stale with the reason and the maker asks again, rather than
+            // failing
+            // on every approval until it expires. The lending actions keep FR-APR-06: pending, with the error shown.
+            if (action.governedByRules() && e.status().is4xxClientError() && !transientRefusal(e)) {
+                throw new RequestSupersededException(e.code(), e.title(), e.getMessage(), e.extensions());
+            }
             throw new ExecutionFailed(e.code() + ": " + e.getMessage(), e);
         } catch (RuntimeException e) {
             log.error("approval {} execution failed", approvalId, e);
@@ -554,6 +595,14 @@ class ApprovalService implements Approvals {
         }
         return action;
     }
+
+    /** A refusal worth trying again (a concurrent write, a lock, too many requests): it leaves the request pending. */
+    private static boolean transientRefusal(ApiException e) {
+        return e.status() == HttpStatus.TOO_MANY_REQUESTS || TRANSIENT.contains(e.code());
+    }
+
+    private static final java.util.Set<String> TRANSIENT =
+            java.util.Set.of("version_conflict", "idempotency_in_progress", "lock_timeout");
 
     private static ApiException notPending(String status) {
         return new ApiException(

@@ -17,6 +17,7 @@
             "kernel",
             "core.tenancy",
             "core.audit",
+            "core.approvals",
             "core.ledger",
             "core.jobs",
             "core.notifications",

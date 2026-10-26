@@ -1,4 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { TOAST_MS, useToast as useToastOf } from './toast';
 import { Highlight } from '../../../app/ui/SearchBox';
@@ -47,6 +48,22 @@ export function Note({ children }: { children: ReactNode }) {
 /** A success message on the screen (read by assistive technology); the toast of {@link useToast} repeats it for a few seconds. */
 export function Success({ children }: { children: ReactNode }) {
   return <p role="status" className="alert alert-success">{children}</p>;
+}
+
+/**
+ * What the person who asked sees while a void, a stock correction or an expense waits for an administrator (issue #343, ADR-091
+ * decision 9): nothing changed yet, an administrator was told, and the request is on Approvals, where they can see or cancel it.
+ * A neutral note, not a success: the action has not happened.
+ */
+export function WaitingForApproval({ what }: { what: string }) {
+  return (
+    <div role="status" className="alert alert-info stack" data-testid="approval-waiting">
+      <p>
+        <strong>Sent for approval.</strong> {what} Nothing changes until an administrator approves it.
+      </p>
+      <Link to="/staff/approvals" className="link-row">See it, or cancel it, on Approvals</Link>
+    </div>
+  );
 }
 
 /**

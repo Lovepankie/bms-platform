@@ -202,6 +202,18 @@ class PushPublishersIT extends IntegrationTest {
         assertThat(told("core.approval_policy_weakened")).containsOnly("user:" + alice);
     }
 
+    /**
+     * ADR-091 decision 8: an amount lowered to 0 that switches an action off by its default (returns ask only above 0 while no
+     * switch was saved) is told like a switch turned off; setting the first amount, which switches returns on, is not.
+     */
+    @Test
+    void loweringTheReturnsAmountToZeroSwitchesThemOffAndTellsTheOtherAdministrators() {
+        patchOk(Map.of("approval_thresholds_minor", Map.of("retail_sale_return", 500)));
+        assertThat(told("core.approval_policy_weakened")).isEmpty();
+        patchOk(Map.of("approval_thresholds_minor", Map.of("retail_sale_return", 0)));
+        toldOnly("core.approval_policy_weakened", alice);
+    }
+
     // ---- Retail: sale void, write-off, transfer -----------------------------------------------------
 
     UUID stockedProduct() {

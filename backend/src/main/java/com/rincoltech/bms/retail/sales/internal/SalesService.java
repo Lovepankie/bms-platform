@@ -1,5 +1,8 @@
 package com.rincoltech.bms.retail.sales.internal;
 
+import com.rincoltech.bms.core.approvals.ApprovalWaiting;
+import com.rincoltech.bms.core.approvals.Approvals;
+import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.ledger.LedgerPosting.PostedEntry;
 import com.rincoltech.bms.core.operations.Idempotency;
@@ -71,6 +74,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -107,6 +111,8 @@ class SalesService {
     private final AccountsService accounts;
     private final ReturnsRepository returns;
     private final ApplicationEventPublisher events;
+    // Lazy: the approvals module holds the void action, which calls back into this service on approval.
+    private final Approvals approvals;
 
     SalesService(
             SalesRepository repo,
@@ -125,7 +131,9 @@ class SalesService {
             RetailPricing priceLists,
             AccountsService accounts,
             ReturnsRepository returns,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            @Lazy Approvals approvals) {
+        this.approvals = approvals;
         this.events = events;
         this.repo = repo;
         this.catalogue = catalogue;
@@ -1199,17 +1207,54 @@ class SalesService {
                 .orElseThrow(ApiException::notFound);
     }
 
+    /** A void that ran at once, or the request that now waits for an administrator (ADR-091). */
+    record VoidOutcome(Sale sale, ApprovalWaiting waiting) {}
+
     /**
      * FR-RET-04, FR-RET-11: a void reverses each stock movement with a {@code return} movement and
      * each journal entry with its reversal, under the sale's row lock. A credit sale that has taken
-     * a payment is not voided.
+     * a payment is not voided. While sale voids ask for approval (ADR-091) and the sale's total reaches the amount, the void
+     * waits for an administrator instead, with the reason, and nothing changes until it is approved.
      */
     @Transactional
-    Sale voidSale(UUID id, VoidRequest r) {
+    VoidOutcome voidSale(UUID id, VoidRequest r) {
         Principal principal = CurrentPrincipal.require();
         Header h = repo.find(id, true)
                 .filter(x -> principal.may("retail.sale.void", x.sale().branchId()))
                 .orElseThrow(ApiException::notFound);
+        refuseVoid(h);
+        Sale s = h.sale();
+        String reason = r.reason().trim();
+        Approvals.Rule rule = approvals.rule(SaleVoidAction.TYPE);
+        if (rule.asks(s.totalMinor())) {
+            Approvals.Outcome o = approvals.request(
+                    new ActionRequest(
+                            SaleVoidAction.TYPE,
+                            s.branchId(),
+                            id,
+                            s.version(),
+                            s.totalMinor(),
+                            s.currency(),
+                            Map.of(SaleVoidAction.REASON, reason)),
+                    rule);
+            if (o.executed()) {
+                return new VoidOutcome(
+                        visible(repo.find(id, false).orElseThrow().sale()), null);
+            }
+            return new VoidOutcome(
+                    null, new ApprovalWaiting(o.approvalId(), SaleVoidAction.TYPE, s.totalMinor(), s.currency()));
+        }
+        return new VoidOutcome(voidNow(h, reason, principal.userId()), null);
+    }
+
+    /** On approval (ADR-091): the sale as it is now, checked again, voided in the name of the person who asked. */
+    void voidApproved(UUID id, String reason, UUID makerId) {
+        Header h = repo.find(id, true).orElseThrow(ApiException::notFound);
+        refuseVoid(h);
+        voidNow(h, reason, makerId);
+    }
+
+    private void refuseVoid(Header h) {
         Sale s = h.sale();
         if (s.status().equals("voided")) {
             throw new ApiException(
@@ -1224,11 +1269,11 @@ class SalesService {
         // Customer returns (issue #201) put part of the sale back already; a void would take it back a second time.
         // Void the
         // returns first.
-        if (returns.hasCompleted(id)) {
+        if (returns.hasCompleted(s.id())) {
             throw ApiException.rule(
                     "sale_has_returns", "A sale with returns against it cannot be voided. Void its returns first.");
         }
-        SalesRepository.OrderFee order = repo.orderFee(id).orElse(null);
+        SalesRepository.OrderFee order = repo.orderFee(s.id()).orElse(null);
         if (order != null && order.feePaidLater()) {
             throw ApiException.rule(
                     "order_fee_paid",
@@ -1236,7 +1281,12 @@ class SalesService {
                             + ", whose delivery fee was paid on the account later. It"
                             + " cannot be voided here; ask your accountant to correct it.");
         }
-        String reason = r.reason().trim();
+    }
+
+    private Sale voidNow(Header h, String reason, UUID by) {
+        Sale s = h.sale();
+        UUID id = s.id();
+        SalesRepository.OrderFee order = repo.orderFee(id).orElse(null);
         List<Recorded> moved = stock.bySource(SALE, id);
         LocalDate today = clock.today(tenant.profile().timezone());
         stock.record(
@@ -1268,9 +1318,9 @@ class SalesService {
                     fee.orderId(),
                     "sale_voided",
                     "Sale " + s.saleNo() + " voided; the delivery fee of " + fee.feeMinor() + " was reversed.",
-                    principal.userId());
+                    by);
         }
-        repo.markVoided(id, principal.userId(), reason);
+        repo.markVoided(id, by, reason);
         audit.record(new AuditLog.Entry(
                 "retail.sale.voided",
                 SALE,
@@ -1283,7 +1333,7 @@ class SalesService {
         events.publishEvent(new PushNotice(
                 "retail.sale_voided",
                 id.toString(),
-                new PushNotice.Holders("core.settings.manage", null, principal.userId()),
+                new PushNotice.Holders("core.settings.manage", null, by),
                 Map.of("branch_id", s.branchId().toString(), "path", "/staff/retail/sales")));
         return visible(repo.find(id, false).orElseThrow().sale());
     }

@@ -14,6 +14,12 @@ public interface TenantSettings {
     long approvalThresholdMinor(String actionType);
 
     /**
+     * ADR-091: the approval switches an administrator saved, action type to on or off; an action missing here keeps its
+     * default (see {@code Approvals.rule}).
+     */
+    Map<String, Boolean> approvalSwitches();
+
+    /**
      * FR-IAM-06, issue #348, ADR-046: the tenant's two-step sign-in policy. Off by default: two-step sign-in is optional until a
      * tenant administrator requires it for everyone or for chosen roles.
      */

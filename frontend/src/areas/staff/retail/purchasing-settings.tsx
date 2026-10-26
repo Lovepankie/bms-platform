@@ -51,8 +51,13 @@ export function PurchasingSettingsForm({ settings, busy, error, saved, onSave }:
       </label>
       <p id="require-costing-hint" className="hint">While this is on, the quantity of a delivery that is held, not costed, cannot be moved out of its branch, though other stock of the same item can go. Add the landed cost, or release the hold, to free it.</p>
       {bad && <p role="alert" className="rt-flag">Enter each as a percent from 0 to 100, with at most two decimals, for example 1.5.</p>}
-      {settings.order_approval_threshold_minor !== undefined ? (
-        <p data-testid="order-threshold">A purchase order worth {money(settings.order_approval_threshold_minor)} or more needs a second person to approve it before it is sent. This limit is set in the business settings.</p>
+      {settings.order_approval_threshold_minor != null ? (
+        <p data-testid="order-threshold">
+          {settings.order_approval_threshold_minor === 0
+            ? 'Every purchase order needs a second person to approve it before it is sent.'
+            : `A purchase order worth ${money(settings.order_approval_threshold_minor ?? 0)} or more needs a second person to approve it before it is sent.`}{' '}
+          This limit is set in Approval rules.
+        </p>
       ) : (
         <p className="hint" data-testid="order-threshold">No approval limit is set for purchase orders, so a single person can send any order.</p>
       )}

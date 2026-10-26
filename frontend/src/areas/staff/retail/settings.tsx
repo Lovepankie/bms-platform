@@ -134,14 +134,14 @@ function Editor({ read, onSaved, onEdit }: { read: CapabilitiesRead; onSaved: ()
 }
 
 /**
- * While customer returns are on and the business has set no approval threshold for them, one administrator can refund cash up to
- * the whole of a sale with no second person. That is the default on purpose (the system invents no amount), so it is said here, as
- * one neutral Hint line (issue #575: no status colour on a normal screen); the full explanation is behind the Hint's info button.
- * No screen sets the limit yet (the approval limits screen is #343), so the Hint offers no link: a link that leads to no field
- * would promise an action it cannot keep. Add the link when #343 ships.
+ * While customer returns are on and returns ask for no approval, one administrator can refund cash up to the whole of a sale with no
+ * second person. That is the default on purpose (the system invents no amount), so it is said here, as one neutral Hint line (issue
+ * #575: no status colour on a normal screen); the full explanation is behind the Hint's info button. The approval rules (issue #343,
+ * ADR-091) set the limit, so the note links to the returns row there. The capabilities answer carries the amount only while returns
+ * ask (0 means every return), so an absent amount is what this note is about.
  */
 export function ReturnsThresholdWarning({ capabilities }: { capabilities: CapabilitiesRead['capabilities'] }) {
-  if (capabilities.returns !== true || (capabilities.returns_approval_threshold_minor ?? 0) > 0) return null;
+  if (capabilities.returns !== true || capabilities.returns_approval_threshold_minor != null) return null;
   return (
     <div role="note" data-testid="returns-no-threshold">
       <Hint>
@@ -149,6 +149,9 @@ export function ReturnsThresholdWarning({ capabilities }: { capabilities: Capabi
         a return, alone. The limit counts the returns of one sale together, not a person&apos;s returns across sales, so many small returns
         on different sales still need no second administrator.
       </Hint>
+      <Link to="/staff/setup/approvals" hash="rule-retail_sale_return" className="link-row" data-testid="returns-limit-link">
+        Set a returns limit in Approval rules
+      </Link>
     </div>
   );
 }

@@ -50,6 +50,18 @@ class ReturnVoidAction implements ApprovalAction {
         return false;
     }
 
+    /** ADR-091 decision 6: the void of a return follows the returns rule, so the stale policy of decision 11 covers it. */
+    @Override
+    public boolean governedByRules() {
+        return true;
+    }
+
+    /** ADR-091: the void of a return follows the returns rule, so it is not a row of its own. */
+    @Override
+    public boolean listed() {
+        return false;
+    }
+
     @Override
     public Optional<Integer> subjectVersion(UUID subjectId) {
         return repo.find(subjectId, false).map(ReturnsRepository.Row::version);

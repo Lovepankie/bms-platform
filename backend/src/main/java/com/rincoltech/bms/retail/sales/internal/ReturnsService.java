@@ -4,7 +4,6 @@ import com.rincoltech.bms.core.approvals.Approvals;
 import com.rincoltech.bms.core.approvals.Approvals.ActionRequest;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -51,7 +50,6 @@ class ReturnsService {
     private final SalesRepository sales;
     private final Idempotency idempotency;
     private final Approvals approvals;
-    private final TenantSettings settings;
     private final RetailCapabilities capabilities;
     private final ObjectMapper mapper;
 
@@ -61,7 +59,6 @@ class ReturnsService {
             SalesRepository sales,
             Idempotency idempotency,
             Approvals approvals,
-            TenantSettings settings,
             RetailCapabilities capabilities,
             ObjectMapper mapper) {
         this.servicer = servicer;
@@ -69,7 +66,6 @@ class ReturnsService {
         this.sales = sales;
         this.idempotency = idempotency;
         this.approvals = approvals;
-        this.settings = settings;
         this.capabilities = capabilities;
         this.mapper = mapper;
     }
@@ -83,9 +79,9 @@ class ReturnsService {
     private ReturnOutcome record(UUID saleId, ReturnRequest r) {
         Principal principal = CurrentPrincipal.require();
         Plan plan = servicer.plan(saleId, r);
-        long threshold = settings.approvalThresholdMinor(ReturnAction.TYPE);
         long cumulative = Math.addExact(plan.priorReturnedMinor(), plan.totalMinor());
-        if (threshold > 0 && cumulative >= threshold) {
+        Approvals.Rule rule = approvals.rule(ReturnAction.TYPE);
+        if (rule.asks(cumulative)) {
             // The till is fixed now, so a checker with another scope executes the same return.
             ReturnRequest fixed =
                     new ReturnRequest(r.lines(), r.refundMethod(), r.moneyMethod(), plan.refundBranchId(), r.note());
@@ -93,14 +89,21 @@ class ReturnsService {
             // The amount is what the sale's returns come to with this one, so the pending request is never taken for a
             // small one
             // and executed at once by the approvals module.
-            Approvals.Outcome o = approvals.request(new ActionRequest(
-                    ReturnAction.TYPE,
-                    plan.sale().branchId(),
-                    saleId,
-                    plan.sale().version(),
-                    cumulative,
-                    plan.sale().currency(),
-                    payload));
+            Approvals.Outcome o = approvals.request(
+                    new ActionRequest(
+                            ReturnAction.TYPE,
+                            plan.sale().branchId(),
+                            saleId,
+                            plan.sale().version(),
+                            cumulative,
+                            plan.sale().currency(),
+                            payload),
+                    rule);
+            if (o.executed()) {
+                // Run at once by the approvals module: answer with the return it made, the sale's newest.
+                return new ReturnOutcome(
+                        true, null, servicer.view(repo.forSale(saleId).getLast(), true));
+            }
             return new ReturnOutcome(false, o.approvalId(), null);
         }
         return new ReturnOutcome(true, null, servicer.record(plan, r.note(), principal.userId(), null, null));
@@ -118,19 +121,26 @@ class ReturnsService {
         Row row = repo.find(returnId, false)
                 .filter(x -> principal.may(ReturnsServicer.PERMISSION, x.branchId()))
                 .orElseThrow(ApiException::notFound);
-        long threshold = settings.approvalThresholdMinor(ReturnAction.TYPE);
-        // A return that needed a second person to be made needs one to be undone, and so does one worth the threshold
-        // alone.
-        boolean asks = threshold > 0 && (row.approvalId() != null || row.totalMinor() >= threshold);
+        Approvals.Rule rule = approvals.rule(ReturnAction.TYPE);
+        // While returns ask (ADR-091 decision 6), a return that needed a second person to be made needs one to be
+        // undone, and
+        // so does one worth the threshold alone.
+        boolean asks = rule.on() && (row.approvalId() != null || rule.asks(row.totalMinor()));
         if (asks && row.status().equals("completed") && r.reason().trim().length() >= ReturnsServicer.MIN_REASON) {
-            Approvals.Outcome o = approvals.request(new ActionRequest(
-                    ReturnVoidAction.TYPE,
-                    row.branchId(),
-                    row.id(),
-                    row.version(),
-                    row.totalMinor(),
-                    row.currency(),
-                    Map.of(ReturnVoidAction.REASON, r.reason().trim())));
+            Approvals.Outcome o = approvals.request(
+                    new ActionRequest(
+                            ReturnVoidAction.TYPE,
+                            row.branchId(),
+                            row.id(),
+                            row.version(),
+                            row.totalMinor(),
+                            row.currency(),
+                            Map.of(ReturnVoidAction.REASON, r.reason().trim())),
+                    rule);
+            if (o.executed()) {
+                return new ReturnOutcome(
+                        true, null, servicer.view(repo.find(returnId, false).orElseThrow(), true));
+            }
             return new ReturnOutcome(false, o.approvalId(), null);
         }
         return new ReturnOutcome(true, null, servicer.voidReturn(returnId, r.reason()));

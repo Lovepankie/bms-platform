@@ -20,6 +20,11 @@ vi.setConfig({ testTimeout: 20000 });
 const paySale = vi.fn();
 const voidSale = vi.fn();
 
+vi.mock('@tanstack/react-router', async (original) => {
+  const real = await original<typeof import('@tanstack/react-router')>();
+  return { ...real, Link: ({ children, to }: { children: unknown; to: string }) => <a href={to}>{children as never}</a> };
+});
+
 vi.mock('../../../api/retail', async (original) => {
   const real = await original<typeof import('../../../api/retail')>();
   return { ...real, retail: { paySale: (...a: unknown[]) => paySale(...a), voidSale: (...a: unknown[]) => voidSale(...a) } };
@@ -410,6 +415,19 @@ describe('voiding a sale', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
     await waitFor(() => expect(voidSale).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByLabelText(/Why is this sale being voided/)).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+  });
+
+  it('says the void waits for an administrator when the business asks for approval, and offers no second void (issue #343)', async () => {
+    voidSale.mockResolvedValue({ approval_id: 'a1', action_type: 'retail_sale_void', amount_minor: 12000, currency: 'UGX' });
+    screenOf(admin, <VoidSaleAction sale={cash} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Wrong buyer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
+    const waiting = await screen.findByTestId('approval-waiting');
+    expect(waiting.getAttribute('role')).toBe('status');
+    expect(waiting.textContent).toContain('The void of this sale waits for an administrator.');
+    expect(waiting.querySelector('a')?.getAttribute('href')).toBe('/staff/approvals');
     expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
   });
 

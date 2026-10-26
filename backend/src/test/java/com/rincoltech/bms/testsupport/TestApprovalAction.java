@@ -51,6 +51,12 @@ public class TestApprovalAction implements ApprovalAction {
         return true;
     }
 
+    /** ADR-091: a switch like a retail action's, on unless a test stores it off, so the switched-off path can be driven. */
+    @Override
+    public boolean switchable() {
+        return true;
+    }
+
     @Override
     public Optional<Integer> subjectVersion(UUID subjectId) {
         return Optional.ofNullable(versions.get(subjectId));

@@ -6666,7 +6666,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Void a sale by reversal (FR-RET-04) */
+        /** Void a sale by reversal (FR-RET-04), or ask an administrator first (ADR-091) */
         post: operations["voidRetailSale"];
         delete?: never;
         options?: never;
@@ -7402,6 +7402,24 @@ export interface paths {
         patch: operations["updateSettings"];
         trace?: never;
     };
+    "/api/v1/settings/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which actions ask for a second person, and from what amount (ADR-091) */
+        get: operations["getApprovalRules"];
+        /** Change the approval rules, with the administrator's proof, audited (ADR-091) */
+        put: operations["updateApprovalRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/logo": {
         parameters: {
             query?: never;
@@ -7991,6 +8009,56 @@ export interface components {
         ApprovalPage: {
             items?: components["schemas"]["Approval"][];
             next_cursor?: string;
+        };
+        ApprovalRule: {
+            /** @description The action type, as on an approval request */
+            action_type?: string;
+            /** @description Whether the action has an amount a threshold applies to */
+            has_amount?: boolean;
+            /** @description The action in words */
+            label?: string;
+            /** @description The module the action belongs to: lending or retail */
+            module?: string;
+            /** @description Whether the action asks for a second person now */
+            on?: boolean;
+            /** @description Whether the business may switch it off; lending actions always ask */
+            switchable?: boolean;
+            /**
+             * Format: int64
+             * @description The amount from which it asks, in minor units; 0 means every one; null without an amount
+             */
+            threshold_minor?: number;
+        };
+        ApprovalRuleChange: {
+            action_type: string;
+            on: boolean;
+            /**
+             * Format: int64
+             * @description Only for an action with an amount; omitted keeps the amount
+             */
+            threshold_minor?: number;
+        };
+        ApprovalRules: {
+            /** @description The business's currency, for the amounts */
+            currency?: string;
+            rules?: components["schemas"]["ApprovalRule"][];
+            /** Format: int32 */
+            version?: number;
+        };
+        ApprovalWaiting: {
+            /** @description The action type, as on the request */
+            action_type: string;
+            /**
+             * Format: int64
+             * @description The amount the checker sees, in minor units
+             */
+            amount_minor?: number;
+            /**
+             * Format: uuid
+             * @description The pending approval request
+             */
+            approval_id: string;
+            currency?: string;
         };
         ArrearsBucket: {
             /** Format: int64 */
@@ -12049,7 +12117,7 @@ export interface components {
             returns?: boolean;
             /**
              * Format: int64
-             * @description Read only: the tenant's approval threshold for customer returns (action retail_sale_return), present only when one is set; while it is absent a return needs no second administrator
+             * @description Read only: the amount from which a customer return needs a second administrator (action retail_sale_return, ADR-091), present only while returns ask for approval (0: every return); while it is absent a return needs no second administrator
              */
             returns_approval_threshold_minor?: number;
             /**
@@ -15614,7 +15682,7 @@ export interface components {
             bill_tolerance_bp?: number;
             /**
              * Format: int64
-             * @description Read only: the approval threshold for sending a purchase order (action retail_purchase_order), present only when one is set; while it is absent an order needs no second administrator
+             * @description Read only: the amount from which sending a purchase order needs a second administrator (action retail_purchase_order, ADR-091), present only while purchase orders ask for approval (0: every order); while it is absent an order needs no second administrator
              */
             order_approval_threshold_minor?: number;
             /**
@@ -19199,6 +19267,13 @@ export interface components {
             /** @description Switch the assistant on or off; needs core.settings.manage as well */
             enabled?: boolean;
         };
+        UpdateApprovalRulesRequest: {
+            /** @description The administrator's own password, when they have no authenticator (ADR-046). Never stored or logged */
+            password?: string;
+            rules: components["schemas"]["ApprovalRuleChange"][];
+            /** @description The current code of the administrator's authenticator, when they have one (ADR-046). Never stored or logged */
+            totp_code?: string;
+        };
         /** @description Omitted fields are unchanged. The code never changes. */
         UpdateBranchRequest: {
             location?: string;
@@ -19382,7 +19457,7 @@ export interface components {
             appraisal_weights?: {
                 [key: string]: number;
             };
-            /** @description Action type to amount in minor units; below it no checker is needed (FR-APR-04) */
+            /** @description Action type to amount in minor units; below it no checker is needed (FR-APR-04). A change needs totp_code or password (ADR-091); the approval rules screen uses PUT /settings/approvals */
             approval_thresholds_minor?: {
                 [key: string]: number;
             };
@@ -19407,7 +19482,7 @@ export interface components {
              * @description Days a covered user without a second factor may keep signing in before it is required; 0 means at once. Sending it moves the deadline to now plus these days (ADR-046)
              */
             mfa_grace_days?: number;
-            /** @description Needed to turn two-step sign-in off or narrow it, from an administrator with no authenticator: their own current password (ADR-046). Never stored or logged */
+            /** @description Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged */
             password?: string;
             receipt_footer?: string;
             reports_enabled?: boolean;
@@ -19418,7 +19493,7 @@ export interface components {
             setup_dismissed?: boolean;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;
-            /** @description Needed to turn two-step sign-in off or narrow it, from an administrator who has an authenticator: its current code (ADR-046). Never stored or logged */
+            /** @description Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged */
             totp_code?: string;
         };
         UpdateTenantSmsControlsRequest: {
@@ -27778,13 +27853,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description The expense, recorded */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["RetailExpense"];
+                };
+            };
+            /** @description Expenses ask for approval and the amount reaches the business's amount (ADR-091): the expense waits for an administrator and is not in the cash book yet */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalWaiting"];
                 };
             };
         };
@@ -31055,13 +31139,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description The sale, voided */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["RetailSale"];
+                };
+            };
+            /** @description Sale voids ask for approval and this sale's total reaches the amount: the void waits for an administrator and nothing changed yet */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalWaiting"];
                 };
             };
         };
@@ -31317,13 +31410,22 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description The correction, made */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockCorrection"];
+                };
+            };
+            /** @description Stock corrections ask for approval and the value of the difference reaches the amount (ADR-091): the correction waits for an administrator and the quantity is unchanged */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalWaiting"];
                 };
             };
         };
@@ -32364,6 +32466,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantSettings"];
+                };
+            };
+        };
+    };
+    getApprovalRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRules"];
+                };
+            };
+        };
+    };
+    updateApprovalRules: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateApprovalRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRules"];
                 };
             };
         };

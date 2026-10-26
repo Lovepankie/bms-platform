@@ -731,6 +731,97 @@
           }
         }
       },
+      "ApprovalRule" : {
+        "properties" : {
+          "action_type" : {
+            "description" : "The action type, as on an approval request",
+            "type" : "string"
+          },
+          "has_amount" : {
+            "description" : "Whether the action has an amount a threshold applies to",
+            "type" : "boolean"
+          },
+          "label" : {
+            "description" : "The action in words",
+            "type" : "string"
+          },
+          "module" : {
+            "description" : "The module the action belongs to: lending or retail",
+            "type" : "string"
+          },
+          "on" : {
+            "description" : "Whether the action asks for a second person now",
+            "type" : "boolean"
+          },
+          "switchable" : {
+            "description" : "Whether the business may switch it off; lending actions always ask",
+            "type" : "boolean"
+          },
+          "threshold_minor" : {
+            "description" : "The amount from which it asks, in minor units; 0 means every one; null without an amount",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "ApprovalRuleChange" : {
+        "properties" : {
+          "action_type" : {
+            "pattern" : "^[a-z][a-z0-9_]{2,62}$",
+            "type" : "string"
+          },
+          "on" : {
+            "type" : "boolean"
+          },
+          "threshold_minor" : {
+            "description" : "Only for an action with an amount; omitted keeps the amount",
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          }
+        },
+        "required" : [ "action_type", "on" ]
+      },
+      "ApprovalRules" : {
+        "properties" : {
+          "currency" : {
+            "description" : "The business's currency, for the amounts",
+            "type" : "string"
+          },
+          "rules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ApprovalRule"
+            },
+            "type" : "array"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "ApprovalWaiting" : {
+        "properties" : {
+          "action_type" : {
+            "description" : "The action type, as on the request",
+            "type" : "string"
+          },
+          "amount_minor" : {
+            "description" : "The amount the checker sees, in minor units",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_id" : {
+            "description" : "The pending approval request",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "action_type", "approval_id" ]
+      },
       "ArrearsBucket" : {
         "properties" : {
           "arrears_minor" : {
@@ -9820,7 +9911,7 @@
             "type" : "boolean"
           },
           "returns_approval_threshold_minor" : {
-            "description" : "Read only: the tenant's approval threshold for customer returns (action retail_sale_return), present only when one is set; while it is absent a return needs no second administrator",
+            "description" : "Read only: the amount from which a customer return needs a second administrator (action retail_sale_return, ADR-091), present only while returns ask for approval (0: every return); while it is absent a return needs no second administrator",
             "format" : "int64",
             "type" : "integer"
           },
@@ -16474,7 +16565,7 @@
             "type" : "integer"
           },
           "order_approval_threshold_minor" : {
-            "description" : "Read only: the approval threshold for sending a purchase order (action retail_purchase_order), present only when one is set; while it is absent an order needs no second administrator",
+            "description" : "Read only: the amount from which sending a purchase order needs a second administrator (action retail_purchase_order, ADR-091), present only while purchase orders ask for approval (0: every order); while it is absent an order needs no second administrator",
             "format" : "int64",
             "type" : "integer"
           },
@@ -23621,6 +23712,31 @@
           }
         }
       },
+      "UpdateApprovalRulesRequest" : {
+        "properties" : {
+          "password" : {
+            "description" : "The administrator's own password, when they have no authenticator (ADR-046). Never stored or logged",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "rules" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ApprovalRuleChange"
+            },
+            "maxItems" : 50,
+            "minItems" : 0,
+            "type" : "array"
+          },
+          "totp_code" : {
+            "description" : "The current code of the administrator's authenticator, when they have one (ADR-046). Never stored or logged",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "rules" ]
+      },
       "UpdateBranchRequest" : {
         "description" : "Omitted fields are unchanged. The code never changes.",
         "properties" : {
@@ -24073,11 +24189,11 @@
           },
           "approval_thresholds_minor" : {
             "additionalProperties" : {
-              "description" : "Action type to amount in minor units; below it no checker is needed (FR-APR-04)",
+              "description" : "Action type to amount in minor units; below it no checker is needed (FR-APR-04). A change needs totp_code or password (ADR-091); the approval rules screen uses PUT /settings/approvals",
               "format" : "int64",
               "type" : "integer"
             },
-            "description" : "Action type to amount in minor units; below it no checker is needed (FR-APR-04)",
+            "description" : "Action type to amount in minor units; below it no checker is needed (FR-APR-04). A change needs totp_code or password (ADR-091); the approval rules screen uses PUT /settings/approvals",
             "type" : "object"
           },
           "approval_validity_days" : {
@@ -24124,7 +24240,7 @@
             "type" : "integer"
           },
           "password" : {
-            "description" : "Needed to turn two-step sign-in off or narrow it, from an administrator with no authenticator: their own current password (ADR-046). Never stored or logged",
+            "description" : "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged",
             "maxLength" : 200,
             "minLength" : 0,
             "type" : "string"
@@ -24159,7 +24275,7 @@
             "type" : "string"
           },
           "totp_code" : {
-            "description" : "Needed to turn two-step sign-in off or narrow it, from an administrator who has an authenticator: its current code (ADR-046). Never stored or logged",
+            "description" : "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged",
             "maxLength" : 20,
             "minLength" : 0,
             "type" : "string"
@@ -36487,7 +36603,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "201" : {
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -36495,7 +36611,17 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "The expense, recorded"
+          },
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalWaiting"
+                }
+              }
+            },
+            "description" : "Expenses ask for approval and the amount reaches the business's amount (ADR-091): the expense waits for an administrator and is not in the cash book yet"
           }
         },
         "summary" : "Record a company expense paid from the till (FR-RET-24); M",
@@ -42009,10 +42135,20 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "The sale, voided"
+          },
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalWaiting"
+                }
+              }
+            },
+            "description" : "Sale voids ask for approval and this sale's total reaches the amount: the void waits for an administrator and nothing changed yet"
           }
         },
-        "summary" : "Void a sale by reversal (FR-RET-04)",
+        "summary" : "Void a sale by reversal (FR-RET-04), or ask an administrator first (ADR-091)",
         "tags" : [ "retail-sales" ]
       }
     },
@@ -42489,7 +42625,7 @@
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "201" : {
             "content" : {
               "application/json" : {
                 "schema" : {
@@ -42497,7 +42633,17 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "The correction, made"
+          },
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalWaiting"
+                }
+              }
+            },
+            "description" : "Stock corrections ask for approval and the value of the difference reaches the amount (ADR-091): the correction waits for an administrator and the quantity is unchanged"
           }
         },
         "summary" : "Correct the quantity of an item at a branch with a reason; an adjustment that is not shrinkage (issue #351); M",
@@ -44241,6 +44387,60 @@
           }
         },
         "summary" : "Change tenant settings, audited with before and after (FR-TEN-08)",
+        "tags" : [ "settings" ]
+      }
+    },
+    "/api/v1/settings/approvals" : {
+      "get" : {
+        "operationId" : "getApprovalRules",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalRules"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Which actions ask for a second person, and from what amount (ADR-091)",
+        "tags" : [ "settings" ]
+      },
+      "put" : {
+        "operationId" : "updateApprovalRules",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UpdateApprovalRulesRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApprovalRules"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Change the approval rules, with the administrator's proof, audited (ADR-091)",
         "tags" : [ "settings" ]
       }
     },

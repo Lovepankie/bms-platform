@@ -102,6 +102,10 @@ export type SaleReturn = S['RetailSaleReturn'];
 export type ReturnLine = S['RetailReturnLine'];
 /** 201 with the return when it was recorded; 202 with `approval_id` when it waits for a second administrator. */
 export type ReturnOutcome = S['RetailReturnOutcome'];
+/** ADR-091: the 202 of a void, a stock correction or an expense that now waits for an administrator; nothing changed yet. */
+export type ApprovalWaiting = S['ApprovalWaiting'];
+/** True for the 202 of an action that waits for an administrator, rather than the record it would have made (ADR-091). */
+export const isWaiting = <T extends object>(x: T | ApprovalWaiting): x is ApprovalWaiting => 'approval_id' in x && typeof x.approval_id === 'string' && !('id' in x);
 export type ReturnPage = S['RetailReturnList'];
 // JUSTIFICATION-A3: the purchasing capability's types are new API surface (ADR-033, issue #198); nothing existing carries them.
 /**
@@ -435,7 +439,7 @@ export interface RetailApi {
   createUnit(name: string): Promise<Unit>;
   updateUnit(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Unit>;
   /** Corrects the quantity of an item at a branch (retail.stocktake.commit there); takes the Idempotency-Key of its form (issue #351). */
-  correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection>;
+  correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection | ApprovalWaiting>;
   /** The stock history of an item at a branch, newest first (issue #351). */
   stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeInactive?: boolean; signal?: AbortSignal }): Promise<StockRow[]>;
@@ -447,7 +451,7 @@ export interface RetailApi {
   /** A payment, partial allowed, against a credit sale (retail.sale.create at the branch); takes the Idempotency-Key of its form. */
   paySale(saleId: string, body: SalePaymentRequest, idempotencyKey: string): Promise<SalePaymentResult>;
   /** Voids a sale by reversal (retail.sale.void at the branch). The schema has no Idempotency-Key for it: a second void is refused as sale_voided. */
-  voidSale(saleId: string, reason: string): Promise<Sale>;
+  voidSale(saleId: string, reason: string): Promise<Sale | ApprovalWaiting>;
   /** Writes off what a credit sale still owes as a loss (retail.credit.manage); takes the Idempotency-Key of its form. */
   writeOffSale(saleId: string, reason: string, idempotencyKey: string): Promise<WriteOffOutcome>;
   listCustomers(): Promise<Customer[]>;
@@ -637,7 +641,7 @@ export interface RetailApi {
   updateExpenseItem(categoryId: string, itemId: string, body: { name?: string; active?: boolean; requires_explanation?: boolean }, version: number): Promise<ExpenseItem>;
   listCashParties(q?: { kind?: CashPartyKind }): Promise<CashParty[]>;
   createCashParty(body: CashPartyRequest): Promise<CashParty>;
-  createExpense(body: ExpenseRequest, idempotencyKey: string): Promise<Expense>;
+  createExpense(body: ExpenseRequest, idempotencyKey: string): Promise<Expense | ApprovalWaiting>;
   listExpenses(q: CashQuery & { categoryId?: string; itemId?: string }): Promise<Expense[]>;
   voidExpense(id: string, reason: string, idempotencyKey: string): Promise<Expense>;
   createAdvance(body: AdvanceRequest, idempotencyKey: string): Promise<Advance>;

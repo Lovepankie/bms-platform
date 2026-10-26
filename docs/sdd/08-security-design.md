@@ -669,7 +669,8 @@ Notes:
   issue called it `retail.stock.manage`, which does not exist. Adding a product whose name another product of the same unit has needs
   `core.settings.manage` (administrators) and a reason, kept on the product and in the audit entry; `GET /retail/products/similar` needs
   `retail.catalogue.manage`. All three of those permissions are administrator-only today. No maker-checker action is registered for the void or
-  the correction (ADR-044 decision 5): a tenant approval threshold for them is a follow-up, so section 8.4 is unchanged. The audit entries
+  the correction (ADR-044 decision 5); ADR-091 (issue #343) later lets a business switch an approval on for the correction (section
+  8.4), and the void of a purchase stays without one. The audit entries
   `retail.purchase.voided`, `retail.stock.corrected` and `retail.product.updated` (with the old and new category) carry the reason.
 - The entry warnings (issue #353, ADR-093, FR-RET-74 and FR-RET-75) add no permission, so the matrix is unchanged. `GET
   /retail/products/{id}/entry-norms` and `POST /retail/entry-warnings/confirmations` need `retail.stock.read`, which every retail role
@@ -817,6 +818,9 @@ CHECK constraint as well as the service.
 | `retail_sale_return_void` | `retail.sale.return` | `retail.sale.return` | Reads the threshold of `retail_sale_return`: needed for a return that was approved or is worth it alone; none while no threshold is set |
 | `retail_purchase_order` | `retail.purchase.create` | `retail.purchase.approve` | Yes, on the order's total, and no checker at all while no threshold is set; it is the send of a draft order |
 | `retail_sale_write_off` | `retail.credit.write_off` | `retail.credit.write_off` | Yes, on the unpaid amount written off; with no positive threshold every write-off needs a second administrator when the tenant has two or more administrators who count (active, locked, or removed or deactivated within 30 days), and one alone may write off alone; any write-off done without a second person, even below a raised threshold, is flagged in the audit row (`only_one_active_administrator` or `below_threshold`) with the number told, and the administrators who count other than the maker are emailed (for a sole administrator a notice to themselves; accepted risk, ADR-043); default rule awaiting confirmation (issue #340) |
+| `retail_sale_void` | `retail.sale.void` | `core.settings.manage` | Yes, on the sale's total, only while the approval rules switch it on (off by default, ADR-091) |
+| `retail_stock_correction` | `retail.stocktake.commit` | `core.settings.manage` | Yes, on the value of the difference at the branch's average cost, only while the approval rules switch it on (off by default, ADR-091) |
+| `retail_expense` | `retail.expense.record` | `core.settings.manage` | Yes, on the amount, only while the approval rules switch it on (off by default, ADR-091) |
 
 Registered so far: `collateral_release` (#13); `retail_sale_write_off` (#340, `retail.sales`, ADR-043: writing off the unpaid part of a credit sale, with the same open default as returns); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
 action pends only at or above a threshold the tenant sets); `loan_disbursement`, `repayment_reversal` and
@@ -837,6 +841,17 @@ table above. It needed no new permission: freeze, unfreeze and reactivation of a
 actions with a reason that need `lending.savings.withdraw_approve`, the checker permission of
 `savings_withdrawal`; the two savings reports need `lending.reports.members`. A withdrawal's checks
 run again when the checker approves, on the account as it is then.
+
+The approval rules (issue #343, ADR-091, `GET` and `PUT /settings/approvals`, `core.settings.manage` to change them with the
+administrator's own code or password, audited as `core.settings.approval_rules_changed`) list the actions of the modules a business
+uses. Every lending action always asks; only its amount changes. Each retail action is a switch: customer returns and purchase
+orders ask while their amount is above 0 unless switched, a credit write-off asks by ADR-043's rule unless switched off (it is still
+flagged and told), and sale voids, stock corrections and expenses ask only when switched on. Switched on, 0 means every one asks, except a credit write-off, whose 0 keeps ADR-043's rule (a second administrator only while two or more count).
+`Approvals.rule` is the one reading of a rule; a module that read it passes it to `Approvals.request`, so the rule is read once and
+a switch saved in between never runs a request the module answers as waiting, and a caller that read none has the rule read there,
+where a switched-off action runs at once (audited as `core.approval.executed_switched_off`). The checker of the three new retail actions is an administrator, so one seller never
+approves another's void or expense. A price below cost is not an approval: only a holder of `retail.price.below_cost` may sell at
+or below cost.
 
 Action types are contributed by the modules that own them (ADR-015): each is a registered
 `ApprovalAction` whose maker and checker permissions must equal its row above. Every

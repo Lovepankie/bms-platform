@@ -358,7 +358,8 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
   });
 
   // Issue #575: a normal settings screen draws no status colour. A note about a default (returns with no approval limit) is one
-  // neutral Hint line, the long explanation behind the Hint's info button, and links nowhere until a screen sets the limit.
+  // neutral Hint line, the long explanation behind the Hint's info button, and a link to the returns limit on the approval
+  // rules (issue #343).
   it('draws the Retail settings screens without an amber note, and the returns note as a Hint', () => {
     for (const file of ['settings', 'purchasing-settings', 'credit-recognition', 'slow-movers']) {
       // A badge that marks an unsaved change ("Will be switched on") is real status and may stay amber.
@@ -368,7 +369,7 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     }
     const note = code('areas/staff/retail/settings.tsx').match(/export function ReturnsThresholdWarning[\s\S]*?\n\}/)?.[0] ?? '';
     expect(note).toMatch(/<Hint>\s*Returns need no second administrator yet\. /);
-    expect(note).not.toMatch(/<Link\b|<a\b/);
+    expect(note).toMatch(/<Link to="\/staff\/setup\/approvals" hash="rule-retail_sale_return"/);
     expect(note).not.toMatch(/tone=|warning|amber/);
   });
 

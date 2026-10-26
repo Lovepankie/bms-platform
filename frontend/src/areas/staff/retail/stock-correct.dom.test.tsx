@@ -329,6 +329,22 @@ describe('a 409 before the list is read again', () => {
 });
 
 describe('a unit in use', () => {
+  it('says the correction waits for an administrator when the business asks for approval (issue #343)', async () => {
+    correctStock.mockResolvedValueOnce({ approval_id: 'a1', action_type: 'retail_stock_correction', amount_minor: 4000, currency: 'UGX' });
+    screenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
+    open('The quantity is wrong');
+    fireEvent.change(qty(), { target: { value: '6' } });
+    fireEvent.change(reason(), { target: { value: 'miscount' } });
+    fireEvent.click(save());
+    const waiting = await screen.findByTestId('approval-waiting');
+    expect(waiting.textContent).toContain('Sent for approval.');
+    expect(waiting.textContent).toContain('Changing Cable 2.5mm to 6 roll waits for an administrator.');
+    expect(waiting.textContent).toContain('Nothing changes until an administrator approves it.');
+    expect(waiting.querySelector('a')?.getAttribute('href')).toBe('/staff/approvals');
+    // Not reported as done: the quantity has not changed.
+    expect(screen.queryByText(/is now 6/)).toBeNull();
+  });
+
   it('sends nobody to change it in Items: a unit is never converted', () => {
     screenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
     open('The unit, name or price is wrong');

@@ -326,7 +326,7 @@ describe('the set-up menu icons', () => {
     await wholePage();
     const tiles = within(screen.getByRole('list', { name: 'More set-up' })).getAllByRole('listitem');
     expect(tiles.map((t) => t.querySelector('.tile-label')?.textContent)).toEqual([
-      'Branches', 'Users', 'Two-step sign-in', 'Two-step for yourself', 'Notifications for the business', 'Referrals', 'Text messages', 'Close the business',
+      'Branches', 'Users', 'Approval rules', 'Two-step sign-in', 'Two-step for yourself', 'Notifications for the business', 'Referrals', 'Text messages', 'Close the business',
     ]);
     for (const t of tiles) {
       expect(t.querySelector('.icon-chip svg')).not.toBeNull();

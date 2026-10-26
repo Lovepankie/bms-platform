@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.purchasing.internal;
 
 import com.rincoltech.bms.core.approvals.ApprovalAction;
+import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -11,9 +12,10 @@ import org.springframework.stereotype.Component;
 /**
  * {@code retail_purchase_order} (chapter 8 section 8.4; issue #198): sending a purchase order whose value is at or above
  * the tenant's approval threshold for this action. Requested with {@code retail.purchase.create} and decided with
- * {@code retail.purchase.approve}, by two different people. Unlike the lending actions, an unset threshold means no checker
- * at all, so a shop with one administrator can order; {@link OrdersService} decides that and calls
- * {@link com.rincoltech.bms.core.approvals.Approvals} only at or above a threshold. The subject is the order, whose version
+ * {@code retail.purchase.approve}, by two different people. Unlike the lending actions, it is a switch on the approval rules
+ * (ADR-091), off until the business sets an amount or switches it on, so a shop with one administrator can order;
+ * {@link OrdersService} decides that from the rule and calls {@link com.rincoltech.bms.core.approvals.Approvals} only when
+ * it asks. The subject is the order, whose version
  * moves with every edit, so a request goes stale when the draft was changed meanwhile (FR-APR-08).
  */
 @Component
@@ -23,8 +25,10 @@ class PurchaseOrderAction implements ApprovalAction {
 
     private final OrderSending sending;
     private final OrdersRepository repo;
+    private final RetailCapabilities capabilities;
 
-    PurchaseOrderAction(OrderSending sending, OrdersRepository repo) {
+    PurchaseOrderAction(OrderSending sending, OrdersRepository repo, RetailCapabilities capabilities) {
+        this.capabilities = capabilities;
         this.sending = sending;
         this.repo = repo;
     }
@@ -52,6 +56,26 @@ class PurchaseOrderAction implements ApprovalAction {
     @Override
     public boolean thresholdApplies() {
         return true;
+    }
+
+    @Override
+    public boolean switchable() {
+        return true;
+    }
+
+    @Override
+    public boolean onByDefault(long thresholdMinor) {
+        return thresholdMinor > 0;
+    }
+
+    @Override
+    public String label() {
+        return "Purchase orders";
+    }
+
+    @Override
+    public boolean offered() {
+        return capabilities.enabled(RetailCapabilities.PURCHASING);
     }
 
     @Override

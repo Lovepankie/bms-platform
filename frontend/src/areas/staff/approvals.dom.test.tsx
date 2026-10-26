@@ -35,8 +35,16 @@ describe('the approvals inbox action column', () => {
     show('collateral_release', 'missing');
     expect(await screen.findByText(/could not be loaded here/)).toBeTruthy();
   });
-  it('leaves other action types as they were', () => {
+  it('names the other action types in words (issue #343)', () => {
     show('loan_disbursement');
-    expect(document.body.textContent).toBe('loan_disbursement');
+    expect(document.body.textContent).toBe('Pay out a loan');
+  });
+  it('names the new retail approvals in words', () => {
+    show('retail_sale_void');
+    expect(document.body.textContent).toBe('Void a sale');
+  });
+  it('keeps the type of an action it does not know', () => {
+    show('test_action');
+    expect(document.body.textContent).toBe('test_action');
   });
 });

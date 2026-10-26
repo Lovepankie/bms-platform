@@ -27,6 +27,7 @@ export interface Feature {
 export const SYNONYMS: Record<string, readonly string[]> = {
   '/staff': ['home', 'dashboard', 'start', 'today'],
   '/staff/approvals': ['approve', 'approval', 'inbox', 'pending', 'second person'],
+  '/staff/setup/approvals': ['approval rules', 'approval limit', 'second person', 'maker checker', 'threshold'],
   '/staff/lending': ['loan', 'borrow', 'borrower', 'application', 'repayment', 'disburse'],
   '/staff/lending/members': ['member', 'client', 'borrower', 'register'],
   '/staff/lending/collateral': ['collateral', 'security', 'pledge'],

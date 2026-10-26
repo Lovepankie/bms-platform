@@ -515,7 +515,8 @@ write. Keys and defaults:
 | `sms_daily_cap` | not a tenant setting: the operator's cap and the on/off switch are in the platform table `platform_sms_controls`, set by the platform operator only; the tenant's own `daily_cap` in the group above can only lower it | 200 until set; off | ADR-036, FR-NTF-20 |
 | `payments.collections_enabled` | boolean | false; settable only while the tenant's own payment account is verified (`payment_gateway_accounts`, V56), else 409 `merchant_account_not_verified` | ADR-035 |
 | `module_groups.ai` (the settings group `ai`: `enabled`, `daily_token_cap`, `daily_cost_cap_micro`, `acknowledged_by`, `acknowledged_at`, `acknowledged_text_version`) | boolean, integer, integer, user, time, text | false, `BMS_AI_TENANT_DAILY_TOKENS` (20,000), `BMS_AI_TENANT_DAILY_COST_MICRO` (500,000), null; a cap is at most the platform ceiling; switching on needs the acknowledgement and a tenant named in `BMS_AI_ENABLED_TENANTS` (403 `advisor_not_available`), enforced in the group's validation (built in #220) | ADR-037 |
-| `approval_thresholds_minor` | map of action type to integer | every action 0 | FR-APR-04 |
+| `approval_thresholds_minor` | map of action type to integer | every action 0; changing one needs the admin's proof (ADR-091) | FR-APR-04 |
+| `approval_switches` | map of action type to boolean, only for the retail actions an admin saved on the approval rules (`PUT /settings/approvals`) | absent: lending actions always ask; `retail_sale_return` and `retail_purchase_order` ask while their amount is above 0; `retail_sale_write_off` asks (ADR-043's rule); `retail_sale_void`, `retail_stock_correction` and `retail_expense` do not | FR-APR-09, ADR-091 |
 | `approval_validity_days` | integer | 14 | FR-ORG-08 |
 | `allow_loans_before_kyc_verified` | boolean | false | FR-MEM-05 |
 | `max_active_loans_per_member` | integer or null | null | FR-ORG-07 |

@@ -6,7 +6,6 @@ import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
-import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -44,7 +43,6 @@ class WriteOffsService {
     private final WriteOffsServicer servicer;
     private final Idempotency idempotency;
     private final Approvals approvals;
-    private final TenantSettings settings;
     private final WriteOffsRepository repo;
     private final Outbox outbox;
     private final CurrentTenant tenant;
@@ -55,7 +53,6 @@ class WriteOffsService {
             WriteOffsServicer servicer,
             Idempotency idempotency,
             Approvals approvals,
-            TenantSettings settings,
             WriteOffsRepository repo,
             Outbox outbox,
             CurrentTenant tenant,
@@ -69,7 +66,6 @@ class WriteOffsService {
         this.servicer = servicer;
         this.idempotency = idempotency;
         this.approvals = approvals;
-        this.settings = settings;
     }
 
     @Transactional
@@ -86,7 +82,8 @@ class WriteOffsService {
                     "Give a reason of at least " + WriteOffsServicer.MIN_REASON + " characters.")));
         }
         Plan plan = servicer.plan(saleId);
-        long threshold = settings.approvalThresholdMinor(SaleWriteOffAction.TYPE);
+        Approvals.Rule rule = approvals.rule(SaleWriteOffAction.TYPE);
+        long threshold = rule.thresholdMinor();
         // The default rule (awaiting Hillary's confirmation): with no threshold set a write-off needs a second
         // administrator when
         // two or more count; with one it is allowed alone. A positive threshold replaces the default: only a debt at or
@@ -97,26 +94,54 @@ class WriteOffsService {
         // the
         // threshold first cannot make a write-off silent.
         List<Admin> admins = repo.recentAdmins(clock.now().minus(ADMIN_MEMORY));
-        boolean ask = threshold > 0 ? plan.unpaidMinor() >= threshold : admins.size() >= 2;
+        // ADR-091: switched off on the approval rules, a write-off never waits, and is still flagged and told below.
+        boolean ask = rule.on() && (threshold > 0 ? plan.unpaidMinor() >= threshold : admins.size() >= 2);
         if (ask) {
-            Approvals.Outcome o = approvals.request(new ActionRequest(
-                    SaleWriteOffAction.TYPE,
-                    plan.sale().branchId(),
-                    saleId,
-                    plan.sale().version(),
-                    plan.unpaidMinor(),
-                    plan.sale().currency(),
-                    Map.of(
-                            SaleWriteOffAction.REASON,
-                            r.reason().trim(),
-                            SaleWriteOffAction.UNPAID,
-                            plan.unpaidMinor())));
+            Approvals.Outcome o = approvals.request(
+                    new ActionRequest(
+                            SaleWriteOffAction.TYPE,
+                            plan.sale().branchId(),
+                            saleId,
+                            plan.sale().version(),
+                            plan.unpaidMinor(),
+                            plan.sale().currency(),
+                            Map.of(
+                                    SaleWriteOffAction.REASON,
+                                    r.reason().trim(),
+                                    SaleWriteOffAction.UNPAID,
+                                    plan.unpaidMinor())),
+                    rule);
+            if (o.executed()) {
+                // Run at once by the approvals module (the switch was off): the action wrote it alone, flagged and
+                // told.
+                return new WriteOffOutcome(
+                        true, null, WriteOffsServicer.view(repo.forSale(saleId).orElseThrow()));
+            }
             return new WriteOffOutcome(false, o.approvalId(), null);
+        }
+        String why = !rule.on()
+                ? "approval_switched_off"
+                : threshold > 0 && admins.size() >= 2 ? "below_threshold" : "only_one_active_administrator";
+        return new WriteOffOutcome(
+                true,
+                null,
+                writeAlone(plan, r.reason(), CurrentPrincipal.require().userId(), admins, why));
+    }
+
+    /**
+     * A write-off done without a second person (ADR-043 decision 10): flagged in its audit row with why, and told to the
+     * administrators who count, by email and on their devices. Every such write-off comes here, the one the approvals module runs
+     * at once while the switch is off included ({@link SaleWriteOffAction}), so none is silent.
+     *
+     * @param admins the administrators who count, or null to read them now
+     */
+    public WriteOff writeAlone(Plan plan, String reason, UUID maker, List<Admin> admins, String why) {
+        if (admins == null) {
+            admins = repo.recentAdmins(clock.now().minus(ADMIN_MEMORY));
         }
         // Done without a second person. The others who count are told; when the maker is the only one it is a notice to
         // themselves
         // and the audit row (ADR-043: the tenant record has no contact email to add).
-        UUID maker = CurrentPrincipal.require().userId();
         // Removed or deactivated administrators within 30 days count for the second-person rule but cannot read an
         // email, so only
         // active ones are told; the maker is told only when no other active administrator can be.
@@ -126,8 +151,7 @@ class WriteOffsService {
         List<Admin> told = !activeOthers.isEmpty()
                 ? activeOthers
                 : admins.stream().filter(a -> a.active() && a.email() != null).toList();
-        String why = threshold > 0 && admins.size() >= 2 ? "below_threshold" : "only_one_active_administrator";
-        WriteOff written = servicer.record(plan, r.reason(), maker, null, null, new Alone(why, told.size()));
+        WriteOff written = servicer.record(plan, reason, maker, null, null, new Alone(why, told.size()));
         String business = tenant.profile().name();
         for (Admin a : told) {
             outbox.enqueue(new Outbox.Message(
@@ -145,6 +169,6 @@ class WriteOffsService {
                     new PushNotice.Users(told.stream().map(Admin::userId).collect(Collectors.toSet())),
                     Map.of("business_name", business, "path", "/staff/retail/credit-sales")));
         }
-        return new WriteOffOutcome(true, null, written);
+        return written;
     }
 }

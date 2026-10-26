@@ -411,6 +411,12 @@ describe('the purchasing settings', () => {
     expect(onSave).toHaveBeenCalledWith({ bill_tolerance_bp: 150, over_receipt_bp: 250, require_costing_before_sale: false });
   });
 
+  it('says every order needs a second person when purchase orders ask from 0 (issue #343)', () => {
+    render(<PurchasingSettingsForm settings={{ bill_tolerance_bp: 100, over_receipt_bp: 250, order_approval_threshold_minor: 0, version: 3 }} onSave={vi.fn()} />);
+    expect(screen.getByTestId('order-threshold').textContent).toContain('Every purchase order needs a second person');
+    expect(screen.getByTestId('order-threshold').textContent).not.toContain('UGX 0');
+  });
+
   it('saves the costing switch on its own, with its one-sentence explanation (issue #199)', () => {
     const onSave = vi.fn();
     render(<PurchasingSettingsForm settings={{ bill_tolerance_bp: 100, over_receipt_bp: 0, require_costing_before_sale: false, version: 2 }} onSave={onSave} />);

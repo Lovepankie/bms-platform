@@ -28,6 +28,46 @@ public interface ApprovalAction {
     boolean thresholdApplies();
 
     /**
+     * ADR-091: whether a tenant administrator may switch this action's approval off on the approval rules. False by default:
+     * lending actions always ask.
+     */
+    default boolean switchable() {
+        return false;
+    }
+
+    /**
+     * ADR-091: whether the approval asks while the business never saved a switch for it, given its stored amount (0 when none),
+     * so a business that never saved one keeps the behaviour it had. True by default.
+     */
+    default boolean onByDefault(long thresholdMinor) {
+        return true;
+    }
+
+    /**
+     * ADR-091: whether the approval rules govern the action, so a refusal on approval makes the request stale with its reason
+     * (decision 11). Every switchable action, and one that follows another's switch (the void of a return).
+     */
+    default boolean governedByRules() {
+        return switchable();
+    }
+
+    /** ADR-091: whether the action is its own row of the approval rules; false for one that follows another's rule. */
+    default boolean listed() {
+        return true;
+    }
+
+    /** ADR-091: whether the bound business uses the action now (a capability switched on), so the approval rules list it. */
+    default boolean offered() {
+        return true;
+    }
+
+    /** The action as a person names it, in the approval rules and the push to the checkers. */
+    default String label() {
+        String words = actionType().replace('_', ' ');
+        return words.substring(0, 1).toUpperCase(java.util.Locale.ROOT) + words.substring(1);
+    }
+
+    /**
      * The subject's current version, or empty when it no longer exists. Compared with the version
      * stored at request time: a difference marks the request {@code stale} (FR-APR-08).
      */

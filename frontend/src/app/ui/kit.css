@@ -795,6 +795,8 @@ p:has(> .link-row:only-child) {
   align-items: flex-start;
   gap: var(--space-1);
   margin: 0 0 var(--space-3);
+  /* A grid or flex item: without this the one uncut line would widen its column, and the page with it (issue #343). */
+  min-width: 0;
 }
 
 .hint-line > .hint {

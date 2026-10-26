@@ -442,6 +442,7 @@ export function Setup() {
         {permissions.includes('core.billing.read') && (
           <Tile to="/staff/setup/billing" icon={icons.creditSales} label="Plan and billing" hint="Your plan, what is paid and until when, and every receipt" />
         )}
+        <Tile to="/staff/setup/approvals" icon={icons.approve} label="Approval rules" hint="Which actions need an administrator first, and from what amount" />
         <Tile to="/staff/setup/two-step" icon={icons.shield} label="Two-step sign-in" hint="Ask your staff for a code from their phone as well" />
         <Tile to="/staff/two-step" icon={icons.lock} label="Two-step for yourself" hint="Turn on a code from your phone for your own sign-in" />
         {hasRetail(me.modules) && (

@@ -159,7 +159,7 @@ class WriteOffsServicer {
         return Math.max(0, remainingCost - recognised);
     }
 
-    /** A write-off done without a second person: why ({@code only_one_active_administrator} or {@code below_threshold}) and how many were told. */
+    /** A write-off done without a second person: why ({@code only_one_active_administrator}, {@code below_threshold} or, ADR-091, {@code approval_switched_off}) and how many were told. */
     record Alone(String why, int notified) {}
 
     /** Posts the entry, records the write-off and clears the debt on the sale. */

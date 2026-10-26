@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { RouterProvider, createMemoryHistory, createRootRoute, createRouter } from '@tanstack/react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Sale, SaleReturn } from '../../../api/retail';
 import { CreditNoteView, VoidPanel } from './credit-note';
@@ -171,21 +172,34 @@ describe('a credit note on screen', () => {
   });
 });
 
+/** A Link needs a router: the note is drawn as the one page of a memory router. */
+async function inRouter(node: ReactNode) {
+  const root = createRootRoute({ component: () => <div data-testid="page">{node}</div> });
+  const router = createRouter({ routeTree: root, history: createMemoryHistory({ initialEntries: ['/'] }) });
+  const out = render(<RouterProvider router={router} />);
+  await screen.findByTestId('page');
+  return out;
+}
+
 describe('the settings note', () => {
-  it('says so in one neutral Hint line while returns are on and no approval limit is set, and stays quiet otherwise', () => {
-    const { unmount } = render(<ReturnsThresholdWarning capabilities={{ returns: true } as never} />);
+  it('says so in one neutral Hint line while returns are on and no approval limit is set, and stays quiet otherwise', async () => {
+    const { unmount } = await inRouter(<ReturnsThresholdWarning capabilities={{ returns: true } as never} />);
     const note = screen.getByTestId('returns-no-threshold');
     expect(note.textContent).toMatch(/^Returns need no second administrator yet\. /);
     expect(note.textContent).toMatch(/no approval limit/i);
     expect(note.getAttribute('role')).toBe('note');
-    // No screen sets the limit yet, so the note offers no link that would lead nowhere.
-    expect(note.querySelector('a')).toBeNull();
+    // Issue #343: the approval rules set the limit, so the note leads to the returns row there.
+    expect(screen.getByTestId('returns-limit-link').getAttribute('href')).toBe('/staff/setup/approvals#rule-retail_sale_return');
     expect(note.querySelector('.alert, .alert-warning')).toBeNull();
     unmount();
-    render(<ReturnsThresholdWarning capabilities={{ returns: true, returns_approval_threshold_minor: 500 } as never} />);
+    // Returns ask for approval: from 500, or (0) for every return. Either way there is nothing to warn about.
+    await inRouter(<ReturnsThresholdWarning capabilities={{ returns: true, returns_approval_threshold_minor: 500 } as never} />);
     expect(screen.queryByTestId('returns-no-threshold')).toBeNull();
     cleanup();
-    render(<ReturnsThresholdWarning capabilities={{ returns: false } as never} />);
+    await inRouter(<ReturnsThresholdWarning capabilities={{ returns: true, returns_approval_threshold_minor: 0 } as never} />);
+    expect(screen.queryByTestId('returns-no-threshold')).toBeNull();
+    cleanup();
+    await inRouter(<ReturnsThresholdWarning capabilities={{ returns: false } as never} />);
     expect(screen.queryByTestId('returns-no-threshold')).toBeNull();
   });
 });
