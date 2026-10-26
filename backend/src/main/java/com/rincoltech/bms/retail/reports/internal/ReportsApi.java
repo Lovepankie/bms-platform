@@ -171,7 +171,7 @@ final class ReportsApi {
                                     + " included; less payments reversed (on the day of the reversal) and money paid back on returns (on the"
                                     + " day of the return, at the refund branch; given back on the day a return is voided). A payment dated"
                                     + " earlier than it was entered counts on the day it was entered. Sales paid at the sale count on the day they"
-                                    + " were entered; cancelling a cash sale removes it from its own day. Not a profit basis")
+                                    + " were entered; cancelling a cash sale removes it from the day it was entered. Not a profit basis")
             Long receivedMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -231,7 +231,7 @@ final class ReportsApi {
                                     + " included; less payments reversed (on the day of the reversal) and money paid back on returns (on the"
                                     + " day of the return, at the refund branch; given back on the day a return is voided). A payment dated"
                                     + " earlier than it was entered counts on the day it was entered. Sales paid at the sale count on the day they"
-                                    + " were entered; cancelling a cash sale removes it from its own day. Not a profit basis")
+                                    + " were entered; cancelling a cash sale removes it from the day it was entered. Not a profit basis")
             Long receivedMinor,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)

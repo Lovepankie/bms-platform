@@ -12,7 +12,7 @@ screens, how to check the figures and how the operator undoes it. Nothing here t
 - `on_payment` (the owner's rule): a credit sale is Sold and On credit. It counts as profit only as the buyer pays, on
   the day of each payment, with its share of the sale's profit (the payment times the sale's profit margin). Received is separate: it is
   the money recorded as collected, by any method, on the day it was entered: every payment on a credit sale, new or old, imported or
-  not (a payment dated earlier counts on the day it was entered). It is not a drawer count. Cash sales count on the day they were entered. A day already reported is never rewritten, except that cancelling (voiding) a cash sale removes it from its own day; a
+  not (a payment dated earlier counts on the day it was entered). It is not a drawer count. Cash sales count on the day they were entered. A day already reported is never rewritten, except that cancelling (voiding) a cash sale removes it from the day it was entered; a
   reversed account payment and a voided return count on the day they happen.
 
 Stock still leaves at the sale and trade debtors are recorded at the sale, so the accounts balance either way. Imported (historical)

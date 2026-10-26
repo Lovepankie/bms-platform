@@ -1553,6 +1553,30 @@ class RetailCreditRecognitionIT extends IntegrationTest {
     }
 
     @Test
+    void aVoidedCashSaleLeavesTheDayItWasEnteredNotTheDayWrittenOnItNorTheDayOfTheVoid() {
+        onPayment();
+        settle(ago(5).toString());
+        UUID s = cashSale(hq, 1, ago(3));
+        sellEntered(s, ago(1));
+        assertThat(field(row(profit(ago(4), today()), hq, ago(1)), "received_minor"))
+                .as("before the void it is Received on the day it was entered")
+                .isEqualTo(1_000);
+        ResponseEntity<JsonNode> v = api.post("/sales/" + s + "/void", Map.of("reason", "Test void"), ADMIN);
+        assertThat(v.getStatusCode().is2xxSuccessful()).as("%s", v.getBody()).isTrue();
+        JsonNode report = profit(ago(4), today());
+        assertThat(field(row(report, hq, ago(1)), "received_minor"))
+                .as("the void removes it from the day it was entered")
+                .isZero();
+        assertThat(field(row(report, hq, ago(3)), "received_minor")).isZero();
+        assertThat(field(row(report, hq, today()), "received_minor"))
+                .as("no void-day leg")
+                .isZero();
+        assertThat(report.get("received_minor").asLong()).isZero();
+        assertThat(field(dayOf(dashboard().get("days"), ago(1)), "received_minor"))
+                .isZero();
+    }
+
+    @Test
     void aPaymentOnAccountTakenAtAnotherBranchAndReversedLeavesBothBranchesAtZero() {
         capability(Map.of("customer_accounts", true));
         onPayment();
