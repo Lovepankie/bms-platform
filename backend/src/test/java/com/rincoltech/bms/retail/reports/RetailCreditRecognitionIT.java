@@ -907,9 +907,9 @@ class RetailCreditRecognitionIT extends IntegrationTest {
     @Test
     void aPaymentRecordedOnAnImportedCreditSaleBeforeItWasRefusedIsReceivedOnTheDayItWasEntered() {
         onPaymentFromTheStart();
-        // Issue #375: before #360 an imported credit sale could still take a payment, so such rows exist. The owner
-        // seeds
-        // one as that route wrote it: dated ten days ago, entered three days ago, with its journal entry.
+        // Issue #375: before #360 an imported credit sale could still take a payment, so such rows exist.
+        // The owner seeds one as that route wrote it (cash in, trade debtors out): dated ten days ago,
+        // entered three days ago.
         UUID sale = UUID.randomUUID();
         TestDatabase.owner()
                 .sql("""
@@ -960,7 +960,7 @@ class RetailCreditRecognitionIT extends IntegrationTest {
                         t.account("cash_on_hand"),
                         t.tenantId(),
                         t.tenantId(),
-                        t.account("opening_balance_equity"),
+                        t.account("trade_debtors"),
                         t.tenantId())
                 .update();
         TestDatabase.owner()
@@ -1572,6 +1572,10 @@ class RetailCreditRecognitionIT extends IntegrationTest {
                 .as("no void-day leg")
                 .isZero();
         assertThat(report.get("received_minor").asLong()).isZero();
+        assertThat(field(row(report, hq, ago(3)), "sales_minor"))
+                .as("the sales and the profit leave the date written on the sale")
+                .isZero();
+        assertThat(field(row(report, hq, ago(3)), "profit_minor")).isZero();
         assertThat(field(dayOf(dashboard().get("days"), ago(1)), "received_minor"))
                 .isZero();
     }

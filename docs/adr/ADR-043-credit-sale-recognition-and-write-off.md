@@ -72,8 +72,8 @@ balance today and every closed period.
      return and at the refund branch (`refund_branch_id`), and given back on the day the return is voided. The profit is a separate leg
      and is not changed by this: a credit sale from before the rule started stays counted at the sale and one from after it as the
      buyer pays, never twice. **A payment dated earlier than it was entered counts on the day it was entered**, so a day already
-     reported is never rewritten by a late entry, except that cancelling (voiding) a cash sale removes it from the day it was entered (a void changes that day, not the date written on the sale, as in every other report
-     of the product; no void-day leg is built). A reversed account payment and a voided return are counted on the day they happen.
+     reported is never rewritten by a late entry, except that cancelling (voiding) a cash sale removes it from the day it was entered (Received changes on that day;
+     Sold, the sales and the profit change on the sale's date, as in every other report of the product; no void-day leg is built). A reversed account payment and a voided return are counted on the day they happen.
      Under `on_payment` the date written on a payment (`paid_on`) must be today **for a sale that counts from the start day on** (the
      sale counted when the buyer pays; the sale says so with `counted_when_paid`, which the payment form reads): a backdated payment
      on such a sale is refused (422 `backdated_payment`, "Under the 'when the buyer pays' rule a payment is dated today. If you took
