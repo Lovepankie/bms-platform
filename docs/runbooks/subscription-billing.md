@@ -16,7 +16,7 @@ by hand (issue #480, ADR-075). Payments are still recorded by the operator on th
 
 **Who gets them (ADR-090).** When the Owner named a billing contact on Plan and billing (an accountant, say), the reminders and
 receipts go to that person instead of the Owner. It never changes anyone's sign-in. A business that asked to close gets no
-reminder and is never made overdue (`docs/runbooks/closing-a-business.md`).
+reminder, is never made overdue and is never listed in Due for suspension (`docs/runbooks/closing-a-business.md`).
 
 **Nothing is ever suspended by itself.** A pilot (complimentary) business, a suspended or cancelled business and one already overdue
 get no reminder. A business with no Owner gets no email: give it an Owner first (Business page, the owner rescue). The
@@ -46,6 +46,10 @@ Payment details are configuration typed here, never in the repository or a ticke
 ## A receipt
 
 - The Owner gets it by email when the payment is recorded and can download it again from Business set-up > Plan and billing.
+- Receipt numbers (`RT-<year>-<number>`) never reset. The year is the day the receipt was issued; the number runs on across
+  years from one platform-wide sequence (`subscription_receipt_numbers`), so the first receipt of a new year carries on from the
+  last of the old one (`RT-2027-000413` after `RT-2026-000412`). Do not reset or restart the sequence. A gap in the numbers is a
+  payment that was rolled back, not a lost receipt.
 - The issuer details on it come from the environment: `BMS_PLATFORM_BILLING_ISSUER_NAME` (default `Rincol Tech`),
   `BMS_PLATFORM_BILLING_ISSUER_ADDRESS`, `BMS_PLATFORM_BILLING_ISSUER_CONTACT` and `BMS_PLATFORM_BILLING_ISSUER_TAX_ID`, set in the
   host's environment file, never in the repository. A receipt is rendered when it is sent or downloaded, so a change to these

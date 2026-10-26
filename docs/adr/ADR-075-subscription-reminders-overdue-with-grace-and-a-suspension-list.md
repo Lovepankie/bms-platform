@@ -34,7 +34,9 @@ and not automatic suspension, an emailed receipt, and a Plan and billing page fo
    switched off by `bms.platform.billing-job-enabled=false`) moves a business in its free month or paid, not a pilot, whose last
    day is before its own today in its own time zone, to `past_due` (shown as overdue), at the first tick after its midnight.
    `platform_mark_subscription_overdue` checks the status and the date again under the row lock, so a payment that lands meanwhile
-   wins, and writes `platform.tenant.subscription_overdue` to the platform audit log with no operator. `past_due` changes nothing
+   wins, and writes `platform.tenant.subscription_overdue` to the platform audit log with no operator. The function trusts the
+   day the job passes (the application's clock, in the business's time zone), so since `V105` (issue #502) it refuses any caller
+   bound to a business (`app.tenant_id` set): only the unbound platform job calls it. `past_due` changes nothing
    the business can do. A free month that ends unpaid becomes overdue the same way. A subscription with a status change the
    operator scheduled (`next_status_change_on`, for example an end chosen for the end of the period) is never moved, its
    date is never touched, it gets no reminder and it is never listed for suspension: a business that is leaving is not
@@ -45,14 +47,24 @@ and not automatic suspension, an emailed receipt, and a Plan and billing page fo
    every signed-in member of its staff sees the banner "Your subscription is overdue since <day>; pay by <day> to keep using the
    app"; the last day of the grace period is the last day paid for plus the grace days.
 4. **A list, not a suspension.** `GET /platform/billing/due-for-suspension` lists every overdue business past the grace period,
-   not a pilot, most overdue first, with the days overdue and the plan's monthly price. The operator suspends from the Business page
+   not a pilot, most overdue first, with the days overdue and the plan's monthly price. A business whose Owner cancelled (ADR-073)
+   or that asked to close (ADR-090) is never listed, as the run leaves it out (`platform_tenants_cancelling`, issue #502). The
+   operator suspends from the Business page
    with the existing route and a reason. No job, function or route added here suspends anything; ADR-024 decision 6 ("automatic
    suspension is opt-in and guarded") is narrowed to never, until a later decision says otherwise.
 5. **What is owed.** A late payment's paid period starts on the day it is recorded (`platform_record_subscription_payment`, V75),
    so the late days are not charged and what is due is the price of the next month. The list, the reminders and the page say that
-   amount; they never add the late days.
+   amount; they never add the late days. **One price date (issue #502):** every one of them reads the plan's price in force on the
+   first day the next payment would cover, the later of today and the day after the last day paid for (the same start as V75
+   gives the payment; `BillingService.priceDate`). A reminder, sent on or before the last day, so prices the day after it; the
+   list, and the page of a business that is overdue, price today; the page of a business paid ahead prices the day after its
+   last day, so it says what the Owner will pay next, the same amount as its reminders. Before #502 the page and the list read
+   today; only the page of a business paid ahead changes, and only when a new price starts in between. No price is changed.
 6. **A receipt for every payment.** When the operator records a payment, the same transaction numbers its receipt
    (`subscription_receipts`, `RT-<year>-<six digits>` from one sequence across the platform) and queues the email to the Owner. The
+   number never resets: the year is the day the receipt is issued, and the digits run on from one year to the next
+   (`RT-2026-000412` may be followed by `RT-2027-000413`, never by `RT-2027-000001`), so a number is unique without its year
+   and a gap is only a rolled back payment (issue #502). The
    receipt row keeps the business's and the plan's names as they were, so the PDF is the same whenever it is rendered (ADR-034).
    The PDF is in the house letterhead of Rincol Tech (the issuer, not the business's own): business, plan, period covered, amount
    in figures and words, method, reference, number and date. The issuer's address, contact and tax number are environment values
@@ -70,7 +82,10 @@ and not automatic suspension, an emailed receipt, and a Plan and billing page fo
    merged first, so this change is the second and adds the skip: a subscription with a row in `subscription_scheduled_changes`
    of kind `cancel` and status `scheduled` is left out of the run's candidates (`platform_tenants_cancelling`), is checked
    again in the reminder's own transaction, and is refused by `platform_mark_subscription_overdue` under the subscription's
-   row lock. It gets no reminder and is never made `past_due`; a cancellation the Owner undid counts for nothing. Done.
+   row lock. The Owner's cancel takes that same row lock (`app_lock_subscription`, V90) before it inserts its row, so a cancel
+   committing at the tick after midnight is seen by the overdue move, which waits for it (issue #502, confirmed by
+   `BillingAutomationIT.frSub09_aCancelCommittingAtTheTickIsNeverMadeOverdue`). It gets no reminder and is never made
+   `past_due`; a cancellation the Owner undid counts for nothing. Done.
 
 ## Consequences
 

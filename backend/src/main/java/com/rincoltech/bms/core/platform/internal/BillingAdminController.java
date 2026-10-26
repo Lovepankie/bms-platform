@@ -75,7 +75,9 @@ class BillingAdminController {
 
             long daysOverdue,
 
-            @Schema(description = "The plan's monthly price today, or null when none was entered")
+            @Schema(
+                    description =
+                            "The plan's monthly price on the first day the next payment would cover (today, for an overdue business), or null when none was entered")
             Long amountDueMinor,
 
             String currency,

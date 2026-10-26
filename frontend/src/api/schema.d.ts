@@ -8233,7 +8233,7 @@ export interface components {
             how_to_pay?: string;
             /**
              * Format: int64
-             * @description The plan's monthly price today, in minor units, or null when none was entered
+             * @description The plan's monthly price on the first day the next payment would cover (the later of today and the day after the last day paid for), in minor units, or null when none was entered
              */
             monthly_minor?: number;
             /**
@@ -8825,7 +8825,7 @@ export interface components {
         DueForSuspensionItem: {
             /**
              * Format: int64
-             * @description The plan's monthly price today, or null when none was entered
+             * @description The plan's monthly price on the first day the next payment would cover (today, for an overdue business), or null when none was entered
              */
             amount_due_minor?: number;
             currency?: string;

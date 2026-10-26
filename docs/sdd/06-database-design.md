@@ -479,7 +479,9 @@ pilot, of an active tenant, with no status change scheduled (`next_status_change
 cancellation the Owner scheduled (`subscription_scheduled_changes`, kind `cancel`, status `scheduled`, checked under the
 subscription's row lock), whose last day is still `due_on` and before `today`, to `past_due`, and writes
 `platform.tenant.subscription_overdue` with no operator; anything else changes nothing. The only automatic status change; it never
-suspends. FR-SUB-09. `platform_tenants_cancelling()` (`V92`, definer, refused under a tenant binding): the tenants with such a
+suspends. Since `V105` (issue #502) it is refused under a tenant binding (only the unbound platform job calls it, so no business's
+request can pass a later `today`) and changes nothing for a business that asked to close (`tenant_closures` requested or removing,
+ADR-090). FR-SUB-09. `platform_tenants_cancelling()` (`V92`, definer, refused under a tenant binding): the tenants with such a
 scheduled cancellation, which the billing run leaves out (ADR-075 decision 8).
 
 Reads for the operator across tenants (`V75`, definer functions owned by `bms_owner`):

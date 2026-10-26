@@ -10,6 +10,9 @@ import com.rincoltech.bms.testsupport.Api.Session;
 import com.rincoltech.bms.testsupport.MovableClock;
 import com.rincoltech.bms.testsupport.MovableClockConfig;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -517,6 +520,143 @@ class BillingAutomationIT extends IntegrationTest {
         assertThat(audits("platform.tenant.subscription_overdue", b.id())).isEqualTo(1);
     }
 
+    /** Runs one statement as bms_app with the business bound, rolled back; returns the SQLSTATE of a refusal, null when it ran. */
+    static String asApp(UUID tenantId, String sql, Object... params) {
+        try (Connection c = TestDatabase.appDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement bind = c.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                bind.setString(1, tenantId.toString());
+                bind.execute();
+            }
+            try (PreparedStatement s = c.prepareStatement(sql)) {
+                for (int i = 0; i < params.length; i++) {
+                    s.setObject(i + 1, params[i]);
+                }
+                s.execute();
+            } finally {
+                c.rollback();
+            }
+            return null;
+        } catch (SQLException e) {
+            return e.getSQLState();
+        }
+    }
+
+    /** An open request to close the business (V102, ADR-090), as the Owner's own request leaves it. */
+    static void closing(Business b) {
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO tenant_closures (id, tenant_id, requested_by, remove_after)
+                        VALUES (?, ?, ?, ?)
+                        """)
+                .params(UUID.randomUUID(), b.id(), b.ownerId(), LocalDate.of(2026, 12, 31))
+                .update();
+    }
+
+    /**
+     * Issue #502 item 1: only the platform job, which runs unbound, makes a business overdue. A caller bound to a business
+     * (any request of its staff) is refused whatever day it passes, and a business that asked to close is refused too.
+     * JUSTIFICATION-A3: a new test case for the review follow-up; the anchor is only the insertion point.
+     */
+    @Test
+    void frSub09_onlyThePlatformJobMakesABusinessOverdue() {
+        Business b = business("active", null, LocalDate.of(2026, 11, 8), false);
+        Business closing = business("active", null, LocalDate.of(2026, 11, 8), false);
+        closing(closing);
+
+        assertThat(asApp(
+                        b.id(),
+                        "SELECT platform_mark_subscription_overdue(?, ?, ?)",
+                        b.id(),
+                        LocalDate.of(2026, 11, 8),
+                        LocalDate.of(2026, 11, 10)))
+                .as("bound to the business, refused")
+                .isEqualTo("42501");
+        assertThat(status(b)).isEqualTo("active");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT platform_mark_subscription_overdue(?, ?, ?)")
+                        .params(closing.id(), LocalDate.of(2026, 11, 8), LocalDate.of(2026, 11, 10))
+                        .query(Boolean.class)
+                        .single())
+                .as("a business that asked to close is never made overdue, whoever calls")
+                .isFalse();
+
+        clock.set(Instant.parse("2026-11-10T06:00:00Z"));
+        assertThat(run(b, closing).markedOverdue()).as("the job, unbound").isEqualTo(1);
+        assertThat(status(b)).isEqualTo("past_due");
+        assertThat(status(closing)).isEqualTo("active");
+        assertThat(audits("platform.tenant.subscription_overdue", closing.id())).isZero();
+    }
+
+    /**
+     * Issue #502 item 2: the Owner's cancel (V90, ADR-073) takes the subscription's row lock before it inserts, so a cancel
+     * committing at the tick after midnight is never made past_due. The test runs the cancel's own statements as
+     * {@code PlanService.schedule} does ({@code app_lock_subscription}, then the insert) in a transaction held open, starts
+     * the run, sees the overdue move wait on that transaction, then commits: the move sees the cancel and changes nothing.
+     * JUSTIFICATION-A3: a new test case for the review follow-up; the anchor is only the insertion point.
+     */
+    @Test
+    void frSub09_aCancelCommittingAtTheTickIsNeverMadeOverdue() throws Exception {
+        Business b = business("active", null, LocalDate.of(2026, 11, 8), false);
+        clock.set(Instant.parse("2026-11-08T21:10:00Z"));
+        java.util.concurrent.CompletableFuture<BillingService.RunResult> tick;
+        try (Connection c = TestDatabase.appDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement bind = c.prepareStatement("SELECT set_config('app.tenant_id', ?, true)")) {
+                bind.setString(1, b.id().toString());
+                bind.execute();
+            }
+            try (PreparedStatement lock = c.prepareStatement("SELECT app_lock_subscription(?)")) {
+                lock.setObject(1, b.id());
+                lock.execute();
+            }
+            try (PreparedStatement cancel = c.prepareStatement("""
+                    INSERT INTO subscription_scheduled_changes (id, tenant_id, kind, module_key, effective_on, requested_by)
+                    VALUES (?, ?, 'cancel', NULL, ?, ?)
+                    """)) {
+                cancel.setObject(1, UUID.randomUUID());
+                cancel.setObject(2, b.id());
+                cancel.setObject(3, LocalDate.of(2026, 11, 9));
+                cancel.setObject(4, b.ownerId());
+                cancel.executeUpdate();
+            }
+            String txid;
+            try (PreparedStatement id = c.prepareStatement("SELECT pg_current_xact_id()::text");
+                    var rs = id.executeQuery()) {
+                rs.next();
+                txid = rs.getString(1);
+            }
+            tick = java.util.concurrent.CompletableFuture.supplyAsync(() -> run(b));
+            assertThat(waitersOn(txid))
+                    .as("the overdue move waits on the cancel's row lock")
+                    .isEqualTo(1);
+            c.commit();
+        }
+        BillingService.RunResult result = tick.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(result.failures()).isZero();
+        assertThat(result.markedOverdue()).isZero();
+        assertThat(status(b)).isEqualTo("active");
+        assertThat(audits("platform.tenant.subscription_overdue", b.id())).isZero();
+    }
+
+    /** How many backends wait for the transaction with this id, polled for up to 30 seconds until one does. */
+    static long waitersOn(String txid) throws InterruptedException {
+        long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        long waiting = 0;
+        while (System.nanoTime() < until && waiting == 0) {
+            waiting = TestDatabase.owner()
+                    .sql("SELECT count(*) FROM pg_locks WHERE NOT granted AND locktype = 'transactionid'"
+                            + " AND transactionid::text = ?")
+                    .param(txid)
+                    .query(Long.class)
+                    .single();
+            if (waiting == 0) {
+                Thread.sleep(50);
+            }
+        }
+        return waiting;
+    }
+
     List<String> listed() {
         ResponseEntity<JsonNode> list =
                 platform.get("/api/v1/platform/billing/due-for-suspension", operator.accessToken());
@@ -630,6 +770,70 @@ class BillingAutomationIT extends IntegrationTest {
                     operator.accessToken());
             assertThat(restored.getStatusCode()).as("%s", restored.getBody()).isEqualTo(HttpStatus.OK);
         }
+    }
+
+    /**
+     * Issue #502 item 3: a business whose Owner cancelled (ADR-073) or that asked to close (ADR-090) is never listed for
+     * suspension, as the runbook says, even when it is already overdue and past the grace period.
+     * JUSTIFICATION-A3: a new test case for the review follow-up; the anchor is only the insertion point.
+     */
+    @Test
+    void frSub10_aCancellingOrClosingBusinessIsNeverListed() {
+        clock.set(Instant.parse("2026-11-20T06:00:00Z"));
+        Business past = business("past_due", null, LocalDate.of(2026, 11, 1), false);
+        Business cancelling = business("past_due", null, LocalDate.of(2026, 11, 1), false);
+        Business closing = business("past_due", null, LocalDate.of(2026, 11, 1), false);
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO subscription_scheduled_changes (id, tenant_id, kind, effective_on, requested_by)
+                        VALUES (?, ?, 'cancel', ?, ?)
+                        """)
+                .params(UUID.randomUUID(), cancelling.id(), LocalDate.of(2026, 11, 2), cancelling.ownerId())
+                .update();
+        closing(closing);
+        signInOperator();
+
+        assertThat(listed())
+                .contains(past.id().toString())
+                .doesNotContain(cancelling.id().toString(), closing.id().toString());
+    }
+
+    /**
+     * Issue #502 item 4: one price date for the reminders, the Owner's page and the list: the first day the next payment would
+     * cover. With a new price from the day after the last day paid for, the reminder and the page both say the new one.
+     * JUSTIFICATION-A3: a new test case for the review follow-up; the anchor is only the insertion point.
+     */
+    @Test
+    void frSub12_theRemindersAndThePagePriceTheSameDay() {
+        Business b = business("active", null, LocalDate.of(2026, 11, 10), false);
+        ResponseEntity<JsonNode> later = platform.post(
+                "/api/v1/platform/plans/" + plan + "/prices",
+                Map.of(
+                        "monthly_minor",
+                        12000,
+                        "annual_months",
+                        11,
+                        "effective_from",
+                        "2026-11-11",
+                        "reason",
+                        "Test price"),
+                operator.accessToken());
+        assertThat(later.getStatusCode()).as("%s", later.getBody()).isEqualTo(HttpStatus.OK);
+
+        clock.set(Instant.parse("2026-11-03T06:00:00Z"));
+        assertThat(run(b).remindersQueued()).isEqualTo(1);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT amount_minor FROM subscription_reminders WHERE tenant_id = ?")
+                        .param(b.id())
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(12000);
+        JsonNode page = Api.tenant(http, b.fixture().slug())
+                .get("/api/v1/billing", token(b))
+                .getBody();
+        assertThat(page.get("monthly_minor").asLong())
+                .as("the price of the next month, not today's")
+                .isEqualTo(12000);
     }
 
     /** FR-SUB-11: a payment gets a numbered receipt in its own transaction, emailed to the Owner with the PDF attached. */

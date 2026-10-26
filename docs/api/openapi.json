@@ -1193,7 +1193,7 @@
             "type" : "string"
           },
           "monthly_minor" : {
-            "description" : "The plan's monthly price today, in minor units, or null when none was entered",
+            "description" : "The plan's monthly price on the first day the next payment would cover (the later of today and the day after the last day paid for), in minor units, or null when none was entered",
             "format" : "int64",
             "type" : "integer"
           },
@@ -2541,7 +2541,7 @@
         "description" : "Most overdue first",
         "properties" : {
           "amount_due_minor" : {
-            "description" : "The plan's monthly price today, or null when none was entered",
+            "description" : "The plan's monthly price on the first day the next payment would cover (today, for an overdue business), or null when none was entered",
             "format" : "int64",
             "type" : "integer"
           },

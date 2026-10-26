@@ -67,7 +67,9 @@ class BillingController {
             String planName,
             String currency,
 
-            @Schema(description = "The plan's monthly price today, in minor units, or null when none was entered")
+            @Schema(
+                    description =
+                            "The plan's monthly price on the first day the next payment would cover (the later of today and the day after the last day paid for), in minor units, or null when none was entered")
             Long monthlyMinor,
 
             @Schema(description = "Months charged for a year, or null")
