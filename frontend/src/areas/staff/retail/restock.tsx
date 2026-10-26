@@ -19,6 +19,8 @@ import { Field, FieldsNeededNote } from '../../../app/ui/Field';
 import { WORDS, howManyInEach, plural, useFromNowOn } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
 import { RowChevron } from '../../../app/ui/ListRow';
+import { entryWarnings, type EntryWarning } from './entry-checks-state';
+import { useEntryChecks, useEntryNorms } from './entry-checks';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -186,6 +188,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       return { saved, context: { supplierName, before } };
     },
     onSuccess: ({ saved, context }) => {
+      entry.saved();
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(saved, context);
@@ -239,9 +242,22 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const problems = lines.map(restockLineProblem);
   const supplierProblem = creditNeedsSupplier(method, supplierId, newSupplier);
   const blocked = lines.length === 0 || problems.some((p) => p !== null) || supplierProblem !== null;
+  // Issue #353: each line against the item's own purchases, said before saving, never blocking.
+  const norms = useEntryNorms(lines.map((l) => l.product.id));
+  const warnings = lines.flatMap((l, i): EntryWarning[] => {
+    const pack = unitsOn ? chosenPack(l.product, l.unitId) : undefined;
+    const total = Object.values(l.qtyByBranch).reduce((sum, q) => sum + (branchQty(q) ?? 0), 0);
+    const first = branches.find((b) => (branchQty(l.qtyByBranch[b.id ?? '']) ?? 0) > 0);
+    return entryWarnings(norms(l.product.id), {
+      screen: 'buy', product: l.product, lineKey: `${l.product.id}-${i}`, qtyMilli: total > 0 ? total : null, qtyFieldId: `q-${i}-${first?.id ?? ''}`,
+      unitChoosable: unitsOn && activePacks(l.product).length > 0, unitFieldId: `unit-${i}`,
+      ...(pack ? { unitId: pack.unit_id, unitName: pack.unit, factor: lineFactor(l) ?? undefined } : {}),
+    });
+  });
+  const entry = useEntryChecks('buy', here, warnings, () => save.mutate(), lines);
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending) save.mutate(); }}>
+    <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending) entry.check(); }}>
       <Note>Saving a purchase changes the buying and selling price of every item below to the values you enter. The change is recorded in the price history.</Note>
       <FieldsNeededNote />
 
@@ -337,6 +353,7 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
                 </div>
               ))}
             </fieldset>
+            {entry.notes(`${l.product.id}-${i}`)}
             <p>
               {newSell !== null && newSell !== l.product.sell_minor ? `Sell price will change from ${money(l.product.sell_minor ?? 0)} to ${money(newSell)}.` : 'Sell price stays the same.'}
               {canProfit && newCost !== null && l.product.cost_minor !== undefined && newCost !== l.product.cost_minor ? ` Last paid will change from ${money(l.product.cost_minor)} to ${money(newCost)}.` : ''}

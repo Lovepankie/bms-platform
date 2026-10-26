@@ -1043,3 +1043,65 @@ th[scope='rowgroup'] .cat-head {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* An entry warning (issue #353): a tinted note next to the field it is about, its words in the text colour for reading, the
+   icon in the warning colour, and Confirm and Change as two ordinary 48px buttons. No stripe, no shadow of its own. */
+.entry-warning p {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text);
+}
+
+.entry-warning-icon {
+  flex: none;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.entry-warning-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.entry-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.entry-warning-actions button {
+  min-height: 48px;
+  min-width: 112px;
+}
+
+/* Did you mean and the category of similar items while a new item is named (issue #353): a neutral note with one row per
+   item and its 48px button, then a one-line hint with a button to choose the category. */
+.name-hints-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.name-hints-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.name-hints-list button,
+.name-hints-category button {
+  min-height: 48px;
+}
+
+.name-hints-category {
+  margin: 0 0 var(--space-4);
+}
+
+.name-hints-category .hint {
+  margin: 0 0 var(--space-2);
+}

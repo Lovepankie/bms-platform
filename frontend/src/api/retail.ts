@@ -54,6 +54,11 @@ export type PriceEdit = S['RetailPriceEditRequest'];
 /** A product with this name or a close one (issue #352): `exact` is the same name in the same unit, which a save refuses. */
 export type SimilarProducts = S['RetailSimilarProducts'];
 export type SimilarProduct = S['RetailSimilarProduct'];
+/** Issue #353, ADR-093: an item's recent history the entry screens warn against, and the hints while naming a new item. */
+export type EntryNorms = S['RetailEntryNorms'];
+export type EntryUsage = S['RetailEntryUsage'];
+export type NameHints = S['RetailNameHints'];
+export type EntryConfirmation = S['RetailEntryConfirmation'];
 export type ImportResult = S['RetailProductImportResult'];
 export type ImportRow = S['RetailProductImportRow'];
 export type Customer = S['RetailCustomer'];
@@ -374,6 +379,12 @@ export interface RetailApi {
   getProduct(id: string): Promise<Product>;
   /** Before saving a new or renamed item: the products with this name or a close one (issue #352). */
   similarProducts(q: { description: string; unitId?: string; excludeId?: string }): Promise<SimilarProducts>;
+  /** Issue #353: the item's median quantities, usual units and last price; the screens call it once per item. */
+  entryNorms(productId: string): Promise<EntryNorms>;
+  /** Issue #353: did you mean, and the category of similar items, while a new item's name is typed. */
+  nameHints(description: string): Promise<NameHints>;
+  /** Issue #353: the person confirmed an entry warning; recorded, never needed to save. */
+  confirmEntryWarning(body: EntryConfirmation): Promise<void>;
   createProduct(body: NewProduct): Promise<Product>;
   /** Non-price fields, under If-Match with the version read. */
   updateProduct(id: string, version: number, body: ProductChange): Promise<Product>;
@@ -716,6 +727,20 @@ const realRetail: RetailApi = {
     return unwrap(
       await api.GET('/api/v1/retail/products/similar', { params: { query: { description, ...(unitId ? { unit_id: unitId } : {}), ...(excludeId ? { exclude_id: excludeId } : {}) } } }),
     );
+  },
+
+  async entryNorms(productId) {
+    return unwrap(await api.GET('/api/v1/retail/products/{product_id}/entry-norms', { params: { path: { product_id: productId } } }));
+  },
+
+  async nameHints(description) {
+    return unwrap(await api.GET('/api/v1/retail/products/name-hints', { params: { query: { description } } }));
+  },
+
+  async confirmEntryWarning(body) {
+    const result = await api.POST('/api/v1/retail/entry-warnings/confirmations', { body });
+    // 204 has no body, so unwrap is only for the refusal.
+    if (!result.response.ok) unwrap(result);
   },
 
   async createProduct(body) {

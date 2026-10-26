@@ -20,6 +20,8 @@ import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
 import { RowChevron } from '../../../app/ui/ListRow';
 import { Hint } from '../../../app/ui/Hint';
+import { entryWarnings } from './entry-checks-state';
+import { useEntryChecks, useEntryNorms } from './entry-checks';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -57,6 +59,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   const save = useMutation({
     mutationFn: () => retail.createTransfer(buildTransfer(fromBranchId, draft), key),
     onSuccess: (t) => {
+      entry.saved();
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(t);
@@ -110,9 +113,15 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   const problem = transferProblem(fromBranchId, draft);
   // With the two-step transfer on (ADR-033) the stock leaves now and is counted at the destination once received.
   const sends = capabilityOn(me, 'retail', TRANSFER_RECEIPT);
+  // Issue #353: each line against the item's own moves (or its purchases while it has few moves), said before saving, never blocking.
+  const norms = useEntryNorms(draft.lines.map((l) => l.product.id));
+  const warnings = draft.lines.flatMap((l, i) => entryWarnings(norms(l.product.id), {
+    screen: 'move', product: l.product, lineKey: l.product.id ?? String(i), qtyMilli: parseQty(l.qty), qtyFieldId: `tq-${i}`,
+  }));
+  const entry = useEntryChecks('move', fromBranchId, warnings, () => save.mutate(), draft.lines);
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) save.mutate(); }}>
+    <form onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) entry.check(); }}>
       <p>From: {label(fromBranchId)}</p>
       <NoStockHere branchId={fromBranchId} />
       <div data-tour="transfer-to">
@@ -144,6 +153,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
             <input id={`tq-${i}`} inputMode="decimal" value={l.qty} aria-invalid={hint !== null}
               onChange={(e) => setDraft((d) => ({ ...d, lines: d.lines.map((x, n) => (n === i ? { ...x, qty: e.target.value } : x)) }))} />
             {hint && <p role="alert" className="rt-flag">{hint}</p>}
+            {entry.notes(l.product.id ?? String(i))}
             <button type="button" aria-label={`Remove ${l.product.description}`}
               onClick={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))}>Remove</button>
           </div>

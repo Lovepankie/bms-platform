@@ -828,6 +828,30 @@ again under the sale's lock; the screens only save a round trip and say each ref
 - **Business set-up.** The Branches tile reads "Add a shop or a store, close or reopen one, or say a branch keeps no goods".
 - **Tests.** `branches/branches.dom.test.tsx` (each kind with its flags and toast, no code box and the code made from the name, the needed name, the plan limit with and without the billing link, the button only for `core.branches.manage`), `branches/state.test.ts`; backend `AddBranchIT`.
 
+## Entry warnings and name hints (#353, ADR-093)
+
+Rule based only (no AI call): each check is a sentence from the item's own records that the person can check.
+
+- **Before saving, on Buy stock, Sell, Move stock and Count stock.** Each screen reads an item's norms once
+  (`GET /retail/products/{id}/entry-norms`, kept five minutes). On Save, a line that looks wrong shows one plain warning next to its field,
+  a tinted note with the warning icon, Confirm and Change (48px buttons; no stripe, no gradient, no emoji): "You usually buy this in rolls;
+  you entered 200 metres. Is that right?" (a unit other than the usual one, Buy stock and Sell only, where a unit is chosen), "You usually
+  buy about 3.5 rolls of this at a time; you entered 40 rolls. Is that right?" (ten times the usual or a tenth of it), "The records show 10
+  pieces here; you counted 1,000 pieces. Is that right?" (Count stock; where the records hold nothing, against the usual purchase), and on
+  Sell, for a price the seller typed, "You last sold this at UGX 6,000 a piece; you entered UGX 60,000. Is that right?". Confirm checks
+  the screen as it is now (a line edited since loses its warning, a new one shows) and, once none is open, saves what the screen shows;
+  the confirmations are recorded (`POST /retail/entry-warnings/confirmations`) once that save succeeds (Count stock: once the
+  count is committed), and the next entry is asked about afresh; Change takes the warning away and puts the
+  cursor in the field; nothing is saved. The save button is never disabled by a warning. With no history (under 3 lines), offline, or
+  while the norms are still loading, nothing is asked. The price floor stays a refusal, as before.
+- **While naming a new item** (Add an item, the item form in a category, and Not in the list? Add it here on Buy stock and Count stock):
+  from 3 letters, a neutral note "Did you mean this item?" lists up to 5 existing items (case and spacing ignored), each with Open (Items) or
+  Use this item (Buy stock and Count stock, which puts the existing item on the line instead), and a hint "Items like this are in Lighting,
+  such as LED bulb 9W screw." with Choose Lighting, which chooses the category only when tapped (not offered when the form is inside a
+  category). Not shown while an item is changed. The save-time name check of #352 below is unchanged.
+- **Tours.** The page tours of Buy stock (version 5), Move stock (version 4) and Count stock (version 5) say in their save step that an
+  unusual line is asked about first. The selling tour, which starts by itself, is left at its version so sellers are not shown it again.
+
 ## Correcting entry mistakes (#351, #352, ADR-044)
 
 The owner fixes a mistake where he sees it, with a trail the spreadsheet never had. Everything below is phone first, in plain words, and

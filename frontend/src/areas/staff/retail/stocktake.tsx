@@ -17,6 +17,8 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS } from '../../../app/glossary';
 import { NewItemHere, type AddedItem } from './new-item-here';
 import { ScreenToast, useItemAdded } from './toast';
+import { entryWarnings } from './entry-checks-state';
+import { useEntryChecks, useEntryNorms } from './entry-checks';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -153,9 +155,26 @@ function CountSheet({ branchId }: { branchId: string }) {
     mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: entered.map(([productId, countedQty]) => ({ product_id: productId, counted_qty: countedQty.trim() })) }),
     onSuccess: setDraft,
   });
+  // Issue #353: each count against what the records hold here, or, where they hold nothing, against the item's usual purchase;
+  // said before the review, never blocking. Only the counts whose records hold nothing read the item's history.
+  const sheet = new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r]));
+  const recorded = new Map([...sheet].map(([id, r]) => [id, milliOf(r.qty ?? '0')]));
+  const norms = useEntryNorms(entered.filter(([id]) => (recorded.get(id) ?? 0) <= 0).map(([id]) => id));
+  const warnings = entered.flatMap(([id, v]) => {
+    const row = sheet.get(id);
+    if (!row) return [];
+    const product: Product = { id, description: row.description, unit: row.unit };
+    const here = recorded.get(id) ?? 0;
+    // Records that hold some need no history: they are the comparison. A record of nothing reads the purchases.
+    const usual = here > 0 ? { product_id: id, unit: row.unit, quantity_factor: norms(id)?.quantity_factor ?? 10 } : norms(id);
+    return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
+  });
+  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), counts);
   const commit = useMutation({
     mutationFn: () => retail.commitStocktake(draft?.id ?? ''),
     onSuccess: (st) => {
+      // Issue #353: a count is saved when it is committed, so that is when its confirmed warnings are recorded.
+      entry.saved();
       setDraft(st);
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
@@ -189,7 +208,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     setDone((d) => [...d, ...Object.keys(counts).filter((id) => isCounted(id) && !d.includes(id))]);
     if (uncounted > 0 && !confirming) return setConfirming(true);
     setConfirming(false);
-    review.mutate();
+    entry.check();
   };
   const line = (r: StockRow, waiting: boolean) => {
     const id = r.product_id ?? '';
@@ -217,6 +236,7 @@ function CountSheet({ branchId }: { branchId: string }) {
             </button>
           )}
         </div>
+        {entry.notes(id)}
       </div>
     );
   };

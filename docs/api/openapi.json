@@ -10199,6 +10199,28 @@
           }
         }
       },
+      "RetailCategoryHint" : {
+        "description" : "Absent when no item shares a word of 3 letters or more with the name",
+        "properties" : {
+          "example" : {
+            "description" : "One of those items, to say why",
+            "example" : "Single cable 1.5 mm",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "items_like" : {
+            "description" : "How many items sharing the most words with the typed name are in it",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailCategoryList" : {
         "properties" : {
           "items" : {
@@ -12027,6 +12049,127 @@
         },
         "required" : [ "prefix" ]
       },
+      "RetailEntryConfirmation" : {
+        "description" : "Issue #353: the person confirmed an entry warning and the save it went with succeeded. Recorded in the audit log as the warning's kind and its numbers (no free text), never needed to save",
+        "properties" : {
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "entered_price_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "entered_qty" : {
+            "description" : "The quantity entered, in the unit entered",
+            "example" : "200",
+            "pattern" : "\\d{1,11}(\\.\\d{1,3})?",
+            "type" : "string"
+          },
+          "entered_unit_id" : {
+            "description" : "The pack unit entered; absent for the item's own unit",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "kind" : {
+            "pattern" : "unit|quantity|price",
+            "type" : "string"
+          },
+          "last_price_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "median_qty" : {
+            "description" : "What it was compared with, in base units: the median, or on Count stock what the records hold",
+            "pattern" : "\\d{1,11}(\\.\\d{1,3})?",
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "screen" : {
+            "pattern" : "buy|sell|move|count",
+            "type" : "string"
+          }
+        },
+        "required" : [ "kind", "product_id", "screen" ]
+      },
+      "RetailEntryNorms" : {
+        "description" : "Issue #353, ADR-093: the item's recent history the entry screens warn against: Buy stock, Sell, Move stock and Count stock call this once per item. The thresholds are sent so the screens use the server's",
+        "properties" : {
+          "buy" : {
+            "$ref" : "#/components/schemas/RetailEntryUsage"
+          },
+          "last_sell_minor" : {
+            "description" : "The price per base unit of the last sale, what was charged (line total over quantity, rounded half up). Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "last_sold_on" : {
+            "description" : "The day of that sale. Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)",
+            "format" : "date",
+            "type" : "string"
+          },
+          "min_lines" : {
+            "description" : "The fewest lines a median or a usual unit is given from",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "move" : {
+            "$ref" : "#/components/schemas/RetailEntryUsage"
+          },
+          "price_factor" : {
+            "description" : "A selling price this many times the last price or more, or this many times less, is warned about",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "quantity_factor" : {
+            "description" : "A quantity this many times the median or more, or this many times less, is warned about",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sell" : {
+            "$ref" : "#/components/schemas/RetailEntryUsage"
+          },
+          "unit" : {
+            "description" : "The item's own (base) unit",
+            "example" : "metre",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailEntryUsage" : {
+        "description" : "Issue #353: what the item's last lines of one kind say, read newest first and at most 20",
+        "properties" : {
+          "lines_read" : {
+            "description" : "How many lines were read, at most 20",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "median_qty" : {
+            "description" : "The median quantity of those lines in the item's own unit (base units), as plain text; absent under 3 lines, when no quantity warning is given",
+            "example" : "50",
+            "type" : "string"
+          },
+          "usual_unit" : {
+            "description" : "The name of that usual unit (the item's own unit when usual_unit_id is absent); absent when there is no usual unit",
+            "example" : "roll",
+            "type" : "string"
+          },
+          "usual_unit_id" : {
+            "description" : "The unit used on more than half of those lines: a pack's unit id; absent when that unit is the item's own or when no unit holds more than half or under 3 lines were read",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "RetailEvaluationBranch" : {
         "properties" : {
           "branch_id" : {
@@ -13766,6 +13909,46 @@
           },
           "totals" : {
             "$ref" : "#/components/schemas/RetailMarginTotals"
+          }
+        }
+      },
+      "RetailNameHint" : {
+        "description" : "At most 5 items, those holding the typed name first, then those a few letters apart",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "category_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailNameHints" : {
+        "description" : "Issue #353: while a new item's name is typed, the existing items it may be (case, accents, spaces and punctuation ignored) and the category most of the items like it are in. Suggestions only",
+        "properties" : {
+          "category" : {
+            "$ref" : "#/components/schemas/RetailCategoryHint"
+          },
+          "did_you_mean" : {
+            "description" : "At most 5 items, those holding the typed name first, then those a few letters apart",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailNameHint"
+            },
+            "type" : "array"
           }
         }
       },
@@ -35979,6 +36162,28 @@
         "tags" : [ "retail-documents" ]
       }
     },
+    "/api/v1/retail/entry-warnings/confirmations" : {
+      "post" : {
+        "operationId" : "confirmRetailEntryWarning",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailEntryConfirmation"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Record that the person confirmed an entry warning and saved anyway (issue #353)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/expense-categories" : {
       "get" : {
         "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
@@ -38443,6 +38648,33 @@
         "tags" : [ "retail-catalogue" ]
       }
     },
+    "/api/v1/retail/products/name-hints" : {
+      "get" : {
+        "operationId" : "getRetailNameHints",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "description",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailNameHints"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Did you mean, and the category of similar items, while a new item's name is typed (issue #353)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
     "/api/v1/retail/products/similar" : {
       "get" : {
         "operationId" : "findSimilarRetailProducts",
@@ -38647,6 +38879,34 @@
           }
         },
         "summary" : "Remove a barcode from an item (#345)",
+        "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/{product_id}/entry-norms" : {
+      "get" : {
+        "operationId" : "getRetailEntryNorms",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailEntryNorms"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "An item's recent quantities, usual units and last selling price, for the entry warnings (issue #353)",
         "tags" : [ "retail-catalogue" ]
       }
     },

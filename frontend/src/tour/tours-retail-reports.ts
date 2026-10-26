@@ -44,7 +44,8 @@ export const restockPage: Tour = {
   // Version 2 adds the Scan here step (issue #345, ADR-070).
   // Version 3 words the Add the items step for the picker that lists items only while you type (issue #534).
   // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 4,
+  // Version 5 says a line unusual for the item is asked about before saving (issue #353, ADR-093).
+  version: 5,
   title: 'This page: buy stock',
   audience: (me) => held(me, RESTOCK),
   autoStart: false,
@@ -54,7 +55,7 @@ export const restockPage: Tour = {
     retail({ id: 'search', target: 'restock-search', title: 'Add the items', body: 'Type part of the name or code, and tap each item you bought in the list under the box. Then fill in the cost, the sell price and how many went to each branch.' }),
     retail({ id: 'scan', target: 'scan-bar', title: 'Scan here', body: 'Or scan each item in the Scan box. It is added for the branch at the top, and a second scan adds one more.' }),
     retail({ id: 'paid', target: 'restock-paid', title: 'How you paid', body: 'Choose Cash, Bank or Credit. Credit means you pay the supplier later.' }),
-    retail({ id: 'save', target: 'restock-save', title: 'Save the purchase', body: 'Tap Save the purchase. Stock goes up, and the buying and selling price of each item change to what you typed.' }),
+    retail({ id: 'save', target: 'restock-save', title: 'Save the purchase', body: 'Tap Save the purchase. Stock goes up, and the buying and selling price of each item change to what you typed. If a quantity or unit is unusual for an item, a note beside it asks you to Confirm or Change it first.' }),
   ],
 };
 
@@ -78,7 +79,8 @@ export const transferPage: Tour = {
   id: 'page-transfer',
   // Version 2 adds the Scan here step (issue #345, ADR-070).
   // Version 3 words the Add the items step for the picker that lists items only while you type (issue #534).
-  version: 3,
+  // Version 4 says a quantity unusual for the item is asked about before saving (issue #353, ADR-093).
+  version: 4,
   title: 'This page: move stock',
   audience: (me) => held(me, TRANSFER) && held(me, STOCK_READ),
   autoStart: false,
@@ -88,7 +90,7 @@ export const transferPage: Tour = {
     retail({ id: 'search', target: 'transfer-search', title: 'Add the items', body: 'Type part of the name or code, and tap each item to move in the list under the box.' }),
     retail({ id: 'scan', target: 'scan-bar', title: 'Scan here', body: 'Or scan each item in the Scan box. It is added, and a second scan adds one more.' }),
     retail({ id: 'items', target: 'transfer-items', title: 'How many', body: 'Type the quantity for each item. You cannot move more than the branch holds.' }),
-    retail({ id: 'save', target: 'transfer-save', title: 'Save the move', body: 'Tap Move stock, or Send stock if the other branch must receive it first.' }),
+    retail({ id: 'save', target: 'transfer-save', title: 'Save the move', body: 'Tap Move stock, or Send stock if the other branch must receive it first. If a quantity is unusual for an item, a note beside it asks you to Confirm or Change it first.' }),
   ],
 };
 

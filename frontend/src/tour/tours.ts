@@ -909,7 +909,8 @@ export const stocktakePage: Tour = {
   // Version 2 adds the Scan here step (issue #345, ADR-070).
   // Version 3 words the Count step for the search on top and the list Not counted yet below it (issue #534).
   // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 4,
+  // Version 5 says a count far from the records is asked about before the review (issue #353, ADR-093).
+  version: 5,
   title: 'This page: count stock',
   audience: (me) => STOCKTAKE.every((p) => held(me, p)),
   autoStart: false,
@@ -931,7 +932,7 @@ export const stocktakePage: Tour = {
       id: 'review',
       target: 'count-review',
       title: 'Check before saving',
-      body: 'Tap Review to see what differs. Nothing changes until you commit the count.',
+      body: 'Tap Review to see what differs. A count far from what the records hold is asked about first: Confirm or Change it. Nothing changes until you commit the count.',
     },
   ],
 };

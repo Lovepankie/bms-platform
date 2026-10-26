@@ -4733,6 +4733,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/entry-warnings/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record that the person confirmed an entry warning and saved anyway (issue #353) */
+        post: operations["confirmRetailEntryWarning"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/expense-categories": {
         parameters: {
             query?: never;
@@ -5576,6 +5593,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/name-hints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Did you mean, and the category of similar items, while a new item's name is typed (issue #353) */
+        get: operations["getRetailNameHints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products/similar": {
         parameters: {
             query?: never;
@@ -5641,6 +5675,23 @@ export interface paths {
         post?: never;
         /** Remove a barcode from an item (#345) */
         delete: operations["removeRetailProductBarcode"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/products/{product_id}/entry-norms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An item's recent quantities, usual units and last selling price, for the entry warnings (issue #353) */
+        get: operations["getRetailEntryNorms"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -12192,6 +12243,22 @@ export interface components {
              */
             version?: number;
         };
+        /** @description Absent when no item shares a word of 3 letters or more with the name */
+        RetailCategoryHint: {
+            /**
+             * @description One of those items, to say why
+             * @example Single cable 1.5 mm
+             */
+            example?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int32
+             * @description How many items sharing the most words with the typed name are in it
+             */
+            items_like?: number;
+            name?: string;
+        };
         RetailCategoryList: {
             items?: components["schemas"]["RetailCategory"][];
         };
@@ -13268,6 +13335,92 @@ export interface components {
             /** @description One to eight capital letters or digits, starting with a letter */
             prefix: string;
         };
+        /** @description Issue #353: the person confirmed an entry warning and the save it went with succeeded. Recorded in the audit log as the warning's kind and its numbers (no free text), never needed to save */
+        RetailEntryConfirmation: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** Format: int64 */
+            entered_price_minor?: number;
+            /**
+             * @description The quantity entered, in the unit entered
+             * @example 200
+             */
+            entered_qty?: string;
+            /**
+             * Format: uuid
+             * @description The pack unit entered; absent for the item's own unit
+             */
+            entered_unit_id?: string;
+            kind: string;
+            /** Format: int64 */
+            last_price_minor?: number;
+            /** @description What it was compared with, in base units: the median, or on Count stock what the records hold */
+            median_qty?: string;
+            /** Format: uuid */
+            product_id: string;
+            screen: string;
+        };
+        /** @description Issue #353, ADR-093: the item's recent history the entry screens warn against: Buy stock, Sell, Move stock and Count stock call this once per item. The thresholds are sent so the screens use the server's */
+        RetailEntryNorms: {
+            buy?: components["schemas"]["RetailEntryUsage"];
+            /**
+             * Format: int64
+             * @description The price per base unit of the last sale, what was charged (line total over quantity, rounded half up). Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
+            last_sell_minor?: number;
+            /**
+             * Format: date
+             * @description The day of that sale. Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
+             */
+            last_sold_on?: string;
+            /**
+             * Format: int32
+             * @description The fewest lines a median or a usual unit is given from
+             */
+            min_lines?: number;
+            move?: components["schemas"]["RetailEntryUsage"];
+            /**
+             * Format: int32
+             * @description A selling price this many times the last price or more, or this many times less, is warned about
+             */
+            price_factor?: number;
+            /** Format: uuid */
+            product_id?: string;
+            /**
+             * Format: int32
+             * @description A quantity this many times the median or more, or this many times less, is warned about
+             */
+            quantity_factor?: number;
+            sell?: components["schemas"]["RetailEntryUsage"];
+            /**
+             * @description The item's own (base) unit
+             * @example metre
+             */
+            unit?: string;
+        };
+        /** @description Issue #353: what the item's last lines of one kind say, read newest first and at most 20 */
+        RetailEntryUsage: {
+            /**
+             * Format: int32
+             * @description How many lines were read, at most 20
+             */
+            lines_read?: number;
+            /**
+             * @description The median quantity of those lines in the item's own unit (base units), as plain text; absent under 3 lines, when no quantity warning is given
+             * @example 50
+             */
+            median_qty?: string;
+            /**
+             * @description The name of that usual unit (the item's own unit when usual_unit_id is absent); absent when there is no usual unit
+             * @example roll
+             */
+            usual_unit?: string;
+            /**
+             * Format: uuid
+             * @description The unit used on more than half of those lines: a pack's unit id; absent when that unit is the item's own or when no unit holds more than half or under 3 lines were read
+             */
+            usual_unit_id?: string;
+        };
         RetailEvaluationBranch: {
             /** Format: uuid */
             branch_id?: string;
@@ -14179,6 +14332,23 @@ export interface components {
             /** Format: int32 */
             top?: number;
             totals?: components["schemas"]["RetailMarginTotals"];
+        };
+        /** @description At most 5 items, those holding the typed name first, then those a few letters apart */
+        RetailNameHint: {
+            category?: string;
+            /** Format: uuid */
+            category_id?: string;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            id?: string;
+            unit?: string;
+        };
+        /** @description Issue #353: while a new item's name is typed, the existing items it may be (case, accents, spaces and punctuation ignored) and the category most of the items like it are in. Suggestions only */
+        RetailNameHints: {
+            category?: components["schemas"]["RetailCategoryHint"];
+            /** @description At most 5 items, those holding the typed name first, then those a few letters apart */
+            did_you_mean?: components["schemas"]["RetailNameHint"][];
         };
         RetailOfflineFailure: {
             /** Format: uuid */
@@ -27413,6 +27583,28 @@ export interface operations {
             };
         };
     };
+    confirmRetailEntryWarning: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailEntryConfirmation"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listRetailExpenseCategories: {
         parameters: {
             query?: {
@@ -28963,6 +29155,28 @@ export interface operations {
             };
         };
     };
+    getRetailNameHints: {
+        parameters: {
+            query: {
+                description: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailNameHints"];
+                };
+            };
+        };
+    };
     findSimilarRetailProducts: {
         parameters: {
             query: {
@@ -29103,6 +29317,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getRetailEntryNorms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailEntryNorms"];
+                };
             };
         };
     };

@@ -8,6 +8,7 @@ import { parseMinor } from '../../../components/money';
 import { useOnline } from '../../../offline/offline-context';
 import { useStaff } from '../context';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
+import { NameHintsPanel, useNameHints } from './name-hints';
 import { parseCount, parseQty } from './maths';
 import { CategoryPicker } from './category-picker';
 import { Problem, money } from './ui';
@@ -178,6 +179,9 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
     pickExisting.mutate(productId);
   };
   const busy = save.isPending || check.isPending || pickExisting.isPending;
+  // Issue #353: while the name is typed, the items it may already be and the category of items like it.
+  const activeCategories = (categories.data ?? []).filter((c) => c.active !== false);
+  const hints = useNameHints(description, (me.permissions ?? []).includes('retail.catalogue.manage'));
 
   const submit = () => {
     if (!complete) {
@@ -210,7 +214,7 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
       <ItemCodeLine id={`${id}-code`} category={chosen} />
       <CategoryPicker
         id={`${id}-category`}
-        categories={(categories.data ?? []).filter((c) => c.active !== false)}
+        categories={activeCategories}
         value={categoryId}
         onChange={setCategoryId}
         required
@@ -228,6 +232,10 @@ function NewItemForm({ id, qtyLabel, counting, askCost, onAdded, onClose }: {
         onChange={(e) => { setDescription(e.target.value); forget(); }}
         autoComplete="off"
       />
+      {!exists && !similar && (
+        <NameHintsPanel id={`${id}-name`} hints={hints} categoryId={categoryId} choosable={(c) => activeCategories.some((x) => x.id === c)}
+          openLabel="Use this item" onOpen={chooseExisting} onUseCategory={setCategoryId} />
+      )}
       <Field
         id={`${id}-unit`}
         label={WORDS.countedIn}

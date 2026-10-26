@@ -1,6 +1,6 @@
 import type {
   Barcode,
-  AllBranchesRow, Category, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
+  AllBranchesRow, Category, EntryConfirmation, EntryNorms, NameHints, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
   Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
 } from './retail';
 import type { SalesQuery } from './retail';
@@ -86,6 +86,17 @@ export function setMockTransferReceipt(on: boolean): void {
 /** The staff layout tells the mock what the session may see; the real API decides by itself. */
 export function setMockProfitAccess(allowed: boolean): void {
   profitAccess = allowed;
+}
+
+// Issue #353: the mock keeps no entry history of its own, so no screen warns unless a test or a screenshot sets one here.
+const entryNormsSet = new Map<string, Partial<EntryNorms>>();
+/** Confirmed entry warnings, newest last, for the tests to read. */
+export const mockEntryConfirmations: EntryConfirmation[] = [];
+
+/** Sets (or with null clears) the fabricated history an item's entry warnings read (issue #353). */
+export function setMockEntryNorms(productId: string, norms: Partial<EntryNorms> | null): void {
+  if (norms) entryNormsSet.set(productId, norms);
+  else entryNormsSet.delete(productId);
 }
 
 interface MockProduct {
@@ -516,6 +527,44 @@ export function createMockRetail(): RetailApi {
           (row.same_unit ? exact : similar).push(row);
         }
         return { exact, similar: similar.sort((a, b) => (a.distance ?? 0) - (b.distance ?? 0)) };
+      }),
+
+    entryNorms: (productId) =>
+      run(() => {
+        const p = products.get(productId);
+        if (!p) return refuse(404, 'not_found', 'No such item.');
+        const none = { lines_read: 0 };
+        return { product_id: p.id, unit: p.unit, buy: none, sell: none, move: none, quantity_factor: 10, price_factor: 2, min_lines: 3, ...entryNormsSet.get(productId) };
+      }),
+
+    nameHints: (description) =>
+      run((): NameHints => {
+        // As the server does (ADR-093): case, accents, spaces and punctuation ignored; holding the name first, then a few letters apart.
+        const key = nameKey(description);
+        const compact = key.replace(/ /g, '');
+        if (compact.length < 3) return { did_you_mean: [] };
+        const all = [...products.values()].filter((p) => p.active !== false);
+        const flat = (p: MockProduct) => nameKey(p.description).replace(/ /g, '');
+        const holding = all.filter((p) => flat(p).includes(compact))
+          .sort((a, b) => Number(flat(b).startsWith(compact)) - Number(flat(a).startsWith(compact)) || nameKey(a.description).length - nameKey(b.description).length || a.code.localeCompare(b.code));
+        const allowed = (a: string, b: string) => { const n = Math.max(a.length, b.length); return n < 5 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3; };
+        const close = all.filter((p) => !holding.includes(p) && editDistance(compact, flat(p)) <= allowed(compact, flat(p)))
+          .sort((a, b) => editDistance(compact, flat(a)) - editDistance(compact, flat(b)) || a.code.localeCompare(b.code));
+        const did_you_mean = [...holding, ...close].slice(0, 5).map((p) => ({ id: p.id, code: p.code, description: p.description, unit: p.unit, category_id: categoryId(p.category), category: p.category }));
+        const words = [...new Set(key.split(' ').filter((w) => w.length >= 3))].slice(0, 6);
+        const scored = all.map((p) => ({ p, score: words.filter((w) => nameKey(p.description).split(' ').includes(w)).length })).filter((x) => x.score > 0);
+        const best = Math.max(0, ...scored.map((x) => x.score));
+        const top = scored.filter((x) => x.score === best);
+        const byCategory = new Map<string, MockProduct[]>();
+        for (const x of top) byCategory.set(x.p.category, [...(byCategory.get(x.p.category) ?? []), x.p]);
+        const anyOf = (c: string) => scored.filter((x) => x.p.category === c).length;
+        const chosen = [...byCategory.entries()].sort(([a, xs], [b, ys]) => ys.length - xs.length || anyOf(b) - anyOf(a) || a.localeCompare(b))[0];
+        return { did_you_mean, ...(chosen ? { category: { id: categoryId(chosen[0]), name: chosen[0], items_like: chosen[1].length, example: chosen[1][0]?.description } } : {}) };
+      }),
+
+    confirmEntryWarning: (body) =>
+      run(() => {
+        mockEntryConfirmations.push(body);
       }),
 
     createProduct: (body) =>

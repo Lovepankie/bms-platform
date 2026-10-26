@@ -10,6 +10,7 @@ import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
+import { NameHintsPanel, useNameHints } from './name-hints';
 import { ItemCodeLine } from './new-item-here';
 import { PackEditor } from './catalogue-packs';
 import { BarcodeEditor } from './catalogue-barcodes';
@@ -183,6 +184,8 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
     onError: () => { sending.current = false; },
   });
   const busy = save.isPending || check.isPending;
+  // Issue #353: while a new item's name is typed, the items it may already be and the category of items like it.
+  const hints = useNameHints(description, !product && canManage);
   const form = useRef<HTMLFormElement>(null);
   const submit = () => {
     if (!complete) {
@@ -244,6 +247,10 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
             onChange={(e) => { setDescription(e.target.value); forget(); }}
             autoComplete="off"
           />
+          {!product && !exists && !similar && (
+            <NameHintsPanel id="item" hints={hints} categoryId={categoryId} categoryFixed={fixed !== undefined}
+              choosable={(c) => categoryChoices.some((x) => x.id === c)} openLabel="Open" onOpen={(id) => (onOpen ?? (() => undefined))(id)} onUseCategory={setCategoryId} />
+          )}
           <Field
             id="item-unit"
             label={WORDS.countedIn}

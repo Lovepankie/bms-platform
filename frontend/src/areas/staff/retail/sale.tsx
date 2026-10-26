@@ -33,6 +33,8 @@ import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
 import { Hint } from '../../../app/ui/Hint';
 import { useUnsavedWork } from '../../../app/unsaved-work';
+import { entryWarnings, type EntryWarning } from './entry-checks-state';
+import { useEntryChecks, useEntryNorms } from './entry-checks';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -119,7 +121,7 @@ export function SaleBar({ children }: { children: ReactNode }) {
  * One line of the sale being made. The unit choice is drawn only while the tenant has the units capability
  * (`unitsOn`) and the item has active pack sizes; otherwise the line is exactly what it was before packs.
  */
-export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh, slide = false, onFlashed, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
+export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh, slide = false, notes, onFlashed, onQty, onPrice, onUnit, onReason, onReset, onRemove }: {
   /** Set on the line just added or topped up, a new number each time: it flashes once (Hillary, 23 Oct 2026). */
   fresh?: number;
   /** Set while the line just went on the sale as a new line: it slides in (#508). */
@@ -136,6 +138,8 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
    * retail.price.override may type another, with a reason, as online.
    */
   offlinePrice?: { canType: boolean };
+  /** Issue #353: the entry warnings of this line, shown under its quantity and price. */
+  notes?: ReactNode;
   onQty: (v: string) => void;
   onPrice: (v: string) => void;
   onUnit: (unitId: string) => void;
@@ -171,6 +175,7 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
           <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : offlinePrice ? !offlinePrice.canType : false} />
         </div>
       </div>
+      {notes}
       {price && price.resolved && (
         <p className="hint" data-tour="sale-price-source" data-testid={`price-source-${i}`}>
           {sourceNote(price.resolved, price.listName)}
@@ -256,6 +261,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       if (e instanceof RetailError) setDraft((d) => ({ ...d, sent: undefined }));
     },
     onSuccess: (sale) => {
+      entry.saved();
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
       void queryClient.invalidateQueries({ queryKey: ['retail', 'stock'] });
@@ -327,6 +333,27 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
   // A sale whose request got no answer may or may not be recorded: the form is locked, and kept to send later or sent again,
   // it is the same request under the same client sale id, recorded once either way (ADR-067 decision 5).
   const locked = offline !== null && draft.sent !== undefined;
+  // Issue #353: each line against the item's own sales, said before saving, never blocking. Offline, or for a request already
+  // sent, nothing is read or asked. Only a price the seller typed is compared with the last one; the item's or a list's price is
+  // the owner's own.
+  const norms = useEntryNorms(offlineMode ? [] : draft.lines.map((l) => l.product.id));
+  const warnings = offlineMode || draft.sent ? [] : shown.lines.flatMap((l, i): EntryWarning[] => {
+    const pack = unitsOn ? chosenPack(l.product, l.unitId) : undefined;
+    const f = lineFigures(l);
+    return entryWarnings(norms(l.product.id), {
+      screen: 'sell', product: l.product, lineKey: `${l.product.id}-${i}`, qtyMilli: f?.qtyMilli ?? null, qtyFieldId: `qty-${i}`,
+      unitChoosable: unitsOn && activePacks(l.product).length > 0, unitFieldId: `unit-${i}`,
+      ...(pack ? { unitId: pack.unit_id, unitName: pack.unit, factor: pack.factor } : {}),
+      ...(l.typed ? { priceMinor: f?.priceMinor ?? null, priceFieldId: `price-${i}` } : {}),
+    });
+  });
+  /** Sends the sale as the screen shows it now (or the request already sent, which is all that can go again). */
+  const send = () => {
+    const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) };
+    if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at: new Date().toISOString() } }));
+    save.mutate(body);
+  };
+  const entry = useEntryChecks('sell', branchId, warnings, send, draft.lines);
   const lost = locked && !save.isPending && !(save.error instanceof RetailError);
   const keep = useMutation({
     mutationFn: async () => {
@@ -374,9 +401,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           keep.mutate();
           return;
         }
-        const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) };
-        if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at: new Date().toISOString() } }));
-        save.mutate(body);
+        entry.check();
       }}
     >
       {offlineMode && <OfflineNote />}
@@ -419,6 +444,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
           onReset={() => (offlineMode ? setLine(i, { price: String(defaultPrice(l.product, l.unitId)), typed: false, reason: '' }) : setLine(i, { typed: false, reason: '' }))}
           onUnit={(unitId) => setUnit(i, unitId)}
           onRemove={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))}
+          notes={entry.notes(`${l.product.id}-${i}`)}
         />
       ))}
 
