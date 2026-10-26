@@ -743,6 +743,11 @@ public class RlsIsolationIT {
                 .params(UUID.randomUUID(), t.tenantId(), loan, charge, user)
                 .update();
         owner.sql("""
+                        INSERT INTO lending_item_waivers (id, tenant_id, loan_id, schedule_item_id, component, amount_minor,
+                                                          business_date, reason, requested_by)
+                        VALUES (?, ?, ?, ?, 'interest', 300, DATE '2026-02-17', 'Test waiver', ?)
+                        """).params(UUID.randomUUID(), t.tenantId(), loan, item, user).update();
+        owner.sql("""
                         INSERT INTO lending_collection_actions (id, tenant_id, loan_id, action_type, note, performed_by,
                                                                 performed_at)
                         VALUES (?, ?, ?, 'call', 'Test call', ?, now())

@@ -64,6 +64,17 @@ final class ServicingApi {
             @Positive Long amountMinor,
             @NotBlank @Size(max = 500) String reason) {}
 
+    @Schema(
+            name = "ScheduleItemWaiverRequest",
+            description =
+                    "FR-ARR-04 (#265): waive all or part of an item's fees or interest; principal is never waived")
+    record ItemWaiverRequest(
+            @Schema(description = "fee or interest") @NotBlank
+            String component,
+
+            @NotNull @Positive Long amountMinor,
+            @NotBlank @Size(max = 500) String reason) {}
+
     @Schema(name = "LoanCharge", description = "R-PEN: one charge on a schedule item, and what can still be waived")
     record ChargeRow(
             UUID id,
@@ -152,7 +163,13 @@ final class ServicingApi {
             @Schema(description = "pending, due, overdue, partially_paid, paid, waived or written_off; null on totals")
             String status,
 
-            LocalDate paidOn) {}
+            LocalDate paidOn,
+
+            @Schema(description = "Interest still due on the item: the most an interest waiver may take (FR-ARR-04)")
+            long interestOutstandingMinor,
+
+            @Schema(description = "Fees still due on the item: the most a fee waiver may take (FR-ARR-04)")
+            long feesOutstandingMinor) {}
 
     @Schema(name = "LoanSchedule", description = "FR-DIS-04: the items and a totals row that equals the loan totals")
     record Schedule(UUID loanId, String currency, List<ScheduleRow> items, ScheduleRow totals) {}

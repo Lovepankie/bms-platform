@@ -983,6 +983,79 @@ class LoanServicer implements LoanServicing {
         }
     }
 
+    // ---- Fee and interest waiver (FR-ARR-04, #265) -----------------------------------------
+
+    /**
+     * The checks of a fee or interest waiver, run again at execution: the loan is active, the item is the loan's, the
+     * component is a fee or interest (principal is a write-off), and the amount is at most what is still due on it.
+     * Returns the item.
+     */
+    Item checkItemWaiver(Loan loan, List<Item> items, int itemNo, String component, long amountMinor) {
+        if ("principal".equals(component)) {
+            throw ApiException.rule(
+                    "principal_not_waivable",
+                    "Principal is never waived: a loan that will not be repaid is written off.");
+        }
+        if (!"fee".equals(component) && !"interest".equals(component)) {
+            throw ApiException.validation(List.of(
+                    new ApiException.FieldProblem("component", "invalid", "The component is fee or interest.")));
+        }
+        requireStatus(loan, Set.of("active"));
+        Item item = items.stream().filter(i -> i.no == itemNo).findFirst().orElseThrow(ApiException::notFound);
+        long due = item.unpaid(component);
+        String what = component.equals("fee") ? "fees" : "interest";
+        String is = component.equals("fee") ? " are" : " is";
+        if (due <= 0) {
+            throw ApiException.rule("nothing_to_waive", "No " + what + is + " still due on item " + itemNo + ".");
+        }
+        if (amountMinor <= 0 || amountMinor > due) {
+            throw ApiException.rule(
+                    "waiver_exceeds_due",
+                    "At most " + due + " of the " + what + is + " still due on item " + itemNo + ".");
+        }
+        return item;
+    }
+
+    /**
+     * FR-ARR-04: the approved fee or interest waiver is recorded with its date and taken off the item; nothing is posted,
+     * because fees and interest on the schedule are income only when paid (ADR-004). A waiver that leaves nothing owing
+     * closes the loan.
+     */
+    void waiveItem(
+            UUID loanId,
+            int itemNo,
+            String component,
+            long amountMinor,
+            String reason,
+            UUID approvalId,
+            UUID makerId,
+            UUID checkerId) {
+        Loan loan = loans.lock(loanId).orElseThrow(ApiException::notFound);
+        List<Item> items = repo.items(loan.id());
+        Item item = checkItemWaiver(loan, items, itemNo, component, amountMinor);
+        LocalDate today = today();
+        UUID waiverId = UUID.randomUUID();
+        repo.insertItemWaiver(
+                waiverId, loan.id(), item.id, component, amountMinor, today, reason, approvalId, makerId, checkerId);
+        if (component.equals("fee")) {
+            item.feesWaived += amountMinor;
+        } else {
+            item.interestWaived += amountMinor;
+            item.interestWaivers += amountMinor;
+        }
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("waiver_id", waiverId);
+        after.put("item_no", itemNo);
+        after.put("component", component);
+        after.put("amount_minor", amountMinor);
+        after.put("reason", reason);
+        after.put("approval_request_id", approvalId);
+        audit.record(AuditLog.Entry.created("lending.loan.item_waived", SUBJECT, loan.id(), loan.branchId(), after));
+        if (refresh(loan.id(), items, today).settled()) {
+            close(loan, today, checkerId != null ? checkerId : makerId);
+        }
+    }
+
     // ---- Payoff quote (FR-REP-06) ---------------------------------------------------------
 
     Quote quote(Loan loan, LocalDate valueDate) {

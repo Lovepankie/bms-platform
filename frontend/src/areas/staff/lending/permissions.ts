@@ -113,3 +113,17 @@ export function applicationSteps(me: Session, loan: { status?: string; branch_id
     return true;
   });
 }
+
+// --- Fee and interest waivers (issue #265, FR-ARR-04) ------------------------------------------------------------------
+// Requested with `lending.charges.waive_request` in the loan's branch on an active loan; decided by someone who also holds the
+// accountant's permission, `lending.charges.waive_fee_interest`. The server checks both again.
+
+export const WAIVE_REQUEST = 'lending.charges.waive_request';
+export const WAIVE_FEE_INTEREST = 'lending.charges.waive_fee_interest';
+
+/** The Waive fee or interest action on a schedule row. */
+export const mayWaiveItem = (me: Session, loan: { status?: string; branch_id?: string }): boolean =>
+  showLending(me) && loan.status === 'active' && holds(me, WAIVE_REQUEST, loan.branch_id);
+
+/** The session holds the accountant's permission, so a small waiver of theirs may take effect at once. */
+export const mayApproveFeeInterest = (me: Session, branchId: string | undefined): boolean => holds(me, WAIVE_FEE_INTEREST, branchId);

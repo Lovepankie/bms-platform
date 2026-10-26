@@ -47,6 +47,9 @@ final class Servicing {
         long interestWaived;
         long feesWaived;
         long penaltiesWaived;
+        /** The part of {@link #interestWaived} that approved waivers took off (FR-ARR-04), not the payoff rebate. */
+        long interestWaivers;
+
         LocalDate paidOn;
 
         /**
@@ -69,15 +72,17 @@ final class Servicing {
 
         /**
          * The starting point of a replay: the same amounts due (penalty charges included) and the
-         * standing fee and penalty waivers (FR-ARR-04), with nothing paid. A reversal re-applies
-         * the repayments around a waiver and never undoes it (ADR-026). Waived interest is left
-         * out: today it is only the early settlement rebate, which the replay recomputes.
+         * standing fee, interest and penalty waivers (FR-ARR-04), with nothing paid. A reversal
+         * re-applies the repayments around a waiver and never undoes it (ADR-026). Of the waived
+         * interest only the waivers are kept: the early settlement rebate is recomputed by the replay.
          */
         Item fresh() {
             Item i = new Item(id, no, dueDate, principalDue, interestDue, feesDue, penaltiesDue);
             i.penaltyCharges = penaltyCharges == null ? null : new TreeMap<>(penaltyCharges);
             i.feesWaived = feesWaived;
             i.penaltiesWaived = penaltiesWaived;
+            i.interestWaivers = interestWaivers;
+            i.interestWaived = interestWaivers;
             return i;
         }
 

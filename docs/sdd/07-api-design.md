@@ -899,13 +899,14 @@ disbursement, FR-DIS-03; a repayment on a closed loan; a quote on a loan that is
 | POST | `/lending/loans/{loan_id}/decision` | `lending.loans.approve` | `{decision: approve or reject, approved_principal_minor?, approved_term_count?, note}`. FR-ORG-06, FR-APR-03 |
 | POST | `/lending/loans/{loan_id}/cancel` | `lending.loans.cancel` | |
 | POST | `/lending/loans/{loan_id}/disbursements` | `lending.disbursements.request` | **M A**. FR-DIS-01 |
-| GET | `/lending/loans/{loan_id}/schedule` | `lending.loans.read` | FR-DIS-04 |
+| GET | `/lending/loans/{loan_id}/schedule` | `lending.loans.read` | FR-DIS-04. Each row also carries `interest_outstanding_minor` and `fees_outstanding_minor`, what a fee or interest waiver may still take (#265) |
 | GET | `/lending/loans/{loan_id}/transactions` | `lending.loans.read` | With allocations |
 | POST | `/lending/loans/{loan_id}/repayments` | `lending.repayments.create` | **M**. `{amount_minor, value_date, payment_method_key, external_reference}`. FR-REP-01 |
 | POST | `/lending/loans/{loan_id}/transactions/{txn_id}/reverse` | `lending.repayments.reverse_request` | **M A**. FR-REP-05 |
 | GET | `/lending/loans/{loan_id}/payoff-quote` | `lending.loans.read` | `?value_date=`. FR-REP-06 |
 | GET | `/lending/loans/{loan_id}/charges` | `lending.loans.read` | R-PEN: each charge with `waived_minor` and `waivable_minor` (unwaived and unpaid) |
 | POST | `/lending/loans/{loan_id}/charges/{charge_id}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04. `{amount_minor?, reason}`; without an amount, all that is waivable. 201 at once below the `charge_waiver` threshold, else 202 |
+| POST | `/lending/loans/{loan_id}/schedule/{item_no}/waive` | `lending.charges.waive_request` | **M A**. FR-ARR-04 (#265). `{component: fee\|interest, amount_minor, reason}`: at most what is still due on that component of the item (422 `waiver_exceeds_due`, `nothing_to_waive`); `principal` is 422 `principal_not_waivable`. The `charge_waiver` approval, its checker also holding `lending.charges.waive_fee_interest`; 201 at once below the threshold (weighed against everything waived on the loan) for a maker who holds that permission, else 202 |
 | POST | `/lending/loans/{loan_id}/write-off` | `lending.loans.write_off_request` | **M A**. FR-LCL-02 |
 | POST | `/lending/loans/{loan_id}/restructure` | `lending.loans.restructure_request` | **M A**. FR-LCL-04 (P2) |
 | PUT | `/lending/loans/{loan_id}/officer` | `lending.collections.assign` | FR-CLN-01. `{officer_user_id}`; `{officer_user_id, reassigned}`; 422 `officer_not_eligible` |

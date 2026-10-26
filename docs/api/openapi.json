@@ -6130,11 +6130,21 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "fees_outstanding_minor" : {
+            "description" : "Fees still due on the item: the most a fee waiver may take (FR-ARR-04)",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "fees_paid_minor" : {
             "format" : "int64",
             "type" : "integer"
           },
           "interest_due_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "interest_outstanding_minor" : {
+            "description" : "Interest still due on the item: the most an interest waiver may take (FR-ARR-04)",
             "format" : "int64",
             "type" : "integer"
           },
@@ -22293,6 +22303,27 @@
         },
         "required" : [ "amount_minor", "payment_method_key" ]
       },
+      "ScheduleItemWaiverRequest" : {
+        "description" : "FR-ARR-04 (#265): waive all or part of an item's fees or interest; principal is never waived",
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "component" : {
+            "description" : "fee or interest",
+            "minLength" : 1,
+            "type" : "string"
+          },
+          "reason" : {
+            "maxLength" : 500,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "amount_minor", "component", "reason" ]
+      },
       "SchedulePreview" : {
         "properties" : {
           "deducted_at_disbursement_minor" : {
@@ -29498,6 +29529,59 @@
           }
         },
         "summary" : "The repayment schedule with a totals row (FR-DIS-04)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/loans/{loan_id}/schedule/{item_no}/waive" : {
+      "post" : {
+        "operationId" : "requestLoanItemWaiver",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "loan_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "item_no",
+          "required" : true,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ScheduleItemWaiverRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Request a waiver of all or part of a schedule item's fees or interest, with a reason (FR-ARR-04); the checker needs the accountant's permission; 201 when executed, 202 when it waits",
         "tags" : [ "lending-loans" ]
       }
     },

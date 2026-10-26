@@ -30,7 +30,7 @@ export const ACTION_WORDS: Record<string, string> = {
   loan_bring_in: 'Bring in a loan from the paper register',
   loan_bring_in_reversal: 'Undo a loan brought in',
   repayment_reversal: 'Reverse a repayment',
-  charge_waiver: 'Waive a charge',
+  charge_waiver: 'Waive a penalty, fee or interest',
   savings_withdrawal: 'Pay out savings',
   savings_reversal: 'Reverse a savings entry',
   investment_funding: 'Take in an investment',
@@ -88,7 +88,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
     <tr>
       <td data-label="Action">
         <What item={item} />
-        {(item.action_type === 'loan_bring_in' || item.action_type === 'loan_bring_in_reversal') && item.subject_id && (
+        {['loan_bring_in', 'loan_bring_in_reversal', 'charge_waiver'].includes(item.action_type ?? '') && item.subject_id && (
           <>
             {' '}
             <Link to="/staff/lending/loans/$loanId" params={{ loanId: item.subject_id }}>Open the loan</Link>

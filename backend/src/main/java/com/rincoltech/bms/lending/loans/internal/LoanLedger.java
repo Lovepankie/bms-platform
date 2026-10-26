@@ -62,6 +62,8 @@ final class LoanLedger {
             CHARGED("Penalties charged"),
             RECHARGED("Penalties charged again after a reversal"),
             WAIVED("Penalties waived"),
+            FEES_WAIVED("Fees waived"),
+            INTEREST_WAIVED("Interest waived"),
             CANCELLED("Penalties cancelled after a back-dated payment");
 
             final String text;

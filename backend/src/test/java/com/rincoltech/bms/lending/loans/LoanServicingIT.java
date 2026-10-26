@@ -3077,6 +3077,335 @@ class LoanServicingIT extends LoanFixtures {
         assertThat(d.getBody().get("code").asString()).isEqualTo("approver_conflict");
     }
 
+    // ---- Fee and interest waivers (FR-ARR-04, #265) ------------------------------------------
+
+    /** A second branch manager: holds the waiver approval but not the accountant's permission. */
+    final UUID otherManager = UUID.randomUUID();
+
+    /** The manager, the accountant and the second manager are the business's staff (the waiver's foreign keys). */
+    void staffRows() {
+        for (UUID staff : List.of(manager, accountant, otherManager, admin)) {
+            TestDatabase.owner()
+                    .sql("INSERT INTO users (id, tenant_id, kind, full_name, email, status)"
+                            + " VALUES (?, ?, 'staff', 'Test Staff', ?, 'active') ON CONFLICT DO NOTHING")
+                    .params(staff, t.tenantId(), staff + "@example.test")
+                    .update();
+        }
+    }
+
+    ResponseEntity<JsonNode> requestItemWaiver(
+            String loan, int itemNo, String component, long amount, UUID user, String perms) {
+        staffRows();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("component", component);
+        body.put("amount_minor", amount);
+        body.put("reason", "Test hardship relief");
+        return send(
+                HttpMethod.POST,
+                LOANS + "/" + loan + "/schedule/" + itemNo + "/waive",
+                withKey(as(user, perms, "*", null), key()),
+                body);
+    }
+
+    /** Requested by the manager and approved by the accountant. */
+    void itemWaived(String loan, int itemNo, String component, long amount) {
+        ResponseEntity<JsonNode> r = requestItemWaiver(loan, itemNo, component, amount, manager, managerPerms);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        ResponseEntity<JsonNode> d =
+                decide(r.getBody().get("approval_request_id").asString(), accountant, accountantPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
+    long journalEntries() {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM journal_entries WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+    }
+
+    JsonNode item(String loan, int index) {
+        return get(loan, "/schedule").get("items").get(index);
+    }
+
+    /**
+     * FR-ARR-04 (#265): a waiver of an item's interest and of its fees is maker-checker, takes the amount off the item,
+     * posts nothing to income or anywhere else, and shows on the statement on its date, which still reconciles.
+     */
+    @Test
+    void frArr04_aFeeOrInterestWaiverIsMakerCheckerAndPostsNothing() throws Exception {
+        String loan = approved(
+                product("ITEMWAIVE", Map.of(), List.of(fee("added_to_loan", 30_000L, null))), 1_200_000, 3, 70);
+        disburse(loan, today.minusDays(3));
+        assertThat(item(loan, 0).get("interest_outstanding_minor").asLong()).isEqualTo(120_000);
+        assertThat(item(loan, 0).get("fees_outstanding_minor").asLong()).isEqualTo(10_000);
+        long entries = journalEntries();
+
+        ResponseEntity<JsonNode> r = requestItemWaiver(loan, 1, "interest", 50_000, manager, managerPerms);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String approval = r.getBody().get("approval_request_id").asString();
+        assertThat(decide(approval, manager, managerPerms).getBody().get("code").asString())
+                .as("the maker, a branch manager, is not the accountant")
+                .isEqualTo("permission_denied");
+        assertThat(item(loan, 0).get("interest_outstanding_minor").asLong())
+                .as("nothing changes before the checker")
+                .isEqualTo(120_000);
+        assertThat(decide(approval, accountant, accountantPerms).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        itemWaived(loan, 1, "fee", 10_000);
+
+        JsonNode first = item(loan, 0);
+        assertThat(first.get("interest_outstanding_minor").asLong()).isEqualTo(70_000);
+        assertThat(first.get("fees_outstanding_minor").asLong()).isZero();
+        assertThat(first.get("waived_minor").asLong()).isEqualTo(60_000);
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("interest_outstanding_minor").asLong()).isEqualTo(310_000);
+        assertThat(b.get("fees_outstanding_minor").asLong()).isEqualTo(20_000);
+        assertThat(journalEntries())
+                .as("a waiver posts nothing: never to income")
+                .isEqualTo(entries);
+        assertThat(TestDatabase.owner()
+                        .sql("""
+                                SELECT component || ':' || amount_minor || ':' || (approved_by = ?) FROM lending_item_waivers
+                                 WHERE tenant_id = ? ORDER BY created_at
+                                """)
+                        .params(accountant, t.tenantId())
+                        .query(String.class)
+                        .list())
+                .containsExactly("interest:50000:true", "fee:10000:true");
+
+        byte[] statement = render(loan, "loan_statement").getBody();
+        assertReconciles(statement, b.get("total_outstanding_minor").asLong());
+        assertThat(statementRows(statement))
+                .filteredOn(row -> row.line().contains("Interest waived"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.credited()).isEqualTo(50_000));
+        assertThat(statementRows(statement))
+                .filteredOn(row -> row.line().contains("Fees waived"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.credited()).isEqualTo(10_000));
+
+        // Paying what is left of item 1 pays only the principal and the interest still due.
+        JsonNode paid = repaid(loan, 470_000, today).get("transaction");
+        assertThat(lines(paid.get("journal_entry_id").asString()))
+                .contains("loan_interest_income:0:70000")
+                .noneMatch(l -> l.startsWith("loan_fee_income"));
+        assertThat(item(loan, 0).get("status").asString()).isEqualTo("paid");
+        booksAgree();
+    }
+
+    /**
+     * FR-ARR-04 (#265): only someone with the accountant's permission decides a fee or interest waiver; a branch manager
+     * who may approve a penalty waiver is refused and is not the checker.
+     */
+    @Test
+    void frArr04_onlyTheAccountantsPermissionApprovesAFeeOrInterestWaiver() {
+        String loan = approved(exampleB("ITEMACC"), 1_200_000, 3, 71);
+        disburse(loan, today.minusDays(3));
+        assertThat(managerPerms)
+                .contains("lending.charges.waive_approve")
+                .doesNotContain("lending.charges.waive_fee_interest");
+        assertThat(accountantPerms).contains("lending.charges.waive_fee_interest");
+
+        ResponseEntity<JsonNode> r = requestItemWaiver(loan, 2, "interest", 20_000, manager, managerPerms);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String approval = r.getBody().get("approval_request_id").asString();
+        ResponseEntity<JsonNode> refused = decide(approval, otherManager, managerPerms);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("permission_denied");
+        assertThat(item(loan, 1).get("interest_outstanding_minor").asLong()).isEqualTo(120_000);
+
+        assertThat(decide(approval, accountant, accountantPerms).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(item(loan, 1).get("interest_outstanding_minor").asLong()).isEqualTo(100_000);
+
+        // The accountant's own request needs another holder of the permission: the tenant admin.
+        ResponseEntity<JsonNode> own = requestItemWaiver(loan, 3, "interest", 5_000, accountant, accountantPerms);
+        assertThat(own.getStatusCode()).as("%s", own.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String ownApproval = own.getBody().get("approval_request_id").asString();
+        assertThat(decide(ownApproval, accountant, accountantPerms)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .as("the maker never approves")
+                .isEqualTo("self_approval_forbidden");
+        assertThat(decide(ownApproval, admin, adminPerms).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(item(loan, 2).get("interest_outstanding_minor").asLong()).isEqualTo(115_000);
+    }
+
+    /**
+     * FR-ARR-04 (#265): the threshold weighs everything waived on the loan, penalties included, with the request, so
+     * waivers split under it still reach a checker; a maker without the accountant's permission always waits.
+     */
+    @Test
+    void frArr04_theFeeAndInterestThresholdWeighsTheCumulativeTotal() {
+        TestDatabase.owner()
+                .sql("INSERT INTO tenant_settings (id, tenant_id, settings) VALUES (?, ?,"
+                        + " '{\"approval_thresholds_minor\": {\"charge_waiver\": 5000}}')")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        String loan = approved(exampleB("ITEMSPLIT"), 1_200_000, 3, 72);
+        disburse(loan, today.minusDays(3));
+
+        ResponseEntity<JsonNode> small = requestItemWaiver(loan, 1, "interest", 1_000, manager, managerPerms);
+        assertThat(small.getStatusCode())
+                .as("under the threshold, but the manager is not the accountant: %s", small.getBody())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(decide(small.getBody().get("approval_request_id").asString(), accountant, accountantPerms)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        for (long total : List.of(3_000L, 5_000L - 1)) {
+            long amount = total == 3_000L ? 2_000 : 1_999;
+            ResponseEntity<JsonNode> r = requestItemWaiver(loan, 1, "interest", amount, accountant, accountantPerms);
+            assertThat(r.getStatusCode())
+                    .as("%s waived in all: %s", total, r.getBody())
+                    .isEqualTo(HttpStatus.CREATED);
+            assertThat(r.getBody().get("executed").asBoolean()).isTrue();
+        }
+        ResponseEntity<JsonNode> over = requestItemWaiver(loan, 2, "interest", 1, accountant, accountantPerms);
+        assertThat(over.getStatusCode())
+                .as("5,000 waived in all reaches the threshold: %s", over.getBody())
+                .isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT amount_minor FROM approval_requests WHERE id = ?::uuid")
+                        .param(over.getBody().get("approval_request_id").asString())
+                        .query(Long.class)
+                        .single())
+                .as("the checker sees this waiver's own amount")
+                .isEqualTo(1);
+        assertThat(item(loan, 0).get("interest_outstanding_minor").asLong()).isEqualTo(120_000 - 4_999);
+    }
+
+    /**
+     * FR-ARR-04 (#265): principal is never waived, a waiver is at most what is still due on its component, and one whose
+     * amount is no longer due when the checker approves goes stale with the reason (ADR-091 decision 11).
+     */
+    @Test
+    void frArr04_aWaiverNeverTakesPrincipalOrMoreThanIsDue() {
+        String loan = approved(exampleB("ITEMCAP"), 1_200_000, 3, 73);
+        disburse(loan, today.minusDays(3));
+
+        ResponseEntity<JsonNode> principal = requestItemWaiver(loan, 1, "principal", 1_000, manager, managerPerms);
+        assertThat(principal.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(principal.getBody().get("code").asString()).isEqualTo("principal_not_waivable");
+        ResponseEntity<JsonNode> other = requestItemWaiver(loan, 1, "penalty", 1_000, manager, managerPerms);
+        assertThat(other.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(other.getBody().get("code").asString()).isEqualTo("validation_failed");
+        ResponseEntity<JsonNode> tooMuch = requestItemWaiver(loan, 1, "interest", 120_001, manager, managerPerms);
+        assertThat(tooMuch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(tooMuch.getBody().get("code").asString()).isEqualTo("waiver_exceeds_due");
+        ResponseEntity<JsonNode> noFees = requestItemWaiver(loan, 1, "fee", 1, manager, managerPerms);
+        assertThat(noFees.getBody().get("code").asString()).isEqualTo("nothing_to_waive");
+        assertThat(requestItemWaiver(loan, 9, "interest", 1, manager, managerPerms)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+
+        itemWaived(loan, 1, "interest", 120_000);
+        assertThat(requestItemWaiver(loan, 1, "interest", 1, manager, managerPerms)
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .as("all of it is waived")
+                .isEqualTo("nothing_to_waive");
+
+        ResponseEntity<JsonNode> r = requestItemWaiver(loan, 2, "interest", 120_000, manager, managerPerms);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        String approval = r.getBody().get("approval_request_id").asString();
+        // The item's interest is paid by a change that does not move the loan's version (a fabricated race).
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE lending_schedule_items SET interest_paid_minor = 1 WHERE loan_id = ?::uuid AND item_no = 2")
+                .param(loan)
+                .update();
+        ResponseEntity<JsonNode> d = decide(approval, accountant, accountantPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(d.getBody().get("code").asString()).isEqualTo("waiver_exceeds_due");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM approval_requests WHERE id = ?::uuid")
+                        .param(approval)
+                        .query(String.class)
+                        .single())
+                .as("a refusal on approval supersedes the request")
+                .isEqualTo("stale");
+    }
+
+    /**
+     * The review of #597, finding 3: the early settlement rebate is weighed against the interest still unpaid and unwaived,
+     * so a waiver and the rebate never take more than the interest due; the payoff charges only the interest left; and a
+     * reversal of that payoff brings the money back, drops the rebate and keeps both waivers.
+     */
+    @Test
+    void frArr04_aPayoffAfterAWaiverRebatesOnlyWhatIsLeftAndItsReversalKeepsTheWaiver() throws Exception {
+        String loan = approved(
+                product("ITEMPAYOFF", Map.of("flat_early_settlement_rebate", true), List.of()), 1_200_000, 3, 75);
+        disburse(loan, today.minusDays(3));
+        itemWaived(loan, 1, "interest", 40_000);
+        itemWaived(loan, 3, "interest", 30_000);
+
+        JsonNode quote = get(loan, "/payoff-quote");
+        assertThat(quote.get("principal_minor").asLong()).isEqualTo(1_200_000);
+        assertThat(quote.get("interest_minor").asLong())
+                .as("item 1 is charged, less its waiver")
+                .isEqualTo(80_000);
+        assertThat(quote.get("rebate_minor").asLong())
+                .as("items 2 and 3 are rebated, item 3 net of its waiver")
+                .isEqualTo(120_000 + 90_000);
+        assertThat(quote.get("total_minor").asLong()).isEqualTo(1_280_000);
+
+        JsonNode paid = repaid(loan, 1_280_000, today);
+        assertThat(paid.get("loan_status").asString()).isEqualTo("closed");
+        assertThat(lines(paid.get("transaction").get("journal_entry_id").asString()))
+                .contains("loan_interest_income:0:80000");
+        assertThat(item(loan, 0).get("waived_minor").asLong()).isEqualTo(40_000);
+        assertThat(item(loan, 2).get("waived_minor").asLong())
+                .as("the waiver and the rebate together are the item's interest, never more")
+                .isEqualTo(120_000);
+
+        ResponseEntity<JsonNode> d =
+                decide(requestReversal(loan, paid.get("transaction").get("id").asString()), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(loan(loan).get("status").asString()).isEqualTo("active");
+        assertThat(item(loan, 0).get("interest_outstanding_minor").asLong()).isEqualTo(80_000);
+        assertThat(item(loan, 1).get("interest_outstanding_minor").asLong()).isEqualTo(120_000);
+        assertThat(item(loan, 2).get("interest_outstanding_minor").asLong())
+                .as("the rebate is gone, the waiver stays")
+                .isEqualTo(90_000);
+        JsonNode b = loan(loan).get("balances");
+        assertThat(b.get("interest_outstanding_minor").asLong()).isEqualTo(290_000);
+        assertReconciles(
+                render(loan, "loan_statement").getBody(),
+                b.get("total_outstanding_minor").asLong());
+        booksAgree();
+    }
+
+    /**
+     * ADR-026 Watch for (#265): a reversal replays the repayments from the schedule with its standing fee and interest
+     * waivers, so it gives the money back without undoing a waiver.
+     */
+    @Test
+    void frArr04_aReversalKeepsTheFeeAndInterestWaivers() {
+        String loan =
+                approved(product("ITEMREV", Map.of(), List.of(fee("added_to_loan", 30_000L, null))), 1_200_000, 3, 74);
+        disburse(loan, today.minusDays(3));
+        itemWaived(loan, 1, "interest", 40_000);
+        itemWaived(loan, 1, "fee", 4_000);
+        String paid = repaid(loan, 300_000, today).get("transaction").get("id").asString();
+        assertThat(item(loan, 0).get("interest_outstanding_minor").asLong()).isZero();
+
+        ResponseEntity<JsonNode> d = decide(requestReversal(loan, paid), manager, managerPerms);
+        assertThat(d.getStatusCode()).as("%s", d.getBody()).isEqualTo(HttpStatus.OK);
+        JsonNode first = item(loan, 0);
+        assertThat(first.get("interest_outstanding_minor").asLong())
+                .as("the payment comes back, the 40,000 waived stays waived")
+                .isEqualTo(80_000);
+        assertThat(first.get("fees_outstanding_minor").asLong()).isEqualTo(6_000);
+        assertThat(first.get("waived_minor").asLong()).isEqualTo(44_000);
+        assertThat(loan(loan).get("balances").get("interest_outstanding_minor").asLong())
+                .isEqualTo(320_000);
+        booksAgree();
+    }
+
     /**
      * The delta review of #270, finding 1: A, dated the first due date, pays item 1 up and cancels its penalties; B,
      * dated today, pays item 2 and its penalties. Reversing A must meet B with item 1's penalties charged again, so

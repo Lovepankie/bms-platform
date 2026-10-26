@@ -24,6 +24,7 @@ The actions open in place on the loan page, offered only for the loan statuses t
 | Payoff quote (value date) | `lending.loans.read` | active | principal, interest, fees, penalties, rebate, total |
 | Reverse a repayment (reason) | `lending.repayments.reverse_request` | repayment on an active or closed loan, or a recovery, not yet reversed | waiting for a checker |
 | Request write-off (reason) | `lending.loans.write_off_request` | active | waiting for a checker |
+| Waive fee or interest, on a schedule row with fees or interest still due (fees or interest, amount up to what is due, why, then a review of borrower, loan, item, amount, who asks and why; issue #265) | `lending.charges.waive_request` | active | 201: waived; 202: waiting for someone with the accountant's permission (`lending.charges.waive_fee_interest`) |
 
 The list follows the branch chosen in the staff header. Dates default to today (the browser's local date) and the
 date inputs do not offer a future date. Payment methods are `cash`, `bank`, `mtn_momo` and `airtel_money`.

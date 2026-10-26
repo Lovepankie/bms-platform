@@ -1930,6 +1930,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lending/loans/{loan_id}/schedule/{item_no}/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request a waiver of all or part of a schedule item's fees or interest, with a reason (FR-ARR-04); the checker needs the accountant's permission; 201 when executed, 202 when it waits */
+        post: operations["requestLoanItemWaiver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lending/loans/{loan_id}/status-history": {
         parameters: {
             query?: never;
@@ -10376,10 +10393,20 @@ export interface components {
             due_date?: string;
             /** Format: int64 */
             fees_due_minor?: number;
+            /**
+             * Format: int64
+             * @description Fees still due on the item: the most a fee waiver may take (FR-ARR-04)
+             */
+            fees_outstanding_minor?: number;
             /** Format: int64 */
             fees_paid_minor?: number;
             /** Format: int64 */
             interest_due_minor?: number;
+            /**
+             * Format: int64
+             * @description Interest still due on the item: the most an interest waiver may take (FR-ARR-04)
+             */
+            interest_outstanding_minor?: number;
             /** Format: int64 */
             interest_paid_minor?: number;
             /** Format: int32 */
@@ -18623,6 +18650,14 @@ export interface components {
             notify_member?: boolean;
             payment_method_key: string;
         };
+        /** @description FR-ARR-04 (#265): waive all or part of an item's fees or interest; principal is never waived */
+        ScheduleItemWaiverRequest: {
+            /** Format: int64 */
+            amount_minor: number;
+            /** @description fee or interest */
+            component: string;
+            reason: string;
+        };
         SchedulePreview: {
             /**
              * Format: int64
@@ -22995,6 +23030,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoanSchedule"];
+                };
+            };
+        };
+    };
+    requestLoanItemWaiver: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                loan_id: string;
+                item_no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleItemWaiverRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanActionOutcome"];
                 };
             };
         };

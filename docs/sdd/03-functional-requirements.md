@@ -733,9 +733,7 @@ loan plus this request, so a waiver split into small requests still reaches a ch
 item's unpaid penalties, can be waived (`waiver_exceeds_charge`, `nothing_to_waive`). The approved
 waiver is a dated `lending_charge_waivers` row, taken off the item's penalties as `waived`, posted
 nowhere, shown on the statement on its date, kept by a reversal's replay (ADR-026), and closes the
-loan when nothing else is owed. Waivers of fees and of interest by the accountant are not built:
-the route of chapter 7 names a charge, and fees and interest on the schedule are not charges, so
-they need a route of their own (an open question on #265). The loan is locked before the charge is read; a
+loan when nothing else is owed. The loan is locked before the charge is read; a
 charge cancelled by a back-dated repayment is not listed and cannot be waived; the charges list reads
 the loan's items once (migration V82). After the second review: a waiver is netted against its own
 charge (a waiver of a later penalty never hides an earlier one from a payment); a back-dated repayment
@@ -743,6 +741,22 @@ cancels the unwaived rest of a partly waived charge; the approval request shows 
 while the threshold weighs the loan's running total; the loan's own officer may not decide its waiver
 (`approver_conflict`); and one waiver at a time waits on a loan: a second request while one is pending
 is refused as `approval_already_pending` (409), the checker decides the first.
+
+Built for fees and interest (#265, migration V107; the owner's decision D50 of 26 Oct 2026 to build it now, recorded on
+#265 at https://github.com/RincolTech-Solutions-ltd/bms-platform/issues/265#issuecomment-6410874637, supersedes the earlier note that left it out of the MVP): a user with
+`lending.charges.waive_request` requests a waiver of all or part of one schedule item's fees or interest
+with a reason (`POST /lending/loans/{loan_id}/schedule/{item_no}/waive`, `{component, amount_minor,
+reason}`). It is the same `charge_waiver` approval, and its checker also holds the accountant's
+permission `lending.charges.waive_fee_interest` (the accountant and the tenant admin; a branch manager is
+refused). The threshold weighs everything waived on the loan, penalties included, with the request; below
+it the waiver takes effect at once only for a maker who holds the accountant's permission, anyone else
+always waits for such a checker. Principal is never waived (`principal_not_waivable`, that is a
+write-off); a waiver is at most what is still due on its component (`waiver_exceeds_due`,
+`nothing_to_waive`), checked again on approval, where a refusal makes the request stale with its reason
+(ADR-091 decision 11). The waiver is a dated `lending_item_waivers` row, taken off the item's fees or
+interest as `waived`, posted nowhere (fees and interest on the schedule are income only when paid), shown
+on the statement on its date, and kept by a reversal's replay apart from the payoff rebate it recomputes
+(ADR-026). The staff screen offers Waive fee or interest on a schedule row with a review step.
 
 ## 3.22 Closure, write-off and restructure (LCL)
 

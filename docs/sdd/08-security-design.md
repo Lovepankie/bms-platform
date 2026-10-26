@@ -332,6 +332,7 @@ platform API and holds no tenant permissions.
 | `lending.credits.refund_approve` | Y | Y | | | Y | | | | | | | |
 | `lending.charges.waive_request` | Y | Y | | | Y | | | | | | | |
 | `lending.charges.waive_approve` | Y | Y | | | Y | | | | | | | |
+| `lending.charges.waive_fee_interest` | Y | | | | Y | | | | | | | |
 | `lending.loans.write_off_request` | Y | | | | Y | | | | | | | |
 | `lending.loans.write_off_approve` | Y | | | | | | | | | | | |
 | `lending.loans.restructure_request` | Y | Y | | | | | | | | | | |
@@ -800,7 +801,7 @@ CHECK constraint as well as the service.
 | `loan_bring_in` | `lending.loans.bring_in` | `lending.disbursements.authorise` | No (always checked) |
 | `loan_bring_in_reversal` | `lending.loans.bring_in` | `lending.disbursements.authorise` | No (always checked) |
 | `repayment_reversal` | `lending.repayments.reverse_request` | `lending.repayments.reverse_approve` | No (always checked) |
-| `charge_waiver` | `lending.charges.waive_request` | `lending.charges.waive_approve` | Yes |
+| `charge_waiver` | `lending.charges.waive_request` | `lending.charges.waive_approve`; for a fee or interest waiver also `lending.charges.waive_fee_interest` (the accountant's, issue #265) | Yes, on everything waived on the loan with the request; a fee or interest waiver asked by someone without `lending.charges.waive_fee_interest` always waits |
 | `loan_write_off` | `lending.loans.write_off_request` | `lending.loans.write_off_approve` | No |
 | `loan_restructure` | `lending.loans.restructure_request` | `lending.loans.restructure_approve` | No |
 | `manual_journal` | `core.journals.create` | `core.journals.approve` | No |

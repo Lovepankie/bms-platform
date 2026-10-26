@@ -415,6 +415,24 @@ back-dated repayment (3,500 of 4,000), a waiver of a later penalty that never bl
 one, the checker seeing the waiver's own amount, and the loan's officer refused as a decider.
 from another branch.
 
+Fee and interest waivers (#265). `LoanServicingIT` waives part of an item's interest and its fees
+through maker and checker (the branch manager who asked cannot decide, nothing changes before the
+checker, no journal entry is made, the statement credits "Interest waived" and "Fees waived" and
+reconciles, and the next payment pays only what is left, with no fee income); refuses a second
+branch manager as checker (403 `permission_denied`) while the accountant and the tenant admin decide,
+and the accountant's own request needs another holder; weighs the threshold against the loan's
+cumulative waived total (a manager's request under it still waits, the accountant's run at once
+until the total reaches it, and the checker sees the request's own amount); refuses principal, an
+unknown component, more than is due, nothing due and an unknown item, and makes a request stale when
+its amount is no longer due on approval; and reverses a payment made after a fee and an interest
+waiver without undoing them; with the early settlement rebate, a payoff after two interest waivers charges only
+the interest left, rebates only what is unpaid and unwaived (waiver and rebate never pass the interest due), and its
+reversal drops the rebate and keeps both waivers. `RlsIsolationIT` has a factory row for `lending_item_waivers`;
+`PermissionMatrixIT` reads the new permission's row. `waive-state.test.ts` checks the form's cap,
+reason and currencies; `waive-item.dom.test.tsx` shows the action only to whoever may ask and only on
+a row with something due, refuses more than is due before sending, reviews borrower, loan, item, amount,
+who asks and why, sends once, and words the answer for a waiver that waits and one done at once.
+
 Collections (#266). `PromisesTest` covers kept, open and broken without a database.
 `LoanServicingIT` reassigns two loans at once (audited, all or none against an unknown loan,
 refusing a cashier, an officer of another branch, an unknown user and a caller without the

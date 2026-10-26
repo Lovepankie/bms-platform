@@ -416,3 +416,25 @@
     max-width: 640px;
   }
 }
+
+/* Waive fee or interest (issue #265): the row's action keeps its 48px target in the schedule, and the review shows the
+   reason as written, wrapped. */
+.ln-row-action {
+  min-height: var(--tap);
+  white-space: nowrap;
+}
+
+.ln-facts.ln-review {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.ln-facts dd.ln-reason {
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ln-waive {
+  display: grid;
+  gap: var(--space-3);
+}

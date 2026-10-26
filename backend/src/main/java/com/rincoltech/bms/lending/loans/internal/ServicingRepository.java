@@ -99,6 +99,20 @@ class ServicingRepository {
                     return null;
                 })
                 .list();
+        // The interest waivers, so a replay keeps them apart from the payoff rebate it recomputes (ADR-026).
+        jdbc.sql("""
+                        SELECT schedule_item_id, sum(amount_minor) FROM lending_item_waivers
+                         WHERE loan_id = ? AND component = 'interest' GROUP BY 1
+                        """)
+                .param(loanId)
+                .query((rs, n) -> {
+                    Item i = byId.get(rs.getObject(1, UUID.class));
+                    if (i != null) {
+                        i.interestWaivers = rs.getLong(2);
+                    }
+                    return null;
+                })
+                .list();
         return items;
     }
 
@@ -270,9 +284,9 @@ class ServicingRepository {
                     long interestPaid = rs.getLong("interest_paid_minor");
                     long feesPaid = rs.getLong("fees_paid_minor");
                     long penaltiesPaid = rs.getLong("penalties_paid_minor");
-                    long waived = rs.getLong("interest_waived_minor")
-                            + rs.getLong("fees_waived_minor")
-                            + rs.getLong("penalties_waived_minor");
+                    long interestWaived = rs.getLong("interest_waived_minor");
+                    long feesWaived = rs.getLong("fees_waived_minor");
+                    long waived = interestWaived + feesWaived + rs.getLong("penalties_waived_minor");
                     long writtenOff = rs.getLong("written_off_minor");
                     long due = principalDue + interestDue + feesDue + penaltiesDue;
                     long paid = principalPaid + interestPaid + feesPaid + penaltiesPaid;
@@ -293,7 +307,9 @@ class ServicingRepository {
                             writtenOff,
                             due - paid - waived - writtenOff,
                             rs.getString("status"),
-                            rs.getObject("paid_on", LocalDate.class));
+                            rs.getObject("paid_on", LocalDate.class),
+                            interestDue - interestPaid - interestWaived,
+                            feesDue - feesPaid - feesWaived);
                 })
                 .list();
     }
@@ -438,8 +454,8 @@ class ServicingRepository {
     }
 
     /**
-     * The loan's penalty charges (R-PEN), their waivers (FR-ARR-04) and their cancels with their dates, for the
-     * statement and the receipts (ADR-034).
+     * The loan's penalty charges (R-PEN), their waivers (FR-ARR-04) and their cancels with their dates, and the fee and
+     * interest waivers (#265), for the statement and the receipts (ADR-034).
      */
     List<LoanLedger.PenaltyEvent> penaltyEvents(UUID loanId) {
         return jdbc.sql("""
@@ -466,9 +482,15 @@ class ServicingRepository {
                           JOIN lending_loan_charges c ON c.id = w.charge_id
                           JOIN lending_schedule_items s ON s.id = c.schedule_item_id
                          WHERE w.loan_id = ?
+                        UNION ALL
+                        SELECT s.item_no, w.business_date, w.created_at, w.amount_minor,
+                               CASE w.component WHEN 'fee' THEN 'FEES_WAIVED' ELSE 'INTEREST_WAIVED' END
+                          FROM lending_item_waivers w
+                          JOIN lending_schedule_items s ON s.id = w.schedule_item_id
+                         WHERE w.loan_id = ?
                          ORDER BY 2, 3, 1
                         """)
-                .params(loanId, loanId, loanId)
+                .params(loanId, loanId, loanId, loanId)
                 .query((rs, n) -> new LoanLedger.PenaltyEvent(
                         rs.getInt(1),
                         rs.getObject(2, LocalDate.class),
@@ -519,12 +541,12 @@ class ServicingRepository {
                 .optional();
     }
 
-    /** Everything waived on the loan so far, for the waiver threshold (FR-APR-04). */
+    /** Everything waived on the loan so far, penalties, fees and interest, for the waiver threshold (FR-APR-04). */
     long waivedOnLoan(UUID loanId) {
-        return jdbc.sql("SELECT coalesce(sum(amount_minor), 0) FROM lending_charge_waivers WHERE loan_id = ?")
-                .param(loanId)
-                .query(Long.class)
-                .single();
+        return jdbc.sql("""
+                        SELECT coalesce((SELECT sum(amount_minor) FROM lending_charge_waivers WHERE loan_id = ?), 0)
+                             + coalesce((SELECT sum(amount_minor) FROM lending_item_waivers WHERE loan_id = ?), 0)
+                        """).params(loanId, loanId).query(Long.class).single();
     }
 
     /** The loan's charges with something standing, oldest first; one cancelled in full shows on the statement only. */
@@ -564,6 +586,37 @@ class ServicingRepository {
                 .update();
         jdbc.sql("UPDATE lending_loan_charges SET waived_minor = waived_minor + ? WHERE id = ?")
                 .params(amountMinor, charge.id())
+                .update();
+    }
+
+    /** FR-ARR-04 (#265): records an approved waiver of an item's fees or interest. */
+    void insertItemWaiver(
+            UUID id,
+            UUID loanId,
+            UUID itemId,
+            String component,
+            long amountMinor,
+            LocalDate businessDate,
+            String reason,
+            UUID approvalId,
+            UUID requestedBy,
+            UUID approvedBy) {
+        jdbc.sql("""
+                        INSERT INTO lending_item_waivers (id, tenant_id, loan_id, schedule_item_id, component, amount_minor,
+                            business_date, reason, approval_request_id, requested_by, approved_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(
+                        id,
+                        loanId,
+                        itemId,
+                        component,
+                        amountMinor,
+                        businessDate,
+                        reason,
+                        approvalId,
+                        requestedBy,
+                        approvedBy)
                 .update();
     }
 
