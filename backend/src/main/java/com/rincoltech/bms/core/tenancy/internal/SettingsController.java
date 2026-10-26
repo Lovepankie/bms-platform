@@ -172,13 +172,13 @@ class SettingsController {
             @Size(max = 20)
             @Schema(
                     description =
-                            "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged")
+                            "Needed to turn two-step sign-in off, narrow it or put its date back (a later date, or a date for people required at once), or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged")
             String totpCode,
 
             @Size(max = 200)
             @Schema(
                     description =
-                            "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged")
+                            "Needed to turn two-step sign-in off, narrow it or put its date back (a later date, or a date for people required at once), or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged")
             String password) {}
 
     @GetMapping
@@ -198,8 +198,9 @@ class SettingsController {
             @RequestHeader(name = "If-Match", required = false) String ifMatch,
             @Valid @RequestBody UpdateSettingsRequest request) {
         // Relaxing the two-step rule needs the proof of the admin reset of a sign-in, before the transaction (ADR-046),
-        // and so
-        // does changing an approval amount (ADR-091 decision 7).
+        // and so does changing an approval amount (ADR-091 decision 7). This read is unlocked: update() decides again
+        // on
+        // the locked row and refuses, 422 proof_required, a change that relaxes it when no proof was checked here.
         boolean proves = service.relaxesTwoStep(request) || service.changesThresholds(request);
         if (proves) {
             guard.requireProof(request.totpCode(), request.password());

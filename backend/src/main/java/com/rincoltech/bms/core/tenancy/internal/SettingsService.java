@@ -133,8 +133,8 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
         }
         SettingsResponse after = write(stored, changes);
         if (relaxes) {
-            // In this transaction: the change and the warning to the administrators commit together (ADR-046 decision
-            // 6).
+            // In this transaction: the change and the warning to the administrators commit together (ADR-046
+            // decision 6).
             guard.notifyRelaxed(
                     after.requireMfaRoles().isEmpty() && !after.requireMfaAllStaff()
                             ? "two-step sign-in is now optional for everyone"

@@ -24,7 +24,8 @@ export class SignInResetError extends Error {
 
 const MESSAGES: Record<string, string | undefined> = {
   permission_denied: 'Only a tenant administrator can reset someone’s sign-in.',
-  not_found: 'This user could not be found. Reload the list and try again.',
+  // A branch-scoped administrator gets 404 for a person outside their branches too, so the words cover both (issue #369).
+  not_found: 'This person could not be found, or they work in a branch you do not manage. Reload the list; if they are still there, ask an administrator who covers every branch.',
   rate_limited: 'Too many tries from here. Wait a few minutes and try again.',
   totp_required: 'Enter the current 6 digit code from your authenticator app.',
   invalid_mfa_code: 'That code is not right. Codes change every 30 seconds; type the next one.',

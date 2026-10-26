@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
-import { type AdminCredential, resetUserSignIn } from '../../../api/sign-in-reset';
+import { type AdminCredential, SignInResetError, resetUserSignIn } from '../../../api/sign-in-reset';
 import { type RoleAssignmentRequest, type StaffUser, users } from '../../../api/users';
 import { useShellBrand } from '../../../app/branding';
 import { BusyButton } from '../../../app/ui/BusyButton';
@@ -84,8 +84,10 @@ export function UsersScreen() {
 
   // The link of a reset is held in this screen's state only, like the invitation link, and the proof the administrator typed is not kept.
   async function resetSignIn(user: StaffUser, credential: AdminCredential): Promise<string | null> {
-    if (working.current) return null;
+    // The panel has already cleared what was typed, so a refusal here must say why (issue #369).
+    if (working.current) return 'Another change is still being sent. Wait for it to finish, then type it again.';
     working.current = true;
+    setBusyId(user.id ?? null);
     setNotice(null);
     try {
       const made = await resetUserSignIn(user.id ?? '', credential);
@@ -93,9 +95,15 @@ export function UsersScreen() {
       setMode(null);
       return null;
     } catch (e) {
+      // The server asked for the other kind of proof: /me is out of date (two-step sign-in was turned on or off elsewhere), so read
+      // it again and the panel asks for the right one.
+      if (e instanceof SignInResetError && (e.code === 'totp_required' || e.code === 'password_required')) {
+        void queryClient.invalidateQueries({ queryKey: ['me'] });
+      }
       return messageOf(e);
     } finally {
       working.current = false;
+      setBusyId(null);
     }
   }
 
@@ -239,7 +247,7 @@ export function UsersScreen() {
                       <RoleEditor user={u} self={u.id === me.user_id} roles={u.id === me.user_id ? allChoices : choices} branches={branchList} retail={!me.modules || me.modules.includes('retail')} onSave={(next) => saveRoles(u, next)} onCancel={() => setMode(null)} />
                     )}
                     {mode?.id === u.id && mode?.kind === 'reset' && (
-                      <ResetPanel user={u} mfaEnabled={me.mfa_enabled === true} onSend={(credential) => resetSignIn(u, credential)} onCancel={() => setMode(null)} />
+                      <ResetPanel user={u} mfaEnabled={me.mfa_enabled === true} openLinkFor={link?.name ?? null} onSend={(credential) => resetSignIn(u, credential)} onCancel={() => setMode(null)} />
                     )}
                     {mode?.id === u.id && mode?.kind === 'deactivate' && (
                       <div className="alert alert-warning stack" role="group" aria-label={`Deactivate ${u.full_name}`}>

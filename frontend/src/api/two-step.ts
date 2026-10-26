@@ -25,6 +25,7 @@ const MESSAGES: Record<string, string | undefined> = {
   invalid_password: 'That password is not right.',
   password_required: 'Type your own password to confirm.',
   totp_required: 'Type the current code from your authenticator app to confirm.',
+  proof_required: 'The settings changed while you were looking. Confirm that it is you below, then save again.',
   account_locked: 'Too many wrong tries. Wait 15 minutes and try again.',
   validation_failed: 'One of the roles you picked is not available. Reload the page and choose again.',
   invalid_mfa_code: 'That code is not right. Codes change every 30 seconds; try the next one.',

@@ -8,10 +8,12 @@ import { resetProofProblem } from './state';
 // ask: the 6 digits of their own authenticator app when they have two-step sign-in, otherwise their own password. Nothing typed is
 // kept once it has been sent, and the link that comes back is shown once in the link box, never here.
 
-export function ResetPanel({ user, mfaEnabled, onSend, onCancel }: {
+export function ResetPanel({ user, mfaEnabled, openLinkFor = null, onSend, onCancel }: {
   user: StaffUser;
   /** `me.mfa_enabled` of the signed-in administrator: decides whether a code or the password is asked for. */
   mfaEnabled: boolean;
+  /** The name on the link box while one is open: the new link takes its place, so the administrator is told first. */
+  openLinkFor?: string | null;
   /** Sends the request; resolves with the words of a refusal, or null when it worked. */
   onSend: (credential: AdminCredential) => Promise<string | null>;
   onCancel: () => void;
@@ -51,16 +53,21 @@ export function ResetPanel({ user, mfaEnabled, onSend, onCancel }: {
         Make a one-time link for <strong>{user.full_name}</strong> to choose a new password. When they use it, they are signed out everywhere. You
         are shown the link once, to send to them yourself.
       </p>
+      {openLinkFor !== null && (
+        <p role="note" className="alert alert-info">
+          The link for {openLinkFor} shown above closes when this one is made. Copy or send it first if you have not.
+        </p>
+      )}
       {mfaEnabled ? (
         <>
           <label htmlFor={`reset-proof-${user.id}`}>Code from your authenticator app</label>
           <input
             id={`reset-proof-${user.id}`}
             value={typed}
-            onChange={(e) => setTyped(e.target.value)}
+            // Only the digits are kept, so a pasted "123 456" is not cut short by a length limit before its space is gone.
+            onChange={(e) => setTyped(e.target.value.replace(/\D/g, '').slice(0, 6))}
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
             spellCheck={false}
             aria-invalid={problem !== null}
           />

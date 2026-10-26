@@ -24244,7 +24244,7 @@
             "type" : "integer"
           },
           "password" : {
-            "description" : "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged",
+            "description" : "Needed to turn two-step sign-in off, narrow it or put its date back (a later date, or a date for people required at once), or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged",
             "maxLength" : 200,
             "minLength" : 0,
             "type" : "string"
@@ -24279,7 +24279,7 @@
             "type" : "string"
           },
           "totp_code" : {
-            "description" : "Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged",
+            "description" : "Needed to turn two-step sign-in off, narrow it or put its date back (a later date, or a date for people required at once), or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged",
             "maxLength" : 20,
             "minLength" : 0,
             "type" : "string"

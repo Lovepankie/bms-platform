@@ -253,7 +253,9 @@ key; MFA is mandatory and enrolled at first sign-in), `totp_last_step bigint`,
 ### `platform_sessions` and `platform_user_recovery_codes` (platform)
 
 `platform_sessions` has the columns of `auth_sessions` with `platform_user_id` in place of
-`tenant_id` and `user_id`. `platform_user_recovery_codes`: `id uuid PK`,
+`tenant_id` and `user_id`. Its `revoked_reason` takes `sign_out`, `rotation_reuse`, `user_deactivated`, `admin`, `mfa_reset`
+and, since `V106` (issue #377), `two_step_required`: an operator always needs a second factor, and the refresh of one who has
+none ends the session with that reason. It never takes `password_reset`: an operator has no password reset link. `platform_user_recovery_codes`: `id uuid PK`,
 `platform_user_id uuid NOT NULL` FK, `code_hash char(64) NOT NULL`, `used_at timestamptz`,
 `created_at`.
 
@@ -797,7 +799,8 @@ bound business only, by `tenant_referrals_mine()`.
 `refresh_token_hash char(64) NOT NULL UNIQUE`, `expires_at timestamptz NOT NULL`,
 `idle_expires_at timestamptz NOT NULL`, `rotated_at timestamptz`,
 `revoked_at timestamptz`, `revoked_reason text` [`sign_out`, `rotation_reuse`,
-`user_deactivated`, `admin`, `mfa_reset`, `password_reset` (added by the migration of #320)], `ip inet`, `user_agent text`.
+`user_deactivated`, `admin`, `mfa_reset`, `password_reset` (added by the migration of #320), `two_step_required` (added by
+`V67`: a session not renewed because its holder must have two-step sign-in and has none, ADR-046)], `ip inet`, `user_agent text`.
 One row per refresh token: a rotation marks the row `rotated_at` and inserts the next row of the
 same family; the access token's `sid` is the row id.
 Index `(tenant_id, user_id) WHERE revoked_at IS NULL`. FR-IAM-07, FR-IAM-08.

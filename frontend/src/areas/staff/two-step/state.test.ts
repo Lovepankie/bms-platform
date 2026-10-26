@@ -141,6 +141,20 @@ describe('dates', () => {
     expect(dateWords('2026-11-04T02:00:00Z', 'America/New_York')).toBe('3 Nov 2026');
   });
 
+  // Issue #377: the day a zone skips midnight starts when the clocks jump, as java.time's atStartOfDay says on the server.
+  it('starts a day whose midnight is skipped when the clocks jump, as the server does', () => {
+    // Santiago puts its clocks forward from 00:00 to 01:00 on 6 Sep 2026: that day starts at 01:00 local, 04:00 UTC.
+    expect(deadlineOf(5, new Date('2026-09-01T12:00:00Z'), 'America/Santiago')).toBe('2026-09-07T03:00:00.000Z');
+    expect(deadlineOf(4, new Date('2026-09-01T12:00:00Z'), 'America/Santiago')).toBe('2026-09-06T04:00:00.000Z');
+    // ICU spells September 'Sep' or 'Sept' depending on its version.
+    expect(deadlineWords('2026-09-06T04:00:00.000Z', 'America/Santiago')).toMatch(/^5 Sept? 2026$/);
+    // The day before the jump and an ordinary day are unchanged.
+    expect(deadlineOf(3, new Date('2026-09-01T12:00:00Z'), 'America/Santiago')).toBe('2026-09-05T04:00:00.000Z');
+    // New York's change at 02:00 is not at midnight: 8 Mar 2026 starts at 05:00 UTC and 9 Mar at 04:00 UTC.
+    expect(deadlineOf(6, new Date('2026-03-01T17:00:00Z'), 'America/New_York')).toBe('2026-03-08T05:00:00.000Z');
+    expect(deadlineOf(7, new Date('2026-03-01T17:00:00Z'), 'America/New_York')).toBe('2026-03-09T04:00:00.000Z');
+  });
+
   it('names the last day for a stored deadline, not the day after', () => {
     expect(deadlineWords('2026-11-03T21:00:00.000Z')).toBe('3 Nov 2026');
     expect(deadlineWords(deadlineOf(14, NOW))).toBe('3 Nov 2026');

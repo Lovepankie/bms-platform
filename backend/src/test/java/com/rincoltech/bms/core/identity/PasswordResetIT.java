@@ -141,6 +141,14 @@ class PasswordResetIT extends IntegrationTest {
         return on.post("/api/v1/users/" + userId + "/reset-sign-in", body, by.accessToken());
     }
 
+    long idempotencyKeys() {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM idempotency_keys WHERE tenant_id = ?")
+                .param(t.tenantId())
+                .query(Long.class)
+                .single();
+    }
+
     long audits(String action, UUID entityId) {
         return TestDatabase.owner()
                 .sql(
@@ -603,7 +611,17 @@ class PasswordResetIT extends IntegrationTest {
         UUID userId = user(email);
         Session before = api.signIn(userId, email, Api.PASSWORD, null);
 
-        ResponseEntity<JsonNode> issued = issue(api, adminSession, userId);
+        long keysBefore = idempotencyKeys();
+        // Sent with an Idempotency-Key, as a retrying client might: the answer holds a credential, so it is never kept
+        // for a
+        // replay (issue #369).
+        Api.allowTotpReuse(adminSession.userId());
+        ResponseEntity<JsonNode> issued = api.call(
+                HttpMethod.POST,
+                "/api/v1/users/" + userId + "/reset-sign-in",
+                Map.of("totp_code", Api.totp(adminSession.totpSecret(), Instant.now())),
+                adminSession.accessToken(),
+                Map.of("Idempotency-Key", "reset-" + UUID.randomUUID()));
         assertThat(issued.getStatusCode()).isEqualTo(HttpStatus.OK);
         String url = issued.getBody().get("url").asString();
         assertThat(url).startsWith("https://" + t.slug() + "-bms-staging.rincoltech.test/reset-password#token=");
@@ -616,6 +634,13 @@ class PasswordResetIT extends IntegrationTest {
         assertThat(audits("core.password_reset.link_revealed", userId)).isEqualTo(1);
         assertThat(auditsMentioning(token)).isZero();
         assertThat(emails("identity.password_reset", email)).isZero();
+        assertThat(idempotencyKeys()).isEqualTo(keysBefore);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM idempotency_keys WHERE response_body::text LIKE ?")
+                        .param("%" + token + "%")
+                        .query(Long.class)
+                        .single())
+                .isZero();
         var row = TestDatabase.owner()
                 .sql("SELECT origin, requested_by FROM user_password_resets WHERE user_id = ?")
                 .param(userId)

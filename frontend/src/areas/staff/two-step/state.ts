@@ -64,6 +64,8 @@ export function dateWords(iso: string | null | undefined, zone: string = DEFAULT
 
 const localDay = (at: Date, zone: string): string => at.toLocaleDateString('en-CA', { timeZone: zone });
 
+const HOUR = 60 * 60 * 1000;
+
 /** How far the zone is ahead of UTC at this instant, in milliseconds. */
 function zoneOffsetMs(at: number, zone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -80,11 +82,19 @@ function zoneOffsetMs(at: number, zone: string): number {
   return Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second')) - Math.floor(at / 1000) * 1000;
 }
 
-/** The instant a calendar day starts in the zone (the offset is read twice so a day that changes the clock is still right). */
+/**
+ * The instant a calendar day starts in the zone, as java.time's `LocalDate.atStartOfDay(zone)` gives it (issue #377). Midnight is
+ * read with the offset in force well before it and well after it (a zone's local midnight is within 15 hours of UTC midnight): an
+ * offset that really applies at that instant is a valid start, and when both are (the clocks went back over midnight) the earlier
+ * instant is the start. When neither is, midnight was skipped (the clocks went forward at 00:00, as in America/Santiago) and the
+ * day starts when the clocks jump, which is midnight read with the earlier offset.
+ */
 function startOfDay(year: number, month: number, day: number, zone: string): number {
   const guess = Date.UTC(year, month - 1, day);
-  const first = guess - zoneOffsetMs(guess, zone);
-  return guess - zoneOffsetMs(first, zone);
+  const before = zoneOffsetMs(guess - 15 * HOUR, zone);
+  const after = zoneOffsetMs(guess + 15 * HOUR, zone);
+  const valid = [before, after].map((offset) => ({ at: guess - offset, offset })).filter((c) => zoneOffsetMs(c.at, zone) === c.offset);
+  return valid.length > 0 ? Math.min(...valid.map((c) => c.at)) : guess - before;
 }
 
 /**

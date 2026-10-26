@@ -341,6 +341,84 @@ class TwoStepPolicyIT extends IntegrationTest {
         assertThat(api.refresh(next).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    /**
+     * Issue #377: a platform operator always needs a second factor. One whose factor is gone (mfa_enabled false) and who
+     * still holds a session has it ended on refresh with the reason the staff session gets, not a server error.
+     */
+    @Test
+    void anOperatorWithNoSecondFactorHasTheSessionEndedOnRefresh() {
+        Api platform = Api.platform(http);
+        String email = Api.email("operator");
+        UUID operator = Api.platformUser(email);
+        Session session = platform.signIn(operator, email, Api.PASSWORD, null);
+        TestDatabase.owner()
+                .sql("UPDATE platform_users SET mfa_enabled = false WHERE id = ?")
+                .param(operator)
+                .update();
+
+        ResponseEntity<JsonNode> refreshed = platform.refresh(session.refreshToken());
+        assertThat(refreshed.getStatusCode()).as("%s", refreshed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(refreshed.getBody().get("status").asString()).isEqualTo("sign_in_required");
+        assertThat(refreshed.getBody().get("access_token").isNull()).isTrue();
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT revoked_reason FROM platform_sessions WHERE platform_user_id = ? AND revoked_at IS NOT NULL")
+                        .param(operator)
+                        .query(String.class)
+                        .list())
+                .isNotEmpty()
+                .containsOnly("two_step_required");
+        assertThat(platform.refresh(session.refreshToken()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    /** Issue #377: people required at once (no date), then a grace period sent, puts the date back: it needs the proof. */
+    @Test
+    void aGraceAfterAtOnceIsPuttingTheDateBack() {
+        assertThat(patch(Map.of("require_mfa_all_staff", true, "mfa_grace_days", 0))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(settings().get("mfa_enforce_from").isNull()).isTrue();
+
+        ResponseEntity<JsonNode> without = patchRaw(Map.of("mfa_grace_days", 7));
+        assertThat(without.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(without.getBody().get("code").asString()).isEqualTo("password_required");
+        assertThat(settings().get("mfa_enforce_from").isNull()).isTrue();
+        assertThat(relaxedMails()).isZero();
+
+        assertThat(patch(Map.of("mfa_grace_days", 7)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(Instant.parse(settings().get("mfa_enforce_from").asString())).isEqualTo(endOfDayAfter(7));
+        assertThat(relaxedMails()).isEqualTo(1);
+    }
+
+    /**
+     * Issue #377: widening the roles with a later date puts the date back for the roles already required, so it needs the
+     * proof; widening with an earlier date does not.
+     */
+    @Test
+    void wideningWithALaterDateNeedsTheProof() {
+        assertThat(patch(Map.of("require_mfa_roles", List.of("cashier"), "mfa_grace_days", 7))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<JsonNode> later =
+                patchRaw(Map.of("require_mfa_roles", List.of("accountant", "cashier"), "mfa_grace_days", 30));
+        assertThat(later.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(later.getBody().get("code").asString()).isEqualTo("password_required");
+        assertThat(settings().get("require_mfa_roles").size()).isEqualTo(1);
+        assertThat(Instant.parse(settings().get("mfa_enforce_from").asString())).isEqualTo(endOfDayAfter(7));
+        assertThat(relaxedMails()).isZero();
+
+        assertThat(patchRaw(Map.of("require_mfa_roles", List.of("accountant", "cashier"), "mfa_grace_days", 3))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(Instant.parse(settings().get("mfa_enforce_from").asString())).isEqualTo(endOfDayAfter(3));
+        assertThat(patch(Map.of("require_mfa_roles", List.of("accountant", "auditor", "cashier"), "mfa_grace_days", 30))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(Instant.parse(settings().get("mfa_enforce_from").asString())).isEqualTo(endOfDayAfter(30));
+        assertThat(relaxedMails()).isEqualTo(1);
+    }
+
     /** ADR-046 decision 3: a day's end is the business's own, not Kampala's. */
     @Test
     void theDeadlineIsTheEndOfADayInTheBusinessOwnTimeZone() {

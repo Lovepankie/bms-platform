@@ -19484,7 +19484,7 @@ export interface components {
              * @description Days a covered user without a second factor may keep signing in before it is required; 0 means at once. Sending it moves the deadline to now plus these days (ADR-046)
              */
             mfa_grace_days?: number;
-            /** @description Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged */
+            /** @description Needed to turn two-step sign-in off, narrow it or put its date back (a later date, or a date for people required at once), or to change an approval amount, from an administrator with no authenticator: their own current password (ADR-046, ADR-091). Never stored or logged */
             password?: string;
             receipt_footer?: string;
             reports_enabled?: boolean;
@@ -19495,7 +19495,7 @@ export interface components {
             setup_dismissed?: boolean;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;
-            /** @description Needed to turn two-step sign-in off or narrow it, or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged */
+            /** @description Needed to turn two-step sign-in off, narrow it or put its date back (a later date, or a date for people required at once), or to change an approval amount, from an administrator who has an authenticator: its current code (ADR-046, ADR-091). Never stored or logged */
             totp_code?: string;
         };
         UpdateTenantSmsControlsRequest: {

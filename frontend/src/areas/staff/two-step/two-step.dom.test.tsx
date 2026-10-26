@@ -202,6 +202,39 @@ describe('the policy screen', () => {
     expect(ready(button('Yes, save this'))).toBe(true);
   });
 
+  // Issue #377: the server's locked recheck found a relaxation the screen did not (the settings changed meanwhile).
+  it('asks for the proof when the server says it is needed after all, and sends it on the next save', async () => {
+    twoStepApi.save
+      .mockRejectedValueOnce(new TwoStepError('The settings changed while you were looking. Confirm that it is you below, then save again.', 422, 'proof_required'))
+      .mockResolvedValueOnce({ ...OFF, version: 6, require_mfa_all_staff: true });
+    shell();
+    await waitFor(() => expect(radio(/Optional/).checked).toBe(true));
+    fireEvent.click(radio(/Required for everyone/));
+    fireEvent.click(button('Review and save'));
+    expect(screen.queryByLabelText('Your own password')).toBeNull();
+    fireEvent.click(button('Yes, save this'));
+    expect(await screen.findByText(/Confirm that it is you below/)).toBeTruthy();
+    expect(twoStepApi.settings.mock.calls.length).toBeGreaterThan(1);
+    const yes = button('Yes, save this');
+    expect(yes.getAttribute('data-not-ready')).toBe('true');
+    fireEvent.change(screen.getByLabelText('Your own password'), { target: { value: 'Test-Password-1' } });
+    fireEvent.click(yes);
+    await waitFor(() => expect(twoStepApi.save).toHaveBeenCalledTimes(2));
+    expect(twoStepApi.save.mock.calls[0]?.[3]).toEqual({});
+    expect(twoStepApi.save.mock.calls[1]?.[3]).toEqual({ password: 'Test-Password-1' });
+  });
+
+  it('does not ask for the proof after a refusal that is not about it', async () => {
+    twoStepApi.save.mockRejectedValue(new TwoStepError('Someone else changed the settings.', 409, 'version_conflict'));
+    shell();
+    await waitFor(() => expect(radio(/Optional/).checked).toBe(true));
+    fireEvent.click(radio(/Required for everyone/));
+    fireEvent.click(button('Review and save'));
+    fireEvent.click(button('Yes, save this'));
+    expect(await screen.findByText(/Someone else changed the settings/)).toBeTruthy();
+    expect(screen.queryByLabelText('Your own password')).toBeNull();
+  });
+
   it('shows no choices to someone who may not change the settings', () => {
     shell(['core.settings.read']);
     expect(screen.getByText(/^You do not have access to this page\. The owner or an administrator/)).toBeTruthy();

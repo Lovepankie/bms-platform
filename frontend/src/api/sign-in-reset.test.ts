@@ -27,7 +27,7 @@ import { requestPasswordReset, resetUserSignIn, SignInResetError } from './sign-
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const USER = '00000000-0000-4000-8000-0000000000a1';
 
-describe('resetUserSignIn (the future Users screen button, #339, calls this)', () => {
+describe("resetUserSignIn (the Users screen's Reset sign-in button, #339)", () => {
   it('posts to the user and returns the link and its end, camel cased', async () => {
     fetchImpl.seen.length = 0;
     fetchImpl.next = async () => json(200, { url: 'https://test-bms.example.test/reset-password#token=fabricated', expires_at: '2026-10-19T13:00:00Z' });
@@ -111,6 +111,13 @@ describe('resetUserSignIn (the future Users screen button, #339, calls this)', (
     expect((error as SignInResetError).status).toBe(409);
     expect((error as SignInResetError).code).toBe('invalid_status_transition');
     expect((error as SignInResetError).message).toContain('invitation');
+  });
+
+  it('says a 404 may be a person outside the branches the administrator manages, not only a missing one', async () => {
+    fetchImpl.next = async () => json(404, { code: 'not_found', detail: 'Not found.' });
+    const error = (await resetUserSignIn(USER, { totpCode: '123456' }).catch((e: unknown) => e)) as SignInResetError;
+    expect(error.status).toBe(404);
+    expect(error.message).toMatch(/could not be found, or they work in a branch you do not manage/);
   });
 
   it('says in its own words that only an administrator may', async () => {

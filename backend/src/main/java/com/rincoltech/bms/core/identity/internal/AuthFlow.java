@@ -511,12 +511,10 @@ class AuthFlow {
             throw revoked();
         }
         if (!account.mfaEnabled() && accounts.mfaRequired(account.id())) {
-            // The business requires two-step sign-in of this person and the date has passed (or a role came after it):
-            // a session with no second factor is not renewed: it ends here and the person signs in again with the
-            // password,
-            // which leads to enrolment (ADR-046). No MFA token is minted from a refresh cookie: a stolen cookie must
-            // not be able
-            // to enrol the thief's authenticator.
+            // The business requires two-step sign-in of this person and the date has passed (or a role came after it),
+            // or a platform operator has no second factor: a session with no second factor is not renewed. It ends here
+            // and the person signs in again with the password, which leads to enrolment (ADR-046). No MFA token is
+            // minted from a refresh cookie: a stolen cookie must not be able to enrol the thief's authenticator.
             accounts.sessions().revokeFamily(row.familyId(), "two_step_required", now);
             accounts.audit("core.auth.session_ended_two_step_required", account.id(), Map.of());
             return new Outcome(Step.SIGN_IN_REQUIRED, null, null, null, List.of());
