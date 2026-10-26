@@ -52,12 +52,12 @@ const notifications: TourStep = {
   body: 'Tap Notifications at the bottom of the menu to install BMS on your phone. On a phone the menu is the button at the top left. There you can also turn on a notice for when something needs you, such as an approval.',
 };
 
-// Feedback (issue #447): every member of staff can tell the BMS team an idea, a problem or a question.
+// Help and feedback (issues #447 and #598): How do I...? and telling the BMS team an idea, a problem or a question.
 const feedback: TourStep = {
   id: 'feedback',
   target: 'nav-feedback',
-  title: 'Tell us what you think',
-  body: 'Tap Help and feedback at the bottom of the menu, then Send feedback. Tell the BMS team an idea, a problem or a question. Add a picture of the screen if it helps. You see our reply there too.',
+  title: 'Help and feedback',
+  body: 'Tap Help and feedback at the bottom of the menu. How do I...? answers common questions with pictures, even offline. Send feedback tells the BMS team an idea, a problem or a question, and you see our reply there too.',
 };
 
 const insights: TourStep = {
@@ -176,7 +176,8 @@ export const adminWelcome: Tour = {
   // Version 25 words the menu, Notifications and Feedback steps for the grouped menu and its footer (issue #564).
   // Version 26 words the branch step for the menu's top on a laptop and the page's top on a phone (issue #564).
   // Version 27 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
-  version: 27,
+  // Version 28 words the Help and feedback step for How do I...? (issue #598).
+  version: 28,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -446,7 +447,8 @@ export const retailSales: Tour = {
   // Version 21 words the bottom tabs step for the tabs the person has (issue #544).
   // Version 22 words the menu, Notifications and Feedback steps for the grouped menu and its footer (issue #564).
   // Version 23 words the branch and menu steps for the menu's top on a laptop and the drawer on a phone (issue #564).
-  version: 23,
+  // Version 24 words the Help and feedback step for How do I...? (issue #598).
+  version: 24,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -627,7 +629,8 @@ export const staffWelcome: Tour = {
   // Version 11 points the shop step at Today in the grouped menu and words Notifications and Feedback for its footer (issue #564).
   // Version 12 words the branch step for the menu's top on a laptop and the page's top on a phone (issue #564).
   // Version 13 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
-  version: 13,
+  // Version 14 words the Help and feedback step for How do I...? (issue #598).
+  version: 14,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -1192,6 +1195,34 @@ export const morePage: Tour = {
       title: 'Sign out',
       body: 'Sign out here when you are done on a shared phone. If sales are still waiting to send, you are asked first.',
     },
+  ],
+};
+
+// How do I...? (issue #598, ADR-095): the help articles, grouped by job and searchable, and one article with its pictures.
+export const helpPage: Tour = {
+  id: 'page-help',
+  version: 1,
+  title: 'This page: how do I...?',
+  audience: () => true,
+  autoStart: false,
+  page: '/staff/help',
+  steps: [
+    { id: 'search', target: 'help-search', title: 'Say what you want to do', body: 'Type a few words, such as move stock or invite. The answers that match show under the box.' },
+    { id: 'groups', target: 'help-groups', optional: true, title: 'Answers by job', body: 'Or open a job, such as Sell or Count stock, and tap a question. You see only the answers for what your role can do.' },
+    { id: 'ask', target: 'help-ask', title: 'Not answered?', body: 'Tap Ask us. Feedback opens as a question, with what you typed already in it.' },
+  ],
+};
+
+export const helpArticlePage: Tour = {
+  id: 'page-help-article',
+  version: 1,
+  title: 'This page: an answer',
+  audience: () => true,
+  autoStart: false,
+  page: '/staff/help/$articleId',
+  steps: [
+    { id: 'steps', target: 'help-article-steps', title: 'Step by step', body: 'Follow the steps in order. Each picture shows the screen, with what to do written on it.' },
+    { id: 'ask', target: 'help-ask', title: 'Still stuck?', body: 'Tap Ask us to send the BMS team your question.' },
   ],
 };
 
@@ -2033,7 +2064,7 @@ export const CORE_TOURS: readonly Tour[] = [
   adminWelcome, retailSales, staffWelcome, salePage, stockPage, restocksPage, salesPage, creditSalesPage, setupPage, loansPage, loanPage, cataloguePage, stocktakePage,
   retailSettingsPage, branchRolesCapability, wholesaleGroup, stockByLocationPage, inTransitPage, transferReceiptCapability, unitsCapability,
   priceListsCapability, priceListsPage, customerAccountsCapability, accountsPage, returnsCapability, returnsPage, documentsCapability, documentsPage, quotationsPage,
-  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
+  purchasingCapability, purchasingPage, landedCostsPage, assistantPage, usersPage, branchesPage, controlsPage, twoStepPage, approvalRulesPage, businessNotificationsPage, billingPage, closePage, notificationsPage, feedbackPage, helpPage, helpArticlePage, moneyPage, morePage, referralsPage, ...CUSTOMER_TOURS,
 ];
 
 const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((part) => part.startsWith('$')).length;

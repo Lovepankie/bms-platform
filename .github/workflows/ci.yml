@@ -128,6 +128,9 @@ jobs:
           npm run test:layout
       - run: npm run build
         if: steps.scope.outputs.run == 'true'
+      - name: The service worker precaches the help articles and pictures (issue #598)
+        if: steps.scope.outputs.run == 'true'
+        run: node scripts/check-help-precache.mjs
 
   delivery:
     name: Workflows, scripts and compose files

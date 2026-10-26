@@ -1149,6 +1149,20 @@ operator's `/platform/feedback`. Endpoints in chapter 7 sections 7.11.3 and 7.11
 | FR-FBK-04 | Each new item shall email every active platform operator through the outbox, and a failure to queue or to send that email shall never refuse or delay the send. | One `feedback.new` email row per active operator in the send's transaction, in a savepoint; a failure is logged without the message and the item is kept (201; `FeedbackIT` makes the outbox throw). | MVP |
 | FR-FBK-05 | A person shall send at most 10 feedback items in any hour. | The eleventh answers 429 `feedback_rate_limited` in plain words with `Retry-After`; checked by a plain count before the picture is decoded and again under a per-person lock in the transaction; another person of the same business is not limited by it. | MVP |
 
+## 3.35.1 In-app help: How do I...? (HLP)
+
+Issue #598, ADR-095, owner decision D51. No migration and no endpoint: the corpus ships with the app. The staff screens are
+`/staff/help` and `/staff/help/$articleId`, opened from the Help sheet and from the How do I? link of a screen. Step 2, answers
+written from this corpus, is #20.
+
+| ID | Requirement | Acceptance criteria | Phase |
+|---|---|---|---|
+| FR-HLP-01 | The app shall hold a help corpus of one short article per task, in plain words a shop owner understands, each step with a phone screenshot taken with fabricated data and its caption drawn on it, each article tagged with the permissions and module it applies to, and a revision that changes whenever an article changes. | Articles in `frontend/src/help/articles`; every step picture is a 412x900 WebP in `frontend/public/help` and every picture there is used; the revision is the first 16 hex digits of the SHA-256 of the files in name order (`corpus.test.ts`). | MVP |
+| FR-HLP-02 | Help and feedback shall offer How do I...?: a search box over the articles and the articles grouped by job (Sell, Buy stock, Move stock, Count stock, Items and categories, Branches and stores, Users and invitations, Money, Loans), showing only the articles the person's permissions and the business's modules allow. | A seller sees no administrator article; a loan officer sees the loan articles and no shop article; an article opened by someone it is not for says so (`help.dom.test.tsx`). | MVP |
+| FR-HLP-03 | A main screen whose task an article explains shall show a small How do I? link that opens that article. | The link opens the screen's first article the person may read; no link on a screen with none (`help.dom.test.tsx`, `corpus.test.ts`). | MVP |
+| FR-HLP-04 | How do I...? and its pictures shall work with no network once the app is installed, and send nothing while a person searches. | The articles are in the bundle and the service worker precaches `help/*.webp`; the page renders with fetch failing and no request made. | MVP |
+| FR-HLP-05 | Not answered? Ask us shall open the in-app feedback (FR-FBK-01) as a question with what the person searched for already typed. | `/staff/feedback?ask=<text>` starts with A question chosen and the text in the message. | MVP |
+
 ## 3.36 Referrals and commissions (REF)
 
 Issue #464, ADR-069, migration `V88`. The business's page is Referrals under Business set-up (`/staff/setup/referrals`); the sign-up

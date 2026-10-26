@@ -20,3 +20,11 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// The help corpus (issue #598, ADR-095), made by the bms-help-corpus plugin of vite.config.ts from src/help/articles.
+declare module 'virtual:help-corpus' {
+  /** Each article's Markdown by its id, the file name without `.md`. */
+  export const sources: Record<string, string>;
+  /** The first 16 hex digits of the SHA-256 of the articles, in name order. */
+  export const revision: string;
+}

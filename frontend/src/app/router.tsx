@@ -239,8 +239,19 @@ const staffNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, 
   import('../areas/staff/notifications/page').then((m) => m.Route),
 );
 // Feedback (issue #447, ADR-065): any member of staff sends an idea, a problem or a question to the BMS team.
-const staffFeedbackRoute = createRoute({ getParentRoute: () => staffRoute, path: '/feedback', staticData: { crumb: 'Feedback' } }).lazy(() =>
-  import('../areas/staff/feedback/page').then((m) => m.Route),
+// `ask` is what a person searched for on How do I...? before tapping Ask us (issue #598): the form starts as a question with it typed.
+const staffFeedbackRoute = createRoute({
+  getParentRoute: () => staffRoute,
+  path: '/feedback',
+  staticData: { crumb: 'Feedback' },
+  validateSearch: (s: Record<string, unknown>): { ask?: string } => ({ ask: typeof s.ask === 'string' ? s.ask : undefined }),
+}).lazy(() => import('../areas/staff/feedback/page').then((m) => m.Route));
+// How do I...? (issue #598, ADR-095): the help articles, grouped by job and searchable, and one article with its pictures.
+const staffHelpRoute = createRoute({ getParentRoute: () => staffRoute, path: '/help', staticData: { crumb: 'How do I...?' } }).lazy(() =>
+  import('../areas/staff/help/page').then((m) => m.Route),
+);
+const staffHelpArticleRoute = createRoute({ getParentRoute: () => staffRoute, path: '/help/$articleId', staticData: { crumb: 'Answer' } }).lazy(() =>
+  import('../areas/staff/help/page').then((m) => m.ArticleRoute),
 );
 
 // Staff users: who works in the business, invite and roles (issue #319).
@@ -498,7 +509,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffHelpRoute, staffHelpArticleRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

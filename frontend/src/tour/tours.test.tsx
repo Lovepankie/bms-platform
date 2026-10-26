@@ -48,6 +48,7 @@ import { Setup } from '../areas/staff/setup';
 import { BranchesScreen } from '../areas/staff/branches/page';
 import { NotificationsPage } from '../areas/staff/notifications/page';
 import { FeedbackPage } from '../areas/staff/feedback/page';
+import { ArticleView, HowDoIPage } from '../areas/staff/help/page';
 import { ReferralsPage } from '../areas/staff/referrals/page';
 import { BusinessNotificationsScreen } from '../areas/staff/notifications/business';
 import { BillingScreen } from '../areas/staff/billing/page';
@@ -100,6 +101,10 @@ function screen(path: string | undefined): ReactElement {
       return <NotificationsPage />;
     case '/staff/feedback':
       return <FeedbackPage />;
+    case '/staff/help':
+      return <HowDoIPage />;
+    case '/staff/help/$articleId':
+      return <ArticleView articleId="switch-branch" />;
     case '/staff/money':
       return <MoneyPage />;
     case '/staff/more':
@@ -321,6 +326,8 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-branches': [ADMIN],
   'page-notifications': [ADMIN, CASHIER],
   'page-feedback': [ADMIN, CASHIER],
+  'page-help': [ADMIN, CASHIER],
+  'page-help-article': [ADMIN, CASHIER],
   'page-referrals': [REFERRER],
   'page-two-step': [ADMIN],
   'page-approval-rules': [ADMIN],

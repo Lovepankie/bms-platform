@@ -29,6 +29,7 @@ import { useSells } from './retail/nav';
 import { StaffTabBar } from './tabs';
 import { canSeeProfit } from './retail/permissions';
 import { rememberPage } from './feedback/feedback-state';
+import { HowDoILink } from './help/how-do-i';
 import { TwoStepNotices } from './two-step/notices';
 import { OwnTwoStep } from './two-step/own';
 import { mustSetUp } from './two-step/state';
@@ -177,7 +178,10 @@ function StaffLayout() {
               <TwoStepNotices me={profile} pathname={pathname} />
               {!mock && <BillingBanner canOpenBilling={(profile.permissions ?? []).includes('core.billing.read')} />}
               {!mock && <PlanNotice />}
-              <StaffBreadcrumbs />
+              <div className="crumb-row">
+                <StaffBreadcrumbs />
+                {!mustSetUp(profile) && <HowDoILink pathname={pathname} me={profile} />}
+              </div>
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
               <SignOutWarning ask={askSignOut} onSignOut={() => void signOut(true)} />
             </div>

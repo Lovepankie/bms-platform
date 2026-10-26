@@ -1,0 +1,2 @@
+# The help articles are hashed byte for byte into their revision (ADR-095): LF on every checkout, so every platform agrees.
+frontend/src/help/articles/*.md text eol=lf

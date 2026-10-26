@@ -1,0 +1,21 @@
+---
+title: How do I count stock?
+job: count-stock
+order: 10
+module: retail
+needs: retail.stocktake.commit, retail.stock.read
+screens: /staff/retail/stocktake
+words: count, counting, shelf, check stock, missing, stock check, difference
+---
+Count what is on the shelf and enter it. BMS shows the difference before anything changes.
+
+1. Choose the branch you are counting with **Switch branch**, then open **Count stock** under Stock.
+   ![Open Count stock](count-stock-1.webp)
+2. Find each item by typing part of its name, or scan it, or work down the list **Not counted yet**. Type how many you counted, or tap 0 for an item that is gone.
+   ![Type how many you counted](count-stock-2.webp)
+3. Tap **Review the difference**. You see each item where the count and the records differ.
+   ![Review the difference](count-stock-3.webp)
+4. When it looks right, tap **Commit the count**. Nothing changes until you do.
+   ![Commit the count](count-stock-4.webp)
+
+> A count far from what the records hold is asked about first: tap **Confirm** if it is right, or **Change** to fix it.

@@ -296,7 +296,7 @@ export function TourProvider({ me, saveProgress = true, children }: { me: Me; sa
 }
 
 /**
- * Help: replay the first-run tour, or a tour of this page, at any time. A native dialog (a bottom sheet on a phone) sits in
+ * Help: replay the first-run tour, or a tour of this page, at any time, and in the staff area open How do I...? (issue #598). A native dialog (a bottom sheet on a phone) sits in
  * the top layer, so no clipping can hide it, and the browser keeps focus inside it and closes it on Escape. useHelpSheet hands
  * back the sheet and a way to open it, so the staff top bar's menu (issue #526) can offer Help as one of its items while the
  * sheet itself stays mounted outside the menu, which hides its items when it closes.
@@ -327,6 +327,11 @@ export function useHelpSheet(feedback: boolean): { open: () => void; sheet: Reac
           </button>
         )}
         {!mainTour && !pageTour && <p className="muted">There is no tour for this page yet.</p>}
+        {feedback && (
+          <Link to="/staff/help" className="btn" data-tour="help-how-do-i" onClick={() => dialog.current?.close()}>
+            How do I...?
+          </Link>
+        )}
         {feedback && (
           <Link to="/staff/feedback" className="btn" onClick={() => dialog.current?.close()}>
             Send feedback
