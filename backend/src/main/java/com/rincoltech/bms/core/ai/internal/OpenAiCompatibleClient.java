@@ -56,6 +56,9 @@ final class OpenAiCompatibleClient implements LlmClient {
     private final URI endpoint;
     private final String apiKey;
     private final String model;
+    /** Sent as {@code reasoning_effort} when not null (Ask BMS's Gemini, #601); other providers never get it. */
+    private final String reasoningEffort;
+
     private final Duration budget;
     private final HttpClient http;
     private final ObjectMapper mapper;
@@ -72,9 +75,23 @@ final class OpenAiCompatibleClient implements LlmClient {
             LongSupplier nanoClock,
             Sleeper sleeper,
             DoubleSupplier jitter) {
+        this(endpoint, apiKey, model, null, budget, mapper, nanoClock, sleeper, jitter);
+    }
+
+    OpenAiCompatibleClient(
+            URI endpoint,
+            String apiKey,
+            String model,
+            String reasoningEffort,
+            Duration budget,
+            ObjectMapper mapper,
+            LongSupplier nanoClock,
+            Sleeper sleeper,
+            DoubleSupplier jitter) {
         this.endpoint = endpoint;
         this.apiKey = apiKey;
         this.model = model;
+        this.reasoningEffort = reasoningEffort;
         this.budget = budget;
         this.mapper = mapper;
         this.nanoClock = nanoClock;
@@ -243,6 +260,9 @@ final class OpenAiCompatibleClient implements LlmClient {
         json.put("max_tokens", request.maxTokens());
         json.put("temperature", 0);
         json.put("stream", false);
+        if (reasoningEffort != null) {
+            json.put("reasoning_effort", reasoningEffort);
+        }
         if (request.json()) {
             json.put("response_format", Map.of("type", "json_object"));
         }

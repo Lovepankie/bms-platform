@@ -215,7 +215,8 @@ services:
       # a provider without a key is skipped, and with none the matching help articles are shown. Never Claude.
       BMS_HELP_ASK_TENANTS: ${BMS_HELP_ASK_TENANTS:-}
       BMS_HELP_ASK_GEMINI_API_KEY: ${BMS_HELP_ASK_GEMINI_API_KEY:-}
-      BMS_HELP_ASK_GEMINI_MODEL: ${BMS_HELP_ASK_GEMINI_MODEL:-gemini-2.5-flash-lite}
+      BMS_HELP_ASK_GEMINI_MODEL: ${BMS_HELP_ASK_GEMINI_MODEL:-gemini-3.5-flash-lite}
+      BMS_HELP_ASK_GEMINI_REASONING: ${BMS_HELP_ASK_GEMINI_REASONING:-minimal}
       BMS_HELP_ASK_GROQ_API_KEY: ${BMS_HELP_ASK_GROQ_API_KEY:-}
       BMS_HELP_ASK_GROQ_MODEL: ${BMS_HELP_ASK_GROQ_MODEL:-llama-3.1-8b-instant}
       BMS_HELP_ASK_DEEPSEEK_API_KEY: ${BMS_HELP_ASK_DEEPSEEK_API_KEY:-}

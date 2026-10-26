@@ -28,14 +28,21 @@ final class OpenAiCompatibleFactory implements LlmClientFactory {
     }
 
     @Override
-    public Optional<LlmClient> openAiCompatible(String baseUrl, String apiKey, String model, Duration budget) {
+    public Optional<LlmClient> openAiCompatible(
+            String baseUrl, String apiKey, String model, Duration budget, String reasoningEffort) {
         return blank(baseUrl) || blank(apiKey) || blank(model)
                 ? Optional.empty()
-                : build(baseUrl, apiKey, model, budget, devOrTest, mapper);
+                : build(baseUrl, apiKey, model, budget, reasoningEffort, devOrTest, mapper);
     }
 
     static Optional<LlmClient> build(
-            String baseUrl, String apiKey, String model, Duration budget, boolean devOrTest, ObjectMapper mapper) {
+            String baseUrl,
+            String apiKey,
+            String model,
+            Duration budget,
+            String reasoningEffort,
+            boolean devOrTest,
+            ObjectMapper mapper) {
         if (!AiConfiguration.wellFormedKey(apiKey)) {
             log.warn("AI provider off: the API key has whitespace or control characters (value not logged)");
             return Optional.empty();
@@ -48,6 +55,7 @@ final class OpenAiCompatibleFactory implements LlmClientFactory {
                 OpenAiCompatibleClient.endpointOf(baseUrl),
                 apiKey,
                 model.strip(),
+                blank(reasoningEffort) ? null : reasoningEffort.strip(),
                 budget,
                 mapper,
                 System::nanoTime,

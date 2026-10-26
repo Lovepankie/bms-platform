@@ -86,9 +86,9 @@ class AskBmsIT extends IntegrationTest {
         @Bean
         @Primary
         AskProviders testProviders() {
-            AskProperties.Provider free = new AskProperties.Provider(null, null, null, null, null);
+            AskProperties.Provider free = new AskProperties.Provider(null, null, null, null, null, null);
             // DeepSeek is paid: one micro-unit a token, so its spend shows in the log.
-            AskProperties.Provider paid = new AskProperties.Provider(null, null, null, 1_000_000L, 1_000_000L);
+            AskProperties.Provider paid = new AskProperties.Provider(null, null, null, 1_000_000L, 1_000_000L, null);
             return new AskProviders(List.of(
                     new AskProviders.Provider("gemini", GEMINI, free),
                     new AskProviders.Provider("groq", GROQ, free),

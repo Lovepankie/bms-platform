@@ -174,6 +174,23 @@ class OpenAiCompatibleClientTest {
         assertThat(MAPPER.readTree(seen.get(1).body()).get("model").asString()).isEqualTo("model-two");
     }
 
+    /** Ask BMS's Gemini is sent a reasoning effort (#601); a client built without one sends none, as before. */
+    @Test
+    void aReasoningEffortIsSentOnlyWhenGiven() throws Exception {
+        script.add(new Reply(200, OK_BODY));
+        script.add(new Reply(200, OK_BODY));
+        LlmClient gemini = OpenAiCompatibleFactory.build(
+                        baseUrl(), KEY, "gemini-3.5-flash-lite", Duration.ofSeconds(30), " minimal ", true, MAPPER)
+                .orElseThrow();
+        gemini.complete(request());
+        client("m", Duration.ofSeconds(30)).complete(request());
+        JsonNode sent = MAPPER.readTree(seen.get(0).body());
+        assertThat(sent.get("reasoning_effort").asString()).isEqualTo("minimal");
+        assertThat(sent.get("model").asString()).isEqualTo("gemini-3.5-flash-lite");
+        assertThat(sent.has("extra_body")).isFalse();
+        assertThat(MAPPER.readTree(seen.get(1).body()).has("reasoning_effort")).isFalse();
+    }
+
     @Test
     void aPlainTextRequestOmitsTheResponseFormat() throws Exception {
         script.add(new Reply(200, OK_BODY));

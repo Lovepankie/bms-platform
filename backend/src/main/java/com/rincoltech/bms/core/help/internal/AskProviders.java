@@ -92,8 +92,10 @@ class AskProviders {
                 log.warn("Ask BMS provider deepseek has a key but no price, so no spend cap could hold: skipped");
                 continue;
             }
+            // Only Gemini gets a reasoning effort (#601); Groq and DeepSeek requests stay as they were.
+            String reasoning = "gemini".equals(name) ? config.reasoning() : null;
             Optional<LlmClient> client =
-                    factory.openAiCompatible(config.baseUrl(), config.apiKey(), config.model(), budget);
+                    factory.openAiCompatible(config.baseUrl(), config.apiKey(), config.model(), budget, reasoning);
             client.ifPresent(c -> chain.add(new Provider(name, c, config)));
         }
         log.info(

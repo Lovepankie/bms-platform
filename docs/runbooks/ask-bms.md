@@ -26,7 +26,8 @@ database, and `NeverClaudeTest` fails the build if an Anthropic endpoint, SDK or
 |---|---|---|
 | `BMS_HELP_ASK_TENANTS` | empty | Turn on the demo businesses first (owner decision D52), then others one at a time |
 | `BMS_HELP_ASK_GEMINI_API_KEY` | empty | Google AI Studio key on the free tier. Secret |
-| `BMS_HELP_ASK_GEMINI_MODEL` | `gemini-2.5-flash-lite` | The cheapest Flash or Flash-Lite model the free tier offers; a swap is this name only |
+| `BMS_HELP_ASK_GEMINI_MODEL` | `gemini-3.5-flash-lite` | The cheapest Flash or Flash-Lite model the free tier offers to new keys (`gemini-2.5-flash-lite` is refused for them, #601); a swap is this name only |
+| `BMS_HELP_ASK_GEMINI_REASONING` | `minimal` | Gemini only: the `reasoning_effort` sent, `minimal`, `low`, `medium` or `high` (anything else stops startup). Gemini 3 models cannot turn thinking off and the OpenAI-compatible endpoint refuses `none` with 400, so `minimal`, the lowest level Google documents, is sent to keep a grounded answer inside the 10 second budget (#601). Empty means the default. Groq and DeepSeek are never sent it |
 | `BMS_HELP_ASK_GROQ_API_KEY` | empty | Groq key on the free tier. Secret |
 | `BMS_HELP_ASK_GROQ_MODEL` | `llama-3.1-8b-instant` | A small free-tier model |
 | `BMS_HELP_ASK_DEEPSEEK_API_KEY` | empty | Paid, last resort. Secret |

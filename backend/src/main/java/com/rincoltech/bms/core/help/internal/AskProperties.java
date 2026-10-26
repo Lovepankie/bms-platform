@@ -43,15 +43,28 @@ record AskProperties(
     /**
      * @param apiKey from {@code BMS_HELP_ASK_<NAME>_API_KEY}
      * @param priceInputMicroPerMillion micro-units of the cost currency per million input tokens (0 on a free tier)
+     * @param reasoning {@code BMS_HELP_ASK_GEMINI_REASONING}, Gemini only: the {@code reasoning_effort} sent, one of
+     *     {@link #REASONING}; blank or unset is {@link #GEMINI_REASONING}, since Gemini 3 cannot turn thinking off and
+     *     refuses {@code none} with 400 (#601). Only Gemini's is sent
      */
     record Provider(
             String baseUrl,
             String apiKey,
             String model,
             Long priceInputMicroPerMillion,
-            Long priceOutputMicroPerMillion) {
+            Long priceOutputMicroPerMillion,
+            String reasoning) {
+
+        /** The values Google's OpenAI-compatible endpoint maps to a Gemini 3 thinking level. */
+        static final Set<String> REASONING = Set.of("minimal", "low", "medium", "high");
+
+        /** The lowest level Google documents for Gemini 3 Flash-Lite, so a grounded answer fits the budget. */
+        static final String GEMINI_REASONING = "minimal";
 
         Provider {
+            reasoning = reasoning == null || reasoning.isBlank()
+                    ? null
+                    : reasoning.strip().toLowerCase(Locale.ROOT);
             priceInputMicroPerMillion = priceInputMicroPerMillion == null ? 0L : notNegative(priceInputMicroPerMillion);
             priceOutputMicroPerMillion =
                     priceOutputMicroPerMillion == null ? 0L : notNegative(priceOutputMicroPerMillion);
@@ -85,9 +98,20 @@ record AskProperties(
         }
         deepseekMonthlyCostMicro =
                 deepseekMonthlyCostMicro == null ? 5_000_000L : notNegative(deepseekMonthlyCostMicro);
-        gemini = gemini == null ? new Provider(null, null, null, null, null) : gemini;
-        groq = groq == null ? new Provider(null, null, null, null, null) : groq;
-        deepseek = deepseek == null ? new Provider(null, null, null, null, null) : deepseek;
+        gemini = gemini == null ? new Provider(null, null, null, null, null, null) : gemini;
+        groq = groq == null ? new Provider(null, null, null, null, null, null) : groq;
+        deepseek = deepseek == null ? new Provider(null, null, null, null, null, null) : deepseek;
+        String reasoning = gemini.reasoning() == null ? Provider.GEMINI_REASONING : gemini.reasoning();
+        if (!Provider.REASONING.contains(reasoning)) {
+            throw new IllegalArgumentException("BMS_HELP_ASK_GEMINI_REASONING must be minimal, low, medium or high");
+        }
+        gemini = new Provider(
+                gemini.baseUrl(),
+                gemini.apiKey(),
+                gemini.model(),
+                gemini.priceInputMicroPerMillion(),
+                gemini.priceOutputMicroPerMillion(),
+                reasoning);
     }
 
     private static long notNegative(long value) {

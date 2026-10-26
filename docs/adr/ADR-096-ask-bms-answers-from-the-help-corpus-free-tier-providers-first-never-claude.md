@@ -39,7 +39,8 @@ can replace the retrieval step later without changing the rest.
    up. A name typed in lower case is not found, which is why the text of a question is never stored (only the SHA-256 of the
    scrubbed, normalised question) and why the prompt holds nothing but the scrubbed question and up to three articles.
 4. **Provider chain, cheapest first; never Claude.** Gemini (a Flash or Flash-Lite model on the free tier, through Google's
-   OpenAI-compatible endpoint), then Groq (a small free-tier model), then DeepSeek (its cheapest chat model, paid, last resort).
+   OpenAI-compatible endpoint; `gemini-3.5-flash-lite` by default, sent `reasoning_effort` `minimal` so its thinking fits
+   the budget, #601), then Groq (a small free-tier model), then DeepSeek (its cheapest chat model, paid, last resort).
    All three go through the gateway's one OpenAI-compatible adapter (`core.ai.LlmClientFactory`): https only, no redirects,
    retries on 429 and 5xx inside a budget (10 seconds per provider by default), temperature 0, JSON answers, and no provider
    text kept. Claude is excluded three ways: only the names `gemini`, `groq` and `deepseek` exist (the code, and a CHECK in

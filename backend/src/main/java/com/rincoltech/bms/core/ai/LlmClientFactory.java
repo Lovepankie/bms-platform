@@ -15,5 +15,14 @@ public interface LlmClientFactory {
      * @return the adapter, or empty when the base URL, key or model is blank or of the wrong shape (nothing is logged
      *     but the fact; never the key or the URL)
      */
-    Optional<LlmClient> openAiCompatible(String baseUrl, String apiKey, String model, Duration budget);
+    default Optional<LlmClient> openAiCompatible(String baseUrl, String apiKey, String model, Duration budget) {
+        return openAiCompatible(baseUrl, apiKey, model, budget, null);
+    }
+
+    /**
+     * The same adapter, sending {@code reasoning_effort} on every request when {@code reasoningEffort} is not blank (Ask
+     * BMS's Gemini, #601); the caller decides which values its provider accepts.
+     */
+    Optional<LlmClient> openAiCompatible(
+            String baseUrl, String apiKey, String model, Duration budget, String reasoningEffort);
 }

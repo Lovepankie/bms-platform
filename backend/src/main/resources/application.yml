@@ -249,7 +249,8 @@ bms:
       gemini:
         base-url: ${BMS_HELP_ASK_GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
         api-key: ${BMS_HELP_ASK_GEMINI_API_KEY:}
-        model: ${BMS_HELP_ASK_GEMINI_MODEL:gemini-2.5-flash-lite}
+        model: ${BMS_HELP_ASK_GEMINI_MODEL:gemini-3.5-flash-lite}
+        reasoning: ${BMS_HELP_ASK_GEMINI_REASONING:minimal}
         price-input-micro-per-million: ${BMS_HELP_ASK_GEMINI_PRICE_INPUT_MICRO_PER_MILLION:0}
         price-output-micro-per-million: ${BMS_HELP_ASK_GEMINI_PRICE_OUTPUT_MICRO_PER_MILLION:0}
       groq:

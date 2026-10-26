@@ -58,7 +58,13 @@ class AiConfiguration {
             return new UnavailableLlmClient();
         }
         return OpenAiCompatibleFactory.build(
-                        p.baseUrl(), p.apiKey(), p.model(), Duration.ofSeconds(p.budgetSeconds()), devOrTest, mapper)
+                        p.baseUrl(),
+                        p.apiKey(),
+                        p.model(),
+                        Duration.ofSeconds(p.budgetSeconds()),
+                        null,
+                        devOrTest,
+                        mapper)
                 .orElseGet(UnavailableLlmClient::new);
     }
 
