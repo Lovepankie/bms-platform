@@ -6387,6 +6387,10 @@
             },
             "type" : "array"
           },
+          "tenant_currency" : {
+            "description" : "The business's currency (ISO 4217): forms type and show money in it before the record they make carries one (issue #289)",
+            "type" : "string"
+          },
           "tenant_timezone" : {
             "description" : "The business's time zone, in which mfa_due_by is a day's end (ADR-046)",
             "type" : "string"

@@ -90,6 +90,14 @@ describe('request bodies', () => {
     const m = member();
     expect(updateBody(m, { ...draftOf(m), gender: '', maritalStatus: '' })).toEqual({ gender: 'unspecified', marital_status: 'unknown' });
   });
+  it('types income in the business currency (issue #289): cents for KES, and the edit reads back the member\'s own currency', () => {
+    const body = createBody({ ...blankMember('b1'), fullName: 'T', phone: '0700000001', idType: 'none', monthlyIncome: '1,250.50' }, 'KES');
+    expect(body.monthly_income_minor).toBe(125050);
+    expect(memberProblems({ ...blankMember('b1'), fullName: 'T', phone: '0700000001', idType: 'none', monthlyIncome: '1.505' }, '2026-10-25', false, undefined, 'KES').monthly_income_minor).toMatch(/in KES/);
+    const m = member({ currency: 'KES', monthly_income_minor: 125050 });
+    expect(draftOf(m).monthlyIncome).toBe('1,250.50');
+    expect(updateBody(m, { ...draftOf(m), monthlyIncome: '1,300' })).toEqual({ monthly_income_minor: 130000 });
+  });
   it('shows an income of 0 as 0 on edit, and an unspecified gender as not said', () => {
     expect(draftOf(member()).monthlyIncome).toBe('0');
     expect(draftOf(member({ gender: 'unspecified', marital_status: 'unknown' })).gender).toBe('');

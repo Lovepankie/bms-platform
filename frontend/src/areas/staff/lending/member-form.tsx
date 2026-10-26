@@ -10,7 +10,8 @@ import { newIdempotencyKey } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
 import { FieldsNeededNote } from '../../../app/ui/Field';
-import { localDate } from './loan-state';
+import { currencyOf, localDate, tenantCurrency } from './loan-state';
+import { exponentOf } from '../../../components/money';
 import { MembersGate } from './member-ui';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
 import { mayCreateMember, mayEditMember, memberBranches } from './member-permissions';
@@ -116,7 +117,9 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
   const idFront = usePhotoQueue();
   const idBack = usePhotoQueue();
   const original = useMemo(() => (member ? draftOf(member) : undefined), [member]);
-  const problems = memberProblems(draft, localDate(), editing, original);
+  // Income is typed in the member's currency, or the business's for a new member (issue #289).
+  const currency = member ? currencyOf(member.currency) : tenantCurrency(me);
+  const problems = memberProblems(draft, localDate(), editing, original, currency);
   const form = useFormErrors(problems, 'mf');
   const mayCheck = !editing || (me.permissions ?? []).includes('lending.members.create');
   const found = useDuplicates(draft, member?.id, mayCheck);
@@ -169,7 +172,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
         finish(await api.update(member.id ?? '', member.version ?? 0, body));
         return;
       }
-      const created = await api.create(createBody(draft), idempotencyKey);
+      const created = await api.create(createBody(draft, currency), idempotencyKey);
       setSaved(created);
       if (idFront.waiting + idBack.waiting === 0 || (await sendPhotos(created.id ?? ''))) finish(created);
     } catch (raw) {
@@ -244,7 +247,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
         <SelectField name="gender" label="Gender" form={form} value={draft.gender} onChange={(v) => set('gender', v)} options={GENDERS} />
         <SelectField name="marital_status" label="Marital status" form={form} value={draft.maritalStatus} onChange={(v) => set('maritalStatus', v)} options={MARITAL} />
         <TextField name="occupation" label="Work or business" form={form} value={draft.occupation} onChange={(v) => set('occupation', v)} maxLength={120} />
-        <TextField name="monthly_income_minor" label="Usual income a month (UGX)" form={form} inputMode="numeric" value={draft.monthlyIncome} onChange={(v) => set('monthlyIncome', v)}
+        <TextField name="monthly_income_minor" label={`Usual income a month (${currency})`} form={form} inputMode={exponentOf(currency) ? 'decimal' : 'numeric'} value={draft.monthlyIncome} onChange={(v) => set('monthlyIncome', v)}
           hint={editing && original?.monthlyIncome !== '' ? 'A saved income can be changed but not removed. Type 0 for none.' : undefined} />
       </Group>
       <Group title="Where the member lives">

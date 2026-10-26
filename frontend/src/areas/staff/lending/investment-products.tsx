@@ -6,8 +6,7 @@ import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { PRODUCTS_MANAGE, may, parsePercent, payoutWords, percent } from './investment-state';
 import { InvestmentsGate } from './investments';
-import { formatMinor } from '../../../components/money';
-import { currencyOf, money, parseAmount, words } from './loan-state';
+import { amountText, money, parseAmount, words } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Investment products setup (FR-INV-01, FR-INV-08): the list for everyone who reads investments,
@@ -46,8 +45,6 @@ export const EMPTY: ProductDraft = {
   penalty: '0',
 };
 
-/** Minor units as a person would type them back: "1,500,000" for UGX, no currency code. */
-const amountText = (minor: number, currency: string | undefined) => formatMinor(minor, currencyOf(currency)).replace(/^\S+ /, '');
 
 export function draftOf(p: InvestmentProduct): ProductDraft {
   return {

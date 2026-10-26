@@ -270,6 +270,16 @@ const lendingLoanRoute = createRoute({ getParentRoute: () => staffLendingRoute, 
   import('../areas/staff/lending/loan').then((m) => m.Route),
 );
 const lendingScreen = <P extends string>(path: P, crumb: string) => createRoute({ getParentRoute: () => staffLendingRoute, path, staticData: { crumb } });
+const applicationNewRoute = createRoute({
+  getParentRoute: () => staffLendingRoute,
+  path: '/applications/new',
+  staticData: { crumb: 'New application' },
+  // The member to start from, as an id (never a phone or an ID number).
+  validateSearch: (s: Record<string, unknown>): { memberId?: string } => ({ memberId: typeof s.memberId === 'string' ? s.memberId : undefined }),
+}).lazy(() => import('../areas/staff/lending/application-form').then((m) => m.NewRoute));
+const applicationEditRoute = lendingScreen('/loans/$loanId/edit', 'Change application').lazy(() => import('../areas/staff/lending/application-form').then((m) => m.EditRoute));
+const appraiseRoute = lendingScreen('/loans/$loanId/appraise', 'Appraise').lazy(() => import('../areas/staff/lending/appraise').then((m) => m.Route));
+const decideRoute = lendingScreen('/loans/$loanId/decide', 'Decision').lazy(() => import('../areas/staff/lending/decide').then((m) => m.Route));
 const savingsRoute = lendingScreen('/savings', 'Savings').lazy(() => import('../areas/staff/lending/savings').then((m) => m.Route));
 const savingsProductsRoute = lendingScreen('/savings/products', 'Savings products').lazy(() => import('../areas/staff/lending/savings-products').then((m) => m.Route));
 const savingsAccountRoute = lendingScreen('/savings/accounts/$accountId', 'Account').lazy(() => import('../areas/staff/lending/savings-account').then((m) => m.Route));
@@ -461,6 +471,10 @@ export const router = createRouter({
       ]), staffLendingRoute.addChildren([
         lendingLoansRoute,
         lendingLoanRoute,
+        applicationNewRoute,
+        applicationEditRoute,
+        appraiseRoute,
+        decideRoute,
         savingsRoute,
         savingsProductsRoute,
         savingsAccountRoute,

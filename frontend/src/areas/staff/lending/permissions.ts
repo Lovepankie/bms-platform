@@ -1,4 +1,5 @@
 import type { Me } from '../../../api/client';
+import { holds, MEMBERS_READ } from './member-permissions';
 
 // Which loan actions a session is offered. The API is the authority (it checks the permission
 // and the loan's status on every call); this only decides what the menu and the loan page show,
@@ -65,4 +66,50 @@ export function canReverse(
   if (!mayDo(me, 'reverse') || txn.reversed_by_txn_id) return false;
   if (txn.txn_type === 'recovery') return true;
   return txn.txn_type === 'repayment' && ['active', 'closed'].includes(loanStatus ?? '');
+}
+
+// --- Loan applications (issue #280 slices 3 and 4) -------------------------------------------------------
+// The origination routes of chapter 7 section 7.11.13 and the permission each declares, held in the loan's branch (the
+// server checks `principal.may(permission, loan.branch_id)`). Approving is also refused to whoever sent or appraised the
+// application (FR-APR-03); the decision screen says so instead of hiding the screen.
+
+export const LOANS_CREATE = 'lending.loans.create';
+export const LOANS_APPRAISE = 'lending.loans.appraise';
+export const LOANS_APPROVE = 'lending.loans.approve';
+export const LOANS_CANCEL = 'lending.loans.cancel';
+
+export type ApplicationStep = 'edit' | 'submit' | 'appraise' | 'decide' | 'send_back' | 'cancel';
+
+type Session = Pick<Me, 'permissions' | 'permission_scopes' | 'user_id'> & { modules?: string[] };
+
+/** Start an application: read loans, find the member (the picker searches members) and create, in some branch. */
+export const mayApply = (me: Session): boolean => showLending(me) && holds(me, MEMBERS_READ) && holds(me, LOANS_CREATE);
+
+const STEP_STATUSES: Record<ApplicationStep, string[]> = {
+  edit: ['draft'],
+  submit: ['draft'],
+  appraise: ['submitted', 'appraised'],
+  decide: ['appraised'],
+  send_back: ['submitted', 'appraised'],
+  cancel: ['draft', 'submitted', 'appraised', 'approved'],
+};
+
+const STEP_NEEDS: Record<ApplicationStep, string> = {
+  edit: LOANS_CREATE,
+  submit: LOANS_CREATE,
+  appraise: LOANS_APPRAISE,
+  decide: LOANS_APPROVE,
+  send_back: LOANS_APPROVE,
+  cancel: LOANS_CANCEL,
+};
+
+/** The application steps offered on a loan, in the order the page shows them. */
+export function applicationSteps(me: Session, loan: { status?: string; branch_id?: string; created_by?: string }): ApplicationStep[] {
+  const order: ApplicationStep[] = ['submit', 'edit', 'appraise', 'decide', 'send_back', 'cancel'];
+  return order.filter((s) => {
+    if (!showLending(me) || !STEP_STATUSES[s].includes(loan.status ?? '') || !holds(me, STEP_NEEDS[s], loan.branch_id)) return false;
+    // A loan officer cancels their own draft; a holder of lending.loans.approve in the branch cancels any open application.
+    if (s === 'cancel') return holds(me, LOANS_APPROVE, loan.branch_id) || (loan.status === 'draft' && !!me.user_id && loan.created_by === me.user_id);
+    return true;
+  });
 }

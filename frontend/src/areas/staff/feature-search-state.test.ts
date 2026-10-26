@@ -170,7 +170,7 @@ describe('feature search: the synonym table (issue #551)', () => {
   });
 
   it('opens only real routes: every action, and everything listed with everything on', () => {
-    expect(ACTIONS.map((a) => a.to)).toEqual(['/staff/retail/catalogue/categories', '/staff/users/new', '/staff/lending/members/new']);
+    expect(ACTIONS.map((a) => a.to)).toEqual(['/staff/retail/catalogue/categories', '/staff/users/new', '/staff/lending/members/new', '/staff/lending/applications/new']);
     for (const a of ACTIONS) expect(routes, a.to).toContain(a.to);
     for (const f of featuresFor(everything, { sells: true })) expect(routes, f.to).toContain(f.to);
   });

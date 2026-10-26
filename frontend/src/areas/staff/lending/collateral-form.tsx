@@ -16,6 +16,8 @@ import { MemberPicker } from './member-picker';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { currencyOf, tenantCurrency } from './loan-state';
+import { exponentOf } from '../../../components/money';
 
 // Register or change a collateral item (issue #280, FR-COL-01, FR-COL-05): the member it belongs to (found by searching), the
 // kind, a description, the title, logbook or plate number, who owns it, what it is worth, whether the owner keeps it or we
@@ -26,6 +28,7 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 const ORDER = ['member_id', 'description', 'reference_no', 'owner_name', 'estimated_value_minor', 'storage_location'] as const;
 
 export function CollateralForm({ item: loaded, memberId }: { item?: CollateralItem; memberId?: string }) {
+  const { me } = useStaff();
   const api = useCollateralApi();
   const members = useMembersApi();
   const navigate = useNavigate();
@@ -42,7 +45,9 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
   const [saved, setSaved] = useState<CollateralItem | null>(null);
   const photos = usePhotoQueue();
   const original = useMemo(() => (item ? draftOf(item) : undefined), [item]);
-  const problems = collateralProblems(draft, editing, original);
+  // The value is typed in the item's currency, or the business's for a new item (issue #289).
+  const currency = item ? currencyOf(item.currency) : tenantCurrency(me);
+  const problems = collateralProblems(draft, editing, original, currency);
   const form = useFormErrors(problems, 'cf');
   // A member given in the address (from the member's page) is read once to show the name.
   const given = useQuery({ queryKey: ['members', 'one', memberId], queryFn: () => members.get(memberId ?? ''), enabled: !!memberId && !editing });
@@ -73,7 +78,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
         done(Object.keys(body).length === 0 ? item : await api.update(item.id ?? '', item.version ?? 0, body));
         return;
       }
-      const created = await api.create(createBody(draft), idempotencyKey);
+      const created = await api.create(createBody(draft, currency), idempotencyKey);
       setSaved(created);
       if (photos.waiting === 0) done(created);
       else if ((await photos.sendAll(sender(created.id ?? ''))).failed === 0) done(created);
@@ -125,7 +130,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
       <Group title="Who owns it and what it is worth" tourId="collateral-owner">
         <SelectField name="owner_relationship" label="Who owns it" form={form} value={draft.ownerRelationship} onChange={(v) => setDraft((d) => ({ ...d, ownerRelationship: v, ownerName: v === 'self' ? '' : d.ownerName }))} options={OWNERS} />
         {owned && <TextField name="owner_name" label="Owner's name" form={form} required={draft.ownerRelationship === 'other'} value={draft.ownerName} onChange={(v) => set('ownerName', v)} maxLength={200} />}
-        <TextField name="estimated_value_minor" label="What it is worth (UGX, your estimate)" form={form} inputMode="numeric" value={draft.value} onChange={(v) => set('value', v)}
+        <TextField name="estimated_value_minor" label={`What it is worth (${currency}, your estimate)`} form={form} inputMode={exponentOf(currency) ? 'decimal' : 'numeric'} value={draft.value} onChange={(v) => set('value', v)}
           hint="A valuation can be added later. Until then the loan cover uses this estimate." />
       </Group>
       {!editing && (

@@ -18,6 +18,7 @@ import { kycBadge, kycMissing, kycWords, relationshipWords, showPhone } from './
 import { showInvestments } from './investment-state';
 import { showSavings } from './savings-permissions';
 import { MembersGate } from './member-ui';
+import { LOANS_CREATE, mayApply } from './permissions';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // A member's page (FR-MEM-05, FR-MEM-08, FR-MEM-09, FR-MEM-10): who they are, what is missing before their details can be
@@ -106,7 +107,7 @@ function Relationships({ memberId }: { memberId: string }) {
   );
 }
 
-function MemberLoans({ memberId }: { memberId: string }) {
+function MemberLoans({ memberId, canApply }: { memberId: string; canApply: boolean }) {
   const loans = useQuery({ queryKey: ['lending', 'loans', 'member', memberId], queryFn: () => lending.listLoans({ memberId }) });
   return (
     <section className="rt-card stack" aria-labelledby="loans-title" data-tour="member-loans">
@@ -114,6 +115,7 @@ function MemberLoans({ memberId }: { memberId: string }) {
       {loans.isPending && <p className="loading">Loading loans</p>}
       <Problem error={loans.error} />
       {loans.data && ((loans.data.items ?? []).length === 0 ? <p className="empty-state">No loans yet.</p> : <LoanRows items={loans.data.items ?? []} />)}
+      {canApply && <Link to="/staff/lending/applications/new" search={{ memberId }} className="btn btn-block" data-tour="member-apply">Start a loan application</Link>}
     </section>
   );
 }
@@ -180,7 +182,7 @@ export function MemberView({ member }: { member: MemberRecord }) {
       <NextOfKinSection memberId={id} canChange={edit} />
       <DocumentsSection memberId={id} canAdd={edit} seesIds={seesIds} />
       <Relationships memberId={id} />
-      {(me.permissions ?? []).includes('lending.loans.read') && <MemberLoans memberId={id} />}
+      {(me.permissions ?? []).includes('lending.loans.read') && <MemberLoans memberId={id} canApply={member.status === 'active' && mayApply(me) && holds(me, LOANS_CREATE, member.branch_id)} />}
       {showCollateral(me) && <MemberCollateral memberId={id} canAdd={holds(me, 'lending.collateral.manage', member.branch_id)} />}
       <MemberSmsControl memberId={id} />
     </>

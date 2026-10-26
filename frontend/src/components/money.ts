@@ -4,6 +4,9 @@
 
 const EXPONENTS: Record<string, number> = { UGX: 0, KES: 2, TZS: 2, USD: 2 };
 
+/** The digits after the point a currency has (0 for UGX, 2 for KES), or undefined for one this table does not know. */
+export const exponentOf = (currency: string): number | undefined => EXPONENTS[currency];
+
 export function formatMinor(minor: number, currency: string): string {
   if (!Number.isSafeInteger(minor)) throw new Error('amount must be a safe integer in minor units');
   const exponent = EXPONENTS[currency];

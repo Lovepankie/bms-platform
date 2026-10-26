@@ -13,7 +13,8 @@ import {
 } from './collateral-state';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
 import { FieldsNeededNote } from '../../../app/ui/Field';
-import { localDate, money } from './loan-state';
+import { currencyOf, localDate, money } from './loan-state';
+import { exponentOf } from '../../../components/money';
 import { mayManageCollateral, mayReleaseCollateral } from './member-permissions';
 import { CollateralGate } from './member-ui';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
@@ -96,11 +97,12 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
   const [d, setD] = useState(blankValuation(today));
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const form = useFormErrors(valuationProblems(d, today), 'cv');
+  const unit = currencyOf(currency);
+  const form = useFormErrors(valuationProblems(d, today, unit), 'cv');
   const guard = useSaveGuard<unknown>();
   /** A valuation of the same day and market value already on the item. Rejects when the look itself fails. */
   const lookUp = async (): Promise<unknown | null> => {
-    const body = valuationBody(d);
+    const body = valuationBody(d, unit);
     return (await api.get(id)).valuations?.find((v) => v.valued_on === body.valued_on && v.market_value_minor === body.market_value_minor) ?? null;
   };
   const ORDER = ['valued_on', 'market_value_minor', 'forced_sale_value_minor'];
@@ -110,7 +112,7 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
     setBusy(true);
     setFailure(null);
     try {
-      await api.addValuation(id, valuationBody(d));
+      await api.addValuation(id, valuationBody(d, unit));
       void queryClient.invalidateQueries({ queryKey: ['collateral'] });
       setOpen(false);
       setD(blankValuation(today));
@@ -143,8 +145,8 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
           <Group title="Add a valuation">
             <TextField name="valued_on" label="Date of the valuation" form={form} required type="date" value={d.valuedOn} onChange={(v) => setD((x) => ({ ...x, valuedOn: v }))} max={today} />
             <TextField name="valuer" label="Who valued it" form={form} value={d.valuer} onChange={(v) => setD((x) => ({ ...x, valuer: v }))} maxLength={200} />
-            <TextField name="market_value_minor" label="Market value (UGX)" form={form} required inputMode="numeric" value={d.market} onChange={(v) => setD((x) => ({ ...x, market: v }))} />
-            <TextField name="forced_sale_value_minor" label="Value in a quick sale (UGX, if known)" form={form} inputMode="numeric" value={d.forcedSale} onChange={(v) => setD((x) => ({ ...x, forcedSale: v }))}
+            <TextField name="market_value_minor" label={`Market value (${unit})`} form={form} required inputMode={exponentOf(unit) ? 'decimal' : 'numeric'} value={d.market} onChange={(v) => setD((x) => ({ ...x, market: v }))} />
+            <TextField name="forced_sale_value_minor" label={`Value in a quick sale (${unit}, if known)`} form={form} inputMode={exponentOf(unit) ? 'decimal' : 'numeric'} value={d.forcedSale} onChange={(v) => setD((x) => ({ ...x, forcedSale: v }))}
               hint="When given, this is the value used for loan cover." />
             <TextField name="note" label="Note" form={form} type="textarea" value={d.note} onChange={(v) => setD((x) => ({ ...x, note: v }))} maxLength={1000} />
           </Group>

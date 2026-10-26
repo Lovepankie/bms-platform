@@ -3,6 +3,7 @@ import { showSavings } from '../areas/staff/lending/savings-permissions';
 import { showReceivePayments } from '../areas/staff/payments/state';
 import { MONEY_SCREENS, canUse, showRetail } from '../areas/staff/retail/permissions';
 import type { Tour, TourStep } from './model';
+import { APPLICATION_TOURS } from './tours-applications';
 import { CUSTOMER_TOURS } from './tours-customers';
 import { LENDING_MORE_TOURS } from './tours-lending-more';
 import { OPERATOR_TOURS } from './tours-operator';
@@ -26,6 +27,8 @@ const CATALOGUE = ['retail.catalogue.manage', 'retail.customer.manage'];
 const LOANS = 'lending.loans.read';
 const DISBURSE = 'lending.disbursements.request';
 const REPAY = 'lending.repayments.create';
+const LOANS_CREATE = 'lending.loans.create';
+const MEMBERS_READ = 'lending.members.read';
 
 const held = (me: Me, permission: string) => (me.permissions ?? []).includes(permission);
 const isTenantAdmin = (me: Me) => held(me, SETTINGS);
@@ -796,22 +799,33 @@ export const setupPage: Tour = {
   ],
 };
 
+// Version 2 adds New loan application (issue #280 slice 3).
 export const loansPage: Tour = {
   id: 'page-loans',
-  version: 1,
+  version: 2,
   title: 'This page: loans',
   audience: (me) => held(me, LOANS),
   autoStart: false,
   page: '/staff/lending',
   steps: [
+    {
+      id: 'apply',
+      target: 'loan-apply',
+      module: 'lending',
+      needs: [LOANS_CREATE, MEMBERS_READ],
+      optional: true,
+      title: 'Start an application',
+      body: 'Tap New loan application to start a loan for a member. You can also start one from the member\'s page.',
+    },
     { ...loanSearch, route: undefined },
     { ...loanApplications, route: undefined },
   ],
 };
 
+// Version 2 adds the application steps (issue #280 slices 3 and 4): where it stands and the next step.
 export const loanPage: Tour = {
   id: 'page-loan',
-  version: 1,
+  version: 2,
   title: 'This page: one loan',
   audience: (me) => held(me, LOANS),
   autoStart: false,
@@ -823,6 +837,21 @@ export const loanPage: Tour = {
       optional: true,
       title: 'What you can do',
       body: 'The buttons here change with the loan. You only see what your role allows.',
+    },
+    {
+      id: 'application',
+      target: 'application-status',
+      optional: true,
+      title: 'The application',
+      body: 'Before the money is paid out, this says where the application stands. It may be a draft, waiting for an appraisal, waiting for a decision, approved or declined.',
+    },
+    {
+      id: 'next',
+      target: 'application-next',
+      needsAny: [LOANS_CREATE, 'lending.loans.appraise', 'lending.loans.approve'],
+      optional: true,
+      title: 'The next step',
+      body: 'The button at the bottom takes the application on: send it for appraisal, appraise it, or decide. You only see the step your role allows.',
     },
     {
       id: 'disburse',
@@ -2014,7 +2043,7 @@ const dynamicSegments = (tour: Tour) => (tour.page ?? '').split('/').filter((par
  * segment (`goods-received/new`) must come before its `$` sibling (`goods-received/$receiptId`): the tours with fewer `$` segments go
  * first (the sort is stable, so the order inside each group is the order written). route-coverage.test.ts proves it for every route.
  */
-export const TOURS: readonly Tour[] = [...CORE_TOURS, ...RETAIL_REPORT_TOURS, ...RETAIL_CASH_TOURS, ...RETAIL_PURCHASING_TOURS, ...RETAIL_ORDER_TOURS, ...LENDING_MORE_TOURS, ...PUBLIC_TOURS, ...OPERATOR_TOURS]
+export const TOURS: readonly Tour[] = [...CORE_TOURS, ...RETAIL_REPORT_TOURS, ...RETAIL_CASH_TOURS, ...RETAIL_PURCHASING_TOURS, ...RETAIL_ORDER_TOURS, ...LENDING_MORE_TOURS, ...APPLICATION_TOURS, ...PUBLIC_TOURS, ...OPERATOR_TOURS]
   .map((tour, order) => ({ tour, order }))
   .sort((a, b) => dynamicSegments(a.tour) - dynamicSegments(b.tour) || a.order - b.order)
   .map(({ tour }) => tour);

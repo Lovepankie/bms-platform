@@ -205,6 +205,11 @@ final class UserApi {
 
             @Schema(
                     description =
+                            "The business's currency (ISO 4217): forms type and show money in it before the record they make carries one (issue #289)")
+            String tenantCurrency,
+
+            @Schema(
+                    description =
                             "True when the signed-in user is the Owner of the business (ADR-062): the PWA offers the owner-only actions and the Transfer ownership action only then")
             boolean isOwner) {}
 

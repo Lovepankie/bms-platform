@@ -10484,6 +10484,8 @@ export interface components {
             /** @description True when the tenant has switched report runs on (setting reports_enabled, ADR-038); the PWA shows the Reports tab only then */
             reports_enabled?: boolean;
             roles?: components["schemas"]["RoleAssignment"][];
+            /** @description The business's currency (ISO 4217): forms type and show money in it before the record they make carries one (issue #289) */
+            tenant_currency?: string;
             /** @description The business's time zone, in which mfa_due_by is a day's end (ADR-046) */
             tenant_timezone?: string;
             /** @description Guided tours the user finished or dismissed, by tour id (issue #19) */

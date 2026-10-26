@@ -1,11 +1,11 @@
 import type { CollateralItem, CreateCollateralBody, EventBody, UpdateCollateralBody, ValuationBody } from '../../../api/collateral';
 import type { FieldMessages } from '../../../api/lending-forms';
 import { parseMinor } from '../../../components/money';
-import { words } from './loan-state';
+import { amountRule, amountText, currencyOf, words } from './loan-state';
 
 // Pure rules of the collateral screens (issue #280, FR-COL-01 to FR-COL-05): plain words for the kinds and states, the
-// form's draft and its checks, and the bodies sent. Amounts are whole shillings typed by a person and sent as integer
-// minor units (ADR-004).
+// form's draft and its checks, and the bodies sent. Amounts are typed by a person in the item's currency (a new item's is the
+// business's, issue #289) and sent as integer minor units (ADR-004).
 
 export const TYPES = [
   { value: 'land_title', label: 'Land title' },
@@ -86,20 +86,20 @@ export function draftOf(c: CollateralItem): CollateralDraft {
     referenceNo: c.reference_no ?? '',
     ownerName: c.owner_name ?? '',
     ownerRelationship: c.owner_relationship ?? 'self',
-    value: c.estimated_value_minor != null ? String(c.estimated_value_minor) : '',
+    value: c.estimated_value_minor != null ? amountText(c.estimated_value_minor, c.currency) : '',
     custody: c.custody_status ?? 'pledged',
     storageLocation: c.storage_location ?? '',
   };
 }
 
 /** Per field, in plain words; empty when the draft can be sent. */
-export function collateralProblems(d: CollateralDraft, editing = false, original?: CollateralDraft): FieldMessages {
+export function collateralProblems(d: CollateralDraft, editing = false, original?: CollateralDraft, currency = 'UGX'): FieldMessages {
   const out: FieldMessages = {};
   if (!editing && d.memberId === '') out.member_id = 'Choose the member this collateral belongs to.';
   if (d.description.trim() === '') out.description = 'Describe the item, for example "Plot of land at Test Village, 50 by 100 feet".';
   if (d.type === 'vehicle' && d.referenceNo.trim() === '') out.reference_no = 'A vehicle needs its plate number.';
   if (d.ownerRelationship === 'other' && d.ownerName.trim() === '') out.owner_name = 'Type the name of the person who owns it.';
-  if (d.value.trim() !== '' && parseMinor(d.value, 'UGX') === null) out.estimated_value_minor = 'Type the value in shillings, with no letters or decimals.';
+  if (d.value.trim() !== '' && parseMinor(d.value, currency) === null) out.estimated_value_minor = `Type the value ${amountRule(currency)}.`;
   // An omitted value keeps the saved one, so a saved value cannot be emptied from this form: say so, not nothing.
   if (editing && original && original.value !== '' && d.value.trim() === '') out.estimated_value_minor = 'A saved value cannot be removed. Type the new value instead.';
   if (!editing && d.custody === 'in_custody' && d.storageLocation.trim() === '') out.storage_location = 'Say where the item is kept.';
@@ -108,7 +108,7 @@ export function collateralProblems(d: CollateralDraft, editing = false, original
 
 const blank = (s: string): string | undefined => (s.trim() === '' ? undefined : s.trim());
 
-export function createBody(d: CollateralDraft): CreateCollateralBody {
+export function createBody(d: CollateralDraft, currency = 'UGX'): CreateCollateralBody {
   return {
     member_id: d.memberId,
     collateral_type: d.type,
@@ -116,7 +116,7 @@ export function createBody(d: CollateralDraft): CreateCollateralBody {
     reference_no: blank(d.referenceNo),
     owner_name: d.ownerRelationship === 'self' ? undefined : blank(d.ownerName),
     owner_relationship: d.ownerRelationship,
-    estimated_value_minor: d.value.trim() === '' ? undefined : (parseMinor(d.value, 'UGX') ?? undefined),
+    estimated_value_minor: d.value.trim() === '' ? undefined : (parseMinor(d.value, currency) ?? undefined),
     custody_status: d.custody,
     storage_location: d.custody === 'in_custody' ? blank(d.storageLocation) : undefined,
   };
@@ -130,7 +130,7 @@ export function updateBody(before: CollateralItem, d: CollateralDraft): UpdateCo
   if (d.referenceNo !== was.referenceNo) body.reference_no = d.referenceNo.trim();
   if (d.ownerName !== was.ownerName) body.owner_name = d.ownerName.trim();
   if (d.ownerRelationship !== was.ownerRelationship) body.owner_relationship = d.ownerRelationship;
-  if (d.value !== was.value && d.value.trim() !== '') body.estimated_value_minor = parseMinor(d.value, 'UGX') ?? undefined;
+  if (d.value !== was.value && d.value.trim() !== '') body.estimated_value_minor = parseMinor(d.value, currencyOf(before.currency)) ?? undefined;
   return body;
 }
 
@@ -146,23 +146,23 @@ export interface ValuationDraft {
 
 export const blankValuation = (today: string): ValuationDraft => ({ valuedOn: today, valuer: '', market: '', forcedSale: '', note: '' });
 
-export function valuationProblems(d: ValuationDraft, today: string): FieldMessages {
+export function valuationProblems(d: ValuationDraft, today: string, currency = 'UGX'): FieldMessages {
   const out: FieldMessages = {};
-  const market = d.market.trim() === '' ? null : parseMinor(d.market, 'UGX');
-  const forced = d.forcedSale.trim() === '' ? undefined : parseMinor(d.forcedSale, 'UGX');
-  if (!market || market <= 0) out.market_value_minor = 'Type what the item would sell for in the market, in shillings.';
-  if (forced === null || forced === 0) out.forced_sale_value_minor = 'Type a value in shillings, or leave this empty.';
+  const market = d.market.trim() === '' ? null : parseMinor(d.market, currency);
+  const forced = d.forcedSale.trim() === '' ? undefined : parseMinor(d.forcedSale, currency);
+  if (!market || market <= 0) out.market_value_minor = `Type what the item would sell for in the market, ${amountRule(currency)}.`;
+  if (forced === null || forced === 0) out.forced_sale_value_minor = `Type a value ${amountRule(currency)}, or leave this empty.`;
   else if (forced !== undefined && market && forced > market) out.forced_sale_value_minor = 'A quick sale cannot fetch more than the market value.';
   if (d.valuedOn === '' || d.valuedOn > today) out.valued_on = 'The valuation date cannot be in the future.';
   return out;
 }
 
-export function valuationBody(d: ValuationDraft): ValuationBody {
+export function valuationBody(d: ValuationDraft, currency = 'UGX'): ValuationBody {
   return {
     valued_on: d.valuedOn,
     valuer_name: blank(d.valuer),
-    market_value_minor: parseMinor(d.market, 'UGX') ?? 0,
-    forced_sale_value_minor: d.forcedSale.trim() === '' ? undefined : (parseMinor(d.forcedSale, 'UGX') ?? undefined),
+    market_value_minor: parseMinor(d.market, currency) ?? 0,
+    forced_sale_value_minor: d.forcedSale.trim() === '' ? undefined : (parseMinor(d.forcedSale, currency) ?? undefined),
     note: blank(d.note),
   };
 }

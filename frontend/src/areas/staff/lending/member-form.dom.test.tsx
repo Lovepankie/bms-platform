@@ -33,12 +33,12 @@ const existing: MemberRecord = {
   id_type: 'nin', national_id: 'CM000000000001', kyc_status: 'verified', status: 'active', gender: 'unspecified', marital_status: 'unknown', version: 4,
 };
 
-function mount(node: ReactElement, api: MembersApi) {
+function mount(node: ReactElement, api: MembersApi, who: Me = me) {
   return render(
     <RouterContextProvider router={router}>
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <LendingApiContext.Provider value={{ members: api, collateral: createCollateralMock().api }}>
-          <StaffContext.Provider value={{ me, branch: BRANCH }}>{node}</StaffContext.Provider>
+          <StaffContext.Provider value={{ me: who, branch: BRANCH }}>{node}</StaffContext.Provider>
         </LendingApiContext.Provider>
       </QueryClientProvider>
     </RouterContextProvider>,
@@ -54,6 +54,14 @@ const fill = (nin = 'CM000000000099', phone = '0700000099') => {
 };
 
 describe('the new member form', () => {
+  it('types income in the business currency with the keypad it needs (issue #289): numbers for UGX, a decimal point for KES', () => {
+    mount(<MemberForm />, createMembersMock().api);
+    expect(screen.getByLabelText(/^Usual income a month \(UGX\)/).getAttribute('inputmode')).toBe('numeric');
+    cleanup();
+    mount(<MemberForm />, createMembersMock().api, { ...me, tenant_currency: 'KES' });
+    expect(screen.getByLabelText(/^Usual income a month \(KES\)/).getAttribute('inputmode')).toBe('decimal');
+  });
+
   it('starts with the needed line and marks each required field with a hidden red asterisk and aria-required', () => {
     mount(<MemberForm />, createMembersMock().api);
     expect(document.querySelector('form .fields-needed')?.textContent).toBe('Fields marked * are needed.');

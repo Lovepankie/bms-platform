@@ -84,7 +84,7 @@ number they have already loaded. See `docs/specs/retail-ui-notes.md`, section "B
 
 - Member self-service savings screens (increment 11), USSD and online payments (phase 2), transfers between accounts.
 - A savings receipt or statement PDF (with the loan documents follow-up).
-- Loan origination screens (application, appraisal, decision; issue #280 slices 3 and 4), waivers, restructures and credit refunds. The member and collateral screens are built (section "Members and collateral").
+- Waivers, restructures and credit refunds. The member and collateral screens (section "Members and collateral") and the application, appraisal and decision screens (section "Loan applications") are built.
 - A pending reversal or write-off is not marked on the loan page; the server refuses a second request with
   `approval_already_pending`.
 - Printing or sending a receipt, a member statement, and a mock switch like `VITE_RETAIL_MOCK`.
@@ -118,7 +118,40 @@ Phone-first staff screens on the generated client (`src/api/members.ts`, `src/ap
 - **Tours** (`src/tour/tours-customers.ts`, each a page tour from Help, audience by permission): `page-members`, `page-member-new`, `page-member`, `page-collateral`, `page-collateral-new`, `page-collateral-item`. `tours.test.tsx` renders each anchor.
 - **Shared phone.** The "different person who shares the phone" box shows from the check's candidates or from the server's `duplicate_phone` refusal (an update-only user gets no check, as that route needs `lending.members.create`); on an edit it applies only when the phone was changed. Phone and national ID are sent normalised, not as typed.
 - **Approvals inbox.** A `collateral_release` request shows the item (kind, description, estimate, where it is) instead of its identifier. The list carries no payload and no member name; those are a follow-up.
-- **Deferred:** the tenant's currency instead of UGX on these forms (a follow-up), collateral free-text search on the server (the register filters the loaded items on the device), a member statement, moving a member to another branch (FR-BR-06), HEIC photos, and the loan application, appraisal and decision screens (issue #280 slices 3 and 4).
+- **Currency (issue #289).** A new member's income and a new item's value are typed in the business's currency from `GET /me` (`tenant_currency`); a saved member, item or valuation uses its own `currency`. The label names it and a two-decimal currency takes cents.
+- **Deferred:** collateral free-text search on the server (the register filters the loaded items on the device), a member statement, moving a member to another branch (FR-BR-06), HEIC photos, and the payload summary and member name on the approvals inbox row of a collateral release (issue #289 item 2).
+
+## Loan applications (issue #280, slices 3 and 4)
+
+**Requirements:** FR-ORG-01 to FR-ORG-07, FR-APR-03 · **API:** `docs/sdd/07-api-design.md` section 7.11.13 · backend change: `GET /me` carries `tenant_currency` (issue #289)
+
+Phone-first staff screens on the generated client (`src/api/loan-applications.ts`, the `ApplicationsApi` interface through `LendingApiContext`, so a test stands in for it). An application is a loan in `draft`, `submitted` or `appraised`; `rejected` and `cancelled` end it. The Loans page offers **New loan application** and the member's page **Start a loan application** (an active member, `lending.loans.create` in the member's branch); feature search finds it too.
+
+| Route | Screen | Permissions needed |
+|---|---|---|
+| `/staff/lending/applications/new` | New application: member (found by searching; `?memberId=` from the member's page), product with its interest, amount and term limits, amount, term (empty takes the product's usual), purpose, more about it, when the money is wanted, guarantors (found by searching, amount, how they know the member), the member's collateral that can secure it (held, valued, in the loan's currency) with the amount each secures | `lending.loans.create` and `lending.members.read` |
+| `/staff/lending/loans/$loanId/edit` | Change a draft: everything but the member and product | `lending.loans.create` in the loan's branch, draft only |
+| `/staff/lending/loans/$loanId` | An application: where it stands (a send-back shows its note from the status history), what was asked, approved terms, interest, purpose, guarantors, collateral, the latest appraisal, the provisional schedule; the next step | `lending.loans.read` |
+| `/staff/lending/loans/$loanId/appraise` | Appraise: income a month (empty uses the member's declared income), other payments a month, visit notes; again on an appraised one | `lending.loans.appraise` in the loan's branch |
+| `/staff/lending/loans/$loanId/decide` | Decide: the appraisal, then Approve (amount and term, at most what was asked; a note) or Decline (a reason) | `lending.loans.approve` in the loan's branch |
+
+| Step on the loan page | Permission | Status |
+|---|---|---|
+| Send for appraisal (primary) | `lending.loans.create` | draft |
+| Change the application | `lending.loans.create` | draft |
+| Appraise (primary when submitted), Appraise again | `lending.loans.appraise` | submitted, appraised |
+| Decide (primary) | `lending.loans.approve` | appraised |
+| Send back for changes (a note) | `lending.loans.approve` | submitted, appraised |
+| Cancel the application (a note) | `lending.loans.cancel`, and `lending.loans.approve` in the branch or the user's own draft | draft, submitted, appraised, approved |
+
+- **One primary action.** The step that moves the application on sits in the sticky bar at the bottom of a phone; the others are plain buttons above. Each form has one primary button in the same bar, with Cancel next to it.
+- **Saving in steps.** The form creates the draft, then sets its guarantors, then its collateral (only when they differ from what the loan holds), then submits, each with the version the last answer gave as `If-Match`. A step refused after the draft exists (for example `kyc_not_verified`, `guarantor_required`, `collateral_not_valued`) leaves the draft saved and the page says so with its number; the next press carries on from it. A create whose answer was lost looks for the member's drafts with the same amount from the last ten minutes before it allows another try (`save-guard.tsx`).
+- **Maker-checker (FR-APR-03).** The decision screen shows Approve switched off, with the reason, to the user who sent or appraised the application; Decline and Send back stay. The server and the database refuse it anyway (`self_approval_forbidden`). The server also refuses an approval above the request, below the product minimum, for a blacklisted member, before the details are checked (unless the business allows it), under the product's collateral cover or over the business's loan limit; each refusal is in plain words (`src/api/lending-forms.ts`).
+- **A draft's product version.** A draft keeps the product version it was made on, and the server checks a change and the submit against it (`LoanService.update` and `submit`, `versionOf`). The form does the same: on a draft it reads the product with every version (`GET /lending/loan-products/{id}`) and checks against the loan's `product_version_id`, even when the product has a newer version or is archived.
+- **Money.** Typed and checked in one currency, the one the label names (the loan's on a draft, the product's once chosen, the business's before), with the decimal keypad for a currency with cents, and sent as integer minor units; the product's limits, a pledge above the item's value and an approval above the request are said under the field once the person leaves it.
+- **Appraisal.** The score (of 100), band, what it suggests (Approve, Look closely, Decline: it only advises), the warnings in words (no income, collateral under the product's minimum, another loan behind, a linked party behind, a loan already running, a new member), the parts of the score and the other loans looked at.
+- **Tours** (`src/tour/tours-applications.ts`): `page-application-new`, `page-application-edit`, `page-loan-appraise`, `page-loan-decide`; `page-loans` v2 adds New loan application, `page-loan` v2 adds the application and its next step.
+- **Deferred:** a product picker that explains fees; editing a guarantor's name (the loan carries the member number only); the approvals inbox is not used for the loan decision (the decision route is its own maker-checker).
 
 ## Investments (increment 10, issue #152)
 

@@ -5,6 +5,7 @@ import { lending, type Loan, type LoanSchedule, type LoanTransaction, type Repay
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { APPLICATION_STATUSES, ApplicationPanel } from './application-view';
 import { CollectPanel } from './collect';
 import { DisburseForm, PayoffQuotePanel, RepaymentForm, RepaymentReceipt, ReverseForm, WriteOffForm } from './actions';
 import { LendingGate } from './loans';
@@ -194,8 +195,25 @@ export function TransactionList({ loan, items }: { loan: Loan; items: LoanTransa
   );
 }
 
-/** The loan page body, given the loan; the schedule and transactions load beside it. */
+/**
+ * The loan page body, given the loan. An application (nothing paid out) shows where it stands and its next step (issue #280);
+ * a loan that was paid out shows its balances, schedule and transactions. Two components, so a loan that moves from one to the
+ * other keeps the rules of hooks.
+ */
 export function LoanView({ loan, memberName }: { loan: Loan; memberName?: string }) {
+  if (APPLICATION_STATUSES.includes(loan.status ?? '')) {
+    return (
+      <>
+        <LoanHeader loan={loan} memberName={memberName} />
+        <ApplicationPanel loan={loan} />
+      </>
+    );
+  }
+  return <ServicingView loan={loan} memberName={memberName} />;
+}
+
+/** A loan approved or paid out: its actions, balances, schedule and transactions. */
+function ServicingView({ loan, memberName }: { loan: Loan; memberName?: string }) {
   const { me } = useStaff();
   const loanId = loan.id ?? '';
   const [open, setOpen] = useState<LoanAction | null>(null);
@@ -238,10 +256,12 @@ export function LoanView({ loan, memberName }: { loan: Loan; memberName?: string
         </section>
       )}
       {!open && receipt && <RepaymentReceipt result={receipt} currency={loan.currency} />}
+      {loan.status === 'approved' && <ApplicationPanel loan={loan} />}
       <BalancesCard loan={loan} />
       <h2 id="ln-schedule" data-tour="loan-schedule">Schedule</h2>
       {loan.status === 'approved' ? (
-        <p className="empty-state">The schedule is set when the loan is disbursed.</p>
+        // The application panel above shows the payments it would mean, once; this says where the real schedule comes from.
+        <p className="empty-state">The schedule is set when the loan is disbursed. Until then, see Payments it would mean above.</p>
       ) : (
         <>
           {schedule.isPending && <p className="loading">Loading the schedule</p>}

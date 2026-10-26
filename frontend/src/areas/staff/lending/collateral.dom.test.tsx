@@ -89,6 +89,18 @@ describe('registering collateral', () => {
     expect(document.getElementById('cf-reference-no')?.getAttribute('aria-invalid')).toBe('true');
   });
 
+  it('types the value in the business currency from /me, not in shillings (issue #289)', async () => {
+    const { collateral } = mount(<CollateralForm memberId={holder.id} />, { me: { ...officer(), tenant_currency: 'KES' } });
+    await screen.findByText('Test Holder 01');
+    // A currency with cents gets the keypad that has a decimal point.
+    expect(screen.getByLabelText(/^What it is worth \(KES, your estimate\)/).getAttribute('inputmode')).toBe('decimal');
+    type(/^Describe the item/, 'Test fridge');
+    type(/^What it is worth/, '1,500.25');
+    fireEvent.click(save());
+    await waitFor(() => expect(collateral.calls.create).toHaveLength(1));
+    expect(collateral.calls.create[0]?.body).toMatchObject({ estimated_value_minor: 150025 });
+  });
+
   it('asks where the item is kept when we hold it', () => {
     mount(<CollateralForm memberId={holder.id} />);
     type(/^Who keeps it/, 'in_custody');
@@ -96,6 +108,16 @@ describe('registering collateral', () => {
     type(/^Describe the item/, 'Test logbook');
     fireEvent.click(save());
     expect(document.getElementById('cf-storage-location-error')?.textContent).toMatch(/where the item is kept/i);
+  });
+});
+
+describe('valuing an item in its own currency (issue #289)', () => {
+  it('labels the values in the item\'s currency and gives a KES item the decimal keypad', () => {
+    const kes: CollateralItem = { id: 'c9', branch_id: BRANCH, member_id: holder.id, collateral_type: 'vehicle', description: 'Test van', reference_no: 'KXX 001X', custody_status: 'pledged', currency: 'KES', version: 1 };
+    mount(<CollateralView detail={{ item: kes, valuations: [], events: [] }} collateralId="c9" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add a valuation' }));
+    expect(screen.getByLabelText(/^Market value \(KES\)/).getAttribute('inputmode')).toBe('decimal');
+    expect(screen.getByLabelText(/^Value in a quick sale \(KES, if known\)/).getAttribute('inputmode')).toBe('decimal');
   });
 });
 

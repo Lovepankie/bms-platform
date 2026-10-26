@@ -9,7 +9,7 @@ import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { money, statusBadge, words } from './loan-state';
 import { canBringIn } from './existing-loans-state';
-import { showLending } from './permissions';
+import { mayApply, showLending } from './permissions';
 import { NoAccess } from '../../../app/ui/EmptyState';
 
 // Loans (FR-DIS, FR-REP): find a loan by its number, the member's number, name or phone, filter by
@@ -72,6 +72,9 @@ export function Loans() {
 
   return (
     <LendingGate title="Loans">
+      {mayApply(me) && (
+        <p><Link to="/staff/lending/applications/new" className="btn rt-primary" data-tour="loan-apply">New loan application</Link></p>
+      )}
       {canBringIn(me) && (
         <p><Link to="/staff/lending/existing-loans">Bring in existing loans from a paper register</Link></p>
       )}

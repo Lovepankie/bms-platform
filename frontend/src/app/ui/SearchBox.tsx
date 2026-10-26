@@ -9,7 +9,7 @@ import { highlightParts, searchStatus, type LiveSearch } from './useLiveSearch';
  * the answer to the previous term. `count` is how many rows the answer holds so far (undefined until
  * the first answer), `more` that another page is available.
  */
-export function SearchBox({ id, label, search, fetching, count, more, minLength = 1, hint }: {
+export function SearchBox({ id, label, search, fetching, count, more, minLength = 1, hint, required }: {
   id: string;
   label: string;
   search: LiveSearch;
@@ -18,6 +18,8 @@ export function SearchBox({ id, label, search, fetching, count, more, minLength 
   more?: boolean;
   minLength?: number;
   hint?: string;
+  /** The search picks something the form needs: the label carries the star and the input aria-required. */
+  required?: boolean;
 }) {
   const status = searchStatus({
     term: search.term,
@@ -31,9 +33,9 @@ export function SearchBox({ id, label, search, fetching, count, more, minLength 
   const input = useRef<HTMLInputElement>(null);
   return (
     <div className="sb">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>{label}{required ? <span className="field-star" aria-hidden="true"> *</span> : null}</label>
       <div className="sb-field">
-        <input id={id} ref={input} aria-describedby={`${id}-status`} {...search.inputProps} />
+        <input id={id} ref={input} aria-describedby={`${id}-status`} aria-required={required || undefined} {...search.inputProps} />
         {search.text !== '' && (
           <button type="button" className="sb-clear" aria-label="Clear search" onClick={() => { search.clear(); input.current?.focus(); }}>
             Clear

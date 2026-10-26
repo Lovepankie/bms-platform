@@ -32,6 +32,23 @@ const BY_CODE: Record<string, string> = {
   unknown_member: 'That member is not in your branches. Search for the member again.',
   member_blacklisted: 'This member is blacklisted.',
   plan_limit_reached: 'Your plan has no room for more members. Ask the business owner to change the plan.',
+  member_not_active: 'Only an active member can apply for a loan. Check the member\'s status.',
+  product_archived: 'This loan product no longer takes new applications. Choose another product.',
+  guarantor_required: 'This product needs at least one guarantor. Add one, then send the application again.',
+  guarantor_not_active: 'A guarantor is not an active member. Remove them or choose another guarantor.',
+  guarantor_blacklisted: 'A guarantor is blacklisted. Remove them or choose another guarantor.',
+  collateral_required: 'This product needs collateral. Choose an item, then send the application again.',
+  collateral_not_held: 'An item is no longer held for the member. Remove it from the application.',
+  collateral_not_valued: 'An item has no value yet. Add an estimate or a valuation on the item first.',
+  currency_mismatch: 'An item is valued in another currency than the loan. Remove it from the application.',
+  pledge_exceeds_value: 'The amount secured by an item is more than the item is worth.',
+  kyc_not_verified: 'The member\'s details have not been checked yet. Check them on the member\'s page first.',
+  collateral_below_product_minimum: 'The collateral covers less of the loan than this product needs. Approve a smaller amount, or send it back for more collateral.',
+  max_active_loans_reached: 'The member already has as many loans as the business allows.',
+  above_requested_principal: 'You cannot approve more than was asked for.',
+  above_requested_term: 'You cannot approve a longer time than was asked for.',
+  below_product_minimum: 'This is below what the product allows.',
+  above_product_maximum: 'This is above what the product allows.',
 };
 
 const FIELD_BY_CODE: Record<string, string> = {
@@ -40,6 +57,19 @@ const FIELD_BY_CODE: Record<string, string> = {
   required: 'Fill this in.',
   unknown_branch: 'Choose a branch you work in.',
   unknown_member: 'Search for the member again.',
+  unknown_product: 'Choose the loan product again.',
+  below_product_minimum: 'Below what the product allows.',
+  above_product_maximum: 'Above what the product allows.',
+  above_requested_principal: 'More than was asked for.',
+  above_requested_term: 'Longer than was asked for.',
+  in_the_past: 'Choose today or a later day.',
+  guarantor_is_borrower: 'The member cannot guarantee their own loan.',
+  duplicate: 'Listed twice.',
+  pledge_exceeds_value: 'More than the item is worth.',
+  unknown_collateral: 'This item is not in the member\'s register.',
+  collateral_not_held: 'This item is no longer held for the member.',
+  collateral_not_valued: 'This item has no value yet.',
+  currency_mismatch: 'This item is valued in another currency.',
 };
 
 /** The message for a failed call in plain words. */

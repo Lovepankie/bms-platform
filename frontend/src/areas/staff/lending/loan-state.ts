@@ -1,5 +1,5 @@
 import type { LoanAllocation } from '../../../api/lending';
-import { formatMinor, parseMinor } from '../../../components/money';
+import { exponentOf, formatMinor, parseMinor } from '../../../components/money';
 
 // Pure helpers of the loan screens: money in the loan's currency, today's date, words for codes,
 // and the allocation of a repayment summed by component. Amounts stay integer minor units
@@ -7,6 +7,18 @@ import { formatMinor, parseMinor } from '../../../components/money';
 
 /** The currency of a loan, UGX when the server sent none (the pilot lends in shillings). */
 export const currencyOf = (c: string | undefined): string => c || 'UGX';
+
+/** The business's currency from /me (issue #289): what a form types money in before its record carries a currency. */
+export const tenantCurrency = (me: { tenant_currency?: string }): string => currencyOf(me.tenant_currency);
+
+/** Minor units as a person would type them back: "1,500,000" for UGX, "1,500.00" for KES, no currency code. */
+export const amountText = (minor: number, currency: string | undefined): string => formatMinor(minor, currencyOf(currency)).replace(/^\S+ /, '');
+
+/** How an amount is typed in `currency`, for a message under the input: "in shillings, with no letters or decimals". */
+export function amountRule(currency: string | undefined): string {
+  const c = currencyOf(currency);
+  return c === 'UGX' ? 'in shillings, with no letters or decimals' : `in ${c}, with no letters and at most ${exponentOf(c) ?? 2} digits after the point`;
+}
 
 /** Minor units as money, or a dash-free placeholder when the server sent no figure. */
 export function money(minor: number | undefined, currency: string | undefined): string {

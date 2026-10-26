@@ -1,7 +1,7 @@
 import type { CreateMemberBody, DuplicateCandidate, KinBody, MemberRecord, UpdateMemberBody } from '../../../api/members';
 import type { FieldMessages } from '../../../api/lending-forms';
 import { parseMinor } from '../../../components/money';
-import { words } from './loan-state';
+import { amountRule, amountText, currencyOf, words } from './loan-state';
 
 // Pure rules of the member screens (issue #280, FR-MEM-01 to FR-MEM-10): the phone and national ID
 // normalisation the server applies, the form's draft and its checks in plain words, and the bodies sent.
@@ -117,7 +117,7 @@ export function draftOf(m: MemberRecord): MemberDraft {
     village: m.village ?? '',
     location: m.location ?? '',
     occupation: m.occupation ?? '',
-    monthlyIncome: m.monthly_income_minor != null ? String(m.monthly_income_minor) : '',
+    monthlyIncome: m.monthly_income_minor != null ? amountText(m.monthly_income_minor, m.currency) : '',
     confirmedNotDuplicate: false,
   };
 }
@@ -136,7 +136,7 @@ function realDate(text: string): boolean {
  * What is wrong with the draft, per field and in plain words; empty when it can be sent. `today` is the local
  * calendar date (YYYY-MM-DD), passed in so a test needs no clock. `editing` relaxes nothing but the branch.
  */
-export function memberProblems(d: MemberDraft, today: string, editing = false, original?: MemberDraft): FieldMessages {
+export function memberProblems(d: MemberDraft, today: string, editing = false, original?: MemberDraft, currency = 'UGX'): FieldMessages {
   const out: FieldMessages = {};
   if (!editing && d.branchId === '') out.branch_id = 'Choose the branch the member belongs to.';
   if (d.fullName.trim() === '') out.full_name = 'Type the member\'s full name.';
@@ -158,7 +158,7 @@ export function memberProblems(d: MemberDraft, today: string, editing = false, o
     else if (d.dateOfBirth >= today) out.date_of_birth = 'The date of birth must be before today.';
     else if (d.dateOfBirth < '1900-01-01') out.date_of_birth = 'Check the year.';
   }
-  if (d.monthlyIncome.trim() !== '' && parseMinor(d.monthlyIncome, 'UGX') === null) out.monthly_income_minor = 'Type the amount in shillings, with no letters or decimals.';
+  if (d.monthlyIncome.trim() !== '' && parseMinor(d.monthlyIncome, currency) === null) out.monthly_income_minor = `Type the amount ${amountRule(currency)}.`;
   // The server keeps what it has when a field is left out, so a saved date of birth or income cannot be emptied: say so, not nothing.
   if (original && original.dateOfBirth !== '' && d.dateOfBirth === '') out.date_of_birth = 'A saved date of birth cannot be removed. Correct it instead.';
   if (original && original.monthlyIncome !== '' && d.monthlyIncome.trim() === '') out.monthly_income_minor = 'A saved income cannot be removed. Type 0 if the member has no regular income.';
@@ -174,9 +174,9 @@ export const sendNin = (typed: string): string => normaliseNin(typed) ?? typed.t
 
 const blank = (s: string): string | undefined => (s.trim() === '' ? undefined : s.trim());
 
-/** The registration request. Call only when `memberProblems` is empty. */
-export function createBody(d: MemberDraft): CreateMemberBody {
-  const income = d.monthlyIncome.trim() === '' ? undefined : (parseMinor(d.monthlyIncome, 'UGX') ?? undefined);
+/** The registration request, the income in the business's `currency`. Call only when `memberProblems` is empty. */
+export function createBody(d: MemberDraft, currency = 'UGX'): CreateMemberBody {
+  const income = d.monthlyIncome.trim() === '' ? undefined : (parseMinor(d.monthlyIncome, currency) ?? undefined);
   return {
     branch_id: d.branchId,
     full_name: d.fullName.trim(),
@@ -222,7 +222,7 @@ export function updateBody(before: MemberRecord, d: MemberDraft): UpdateMemberBo
   text('village', 'village');
   text('location', 'location');
   text('occupation', 'occupation');
-  if (d.monthlyIncome !== was.monthlyIncome && d.monthlyIncome.trim() !== '') body.monthly_income_minor = parseMinor(d.monthlyIncome, 'UGX') ?? undefined;
+  if (d.monthlyIncome !== was.monthlyIncome && d.monthlyIncome.trim() !== '') body.monthly_income_minor = parseMinor(d.monthlyIncome, currencyOf(before.currency)) ?? undefined;
   if (d.confirmedNotDuplicate) body.confirmed_not_duplicate = true;
   return body;
 }

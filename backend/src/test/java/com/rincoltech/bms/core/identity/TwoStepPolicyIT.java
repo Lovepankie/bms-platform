@@ -377,6 +377,26 @@ class TwoStepPolicyIT extends IntegrationTest {
                 .isEqualTo(zone.getId());
     }
 
+    /** Issue #289: /me names the business's currency, so a lending form types money in it before the record has one. */
+    @Test
+    void meNamesTheBusinessCurrency() {
+        TestDatabase.Fixture other = TestDatabase.tenant("me-currency", true);
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET currency = 'KES' WHERE id = ?")
+                .param(other.tenantId())
+                .update();
+        Api there = Api.tenant(http, other.slug());
+        String email = Api.email("officer");
+        UUID id = Api.staff(other, email, new Role("loan_officer", null));
+        Session session = there.signIn(id, email, Api.PASSWORD, null);
+
+        assertThat(there.get("/api/v1/me", session.accessToken())
+                        .getBody()
+                        .get("tenant_currency")
+                        .asString())
+                .isEqualTo("KES");
+    }
+
     /** ADR-042 with ADR-046: a link an administrator hands over still works after the deadline, and leads to enrolment. */
     @Test
     void anAdminResetLinkAfterTheDeadlineLeadsToEnrolmentNotToASession() {
