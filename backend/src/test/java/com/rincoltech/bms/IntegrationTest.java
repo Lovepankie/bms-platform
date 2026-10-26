@@ -12,6 +12,10 @@ import org.springframework.test.context.TestPropertySource;
  * connected as bms_app to the shared {@link TestDatabase}. Every subclass shares one cached
  * application context.
  *
+ * <p>The test profile starts no db-scheduler at all (issue #530, {@code application-test.yml}), so no recurring task
+ * ticks in any test context, a new one included ({@code RecurringJobsOffIT} guards it). The switches below also remove
+ * the wall-clock jobs that once raced other tests, for a test that turns the scheduler back on.
+ *
  * <p>No test context schedules the report runner. Every cached context in the test JVM shares one database, one
  * {@code scheduled_tasks} row for {@code core.reporting.report-runner} and one {@code report_runs} table, so a runner
  * ticking in a context that is not the one under test claimed the runs of another context's test (failing them as

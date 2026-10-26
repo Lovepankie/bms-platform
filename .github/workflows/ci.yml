@@ -4,16 +4,12 @@ name: CI
 # pull_request, never pull_request_target: a run for a pull request from a fork gets a read-only
 # token and no secrets, and nothing here pushes anything.
 
+# No paths-ignore (issue #549): branch protection requires the Backend, Frontend and Delivery checks, and a workflow
+# skipped by a path filter never reports them, so a prose-only pull request could never merge. Instead each of those
+# jobs first runs .github/scripts/prose_only.py: when the pull request changes only docs/specs, docs/runbooks, docs/ui
+# or CONTEXT.md, every later step is skipped and the job reports success in seconds on the same runner.
 on:
   pull_request:
-    # Prose-only changes cannot affect a build or a test (only comments in code mention these
-    # folders), so they skip the long jobs on the single Pi runner. docs/sdd, docs/api, docs/adr and
-    # AGENTS.md are NOT listed: tests read them (permission matrix, OpenAPI snapshot, ADR index).
-    paths-ignore:
-      - "docs/specs/**"
-      - "docs/runbooks/**"
-      - "docs/ui/**"
-      - "CONTEXT.md"
   push:
     branches: [main]
   workflow_dispatch:
@@ -35,7 +31,15 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The pull request's merge commit and its first parent, the base, for prose_only.py.
+          fetch-depth: 2
+      - name: Prose only? (issue #549)
+        id: scope
+        working-directory: .
+        run: python3 .github/scripts/prose_only.py
       - uses: actions/setup-java@v6
+        if: steps.scope.outputs.run == 'true'
         with:
           distribution: temurin
           java-version: "25"
@@ -46,6 +50,7 @@ jobs:
       # The lending insights demo seed test runs one heavy report query that takes about 55 s on a
       # hosted runner, close to the 60 s statement timeout; CI alone allows 180 s (production keeps 60 s).
       - name: Build and test
+        if: steps.scope.outputs.run == 'true'
         env:
           BMS_DB_STATEMENT_TIMEOUT: 180s
         run: mvn -B verify
@@ -91,24 +96,38 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The pull request's merge commit and its first parent, the base, for prose_only.py.
+          fetch-depth: 2
+      - name: Prose only? (issue #549)
+        id: scope
+        working-directory: .
+        run: python3 .github/scripts/prose_only.py
       - uses: actions/setup-node@v7
+        if: steps.scope.outputs.run == 'true'
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+        if: steps.scope.outputs.run == 'true'
       - name: Typed API client matches the committed contract
+        if: steps.scope.outputs.run == 'true'
         run: |
           npm run gen:api
           git diff --exit-code -- src/api/schema.d.ts \
             || { echo "::error::src/api/schema.d.ts is stale; run 'make openapi' and commit it."; exit 1; }
       - run: npm run lint
+        if: steps.scope.outputs.run == 'true'
       - run: npm test
+        if: steps.scope.outputs.run == 'true'
       - name: Layout checks in Chromium (the bottom tabs, issue #544)
+        if: steps.scope.outputs.run == 'true'
         run: |
           npx playwright install chromium
           npm run test:layout
       - run: npm run build
+        if: steps.scope.outputs.run == 'true'
 
   delivery:
     name: Workflows, scripts and compose files
@@ -117,7 +136,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The pull request's merge commit and its first parent, the base, for prose_only.py.
+          fetch-depth: 2
+      - name: Prose only? (issue #549)
+        id: scope
+        working-directory: .
+        run: python3 .github/scripts/prose_only.py
+      - name: The prose-only switch behaves as documented
+        # Never guarded: a broken switch that calls every change prose must still turn this check red.
+        run: python3 .github/scripts/test_prose_only.py
       - name: Assert the Docker daemon is rootless
+        if: steps.scope.outputs.run == 'true'
         # ADR-018 finding L9: --user 0:0 below is safe only because container uid 0 maps to the
         # unprivileged runner user under rootless Docker. If this runner's daemon were ever the
         # system one, the same flag would bind-mount the workspace as real root, so fail before any
@@ -130,23 +160,30 @@ jobs:
             exit 1
           fi
       - name: actionlint
+        if: steps.scope.outputs.run == 'true'
         # --user 0:0: under the runner's rootless Docker, container root is the unprivileged runner
         # user on the host, the only identity that can read the workspace (ADR-018).
         run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
       - name: shellcheck
+        if: steps.scope.outputs.run == 'true'
         run: docker run --rm --user 0:0 -v "$PWD:/repo" -w /repo koalaman/shellcheck:v0.10.0 -x deploy/*.sh deploy/tests/*.sh deploy/postgres/initdb/*.sh
       - name: Host script tests
+        if: steps.scope.outputs.run == 'true'
         run: bash deploy/tests/monitor-test.sh
       - name: Staging image clean-up and unit check
+        if: steps.scope.outputs.run == 'true'
         # Issue #580: pull-staging.sh keeps every image a container uses and accepts the drill from cron.
         run: bash deploy/tests/cleanup-test.sh
       - name: Web files of the previous build survive a deploy
+        if: steps.scope.outputs.run == 'true'
         # ADR-078, issue #525: three small web builds through deploy.sh's switch and both compose files.
         run: bash deploy/tests/keep-assets-test.sh
       - name: Requests keep getting 200 while a deploy switches
+        if: steps.scope.outputs.run == 'true'
         # ADR-083, issue #496: deploy.sh's switch, rollback and a refused release under GET and POST traffic, both compose files.
         run: bash deploy/tests/no-gap-test.sh
       - name: Compose files parse
+        if: steps.scope.outputs.run == 'true'
         env:
           API_IMAGE: ghcr.io/rincoltech-solutions-ltd/bms-platform-api:sha-0000000
           WEB_IMAGE: ghcr.io/rincoltech-solutions-ltd/bms-platform-web:sha-0000000
@@ -174,6 +211,7 @@ jobs:
           docker compose -f deploy/compose.pi-staging.yml config --quiet
           docker compose -f docker-compose.yml config --quiet
       - name: systemd units parse
+        if: steps.scope.outputs.run == 'true'
         run: |
           for unit in deploy/systemd/*; do
             grep -Eq '^\[(Unit|Service|Timer|Slice)\]' "$unit" || { echo "::error::$unit has no unit section"; exit 1; }

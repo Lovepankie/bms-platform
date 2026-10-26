@@ -73,7 +73,17 @@ internet; it is memory- and CPU-capped so the other users of that machine are no
 elsewhere (below). `deploy-production` is the one job that stays on `ubuntu-latest`, because it holds the
 production SSH key and only runs for a release tag after the production VM exists.
 
-Runs on every pull request and every push to `main`.
+Runs on every pull request and every push to `main`. The workflow has no `paths-ignore` (issue #549): branch
+protection requires the Backend, Frontend and Delivery checks, and a workflow skipped by a path filter never reports
+them, so a pull request that changed only prose stayed blocked for ever. Instead each of the three jobs checks out with
+`fetch-depth: 2` and first runs `.github/scripts/prose_only.py` (its unit test runs in the Delivery job): when the pull
+request's merge commit changes only `docs/specs/`, `docs/runbooks/`, `docs/ui/` or `CONTEXT.md`, every later step is
+skipped and the job reports success in seconds on the same runner; any other file, a push to `main` or a manual run
+does the full job. `docs/sdd`, `docs/api`, `docs/adr` and `AGENTS.md` always run the jobs, because tests read them.
+
+The integration tests start no db-scheduler (issue #530): the test profile sets `db-scheduler.enabled=false`, so no
+recurring task ticks on the wall clock across other tests' tenants, and `RecurringJobsOffIT` fails if a scheduler
+starts in the shared test context. A test that needs one turns it on with `db-scheduler.enabled=true`.
 
 | Job | Steps | Proves |
 |---|---|---|

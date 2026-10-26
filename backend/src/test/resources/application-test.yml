@@ -39,3 +39,10 @@ bms:
 management:
   server:
     port: 0
+
+# No recurring job runs in a test context (issue #530). Every cached context shares one database and one
+# scheduled_tasks table, so a scheduler left running in one context ticks wall-clock jobs across the tenants of
+# whatever test runs next (#487). The task beans still exist; a test calls the job's work itself, or turns the
+# scheduler back on with @TestPropertySource(properties = "db-scheduler.enabled=true"). RecurringJobsOffIT guards it.
+db-scheduler:
+  enabled: false
