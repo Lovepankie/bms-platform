@@ -293,8 +293,8 @@ class CreditRecognitionRepository {
      * The sales paid at the sale (not credit), by the day they were entered (the tenant's day of {@code created_at}) and the branch of
      * the sale: the part of Received that is not a payment on a credit sale (ADR-043). Received is money recorded as collected on the
      * day it was entered, so a cash sale dated in the past counts on the day it was entered, like a payment dated earlier. A cash sale
-     * that is cancelled (voided) is not here at all: cancelling it removes it from its own day, the one exception to "a day already
-     * reported is never rewritten".
+     * that is cancelled (voided) is not here at all: cancelling it removes it from the day it was entered, the one exception to
+     * "a day already reported is never rewritten".
      */
     List<ReportsRepository.DayFigures> cashSalesEntered(List<UUID> branchIds, LocalDate from, LocalDate to) {
         if (branchIds != null && branchIds.isEmpty()) {

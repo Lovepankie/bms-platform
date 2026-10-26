@@ -905,6 +905,95 @@ class RetailCreditRecognitionIT extends IntegrationTest {
     }
 
     @Test
+    void aPaymentRecordedOnAnImportedCreditSaleBeforeItWasRefusedIsReceivedOnTheDayItWasEntered() {
+        onPaymentFromTheStart();
+        // Issue #375: before #360 an imported credit sale could still take a payment, so such rows exist.
+        // The owner seeds one as that route wrote it (cash in, trade debtors out): dated ten days ago,
+        // entered three days ago.
+        UUID sale = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO retail_sales (id, tenant_id, branch_id, sale_no, sale_date, payment_method, buyer_name,
+                            currency, total_minor, cost_total_minor, paid_minor, status, historical, created_by)
+                        VALUES (?, ?, ?, 'IMP-0003', ?, 'credit', 'Test Buyer 17',
+                            (SELECT currency FROM tenants WHERE id = ?), 5000, 3000, 2000, 'completed', true, ?)
+                        """)
+                .params(sale, t.tenantId(), hq, java.sql.Date.valueOf(ago(20)), t.tenantId(), api.userId())
+                .update();
+        TestDatabase.owner().sql("""
+                        INSERT INTO retail_sale_lines (id, tenant_id, sale_id, line_no, product_id, qty, unit_price_minor,
+                            unit_cost_minor, line_total_minor, line_cost_minor)
+                        VALUES (gen_random_uuid(), ?, ?, 1, ?, 5, 1000, 600, 5000, 3000)
+                        """).params(t.tenantId(), sale, product).update();
+        LocalDate paidOn = ago(10);
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO gl_periods (id, tenant_id, year, month, status) VALUES (gen_random_uuid(), ?, ?, ?, 'open')
+                        ON CONFLICT (tenant_id, year, month) DO NOTHING
+                        """)
+                .params(t.tenantId(), paidOn.getYear(), paidOn.getMonthValue())
+                .update();
+        UUID period = TestDatabase.owner()
+                .sql("SELECT id FROM gl_periods WHERE tenant_id = ? AND year = ? AND month = ?")
+                .params(t.tenantId(), paidOn.getYear(), paidOn.getMonthValue())
+                .query(UUID.class)
+                .single();
+        UUID entry = UUID.randomUUID();
+        TestDatabase.owner()
+                .sql("""
+                        WITH e AS (INSERT INTO journal_entries (id, tenant_id, branch_id, entry_no, entry_date, period_id,
+                                       reference, source_module, source_type)
+                                   VALUES (?, ?, ?, 'JE90000375', ?, ?, 'IMP-0003', 'test', 'fixture')
+                                   RETURNING id)
+                        INSERT INTO journal_lines (id, tenant_id, entry_id, line_no, account_id, debit, credit, currency)
+                        SELECT gen_random_uuid(), ?, e.id, 1, ?, 2000, 0, (SELECT currency FROM tenants WHERE id = ?) FROM e
+                        UNION ALL SELECT gen_random_uuid(), ?, e.id, 2, ?, 0, 2000, (SELECT currency FROM tenants WHERE id = ?)
+                        FROM e
+                        """)
+                .params(
+                        entry,
+                        t.tenantId(),
+                        hq,
+                        java.sql.Date.valueOf(paidOn),
+                        period,
+                        t.tenantId(),
+                        t.account("cash_on_hand"),
+                        t.tenantId(),
+                        t.tenantId(),
+                        t.account("trade_debtors"),
+                        t.tenantId())
+                .update();
+        TestDatabase.owner()
+                .sql(
+                        "INSERT INTO retail_sale_payments (id, tenant_id, created_at, sale_id, amount_minor, currency, method,"
+                                + " paid_on, journal_entry_id, created_by)"
+                                + " VALUES (gen_random_uuid(), ?, " + enteredAt(ago(3)) + ", ?, 2000,"
+                                + " (SELECT currency FROM tenants WHERE id = ?), 'cash', ?, ?, ?)")
+                .params(t.tenantId(), sale, t.tenantId(), java.sql.Date.valueOf(paidOn), entry, api.userId())
+                .update();
+
+        JsonNode report = profit(ago(21), today());
+        assertThat(field(row(report, hq, ago(3)), "received_minor"))
+                .as("money recorded as collected, on the day it was entered")
+                .isEqualTo(2_000);
+        assertThat(field(row(report, hq, paidOn), "received_minor"))
+                .as("not on the earlier date written on it")
+                .isZero();
+        assertThat(report.get("received_minor").asLong()).isEqualTo(2_000);
+        assertThat(report.get("profit_minor").asLong())
+                .as("the imported sale keeps its profit at the sale, once")
+                .isEqualTo(2_000);
+        assertThat(field(row(report, hq, ago(20)), "profit_minor")).isEqualTo(2_000);
+        assertThat(field(row(report, hq, ago(3)), "profit_minor")).isZero();
+
+        JsonNode dash = dashboard();
+        assertThat(field(dayOf(dash.get("days"), ago(3)), "received_minor")).isEqualTo(2_000);
+        assertThat(dash.get("last7_received_minor").asLong()).isEqualTo(2_000);
+        assertThat(dash.get("last30_received_minor").asLong())
+                .isEqualTo(report.get("received_minor").asLong());
+    }
+
+    @Test
     void theWhenPaidFieldsOfTheHomeCardsAppearOnlyOnceTheRuleHasStarted() {
         onPayment();
         JsonNode pending = dashboard();
@@ -1461,6 +1550,34 @@ class RetailCreditRecognitionIT extends IntegrationTest {
         assertThat(field(dayOf(dash.get("days"), ago(3)), "received_minor")).isZero();
         assertThat(dash.get("today").get("received_minor").asLong()).isEqualTo(1_000);
         assertThat(shopOf(dash, hq).get("today_received_minor").asLong()).isEqualTo(1_000);
+    }
+
+    @Test
+    void aVoidedCashSaleLeavesTheDayItWasEnteredNotTheDayWrittenOnItNorTheDayOfTheVoid() {
+        onPayment();
+        settle(ago(5).toString());
+        UUID s = cashSale(hq, 1, ago(3));
+        sellEntered(s, ago(1));
+        assertThat(field(row(profit(ago(4), today()), hq, ago(1)), "received_minor"))
+                .as("before the void it is Received on the day it was entered")
+                .isEqualTo(1_000);
+        ResponseEntity<JsonNode> v = api.post("/sales/" + s + "/void", Map.of("reason", "Test void"), ADMIN);
+        assertThat(v.getStatusCode().is2xxSuccessful()).as("%s", v.getBody()).isTrue();
+        JsonNode report = profit(ago(4), today());
+        assertThat(field(row(report, hq, ago(1)), "received_minor"))
+                .as("the void removes it from the day it was entered")
+                .isZero();
+        assertThat(field(row(report, hq, ago(3)), "received_minor")).isZero();
+        assertThat(field(row(report, hq, today()), "received_minor"))
+                .as("no void-day leg")
+                .isZero();
+        assertThat(report.get("received_minor").asLong()).isZero();
+        assertThat(field(row(report, hq, ago(3)), "sales_minor"))
+                .as("the sales and the profit leave the date written on the sale")
+                .isZero();
+        assertThat(field(row(report, hq, ago(3)), "profit_minor")).isZero();
+        assertThat(field(dayOf(dashboard().get("days"), ago(1)), "received_minor"))
+                .isZero();
     }
 
     @Test

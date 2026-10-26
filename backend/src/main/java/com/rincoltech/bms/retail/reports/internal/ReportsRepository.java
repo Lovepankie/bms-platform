@@ -118,25 +118,16 @@ class ReportsRepository {
      * entered and dated before the start day count at the sale, as they always did.
      */
     List<DayFigures> daily(List<UUID> branchIds, LocalDate from, LocalDate to, CreditPeriods periods) {
-        return daily(branchIds, from, to, periods, false);
-    }
-
-    private List<DayFigures> daily(
-            List<UUID> branchIds, LocalDate from, LocalDate to, CreditPeriods periods, boolean cashOnly) {
         Map<String, Object> periodParams = new LinkedHashMap<>();
-        String deferredSale = cashOnly
-                ? " AND s.payment_method <> 'credit'"
-                : periods.isEmpty()
-                        ? ""
-                        : " AND (s.payment_method <> 'credit' OR s.historical OR NOT "
-                                + periods.sql("s.sale_date", "s.created_at", periodParams, "crpS") + ")";
-        String deferredReturn = cashOnly
-                ? "true"
-                : periods.isEmpty()
-                        ? "false"
-                        : "EXISTS (SELECT 1 FROM retail_sales rs WHERE rs.tenant_id = r.tenant_id AND rs.id = r.sale_id"
-                                + " AND rs.payment_method = 'credit' AND NOT rs.historical AND "
-                                + periods.sql("rs.sale_date", "rs.created_at", periodParams, "crpR") + ")";
+        String deferredSale = periods.isEmpty()
+                ? ""
+                : " AND (s.payment_method <> 'credit' OR s.historical OR NOT "
+                        + periods.sql("s.sale_date", "s.created_at", periodParams, "crpS") + ")";
+        String deferredReturn = periods.isEmpty()
+                ? "false"
+                : "EXISTS (SELECT 1 FROM retail_sales rs WHERE rs.tenant_id = r.tenant_id AND rs.id = r.sale_id"
+                        + " AND rs.payment_method = 'credit' AND NOT rs.historical AND "
+                        + periods.sql("rs.sale_date", "rs.created_at", periodParams, "crpR") + ")";
         // Spelled outside the text blocks below, which strip the space at the end of a line.
         String returnSales = " CASE WHEN " + deferredReturn + " THEN 0 ELSE -r.total_minor END,";
         String returnCost = " CASE WHEN " + deferredReturn + " THEN 0 ELSE -r.cost_minor END,";
