@@ -43,7 +43,7 @@ export const SYNONYMS: Record<string, readonly string[]> = {
   '/staff/users': ['staff', 'users', 'user', 'people', 'employee', 'worker', 'team', 'role', 'abakozi'],
   '/staff/notifications': ['notification', 'alert', 'install', 'app'],
   '/staff/feedback': ['feedback', 'idea', 'problem', 'question', 'complain', 'support'],
-  '/staff/help': ['help', 'how do i', 'how to', 'guide', 'instructions', 'answers'],
+  '/staff/help': ['help', 'ask', 'ask bms', 'question', 'how do i', 'how to', 'guide', 'instructions', 'answers'],
   '/staff/setup': ['setup', 'set up', 'settings', 'business name', 'logo', 'colour', 'color'],
   '/staff/retail/sale': ['sell', 'sale', 'till', 'checkout', 'receipt', 'tunda', 'okutunda'],
   '/staff/retail/credit-sales': ['credit', 'owe', 'debt', 'debtor', 'unpaid', 'pay later', 'bbanja', 'ebbanja'],
@@ -119,9 +119,10 @@ export const ACTIONS: { to: string; label: string; hint: string; may: (me: Me) =
 
 /**
  * Every screen and main action the session may open, each once. `sells` is useSells, as for the menu. The retail screens come
- * first with their menu names (Buy stock, Count stock, Customers who owe), then the Money page's links, then the menu's areas.
+ * first with their menu names (Buy stock, Count stock, Customers who owe), then the Money page's links, then the menu's areas,
+ * Help among them (named Ask BMS while `ask`, useAskEnabled, says the business has it on; issue #603).
  */
-export function featuresFor(me: Me, { sells }: { sells: boolean }): Feature[] {
+export function featuresFor(me: Me, { sells, ask = false }: { sells: boolean; ask?: boolean }): Feature[] {
   const retail = showRetail(me);
   const screens = retail ? screensFor(me, { sells }) : [];
   const catalogue = retail ? CATALOGUE_LINKS.filter((l) => canUse(me, l.screen)) : [];
@@ -129,7 +130,7 @@ export function featuresFor(me: Me, { sells }: { sells: boolean }): Feature[] {
     ...screens.map((s) => ({ to: s.path, label: s.label, hint: s.hint })),
     ...catalogue.map((l) => ({ to: l.path, label: l.label, hint: l.hint })),
     ...moneyLinks(me).map((l) => ({ to: l.to, label: l.label, hint: l.hint })),
-    ...staffAreas(me, { sells }).map((a) => ({ to: a.to, label: a.label })),
+    ...staffAreas(me, { sells, ask }).map((a) => ({ to: a.to, label: a.label })),
   ];
   const seen = new Set<string>();
   const features: Feature[] = [];

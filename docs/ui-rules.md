@@ -60,7 +60,15 @@ back to what opened it.
     The one longer motion is the sale-complete check, drawn in 400ms (issue #520), still by `transform` only. A skeleton may
     shimmer for 1.2s as the existing one in `feedback.css` does (accepted, 24 Oct 2026), since the global reduced-motion
     block stops it; the kit's own Skeleton is still grey rows. `frontend/src/app/ui/kit.css` also stops each of its
-    animations under reduced motion.
+    animations under reduced motion. No dot or badge pulses or blinks to catch the eye; a loop that fades may only show work in
+    progress. The one exception, which the owner asked for (issue #603), is the New badge of a new feature (`.new-blink`): it
+    blinks by opacity for at most five seconds per page load (the clock starts with the first badge drawn; a badge drawn again
+    later, as when the drawer opens again, blinks only for what is left), then stands still until the person opens the
+    feature, and it never blinks under reduced motion. Five seconds keeps it inside WCAG 2.2.2, which asks for a way to pause
+    only a blink that runs longer. The design guard holds this with a plain token ban: `infinite` (shorthand, longhand or
+    `-webkit-`) and any `var()` but the motion tokens in an animation value fail outside the named work-in-progress loops
+    (spinners, the skeleton shimmer, the loading mark, the sync dot while sending); every `.new-blink` rule must run
+    `rt-new-blink` five times; and code may not set an animation or loop one with `Infinity`.
 
 ## Feedback
 

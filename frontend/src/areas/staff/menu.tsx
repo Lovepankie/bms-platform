@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Me } from '../../api/client';
 import { WORDS } from '../../app/glossary';
+import { NewBadge } from '../../app/ui/NewBadge';
 import { icons } from '../../components/icons';
 import type { MenuGroup, MenuLink, MenuSection } from '../../components/side-menu';
 import { useOptionalStaff } from './context';
@@ -17,7 +18,7 @@ import { showSms } from './sms/state';
 import { showUsers } from './users/state';
 
 // The staff menu's groups and items (issue #564, owner decisions D38 and D44, ADR-086), apart from the layout in route.tsx so a
-// test reads them without loading the staff area (issue #483). One list, grouped the way a shop owner thinks: Home, then Today,
+// test reads them without loading the staff area (issue #483). One list, grouped the way a shop owner thinks: Home and How do I? (Ask BMS), then Today,
 // Stock, Money, Wholesale (when a wholesale tool is on), Lending (when the business has it) and Business, each item filtered by
 // the same permission rules as before. The sidebar from 720px and the phone drawer both draw it; Notifications and Help and
 // feedback are in the menu's footer.
@@ -45,20 +46,32 @@ function shopRow(me: Me, label: string, icon: keyof typeof icons, screens: Retai
   return !!screen && { to: pathOf(screen), label, icon: icons[icon], section: 'shop', ...extra };
 }
 
+/** The id of the help page's New badge (issue #603): shown until this person opens /staff/help once on this device. */
+export const HELP_FEATURE = 'ask-bms';
+
+/**
+ * The help page's entry, just after Home (issue #603): Ask BMS while the business has it on (useAskEnabled, as the page decides
+ * whether to draw the Ask box), else How do I?, never Help, which names the tours sheet of the top menu and the menu's foot
+ * (WCAG 3.2.4). Every person may open it; the page lists only the articles their permissions allow.
+ */
+export function helpLink(ask: boolean): MenuLink {
+  return { to: '/staff/help', label: ask ? 'Ask BMS' : 'How do I?', icon: icons.ask, badge: <NewBadge feature={HELP_FEATURE} /> };
+}
+
 const count = (n: number | undefined, words = '') => (n && n > 0 ? `${n > 99 ? '99+' : n}${words}` : undefined);
 
 /**
  * The menu's groups for the session, in order; a group the session has nothing in is left out by the menu. `sells` is useSells
- * (false while every branch the session may sell at is a store) and `counts` the figures of useMenuCounts.
+ * (false while every branch the session may sell at is a store), `counts` the figures of useMenuCounts and `ask` useAskEnabled.
  */
-export function staffMenu(me: Me, { sells, counts = {} }: { sells: boolean; counts?: MenuCounts }): MenuGroup[] {
+export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: boolean; counts?: MenuCounts; ask?: boolean }): MenuGroup[] {
   const permissions = me.permissions ?? [];
   const retail = showRetail(me);
   // Reports is the shop's page of figures and every shop page; a lending business without the shop has its own Reports page, which
   // a business with both lists in its Lending group.
   const lendingReports = showReports(me);
   const groups: { id: string; label?: string; tour?: string; links: (MenuLink | false)[] }[] = [
-    { id: 'home', links: [{ to: '/staff', label: 'Home', icon: icons.home, exact: true }] },
+    { id: 'home', links: [{ to: '/staff', label: 'Home', icon: icons.home, exact: true }, helpLink(ask)] },
     {
       id: 'today',
       label: 'Today',
@@ -157,8 +170,8 @@ export const FOOT_LINKS: MenuLink[] = [
  * Every page the menu opens, in menu order, then the footer's: the More page, the feature search and the tours read this flat
  * list, the shop and lending pages marked with their STAFF_SECTIONS id.
  */
-export function staffAreas(me: Me, { sells }: { sells: boolean }): MenuLink[] {
-  return [...staffMenu(me, { sells }).flatMap((g) => g.links), ...FOOT_LINKS];
+export function staffAreas(me: Me, { sells, ask = false }: { sells: boolean; ask?: boolean }): MenuLink[] {
+  return [...staffMenu(me, { sells, ask }).flatMap((g) => g.links), ...FOOT_LINKS];
 }
 
 /**

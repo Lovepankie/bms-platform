@@ -125,6 +125,21 @@
   flex: none;
 }
 
+/* The Ask button (issue #603): the ask icon and its word next to Search, a 48px target, the New dot at its top right. */
+.ask-open {
+  position: relative;
+  flex: none;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  gap: var(--space-1);
+}
+
+@media (max-width: 379px) {
+  .ask-open-word {
+    display: none;
+  }
+}
+
 /* The one menu: a panel under its button, the items full width and left aligned, closed with the hidden attribute. */
 .top-menu {
   position: relative;
@@ -1115,6 +1130,53 @@ img.menu-shop-logo {
   line-height: var(--tab-badge);
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The new-feature badge (issue #603, src/app/ui/NewBadge.tsx): a small New pill after a menu entry's name, and a dot on the
+ * More tab and the top bar's Ask button, in the brand fill, until the person opens the feature once. .new-blink fades them by
+ * opacity only, 1 to 0.35 and back each second on the ease-out curve, five times at most, and the component takes .new-blink
+ * off once the page load's five seconds are up, so a badge drawn again later stands still (WCAG 2.2.2 needs no pause control):
+ * the one blink the design guard allows (the owner asked for it, 27 Oct 2026). Under reduced motion the component leaves
+ * .new-blink off, and the rule below stops it as well.
+ */
+.new-badge {
+  flex: none;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading);
+  vertical-align: middle;
+}
+
+.new-dot {
+  position: absolute;
+  top: 0;
+  right: var(--space-2);
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
+.new-blink {
+  animation: rt-new-blink 1s var(--ease-out) 5;
+}
+
+@keyframes rt-new-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-blink {
+    animation: none;
+  }
 }
 
 /* The pages the Money and More tabs open: the account card's shop, name and Sign out. */

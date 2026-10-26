@@ -29,7 +29,8 @@ import { useSells } from './retail/nav';
 import { StaffTabBar } from './tabs';
 import { canSeeProfit } from './retail/permissions';
 import { rememberPage } from './feedback/feedback-state';
-import { HowDoILink } from './help/how-do-i';
+import { useAskEnabled } from './help/ask';
+import { AskButton, HowDoILink } from './help/how-do-i';
 import { TwoStepNotices } from './two-step/notices';
 import { OwnTwoStep } from './two-step/own';
 import { mustSetUp } from './two-step/state';
@@ -202,7 +203,8 @@ const FOOT_TOURS = ['nav-notifications', 'nav-feedback'];
 function useStaffGroups(me: Me) {
   const sells = useSells(me);
   const counts = useMenuCounts(me);
-  return staffMenu(me, { sells, counts });
+  const ask = useAskEnabled();
+  return staffMenu(me, { sells, counts, ask });
 }
 
 /**
@@ -334,6 +336,8 @@ export function StaffBar({
           {phone ? <BranchTitle me={me} branch={branch} onChoose={onBranch} /> : <span className="staff-bar-spacer" />}
           <SyncStatus />
           <FeatureSearch me={me} />
+          {/* The Ask button (issue #603); none while two-step set-up blocks the page, whose header is kept minimal. */}
+          {!mustSetUp(me) && <AskButton />}
           <TopMenu me={me} busy={busy} onSignOut={onSignOut} signOut={!phone || signOutInBar} />
         </div>
       </header>

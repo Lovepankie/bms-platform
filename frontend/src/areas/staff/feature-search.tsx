@@ -8,6 +8,7 @@ import { useLiveSearch } from '../../app/ui/useLiveSearch';
 import { icons } from '../../components/icons';
 import { useIsPhone } from '../../components/side-menu';
 import { featuresFor, findFeatures, type Feature } from './feature-search-state';
+import { useAskEnabled } from './help/ask';
 import { useSells } from './retail/nav';
 
 // Feature search (issue #551): a Search button in the staff bar, and one at the top of the More page on a phone, opens a sheet
@@ -32,7 +33,8 @@ export function isSearchShortcut(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'met
 
 function FindScreen({ me, onGo, onClose }: { me: Me; onGo: (feature: Feature) => void; onClose: () => void }) {
   const sells = useSells(me);
-  const features = useMemo(() => featuresFor(me, { sells }), [me, sells]);
+  const ask = useAskEnabled();
+  const features = useMemo(() => featuresFor(me, { sells, ask }), [me, sells, ask]);
   const search = useLiveSearch();
   const results = useMemo(() => (search.term === '' ? undefined : findFeatures(features, search.term)), [features, search.term]);
   return (

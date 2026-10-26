@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useRouterState } from '@tanstack/react-router';
 import { type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from 'react';
 import type { Me } from '../../api/client';
+import { NewDot, useIsNew } from '../../app/ui/NewBadge';
 import { icons } from '../../components/icons';
 import { useIsPhone } from '../../components/side-menu';
 import { useOptionalStaff } from './context';
 import { homeParts, homeSummaryQuery } from './home-cards';
 import { showSavings } from './lending/savings-permissions';
-import { staffAreas } from './menu';
+import { HELP_FEATURE, staffAreas } from './menu';
 import { showReceivePayments } from './payments/state';
 import { useSells } from './retail/nav';
 import { MONEY_SCREENS, SCREENS, canUse, showRetail, type RetailScreen } from './retail/permissions';
@@ -143,6 +144,8 @@ export function TabBar({ me, away = false, barRef }: { me: Me; away?: boolean; b
   const low = useLowStock(me);
   const tabs = staffTabs(me, { sells });
   const current = currentTab(tabs, pathname);
+  // The help page's New dot sits on More, which lists it (issue #603), and More says New in its name.
+  const fresh = useIsNew(HELP_FEATURE);
   const underMore = useMemo(() => staffAreas(me, { sells }).flatMap((l) => (l.tour ? [l.tour] : [])), [me, sells]);
   return (
     <nav ref={barRef} className="tab-bar" aria-label="Main" data-tour="tab-bar" data-tour-also="retail-nav" hidden={away}>
@@ -165,8 +168,10 @@ export function TabBar({ me, away = false, barRef }: { me: Me; away?: boolean; b
                       {badge > 99 ? '99+' : badge}
                     </span>
                   )}
+                  {t.id === 'more' && <NewDot feature={HELP_FEATURE} />}
                 </span>
                 <span className="tab-label">{t.label}</span>
+                {t.id === 'more' && fresh && <span className="visually-hidden">, New</span>}
                 {badge > 0 && <span className="visually-hidden">, {badge} {badge === 1 ? 'item' : 'items'} low on stock</span>}
               </Link>
             </li>

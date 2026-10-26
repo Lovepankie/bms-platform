@@ -18,7 +18,7 @@ const api = process.env.VITE_API_PROXY ?? 'http://localhost:8080';
 const HELP_DIR = fileURLToPath(new URL('./src/help/articles/', import.meta.url));
 const HELP_ID = 'virtual:help-corpus';
 
-function helpCorpus(): Plugin {
+export function helpCorpus(): Plugin {
   return {
     name: 'bms-help-corpus',
     resolveId: (id) => (id === HELP_ID ? `\0${HELP_ID}` : undefined),

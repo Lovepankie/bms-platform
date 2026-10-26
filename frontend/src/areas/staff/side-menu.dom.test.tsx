@@ -144,7 +144,7 @@ afterEach(() => {
 });
 
 const RETAIL_ONLY: [string, string[]][] = [
-  ['', ['Home']],
+  ['', ['Home', 'How do I?']],
   ['Today', ['Sell', 'Orders']],
   ['Stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
   ['Money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
@@ -166,7 +166,7 @@ describe('the groups and their order (issue #564)', () => {
     widthIs(false);
     show(lender);
     expect(groupsOf(sidebar())).toEqual([
-      ['', ['Home']],
+      ['', ['Home', 'How do I?']],
       ['Today', ['Approvals']],
       ['Lending', ['Loans', 'Members', 'Insights']],
       ['Business', ['Staff', 'Business set-up']],

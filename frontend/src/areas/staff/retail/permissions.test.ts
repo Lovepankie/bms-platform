@@ -103,7 +103,7 @@ describe('the shop rows of the staff menu', () => {
 
   it('gives an administrator every row of Today, Stock and Money', () => {
     expect(rows(mockMe('admin'))).toEqual([
-      ['home', ['Home']],
+      ['home', ['Home', 'How do I?']],
       ['today', ['Sell', 'Orders']],
       ['stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
       ['money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
@@ -115,7 +115,7 @@ describe('the shop rows of the staff menu', () => {
 
   it('gives a cashier the cash book rows their permissions allow', () => {
     expect(rows(mockMe('cashier'))).toEqual([
-      ['home', ['Home']],
+      ['home', ['Home', 'How do I?']],
       ['today', ['Sell', 'Orders']],
       ['stock', ['My stock', 'Items and categories']],
       ['money', ['Cash book', 'Expenses', 'Customers who owe', 'Savings and advances']],
@@ -142,7 +142,7 @@ describe('the shop rows of the staff menu', () => {
   it('gives a seller without the cash book only the rows they may open', () => {
     // ADR-055: the seeded sales role has no cash book.
     expect(rows(mockMe('sales'))).toEqual([
-      ['home', ['Home']],
+      ['home', ['Home', 'How do I?']],
       ['today', ['Sell', 'Orders']],
       ['stock', ['My stock', 'Items and categories']],
       ['money', ['Customers who owe']],

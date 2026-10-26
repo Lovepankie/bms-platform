@@ -5,6 +5,7 @@ import type { MenuLink } from '../../components/side-menu';
 import { CurrentShop } from './branch-picker';
 import { useStaff } from './context';
 import { FeatureSearch } from './feature-search';
+import { useAskEnabled } from './help/ask';
 import { STAFF_SECTIONS, staffAreas } from './menu';
 import { useSells } from './retail/nav';
 import { moneyLinks } from './tabs';
@@ -50,7 +51,7 @@ function AreaCard({ title, label = title ?? 'Areas', links }: { title?: string; 
     <Card title={title}>
       <RowList label={label}>
         {links.map((l) => (
-          <ListRow key={l.to} to={l.to} title={l.label} meta={l.to === '/staff/retail' ? 'Every shop page' : undefined} />
+          <ListRow key={l.to} to={l.to} title={<>{l.label}{l.badge}</>} meta={l.to === '/staff/retail' ? 'Every shop page' : undefined} />
         ))}
       </RowList>
     </Card>
@@ -60,7 +61,7 @@ function AreaCard({ title, label = title ?? 'Areas', links }: { title?: string; 
 export function MorePage() {
   const { me, branch, signOut, signingOut = false } = useStaff();
   const sells = useSells(me);
-  const areas = staffAreas(me, { sells });
+  const areas = staffAreas(me, { sells, ask: useAskEnabled() });
   // As in the side menu (issue #471, FR-UXN-04): headed parts only when the links name two sections, and then the shared areas
   // before the first sectioned one (Home, Approvals) come first, then each section, then the other shared areas (#544).
   const named = STAFF_SECTIONS.filter((s) => areas.some((l) => l.section === s.id));

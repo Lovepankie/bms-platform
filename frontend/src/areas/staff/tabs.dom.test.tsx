@@ -370,7 +370,7 @@ describe('the bottom tabs on a phone (issue #539)', () => {
     Element.prototype.scrollIntoView = vi.fn();
     show(admin, { children: <Starter /> });
     await screen.findByRole('heading', { name: 'Feedback here' });
-    const more = within(bar()).getByRole('link', { name: 'More' });
+    const more = within(bar()).getByRole('link', { name: 'More, New' });
     expect(more.getAttribute('data-tour-also')?.split(' ')).toEqual(expect.arrayContaining(['nav-areas', 'nav-feedback', 'nav-notifications', 'nav-retail']));
     // On a phone the drawer holds the link itself since issue #564, so the step opens the drawer rather than lighting up More.
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
@@ -429,7 +429,7 @@ describe('the tabs and their pages, read from /me (issue #539)', () => {
     // since it sits in Today after the shop's rows.
     const lists = screen.getAllByRole('list').map((l) => l.getAttribute('aria-label'));
     expect(lists.slice(0, 4)).toEqual(['Start', 'Shop', 'Lending', 'Business']);
-    expect(within(screen.getByRole('list', { name: 'Start' })).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home']);
+    expect(within(screen.getByRole('list', { name: 'Start' })).getAllByRole('link').map((a) => a.querySelector('.list-row-title')?.firstChild?.textContent)).toEqual(['Home', 'How do I?']);
     expect(within(screen.getByRole('list', { name: 'Business' })).getByRole('link', { name: 'Approvals' })).toBeTruthy();
     expect(within(screen.getByRole('list', { name: 'Business' })).queryByRole('link', { name: 'Home' })).toBeNull();
     expect(within(screen.getByRole('list', { name: 'Lending' })).getByRole('link', { name: 'Loans' })).toBeTruthy();

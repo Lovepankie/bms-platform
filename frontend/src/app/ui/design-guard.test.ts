@@ -43,6 +43,34 @@ function transitioned(value: string): string[] {
   return value.split(/,(?![^(]*\))/).map((item) => item.trim().split(/\s+(?![^(]*\))/).find((word) => !NOT_A_PROPERTY.test(word)) ?? 'all');
 }
 
+// The pulse ban (issue #603, rule 13) is a plain token ban, not a CSS parser: what loops says `infinite`, and a var() other than a
+// motion token (var(--motion...), var(--ease...)) could hide a name or a count, so neither may stand in an animation value.
+const ANIMATION_DECL = /(?<![\w-])(?:-webkit-)?animation(?:-name|-iteration-count)?\s*:\s*([^;}]+)/g;
+const MOTION_TOKEN = /var\(--(?:motion|ease)[\w-]*\)/g;
+
+/** Each rule of `css`: its selectors and its declarations. */
+const rulesOf = (css: string) => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selectors: (selector as string).split(',').map((s) => s.trim()), body: body as string }));
+
+/** The selectors of `css` whose animation loops (`infinite`) or carries a var() that is not a motion token. */
+function loopsIn(css: string): string[] {
+  return rulesOf(css).flatMap(({ selectors, body }) =>
+    [...body.matchAll(ANIMATION_DECL)].some(([, value]) => /\binfinite\b/.test(value as string) || /var\(/.test((value as string).replace(MOTION_TOKEN, ''))) ? selectors : [],
+  );
+}
+
+/** The rules of `css` that name .new-blink and do anything but run rt-new-blink five times on the tokens, or nothing. */
+function blinksOffPin(css: string): string[] {
+  return rulesOf(css)
+    .filter(({ selectors }) => selectors.some((s) => /\.new-blink(?![\w-])/.test(s)))
+    .flatMap(({ body }) => [...body.matchAll(ANIMATION_DECL)].map(([decl]) => (decl as string).trim()))
+    .filter((decl) => decl !== 'animation: rt-new-blink 1s var(--ease-out) 5' && decl !== 'animation: none');
+}
+
+/** True when code animates without a stylesheet: a loop near animation, animate( or iterations, or an animation style set from code. */
+const animatesInCode = (source: string) =>
+  /(?:animation|animate\(|iterations)[\s\S]{0,200}?\b(?:Infinity|infinite)\b/i.test(source) ||
+  /\.style\.(?:webkit)?animation|setProperty\(\s*['"](?:-webkit-)?animation|['"](?:-webkit-)?animation[\w-]*['"]\s*:|\b(?:Webkit|Moz|ms)Animation|(?<![\w.-])animation[A-Za-z]*\s*:/.test(source);
+
 /** The source with its comments blanked: comments cite issues (#95) and name what was removed. */
 function code(file: string): string {
   return readFileSync(join(SRC, file), 'utf8')
@@ -107,6 +135,75 @@ describe('design guard', () => {
       const [, y1, , y2] = (curve as string).split(',').map(Number);
       expect([y1, y2].every((y) => (y as number) >= 0 && (y as number) <= 1), `${file}: cubic-bezier(${curve}) overshoots`).toBe(true);
     }
+  });
+
+  // Rule 13: no pulsing or blinking dot or badge to catch the eye. A loop (`infinite`, in any form) may only show work in progress
+  // and stops when the work does; each such selector is named here with its reason. The one attention blink is the new-feature
+  // badge's .new-blink (issue #603): the owner asked for it, every rule that names it runs rt-new-blink five times (and
+  // NewBadge.tsx takes the class off once the page load's five seconds are up, WCAG 2.2.2), and it stands still under reduced
+  // motion. Code may not animate past the stylesheets. The fixtures below feed each way around the ban to the same checkers.
+  // JUSTIFICATION-A3: #603 asks for the pulse ban to be held by the guard with one named exception; no existing test checks loops.
+  const LOOPS: Record<string, string> = {
+    '.busy-spinner': 'the busy button, and its pulse under reduced motion, while it writes',
+    '.brand-loader-arc': 'the loading mark, while a page loads',
+    '.brand-loader-core': 'the loading mark, while a page loads',
+    '.sync-dot-syncing': 'the sync dot, while sales are being sent',
+    '.spinner': 'a spinner, while something loads',
+    '.sb-searching::before': 'the search box spinner, while it searches',
+    '.loading::before': 'the loading line spinner, while something loads',
+    '.skeleton': 'the skeleton shimmer, while a page loads',
+    '.refresh-spinning': 'the refresh icon, while it refreshes',
+  };
+  const STYLESHEETS = () => allStylesheets.map((f) => code(relative(SRC, f))).join('\n');
+  it('loops nothing but work in progress, and pins every .new-blink rule to five runs', () => {
+    expect(new Set(loopsIn(STYLESHEETS()))).toEqual(new Set(Object.keys(LOOPS)));
+    expect(blinksOffPin(STYLESHEETS())).toEqual([]);
+    expect(code('app/ui/navigation.css')).toMatch(/\.new-blink \{\s*animation: rt-new-blink 1s var\(--ease-out\) 5;/);
+    expect(code('app/ui/navigation.css')).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.new-blink \{\s*animation: none;/);
+    const sources = files(SRC, /\.tsx?$/).map((f) => relative(SRC, f));
+    for (const file of sources) expect(animatesInCode(code(file)) ? file : null).toBeNull();
+  });
+
+  it.each([
+    ['the name after the duration', '.x { animation: 2s pulse infinite; }'],
+    ['the longhand count', '.x { animation-name: pulse; animation-iteration-count: infinite; }'],
+    ['a longhand count over a shorthand', '.x { animation: pulse 1s; animation-iteration-count: infinite; }'],
+    ['a list of counts', '.x { animation-name: spin, pulse; animation-iteration-count: 1, infinite; }'],
+    ['the second item of a list', '.x { animation: spin 1s linear, pulse 2s infinite; }'],
+    ['a name in a var()', '.x { animation: var(--pulse); }'],
+    ['a longhand name in a var()', '.x { animation-name: var(--n); }'],
+    ['a count in a var()', '.x { animation: pulse 1s var(--forever); }'],
+    ['the -webkit- prefix', '.x { -webkit-animation: pulse 1s infinite; }'],
+    ['an important shorthand', '.x { animation: pulse 1s infinite !important; }'],
+  ])('fails a loop written with %s', (_way, rule) => {
+    expect(loopsIn(rule)).toEqual(['.x']);
+  });
+
+  it('lets a fade that runs once on the motion tokens, and no animation, pass', () => {
+    expect(loopsIn('.a { animation: pulse var(--motion) var(--ease-out); }\n.b { animation: none; }\n.c { animation-iteration-count: 1; }')).toEqual([]);
+  });
+
+  it.each([
+    ['set to loop', '.new-blink { animation-iteration-count: infinite; }'],
+    ['given another animation', '.new-blink { animation: pulse 1s 5; }'],
+    ['run more times', 'nav .new-blink { animation: rt-new-blink 1s var(--ease-out) 50; }'],
+  ])('fails a .new-blink rule %s in any stylesheet', (_way, rule) => {
+    expect(blinksOffPin(rule)).toHaveLength(1);
+  });
+
+  it.each([
+    ['a style key', '<span style={{ animation: "pulse 1s infinite" }} />'],
+    ['a quoted style key', "<span style={{ 'animation': 'pulse 1s' }} />"],
+    ['WebkitAnimation', '<span style={{ WebkitAnimation: "pulse 1s" }} />'],
+    ['style.animation', "el.style.animation = 'pulse 1s';"],
+    ['setProperty', "el.style.setProperty('animation', 'pulse 1s');"],
+    ['animate with Infinity', 'el.animate([{ opacity: 1 }, { opacity: 0.3 }], { duration: 1000, iterations: Infinity });'],
+  ])('fails code that animates with %s', (_way, source) => {
+    expect(animatesInCode(source)).toBe(true);
+  });
+
+  it('lets code that only names a class pass', () => {
+    expect(animatesInCode('<span className="new-badge new-blink" />')).toBe(false);
   });
 
   it('reads the property out of each transition item, and an item without one as all', () => {

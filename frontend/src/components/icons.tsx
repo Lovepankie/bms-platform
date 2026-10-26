@@ -583,6 +583,14 @@ export const icons = {
       <path d="M12 17h.01" />
     </Svg>
   ),
+  // A speech bubble with a question mark: Ask BMS, the help page's entry in the menu (issue #603).
+  ask: (
+    <Svg>
+      <path d="M4 5h16v11H9l-5 4z" />
+      <path d="M10 8.6a2 2 0 0 1 3.9.6c0 1.3-1.9 1.8-1.9 1.8" />
+      <path d="M12 13.5h.01" />
+    </Svg>
+  ),
   // A circle with an i: a toast that only informs (#508).
   info: (
     <Svg>

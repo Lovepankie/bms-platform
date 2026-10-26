@@ -12,9 +12,17 @@ import { Card, ListRow, RowList } from '../../../app/ui/ListRow';
 
 export const ASK_STATUS_KEY = ['help', 'ask', 'status'] as const;
 
-export function useAskEnabled(): boolean {
+/**
+ * Whether Ask BMS is on for the business, and whether that is settled (`known`): the server has answered, the read failed, or it
+ * waits for the network (offline, the query is paused), when Ask BMS counts as off.
+ */
+export function useAskStatus(): { enabled: boolean; known: boolean } {
   const status = useQuery({ queryKey: ASK_STATUS_KEY, queryFn: askBms.status, staleTime: 5 * 60_000, retry: false });
-  return status.data?.enabled === true;
+  return { enabled: status.data?.enabled === true, known: !status.isPending || status.fetchStatus === 'paused' };
+}
+
+export function useAskEnabled(): boolean {
+  return useAskStatus().enabled;
 }
 
 const row = (a: { id: string; title: string }) => <ListRow key={a.id} title={a.title} to={`/staff/help/${a.id}`} />;

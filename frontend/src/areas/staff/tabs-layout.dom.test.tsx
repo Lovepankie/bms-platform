@@ -70,6 +70,15 @@ afterEach(() => {
 });
 
 describe('the staff layout wires the tabs', () => {
+  it('draws the top bar Ask button for a person at work, and none while two-step set-up blocks the page (issue #603)', async () => {
+    start(seller, '/staff');
+    expect(await screen.findByRole('link', { name: 'How do I?, New' }, { timeout: 10000 })).toBeTruthy();
+    cleanup();
+    start({ ...seller, mfa_required: true, mfa_enabled: false } as Me, '/staff');
+    await screen.findByRole('button', { name: /^Menu for / }, { timeout: 10000 });
+    expect(screen.queryByRole('link', { name: /^(Ask BMS|How do I\?)(, New)?$/ })).toBeNull();
+  });
+
   it('puts Sign out in the top bar and draws no tabs while two-step set-up blocks the page (mustSetUp)', async () => {
     const signOut = vi.spyOn(api, 'POST').mockImplementation((() => new Promise(() => undefined)) as never);
     start({ ...seller, mfa_required: true, mfa_enabled: false } as Me, '/staff');

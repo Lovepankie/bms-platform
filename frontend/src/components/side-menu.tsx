@@ -16,7 +16,8 @@ import { icons } from './icons';
 
 const PHONE = '(max-width: 719px)';
 
-function useMedia(media: string): boolean {
+/** True while `media` matches; false when rendered without a window. */
+export function useMedia(media: string): boolean {
   return useSyncExternalStore(
     (notify) => {
       if (typeof window === 'undefined' || !window.matchMedia) return () => undefined;
@@ -46,6 +47,8 @@ export interface MenuLink {
   count?: string;
   /** The id of the MenuSection (the module) it belongs to; none for the links every business shares. The More page reads it. */
   section?: string;
+  /** Drawn after the label, such as the New pill of a new feature (issue #603). */
+  badge?: ReactNode;
 }
 
 /** A module of the business (Shop, Lending): the Home cards and the More page head their parts with it (issue #471). */
@@ -76,11 +79,12 @@ export function useCloseMenu(): () => void {
 }
 
 /** One link of the side menu: its icon, its label and its count, read out together as "Orders, 3". */
-export function MenuItemLink({ to, label, icon, tour, exact, count }: Omit<MenuLink, 'section'>) {
+export function MenuItemLink({ to, label, icon, tour, exact, count, badge }: Omit<MenuLink, 'section'>) {
   return (
     <Link to={to as never} activeOptions={exact ? { exact: true } : undefined} data-tour={tour}>
       {icon}
       <span className="side-menu-label">{label}</span>
+      {badge}
       {count && (
         <span className="side-menu-count">
           <span className="visually-hidden">, </span>
@@ -96,7 +100,7 @@ function MenuItems({ links }: { links: MenuLink[] }) {
     <ul>
       {links.map((l) => (
         <li key={l.to}>
-          <MenuItemLink to={l.to} label={l.label} icon={l.icon} tour={l.tour} exact={l.exact} count={l.count} />
+          <MenuItemLink to={l.to} label={l.label} icon={l.icon} tour={l.tour} exact={l.exact} count={l.count} badge={l.badge} />
         </li>
       ))}
     </ul>
