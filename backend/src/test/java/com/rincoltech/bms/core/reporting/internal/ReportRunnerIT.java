@@ -256,6 +256,27 @@ class ReportRunnerIT extends ReportsItSupport {
                 .isGreaterThanOrEqualTo(1);
     }
 
+    // JUSTIFICATION-A3: the regression case of issue #621, a run of a removed business left queued by another test.
+    @Test
+    void aRunOfARemovedBusinessIsNeverClaimedAndDoesNotHoldUpTheQueue() throws Exception {
+        TestDatabase.Fixture removed = tenant(true);
+        UUID left = insertRun(removed, UUID.randomUUID(), "queued");
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET status = 'closed' WHERE id = ?")
+                .param(removed.tenantId())
+                .update();
+
+        TestDatabase.Fixture t = tenant(true);
+        assertReady(runToTheEnd(t, UUID.randomUUID(), "test.rows", Map.of("n", 1), "json"), "the run after it");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT status FROM report_runs WHERE id = ?")
+                        .param(left)
+                        .query(String.class)
+                        .single())
+                .as("the runner does not serve a removed business")
+                .isEqualTo("queued");
+    }
+
     // ---- guards before a run starts ---------------------------------------------------------------
 
     @Test

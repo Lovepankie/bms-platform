@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,9 @@ class BusinessClosureIT extends IntegrationTest {
 
     LocalDate today;
 
+    /** The businesses this test made. */
+    final List<UUID> businesses = new ArrayList<>();
+
     record Business(
             TestDatabase.Fixture t,
             Api api,
@@ -67,8 +71,25 @@ class BusinessClosureIT extends IntegrationTest {
         today = LocalDate.now(KAMPALA);
     }
 
+    /**
+     * The full data export a closing request queues is closed with the test (issue #621). No runner ticks here, and a business
+     * the test removed is never claimed, so the run stayed queued in the shared database and held up the next report test
+     * that waited for the queue to empty.
+     */
+    @AfterEach
+    void closeQueuedExports() {
+        for (UUID tenantId : businesses) {
+            TestDatabase.owner()
+                    .sql("UPDATE report_runs SET status = 'cancelled', finished_at = now()"
+                            + " WHERE tenant_id = ? AND status IN ('queued', 'running')")
+                    .param(tenantId)
+                    .update();
+        }
+    }
+
     Business business() {
         TestDatabase.Fixture t = TestDatabase.tenant("close", true, true);
+        businesses.add(t.tenantId());
         TestDatabase.owner()
                 .sql("""
                         INSERT INTO subscriptions (id, tenant_id, plan_id, status, current_period_start, current_period_end)
@@ -611,6 +632,7 @@ class BusinessClosureIT extends IntegrationTest {
     @Test
     void frTen09_theRemovalLeavesNoPersonalDataInAnyTable() {
         TestDatabase.Fixture t = TestDatabase.tenant("close-all", true, true);
+        businesses.add(t.tenantId());
         RlsIsolationIT.seedOneRowInEveryTable(t);
         // Free text people typed on money records (D46: erased too): a purchase note, a journal memo, a stock movement
         // note.

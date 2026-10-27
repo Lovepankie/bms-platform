@@ -22,6 +22,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Issue #399, ADR-055, slice 2: a seller sees only their own figures. Two sellers of one shop and the owner, signed in for real:
@@ -254,7 +255,10 @@ class RetailSellerFiguresIT extends IntegrationTest {
                 "/controls/summary")) {
             ResponseEntity<JsonNode> r = get(path, tokenA);
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
-            assertThat(r.getBody().toString()).as(path).doesNotContain("7000", "14000", "21000");
+            // The random request_id is left out: an id like 30ed2140008b... holds "14000" (issue #621).
+            ObjectNode problem = (ObjectNode) r.getBody().deepCopy();
+            problem.remove("request_id");
+            assertThat(problem.toString()).as(path).doesNotContain("7000", "14000", "21000");
         }
     }
 

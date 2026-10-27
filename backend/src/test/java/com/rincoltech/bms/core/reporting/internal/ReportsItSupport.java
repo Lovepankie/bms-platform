@@ -9,6 +9,7 @@ import com.rincoltech.bms.core.reporting.internal.TestReports.MovableClock;
 import java.net.URI;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -152,20 +153,48 @@ abstract class ReportsItSupport extends IntegrationTest {
         return r.getBody();
     }
 
-    /** The queue is run until nothing is queued or running (any tenant), a tick at a time. */
+    /**
+     * The queue is run until no run the runner serves is queued or running, in any tenant: a tick at a time, each
+     * tick's workers awaited, until every such run has ended (its status is no longer queued or running and no worker of
+     * this process holds it), or {@link #IDLE} has passed.
+     *
+     * <p>Only the businesses the runner serves count: active, or ended by the Owner's cancellation, as in V90's
+     * {@code app_tenants_with_queued_report_runs}. A run of a business that was removed or suspended by the operator is
+     * never claimed, so waiting for it can only fail; one such run, the full data export {@code BusinessClosureIT} queues
+     * when it asks to close a business it then removes, failed the first drain of whatever report test came after it
+     * (issue #621).
+     */
     void drain() throws InterruptedException {
-        for (int i = 0; i < 60; i++) {
-            runner.tick();
+        long end = System.nanoTime() + IDLE.toNanos();
+        while (true) {
+            int started = runner.tick();
             assertThat(runner.awaitIdle(IDLE)).as("the workers finished").isTrue();
-            Integer open = TestDatabase.owner()
-                    .sql("SELECT count(*)::int FROM report_runs WHERE status IN ('queued', 'running')")
-                    .query(Integer.class)
-                    .single();
-            if (open == 0) {
+            List<String> open = openRuns();
+            if (open.isEmpty()) {
                 return;
             }
+            if (System.nanoTime() > end) {
+                throw new AssertionError("runs are still open after " + IDLE + ": " + open);
+            }
+            if (started == 0) {
+                Thread.sleep(50);
+            }
         }
-        throw new AssertionError("runs are still open after 60 ticks");
+    }
+
+    /** The runs the runner serves that are still queued or running, each with its state, for drain's message. */
+    static List<String> openRuns() {
+        return TestDatabase.owner().sql("""
+                        SELECT r.id || ' (' || r.report_key || ', ' || r.status || ', business ' || t.slug
+                               || ', owner ' || coalesce(r.owner, 'none') || ', heartbeat '
+                               || coalesce(r.heartbeat_at::text, 'none') || ')'
+                          FROM report_runs r JOIN tenants t ON t.id = r.tenant_id
+                          LEFT JOIN subscriptions s ON s.tenant_id = t.id
+                         WHERE r.status IN ('queued', 'running')
+                           AND (t.status = 'active'
+                                OR (t.status = 'suspended' AND s.status = 'cancelled' AND s.ended_on IS NOT NULL))
+                         ORDER BY r.created_at, r.id
+                        """).query(String.class).list();
     }
 
     /** The text of a ready run's file, fetched through the signed URL as a browser would. */
