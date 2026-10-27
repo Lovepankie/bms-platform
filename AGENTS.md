@@ -788,9 +788,20 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   from the first-run card (#615) and the Catalogue home, asks "What kind of shop is it?" from eight bundled starting sets
   (`shop-starters.ts`), lists their categories, units and packs ticked, and adds what stays ticked through the existing create
   routes (`shop-setup-state.ts`); a name the shop has is skipped, a unit with no usual size gets one, and a second run adds
-  nothing. The pack form of an item fills in the unit's usual size and its Used for (`purposeForUnit`), and a pack added to an item with no `purpose` takes the unit's usual one (a buy-only one sent with a price is added for `both`): one pack idea, one `Purpose` type and one `PURPOSES` list (`catalogue-packs.tsx`). Help articles `set-up-your-shop` and `add-a-unit` (How do I add a unit?, which a tester asked for), page tour `page-shop-setup`.
-  Tests: `RetailCatalogueManagementIT.aUnitKeepsItsUsualPackSizeAndUse`, `RetailSellingPacksIT.aPackWithNoPurposeTakesItsUnitsUsualPurpose`, `MigrationOrderIT`, `shop-setup-state.test.ts`,
+  nothing. The pack form of an item fills in the unit's usual size and its Used for (`purposeForUnit`), while a pack added through the API with no `purpose` is for `both`, as #627 set (issue #637): one pack idea, one `Purpose` type and one `PURPOSES` list (`catalogue-packs.tsx`). Help articles `set-up-your-shop` and `add-a-unit` (How do I add a unit?, which a tester asked for), page tour `page-shop-setup`.
+  Tests: `RetailCatalogueManagementIT.aUnitKeepsItsUsualPackSizeAndUse`, `MigrationOrderIT`, `shop-setup-state.test.ts`,
   `shop-setup.dom.test.tsx`, the help corpus test.
+- **Built (packs follow-ups of the #628 review, issue #637, ADR-100 note):** no migration. A pack added through the API with no
+  `purpose` is for `both` again, as #627 set; the pack form sends the unit's usual Used for itself, and the CSV import makes its packs
+  through the same `CatalogueService.createPack` (same checks, same audit). `PATCH /retail/units/{id}` takes `clear_usual_pack`, and the Units page has **Usual pack** on a unit's row: a sheet
+  (`unit-usual-pack.tsx`) to change what it holds, the number and Used for, or Remove usual pack; items keep their packs. A usual
+  pack is one level only (422 `unit_is_a_pack`, `unit_counted_by_pack`), so Roll of Metre and Metre of Roll can never both be kept.
+  Set up your shop reads the units back after a `duplicate_unit`, so a unit another phone added meanwhile is not called missing,
+  and leaves out a pack of a unit that is a pack itself. `PURPOSES` is the one list of purpose values, labels and words
+  (`asPurpose`). Help `add-a-unit` step 6. Tests: `RetailSellingPacksIT.aPackAddedWithNoPurposeIsForBothWhateverItsUnitsUsualPurpose`,
+  `RetailSellingPacksIT.theImportAddsAPackByTheSameRulesAsAddingOne`,
+  `RetailCatalogueManagementIT.aUsualPackIsChangedOrClearedAndIsOneLevelOnly`, `usual-pack.dom.test.tsx`,
+  `shop-setup-state.test.ts`, the help corpus test.
 
 ## Reading order
 

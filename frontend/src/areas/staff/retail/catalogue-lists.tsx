@@ -8,6 +8,7 @@ import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
 import { useComeBack } from '../../../app/ui/EmptyChoice';
 import { packText } from './shop-setup-state';
+import { UsualPackSheet, mayHaveUsualPack } from './unit-usual-pack';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
 // deleted: items and their history keep pointing at it. A switched-off row stays on the items that
@@ -86,6 +87,8 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   const [name, setName] = useState('');
   const [suggested, setSuggested] = useState('');
   const [adding, setAdding] = useState(false);
+  // Issue #637: the unit whose usual pack sheet is open.
+  const [packFor, setPackFor] = useState<string | null>(null);
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
   const back = useComeBack();
   const done = (text: string) => {
@@ -152,7 +155,16 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
               : 'usual_pack' in r && r.usual_pack ? <p className="hint">{`Usual pack: ${packText(r.usual_pack.size ?? '', r.usual_pack.of_unit ?? '', r.usual_pack.purpose)}.`}</p> : undefined}
             extra={withPrefix
               ? <Link className="btn-sm" to={`/staff/retail/catalogue/categories/${r.id ?? ''}` as never} aria-label={`Open ${r.name} and its items`}>Open</Link>
-              : <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>}
+              : (
+                <>
+                  <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>
+                  {mayHaveUsualPack(r, rows.data ?? []) && (
+                    <button type="button" className="btn-sm" onClick={() => setPackFor(r.id ?? null)} aria-label={`Usual pack of ${r.name}`}>
+                      Usual pack
+                    </button>
+                  )}
+                </>
+              )}
             busy={change.isPending}
             onRename={(n) => change.mutate({ id: r.id ?? '', version: r.version, body: { name: n }, text: (x) => `Renamed to "${x.name}".` })}
             onToggle={() =>
@@ -167,6 +179,9 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
           />
         ))}
       </ul>
+      {(rows.data ?? []).filter((r) => r.id === packFor).map((r) => (
+        <UsualPackSheet key={`${r.id}-${r.version}`} unit={r} units={rows.data ?? []} onClose={() => setPackFor(null)} onSaved={done} />
+      ))}
       {toast}
     </>
   );

@@ -80,7 +80,12 @@ final class CatalogueApi {
             Boolean active,
 
             @Valid @Schema(description = "Issue #625: sets the usual pack; left out, it is unchanged")
-            UsualPackRequest usualPack) {}
+            UsualPackRequest usualPack,
+
+            @Schema(
+                    description = "Issue #637: true to clear the usual pack; not sent with usual_pack. Items' packs are"
+                            + " unchanged")
+            Boolean clearUsualPack) {}
 
     @Schema(name = "RetailCategory")
     record Category(
@@ -1189,7 +1194,7 @@ final class CatalogueApi {
             @Schema(
                     description =
                             "What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624)."
-                                    + " Left out, the unit's usual purpose (issue #625), else both")
+                                    + " Left out, both; the screens fill in the unit's usual purpose (issue #637)")
             String purpose,
 
             @PositiveOrZero

@@ -574,23 +574,91 @@ class RetailSellingPacksIT extends IntegrationTest {
         assertThat(bad.getStatusCode()).isIn(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
-    /** Issue #625 and #624 merged (ADR-100): a pack added with no purpose takes its unit's usual one, the same values. */
+    /**
+     * Issue #637 (ADR-099, ADR-100): a pack added through the API with no purpose is for both, as #627 set, whatever its
+     * unit's usual purpose; the screens fill in the usual purpose themselves, and a purpose sent is kept.
+     */
     @Test
-    void aPackWithNoPurposeTakesItsUnitsUsualPurpose() {
+    void aPackAddedWithNoPurposeIsForBothWhateverItsUnitsUsualPurpose() {
         UUID piece = api.unit("piece");
         usual(carton, piece, "buy");
         usual(halfCarton, piece, "sell");
-        usual(box, piece, "buy");
-        assertThat(pack(carton, "12", null, null).get("purpose").asString()).isEqualTo("buy");
-        assertThat(pack(halfCarton, "6", null, null).get("purpose").asString()).isEqualTo("sell");
-        // A price sent with it means the pack is sold, so a usual buy-only pack is added for both.
-        assertThat(pack(box, "10", null, 900L).get("purpose").asString()).isEqualTo("both");
-        // A plain unit still gives both, and a purpose sent wins over the usual one.
-        UUID dozen = api.unit("dozen");
-        assertThat(pack(dozen, "12", null, null).get("purpose").asString()).isEqualTo("both");
+        assertThat(pack(carton, "12", null, null).get("purpose").asString()).isEqualTo("both");
+        assertThat(pack(halfCarton, "6", null, null).get("purpose").asString()).isEqualTo("both");
         UUID crate = api.unit("crate");
         usual(crate, piece, "sell");
         assertThat(pack(crate, "24", "buy", null).get("purpose").asString()).isEqualTo("buy");
+        // A usual buy-only unit with a price sent and no purpose is still for both, so the price is kept.
+        usual(box, piece, "buy");
+        JsonNode priced = pack(box, "10", null, 900L);
+        assertThat(priced.get("purpose").asString()).isEqualTo("both");
+        assertThat(priced.get("sell_minor").asLong()).isEqualTo(900);
+    }
+
+    /**
+     * Issue #637: the CSV import adds a pack by the rules of POST /products/{id}/units: for both, with no price of its own,
+     * whatever the unit's usual purpose, and never in a switched-off unit.
+     */
+    @Test
+    void theImportAddsAPackByTheSameRulesAsAddingOne() {
+        UUID piece = api.unit("piece");
+        usual(carton, piece, "buy");
+        String csv = "code,description,category,unit,sell price,pack unit,pack factor\n"
+                + "IMP-SP1,Test imported pens,Test Category,piece,100,carton,12\n";
+        ResponseEntity<JsonNode> applied =
+                api.post("/products/import?dry_run=false", Map.of("csv", csv), ADMIN + "," + SETTINGS);
+        assertThat(applied.getStatusCode()).as("%s", applied.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(applied.getBody().get("added").asInt()).isEqualTo(1);
+        String imported = api.get("/products?query=IMP-SP1", ADMIN)
+                .getBody()
+                .get("items")
+                .get(0)
+                .get("id")
+                .asString();
+        JsonNode viaImport = api.get("/products/" + imported + "/units", ADMIN)
+                .getBody()
+                .get("items")
+                .get(0);
+        JsonNode viaApi = pack(carton, "12", null, null);
+        assertThat(viaImport.get("purpose").asString())
+                .isEqualTo("both")
+                .isEqualTo(viaApi.get("purpose").asString());
+        assertThat(viaImport.has("sell_minor")).isFalse();
+        assertThat(viaApi.has("sell_minor")).isFalse();
+        // One path: both packs are audited as retail.product_unit.created, the imported one with its source.
+        List<String> audited = TestDatabase.owner()
+                .sql("SELECT cast(data AS text) FROM audit_log WHERE tenant_id = ?"
+                        + " AND action = 'retail.product_unit.created' AND data::text LIKE ?")
+                .params(t.tenantId(), "%" + carton + "%")
+                .query(String.class)
+                .list();
+        assertThat(audited).hasSize(2);
+        assertThat(audited)
+                .filteredOn(a -> a.contains(imported))
+                .singleElement()
+                .asString()
+                .contains("\"source\": \"import\"")
+                .contains("\"purpose\": \"both\"");
+        assertThat(audited).filteredOn(a -> a.contains(pen.toString())).hasSize(1);
+
+        // A switched-off unit is refused by both paths.
+        ResponseEntity<JsonNode> off = api.call(
+                HttpMethod.PATCH, "/units/" + box, Map.of("active", false), ADMIN, "*", Map.of("If-Match", "1"));
+        assertThat(off.getStatusCode()).as("%s", off.getBody()).isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> dry = api.post(
+                "/products/import?dry_run=true",
+                Map.of(
+                        "csv",
+                        csv.replace("IMP-SP1", "IMP-SP2")
+                                .replace("pens", "pencils")
+                                .replace("carton", "box")),
+                ADMIN + "," + SETTINGS);
+        assertThat(dry.getBody().get("rows").get(0).get("outcome").asString()).isEqualTo("error");
+        assertThat(dry.getBody().get("rows").get(0).get("message").asString()).contains("switched off");
+        ResponseEntity<JsonNode> refused = addPack(box, "10", null, null, ADMIN);
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(refused.getBody().get("errors").get(0).get("code").asString())
+                .isEqualTo("inactive_unit");
     }
 
     void usual(UUID unit, UUID of, String purpose) {

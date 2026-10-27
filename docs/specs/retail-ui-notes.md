@@ -318,7 +318,10 @@ of the screens under it; the Catalogue home lists only those it may use (a sales
   asks for a selling price; its cost is asked only with `retail.profit.read` (else 0, and a restock sets it).
 - **Categories and Units** (`catalogue-lists.tsx`, one component twice): Add, Rename, Switch off or Switch on,
   with "Used by N items". Nothing is deleted. A switched-off row stays on the items that use it and is not offered
-  for a new item (the server refuses it with 422 `inactive_category`, `inactive_unit`).
+  for a new item (the server refuses it with 422 `inactive_category`, `inactive_unit`). A switched-on unit also has
+  Usual pack (issue #637), offered unless another unit's usual pack counts it (one level only): a Sheet
+  (`unit-usual-pack.tsx`) with It holds (units that are not packs themselves; with none, the kit's EmptyChoice and Add a
+  new unit), How many in one, Used for (Segmented, `PURPOSES`), Save and Remove usual pack; items keep their packs.
 - **Suppliers and Credit buyers** (`catalogue-people.tsx`): Add and Edit name and contact; a supplier can also be
   switched off (it is then refused on a new restock). Credit buyers show what each owes on credit sales in the
   branches the user may read (`balance_minor`). The contact is shown as typed and is not written to the audit log.

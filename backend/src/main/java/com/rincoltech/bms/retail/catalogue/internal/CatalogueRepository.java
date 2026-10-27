@@ -141,10 +141,17 @@ class CatalogueRepository {
                 .single();
     }
 
-    /** Issue #625, ADR-100: the usual size of a pack and what it is for; the V111 check keeps all three or none. */
+    /**
+     * Issue #625, ADR-100: the usual size of a pack and what it is for; the V111 check keeps all three or none. A null
+     * {@code pack} clears it (issue #637).
+     */
     void setUsualPack(UUID id, UsualPackRequest pack) {
         jdbc.sql("UPDATE retail_units SET pack_size = ?, pack_of_unit_id = ?, pack_purpose = ? WHERE id = ?")
-                .params(pack.size(), pack.ofUnitId(), pack.purpose(), id)
+                .params(
+                        pack == null ? null : pack.size(),
+                        pack == null ? null : pack.ofUnitId(),
+                        pack == null ? null : pack.purpose(),
+                        id)
                 .update();
     }
 
@@ -735,6 +742,15 @@ class CatalogueRepository {
                         SELECT EXISTS (SELECT 1 FROM retail_stock_movements WHERE product_id = ?)
                             OR EXISTS (SELECT 1 FROM retail_stock_balances WHERE product_id = ? AND qty <> 0)
                         """).params(productId, productId).query(Boolean.class).single();
+    }
+
+    /** Issue #637: the name of a unit whose usual pack counts this one, or null. */
+    String unitCountedByUsualPack(UUID unitId) {
+        return jdbc.sql("SELECT name FROM retail_units WHERE pack_of_unit_id = ? ORDER BY name LIMIT 1")
+                .param(unitId)
+                .query(String.class)
+                .optional()
+                .orElse(null);
     }
 
     boolean unitHasPacks(UUID unitId) {

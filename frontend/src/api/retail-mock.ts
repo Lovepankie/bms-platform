@@ -948,6 +948,7 @@ export function createMockRetail(): RetailApi {
         }
         u.active = body.active ?? u.active;
         if (body.usual_pack) u.usual_pack = usualPackOf(body.usual_pack);
+        if (body.clear_usual_pack) delete u.usual_pack;
         u.version += 1;
         return refreshed(u, 'unit') as Unit;
       }),

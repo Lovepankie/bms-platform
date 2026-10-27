@@ -17,6 +17,7 @@ function fakeShop(start: { categories?: string[]; units?: string[] } = {}) {
   };
   const usual = (p: UsualPackRequest): Unit['usual_pack'] => ({ size: Number(p.size).toFixed(3), of_unit_id: p.of_unit_id, of_unit: units.find((u) => u.id === p.of_unit_id)?.name ?? '', purpose: p.purpose });
   const api = {
+    listUnits: () => Promise.resolve(units.map((u) => ({ ...u }))),
     createCategory: (name: string) => {
       clash(categories, name, 'duplicate_category');
       const c: Category = { id: `c${++n}`, name, active: true, version: 1, code_prefix: name.slice(0, 3).toUpperCase() };
@@ -183,6 +184,45 @@ describe('Set up your shop', () => {
     const again = await run(shop, 'phones');
     expect(again.result.error).toBeNull();
     expect(again.result.added.map((a) => a.name)).toEqual(['Phone covers', 'Screen protectors', 'Memory cards', 'Box', 'Carton']);
+  });
+
+  it('reads the units back when one was added meanwhile, so its pack is added, not left out as missing (issue #637)', async () => {
+    const shop = fakeShop({ units: ['Piece', 'Box'] });
+    const plan = planSetup(shopTypeById('hardware')!, [], [...shop.units]);
+    // Another phone adds Metre after the plan was read.
+    await shop.api.createUnit('Metre');
+    const result = await applySetup(shop.api, plan, allTicked(plan), [shop.units[0]!, shop.units[1]!]);
+    expect(result.error).toBeNull();
+    expect(result.skipped).toContainEqual({ name: 'Metre', why: 'Your shop has it already.' });
+    expect(result.skipped.map((s) => s.name)).not.toContain('Roll');
+    expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack?.of_unit).toBe('Metre');
+  });
+
+  it('leaves out a pack of a unit that is a pack itself, one level only (issue #637)', async () => {
+    const shop = fakeShop();
+    const metre = shop.units.find((u) => u.name === 'Metre')!;
+    metre.usual_pack = { size: '2.000', of_unit_id: shop.units[0]!.id, of_unit: 'Piece', purpose: 'both' };
+    const { result } = await run(shop, 'hardware');
+    expect(result.skipped).toContainEqual({ name: 'Roll', why: 'Metre is itself a pack, so this pack was left out.' });
+    expect(shop.units.map((u) => u.name)).not.toContain('Roll');
+  });
+
+  it("gives a pack's unit another phone added meanwhile, with no usual size, this one (review of #637)", async () => {
+    const shop = fakeShop();
+    const plan = planSetup(shopTypeById('hardware')!, [], [...shop.units]);
+    await shop.api.createUnit('Roll');
+    const result = await applySetup(shop.api, plan, allTicked(plan), [...shop.units].filter((u) => u.name !== 'Roll'));
+    expect(result.error).toBeNull();
+    expect(result.skipped.map((s) => s.name)).not.toContain('Roll');
+    expect(shop.units.filter((u) => u.name === 'Roll')).toHaveLength(1);
+    expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack?.of_unit).toBe('Metre');
+  });
+
+  it('holds no pack in a starting set whose smaller unit is a pack of that set, one level only (ADR-100 note)', () => {
+    for (const type of SHOP_TYPES) {
+      const packNames = new Set(type.packs.map((p) => p.name.toLowerCase()));
+      for (const p of type.packs) expect(packNames.has(p.of.toLowerCase()), `${type.id}: ${p.name} of ${p.of}`).toBe(false);
+    }
   });
 
   it('says a pack in plain words', () => {

@@ -15004,7 +15004,7 @@ export interface components {
         RetailPackRequest: {
             /** @description Base units in one pack, at least 1, up to three places, for example 12 or 12.5 */
             factor: string;
-            /** @description What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624). Left out, the unit's usual purpose (issue #625), else both */
+            /** @description What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624). Left out, both; the screens fill in the unit's usual purpose (issue #637) */
             purpose?: string;
             /**
              * Format: int64
@@ -18137,6 +18137,8 @@ export interface components {
         /** @description Omitted fields are unchanged; a unit is never deleted */
         RetailUnitUpdate: {
             active?: boolean;
+            /** @description Issue #637: true to clear the usual pack; not sent with usual_pack. Items' packs are unchanged */
+            clear_usual_pack?: boolean;
             name?: string;
             usual_pack?: components["schemas"]["RetailUsualPackRequest"];
         };

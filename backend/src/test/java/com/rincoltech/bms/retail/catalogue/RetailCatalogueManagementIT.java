@@ -242,6 +242,72 @@ class RetailCatalogueManagementIT extends IntegrationTest {
                 .doesNotContain(piece.toString());
     }
 
+    /**
+     * Issue #637: a usual pack is changed or cleared with clear_usual_pack, which items' packs never follow, and a usual
+     * pack is one level only (ADR-100 note), so Roll of Metre and Metre of Roll can never both be kept.
+     */
+    @Test
+    void aUsualPackIsChangedOrClearedAndIsOneLevelOnly() {
+        UUID metre = api.unit("test-metre");
+        UUID roll = RetailTestSupport.id(api.post(
+                "/units",
+                Map.of("name", "test-roll", "usual_pack", Map.of("size", "50", "of_unit_id", metre, "purpose", "both")),
+                ADMIN));
+        JsonNode changed = patch(
+                        "/units/" + roll,
+                        Map.of("usual_pack", Map.of("size", "100", "of_unit_id", metre, "purpose", "sell")),
+                        ADMIN)
+                .getBody();
+        assertThat(changed.get("usual_pack").get("size").asString()).isEqualTo("100.000");
+        assertThat(changed.get("usual_pack").get("purpose").asString()).isEqualTo("sell");
+
+        // Setting and clearing at once is refused; clearing alone removes it, and clearing again changes nothing.
+        Map<String, Object> both = Map.of(
+                "clear_usual_pack", true, "usual_pack", Map.of("size", "100", "of_unit_id", metre, "purpose", "both"));
+        assertThat(patch("/units/" + roll, both, ADMIN).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        ResponseEntity<JsonNode> cleared = patch("/units/" + roll, Map.of("clear_usual_pack", true), ADMIN);
+        assertThat(cleared.getStatusCode()).as("%s", cleared.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(cleared.getBody().has("usual_pack")).isFalse();
+        int version = cleared.getBody().get("version").asInt();
+        assertThat(patch("/units/" + roll, Map.of("clear_usual_pack", true), ADMIN)
+                        .getBody()
+                        .get("version")
+                        .asInt())
+                .isEqualTo(version);
+        String audited = TestDatabase.owner()
+                .sql("SELECT string_agg(cast(data AS text), ' ') FROM audit_log WHERE tenant_id = ?"
+                        + " AND action = 'retail.unit.updated'")
+                .param(t.tenantId())
+                .query(String.class)
+                .single();
+        assertThat(audited).contains("100.000 test-metre sell");
+
+        // One level only: Metre cannot be a pack of Roll while Roll is a pack of Metre, nor a pack of a pack.
+        patch(
+                "/units/" + roll,
+                Map.of("usual_pack", Map.of("size", "100", "of_unit_id", metre, "purpose", "both")),
+                ADMIN);
+        ResponseEntity<JsonNode> cycle = patch(
+                "/units/" + metre,
+                Map.of("usual_pack", Map.of("size", "2", "of_unit_id", roll, "purpose", "both")),
+                ADMIN);
+        assertThat(cycle.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(cycle.getBody().get("errors").get(0).get("code").asString()).isEqualTo("unit_is_a_pack");
+        UUID piece = api.unit("test-piece");
+        ResponseEntity<JsonNode> counted = patch(
+                "/units/" + metre,
+                Map.of("usual_pack", Map.of("size", "100", "of_unit_id", piece, "purpose", "both")),
+                ADMIN);
+        assertThat(counted.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(counted.getBody().get("errors").get(0).get("code").asString())
+                .isEqualTo("unit_counted_by_pack");
+        ResponseEntity<JsonNode> bale = api.post(
+                "/units",
+                Map.of("name", "test-bale", "usual_pack", Map.of("size", "5", "of_unit_id", roll, "purpose", "buy")),
+                ADMIN);
+        assertThat(bale.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
     @Test
     void aSupplierIsEditedAndSwitchedOff() {
         UUID supplier = RetailTestSupport.id(
