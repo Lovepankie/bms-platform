@@ -11,6 +11,7 @@ import { useToast } from '../retail/toast';
 import { AddBranchForm } from './add-branch';
 import { addedWords, branchLine, canManageBranches, closedCount, closedOn, isClosed, keepsGoods, sellsGoods, showBranches, visibleBranches } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { useComeBack } from '../../../app/ui/EmptyChoice';
 
 // Branches (issue #329; ADR-041): which branches are open, close one without losing its history, reopen it, and say that a branch
 // keeps no goods (a head office). Everyone who may read branches sees the list; an administrator also closes, reopens and switches.
@@ -37,6 +38,7 @@ export function BranchesScreen() {
   const queryClient = useQueryClient();
   const allowed = showBranches(me);
   const canManage = canManageBranches(me);
+  const back = useComeBack();
   const roles = useBranchRoles(me);
   const list = useQuery({ queryKey: ['staff-branches'], queryFn: branches.list, enabled: allowed });
   const [showClosed, setShowClosed] = useState(false);
@@ -81,6 +83,8 @@ export function BranchesScreen() {
     show(addedWords(branch), 'success');
     setJustAdded(branch.id ?? null);
     await refreshLists();
+    // Opened from an empty branch list (issue #619): the new branch takes the person back to the form that needed it.
+    back?.();
   }
 
   async function act(branch: AdminBranch, run: () => Promise<string>, onRefusal?: (e: BranchesError) => boolean) {

@@ -15,6 +15,7 @@ import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { Hint } from '../../../app/ui/Hint';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // Advances to the owner or the company, and their repayments (FR-RET-26). Not the lending module: no
 // schedule, interest or collateral. Recording an advance needs retail.advance.create, a repayment
@@ -68,11 +69,11 @@ export function AdvanceForm({ branchId, onSaved }: { branchId: string; onSaved?:
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
       <DateField id="advance-date" label="Date" value={draft.date} onChange={(date) => update({ date })} />
       <PartyPicker
-        id="advance-party" label="Who is the advance for?" parties={parties.data ?? []} kinds={[...ADVANCE_KINDS]} listed={[...ADVANCE_KINDS]} value={draft.partyId}
+        id="advance-party" label="Who is the advance for?" parties={parties.data ?? []} loading={parties.data === undefined} load={parties} kinds={[...ADVANCE_KINDS]} listed={[...ADVANCE_KINDS]} value={draft.partyId}
         onChange={(partyId) => update({ partyId })} noneLabel="Choose who it is for" addLabel="Add a new person or company"
       />
       <PartyPicker
-        id="advance-taken-by" label="Who took the money? (optional)" parties={parties.data ?? []} kinds={[...ADVANCE_KINDS]} listed={[...ADVANCE_KINDS]} value={draft.takenById}
+        id="advance-taken-by" label="Who took the money? (optional)" parties={parties.data ?? []} loading={parties.data === undefined} load={parties} kinds={[...ADVANCE_KINDS]} listed={[...ADVANCE_KINDS]} value={draft.takenById}
         onChange={(takenById) => update({ takenById })} noneLabel="Not recorded" addLabel="Add a new person" optional
       />
       <label htmlFor="advance-principal">Amount advanced</label>
@@ -113,14 +114,19 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
       {!canList && <p role="note" className="alert alert-info">You need access to the advances list to choose an advance to repay.</p>}
-      {open.isError && <Problem error={open.error} />}
+      {showsEmptyChoice(open) ? (
+        <EmptyChoice id="repay-advance" label="Advance being repaid" load={open} text="No advance has a balance to repay." />
+      ) : (
+      <>
       <label htmlFor="repay-advance">Advance being repaid</label>
       <select id="repay-advance" value={draft.advanceId} onChange={(e) => update({ advanceId: e.target.value })}>
-        <option value="">{open.data && open.data.length === 0 ? 'No advance has a balance' : 'Choose an advance'}</option>
+        <option value="">Choose an advance</option>
         {(open.data ?? []).map((a) => (
           <option key={a.id} value={a.id}>{advanceLabel(a)}</option>
         ))}
       </select>
+      </>
+      )}
       <fieldset>
         <legend>How was it repaid?</legend>
         {METHODS.map((m) => (

@@ -13,6 +13,8 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
+import { addOn } from './screen-link';
 
 // "Correct" on a row of the stock list (issue #351, ADR-044): the owner fixes a mistake where he sees it, with a trail. Four small
 // choices, each opened on its own: the right quantity (a reason, posted as a correction that is not shrinkage), the category, a wrong
@@ -127,6 +129,7 @@ function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; bra
 
 /** Move the item to the right category; the change is audited with the old and the new category. */
 function CategoryForm({ row, onDone }: { row: StockRow; onDone: (message: string) => void }) {
+  const { me } = useStaff();
   const queryClient = useQueryClient();
   const id = row.product_id ?? '';
   const product = useQuery({ queryKey: ['retail', 'product', id], queryFn: () => retail.getProduct(id), gcTime: 0 });
@@ -159,10 +162,17 @@ function CategoryForm({ row, onDone }: { row: StockRow; onDone: (message: string
       }}
     >
       <p>Now in <strong>{row.category}</strong>.</p>
+      {categories.isError || (categories.data !== undefined && choices.every((c) => c.id === own)) ? (
+        <EmptyChoice id="correct-category" label="The right category" load={categories} text="No other category yet." ask="Ask the owner to add the category first."
+          add={addOn(me, 'categories', 'Add a category', '/staff/retail/catalogue/categories')} />
+      ) : (
+      <>
       <label htmlFor="correct-category">The right category</label>
       <select id="correct-category" value={target} onChange={(e) => setChosen(e.target.value)}>
         {choices.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
+      </>
+      )}
       <p className="hint">The change is recorded with the old and the new category.</p>
       <Problem error={send.error} />
       <BusyButton type="submit" className="rt-primary" busy={send.isPending} notReady={!ready}>Move to this category</BusyButton>

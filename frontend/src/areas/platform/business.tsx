@@ -634,6 +634,7 @@ export function BusinessScreen({ tenantId }: { tenantId: string }) {
               >
                 <div>
                   <label htmlFor="plan-pick">New plan</label>
+                  {/* empty: the operator console; the plans are seeded with the platform and a plan in use is never removed. */}
                   <select id="plan-pick" value={planPick} onChange={(e) => setPlanPick(e.target.value)}>
                     <option value="">Choose</option>
                     {activePlans.map((p) => (

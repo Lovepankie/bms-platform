@@ -18,6 +18,7 @@ import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue
 import { ItemPhoto, PhotoChoice, PhotoEditor, sendNewPhoto, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
 import { StockMinimumEditor } from './stock-minimum';
+import { UnitPicker } from './unit-picker';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { CategoryPicker } from './category-picker';
 import { ScreenToast } from './toast';
@@ -254,18 +255,14 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
             <NameHintsPanel id="item" hints={hints} categoryId={categoryId} categoryFixed={fixed !== undefined}
               choosable={(c) => categoryChoices.some((x) => x.id === c)} openLabel="Open" onOpen={(id) => (onOpen ?? (() => undefined))(id)} onUseCategory={setCategoryId} />
           )}
-          <Field
+          <UnitPicker
             id="item-unit"
-            label={WORDS.countedIn}
-            required
+            units={unitChoices}
+            loading={units.data === undefined} load={units}
+            value={unitId}
+            onChange={(next) => { setUnitId(next); forget(); }}
             error={unitId === '' ? 'Choose a unit.' : null}
             showError={showErrors}
-            control={(props) => (
-              <select {...props} value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
-                <option value="">Choose a unit</option>
-                {unitChoices.map((u) => <option key={u.id} value={u.id}>{u.name}{u.active === false ? ' (switched off)' : ''}</option>)}
-              </select>
-            )}
           />
         </>
       )}

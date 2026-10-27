@@ -350,10 +350,14 @@ describe('design guard, the rules the kit holds every screen to', () => {
   it('builds the inline Add an item from Field and the category picker, every field required, the Item code as text and 48px controls', () => {
     const form = code('areas/staff/retail/new-item-here.tsx');
     const fields = [...form.matchAll(/<Field\b([\s\S]*?)\n\s*\/>/g)].map(([, props]) => props as string);
-    expect(fields.length).toBe(5);
+    expect(fields.length).toBe(4);
     expect(form).toContain('<ItemCodeLine id={`${id}-code`}');
     expect(fields.filter((props) => /\n\s*required\n/.test(props)).map((props) => props.match(/id=\{`\$\{id\}-(\w+)`\}/)?.[1]))
-      .toEqual(['description', 'unit', 'cost', 'sell', 'qty']);
+      .toEqual(['description', 'cost', 'sell', 'qty']);
+    // Counted in is the unit picker (issue #619), which draws its own Field, required unless told otherwise, after the description.
+    expect(form).toMatch(/<UnitPicker\n\s*id=\{`\$\{id\}-unit`\}/);
+    expect(code('areas/staff/retail/unit-picker.tsx')).toMatch(/required = true/);
+    expect(form.indexOf('<UnitPicker')).toBeGreaterThan(form.indexOf(`id={\`\${id}-description\`}`));
     // The category is the one picker (#578), which draws its own Field, required, first.
     expect(form.match(/<CategoryPicker\b([\s\S]*?)\n\s*\/>/)?.[1]).toMatch(/id=\{`\$\{id\}-category`\}[\s\S]*\n\s*required\n/);
     expect(form.indexOf('<CategoryPicker')).toBeLessThan(form.search(/<Field\s/));
@@ -509,5 +513,58 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
     expect(phone).toMatch(/\.breadcrumbs li\.crumb-parent::before \{\s*content: none;/);
     expect(nav).toMatch(/\.breadcrumbs li \+ li::before/);
     expect(nav).not.toMatch(/\.breadcrumbs li::before/);
+  });
+});
+
+// Rule 25 (issue #619): a list a form needs is never a dead end. A <select> whose options are read at run time (a list mapped from
+// data or props, not a constant such as METHODS or Object.keys(WORDS)) shows the EmptyChoice when that list is empty, or says
+// with an `empty:` comment in the lines just above it why it never is (a filter with its "All", a list the server always fills).
+// The comment is read, not blanked, so the reason stays next to the select it excuses.
+const CONSTANT_OPTIONS = /^\(*(?:\[|(?:Object\.(?:keys|entries)\()?[A-Z][A-Z0-9_]*\b)/;
+
+/** Each <select> of `source` whose options come from a list read at run time: its line and the list it maps. */
+export function runtimeSelects(source: string): { line: number; list: string }[] {
+  return [...source.matchAll(/<select\b/g)].flatMap((m) => {
+    const body = source.slice(m.index, source.indexOf('</select>', m.index));
+    const lists = [...body.matchAll(/\{\s*([^{}]*?)\??\.map\(/g)].map(([, list]) => (list as string).trim()).filter((list) => !CONSTANT_OPTIONS.test(list));
+    return lists.length === 0 ? [] : [{ line: source.slice(0, m.index).split('\n').length, list: lists.join(', ') }];
+  });
+}
+
+/** True when the 12 lines above `line` hold an EmptyChoice or an `empty:` comment, or the 15 below an EmptyChoice (its other branch). */
+export function handlesEmpty(source: string, line: number): boolean {
+  const lines = source.split('\n');
+  const above = lines.slice(Math.max(0, line - 13), line).join('\n');
+  const below = lines.slice(line, line + 15).join('\n');
+  return /<EmptyChoice\b|\/\/ empty: \S|\{\/\* empty: \S/.test(above) || /<EmptyChoice\b/.test(below);
+}
+
+describe('design guard, an empty list is never a dead end (issue #619)', () => {
+  const sources = components.map((f) => relative(SRC, f));
+
+  it('finds the selects of run-time lists, and passes a constant list or one handled', () => {
+    expect(runtimeSelects('<select>{METHODS.map((m) => <option />)}</select>')).toEqual([]);
+    expect(runtimeSelects('<select>{(Object.keys(WORDS) as W[]).map((m) => <option />)}</select>')).toEqual([]);
+    expect(runtimeSelects('<select>\n{(units.data ?? []).map((u) => <option />)}</select>')).toEqual([{ line: 1, list: '(units.data ?? [])' }]);
+    expect(runtimeSelects('<select>{lists.data?.map((u) => <option />)}</select>')).toEqual([{ line: 1, list: 'lists.data' }]);
+    expect(handlesEmpty('x\n<select>', 2)).toBe(false);
+    expect(handlesEmpty('{units.length === 0 ? <EmptyChoice id="u" /> : (\n<select>', 2)).toBe(true);
+    expect(handlesEmpty('// empty: a filter, "All" is always there\n<select>', 2)).toBe(true);
+  });
+
+  // The lending forms' SelectField draws the EmptyChoice itself when given `empty`: one of a run-time list must pass it.
+  it.each(sources)('%s passes `empty` to every SelectField of a run-time list', (file) => {
+    const source = readFileSync(join(SRC, file), 'utf8');
+    const missing = [...source.matchAll(/<SelectField\b[\s\S]*?\/>/g)]
+      .map(([tag]) => tag as string)
+      .filter((tag) => /options=\{\s*\(?[a-z]/.test(tag) && !/\bempty=/.test(tag) && !/\/\* empty: \S/.test(tag))
+      .map((tag) => `${file}: ${tag.slice(0, 80)}`);
+    expect(missing).toEqual([]);
+  });
+
+  it.each(sources)('%s shows the EmptyChoice for every select of a run-time list, or says why it is never empty', (file) => {
+    const source = readFileSync(join(SRC, file), 'utf8');
+    const missing = runtimeSelects(source).filter(({ line }) => !handlesEmpty(source, line)).map(({ line, list }) => `${file}:${line} maps ${list}`);
+    expect(missing).toEqual([]);
   });
 });

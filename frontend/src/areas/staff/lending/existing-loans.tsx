@@ -12,6 +12,7 @@ import { money, words } from './loan-state';
 import { MemberPicker } from './member-picker';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // Record an existing loan (issue #466, FR-EXL-01 to FR-EXL-04, ADR-071), for a business moving off a paper register: the
 // member, the product, the amount lent, the real date it was given out, the term, the product's rate or the amount the
@@ -151,11 +152,17 @@ export function ExistingLoanForm({ api = existingLoans }: { api?: ExistingLoansA
     <form className="mf" aria-label="Record an existing loan" noValidate onSubmit={submit} data-tour="existing-form">
       <MemberPicker id="el-member" chosen={chosen} error={error('member_id')} errorId="el-member-error"
         onChoose={(m) => { setChosen(m); set('memberId', m?.id ?? null); }} />
+      {showsEmptyChoice(products) ? (
+        <EmptyChoice id="el-product" label="Loan product" load={products} text="No loan products yet." ask="Ask the owner to add a loan product first." />
+      ) : (
+      <>
       <label htmlFor="el-product">Loan product</label>
       <select id="el-product" value={draft.productId} onChange={(e) => set('productId', e.target.value)} aria-invalid={!!error('product_id')}>
         <option value="">Choose the product</option>
         {(products.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.code}: {p.name}</option>)}
       </select>
+      </>
+      )}
       {error('product_id') && <p className="field-error" role="alert">{error('product_id')}</p>}
       <label htmlFor="el-principal">Amount lent</label>
       <input id="el-principal" inputMode="decimal" value={draft.principal} onChange={(e) => set('principal', e.target.value)} aria-invalid={!!error('principal_minor')} />

@@ -9,8 +9,9 @@ import { money } from './loan-state';
 import { AccountRows, SavingsGate } from './savings';
 import { MemberSmsControl } from './member-sms';
 import { showInvestments } from './investment-state';
-import { mayOpenAccounts } from './savings-permissions';
+import { mayManageProducts, mayOpenAccounts } from './savings-permissions';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // A member's savings tab (FR-SAV-02): every account the member holds (a member may hold several),
 // the total, and opening another one on an active product. Opening moves no money: the first
@@ -19,6 +20,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 function OpenAccount({ memberId }: { memberId: string }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { me } = useStaff();
   const products = useQuery({ queryKey: ['savings', 'products'], queryFn: () => savings.listProducts() });
   const active = (products.data ?? []).filter((p) => p.status === 'active');
   const [productId, setProductId] = useState('');
@@ -30,8 +32,11 @@ function OpenAccount({ memberId }: { memberId: string }) {
       void navigate({ to: '/staff/lending/savings/accounts/$accountId', params: { accountId: a.id ?? '' } });
     },
   });
-  if (products.data && active.length === 0) {
-    return <p className="empty-state">There is no active savings product yet. Ask an admin to set one up.</p>;
+  if (showsEmptyChoice(products, products.data && active)) {
+    return (
+      <EmptyChoice id="sv-open-product" label="Product" load={products} text="No savings products yet." ask="Ask the owner to add a savings product first."
+        add={mayManageProducts(me) ? { label: 'Add a savings product', to: '/staff/lending/savings/products' } : null} />
+    );
   }
   return (
     <form aria-label="Open a savings account" onSubmit={(e) => { e.preventDefault(); if (productId && !open.isPending) open.mutate(); }}>

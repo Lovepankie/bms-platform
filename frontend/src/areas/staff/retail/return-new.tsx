@@ -18,6 +18,7 @@ import { Problem, Success, money } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // Take goods back against a sale (returns capability, ADR-033, issue #201). Each line of the sale shows what was sold, what has
 // come back already and what can still come back; the person enters a quantity, the reason and where the goods go, then how the
@@ -80,11 +81,17 @@ export function ReturnRow({ line, row, back, branches, onChange }: {
               </select>
               {row.disposition === 'restock' && (
                 <>
+                  {branches.some((b) => b.stocks_goods !== false) ? (
+                  <>
                   <label htmlFor={`branch-${id}`}>Put them back at</label>
                   <select id={`branch-${id}`} value={row.restockBranchId} onChange={(e) => onChange({ ...row, restockBranchId: e.target.value })}>
                     <option value="">Choose a branch or store</option>
                     {branches.filter((b) => b.stocks_goods !== false).map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
                   </select>
+                  </>
+                  ) : (
+                    <EmptyChoice id={`branch-${id}`} label="Put them back at" text="No branch or store where you may put stock back." ask="Ask the owner to give you one first." />
+                  )}
                 </>
               )}
               {row.disposition === 'write_off' && <Hint full>Damaged goods never go back into stock. Their cost is written off.</Hint>}
@@ -138,6 +145,7 @@ export function ReturnFormView({ sale, back, form: chosen, branches, usualIsStor
         {plan.moneyMinor > 0 && (tills.length > 1 || (usualIsStore && tills.length > 0)) && (
           <>
             <label htmlFor="refund-branch">Pay the money out of the till of</label>
+            {/* empty: drawn only when there is a till to choose. */}
             <select id="refund-branch" value={form.refundBranchId} onChange={(e) => onChange({ ...form, refundBranchId: e.target.value })}>
               <option value="">{sale.branch_id && !usualIsStore ? 'The usual branch' : 'Choose a branch'}</option>
               {tills.map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}

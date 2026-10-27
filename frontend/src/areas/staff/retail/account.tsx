@@ -19,6 +19,7 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 import { showDate } from './maths';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
 import { Hint } from '../../../app/ui/Hint';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // One credit buyer's account (customer_accounts capability, ADR-033, issue #196): the limit and the terms, what is owed,
 // payment on account, the payments taken, and the statement. A seller opens it from Credit buyers or Credit control; the
@@ -122,11 +123,17 @@ export function PaymentPanel({ form, open, branches, today, busy, error, onChang
       ) : (
         <form className="stack" onSubmit={(e) => { e.preventDefault(); if (!problem && !busy) onSubmit(); }}>
           <p className="hint">Up to {money(allocatableMinor(open))} can be paid here.</p>
+          {branches.length === 0 ? (
+            <EmptyChoice id="pay-branch" label="Branch that received the money" text="No branch where you may take payments." ask="Ask the owner to give you a branch first." />
+          ) : (
+          <>
           <label htmlFor="pay-branch">Branch that received the money</label>
           <select id="pay-branch" value={form.branchId} onChange={(e) => onChange({ ...form, branchId: e.target.value })}>
             <option value="">Choose a branch</option>
             {branches.map((b) => <option key={b.id} value={b.id}>{branchLabel(b)}</option>)}
           </select>
+          </>
+          )}
           <label htmlFor="pay-amount">Amount received</label>
           <input id="pay-amount" inputMode="numeric" value={form.amount} onChange={(e) => onChange({ ...form, amount: e.target.value })} />
           <label htmlFor="pay-method">Paid by</label>

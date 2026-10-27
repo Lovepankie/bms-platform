@@ -311,3 +311,18 @@ describe('the category picker on a phone', () => {
     expect(document.querySelector('.toast')?.textContent).toBe('Added the category Phone cases. Its item codes start with PHN.');
   });
 });
+
+describe('with no category to choose (issue #619)', () => {
+  it('says so and adds the first one in place for whoever manages the catalogue', async () => {
+    open(<CategoryPicker id="c" categories={[]} value="" onChange={() => undefined} />);
+    expect(await screen.findByText('No categories yet.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add a category' })).toBeTruthy();
+  });
+
+  it('tells anyone else to ask the owner', async () => {
+    open(<CategoryPicker id="c" categories={[]} value="" onChange={() => undefined} />, mockMe('sales'));
+    expect(await screen.findByText('No categories yet. Ask the owner to add a category first.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add a category' })).toBeNull();
+  });
+});
+

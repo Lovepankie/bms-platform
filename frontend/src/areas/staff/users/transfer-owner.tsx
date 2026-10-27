@@ -57,6 +57,7 @@ export function TransferOwner({ targets, mfaEnabled, onSend, onCancel }: {
       }}
     >
       <label htmlFor="transfer-to">Who becomes the owner</label>
+      {/* empty: with no other administrator the dialog returns early above and says to make one first. */}
       <select id="transfer-to" value={toId} disabled={busy} onChange={(e) => setToId(e.target.value)}>
         <option value="">Choose an administrator</option>
         {targets.map((t) => (

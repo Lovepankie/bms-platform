@@ -4,22 +4,29 @@ import { useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type CustomerGroup, type PriceList } from '../../../api/retail';
 import { AddPanel } from './catalogue';
-import { ScreenLink } from './screen-link';
+import { ScreenLink, addOn } from './screen-link';
 import { Gate, Problem, changeFailureText, requireVersion } from './ui';
 import { WORDS } from '../../../app/glossary';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { useOptionalStaff, useStaff } from '../context';
 
 // Customer groups (ADR-033, issue #195): customers that share a price list. A buyer's own list wins over the list of
 // the group; a buyer is put in a group on the Credit buyers page. A group is switched off, never deleted. Each group
 // names the list its buyers are priced from, or none.
 
-export function GroupCard({ group, lists, busy, onSave, extra }: {
+export function GroupCard({ group, lists, listsLoad, busy, onSave, extra }: {
   group: CustomerGroup;
   /** More under the group's line, such as links to its buyers and its price list. */
   extra?: ReactNode;
   lists: PriceList[];
+  /** The read of the price lists: a failed one is said with Try again, never as "No price lists yet." */
+  listsLoad?: { isError: boolean; refetch: () => unknown; data?: PriceList[] };
   busy?: boolean;
   onSave: (body: { name: string; price_list_id?: string; active: boolean }) => void;
 }) {
+  // A card drawn outside the staff layout (a test) offers no way to the Price lists screen.
+  const me = useOptionalStaff()?.me;
+  const choosable = lists.filter((l) => l.active || l.id === group.price_list_id);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(group.name ?? '');
   const [listId, setListId] = useState(group.price_list_id ?? '');
@@ -39,11 +46,18 @@ export function GroupCard({ group, lists, busy, onSave, extra }: {
         <div className="stack">
           <label htmlFor={`group-name-${group.id}`}>Name</label>
           <input id={`group-name-${group.id}`} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} />
-          <label htmlFor={`group-list-${group.id}`}>Price list</label>
-          <select id={`group-list-${group.id}`} value={listId} onChange={(e) => setListId(e.target.value)}>
-            <option value="">No price list</option>
-            {lists.filter((l) => l.active || l.id === group.price_list_id).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
+          {!(listsLoad ? showsEmptyChoice(listsLoad, listsLoad.data && choosable) : choosable.length === 0) ? (
+            <>
+              <label htmlFor={`group-list-${group.id}`}>Price list</label>
+              <select id={`group-list-${group.id}`} value={listId} onChange={(e) => setListId(e.target.value)}>
+                <option value="">No price list</option>
+                {choosable.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </>
+          ) : (
+            <EmptyChoice id={`group-list-${group.id}`} label="Price list" load={listsLoad} text="No price lists yet." ask="Ask the owner to add a price list first."
+              add={me ? addOn(me, 'priceLists', 'Add a price list', '/staff/retail/price-lists') : null} />
+          )}
           <p className="cluster">
             <BusyButton busy={busy ?? false} type="button" disabled={name.trim() === ''} onClick={() => { save(group.active !== false, name.trim(), listId); setEditing(false); }}>Save</BusyButton>
             <button type="button" className="btn-ghost" onClick={() => { setName(group.name ?? ''); setListId(group.price_list_id ?? ''); setEditing(false); }}>Cancel</button>
@@ -60,6 +74,7 @@ export function GroupCard({ group, lists, busy, onSave, extra }: {
 }
 
 export function CustomerGroups() {
+  const { me } = useStaff();
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -84,11 +99,18 @@ export function CustomerGroups() {
         <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) create.mutate(); }} data-tour="customer-group-new">
           <label htmlFor="new-group-name">Name</label>
           <input id="new-group-name" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} autoComplete="off" />
-          <label htmlFor="new-group-list">Price list (optional)</label>
-          <select id="new-group-list" value={listId} onChange={(e) => setListId(e.target.value)}>
-            <option value="">No price list</option>
-            {(lists.data ?? []).filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
+          {showsEmptyChoice(lists, lists.data?.filter((l) => l.active)) ? (
+            <EmptyChoice id="new-group-list" label="Price list (optional)" load={lists} text="No price lists yet." ask="Ask the owner to add a price list first."
+              add={addOn(me, 'priceLists', 'Add a price list', '/staff/retail/price-lists')} />
+          ) : (
+            <>
+              <label htmlFor="new-group-list">Price list (optional)</label>
+              <select id="new-group-list" value={listId} onChange={(e) => setListId(e.target.value)}>
+                <option value="">No price list</option>
+                {(lists.data ?? []).filter((l) => l.active).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </>
+          )}
           <BusyButton busy={create.isPending} type="submit" className="rt-primary" notReady={name.trim() === ''}>Add group</BusyButton>
           <Problem error={create.error} />
         </form>
@@ -103,6 +125,7 @@ export function CustomerGroups() {
             key={g.id}
             group={g}
             lists={lists.data ?? []}
+            listsLoad={lists}
             busy={change.isPending}
             onSave={(body) => change.mutate({ group: g, body })}
             extra={(

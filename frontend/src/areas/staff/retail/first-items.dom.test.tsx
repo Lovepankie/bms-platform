@@ -25,6 +25,7 @@ const commitStocktake = vi.fn();
 const similarProducts = vi.fn();
 const listCatalogue = vi.fn();
 const getProduct = vi.fn();
+const listProducts = vi.fn();
 const made: Product = { id: 'p9', code: 'DUV-0001', description: 'Test duvet cover', category_id: 'c9', category: 'Duvets', unit_id: 'u1', unit: 'piece', sell_minor: 45000, cost_minor: 0, active: true, version: 1 };
 const duvets = { id: 'c9', name: 'Duvets', active: true, product_count: 0, version: 1, code_prefix: 'DUV', next_code: 'DUV-0001' };
 
@@ -40,7 +41,7 @@ vi.mock('../../../api/retail', async (original) => {
     retail: {
       ...real.retail,
       listCatalogue: (...a: unknown[]) => { listCatalogue(...a); return Promise.resolve({ items: catalogue }); },
-      listProducts: () => Promise.resolve(catalogue),
+      listProducts: (...a: unknown[]) => listProducts(...a),
       listCustomers: () => Promise.resolve([]),
       stockedBranches: () => Promise.resolve([]),
       listCategories: () => Promise.resolve(cats),
@@ -79,7 +80,10 @@ afterEach(() => {
   similarProducts.mockReset();
   similarProducts.mockResolvedValue({ exact: [], similar: [] });
   getProduct.mockReset();
+  listProducts.mockReset();
+  listProducts.mockImplementation(() => Promise.resolve(catalogue));
 });
+listProducts.mockImplementation(() => Promise.resolve(catalogue));
 
 similarProducts.mockResolvedValue({ exact: [], similar: [] });
 
@@ -160,10 +164,9 @@ describe('a Sell search that finds nothing', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Not in the list? Add it here' }));
     expect((within(form()).getByLabelText(/^Description/) as HTMLInputElement).value).toBe('Test duvet cover');
 
-    // A first shop has no category: the picker makes one right there and chooses it.
-    const category = within(form()).getByLabelText(/^Category/);
-    fireEvent.click(category);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add a new category' }));
+    // A first shop has no category: the field says so (issue #619), makes one right there and chooses it.
+    expect(await within(form()).findByText('No categories yet.')).toBeTruthy();
+    fireEvent.click(within(form()).getByRole('button', { name: 'Add a category' }));
     fireEvent.change(screen.getByLabelText(/^Name of the new category/), { target: { value: 'Duvets' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
     await waitFor(() => expect(within(form()).getByLabelText(/^Category/).textContent).toBe('Duvets'));
@@ -194,6 +197,8 @@ describe('a Sell search that finds nothing', () => {
     const existing: Product = { ...made, id: 'p1', code: 'DUV-0007' };
     similarProducts.mockResolvedValue({ exact: [{ id: 'p1', code: 'DUV-0007', description: 'Test duvet cover' }], similar: [] });
     getProduct.mockResolvedValue(existing);
+    // The search a name differs from finds nothing; the item's own code finds it, with this branch's stock.
+    listProducts.mockImplementation(({ query }: { query?: string }) => Promise.resolve(query === 'DUV-0007' ? [{ ...existing, qty: '3.000' }] : []));
     open(<RecordSale />, owner);
     await fill('4');
     fireEvent.click(await within(form()).findByRole('button', { name: 'Use this item' }));
@@ -201,6 +206,19 @@ describe('a Sell search that finds nothing', () => {
     expect(createProduct).not.toHaveBeenCalled();
     expect(createStocktake).not.toHaveBeenCalled();
     expect(await screen.findByText('Test duvet cover is already in your items, so its stock is not changed here. If it is wrong, use Count stock.')).toBeTruthy();
+  });
+
+  it('keeps an existing item with no stock here off the sale, and says to buy or count stock first (review of #616)', async () => {
+    const existing: Product = { ...made, id: 'p1', code: 'DUV-0007' };
+    similarProducts.mockResolvedValue({ exact: [{ id: 'p1', code: 'DUV-0007', description: 'Test duvet cover' }], similar: [] });
+    getProduct.mockResolvedValue(existing);
+    listProducts.mockImplementation(({ query }: { query?: string }) => Promise.resolve(query === 'DUV-0007' ? [{ ...existing, qty: '0.000' }] : []));
+    open(<RecordSale />, owner);
+    await fill('4');
+    fireEvent.click(await within(form()).findByRole('button', { name: 'Use this item' }));
+    expect(await screen.findByText('Test duvet cover is already in your items, but it has no stock here yet, so it is not on the sale. Use Buy stock or Count stock first.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove Test duvet cover' })).toBeNull();
+    expect(createStocktake).not.toHaveBeenCalled();
   });
 
   it('keeps a new item off the sale for someone who may not count stock here, and says how to put stock in', async () => {
@@ -223,6 +241,19 @@ describe('a Sell search that finds nothing', () => {
     expect(await screen.findByText('Test duvet cover is saved, but its count is not. Count it on Count stock, then sell it.')).toBeTruthy();
     expect(commitStocktake).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Remove Test duvet cover' })).toBeNull();
+  });
+
+  it('keeps an open Add it here with what was typed when a later search finds something (review of #616)', async () => {
+    cats = [duvets];
+    listProducts.mockImplementation(({ query }: { query?: string }) => Promise.resolve(query === 'Test duvet' ? [{ ...made, qty: '2.000' }] : []));
+    open(<RecordSale />, owner);
+    await search('Test duvet cover');
+    fireEvent.click(await screen.findByRole('button', { name: 'Not in the list? Add it here' }));
+    fireEvent.change(within(form()).getByLabelText(/^Selling price/), { target: { value: '45000' } });
+    await search('Test duvet');
+    expect(await screen.findByRole('option', { name: /Test duvet cover/ })).toBeTruthy();
+    expect((within(form()).getByLabelText(/^Selling price/) as HTMLInputElement).value).toBe('45000');
+    expect((within(form()).getByLabelText(/^Description/) as HTMLInputElement).value).toBe('Test duvet cover');
   });
 
   it('tells someone who cannot add items to ask the owner', async () => {

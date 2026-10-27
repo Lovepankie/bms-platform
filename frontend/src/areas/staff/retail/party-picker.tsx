@@ -5,6 +5,7 @@ import { useStaff } from '../context';
 import { addableKinds } from './permissions';
 import { Problem } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // One list of cash parties serves beneficiaries and advance parties (FR-RET-17). The picker offers the
 // active parties of the allowed kinds and lets a permitted user add one on the spot. Adding is not a
@@ -18,10 +19,14 @@ export function useCashParties() {
   return useQuery({ queryKey: ['retail', 'cash-parties'], queryFn: () => retail.listCashParties() });
 }
 
-export function PartyPicker({ id, label, parties, kinds, listed, value, onChange, noneLabel, addLabel, optional = false }: {
+export function PartyPicker({ id, label, parties, loading = false, load, kinds, listed, value, onChange, noneLabel, addLabel, optional = false }: {
   id: string;
   label: string;
   parties: CashParty[];
+  /** The list is not known yet (on its way, or its read failed): the select shows, never the empty line. */
+  loading?: boolean;
+  /** The read of the parties: a failed one says so with Try again (EmptyChoice). */
+  load?: { isError: boolean; refetch: () => unknown };
   /** The kinds a party added here may be; one means the kind is fixed, several means the person chooses. */
   kinds: CashPartyKind[];
   /** The kinds the list shows; every kind when absent (a beneficiary may be anyone in the list). */
@@ -53,7 +58,11 @@ export function PartyPicker({ id, label, parties, kinds, listed, value, onChange
   const choices = parties.filter((p) => p.active !== false && (!listed || listed.includes(p.kind as CashPartyKind)));
   return (
     <>
-      {!adding && (
+      {!adding && (load?.isError || (!loading && choices.length === 0)) && (
+        <EmptyChoice id={id} label={label} load={load} text="Nobody in this list yet." ask="Ask the owner to add them first."
+          add={addable.length > 0 ? { label: addLabel, onClick: () => { setAdding(true); add.reset(); } } : null} />
+      )}
+      {!adding && !load?.isError && (loading || choices.length > 0) && (
         <>
           <label htmlFor={id}>{label}</label>
           <select id={id} value={value} onChange={(e) => onChange(e.target.value)} aria-required={!optional}>
@@ -77,6 +86,7 @@ export function PartyPicker({ id, label, parties, kinds, listed, value, onChange
           {addable.length > 1 && (
             <>
               <label htmlFor={kindId}>Who is this?</label>
+              {/* empty: drawn only with two kinds or more to choose from. */}
               <select id={kindId} value={kind} onChange={(e) => setKind(e.target.value as CashPartyKind)}>
                 {addable.map((k) => (
                   <option key={k} value={k}>{KIND_LABELS[k] ?? k}</option>

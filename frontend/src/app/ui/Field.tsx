@@ -24,8 +24,9 @@ export function FieldsNeededNote() {
 
 /** Scrolls to the first required field left empty, or the first marked wrong, inside `root`, and focuses it; false when none. */
 export function focusFirstMissing(root: ParentNode): boolean {
-  const fields = [...root.querySelectorAll<HTMLInputElement>('[aria-required="true"], [aria-invalid="true"]')];
-  const first = fields.find((f) => f.getAttribute('aria-invalid') === 'true' || ('value' in f && String(f.value).trim() === ''));
+  // An empty list a field needs (EmptyChoice, issue #619) marks its way to add one `data-needed`: it is always missing.
+  const fields = [...root.querySelectorAll<HTMLInputElement>('[aria-required="true"], [aria-invalid="true"], [data-needed]')];
+  const first = fields.find((f) => f.hasAttribute('data-needed') || f.getAttribute('aria-invalid') === 'true' || ('value' in f && String(f.value).trim() === ''));
   if (!first) return false;
   first.scrollIntoView?.({ block: 'center' });
   first.focus();

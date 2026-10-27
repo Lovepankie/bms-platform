@@ -6,7 +6,7 @@ that carry them live in `frontend/src/app/theme.css`; `frontend/src/app/ui/desig
 check. The fuller design system is `docs/ui/design-system.md`.
 
 The component kit (issue #520) carries these rules: `Segmented`, `Stepper`, `Field`, `MoneyInput`, `ListRow` and `Card`,
-`Sheet`, `EmptyState`, `Skeleton` and `SuccessScreen` in `frontend/src/app/ui`, styled in `kit.css` and shown together on
+`Sheet`, `EmptyState`, `EmptyChoice` (issue #619), `Skeleton` and `SuccessScreen` in `frontend/src/app/ui`, styled in `kit.css` and shown together on
 `/staff/kit` (administrators only). A new screen is built from them. Dialogs and sheets use `@radix-ui/react-dialog`
 (the kit's `Sheet`), the pick-one control uses `@radix-ui/react-toggle-group` (`Segmented`), and a searchable list that opens
 under its field on a wider screen uses `@radix-ui/react-popover` (the category picker, issue #578), all styled only with our
@@ -113,3 +113,18 @@ back to what opened it.
     the rows behind it is link coloured with a chevron. No navigation is an underlined word.
 24. A help text is one line (`Hint`); the rest is behind its info button or in Help. A warning or a consequence that changes
     what the person does next is never cut (`Hint full`, or a `Note`).
+
+## Empty lists on a form (issue #619)
+
+25. A list a form needs is never a dead end. When a select or picker has no options it is the kit's `EmptyChoice`: the
+    field's label, one plain line saying what is missing ("No units yet."), and one way to fill it. Where the list is made of
+    names (units, categories, suppliers, customer groups, cash parties) the button adds one right there, by its name, and
+    chooses it (`AddByName`); otherwise it opens the screen that adds one with `?back=` the form, and that screen comes back
+    once it is added (`useComeBack`). Someone who may not add one reads who can ("Ask the owner to add a unit first."). Never
+    only a "Choose a unit" with nothing under it, and never shown while the list is still loading. A needed field's way to add
+    is where Save takes the person (`data-needed`, read by `focusFirstMissing`). Counted in on both item forms always offers
+    Add a new unit (`UnitPicker`). An info toast never hides an error toast still showing: it is said after it. The design
+    guard fails a `<select>` of a list read at run time that has no `EmptyChoice` near it and no `empty:` comment saying why it
+    is never empty (a filter with its "All", a select drawn only when it has choices). The help article is
+    `frontend/src/help/articles/empty-list.md`.
+

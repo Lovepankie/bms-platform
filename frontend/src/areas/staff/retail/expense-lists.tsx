@@ -6,6 +6,7 @@ import { retail, type ExpenseCategory, type ExpenseItem } from '../../../api/ret
 import { useToast } from './toast';
 import { Gate, Problem } from './ui';
 import { Hint } from '../../../app/ui/Hint';
+import { useComeBack } from '../../../app/ui/EmptyChoice';
 
 // The expense lists (FR-RET-17): categories and the items in them, kept by whoever holds
 // retail.expense.manage. Nothing is deleted: a category or item is switched off and stays on old records.
@@ -27,7 +28,7 @@ function RenameField({ label, value, disabled, onSave }: { label: string; value:
   );
 }
 
-export function ItemRow({ category, item, busy, change }: { category: ExpenseCategory; item: ExpenseItem; busy: boolean; change: (run: () => Promise<unknown>) => void }) {
+export function ItemRow({ category, item, busy, change }: { category: ExpenseCategory; item: ExpenseItem; busy: boolean; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
   const id = useId();
   const version = item.version ?? 0;
   const update = (body: { name?: string; active?: boolean; requires_explanation?: boolean }) => change(() => retail.updateExpenseItem(category.id ?? '', item.id ?? '', body, version));
@@ -51,7 +52,7 @@ export function ItemRow({ category, item, busy, change }: { category: ExpenseCat
   );
 }
 
-function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: (run: () => Promise<unknown>) => void }) {
+function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
   const nameId = useId();
   const flagId = useId();
   const [name, setName] = useState('');
@@ -60,7 +61,7 @@ function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: 
     <form onSubmit={(e) => {
       e.preventDefault();
       if (name.trim() === '' || busy) return;
-      change(() => retail.createExpenseItem(category.id ?? '', { name: name.trim(), requires_explanation: flag }));
+      change(() => retail.createExpenseItem(category.id ?? '', { name: name.trim(), requires_explanation: flag }), true);
       setName('');
       setFlag(false);
     }}>
@@ -75,7 +76,7 @@ function AddItem({ category, busy, change }: { category: ExpenseCategory; busy: 
   );
 }
 
-export function CategoryCard({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: (run: () => Promise<unknown>) => void }) {
+export function CategoryCard({ category, busy, change }: { category: ExpenseCategory; busy: boolean; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
   const version = category.version ?? 0;
   const update = (body: { name?: string; active?: boolean }) => change(() => retail.updateExpenseCategory(category.id ?? '', body, version));
   return (
@@ -96,7 +97,7 @@ export function CategoryCard({ category, busy, change }: { category: ExpenseCate
   );
 }
 
-export function ExpenseLists({ categories, busy, error, change }: { categories: ExpenseCategory[]; busy: boolean; error: unknown; change: (run: () => Promise<unknown>) => void }) {
+export function ExpenseLists({ categories, busy, error, change }: { categories: ExpenseCategory[]; busy: boolean; error: unknown; change: (run: () => Promise<unknown>, item?: boolean) => void }) {
   const nameId = useId();
   const [name, setName] = useState('');
   return (
@@ -121,10 +122,15 @@ export function ExpenseLists({ categories, busy, error, change }: { categories: 
 export function ExpenseListsScreen() {
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
+  const back = useComeBack();
   const categories = useQuery({ queryKey: ['retail', 'expense-categories', false], queryFn: () => retail.listExpenseCategories() });
   const change = useMutation({
-    mutationFn: (run: () => Promise<unknown>) => run(),
-    onSuccess: () => show('Saved.', 'success'),
+    mutationFn: ({ run }: { run: () => Promise<unknown>; item?: boolean }) => run(),
+    onSuccess: (_, { item }) => {
+      show('Saved.', 'success');
+      // Opened from an empty list on the expense form (issue #619): the form needs an item, so a new item takes the person back.
+      if (item) back?.();
+    },
     // Success or a refusal (for example a stale version), the lists are read again so the next change uses what is current.
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'expense-categories'] }),
   });
@@ -134,7 +140,7 @@ export function ExpenseListsScreen() {
       <div data-tour="expense-lists-body">
         {categories.isError && <Problem error={categories.error} />}
         {categories.isPending && <p className="loading">Loading</p>}
-        {categories.data && <ExpenseLists categories={categories.data} busy={change.isPending} error={change.error} change={(run) => change.mutate(run)} />}
+        {categories.data && <ExpenseLists categories={categories.data} busy={change.isPending} error={change.error} change={(run, item) => change.mutate({ run, item })} />}
       </div>
       {toast}
     </Gate>

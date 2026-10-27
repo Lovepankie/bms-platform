@@ -53,6 +53,7 @@ function LineCard({ line, index, order, onChange, onRemove }: {
       {line.packs.length > 0 && (
         <>
           <label htmlFor={`rc-unit-${index}`}>Received by</label>
+          {/* empty: drawn only when the item has packs; its own unit is always there. */}
           <select id={`rc-unit-${index}`} value={line.unitId ?? ''} onChange={(e) => onChange(withReceiveUnit(line, e.target.value))}>
             <option value="">{line.baseUnit}</option>
             {line.packs.map((k) => <option key={k.unit_id} value={k.unit_id}>{k.unit} ({showQty(k.factor ?? '')} each)</option>)}

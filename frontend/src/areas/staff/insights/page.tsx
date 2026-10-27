@@ -189,6 +189,7 @@ function InsightsPage() {
         </label>
         <label>
           Product
+          {/* empty: a filter; All products is always there. */}
           <select value={productId} onChange={(e) => setProductId(e.target.value)}>
             <option value="">All products</option>
             {products.map((p) => (
@@ -199,6 +200,7 @@ function InsightsPage() {
         {!own && (
           <label>
             Officer
+            {/* empty: a filter; All officers is always there. */}
             <select value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
               <option value="">All officers</option>
               {officers.map((o) => (

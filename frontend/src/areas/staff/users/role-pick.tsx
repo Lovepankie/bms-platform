@@ -37,6 +37,7 @@ export function RolePick({ roles, branches, roleKey, branchIds, onChange, disabl
   return (
     <div className="stack">
       <label htmlFor={`${id}-role`}>{label}</label>
+      {/* empty: the roles are seeded with every business and cannot be removed. */}
       <select id={`${id}-role`} value={roleKey} disabled={disabled} aria-invalid={Boolean(problem)} onChange={(e) => onChange({ roleKey: e.target.value, branchIds: e.target.value === TENANT_ADMIN ? [] : branchIds })}>
         <option value="">Choose a role</option>
         {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}

@@ -356,6 +356,7 @@ export function AllSales() {
           {itemSearch !== '' && (
             <>
               <label htmlFor="sales-item">Choose the item</label>
+              {/* empty: a filter of what the search found; Any of these is always there. */}
               <select id="sales-item" value={productId} onChange={(e) => setProductId(e.target.value)}>
                 <option value="">Any of these</option>
                 {(products.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.description} ({p.code})</option>)}

@@ -42,7 +42,8 @@ export function Toast({ message, tone, silent = false }: { message: string; tone
 }
 
 export function useToast(ms: number = TOAST_MS, silent = false): { show: (message: string, tone: ToastTone) => void; toast: ReactNode } {
-  const [shown, setShown] = useState<{ message: string; tone: ToastTone } | null>(null);
+  // `error` is the error a later info was said after, so a second info replaces the first instead of piling up.
+  const [shown, setShown] = useState<{ message: string; tone: ToastTone; error?: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clear = () => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -52,7 +53,13 @@ export function useToast(ms: number = TOAST_MS, silent = false): { show: (messag
   const show = useCallback(
     (message: string, tone: ToastTone) => {
       clear();
-      setShown({ message, tone });
+      // An info never hides an error still showing (review of #616: a photo not saved after a count not saved): it is said after
+      // the error, in the error's toast, so the one toast a screen shows keeps what went wrong.
+      setShown((was) => {
+        if (was?.tone !== 'error' || tone !== 'info') return { message, tone };
+        const error = was.error ?? was.message;
+        return { message: `${error} ${message}`, tone: 'error', error };
+      });
       timer.current = setTimeout(() => setShown(null), ms);
     },
     [ms],

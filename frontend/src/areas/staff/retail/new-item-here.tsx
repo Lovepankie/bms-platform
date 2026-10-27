@@ -12,6 +12,7 @@ import { NameHintsPanel, useNameHints } from './name-hints';
 import { parseCount, parseQty } from './maths';
 import { CategoryPicker } from './category-picker';
 import { PhotoChoice, sendNewPhoto } from './item-photo';
+import { UnitPicker } from './unit-picker';
 import { ScreenToast } from './toast';
 import { Problem, money } from './ui';
 
@@ -57,7 +58,7 @@ export function ItemCodeLine({ id, category }: { id: string; category: Category 
   );
 }
 
-export function NewItemHere({ id, qtyLabel, qtyError, counting = false, askCost, description, ask = ASK_MANAGER, onAdded }: {
+export function NewItemHere({ id, qtyLabel, qtyError, counting = false, askCost, description, ask = ASK_MANAGER, onOpenChange, onAdded }: {
   id: string;
   /** What a missing or wrong quantity says, when the screen's words differ from buying or counting (Sell, issue #615). */
   qtyError?: string;
@@ -71,6 +72,8 @@ export function NewItemHere({ id, qtyLabel, qtyError, counting = false, askCost,
   counting?: boolean;
   /** The buying price is asked for: always on Buy stock; on Count stock only for someone who may see it. */
   askCost: boolean;
+  /** Told when the form opens and closes, so the screen keeps it drawn while it is open. */
+  onOpenChange?: (open: boolean) => void;
   /** Puts the item on the screen's line; a returned text says why it could not, and shows under the button. */
   onAdded: (added: AddedItem) => string | void | Promise<string | void>;
 }) {
@@ -83,7 +86,7 @@ export function NewItemHere({ id, qtyLabel, qtyError, counting = false, askCost,
   if (!open) {
     return (
       <>
-        <button type="button" id={`${id}-open`} className="btn-ghost" aria-expanded={false} onClick={() => { setNote(null); setOpen(true); }}>
+        <button type="button" id={`${id}-open`} className="btn-ghost" aria-expanded={false} onClick={() => { setNote(null); setOpen(true); onOpenChange?.(true); }}>
           Not in the list? Add it here
         </button>
         {note && <p role="alert" className="alert alert-warning" data-testid={`${id}-note`}>{note}</p>}
@@ -94,6 +97,7 @@ export function NewItemHere({ id, qtyLabel, qtyError, counting = false, askCost,
   const close = (refused?: string | void) => {
     setNote(refused || null);
     setOpen(false);
+    onOpenChange?.(false);
     setTimeout(() => document.getElementById(`${id}-open`)?.focus());
   };
   return <NewItemForm id={id} qtyLabel={qtyLabel} qtyError={qtyError} counting={counting} askCost={askCost} initial={description} onAdded={onAdded} onClose={close} />;
@@ -120,7 +124,7 @@ function NewItemForm({ id, qtyLabel, qtyError, counting, askCost, initial = '', 
   const [cost, setCost] = useState(counting ? '0' : '');
   const [sell, setSell] = useState('');
   const [qty, setQty] = useState('');
-  // Issue #617: the optional photo, sent right after the item is made; a failed upload leaves the item and says so.
+  // Issue #617: the optional photo, sent once the item is on the line; a failed upload leaves the item and says so.
   const [photo, setPhoto] = useState<File | null>(null);
   const screenToast = useContext(ScreenToast);
   const [showErrors, setShowErrors] = useState(false);
@@ -154,11 +158,14 @@ function NewItemForm({ id, qtyLabel, qtyError, counting, askCost, initial = '', 
         cost_minor: costMinor ?? 0,
         ...(duplicateReason ? { duplicate_reason: duplicateReason } : {}),
       });
-      const photoNote = await sendNewPhoto(product.id ?? '', photo);
       void queryClient.invalidateQueries({ queryKey: ['retail', 'catalogue'] });
+      // The line first, then the photo (review of #616): a large photo on a slow connection never keeps the item off the
+      // purchase or the sale, and the form closes at once. A failed upload leaves the item and says so after the line's own word.
       await added(product, true);
-      // Said after the screen's own word about the line, so it is the toast that stays.
+      const photoNote = await sendNewPhoto(product.id ?? '', photo);
       if (photoNote) screenToast?.(`${product.description ?? 'The item'} is saved. ${photoNote}`, 'info');
+      // The item's photo is read again once it is on the item.
+      else if (photo) void queryClient.invalidateQueries({ queryKey: ['retail', 'catalogue'] });
     },
     onError: (error) => {
       const found = existingOf(error);
@@ -253,18 +260,14 @@ function NewItemForm({ id, qtyLabel, qtyError, counting, askCost, initial = '', 
         <NameHintsPanel id={`${id}-name`} hints={hints} categoryId={categoryId} choosable={(c) => activeCategories.some((x) => x.id === c)}
           openLabel="Use this item" onOpen={chooseExisting} onUseCategory={setCategoryId} />
       )}
-      <Field
+      <UnitPicker
         id={`${id}-unit`}
-        label={WORDS.countedIn}
-        required
+        units={(units.data ?? []).filter((u) => u.active !== false)}
+        loading={units.data === undefined} load={units}
+        value={unitId}
+        onChange={(next) => { setUnitId(next); forget(); }}
         error={unitId === '' ? 'Choose a unit.' : null}
         showError={showErrors}
-        control={(props) => (
-          <select {...props} value={unitId} onChange={(e) => { setUnitId(e.target.value); forget(); }}>
-            <option value="">Choose a unit</option>
-            {(units.data ?? []).filter((u) => u.active !== false).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        )}
       />
       {askCost && (
         <Field

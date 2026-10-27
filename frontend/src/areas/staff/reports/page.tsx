@@ -197,6 +197,7 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
           <label key={p.name}>
             {paramLabel(p.name)}
             {p.type === 'enum' ? (
+              // empty: Default is always there; the values come with the report.
               <select value={values[p.name] ?? ''} onChange={(ev) => setValues({ ...values, [p.name]: ev.target.value })}>
                 <option value="">Default</option>
                 {p.values.map((v) => (
@@ -214,6 +215,7 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
         ))}
       <label>
         File type
+        {/* empty: every report the server lists has at least one file type. */}
         <select value={format} onChange={(ev) => setFormat(ev.target.value)}>
           {entry.formats.map((f) => (
             <option key={f} value={f}>{FORMAT_LABEL[f] ?? f.toUpperCase()}</option>

@@ -451,6 +451,18 @@ button.list-row:focus-visible {
   color: var(--color-text-muted);
 }
 
+/* The empty choice (issue #619): a list a form needs is empty. One plain line under the field's label and one way to fill it,
+   left aligned in the form like the field it stands for. No border or box (rule 21). */
+.empty-choice > p {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.empty-choice > .btn,
+.empty-choice > button {
+  min-height: var(--tap);
+}
+
 /* Skeleton: still grey rows in the shape of a list, faded in once over 200ms. No loop: motion on this page stays short (owner
    rule, 24 Oct 2026). */
 .skeleton-rows {

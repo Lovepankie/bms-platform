@@ -38,6 +38,8 @@ import { useUnsavedWork } from '../../../app/unsaved-work';
 import { entryWarnings, type EntryWarning } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { FirstItemsCard, useNoItemsYet } from './first-items';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { addOn } from './screen-link';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -168,6 +170,7 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
       {packs.length > 0 && (
         <div>
           <label htmlFor={`unit-${i}`}>Sell by</label>
+          {/* empty: drawn only when the item has packs; its own unit is always there. */}
           <select id={`unit-${i}`} data-tour="sale-unit" value={pack?.unit_id ?? ''} onChange={(e) => onUnit(e.target.value)}>
             <option value="">{line.product.unit}</option>
             {packs.map((k) => <option key={k.unit_id} value={k.unit_id}>{k.unit} ({showQty(k.factor ?? '')} {line.product.unit})</option>)}
@@ -343,7 +346,20 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     for (const key of [['retail', 'catalogue'], ['retail', 'products'], ['retail', 'stocked-branches']]) void queryClient.invalidateQueries({ queryKey: key });
     clear();
     if (!made) {
-      add(product);
+      // An item already in the list keeps its own stock (review of #616): with none here it stays off the sale, as a new one does,
+      // so the sale is never refused for stock at Record sale. The search reads this branch's balance, 0 included.
+      let here: Product | undefined;
+      try {
+        here = (await retail.listProducts({ query: product.code ?? product.description ?? '', branchId })).find((p) => p.id === product.id);
+      } catch {
+        show(`${name} is in your items, but its stock here could not be read. Search for it again.`, 'error');
+        return;
+      }
+      if (!here || !(Number(here.qty ?? '0') > 0)) {
+        show(`${name} is already in your items, but it has no stock here yet, so it is not on the sale. Use ${WORDS.buyStock} or ${WORDS.countStock} first.`, 'info');
+        return;
+      }
+      add(here);
       if (qty.trim() !== '') show(`${name} is already in your items, so its stock is not changed here. If it is wrong, use ${WORDS.countStock}.`, 'info');
       return;
     }
@@ -450,10 +466,10 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
             branchId={branchId}
             showPrice
             onAdd={add}
-            notFound={(term, clear) => (
+            notFound={(term, clear, hold) => (
               <ScreenToast.Provider value={show}>
                 <NewItemHere id="sale-new" description={term} ask={ASK_OWNER_ITEM} askCost={profit} qtyLabel={mayCount ? 'How many you have here' : undefined}
-                  qtyError="Type how many you have here, more than 0." onAdded={(added) => addNew(added, clear)} />
+                  qtyError="Type how many you have here, more than 0." onOpenChange={hold} onAdded={(added) => addNew(added, clear)} />
               </ScreenToast.Provider>
             )}
           />
@@ -501,6 +517,11 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       {pricesOn && draft.method !== 'credit' && (
         <fieldset data-tour="sale-customer">
           <legend>Customer</legend>
+          {showsEmptyChoice(customers) ? (
+            <EmptyChoice id="price-customer" label="Customer (optional): sets the price list" load={customers} text="No customers yet." ask="Ask the owner to add your customers first."
+              add={addOn(me, 'buyers', 'Add a customer', '/staff/retail/catalogue/buyers')} />
+          ) : (
+          <>
           <label htmlFor="price-customer">Customer (optional): sets the price list</label>
           <select id="price-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
             <option value="">No customer: retail prices</option>
@@ -508,10 +529,17 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          </>
+          )}
         </fieldset>
       )}
       {canChooseList && (
         <div>
+          {showsEmptyChoice(lists, lists.data?.filter((l) => l.active)) ? (
+            <EmptyChoice id="price-list" label="Price list for this sale" load={lists} text="No price lists yet." ask="Ask the owner to add a price list first."
+              add={addOn(me, 'priceLists', 'Add a price list', '/staff/retail/price-lists')} />
+          ) : (
+          <>
           <label htmlFor="price-list">Price list for this sale</label>
           <select id="price-list" value={draft.priceListId ?? ''} onChange={(e) => update({ priceListId: e.target.value || undefined })}>
             <option value="">The customer's own list</option>
@@ -519,6 +547,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
+          </>
+          )}
         </div>
       )}
 
@@ -536,13 +566,18 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       {offlineMode && (
         <fieldset>
           <legend>Buyer (optional)</legend>
+          {(offline?.catalogue?.customers ?? []).length > 0 && (
+          <>
           <label htmlFor="offline-customer">Customer saved on this phone</label>
+          {/* empty: drawn only when this phone holds customers; otherwise the buyer's name is typed below. */}
           <select id="offline-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
             <option value="">No customer</option>
             {(offline?.catalogue?.customers ?? []).map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          </>
+          )}
           {!draft.customerId && (
             <>
               <label htmlFor="offline-buyer-name">Or the buyer's name</label>
@@ -555,7 +590,10 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       {draft.method === 'credit' && (
         <fieldset>
           <legend>Customer from the list</legend>
-          {!addingBuyer && (
+          {!addingBuyer && showsEmptyChoice(customers) && (
+            <EmptyChoice id="buyer" label="Buyer" load={customers} text="No buyers yet." add={{ label: 'Add a new buyer', onClick: () => { setAddingBuyer(true); update({ customerId: '' }); } }} />
+          )}
+          {!addingBuyer && !showsEmptyChoice(customers) && (
             <>
               <label htmlFor="buyer">Buyer</label>
               <select id="buyer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>

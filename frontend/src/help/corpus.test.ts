@@ -45,8 +45,8 @@ const ids = (list: { id: string }[]) => list.map((a) => a.id);
 
 // The getting-started articles (issue #609) open before sign-in, where the picture script (docs/ui/how-do-i-598) needs a
 // local API, so they ship as text first; their pictures are a follow-up and this list shrinks as they land. Getting your shop
-// ready (issue #615) and adding a photo (issue #617) are text first in the same way.
-const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo'];
+// ready (issue #615), adding a photo (issue #617) and an empty list (issue #619) are text first in the same way.
+const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list'];
 
 describe('the help corpus', () => {
   it('holds the 15 to 30 articles of the questions pilots asked, each job with one at least', () => {
@@ -355,8 +355,54 @@ describe('a photo while adding an item (issue #617)', () => {
       expect(labels.length, `part ${i + 1}`).toBeGreaterThan(0);
       for (const label of labels) expect(code, `part ${i + 1}: ${label}`).toMatch(whole(label));
     });
+    // The introduction says the photo shows when the item is picked in a sale: the Sell search, ProductPicker, draws it.
+    expect(articleText(photo)).toContain('when you pick the item in a sale');
+    expect(source(['areas/staff/retail/ui.tsx'])).toMatch(/export function ProductPicker[\s\S]*?<ItemPhoto photoId=\{shownPhoto\(p\)\}/);
+    expect(source(['areas/staff/retail/sale.tsx'])).toMatch(/<ProductPicker\n\s*id="sale-search"/);
     const step = boldIn([articleById('add-an-item')!.steps[1]!.text]).filter((l) => /photo|picture/.test(l));
     expect(step).toEqual(['Take a picture', 'Choose a photo']);
     for (const label of step) expect(source(['areas/staff/retail/item-photo.tsx'])).toMatch(whole(label));
+  });
+});
+
+describe('an empty list (issue #619)', () => {
+  const EMPTY = 'empty-list';
+  // The code of the screens each part walks through (its steps in order, then its note).
+  const PARTS = [
+    ['areas/staff/retail/unit-picker.tsx'],
+    ['areas/staff/retail/unit-picker.tsx'],
+    ['areas/staff/retail/sale.tsx'],
+    ['areas/staff/retail/unit-picker.tsx'],
+    ['app/glossary.ts', 'areas/staff/retail/unit-picker.tsx'],
+  ];
+  const source = (files: string[]) => files.map((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')).join('\n');
+  const boldIn = (runs: Inline[]) => [...new Set(runs.flat().filter((r) => r.strong).map((r) => r.text))];
+  const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const whole = (label: string) => new RegExp(`(^|[>'"])\\s*${escape(label)}\\s*($|[<'"])`, 'm');
+
+  it('is there for everyone, under Getting started, and found with the words a stuck person types', () => {
+    const empty = articleById(EMPTY)!;
+    expect(empty.title).toBe('What do I do when a list is empty?');
+    expect(empty.job).toBe('start');
+    for (const people of [seller, owner, officer]) expect(ids(articlesFor(people))).toContain(EMPTY);
+    for (const typed of ['the list is empty', 'no units', 'nothing to choose', 'dropdown is empty']) expect(searchArticles(articlesFor(owner), typed)[0]?.id, typed).toBe(EMPTY);
+    expect(articleText(empty)).not.toMatch(/[\u2013\u2014]| - /);
+  });
+
+  it('puts in bold only labels the screens of each step really show', () => {
+    const empty = articleById(EMPTY)!;
+    const parts = [...empty.steps.map((step) => boldIn([step.text])), boldIn(empty.notes)];
+    expect(parts).toHaveLength(PARTS.length);
+    parts.forEach((labels, i) => {
+      const code = source(PARTS[i]!);
+      expect(labels.length, `part ${i + 1}`).toBeGreaterThan(0);
+      for (const label of labels) expect(code, `part ${i + 1}: ${label}`).toMatch(whole(label));
+    });
+  });
+
+  it('promises only what the screens do: the inline adds, and the screens that come back', () => {
+    const inline = source(['areas/staff/retail/unit-picker.tsx', 'areas/staff/retail/category-picker.tsx', 'areas/staff/retail/purchasing-ui.tsx', 'areas/staff/retail/buyer-pricing.tsx']);
+    for (const create of ['retail.createUnit', 'createCategory', 'retail.createSupplier', 'retail.createCustomerGroup']) expect(inline).toContain(create);
+    for (const screen of ['catalogue-people.tsx', 'price-lists.tsx', '../branches/page.tsx']) expect(source([`areas/staff/retail/${screen}`]), screen).toMatch(/useComeBack\(\)[\s\S]*back\?\.\(\)/);
   });
 });

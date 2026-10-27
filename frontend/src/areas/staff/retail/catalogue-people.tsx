@@ -13,6 +13,7 @@ import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
+import { useComeBack } from '../../../app/ui/EmptyChoice';
 
 // Suppliers and Credit buyers (#146): a name and a contact, added and edited by the shop. A supplier
 // can be switched off (it stays on its past restocks); a credit buyer is never removed. The contact
@@ -95,6 +96,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   searchable?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const back = useComeBack();
   const { show, toast } = useToast();
   const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -120,7 +122,11 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const add = useMutation({
     mutationFn: () => create({ name: name.trim(), ...(contact.trim() ? { contact: contact.trim() } : {}) }),
     onMutate: () => setMessage(null),
-    onSuccess: (row) => { setName(''); setContact(''); setAdding(false); done(`Added the ${noun} "${row.name}".`); },
+    onSuccess: (row) => {
+      setName(''); setContact(''); setAdding(false); done(`Added the ${noun} "${row.name}".`);
+      // Opened from an empty list on a form (issue #619): what was added takes the person back to that form.
+      back?.();
+    },
   });
   const change = useMutation({
     mutationFn: (v: { id: string; version: number | undefined; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, requireVersion(v.version), v.body).then((row) => ({ row, text: v.text })),

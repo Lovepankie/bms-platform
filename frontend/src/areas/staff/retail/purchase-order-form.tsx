@@ -30,6 +30,7 @@ export function OrderLineCard({ line, index, onChange, onRemove }: { line: Order
       {line.packs.length > 0 && (
         <>
           <label htmlFor={`unit-${index}`}>Ordered by</label>
+          {/* empty: drawn only when the item has packs; its own unit is always there. */}
           <select id={`unit-${index}`} value={line.unitId ?? ''} onChange={(e) => onChange(withOrderUnit(line, e.target.value))}>
             <option value="">{line.baseUnit}</option>
             {line.packs.map((k) => <option key={k.unit_id} value={k.unit_id}>{k.unit} ({showQty(k.factor ?? '')} each)</option>)}

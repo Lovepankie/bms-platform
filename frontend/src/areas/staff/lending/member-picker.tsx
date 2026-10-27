@@ -1,5 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { Highlight, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
+import { MEMBERS_CREATE } from './member-permissions';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { useMembersApi } from '../../../api/lending-context';
 import type { MemberListItem } from '../../../api/members';
@@ -20,7 +22,7 @@ export function MemberPicker({ id, chosen, onChoose, error, errorId, label = 'Fi
   chosenLabel?: string;
   required?: boolean;
 }) {
-  const { branch } = useStaff();
+  const { me, branch } = useStaff();
   const api = useMembersApi();
   const search = useLiveSearch();
   const found = useQuery({
@@ -49,7 +51,9 @@ export function MemberPicker({ id, chosen, onChoose, error, errorId, label = 'Fi
       {search.term !== '' && found.data && (
         <SearchResults fetching={fetching}>
           {items.length === 0 ? (
-            <NoResults term={search.term} onClear={search.clear} noun="members" />
+            // Issue #619: a search that finds nobody leads to adding the member, and comes back here once they are added.
+            <EmptyChoice id={`${id}-add`} text={`No members for "${search.term}".`} ask="Ask the owner to add the member first."
+              add={(me.permissions ?? []).includes(MEMBERS_CREATE) ? { label: 'Add a member', to: '/staff/lending/members/new' } : null} />
           ) : (
             <ul className="ln-list">
               {items.map((m) => (

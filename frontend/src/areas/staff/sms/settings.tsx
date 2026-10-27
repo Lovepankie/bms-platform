@@ -174,6 +174,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
           hint="The name members see. It must be one the platform approved for your business. Without one, messages come from the provider's shared sender. To get a name approved, ask the platform."
           error={fieldError('sender_id')}
         >
+          {/* empty: The shared sender is always there; the hint says how to get a name approved. */}
           <select id="sms-sender" data-tour="sms-sender" value={draft.senderId} disabled={!canManage} onChange={(e) => set('senderId', e.target.value)}>
             <option value="">The shared sender (default)</option>
             {saved.approved_sender_ids.map((id) => (

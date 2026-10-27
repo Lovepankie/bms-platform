@@ -22,6 +22,8 @@ import { RowChevron } from '../../../app/ui/ListRow';
 import { Hint } from '../../../app/ui/Hint';
 import { entryWarnings } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
+import { canManageBranches } from '../branches/state';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -125,6 +127,11 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       <p>From: {label(fromBranchId)}</p>
       <NoStockHere branchId={fromBranchId} />
       <div data-tour="transfer-to">
+      {destinations.length === 0 ? (
+        <EmptyChoice id="transfer-to" label="To branch" text="No other branch or store to move stock to." ask="Ask the owner to add a branch first."
+          add={canManageBranches(me) ? { label: 'Add a branch', to: '/staff/setup/branches' } : null} />
+      ) : (
+      <>
       <label htmlFor="transfer-to">To branch</label>
       <select id="transfer-to" value={draft.toBranchId} onChange={(e) => update({ toBranchId: e.target.value })}>
         <option value="">Choose a branch</option>
@@ -132,8 +139,9 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
           <option key={b.id} value={b.id}>{label(b.id)}</option>
         ))}
       </select>
+      </>
+      )}
       </div>
-      {destinations.length === 0 && <p>You have no other branch to move stock to.</p>}
       {sends && <Hint full>The stock leaves this branch now. The other branch counts it once they receive it.</Hint>}
 
       <div data-tour="transfer-search">

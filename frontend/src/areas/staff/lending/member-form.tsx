@@ -21,6 +21,7 @@ import {
 } from './member-state';
 import { PhotoQueueControl, usePhotoQueue, type Sender } from './photo-queue';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { useComeBack } from '../../../app/ui/EmptyChoice';
 
 // Create and edit a member (issue #280, FR-MEM-01 to FR-MEM-04, FR-MEM-09, FR-MEM-10). One column, big inputs, a sticky save
 // bar. Before anything is saved the screen asks the server for likely duplicates by phone, national ID and name and shows
@@ -140,9 +141,12 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
 
   const photosBusy = idFront.busy || idBack.busy;
 
+  const back = useComeBack();
   const finish = (m: MemberRecord) => {
     void queryClient.invalidateQueries({ queryKey: ['members'] });
     if (onSaved) onSaved(m);
+    // Opened from a member search that found nobody (issue #619): the new member takes the person back to the form that needed one.
+    else if (!editing && back) back();
     else void navigate({ to: '/staff/lending/members/$memberId', params: { memberId: m.id ?? '' } });
   };
 
@@ -223,7 +227,8 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
           <p className="field-hint">Branch: {branchName}. To move a member to another branch, ask an administrator.</p>
         ) : (
           <SelectField name="branch_id" label="Branch" form={form} required value={draft.branchId} onChange={(v) => set('branchId', v)}
-            options={allowed.map((b) => ({ value: b.id ?? '', label: branchLabel(b) }))} blankLabel="Choose a branch" />
+            options={allowed.map((b) => ({ value: b.id ?? '', label: branchLabel(b) }))} blankLabel="Choose a branch"
+            empty={{ text: 'No branch where you may add members.', ask: 'Ask the owner to give you a branch first.' }} />
         )}
         <TextField name="full_name" label="Full name" form={form} required value={draft.fullName} onChange={(v) => set('fullName', v)} autoComplete="off" maxLength={200} />
         <TextField name="phone" label="Phone number" form={form} required type="tel" inputMode="tel" value={draft.phone} onChange={(v) => { setServerPhone(false); set('phone', v); }}

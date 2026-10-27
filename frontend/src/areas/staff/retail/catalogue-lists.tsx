@@ -6,6 +6,7 @@ import { retail, type Category, type Unit } from '../../../api/retail';
 import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
+import { useComeBack } from '../../../app/ui/EmptyChoice';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
 // deleted: items and their history keep pointing at it. A switched-off row stays on the items that
@@ -85,6 +86,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   const [suggested, setSuggested] = useState('');
   const [adding, setAdding] = useState(false);
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
+  const back = useComeBack();
   const done = (text: string) => {
     setMessage(text);
     show(text, 'success');
@@ -97,6 +99,8 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
       setName(''); setSuggested(''); setAdding(false);
       const codes = withPrefix && 'code_prefix' in row && row.code_prefix ? ` Its item codes start with ${row.code_prefix}.` : '';
       done(`Added the ${noun} "${row.name}".${codes}`);
+      // Opened from an empty list on a form (issue #619): what was added takes the person back to that form.
+      back?.();
     },
   });
   const change = useMutation({

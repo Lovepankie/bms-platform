@@ -124,6 +124,7 @@ export function MenuShop({ me, branch, role, onChoose, tour }: { me: Me; branch:
           <span className="menu-shop-branch-name">{name}</span>
           {choices > 1 && <span className="menu-shop-chevron" aria-hidden="true">{icons.chevron}</span>}
           {choices > 1 && (
+            // empty: drawn only with two branches or more to switch between.
             <select className="menu-shop-select" aria-label="Switch branch" value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
               {me.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
               {branches.map((b) => (

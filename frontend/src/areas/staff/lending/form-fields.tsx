@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { FieldMessages } from '../../../api/lending-forms';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { EmptyChoice, type ChoiceAdd } from '../../../app/ui/EmptyChoice';
 
 // Accessible form pieces shared by the member and collateral forms (issue #280): a label above every
 // input, a hint and an error tied to the input with aria-describedby, aria-invalid on a refused input,
@@ -125,15 +126,18 @@ export function TextField({ name, label, form, hint, required, disabled, value, 
   );
 }
 
-export function SelectField({ name, label, form, hint, required, disabled, value, onChange, options, blankLabel }: CommonProps & {
+export function SelectField({ name, label, form, hint, required, disabled, value, onChange, options, blankLabel, empty }: CommonProps & {
   value: string;
   onChange: (value: string) => void;
   options: readonly { value: string; label: string }[];
   /** An empty first choice ("Choose a branch"). */
   blankLabel?: string;
+  /** What the field says when a list read from the server is empty (issue #619): the line, who to ask, and the way to add one. */
+  empty?: { text: string; ask: string; add?: ChoiceAdd<unknown> | null; load?: { isError: boolean; refetch: () => unknown } };
 }) {
   const id = form.idOf(name);
   const error = form.error(name);
+  if (empty && (options.length === 0 || empty.load?.isError)) return <EmptyChoice id={id} label={label} required={required} load={empty.load} text={empty.text} ask={empty.ask} add={empty.add} />;
   return (
     <div className="mf-field">
       <label htmlFor={id}>{label}{required ? <span className="field-star" aria-hidden="true"> *</span> : null}</label>

@@ -130,6 +130,7 @@ export function BarcodeEditor({ product }: { product: Product }) {
           {packs.length > 0 && (
             <>
               <label htmlFor="barcode-unit">This barcode is on</label>
+              {/* empty: drawn only when the item has packs; One of its own unit is always there. */}
               <select id="barcode-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
                 <option value="">One {product.unit}</option>
                 {packs.map((k) => <option key={k.unit_id} value={k.unit_id}>One {k.unit}</option>)}

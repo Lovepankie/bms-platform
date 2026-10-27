@@ -64,6 +64,7 @@ export function Choice<T extends string | number>({ id, label, value, options, o
   return (
     <div>
       <label htmlFor={id}>{label}</label>
+      {/* empty: every caller passes a fixed list of choices (rows to show, a target, a grouping). */}
       <select id={id} value={String(value)} onChange={(e) => onChange((typeof value === 'number' ? Number(e.target.value) : e.target.value) as T)}>
         {options.map((o) => <option key={String(o.value)} value={String(o.value)}>{o.label}</option>)}
       </select>

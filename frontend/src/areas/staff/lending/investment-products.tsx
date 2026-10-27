@@ -8,6 +8,7 @@ import { PRODUCTS_MANAGE, may, parsePercent, payoutWords, percent } from './inve
 import { InvestmentsGate } from './investments';
 import { amountText, money, parseAmount, words } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { useComeBack } from '../../../app/ui/EmptyChoice';
 
 // Investment products setup (FR-INV-01, FR-INV-08): the list for everyone who reads investments,
 // and for a tenant admin the form to create one, edit it (investments already opened keep their
@@ -96,6 +97,7 @@ export function termsOf(d: ProductDraft, currency: string | undefined): Investme
 
 function ProductForm({ product, currency, onDone }: { product?: InvestmentProduct; currency?: string; onDone: () => void }) {
   const queryClient = useQueryClient();
+  const back = useComeBack();
   const [d, setD] = useState<ProductDraft>(product ? draftOf(product) : EMPTY);
   const update = (patch: Partial<ProductDraft>) => setD((x) => ({ ...x, ...patch }));
   const terms = termsOf(d, currency);
@@ -110,6 +112,8 @@ function ProductForm({ product, currency, onDone }: { product?: InvestmentProduc
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['lending', 'investment-products'] });
       onDone();
+      // Opened from an empty product list (issue #619): a new product takes the person back to the form that needed it.
+      if (!product) back?.();
     },
   });
   const field = (id: string, label: string, value: string, set: (v: string) => void, hint?: string, mode?: 'decimal') => (

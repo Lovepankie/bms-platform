@@ -15,6 +15,8 @@ import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, WaitingForApproval, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { addOn } from './screen-link';
 
 // Company expenses (FR-RET-24): shop, date, category, then an item of that category, an optional
 // beneficiary, the amount, and an explanation when the item needs one. A receipt photo is not offered yet:
@@ -50,7 +52,11 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
       <DateField id="expense-date" label="Date" value={draft.date} onChange={(date) => update({ date })} />
 
-      {categories.isError && <Problem error={categories.error} />}
+      {showsEmptyChoice(categories, categories.data && activeCategories(list)) ? (
+        <EmptyChoice id="expense-category" label="Category" load={categories} text="No expense categories yet." ask="Ask the owner to add expense categories first."
+          add={addOn(me, 'expenseSetup', 'Add an expense category', '/staff/retail/expense-lists')} />
+      ) : (
+      <>
       <label htmlFor="expense-category">Category</label>
       <select id="expense-category" value={draft.categoryId} onChange={(e) => update({ categoryId: e.target.value, itemId: '', explanation: '' })}>
         <option value="">Choose a category</option>
@@ -59,6 +65,14 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
         ))}
       </select>
 
+      </>
+      )}
+
+      {draft.categoryId !== '' && items.length === 0 ? (
+        <EmptyChoice id="expense-item" label="Item" text="This category has no items yet." ask="Ask the owner to add its items first."
+          add={addOn(me, 'expenseSetup', 'Add an item to it', '/staff/retail/expense-lists')} />
+      ) : (
+      <>
       <label htmlFor="expense-item">Item</label>
       <select id="expense-item" value={draft.itemId} disabled={draft.categoryId === ''} onChange={(e) => update({ itemId: e.target.value, explanation: '' })}>
         <option value="">{draft.categoryId === '' ? 'Choose a category first' : 'Choose an item'}</option>
@@ -66,6 +80,8 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
           <option key={i.id} value={i.id}>{i.name}</option>
         ))}
       </select>
+      </>
+      )}
 
       {explain && (
         <>
@@ -75,7 +91,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
       )}
 
       <PartyPicker
-        id="expense-party" label="Beneficiary (optional)" parties={parties.data ?? []} kinds={['other']} value={draft.partyId}
+        id="expense-party" label="Beneficiary (optional)" parties={parties.data ?? []} loading={parties.data === undefined} load={parties} kinds={['other']} value={draft.partyId}
         onChange={(partyId) => update({ partyId })} noneLabel="No beneficiary" addLabel="Add a new beneficiary" optional
       />
 

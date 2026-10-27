@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { retail, type Pack, type Product } from '../../../api/retail';
+import { retail, type Pack, type Product, type Unit } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showQty } from './maths';
 import { Problem } from './ui';
 import { UNITS, capabilityOn, holds } from './permissions';
 import { factorMilli } from './units-state';
 import { WORDS } from '../../../app/glossary';
+import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 
 // Pack sizes of an item (ADR-033, issue #194): a unit and the number of base units in one pack, for
 // example a carton of twelve pieces. Offered only while /me lists the units capability and the user may
@@ -91,11 +92,25 @@ export function PackEditor({ product }: { product: Product }) {
       <ul style={{ listStyle: 'none', padding: 0 }}>
         {(packs.data ?? []).map((k) => <PackRow key={`${k.unit_id}-${k.version}`} productId={id} pack={k} />)}
       </ul>
+      {showsEmptyChoice(units, units.data && choices) ? (
+        <EmptyChoice id="pack-unit" label="Add a pack" load={units} text="No other unit to make a pack of yet." add={{
+          label: 'Add a new unit', name: 'Name of the new unit, such as carton', send: 'Add unit', maxLength: 50,
+          create: (name) => retail.createUnit(name),
+          onAdded: (unit) => {
+            queryClient.setQueryData<Unit[]>(['retail', 'catalogue', 'units'], (was) => [...(was ?? []).filter((u) => u.id !== unit.id), unit]);
+            void queryClient.invalidateQueries({ queryKey: ['retail', 'catalogue', 'units'] });
+            setUnitId(unit.id ?? '');
+          },
+        }} />
+      ) : (
+      <>
       <label htmlFor="pack-unit">Add a pack</label>
       <select id="pack-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
         <option value="">Choose a unit</option>
         {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
       </select>
+      </>
+      )}
       <label htmlFor="pack-factor">Items in one pack</label>
       <input
         id="pack-factor"

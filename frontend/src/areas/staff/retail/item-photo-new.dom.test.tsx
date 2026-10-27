@@ -18,6 +18,7 @@ const createProduct = vi.fn();
 const setProductPhoto = vi.fn();
 const getProduct = vi.fn();
 let items: Product[] = [];
+let found: Product[] = [];
 const bulbs = { id: 'c1', name: 'Bulbs', active: true, product_count: 1, version: 3, code_prefix: 'BLB', next_code: 'BLB-0002' };
 const made: Product = { id: 'p9', code: 'BLB-0002', description: 'Test bulb 12W', category_id: 'c1', category: 'Bulbs', unit_id: 'u1', unit: 'piece', sell_minor: 9000, cost_minor: 0, active: true, version: 1 };
 
@@ -33,7 +34,7 @@ vi.mock('../../../api/retail', async (original) => {
     retail: {
       ...real.retail,
       listCatalogue: () => Promise.resolve({ items }),
-      listProducts: () => Promise.resolve([]),
+      listProducts: () => Promise.resolve(found),
       listSuppliers: () => Promise.resolve([]),
       listCategories: () => Promise.resolve([bulbs]),
       listUnits: () => Promise.resolve([{ id: 'u1', name: 'piece', active: true, product_count: 1, version: 1 }]),
@@ -52,6 +53,8 @@ vi.mock('../../../api/retail', async (original) => {
 
 const { ProductsPage } = await import('./catalogue-products');
 const { RestockForm } = await import('./restock');
+const { ProductPicker } = await import('./ui');
+const { FirstItemsCard } = await import('./first-items');
 
 const owner = mockMe('admin');
 const picture = () => new File(['fake image bytes'], 'bulb.jpg', { type: 'image/jpeg' });
@@ -64,6 +67,7 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
   items = [];
+  found = [];
   createProduct.mockReset();
   setProductPhoto.mockReset();
   getProduct.mockReset();
@@ -181,5 +185,50 @@ describe('a photo with Add it here', () => {
     await waitFor(() => expect(setProductPhoto).toHaveBeenCalledWith('p9', expect.any(File)));
     expect(await screen.findByText('Test bulb 12W is saved. The photo was not saved. Add it from Edit on the item.')).toBeTruthy();
     expect(createProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the item on the purchase before its photo is sent, so a slow upload never holds the line (review of #616)', async () => {
+    createProduct.mockResolvedValue(made);
+    let upload: (value: unknown) => void = () => undefined;
+    setProductPhoto.mockReturnValue(new Promise((resolve) => { upload = resolve; }));
+    open(<RestockForm />);
+    fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
+    const form = screen.getByRole('group', { name: 'Add a new item' });
+    await chooseCategory(within(form).getByLabelText(/^Category/), 'Bulbs');
+    fireEvent.change(within(form).getByLabelText(/^Description/), { target: { value: 'Test bulb 12W' } });
+    await within(form).findByRole('option', { name: 'piece' });
+    fireEvent.change(within(form).getByLabelText(/^Counted in/), { target: { value: 'u1' } });
+    fireEvent.change(within(form).getByLabelText(/^Buying price/), { target: { value: '6000' } });
+    fireEvent.change(within(form).getByLabelText(/^Selling price/), { target: { value: '9000' } });
+    const qty = within(form).queryByLabelText(/^Quantity bought/);
+    if (qty) fireEvent.change(qty, { target: { value: '3' } });
+    fireEvent.change(within(form).getByLabelText('Take a picture'), { target: { files: [picture()] } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save the item' }));
+    await waitFor(() => expect(setProductPhoto).toHaveBeenCalledWith('p9', expect.any(File)));
+    // The upload has not answered, and the form is closed with the item already a line of the purchase.
+    expect(screen.queryByRole('group', { name: 'Add a new item' })).toBeNull();
+    expect(screen.getByText('Test bulb 12W')).toBeTruthy();
+    upload({ id: 'ph1' });
+  });
+});
+
+describe('the photo in the Sell search (review of #616, the add-a-photo article)', () => {
+  it('shows the photo of an item that has one when it is found to put on a sale', async () => {
+    found = [{ ...made, photo_id: 'ph1', qty: '3.000' }];
+    open(<ProductPicker id="sale-search" branchId={owner.branches?.[0]?.id} showPrice onAdd={() => undefined} />);
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Test bulb' } });
+    expect(await screen.findByRole('img', { name: 'Photo of Test bulb 12W' })).toBeTruthy();
+  });
+});
+
+describe('the card of a shop with no items (review of #616)', () => {
+  it('goes once an item is added on Items, not only through Add it here on Sell', async () => {
+    createProduct.mockImplementation(async () => { items = [made]; return made; });
+    open(<><FirstItemsCard /><ProductsPage /></>);
+    expect(await screen.findByRole('heading', { name: 'Get your shop ready' })).toBeTruthy();
+    await fillItem();
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Get your shop ready' })).toBeNull());
   });
 });

@@ -1,7 +1,10 @@
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { QueryClientContext, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useRef, useState, type ReactNode } from 'react';
-import { retail } from '../../../api/retail';
+import { useContext, useRef, useState, type ReactNode } from 'react';
+import { retail, type Supplier } from '../../../api/retail';
+import { EmptyChoice } from '../../../app/ui/EmptyChoice';
+import { useOptionalStaff } from '../context';
+import { holds } from './permissions';
 import { branchLabel } from '../../../auth/branch';
 import { MIN_REASON, reasonOf, reversalKeys } from './account-state';
 import { newIdempotencyKey } from './idempotency';
@@ -107,9 +110,30 @@ export function SupplierField({ id, label = 'Supplier', value, suppliers, disabl
   required?: boolean;
   onChange: (supplierId: string) => void;
 }) {
+  const me = useOptionalStaff()?.me;
+  // The form's own read of the suppliers, looked up in the cache without a second request: the empty line waits until it has
+  // answered. A form drawn without a query client (a test) never shows it.
+  const queryClient = useContext(QueryClientContext);
+  const read = queryClient?.getQueryState(['retail', 'suppliers']);
+  const failed = read?.status === 'error';
+  if (failed || (read?.data !== undefined && suppliers.length === 0)) {
+    return (
+      <EmptyChoice id={id} label={label} required={required} load={{ isError: failed, refetch: () => queryClient?.refetchQueries({ queryKey: ['retail', 'suppliers'] }) }} text="No suppliers yet." ask="Ask the owner to add your suppliers first."
+        add={me && holds(me, 'retail.catalogue.manage') ? {
+          label: 'Add a supplier', name: 'Name of the supplier', send: 'Add supplier', maxLength: 120,
+          create: (name) => retail.createSupplier({ name }),
+          onAdded: (supplier) => {
+            queryClient?.setQueryData<Supplier[]>(['retail', 'suppliers'], (was) => [...(was ?? []).filter((s) => s.id !== supplier.id), supplier]);
+            void queryClient?.invalidateQueries({ queryKey: ['retail', 'suppliers'] });
+            onChange(supplier.id ?? '');
+          },
+        } : null} />
+    );
+  }
   return (
     <>
       <label htmlFor={id}>{label}{required && <Star />}</label>
+      {/* empty: with no supplier the field is the EmptyChoice returned above. */}
       <select id={id} value={value} disabled={disabled} aria-required={required || undefined} onChange={(e) => onChange(e.target.value)}>
         <option value="">Choose a supplier</option>
         {suppliers.map((s) => <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>)}
@@ -137,6 +161,7 @@ export function BranchField({ id, label, value, branches, required = false, onCh
   onChange: (branchId: string) => void;
 }) {
   if (branches.length === 1) return <p><strong>{label}:</strong> {branchLabel(branches[0])}</p>;
+  if (branches.length === 0) return <EmptyChoice id={id} label={label} required={required} text="No branch or store you may use here." ask="Ask the owner to give you one first." />;
   return (
     <>
       <label htmlFor={id}>{label}{required && <Star />}</label>

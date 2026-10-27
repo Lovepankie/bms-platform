@@ -12,6 +12,7 @@ import { ScreenToast } from './toast';
 import { Gate, ProductPicker, Problem, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
+import { UnitPicker } from './unit-picker';
 
 // Items with sizes and colours (issue #384, ADR-051): the owner of a baby clothes shop chooses the sizes and the prints once and
 // every combination becomes a variant with its own code, price and stock. A variant is an item of its own everywhere else (sale,
@@ -228,12 +229,9 @@ export function NewFamilyPage() {
           <input id="sizes-item-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} autoComplete="off" placeholder="Baby romper" />
           <ScreenToast.Provider value={show}>
             <CategoryPicker id="sizes-item-category" categories={(categories.data ?? []).filter((c) => c.active !== false)} value={categoryId} onChange={setCategoryId} />
+            <UnitPicker id="sizes-item-unit" units={(units.data ?? []).filter((u) => u.active !== false)} loading={units.data === undefined} load={units} value={unitId} onChange={setUnitId}
+              error={null} showError={false} required={false} />
           </ScreenToast.Provider>
-          <label htmlFor="sizes-item-unit">{WORDS.countedIn}</label>
-          <select id="sizes-item-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
-            <option value="">Choose a unit</option>
-            {(units.data ?? []).filter((u) => u.active !== false).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
           {profit && (
             <>
               <label htmlFor="sizes-item-cost">Buying price ({RETAIL_CURRENCY})</label>

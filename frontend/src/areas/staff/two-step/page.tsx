@@ -171,6 +171,7 @@ export function TwoStepPolicyScreen() {
         <div data-tour="twostep-grace">
           <label>
             How long do people have to set it up?
+            {/* empty: graceChoices always holds the fixed choices of days. */}
             <select
               value={choice.graceDays}
               disabled={busy}

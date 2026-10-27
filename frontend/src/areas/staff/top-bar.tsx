@@ -36,6 +36,7 @@ export function BranchTitle({ me, branch, onChoose }: { me: Me; branch: string |
         </span>
       </span>
       {choices > 1 && (
+        // empty: drawn only with two branches or more to switch between.
         <select className="top-title-select" aria-label="Branch" value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
           {me.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
           {branches.map((b) => (

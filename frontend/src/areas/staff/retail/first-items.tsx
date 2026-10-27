@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { retail } from '../../../api/retail';
 import { Card, RowChevron } from '../../../app/ui/ListRow';
 import { useStaff } from '../context';
-import { holds, showRetail } from './permissions';
+import { canUse, holds, showRetail } from './permissions';
 import { ScreenLink } from './screen-link';
 
 // The starting card of a shop with no items yet (issue #615): a new business opened Sell, searched, found nothing and had to
@@ -31,7 +31,9 @@ export function FirstItemsCard() {
   const { me } = useStaff();
   const empty = useNoItemsYet();
   if (!empty) return null;
-  const manages = holds(me, 'retail.catalogue.manage');
+  // Adding needs the Items screen (or the import), not only the catalogue permission: a manager who can open neither is told to
+  // ask, never left with the card's words and no action (review of #616).
+  const manages = holds(me, 'retail.catalogue.manage') && (canUse(me, 'products') || canUse(me, 'importer'));
   return (
     <Card title="Get your shop ready">
       <p data-testid="first-items-text">{NO_ITEMS_YET}</p>

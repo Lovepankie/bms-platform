@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { TOAST_MS, useToast as useToastOf } from './toast';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
@@ -260,8 +260,11 @@ export function useProfitAccess(): boolean {
  */
 export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStock = true, addLabel = 'Add', label = 'Find an item by name, code or category', notFound }: {
   id: string;
-  /** Drawn under the box once a search has found nothing, with what was typed (Sell's Add it here, issue #615). */
-  notFound?: (term: string, clear: () => void) => ReactNode;
+  /**
+   * Drawn under the box once a search has found nothing, with what was typed (Sell's Add it here, issue #615). `hold` keeps it
+   * drawn while a form it opened is open, so a later search that finds something never wipes what was typed (review of #616).
+   */
+  notFound?: (term: string, clear: () => void, hold: (open: boolean) => void) => ReactNode;
   /** The box's label; a second picker on a screen has its own, so the two are told apart. */
   label?: string;
   /** Absent for a screen that is about an item and not a branch's stock (the price list editor), which also sets showStock false. */
@@ -278,6 +281,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
     enabled: search.term !== '',
   });
   const nothing = notFound && search.term !== '' && !search.pending && products.data !== undefined && products.data.length === 0;
+  const [held, setHeld] = useState(false);
   return (
     <>
     <ItemCombobox
@@ -316,7 +320,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
         );
       }}
     />
-    {nothing && notFound(search.term, search.clear)}
+    {notFound && (nothing || held) && notFound(search.term, search.clear, setHeld)}
     </>
   );
 }
