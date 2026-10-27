@@ -383,7 +383,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
                 deploymentNode "R2 staging buckets" "Documents and backups under staging/, private" "Cloudflare R2" {
                     containerInstance bms.storage
                 }
-                edge = infrastructureNode "Edge and tunnel" "Proxied CNAMEs bms-staging and <slug>-bms-staging.rincoltech.com to the tunnel; TLS with the free *.rincoltech.com edge certificate; one public hostname per host" "Cloudflare DNS and Tunnel"
+                edge = infrastructureNode "Edge and tunnel" "Proxied CNAMEs bms-staging and <slug>-bms-staging.rincoltech.com to the tunnel; TLS with the free *.rincoltech.com edge certificate; one public hostname per host; the connector runs over HTTP/2, not QUIC (ADR-097)" "Cloudflare DNS and Tunnel"
             }
             github = deploymentNode "GitHub" "Build once per commit on main for amd64 and arm64; moves the staging pointer (ADR-006, ADR-018)" "GitHub Actions" {
                 registry = infrastructureNode "Container registry" "Private bms-platform-api, -web and -proxy images tagged sha-<short>, and the staging pointer tag; each signed by digest with cosign" "GHCR"

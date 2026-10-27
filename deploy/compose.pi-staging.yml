@@ -381,6 +381,9 @@ services:
       # The tunnel's connector token (Cloudflare Zero Trust, Networks, Tunnels). Its public
       # hostnames point at http://proxy:8080 (docs/runbooks/provision-host.md section 8).
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?}
+      # HTTP/2 over TCP rather than the default QUIC over UDP (ADR-097): on the staging Pi's mobile
+      # uplink QUIC streams time out and requests take seconds. CLOUDFLARE_TUNNEL_PROTOCOL in .env overrides.
+      TUNNEL_TRANSPORT_PROTOCOL: ${CLOUDFLARE_TUNNEL_PROTOCOL:-http2}
     mem_limit: 48m
     cpus: 0.5
     depends_on:
