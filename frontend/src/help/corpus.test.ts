@@ -186,7 +186,7 @@ describe('the getting-started articles (issue #609)', () => {
     'start-using-bms': ['app/landing.tsx', 'areas/onboarding/sign-up.tsx', 'areas/onboarding/forms.ts', 'areas/onboarding/applicant.tsx'],
     'open-my-invitation': ['areas/auth/accept-invitation.tsx', 'areas/auth/steps.tsx'],
     'sign-in': ['app/landing.tsx', 'areas/auth/sign-in.tsx', 'areas/auth/forgot-password.tsx', 'areas/auth/reset-password.tsx', 'areas/onboarding/find-sign-in.tsx'],
-    'install-bms': ['install/InstallPrompt.tsx', 'areas/staff/menu.tsx', 'areas/staff/notifications/page.tsx'],
+    'install-bms': ['install/InstallPrompt.tsx', 'areas/auth/sign-in.tsx', 'areas/staff/menu.tsx', 'areas/staff/notifications/page.tsx'],
   };
   const source = (files: string[]) => files.map((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')).join('\n');
   const text = (id: string) => articleText(articleById(id)!);
@@ -214,9 +214,12 @@ describe('the getting-started articles (issue #609)', () => {
       const code = source(files);
       const labels = bold(id);
       expect(labels.length, id).toBeGreaterThan(5);
-      // A label is the whole of a JSX text, a string or an element's text: "Add" must not pass by being part of "Address".
-      for (const label of labels) expect(code, `${id}: ${label}`).toMatch(new RegExp(`(^|[>'"]|\\s)${escape(label)}($|[<'"]|\\s)`, 'm'));
+      // A label is the whole of a JSX text, a string or an element's text: "Add" must not pass by being part of "Address", nor
+      // "Share" by being a word in a sentence or a comment.
+      for (const label of labels) expect(code, `${id}: ${label}`).toMatch(new RegExp(`(^|[>'"])\\s*${escape(label)}\\s*($|[<'"])`, 'm'));
     }
+    // install-bms step 1: the sign-in page draws the Install the app card.
+    expect(source(['areas/auth/sign-in.tsx'])).toMatch(/<InstallPrompt\b/);
   });
 
   it('give the numbers and promises the screens and the server give', () => {
