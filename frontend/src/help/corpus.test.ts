@@ -375,6 +375,7 @@ describe('adding a unit (a tester asked, issue #625)', () => {
     ['app/glossary.ts', 'areas/staff/retail/unit-picker.tsx'],
     ['app/glossary.ts'],
     ['areas/staff/retail/catalogue-products.tsx', 'app/glossary.ts', 'areas/staff/retail/catalogue-packs.tsx'],
+    ['areas/staff/retail/catalogue-lists.tsx', 'areas/staff/retail/unit-usual-pack.tsx'],
     ['areas/staff/retail/catalogue-lists.tsx'],
   ];
   // Units is the list of Categories with the noun unit (catalogue-lists.tsx), so its labels are read with the noun put in.
