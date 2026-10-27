@@ -77,8 +77,11 @@ describe('the turn-on line on the item form', () => {
     expect(screen.getByText(PACKS_QUESTION)).toBeTruthy();
     expect(screen.queryByTestId('pack-editor')).toBeNull();
     expect(screen.getByRole('link', { name: /How do I sell or buy in cartons\?/ }).getAttribute('href')).toBe('/staff/help/sell-or-buy-in-cartons');
-    // The secondary style: Save changes stays the one primary action.
-    expect(screen.getByRole('button', { name: 'Turn on cartons' }).className).not.toMatch(/primary|brand/);
+    // The secondary style, named: Save changes stays the one primary action.
+    const turnOn = screen.getByRole('button', { name: 'Turn on cartons' });
+    expect(turnOn.classList.contains('btn')).toBe(true);
+    expect(turnOn.className).not.toMatch(/primary|brand/);
+    expect(document.querySelectorAll('.rt-primary, .btn-primary, .btn-brand')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
 
     await screen.findByTestId('pack-editor');

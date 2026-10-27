@@ -381,8 +381,8 @@ export function PacksTurnOn({ adding }: { adding: boolean }) {
       {holds(me, SETTINGS_MANAGE) ? (
         <>
           <Problem error={turnOn.error} />
-          {/* A bare button is the secondary style: Add item or Save changes stays the one primary action (rule 6). */}
-          <BusyButton busy={turnOn.isPending} type="button" onClick={() => turnOn.mutate()}>Turn on cartons</BusyButton>
+          {/* .btn is the secondary style (buttons.css): Add item or Save changes stays the one primary action (rule 6). */}
+          <BusyButton busy={turnOn.isPending} type="button" className="btn" onClick={() => turnOn.mutate()}>Turn on cartons</BusyButton>
         </>
       ) : (
         <p className="hint" data-testid="packs-ask">{ASK_OWNER_PACKS}</p>
