@@ -625,6 +625,21 @@ class RetailSellingPacksIT extends IntegrationTest {
                 .isEqualTo(viaApi.get("purpose").asString());
         assertThat(viaImport.has("sell_minor")).isFalse();
         assertThat(viaApi.has("sell_minor")).isFalse();
+        // One path: both packs are audited as retail.product_unit.created, the imported one with its source.
+        List<String> audited = TestDatabase.owner()
+                .sql("SELECT cast(data AS text) FROM audit_log WHERE tenant_id = ?"
+                        + " AND action = 'retail.product_unit.created' AND data::text LIKE ?")
+                .params(t.tenantId(), "%" + carton + "%")
+                .query(String.class)
+                .list();
+        assertThat(audited).hasSize(2);
+        assertThat(audited)
+                .filteredOn(a -> a.contains(imported))
+                .singleElement()
+                .asString()
+                .contains("\"source\": \"import\"")
+                .contains("\"purpose\": \"both\"");
+        assertThat(audited).filteredOn(a -> a.contains(pen.toString())).hasSize(1);
 
         // A switched-off unit is refused by both paths.
         ResponseEntity<JsonNode> off = api.call(

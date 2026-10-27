@@ -141,8 +141,10 @@ class CatalogueRepository {
                 .single();
     }
 
-    /** Issue #625, ADR-100: the usual size of a pack and what it is for; the V111 check keeps all three or none. */
-    /** Sets the usual pack, or clears it when {@code pack} is null (issue #637). */
+    /**
+     * Issue #625, ADR-100: the usual size of a pack and what it is for; the V111 check keeps all three or none. A null
+     * {@code pack} clears it (issue #637).
+     */
     void setUsualPack(UUID id, UsualPackRequest pack) {
         jdbc.sql("UPDATE retail_units SET pack_size = ?, pack_of_unit_id = ?, pack_purpose = ? WHERE id = ?")
                 .params(

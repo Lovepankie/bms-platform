@@ -56,13 +56,16 @@ class ProductImportService {
     private final AuditLog audit;
     private final ModuleSettings settings;
     private final BarcodeRepository barcodes;
+    private final CatalogueService catalogue;
 
     ProductImportService(
             CatalogueRepository repo,
             CurrentTenant tenant,
             AuditLog audit,
             ModuleSettings settings,
-            BarcodeRepository barcodes) {
+            BarcodeRepository barcodes,
+            CatalogueService catalogue) {
+        this.catalogue = catalogue;
         this.repo = repo;
         this.tenant = tenant;
         this.audit = audit;
@@ -458,25 +461,11 @@ class ProductImportService {
                     product.id());
             UUID packUnitId = null;
             if (p.packUnit() != null) {
-                // Issue #637: the rules of CatalogueService.addPack with no purpose and no price (a pack for both),
-                // whatever the unit's usual purpose; RetailSellingPacksIT holds the two paths together.
+                // Issue #637: made by the one pack path of POST /products/{id}/units, its checks and its audit: for
+                // both, with no price of its own, whatever the unit's usual purpose.
                 packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
-                UUID packId = UUID.randomUUID();
-                repo.insertPack(packId, product.id(), packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by);
-                audit.record(AuditLog.Entry.created(
-                        "retail.product_unit.created",
-                        "retail.product_unit",
-                        packId,
-                        null,
-                        Map.of(
-                                "product_id",
-                                product.id(),
-                                "unit_id",
-                                packUnitId,
-                                "factor",
-                                p.packFactor().setScale(3).toPlainString(),
-                                "source",
-                                "import")));
+                catalogue.createPack(
+                        product, packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by, "import");
             }
             for (String c : p.barcodes()) {
                 addBarcode(product.id(), null, c, p.barcodeFormat(), by);

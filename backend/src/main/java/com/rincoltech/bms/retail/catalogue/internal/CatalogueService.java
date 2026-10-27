@@ -339,6 +339,7 @@ class CatalogueService {
             throw duplicate("duplicate_unit", "A unit with this name exists.");
         }
         if (now.containsKey("usual_pack")) {
+            // Null when clear_usual_pack was sent: the three columns are cleared together (issue #637).
             repo.setUsualPack(id, r.usualPack());
         }
         audit.record(new AuditLog.Entry("retail.unit.updated", "retail.unit", id, null, was, now));
@@ -830,7 +831,36 @@ class CatalogueService {
     Pack addPack(UUID productId, PackRequest r) {
         requireUnits();
         Product product = repo.lock(productId).orElseThrow(ApiException::notFound);
-        Unit unit = repo.unit(r.unitId()).orElse(null);
+        // ADR-099: with no purpose sent, a pack is for both, whatever its unit's usual purpose (#637); the screens fill
+        // in the unit's usual purpose themselves (ADR-100).
+        String purpose = r.purpose() == null ? RetailCatalogue.PACK_BOTH : r.purpose();
+        if (r.sellMinor() != null) {
+            requirePriceEdit(
+                    "You may not change selling prices, so you cannot set a pack's price. Ask someone who may.");
+            if (purpose.equals(RetailCatalogue.PACK_BUY)) {
+                throw buyOnlyPriced();
+            }
+        }
+        createPack(
+                product,
+                r.unitId(),
+                r.factor(),
+                purpose,
+                r.sellMinor(),
+                CurrentPrincipal.require().userId(),
+                null);
+        return forCaller(repo.pack(productId, r.unitId()).orElseThrow());
+    }
+
+    /**
+     * Issue #637: the one way a pack is made, by POST /products/{id}/units and by the CSV import: the unit must exist, be
+     * switched on and differ from the product's own unit, the pack is unique per unit, and it is audited as
+     * retail.product_unit.created ({@code source} names a caller other than the API). The caller checks the capability,
+     * the price permission and the purpose.
+     */
+    void createPack(
+            Product product, UUID unitId, BigDecimal factor, String purpose, Long sellMinor, UUID by, String source) {
+        Unit unit = repo.unit(unitId).orElse(null);
         if (unit == null) {
             throw ApiException.validation(List.of(new FieldProblem("unit_id", "unknown_unit", "No such unit.")));
         }
@@ -843,39 +873,24 @@ class CatalogueService {
                     "pack_unit_is_base_unit",
                     "A pack must be a different unit from the one the product is counted in.");
         }
-        // ADR-099: with no purpose sent, a pack is for both, whatever its unit's usual purpose (#637); the screens fill
-        // in the unit's usual purpose themselves (ADR-100).
-        String purpose = r.purpose() == null ? RetailCatalogue.PACK_BOTH : r.purpose();
-        if (r.sellMinor() != null) {
-            requirePriceEdit(
-                    "You may not change selling prices, so you cannot set a pack's price. Ask someone who may.");
-            if (purpose.equals(RetailCatalogue.PACK_BUY)) {
-                throw buyOnlyPriced();
-            }
-        }
         UUID id = UUID.randomUUID();
         try {
-            repo.insertPack(
-                    id,
-                    productId,
-                    r.unitId(),
-                    r.factor(),
-                    purpose,
-                    r.sellMinor(),
-                    CurrentPrincipal.require().userId());
+            repo.insertPack(id, product.id(), unitId, factor, purpose, sellMinor, by);
         } catch (DuplicateKeyException e) {
             throw duplicate("duplicate_pack", "The product has a pack of this unit already.");
         }
         Map<String, Object> after = new LinkedHashMap<>();
-        after.put("product_id", productId);
-        after.put("unit_id", r.unitId());
-        after.put("factor", r.factor().setScale(3).toPlainString());
+        after.put("product_id", product.id());
+        after.put("unit_id", unitId);
+        after.put("factor", factor.setScale(3).toPlainString());
         after.put("purpose", purpose);
-        if (r.sellMinor() != null) {
-            after.put("sell_minor", r.sellMinor());
+        if (sellMinor != null) {
+            after.put("sell_minor", sellMinor);
+        }
+        if (source != null) {
+            after.put("source", source);
         }
         audit.record(AuditLog.Entry.created("retail.product_unit.created", PACK, id, null, after));
-        return forCaller(repo.pack(productId, r.unitId()).orElseThrow());
     }
 
     /** Change the factor (future sales and restocks only: lines keep the factor they used) or switch a pack off. */

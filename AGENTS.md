@@ -785,8 +785,8 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   Tests: `RetailCatalogueManagementIT.aUnitKeepsItsUsualPackSizeAndUse`, `MigrationOrderIT`, `shop-setup-state.test.ts`,
   `shop-setup.dom.test.tsx`, the help corpus test.
 - **Built (packs follow-ups of the #628 review, issue #637, ADR-100 note):** no migration. A pack added through the API with no
-  `purpose` is for `both` again, as #627 set; the pack form sends the unit's usual Used for itself, and the CSV import adds a pack by
-  the same rule. `PATCH /retail/units/{id}` takes `clear_usual_pack`, and the Units page has **Usual pack** on a unit's row: a sheet
+  `purpose` is for `both` again, as #627 set; the pack form sends the unit's usual Used for itself, and the CSV import makes its packs
+  through the same `CatalogueService.createPack` (same checks, same audit). `PATCH /retail/units/{id}` takes `clear_usual_pack`, and the Units page has **Usual pack** on a unit's row: a sheet
   (`unit-usual-pack.tsx`) to change what it holds, the number and Used for, or Remove usual pack; items keep their packs. A usual
   pack is one level only (422 `unit_is_a_pack`, `unit_counted_by_pack`), so Roll of Metre and Metre of Roll can never both be kept.
   Set up your shop reads the units back after a `duplicate_unit`, so a unit another phone added meanwhile is not called missing,
