@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Category, Customer, PriceChange, Product } from '../../../api/retail';
 import { createMockRetail, mockMe, setMockProfitAccess } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
@@ -13,6 +13,12 @@ import { countableStock } from './stocktake';
 import { PriceForm, PriceHistory, ProductCard, ProductForm, belowCostHint, inactiveWarning, showWhen } from './catalogue-products';
 import { CATALOGUE_LINKS, canUse, screensFor } from './permissions';
 import { Gate } from './ui';
+
+// The item form links to its help (issue #630); these tests draw it without a router.
+vi.mock('@tanstack/react-router', async (original) => {
+  const real = await original<typeof import('@tanstack/react-router')>();
+  return { ...real, Link: ({ children, to, className }: { children: unknown; to: string; className?: string }) => <a href={to} className={className}>{children as never}</a> };
+});
 
 const renderToString = (node: ReactElement) => render(node).replaceAll('<!-- -->', '');
 const branch = mockMe('admin').branches?.[0]?.id ?? '';
