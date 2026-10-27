@@ -440,7 +440,7 @@ export interface RetailApi {
   listUnits(): Promise<Unit[]>;
   /** Issue #625: `usualPack` makes the unit a pack with its usual size in a smaller unit and what it is for; never a price. */
   createUnit(name: string, usualPack?: UsualPackRequest): Promise<Unit>;
-  updateUnit(id: string, version: number, body: { name?: string; active?: boolean; usual_pack?: UsualPackRequest }): Promise<Unit>;
+  updateUnit(id: string, version: number, body: { name?: string; active?: boolean; usual_pack?: UsualPackRequest; clear_usual_pack?: boolean }): Promise<Unit>;
   /** Corrects the quantity of an item at a branch (retail.stocktake.commit there); takes the Idempotency-Key of its form (issue #351). */
   correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection | ApprovalWaiting>;
   /** The stock history of an item at a branch, newest first (issue #351). */
