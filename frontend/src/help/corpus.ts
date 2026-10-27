@@ -11,6 +11,7 @@ export const REVISION = revision;
 
 /** The jobs the articles are grouped by, in the order a shop owner meets them. */
 export const JOBS = [
+  { id: 'start', label: 'Getting started' },
   { id: 'sell', label: 'Sell' },
   { id: 'buy-stock', label: 'Buy stock' },
   { id: 'move-stock', label: 'Move stock' },
@@ -125,7 +126,9 @@ function stem(word: string): string {
   return word;
 }
 
-const words = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map(stem);
+/** The words of `text`, stemmed, without those in `skip`, which are taken out before stemming ("this" would become "thi"). */
+const words = (text: string, skip: ReadonlySet<string> = new Set()) =>
+  text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== '' && !skip.has(w)).map(stem);
 
 // Words that say nothing about the task, so "how do I move stock" ranks by "move" and "stock".
 const STOP = new Set(['how', 'do', 'i', 'a', 'an', 'the', 'to', 'of', 'in', 'on', 'my', 'is', 'it', 'and', 'or', 'can', 'what', 'why', 'does', 'for', 'from', 'with', 'me', 'at', 'this', 'that']);
@@ -136,7 +139,7 @@ const STOP = new Set(['how', 'do', 'i', 'a', 'an', 'the', 'to', 'of', 'in', 'on'
  * is not a stop word; an empty search is every article in order.
  */
 export function searchArticles(articles: readonly Article[], typed: string): Article[] {
-  const wanted = words(typed).filter((w) => !STOP.has(w));
+  const wanted = words(typed, STOP);
   if (wanted.length === 0) return [...articles];
   const hits = (pool: string[], w: string) => pool.some((p) => p === w || (w.length >= 3 && p.startsWith(w)));
   return articles
@@ -155,6 +158,25 @@ export function searchArticles(articles: readonly Article[], typed: string): Art
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((r) => r.article);
+}
+
+// Words a question to Ask BMS carries that name no task, on top of STOP: "how do I sign up to this app" is about "sign".
+const VAGUE = new Set([...STOP, 'app', 'bms', 'up', 'first', 'time', 'use', 'get', 'want', 'need', 'please', 'help', 'you', 'your', 'we', 'be', 'are', 'there', 'where', 'when', 'will', 'should', 'not']);
+
+/**
+ * The articles Ask BMS listed that are really about the question (issue #609): those whose title or search words share a word
+ * of it that is not VAGUE, in the order given; a word of four letters or more also matches the start of a longer one ("sign"
+ * finds "signup", but "add" never finds "address"). A word only in an article's text is not enough, so a question no article
+ * answers lists none rather than unrelated ones. An article this app does not have yet (a newer server) is judged by its title.
+ */
+export function relatedArticles<T extends { id: string; title: string }>(question: string, listed: readonly T[], articles: readonly Article[] = ARTICLES): T[] {
+  const wanted = words(question, VAGUE);
+  if (wanted.length === 0) return [];
+  return listed.filter((item) => {
+    const article = articleById(item.id, articles);
+    const pool = words(article ? [article.title, ...article.words].join(' ') : item.title);
+    return wanted.some((w) => pool.some((p) => p === w || (w.length >= 4 && p.startsWith(w))));
+  });
 }
 
 const covers = (screen: string, path: string) => {

@@ -945,6 +945,10 @@
           "cited" : {
             "$ref" : "#/components/schemas/AskArticle"
           },
+          "reason" : {
+            "description" : "Why no answer was written, for source articles only: not_in_articles (the model found none in the articles), all_failed (every provider failed), no_provider (none is set) or daily_cap (the business's questions for the day are used up); null otherwise",
+            "type" : "string"
+          },
           "revision" : {
             "type" : "string"
           },

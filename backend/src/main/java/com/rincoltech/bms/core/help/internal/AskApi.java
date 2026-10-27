@@ -39,6 +39,13 @@ final class AskApi {
                             + " match is a job for another role; no_match: no article matches")
             String source,
 
+            @Schema(
+                    description = "Why no answer was written, for source articles only: not_in_articles (the model"
+                            + " found none in the articles), all_failed (every provider failed), no_provider (none is"
+                            + " set) or daily_cap (the business's questions for the day are used up); null otherwise",
+                    nullable = true)
+            String reason,
+
             @Schema(description = "The answer to show; null for articles and no_match")
             String answer,
 

@@ -116,3 +116,15 @@ can replace the retrieval step later without changing the rest.
 - A model id change: it is part of the cache key, so the first questions after it each call a provider.
 - Answers citing the right article with wrong steps: compare a few cached answers with their articles after each corpus
   change.
+
+## Amendment: no answer is said plainly (issue #609)
+
+When the help has no answer (`source` `no_match`, or `articles` with the new `reason` `not_in_articles` or `all_failed`), the box
+says first, in one line, "I could not find this in the help yet. Tap Ask
+us and it comes to the team.", with the Ask us button right under it carrying the question. Only then does it list the
+articles the server matched, and only those whose title or search words share a word of the question that is not a stop word
+("how", "do", "I", "this", "app" and the like; `relatedArticles` in `corpus.ts`). A word found only in an article's text is not
+enough, so a question no article answers lists none rather than unrelated ones, and the page drops its own "Not answered? Ask
+us" while that line shows, so there is one. With `reason` `no_provider` or `daily_cap` no model was asked, so the box does not
+say the help has none: it lists the matching articles as before. The response gains `reason` (null unless `source` is
+`articles`), the same value as the log's `fallback_reason`; an older app ignores it.

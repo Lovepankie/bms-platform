@@ -195,14 +195,14 @@ class AskService {
 
         if (providers.chain().isEmpty()) {
             store.log(outcome.articles("no_provider", null, false));
-            return answer("articles", null, null, readable);
+            return fallback("no_provider", readable);
         }
         Instant dayStart = LocalDate.ofInstant(start, tenant.profile().timezone())
                 .atStartOfDay(tenant.profile().timezone())
                 .toInstant();
         if (!store.ticket("provider", principal.userId(), start, dayStart, properties.dailyQuestions())) {
             store.log(outcome.articles("daily_cap", null, false));
-            return answer("articles", null, null, readable);
+            return fallback("daily_cap", readable);
         }
 
         LlmClient.Request prompt = new LlmClient.Request(
@@ -269,7 +269,7 @@ class AskService {
             if (parsed.get().answer().isEmpty()) {
                 // The model read the articles and found no answer in them; another model would read the same articles.
                 store.log(outcome.articles("not_in_articles", provider, true));
-                return answer("articles", null, null, readable);
+                return fallback("not_in_articles", readable);
             }
             Article cited = parsed.get().article();
             store.log(outcome.model(provider, cited.id()));
@@ -289,7 +289,7 @@ class AskService {
             return answer("model", parsed.get().answer(), cited, readable);
         }
         store.log(outcome.articles("all_failed", null, true));
-        return answer("articles", null, null, readable);
+        return fallback("all_failed", readable);
     }
 
     /** The asker's locale if the articles are written in it, else the articles' own (English today, ADR-095). */
@@ -390,8 +390,18 @@ class AskService {
     }
 
     private AskAnswer answer(String source, String text, Article cited, List<Hit> readable) {
+        return answer(source, null, text, cited, readable);
+    }
+
+    /** No answer written: the matching articles, and why, as logged in {@code fallback_reason} (issue #609). */
+    private AskAnswer fallback(String reason, List<Hit> readable) {
+        return answer("articles", reason, null, null, readable);
+    }
+
+    private AskAnswer answer(String source, String reason, String text, Article cited, List<Hit> readable) {
         return new AskAnswer(
                 source,
+                reason,
                 text,
                 cited == null ? null : new AskArticle(cited.id(), cited.title()),
                 readable.stream()

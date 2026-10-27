@@ -13,6 +13,8 @@ export interface AskArticle {
 export interface AskAnswer {
   /** model: phrased from `cited`; cache: the same answer as before; articles: none phrased, `articles` listed; other_role; no_match */
   source: 'model' | 'cache' | 'articles' | 'other_role' | 'no_match';
+  /** Why no answer was written, for `articles` only (issue #609); absent from a server older than it. */
+  reason?: 'not_in_articles' | 'all_failed' | 'no_provider' | 'daily_cap' | null;
   answer: string | null;
   cited: AskArticle | null;
   articles: AskArticle[];

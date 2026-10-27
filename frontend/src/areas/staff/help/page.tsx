@@ -46,6 +46,8 @@ export function HowDoIPage() {
   const found = useMemo(() => searchArticles(mine, search.term), [mine, search.term]);
   const { enabled: askEnabled, known } = useAskStatus();
   const [asked, setAsked] = useState('');
+  // Ask BMS said the help has no answer, with its own Ask us right under it (issue #609): one Ask us, not two.
+  const [askNotFound, setAskNotFound] = useState(false);
   // The top bar's Ask button opens /staff/help#ask (issue #603): once the server has said whether Ask BMS is on, the cursor goes
   // to the question box, or to the article search while it is off or the phone is offline (a remembered "on" cannot be asked
   // then). Only once per arrival.
@@ -60,7 +62,7 @@ export function HowDoIPage() {
     <main className="rt ln stack help-page">
       <h1>How do I...?</h1>
       <p>Short answers with pictures, for the jobs you do in BMS. They work without the internet too.</p>
-      {askEnabled && <AskBms onAsked={setAsked} />}
+      {askEnabled && <AskBms onAsked={setAsked} onNotFound={setAskNotFound} />}
       <form role="search" data-tour="help-search" onSubmit={(e) => { e.preventDefault(); search.flush(); }}>
         <SearchBox id="help-q" label="What do you want to do?" search={search} fetching={false} count={search.term ? found.length : undefined} hint="For example: move stock, invite, count" />
       </form>
@@ -87,7 +89,7 @@ export function HowDoIPage() {
           </div>
         )}
       </SearchResults>
-      <AskUs text={search.text.trim() ? search.text : asked} />
+      {(search.text.trim() || !askNotFound) && <AskUs text={search.text.trim() ? search.text : asked} />}
     </main>
   );
 }
@@ -98,6 +100,7 @@ export function ArticleView({ articleId }: { articleId: string }) {
   const article = articleById(articleId);
   const allowed = article !== undefined && articleVisible(article, me);
   const askEnabled = useAskEnabled();
+  const [askNotFound, setAskNotFound] = useState(false);
   // An article is part of /staff/help: reading one retires the New badge too (issue #603); one not found or for another role is not read.
   useEffect(() => {
     if (allowed) markFeatureSeen(HELP_FEATURE);
@@ -118,7 +121,7 @@ export function ArticleView({ articleId }: { articleId: string }) {
     <main className="rt ln stack help-page">
       <h1>{article.title}</h1>
       {/* A person the article did not answer asks straight away (issue #603). */}
-      {askEnabled && <AskBms />}
+      {askEnabled && <AskBms onNotFound={setAskNotFound} />}
       {article.intro.map((runs, i) => (
         <p key={i} data-tour={i === 0 ? 'help-article-intro' : undefined}>
           <Words runs={runs} />
@@ -139,7 +142,7 @@ export function ArticleView({ articleId }: { articleId: string }) {
           <Words runs={runs} />
         </p>
       ))}
-      <AskUs text={article.title} />
+      {!askNotFound && <AskUs text={article.title} />}
       <p>
         <Link to="/staff/help" className="btn btn-ghost">All the answers</Link>
       </p>

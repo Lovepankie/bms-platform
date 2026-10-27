@@ -16,3 +16,7 @@ touch and reduced motion, and only fabricated data:
 Retake one article's pictures with `node scripts/help-screenshots.mjs <article-id>` from `frontend/`, or every picture with no
 argument. The caption of each picture is its alt text in the article, so change the words there. `corpus.test.ts` fails on a
 missing, unused or wrongly sized picture.
+
+The four getting-started articles (issue #609: `start-using-bms`, `open-my-invitation`, `sign-in`, `install-bms`) have no
+pictures yet: their screens open before sign-in and need the local API. Add their entries to the script's `SHOTS`, take them,
+and take their ids out of `PICTURES_PENDING` in `corpus.test.ts`.

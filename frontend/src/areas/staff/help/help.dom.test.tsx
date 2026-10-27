@@ -57,7 +57,7 @@ function type(text: string) {
 describe('How do I...?', () => {
   it('groups the answers by job, in the order of the jobs', () => {
     show(owner, <HowDoIPage />);
-    expect(headings()).toEqual(['Sell', 'Buy stock', 'Move stock', 'Count stock', 'Items and categories', 'Branches and stores', 'Users and invitations', 'Money']);
+    expect(headings()).toEqual(['Getting started', 'Sell', 'Buy stock', 'Move stock', 'Count stock', 'Items and categories', 'Branches and stores', 'Users and invitations', 'Money']);
     expect(titles()).toContain('How do I add a shop or a store?');
   });
 
@@ -125,8 +125,13 @@ describe('the How do I? link of a screen', () => {
     expect(screen.getByRole('link', { name: /^How do I\?/ }).getAttribute('href')).toBe('/staff/help/add-a-branch');
   });
 
+  it('opens the install article from Notifications and app, for a seller too (issue #609)', () => {
+    show(seller, <HowDoILink pathname="/staff/notifications" me={seller} />, '/staff/notifications');
+    expect(screen.getByRole('link', { name: /^How do I\?/ }).getAttribute('href')).toBe('/staff/help/install-bms');
+  });
+
   it('is not drawn on a screen with no article, on the help itself, or for someone the article is not for', () => {
-    const { container } = show(owner, <HowDoILink pathname="/staff/notifications" me={owner} />, '/staff/notifications');
+    const { container } = show(owner, <HowDoILink pathname="/staff/reports" me={owner} />, '/staff/reports');
     expect(container.textContent).toBe('');
     cleanup();
     expect(show(owner, <HowDoILink pathname="/staff/help/switch-branch" me={owner} />).container.textContent).toBe('');

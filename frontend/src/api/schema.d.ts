@@ -8150,6 +8150,8 @@ export interface components {
             /** @description The matching articles the asker may read, best first */
             articles?: components["schemas"]["AskArticle"][];
             cited?: components["schemas"]["AskArticle"];
+            /** @description Why no answer was written, for source articles only: not_in_articles (the model found none in the articles), all_failed (every provider failed), no_provider (none is set) or daily_cap (the business's questions for the day are used up); null otherwise */
+            reason?: string;
             revision?: string;
             /** @description model: phrased from the cited article; cache: the same answer as before; articles: no answer was phrased, the matching articles are listed; other_role: the best match is a job for another role; no_match: no article matches */
             source?: string;

@@ -1,14 +1,20 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { askBms, type AskAnswer } from '../../../api/help';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Field } from '../../../app/ui/Field';
 import { Card, ListRow, RowList } from '../../../app/ui/ListRow';
+import { relatedArticles } from '../../../help/corpus';
 
 // Ask BMS (issue #20, ADR-096): a question in the person's own words, answered from the How do I...? articles only, with the
 // article it comes from linked. Shown only while the server says it is on for the business; offline or off, the page is as
-// before. The server scrubs the question and never reads the business's records; when no answer is written the matching
-// articles are listed instead. "Not answered? Ask us" stays under it on the page.
+// before. The server scrubs the question and never reads the business's records. When the help has no answer (issue #609:
+// the model found none in the articles, every model failed, or no article matched) it says so in one line with Ask us right
+// under it, then lists only the articles that share a real word with the question; the page then drops its own "Not
+// answered? Ask us", so there is one. With no model to ask, or the day's questions used up, the matching articles are listed.
+
+export const NOT_FOUND = 'I could not find this in the help yet. Tap Ask us and it comes to the team.';
 
 export const ASK_STATUS_KEY = ['help', 'ask', 'status'] as const;
 
@@ -27,7 +33,12 @@ export function useAskEnabled(): boolean {
 
 const row = (a: { id: string; title: string }) => <ListRow key={a.id} title={a.title} to={`/staff/help/${a.id}`} />;
 
-function Answer({ result }: { result: AskAnswer }) {
+/** Whether the help has no answer to the question, rather than no model to write one (issue #609). */
+export function notFound(result: AskAnswer): boolean {
+  return result.source === 'no_match' || (result.source === 'articles' && (result.reason === 'not_in_articles' || result.reason === 'all_failed'));
+}
+
+function Answer({ result, question }: { result: AskAnswer; question: string }) {
   if ((result.source === 'model' || result.source === 'cache') && result.answer && result.cited) {
     return (
       <Card title="Answer">
@@ -53,21 +64,48 @@ function Answer({ result }: { result: AskAnswer }) {
       </>
     );
   }
-  if (result.articles.length > 0) {
-    return (
+  if (!notFound(result)) {
+    // No model was asked (none set, or the day's questions used up): the matching articles, as before.
+    return result.articles.length > 0 ? (
       <Card title="These articles may answer it">
         <RowList label="These articles may answer it">{result.articles.map(row)}</RowList>
       </Card>
+    ) : (
+      <p className="empty-state">No article answers that yet.</p>
     );
   }
-  return <p className="empty-state">No article answers that yet.</p>;
+  const related = relatedArticles(question, result.articles);
+  return (
+    <div className="stack" data-testid="ask-not-found">
+      <p role="note" className="alert alert-info">
+        {NOT_FOUND}
+      </p>
+      <p>
+        <Link to="/staff/feedback" search={{ ask: question }} className="btn">
+          Ask us
+        </Link>
+      </p>
+      {related.length > 0 && (
+        <Card title="These articles may answer it">
+          <RowList label="These articles may answer it">{related.map(row)}</RowList>
+        </Card>
+      )}
+    </div>
+  );
 }
 
-/** The Ask BMS box; `onAsked` hands the question to "Not answered? Ask us". */
-export function AskBms({ onAsked }: { onAsked?: (question: string) => void }) {
+/**
+ * The Ask BMS box; `onAsked` hands the question to "Not answered? Ask us", and `onNotFound` tells the page whether the answer
+ * shown says the help has none, with its own Ask us.
+ */
+export function AskBms({ onAsked, onNotFound }: { onAsked?: (question: string) => void; onNotFound?: (shown: boolean) => void }) {
   const [question, setQuestion] = useState('');
   const [tried, setTried] = useState(false);
-  const ask = useMutation({ mutationFn: (q: string) => askBms.ask(q) });
+  const ask = useMutation({
+    mutationFn: (q: string) => askBms.ask(q),
+    onMutate: () => onNotFound?.(false),
+    onSuccess: (result) => onNotFound?.(notFound(result)),
+  });
   const text = question.trim();
   const tooShort = text.length < 3 ? 'Type your question, in your own words.' : null;
   return (
@@ -106,7 +144,7 @@ export function AskBms({ onAsked }: { onAsked?: (question: string) => void }) {
             {ask.error instanceof Error ? ask.error.message : 'Could not ask now. The articles below still answer.'}
           </p>
         )}
-        {ask.data && <Answer result={ask.data} />}
+        {ask.data && <Answer result={ask.data} question={ask.variables ?? text} />}
       </div>
     </section>
   );

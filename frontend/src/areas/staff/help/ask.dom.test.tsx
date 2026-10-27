@@ -11,7 +11,8 @@ import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
 
 // Ask BMS (issue #20, ADR-096) on How do I...?: the box shows only while the server says it is on; an answer shows with a
-// link to the article it comes from; another role's job, the matching articles and no match each say so; a failure leaves
+// link to the article it comes from; another role's job and the matching articles each say so; no answer is said plainly
+// with Ask us under it and only related articles (issue #609); a failure leaves
 // the articles; and "Not answered? Ask us" carries the question. The server is a mock: no network, no model. Every person is
 // fabricated.
 
@@ -23,6 +24,7 @@ vi.mock('../../../api/help', async (original) => {
 });
 
 const { HowDoIPage } = await import('./page');
+const { NOT_FOUND } = await import('./ask');
 
 afterEach(() => {
   cleanup();
@@ -114,7 +116,50 @@ describe('Ask BMS', () => {
 
     ask.ask.mockResolvedValueOnce(reply({ source: 'no_match' }));
     await askQuestion('zzqx wvvy');
-    expect(await screen.findByText('No article answers that yet.')).toBeTruthy();
+    expect(await screen.findByText(NOT_FOUND)).toBeTruthy();
+  });
+
+  it('says plainly when the articles do not answer, puts Ask us right under it, and lists only related articles (issue #609)', async () => {
+    ask.status.mockResolvedValue({ enabled: true, revision: 'r' });
+    // What the server listed for the owner's question on 27 Oct: the model found no answer, and the matches were unrelated.
+    const unrelated = [
+      { id: 'add-an-item', title: 'How do I add an item?' },
+      { id: 'approve-a-request', title: 'How do I approve a request?' },
+      { id: 'add-a-branch', title: 'How do I add a shop or a store?' },
+    ];
+    ask.ask.mockResolvedValueOnce(reply({ source: 'articles', reason: 'not_in_articles', articles: unrelated }));
+    show(<HowDoIPage />);
+    await askQuestion('How do I sign up to this app first time');
+    const box = await screen.findByTestId('ask-not-found');
+    const [line, button] = Array.from(box.children);
+    expect(line?.textContent).toBe('I could not find this in the help yet. Tap Ask us and it comes to the team.');
+    const askUs = within(button as HTMLElement).getByRole('link', { name: 'Ask us' });
+    expect(new URL(askUs.getAttribute('href') ?? '', 'http://localhost').searchParams.get('ask')).toBe('How do I sign up to this app first time');
+    expect(screen.queryByRole('list', { name: 'These articles may answer it' })).toBeNull();
+    // One Ask us: the page's own "Not answered? Ask us" steps aside while this one shows, and comes back for a search.
+    expect(screen.getAllByRole('link', { name: 'Ask us' })).toEqual([askUs]);
+    fireEvent.change(screen.getByLabelText('What do you want to do?'), { target: { value: 'count stock' } });
+    await waitFor(() => expect(screen.getAllByRole('link', { name: 'Ask us' })).toHaveLength(2));
+    fireEvent.change(screen.getByLabelText('What do you want to do?'), { target: { value: '' } });
+    await waitFor(() => expect(screen.getAllByRole('link', { name: 'Ask us' })).toHaveLength(1));
+
+    // Every model failing reads the same; an article sharing a real word with the question is listed under Ask us.
+    ask.ask.mockResolvedValueOnce(reply({ source: 'articles', reason: 'all_failed', articles: [...unrelated, { id: 'start-using-bms', title: 'How do I start using BMS for my business?' }] }));
+    await askQuestion('How do I sign up to this app first time');
+    const list = await screen.findByRole('list', { name: 'These articles may answer it' });
+    expect(within(list).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/staff/help/start-using-bms']);
+    expect(screen.getByTestId('ask-not-found').firstElementChild?.textContent).toBe(NOT_FOUND);
+  });
+
+  it('lists the matching articles without saying the help has none when no model was asked (the day\'s questions used up)', async () => {
+    ask.status.mockResolvedValue({ enabled: true, revision: 'r' });
+    ask.ask.mockResolvedValueOnce(reply({ source: 'articles', reason: 'daily_cap', articles: [{ id: 'count-stock', title: 'How do I count my stock?' }] }));
+    show(<HowDoIPage />);
+    await askQuestion('How do I count the shelves?');
+    const list = await screen.findByRole('list', { name: 'These articles may answer it' });
+    expect(within(list).getByRole('link').getAttribute('href')).toBe('/staff/help/count-stock');
+    expect(screen.queryByText(NOT_FOUND)).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Ask us' })).toHaveLength(1);
   });
 
   it('says so when the question cannot be sent, and asks for a question first', async () => {

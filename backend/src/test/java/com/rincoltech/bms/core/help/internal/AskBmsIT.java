@@ -364,6 +364,7 @@ class AskBmsIT extends IntegrationTest {
         JsonNode fallback = okAsk(admin, "How do I invite a storekeeper?");
         assertThat(fallback.get("source").asString()).isEqualTo("articles");
         assertThat(fallback.get("answer").isNull()).isTrue();
+        assertThat(fallback.get("reason").asString()).isEqualTo("all_failed");
         assertThat(fallback.get("articles").get(0).get("id").asString()).isEqualTo("invite-someone");
         row = lastLog();
         assertThat(row.get("outcome")).isEqualTo("articles");
@@ -390,6 +391,7 @@ class AskBmsIT extends IntegrationTest {
         noProviders = true;
         JsonNode a = okAsk(admin, "How do I invite a cashier?");
         assertThat(a.get("source").asString()).isEqualTo("articles");
+        assertThat(a.get("reason").asString()).isEqualTo("no_provider");
         assertThat(a.get("articles").get(0).get("id").asString()).isEqualTo("invite-someone");
         Map<String, Object> row = lastLog();
         assertThat(row.get("fallback_reason")).isEqualTo("no_provider");
@@ -402,6 +404,7 @@ class AskBmsIT extends IntegrationTest {
         GEMINI.thenAnswer(new LlmClient.Result("{\"answer\": \"\", \"article\": \"\"}", 100, 5, "stop"));
         JsonNode a = okAsk(admin, "How do I invite a cashier?");
         assertThat(a.get("source").asString()).isEqualTo("articles");
+        assertThat(a.get("reason").asString()).isEqualTo("not_in_articles");
         Map<String, Object> row = lastLog();
         assertThat(row.get("fallback_reason")).isEqualTo("not_in_articles");
         assertThat(row.get("provider")).isEqualTo("gemini");
@@ -410,6 +413,7 @@ class AskBmsIT extends IntegrationTest {
         JsonNode none = okAsk(admin, "zzqx wvvy");
         assertThat(none.get("source").asString()).isEqualTo("no_match");
         assertThat(none.get("articles")).isEmpty();
+        assertThat(none.get("reason").isNull()).isTrue();
         assertThat(lastLog().get("outcome")).isEqualTo("no_match");
         assertThat(GEMINI.requests()).hasSize(1);
     }
@@ -426,6 +430,7 @@ class AskBmsIT extends IntegrationTest {
         }
         JsonNode capped = okAsk(admin, "How do I invite a new user?");
         assertThat(capped.get("source").asString()).isEqualTo("articles");
+        assertThat(capped.get("reason").asString()).isEqualTo("daily_cap");
         assertThat(capped.get("articles").get(0).get("id").asString()).isEqualTo("invite-someone");
         Map<String, Object> row = lastLog();
         assertThat(row.get("fallback_reason")).isEqualTo("daily_cap");
