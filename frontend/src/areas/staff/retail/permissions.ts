@@ -16,7 +16,7 @@ export const ALL_SELLERS = 'retail.sale.all_sellers';
 
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'orders' | 'ordersReport' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'
-  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer' | 'labels' | 'shopSetup'
+  | 'catalogue' | 'quickAdd' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer' | 'labels' | 'shopSetup'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
   // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed. Payments
@@ -158,6 +158,9 @@ const NEEDS: Record<RetailScreen, string[]> = {
   // The Catalogue home needs nothing itself: canUse opens it when any screen under it may be used.
   catalogue: [],
   // The lists these screens read are stock, purchase and sale reads; changing them needs the manage permissions.
+  // Quick add (issue #632): making the item is a catalogue change; adding its stock also needs retail.stocktake.commit at the
+  // branch, without which the form adds the item with no stock and says who to ask.
+  quickAdd: ['retail.catalogue.manage', 'retail.stock.read'],
   products: ['retail.catalogue.manage', 'retail.stock.read'],
   categories: ['retail.catalogue.manage', 'retail.stock.read'],
   units: ['retail.catalogue.manage', 'retail.stock.read'],
@@ -323,6 +326,7 @@ export const SCREENS: { screen: RetailScreen; path: string; label: string; hint:
   { screen: 'usage', path: '/staff/retail/usage', label: 'Usage and damage', hint: 'Items used or damaged' },
   { screen: 'stock', path: '/staff/retail/stock', label: 'Stock', hint: 'What is on the shelf' },
   { screen: 'stocktake', path: '/staff/retail/stocktake', label: WORDS.countStock, hint: 'Count and correct stock' },
+  { screen: 'quickAdd', path: '/staff/retail/quick-add', label: 'Quick add', hint: 'An item, its prices and how many you have, in one tap' },
   { screen: 'transfer', path: '/staff/retail/transfer', label: 'Move stock', hint: 'Send stock to another branch' },
   { screen: 'stockByLocation', path: '/staff/retail/stock-by-location', label: 'Stores and shops', hint: 'Stock in each store and shop, and on the way' },
   { screen: 'transfers', path: '/staff/retail/transfers', label: 'Stock moves', hint: 'Stock sent between branches' },
@@ -375,6 +379,7 @@ export const WHOLESALE_SCREENS: readonly RetailScreen[] = [
 
 /** The screens under Catalogue, in the order the Catalogue home lists them. */
 export const CATALOGUE_LINKS: { screen: RetailScreen; path: string; label: string; hint: string }[] = [
+  { screen: 'quickAdd', path: '/staff/retail/quick-add', label: 'Quick add', hint: 'An item, its prices and how many you have, in one tap' },
   { screen: 'products', path: '/staff/retail/catalogue/products', label: 'Items', hint: 'Add or change an item, change its price' },
   { screen: 'categories', path: '/staff/retail/catalogue/categories', label: 'Categories', hint: 'Group your items and add new ones inside a category' },
   { screen: 'units', path: '/staff/retail/catalogue/units', label: 'Units', hint: 'Piece, roll, kilogram and so on' },

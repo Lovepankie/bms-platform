@@ -79,7 +79,7 @@ function sideMenu(me: Me) {
 const AREA_LABELS = [
   'Home', 'How do I?',
   'Sell', 'Orders', 'Approvals',
-  'My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories',
+  'My stock', 'Buy stock', 'Count stock', 'Quick add', 'Move stock', 'Items and categories',
   'Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances',
   'Loans', 'Members', 'Savings', 'Investments', 'Insights', 'Loan reports',
   'Reports', 'Controls', 'Staff', 'Receive payments', 'SMS', 'AI assistant', 'Business set-up',

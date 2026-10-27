@@ -39,8 +39,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -60,6 +62,12 @@ class CatalogueService {
     static final String PROFIT_READ = "retail.profit.read";
     static final int DEFAULT_LIMIT = 50;
     static final int MAX_LIMIT = 200;
+    /** Issue #632: the category Quick add files an item under when none is chosen, and the unit it counts in. */
+    static final String GENERAL = "General";
+
+    static final String PIECE = "Piece";
+    /** The piece unit a business may already have, lower case, in the order Quick add prefers them. */
+    static final List<String> PIECE_NAMES = List.of("piece", "pc", "pcs");
 
     private final CatalogueRepository repo;
     private final CurrentTenant currentTenant;
@@ -388,6 +396,71 @@ class CatalogueService {
         }
         audit.record(AuditLog.Entry.created("retail.product.created", PRODUCT, p.id(), null, after));
         return withPacks(visible(repo.find(p.id()).orElseThrow()));
+    }
+
+    /**
+     * Issue #632, Quick add: the category and unit left out are General and the shop's piece unit, made when missing (the
+     * name lookups are lower case), then the item is made exactly as {@link #create} makes it.
+     */
+    @Transactional
+    RetailCatalogue.NewItem createItem(
+            String description, UUID categoryId, UUID unitId, long costMinor, long sellMinor, String duplicateReason) {
+        UUID by = CurrentPrincipal.require().userId();
+        boolean categoryMade = false;
+        UUID category = categoryId;
+        if (category == null) {
+            // A General the owner switched off is not switched back on behind their back: they choose a category.
+            if (repo.inactiveCategoryNames().contains(GENERAL.toLowerCase(Locale.ROOT))) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "category_id",
+                        "inactive_category",
+                        "The General category is switched off. Choose a category.")));
+            }
+            category = repo.categoryIdsByName().get(GENERAL.toLowerCase(Locale.ROOT));
+        }
+        if (category == null) {
+            category = UUID.randomUUID();
+            categoryMade = madeForQuickAdd("retail_categories", "retail.category", category, GENERAL, by);
+            category = categoryMade ? category : repo.categoryIdsByName().get(GENERAL.toLowerCase(Locale.ROOT));
+        }
+        boolean unitMade = false;
+        UUID unit = unitId;
+        if (unit == null) {
+            // Only a switched-on piece unit is used; a switched-off pc or pcs is passed over and Piece is made. A
+            // switched-off
+            // Piece is not switched back on: the person chooses a unit.
+            Map<String, UUID> units = repo.unitIdsByName();
+            Set<String> off = repo.inactiveUnitNames();
+            unit = PIECE_NAMES.stream()
+                    .filter(n -> !off.contains(n))
+                    .map(units::get)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+            if (unit == null && off.contains(PIECE.toLowerCase(Locale.ROOT))) {
+                throw ApiException.validation(List.of(new FieldProblem(
+                        "unit_id", "inactive_unit", "The Piece unit is switched off. Choose a unit.")));
+            }
+        }
+        if (unit == null) {
+            unit = UUID.randomUUID();
+            unitMade = madeForQuickAdd("retail_units", "retail.unit", unit, PIECE, by);
+            unit = unitMade ? unit : repo.unitIdsByName().get(PIECE.toLowerCase(Locale.ROOT));
+        }
+        Product p = create(
+                new CreateProductRequest(null, description, category, unit, costMinor, sellMinor, duplicateReason));
+        // Read again: the answer of create leaves out the cost for someone who may not read it.
+        return new RetailCatalogue.NewItem(
+                CatalogueLookup.snapshot(repo.find(p.id()).orElseThrow()), categoryMade, unitMade);
+    }
+
+    private boolean madeForQuickAdd(String table, String entity, UUID id, String name, UUID by) {
+        if (!repo.insertIfMissing(table, id, name, by)) {
+            return false;
+        }
+        audit.record(AuditLog.Entry.created(
+                entity + ".created", entity, id, null, Map.of("name", name, "source", "quick_add")));
+        return true;
     }
 
     @Transactional(readOnly = true)

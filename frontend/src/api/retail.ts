@@ -198,6 +198,9 @@ export type UsageRequest = S['RetailUsageRequest'];
 export type Usage = S['RetailUsageReport'];
 export type StocktakeRequest = S['RetailStocktakeRequest'];
 export type Stocktake = S['RetailStocktake'];
+/** Quick add (issue #632): an item, its prices and how many there are at a branch, in one request. */
+export type QuickAddRequest = S['RetailQuickAddRequest'];
+export type QuickAdd = S['RetailQuickAdd'];
 export type StocktakeLine = S['RetailStocktakeLine'];
 export type Valuation = S['RetailValuation'];
 export type ValuationRow = S['RetailValuationRow'];
@@ -595,6 +598,8 @@ export interface RetailApi {
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   commitStocktake(id: string): Promise<Stocktake>;
+  /** Quick add (issue #632): makes the item and adds its stock at the branch as opening stock in one transaction; takes the Idempotency-Key of its form. */
+  quickAdd(body: QuickAddRequest, idempotencyKey: string): Promise<QuickAdd>;
   /** Every product with its balance in each branch the caller may read (#144). */
   listStockAllBranches(q: { query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeClosed?: boolean; includeInactive?: boolean; signal?: AbortSignal }): Promise<AllBranchesStock>;
   /** One branch, or every branch in the caller's scope when `branchId` is absent (#144). */
@@ -1391,6 +1396,10 @@ const realRetail: RetailApi = {
 
   async commitStocktake(id) {
     return unwrap(await api.POST('/api/v1/retail/stocktakes/{stocktake_id}/commit', { params: { path: { stocktake_id: id } } }));
+  },
+
+  async quickAdd(body, key) {
+    return unwrap(await api.POST('/api/v1/retail/quick-add', { params: { header: { 'Idempotency-Key': key } }, body }));
   },
 
   async valuation({ branchId, asOf }) {

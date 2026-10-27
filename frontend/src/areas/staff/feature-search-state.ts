@@ -53,6 +53,7 @@ export const SYNONYMS: Record<string, readonly string[]> = {
   '/staff/retail/restock': ['buy', 'purchase', 'restock', 'supplier', 'goods in', 'new stock', 'gula', 'okugula'],
   '/staff/retail/usage': ['use', 'used', 'damage', 'broken', 'spoilt', 'expired', 'lost', 'write off'],
   '/staff/retail/stock': ['stock', 'shelf', 'inventory', 'quantity', 'how many', 'low stock', 'ebintu'],
+  '/staff/retail/quick-add': ['quick add', 'add item', 'new item', 'add stock', 'how many i have', 'quick', 'yongera'],
   '/staff/retail/stocktake': ['count', 'stock take', 'stocktake', 'check stock', 'audit', 'bala', 'okubala'],
   '/staff/retail/transfer': ['move', 'transfer', 'send stock', 'branch', 'store'],
   '/staff/retail/stock-by-location': ['store', 'shop', 'location', 'where', 'warehouse'],

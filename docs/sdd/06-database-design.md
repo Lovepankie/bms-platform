@@ -2072,6 +2072,8 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 
 Default units (issue #618, ADR-098): when retail is switched on for a business the application adds the units Piece, Pair, Set, Box, Pack, Kg, Litre and Metre with `created_by` null, skipping a name the business has; V109 added them to every retail business, not closed, that had no unit.
 
+Quick add (issue #632, ADR-101): an item added without a category goes under General and one without a unit is counted in the shop's piece unit (Piece, else pc or pcs); the application makes either with `INSERT ... ON CONFLICT DO NOTHING` on the name index when the business has none, so two adds at once make it once. Its stock is one `retail_stock_movements` row of kind `opening` (allowed since V11; the import's opening stock uses `legacy_balance`, so Quick add is its first writer) and source type `retail.quick_add`, at the branch's average, with a journal entry debiting inventory and crediting opening balance equity (3030), the same journal as the import's opening stock. No table or column changes.
+
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 | Column | Type | Notes |

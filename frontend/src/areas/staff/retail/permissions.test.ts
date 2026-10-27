@@ -40,7 +40,7 @@ describe('retail permission gating', () => {
     // features on. The tile of a capability (Branch roles) is absent while the capability is off.
     expect(screensFor(admin).map((s) => s.screen)).toEqual(
       [
-        'sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'restock', 'usage', 'stock', 'stocktake', 'transfer', 'transfers', 'valuation', 'profit',
+        'sale', 'creditSales', 'salesHistory', 'orders', 'ordersReport', 'restock', 'usage', 'stock', 'stocktake', 'quickAdd', 'transfer', 'transfers', 'valuation', 'profit',
         'salesAnalysis', 'margins', 'stockHealth', 'creditControl', 'evaluation', 'controls', 'catalogue',
         'banking', 'savings', 'expenses', 'withdrawals', 'advances', 'cashSummary', 'bankingReport', 'expensesReport', 'expenseSetup',
         // Paying suppliers and what is owed need no capability (issue #557): they pay what Buy stock bought on credit.
@@ -105,7 +105,7 @@ describe('the shop rows of the staff menu', () => {
     expect(rows(mockMe('admin'))).toEqual([
       ['home', ['Home', 'How do I?']],
       ['today', ['Sell', 'Orders']],
-      ['stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
+      ['stock', ['My stock', 'Buy stock', 'Count stock', 'Quick add', 'Move stock', 'Items and categories']],
       ['money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
       ['wholesale', []],
       ['lending', []],

@@ -165,6 +165,18 @@ public interface RetailCatalogue {
     }
 
     /**
+     * Issue #632, Quick add: makes an item in the caller's transaction through the same rules as Items (the code from the
+     * category, ADR-081; the name check, 422 {@code duplicate_product_name}). A null category files it under General and a
+     * null unit counts it in the shop's piece unit (Piece, or pc when the business uses that); either is made when the
+     * business has none of that name, and a switched-off one is refused as on Items.
+     */
+    NewItem createItem(
+            String description, UUID categoryId, UUID unitId, long costMinor, long sellMinor, String duplicateReason);
+
+    /** The item Quick add made, and whether it also made the General category or the Piece unit. */
+    record NewItem(ProductSnapshot product, boolean categoryMade, boolean unitMade) {}
+
+    /**
      * A pack size: {@code factor} base units in one pack of {@code unit}. Issue #624: {@code purpose} says whether it is
      * bought, sold or both, and {@code sellMinor} is its own selling price per pack, null for the piece price times the size.
      */

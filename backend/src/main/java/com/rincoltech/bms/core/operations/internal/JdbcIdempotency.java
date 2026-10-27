@@ -63,7 +63,7 @@ class JdbcIdempotency implements Idempotency {
             if (lockTimeout(e)) {
                 throw new ApiException(
                         HttpStatus.CONFLICT,
-                        "idempotency_in_progress",
+                        Idempotency.IN_PROGRESS,
                         "Request in progress",
                         "A request with this Idempotency-Key is still being processed; retry shortly.");
             }
@@ -79,7 +79,7 @@ class JdbcIdempotency implements Idempotency {
                     .single();
             if (!stored.requestHash().equals(hash)) {
                 throw ApiException.rule(
-                        "idempotency_key_reused", "This Idempotency-Key was used for a different request.");
+                        Idempotency.KEY_REUSED, "This Idempotency-Key was used for a different request.");
             }
             return new Outcome<>(mapper.readValue(stored.body(), responseType), true);
         }

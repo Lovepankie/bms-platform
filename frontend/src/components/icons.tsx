@@ -223,6 +223,14 @@ export const icons = {
       <path d="M9 13l2 2 4-4" />
     </Svg>
   ),
+  // A box with a plus and a spark: Quick add, an item and its stock in one tap (issue #632).
+  quickAdd: (
+    <Svg>
+      <path d="M4 9l7-4 7 4v8l-7 4-7-4z" />
+      <path d="M11 11v6M8 14h6" />
+      <path d="M19 3v4M17 5h4" />
+    </Svg>
+  ),
   // A gem: what the stock is worth.
   valuation: (
     <Svg>

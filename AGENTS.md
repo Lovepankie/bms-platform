@@ -773,6 +773,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `DefaultUnits` in `retail.catalogue` through the existing unit insert, skipping a name the business has in any case, each unit audited
   `retail.unit.created` by the system. No API, permission or screen change (the inline Add a new unit is #616). Tests:
   `RetailDefaultUnitsIT`, `MigrationOrderIT.defaultUnitsMigrationFillsOnlyRetailBusinessesWithNoUnit`.
+- **Built (Quick add, issue #632, ADR-101, FR-RET-79):** no migration. `POST /api/v1/retail/quick-add` (`retail.stock`, permission
+  `retail.catalogue.manage`, `Idempotency-Key`) makes the item through `RetailCatalogue.createItem` (the catalogue's own create; General and
+  Piece made when left out and missing) and, with `qty`, adds exactly that quantity at the branch as one `opening` movement of source
+  `retail.quick_add` posted to inventory against opening balance equity (`retail.stocktake.commit` there, checked first), all in one
+  transaction; with `product_id` only the quantity is added. The Quick add screen (`/staff/retail/quick-add`): the Stock menu
+  row and More, the first-run card's first action, the catalogue home, the Items page and Sell's not-found line; Add another and Sell it
+  (`/staff/retail/sale?item=`). Help: How do I add an item quickly?. Tests: `RetailQuickAddIT`, `quick-add.dom.test.tsx`.
 - **Built (Set up your shop, issue #625, ADR-100, FR-RET-01, units spec section 9 step 5):** migration `V111` (directly after
   `V110`, #624, PR #627): `retail_units` gains `pack_size`, `pack_of_unit_id` and `pack_purpose`, the usual size of a
   unit that is a pack in a smaller unit and what it is for (`buy`, `sell` or `both`, the values and Used for words of a pack's
@@ -1221,6 +1228,10 @@ Accepted (this list is the ADR index):
   cloud-init and Cloudflare modules, nothing applied before): the VM, its firewall, DNS, the R2 buckets with the ADR-058 lock and
   lifecycle rules and host tokens (the backup one cannot delete a locked backup; the DNS-01 one reaches the whole zone, an accepted risk); later updated by a signed pointer the owner moves with
   a local promote command, no deploy SSH key and no hosted job (proposed, #300, #301; provider, region and the promote command pending)
+- ADR-101 Quick add makes the item and its starting stock in one request: `POST /retail/quick-add` in `retail.stock`, the catalogue's
+  own create then the quantity added as opening stock against opening balance equity, never set and never a count, General and Piece
+  made when missing, the stock gated by `retail.stocktake.commit`
+  (#632, owner decision D67; no migration)
 
 Pending (cite only as "pending ADR-NNN"):
 
