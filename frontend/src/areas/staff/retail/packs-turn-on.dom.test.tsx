@@ -36,6 +36,7 @@ vi.mock('../../../api/retail', async (original) => {
   };
 });
 
+const { RetailError } = await import('../../../api/retail');
 const { ProductForm } = await import('./catalogue-products');
 const { ASK_OWNER_PACKS, PACKS_ON_ADDING, PACKS_QUESTION, withPacksOn } = await import('./catalogue-packs');
 
@@ -47,7 +48,8 @@ afterEach(() => {
 
 const packsOff = (me: Me): Me => ({ ...me, module_capabilities: { ...me.module_capabilities, retail: (me.module_capabilities?.retail ?? []).filter((c) => c !== 'units') } });
 const owner = packsOff(mockMe('admin'));
-const manager = { ...owner, permissions: (owner.permissions ?? []).filter((p) => p !== 'core.settings.manage') };
+const withoutSettings = { ...owner, permissions: (owner.permissions ?? []).filter((p) => p !== 'core.settings.manage') };
+const withoutCatalogue = { ...owner, permissions: (owner.permissions ?? []).filter((p) => p !== 'retail.catalogue.manage') };
 const water = { id: 'p1', code: 'TD-0001', description: 'Test water 500ml', category_id: 'c1', category: 'Test drinks', unit: 'piece', unit_id: 'u1', sell_minor: 1_000, active: true, version: 1 };
 
 /** The form under the staff context that reads /me from the query cache, as the staff layout does. */
@@ -75,6 +77,8 @@ describe('the turn-on line on the item form', () => {
     expect(screen.getByText(PACKS_QUESTION)).toBeTruthy();
     expect(screen.queryByTestId('pack-editor')).toBeNull();
     expect(screen.getByRole('link', { name: /How do I sell or buy in cartons\?/ }).getAttribute('href')).toBe('/staff/help/sell-or-buy-in-cartons');
+    // The secondary style: Save changes stays the one primary action.
+    expect(screen.getByRole('button', { name: 'Turn on cartons' }).className).not.toMatch(/primary|brand/);
     fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
 
     await screen.findByTestId('pack-editor');
@@ -103,12 +107,41 @@ describe('the turn-on line on the item form', () => {
     expect(changeCapabilities).not.toHaveBeenCalled();
   });
 
+  it('reads the settings again once when someone changed them in between, and shows a second conflict', async () => {
+    const conflict = () => new RetailError('The resource changed since it was read.', 409, 'version_conflict');
+    capabilities.mockResolvedValueOnce({ capabilities: { units: false }, version: 5 }).mockResolvedValueOnce({ capabilities: { units: false }, version: 6 });
+    changeCapabilities.mockRejectedValueOnce(conflict()).mockResolvedValueOnce({ capabilities: { units: true }, version: 7 });
+    screenOf(owner, water);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
+
+    await screen.findByTestId('pack-editor');
+    expect(changeCapabilities.mock.calls).toEqual([[{ units: true }, 5], [{ units: true }, 6]]);
+
+    cleanup();
+    capabilities.mockResolvedValue({ capabilities: { units: false }, version: 8 });
+    changeCapabilities.mockReset().mockRejectedValue(conflict());
+    screenOf(owner, water);
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
+
+    await waitFor(() => expect(changeCapabilities).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId('packs-turn-on').querySelector('[role="alert"]')?.textContent).toContain('changed since it was read'));
+    expect(screen.queryByTestId('pack-editor')).toBeNull();
+  });
+
   it('tells someone who may not change settings who can turn packs on, with no button', () => {
-    screenOf(manager, water);
+    screenOf(withoutSettings, water);
 
     expect(screen.getByText(PACKS_QUESTION)).toBeTruthy();
     expect(screen.getByTestId('packs-ask').textContent).toBe(ASK_OWNER_PACKS);
     expect(screen.queryByRole('button', { name: 'Turn on cartons' })).toBeNull();
+  });
+
+  it('is not there for someone who may not change items', () => {
+    screenOf(withoutCatalogue, water);
+
+    expect(screen.queryByTestId('packs-turn-on')).toBeNull();
+    expect(screen.queryByText(PACKS_QUESTION)).toBeNull();
   });
 
   it('is not there while packs are on', async () => {

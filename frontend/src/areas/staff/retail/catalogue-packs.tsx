@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { Me } from '../../../api/client';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { retail, type Pack, type Product, type Unit } from '../../../api/retail';
+import { RetailError, retail, type Pack, type Product, type Unit } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showQty } from './maths';
 import { Money, Problem, money } from './ui';
@@ -354,8 +354,17 @@ export function PacksTurnOn({ adding }: { adding: boolean }) {
   const [done, setDone] = useState(false);
   const turnOn = useMutation({
     mutationFn: async () => {
-      const read = await retail.capabilities();
-      return read.capabilities.units === true ? read : retail.changeCapabilities({ units: true }, read.version);
+      // Read, then send only units with that version; the server merges it. A change by someone else in between is read
+      // again once, and a second conflict is shown.
+      for (let attempt = 0; ; attempt += 1) {
+        const read = await retail.capabilities();
+        if (read.capabilities.units === true) return read;
+        try {
+          return await retail.changeCapabilities({ units: true }, read.version);
+        } catch (error) {
+          if (attempt > 0 || !(error instanceof RetailError && error.code === 'version_conflict')) throw error;
+        }
+      }
     },
     onSuccess: (next) => {
       queryClient.setQueryData(['retail', 'capabilities'], next);
@@ -372,6 +381,7 @@ export function PacksTurnOn({ adding }: { adding: boolean }) {
       {holds(me, SETTINGS_MANAGE) ? (
         <>
           <Problem error={turnOn.error} />
+          {/* A bare button is the secondary style: Add item or Save changes stays the one primary action (rule 6). */}
           <BusyButton busy={turnOn.isPending} type="button" onClick={() => turnOn.mutate()}>Turn on cartons</BusyButton>
         </>
       ) : (

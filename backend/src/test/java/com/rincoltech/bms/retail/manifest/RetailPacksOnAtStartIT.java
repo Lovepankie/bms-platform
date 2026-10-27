@@ -81,9 +81,18 @@ class RetailPacksOnAtStartIT extends IntegrationTest {
         return JsonMapper.builder().build().readTree(json);
     }
 
+    static long changes(UUID tenantId) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.capabilities.changed'")
+                .param(tenantId)
+                .query(Long.class)
+                .single();
+    }
+
     @Test
     void aNewRetailBusinessStartsWithPacksOnAndEverythingElseOff() {
-        JsonNode retail = stored(create(List.of("retail")));
+        UUID tenantId = create(List.of("retail"));
+        JsonNode retail = stored(tenantId);
 
         assertThat(retail.path("units").asBoolean()).isTrue();
         for (String off : List.of(
@@ -96,6 +105,8 @@ class RetailPacksOnAtStartIT extends IntegrationTest {
                 "returns")) {
             assertThat(retail.path(off).asBoolean()).as(off).isFalse();
         }
+        assertThat(retail.path("profile").asString()).isEqualTo("shops");
+        assertThat(changes(tenantId)).isEqualTo(1);
     }
 
     @Test
@@ -110,11 +121,24 @@ class RetailPacksOnAtStartIT extends IntegrationTest {
         switchModules(tenantId, List.of("lending", "retail"));
 
         assertThat(stored(tenantId).path("units").asBoolean()).isTrue();
-        long audits = TestDatabase.owner()
-                .sql("SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.capabilities.changed'")
+        assertThat(changes(tenantId)).isEqualTo(1);
+    }
+
+    /** A modules change that keeps retail on is no switch-on: packs the owner turned off stay off. */
+    @Test
+    void aModulesChangeWithRetailAlreadyOnLeavesPacksAsTheOwnerSetThem() {
+        UUID tenantId = create(List.of("retail"));
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE tenant_settings SET settings = jsonb_set(settings, '{module_groups,retail,units}', 'false')"
+                                + " WHERE tenant_id = ?")
                 .param(tenantId)
-                .query(Long.class)
-                .single();
-        assertThat(audits).isEqualTo(1);
+                .update();
+
+        switchModules(tenantId, List.of("lending", "retail"));
+        switchModules(tenantId, List.of("retail"));
+
+        assertThat(stored(tenantId).path("units").asBoolean()).isFalse();
+        assertThat(changes(tenantId)).isEqualTo(1);
     }
 }

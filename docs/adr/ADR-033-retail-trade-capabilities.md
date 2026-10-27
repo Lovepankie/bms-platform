@@ -397,14 +397,18 @@ stay off.
 
 1. **Set up at the switch, not read as a default.** `retail.manifest` supplies `PacksOnAtStart`, a `core.tenancy.ModuleSetUp`
    (ADR-098), which writes `units: true` through the core settings write in the switching transaction, audited as
-   `retail.capabilities.changed`. An absent flag still reads as off, so no existing business changes and no migration is needed.
+   `retail.capabilities.changed`. The stored kind is Shops, so a new business does not read as a wholesaler. The core calls the
+   set-up only for a module that was off, so a modules change that keeps retail on leaves packs as the owner set them. An absent
+   flag still reads as off, so no existing business changes and no migration is needed.
 2. **A later switch-on turns packs on again.** A business whose retail was switched off and on again finds packs on, even if the
    owner had switched them off; they switch them off again in Retail settings. The packs and their prices are kept either way.
 3. **Choosing a kind still applies its preset.** Shops and Stores and shops switch packs off, as before; the kind remains a preset
-   of the flags (ADR-092).
+   of the flags (ADR-092). Neither sign-up nor the first-run set-up asks for the kind; it is chosen only in Retail settings, so a
+   new business keeps packs on until the owner chooses.
 4. **The item form says packs exist.** While `units` is off, Add an item and Edit show one line, "Also sold or bought in cartons
    or boxes?". Someone with `core.settings.manage` turns packs on there through `PUT /retail/settings/capabilities` with its
-   `If-Match`, and the pack section shows at once; anyone else reads "Ask the owner to turn on cartons in Retail settings." The line
+   `If-Match` (sending `units` alone, which the group merges; a version conflict is read again once), and the pack section shows
+   at once; anyone else reads "Ask the owner to turn on cartons in Retail settings." The line
    links the help article How do I sell or buy in cartons?
 
 **Better:** a new shop that buys by the carton finds packs on the item form from the first day. **Worse:** a shop that never sells a

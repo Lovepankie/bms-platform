@@ -107,6 +107,29 @@ class RetailCapabilityGroupTest {
                 .containsExactly("branch_roles", "returns", "units");
     }
 
+    /** Issue #630: the item form sends units alone; the change merges and leaves the kind and every other switch as they were. */
+    @Test
+    void aChangeOfOneSwitchKeepsTheKindAndTheOtherSwitches() {
+        Map<String, Object> current = group.normalise(
+                Map.of("profile", "stores_and_shops", "branch_roles", true, "transfer_receipt", true, "returns", true),
+                Map.of());
+
+        Map<String, Object> after = group.normalise(current, Map.of("units", true));
+
+        assertThat(after.get("profile")).isEqualTo("stores_and_shops");
+        assertThat(group.enabledCapabilities(after))
+                .containsExactly("branch_roles", "returns", "transfer_receipt", "units");
+    }
+
+    /** Issue #630: a new business starts with packs on and still reads as Shops, not as a wholesaler. */
+    @Test
+    void packsOnAtTheStartKeepTheKindShops() {
+        Map<String, Object> after = group.normalise(group.normalise(Map.of(), Map.of()), Map.of("units", true));
+
+        assertThat(after.get("profile")).isEqualTo("shops");
+        assertThat(group.enabledCapabilities(after)).containsExactly("units");
+    }
+
     @Test
     void theSlowMoverRulesDefaultToFourMonthsAndNoThresholdAndTakeWholeNumbersInRange() {
         Map<String, Object> g = group.normalise(Map.of(), Map.of());

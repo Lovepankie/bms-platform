@@ -819,6 +819,17 @@ class OnboardingIT extends IntegrationTest {
                         .query(String.class)
                         .list())
                 .containsExactly("Box", "Kg", "Litre", "Metre", "Pack", "Pair", "Piece", "Set");
+        // Issue #630 (ADR-033 amendment): and with packs on, every other retail switch off, audited once.
+        assertThat(owner.sql("""
+                                SELECT settings -> 'module_groups' -> 'retail' ->> 'units' FROM tenant_settings
+                                 WHERE tenant_id = ?
+                                """).param(tenantId).query(String.class).single()).isEqualTo("true");
+        assertThat(owner.sql(
+                                "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.capabilities.changed'")
+                        .param(tenantId)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
         assertThat(owner.sql("""
                                 SELECT count(*) FROM users u JOIN user_role_assignments a ON a.user_id = u.id
                                  WHERE u.tenant_id = ? AND u.email = ? AND u.status = 'invited' AND a.role_key = 'tenant_admin'
