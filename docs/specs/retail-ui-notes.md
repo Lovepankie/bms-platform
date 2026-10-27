@@ -1367,8 +1367,18 @@ the items show only while you search, and go away once one is picked. Every item
   inactive ones that still hold stock) with its count box and a **0** button for an item that is gone. A line moves to Counted
   items when its count is entered (on leaving the box, on Enter, or on 0) and back when the count is emptied. A found item that
   is not counted yet heads Not counted yet, marked, with the cursor in its count box (the one picker where a pick does not leave it in the search, since the count is the next step); a scan counts one more and moves the
-  line to Counted items. With lines left, Review variance first says "12 items not counted. Finish anyway?" with **Keep
-  counting** and **Finish anyway**, as an inline warning, not a dialog. Only counted lines are sent, as before.
+  line to Counted items. With lines left, Review variance first says "12 items not counted. Review the difference anyway?"
+  with **Keep counting** and **Review the difference anyway** (issue #629, which retired Finish here), as an inline warning, not a dialog. Only counted lines are sent, as before.
+- **Count stock: a count that wipes stock (issue #629).** The count page's note ends "Leave an item empty if you did not count
+  it.": an empty or blank box is never sent, so it never sets an item to 0. On **Review the difference**, a line that takes an
+  item holding stock to 0, or to less than half of what it held, has a note under it in the entry warning's look, with its icon
+  and words ("This removes 8 pieces. Is that right?"), and a 48px tick named for the item ("Yes, Test Plug is right"), so it
+  never rests on colour alone. **Commit the count** passes `notReady` until every such line is ticked: a press sends nothing
+  and goes to the first tick left, and a line under the list says how many are left. A count typed above zero that keeps half
+  or more, and a count that adds, ask nothing. A new review (after **Back to the count**) asks again. The help article and the
+  `page-stocktake` tour (version 6) say both, and name the button **Commit the count**, never Finish; the question before the
+  review names the button it leads to, Review the difference anyway; the server's refusals that
+  told a person to finish a count now say to commit it.
 - **Scan box.** Unchanged (ADR-070 decision 11, owner decision D7): a scanner types only into the Scan box, which adds the item or one more.
 - **Tours.** `retail-sales` version 16, `page-stocktake` 3 (the search on top and the list Not counted yet), `page-restock` 3, `page-usage` 2, `page-transfer` 3,
   `page-sizes-join` 2 and `page-labels` 2 word their search steps for the list that shows while you type.

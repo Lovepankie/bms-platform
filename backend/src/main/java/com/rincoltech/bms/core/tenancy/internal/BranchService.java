@@ -368,7 +368,7 @@ class BranchService implements BranchProvisioning {
                 "branch_still_has_stock",
                 "This branch still has goods",
                 describe(branch, findings)
-                        + " Move the stock to a shop, receive or cancel the transfers and finish the stock counts first,"
+                        + " Move the stock to a shop, receive or cancel the transfers and commit the stock counts first,"
                         + " then mark it as not stocking.",
                 List.of(),
                 facts(findings));

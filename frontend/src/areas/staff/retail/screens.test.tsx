@@ -7,7 +7,7 @@ import { createMockRetail, mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { Receipt, SaleForm } from './sale';
 import { AllBranchesList, AllBranchesTable, StockLevelFilter, StockPage, StockTable } from './stock';
-import { StocktakeReview } from './stocktake';
+import { StocktakeReview, bigDrop, dropWords } from './stocktake';
 import { BranchTotals, ProfitTable, ValuationTable } from './profit';
 import { RestockForm, RestockSaved, supplierOptions } from './restock';
 import { TransferForm, TransferSummary } from './transfer';
@@ -207,6 +207,27 @@ describe('stock-take review', () => {
 
   it('has no commit button once committed', () => {
     expect(renderToString(<StocktakeReview stocktake={{ ...st, status: 'committed' }} onCommit={() => undefined} />)).not.toContain('Commit the count');
+  });
+
+  // Issue #629: to 0 or below half of what was held asks first; half or more, an item that held nothing, or a rise does not.
+  it('marks a count that wipes or halves stock, and words what it removes', () => {
+    const l = (expected: string, counted: string) => ({ product_id: 'p', expected_qty: expected, counted_qty: counted });
+    expect(bigDrop(l('8.000', '0.000'))).toBe(true);
+    expect(bigDrop(l('10.000', '4.999'))).toBe(true);
+    expect(bigDrop(l('10.000', '5.000'))).toBe(false);
+    expect(bigDrop(l('1.000', '0.000'))).toBe(true);
+    expect(bigDrop(l('0.000', '0.000'))).toBe(false);
+    expect(bigDrop(l('-2.000', '0.000'))).toBe(false);
+    expect(bigDrop(l('3.000', '7.000'))).toBe(false);
+    expect(dropWords(l('8.000', '0.000'), 'piece')).toBe('This removes 8 pieces. Is that right?');
+    expect(dropWords(l('1.000', '0.000'), 'box')).toBe('This removes 1 box. Is that right?');
+    expect(dropWords(l('2.000', '0.000'), 'box')).toBe('This removes 2 boxes. Is that right?');
+    expect(dropWords(l('2.500', '0.000'), undefined)).toBe('This removes 2.5. Is that right?');
+  });
+
+  it('asks nothing once committed', () => {
+    const wiped: Stocktake = { ...st, status: 'committed', lines: [{ product_id: 'p1', description: 'LED bulb 9W screw', expected_qty: '12.000', counted_qty: '0.000', committed_variance_qty: '-12.000' }] };
+    expect(renderToString(<StocktakeReview stocktake={wiped} />)).not.toContain('Is that right?');
   });
 });
 

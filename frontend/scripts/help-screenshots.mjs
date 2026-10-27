@@ -284,7 +284,7 @@ const SHOTS = {
       // The first tap leaves the count box (the line moves to Counted items); the second asks for the review.
       const commit = button(page, 'Commit the count');
       for (let i = 0; i < 6 && !(await commit.isVisible()); i++) {
-        const next = ['Confirm', 'Finish anyway'].map((name) => button(page, name));
+        const next = ['Confirm', 'Review the difference anyway'].map((name) => button(page, name));
         const shown = (await next[0].isVisible()) ? next[0] : (await next[1].isVisible()) ? next[1] : tour(page, 'count-review');
         await shown.click();
         await page.waitForTimeout(900);

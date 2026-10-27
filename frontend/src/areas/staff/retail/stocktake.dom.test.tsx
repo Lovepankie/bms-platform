@@ -13,6 +13,7 @@ vi.setConfig({ testTimeout: 20000 });
 
 const listStock = vi.fn();
 const createStocktake = vi.fn();
+const commitStocktake = vi.fn();
 
 vi.mock('@tanstack/react-router', async (original) => {
   const real = await original<typeof import('@tanstack/react-router')>();
@@ -21,7 +22,7 @@ vi.mock('@tanstack/react-router', async (original) => {
 
 vi.mock('../../../api/retail', async (original) => {
   const real = await original<typeof import('../../../api/retail')>();
-  return { ...real, retail: { ...real.retail, listStock: (...a: unknown[]) => listStock(...a), createStocktake: (...a: unknown[]) => createStocktake(...a) } };
+  return { ...real, retail: { ...real.retail, listStock: (...a: unknown[]) => listStock(...a), createStocktake: (...a: unknown[]) => createStocktake(...a), commitStocktake: (...a: unknown[]) => commitStocktake(...a) } };
 });
 
 const { StocktakePage } = await import('./stocktake');
@@ -30,6 +31,7 @@ afterEach(() => {
   cleanup();
   listStock.mockReset();
   createStocktake.mockReset();
+  commitStocktake.mockReset();
 });
 
 const row = (code: string, description: string, qty: string): StockRow => ({ product_id: code, code, description, category: 'Lamps', unit: 'piece', qty, negative: false, sell_minor: 1500 });
@@ -132,9 +134,9 @@ describe('counting the sheet', () => {
     await screen.findByText(EMPTY);
     fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Inactive Held' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
-    expect(screen.getByTestId('count-not-done').textContent).toContain('1 item not counted. Finish anyway?');
+    expect(screen.getByTestId('count-not-done').textContent).toContain('1 item not counted. Review the difference anyway?');
     expect(createStocktake).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Finish anyway' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference anyway' }));
     await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
     expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'I-1', counted_qty: '0' }] });
   });
@@ -153,8 +155,8 @@ describe('counting the sheet', () => {
     expect(inside(/^Counted items/, (order[0] ?? '').replace('count-', ''))).toBe(true);
   });
 
-  // Review of #535: the question answers the counts it was asked about, and Finish anyway keeps the Review button's guards.
-  it('withdraws the question when a count changes, so Finish anyway never sends an invalid or empty count', async () => {
+  // Review of #535: the question answers the counts it was asked about, and Review the difference anyway keeps the Review button's guards.
+  it('withdraws the question when a count changes, so Review the difference anyway never sends an invalid or empty count', async () => {
     listStock.mockResolvedValue([...active, inactiveHeld]);
     open();
     await screen.findByText(EMPTY);
@@ -164,18 +166,18 @@ describe('counting the sheet', () => {
     expect(screen.getByTestId('count-not-done')).toBeTruthy();
     fireEvent.change(document.getElementById('count-I-1') as HTMLInputElement, { target: { value: '4x' } });
     expect(screen.queryByTestId('count-not-done')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Finish anyway' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Review the difference anyway' })).toBeNull();
     expect(createStocktake).not.toHaveBeenCalled();
   });
 
-  it('keeps Finish anyway to one request however often it is tapped', async () => {
+  it('keeps Review the difference anyway to one request however often it is tapped', async () => {
     listStock.mockResolvedValue([...active, inactiveHeld]);
     createStocktake.mockImplementation(() => new Promise(() => {}));
     open();
     await screen.findByText(EMPTY);
     fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Inactive Held' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
-    const go = screen.getByRole('button', { name: 'Finish anyway' });
+    const go = screen.getByRole('button', { name: 'Review the difference anyway' });
     fireEvent.click(go);
     fireEvent.click(go);
     await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
@@ -192,6 +194,21 @@ describe('counting the sheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Keep counting' }));
     expect(screen.queryByTestId('count-not-done')).toBeNull();
     expect(createStocktake).not.toHaveBeenCalled();
+  });
+
+  // Issue #629: the question names the button it leads to, and nothing on the count page says Finish.
+  it('asks in the words of Review the difference, and never says Finish', async () => {
+    listStock.mockResolvedValue([...active, inactiveHeld]);
+    open();
+    await screen.findByText(EMPTY);
+    fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Lamp Inactive Held' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
+    const question = screen.getByTestId('count-not-done');
+    expect(question.querySelector('p')?.textContent).toBe('1 item not counted. Review the difference anyway?');
+    expect(screen.getByRole('button', { name: 'Review the difference anyway' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Keep counting' })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/finish/i);
+    expect([...document.querySelectorAll('[aria-label]')].map((e) => e.getAttribute('aria-label')).join(' ')).not.toMatch(/finish/i);
   });
 
   it('finishes at once when every line is counted', async () => {
@@ -212,5 +229,96 @@ describe('counting the sheet', () => {
     fireEvent.change(box(), { target: { value: 'fridge' } });
     await waitFor(() => expect(screen.getAllByText('No item matches "fridge".').length).toBeGreaterThan(0));
     expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+});
+
+// Issue #629: a shop owner was one tap from committing a count that took an item from 8 to 0 by a 0 meant for another line.
+describe('a count that wipes or halves stock', () => {
+  const sheet = [row('A-1', 'Test Plug Four Way', '8.000'), row('A-2', 'Test Plug Two Way', '10.000'), row('A-3', 'Test Bulb', '10.000'), row('A-4', 'Test Tape', '5.000')];
+  const line = (id: string, description: string, expected: string, counted: string) => ({
+    product_id: id, description, expected_qty: expected, counted_qty: counted, variance_qty: (Number(counted) - Number(expected)).toFixed(3),
+  });
+  const draft = {
+    id: 'st1', status: 'draft',
+    lines: [
+      line('A-1', 'Test Plug Four Way', '8.000', '0.000'),
+      line('A-2', 'Test Plug Two Way', '10.000', '4.000'),
+      line('A-3', 'Test Bulb', '10.000', '6.000'),
+      line('A-4', 'Test Tape', '5.000', '7.000'),
+    ],
+  };
+
+  async function review() {
+    listStock.mockResolvedValue(sheet);
+    createStocktake.mockResolvedValue(draft);
+    commitStocktake.mockResolvedValue({ ...draft, status: 'committed' });
+    open();
+    await screen.findByText(EMPTY);
+    for (const [id, qty] of [['A-1', '0'], ['A-2', '4'], ['A-3', '6'], ['A-4', '7']] as const) {
+      fireEvent.change(document.getElementById(`count-${id}`) as HTMLInputElement, { target: { value: qty } });
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (4 counted)' }));
+    await screen.findByRole('heading', { name: 'Review the difference' });
+  }
+
+  it('notes in words, with a tick, each line that takes stock to 0 or below half, and no other line', async () => {
+    await review();
+    expect(screen.getByTestId('count-drop-A-1').textContent).toContain('This removes 8 pieces. Is that right?');
+    expect(screen.getByTestId('count-drop-A-2').textContent).toContain('This removes 6 pieces. Is that right?');
+    // A count typed above zero that keeps half or more, and a count that adds, are left as they are.
+    expect(screen.queryByTestId('count-drop-A-3')).toBeNull();
+    expect(screen.queryByTestId('count-drop-A-4')).toBeNull();
+    // Not by colour alone: the words, an icon and a tick named for its item.
+    const tick = screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }) as HTMLInputElement;
+    expect(tick.checked).toBe(false);
+    expect(screen.getByTestId('count-drop-A-1').querySelector('svg')).not.toBeNull();
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  it('commits only once every noted line is ticked, and a press before that goes to the first tick', async () => {
+    await review();
+    const commit = screen.getByRole('button', { name: 'Commit the count' });
+    expect(screen.getByText('Tick the 2 lines marked above before you commit the count.')).toBeTruthy();
+    fireEvent.click(commit);
+    expect(commitStocktake).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));
+    expect(screen.getByText('Tick the line marked above before you commit the count.')).toBeTruthy();
+    fireEvent.click(commit);
+    expect(commitStocktake).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Yes, Test Plug Two Way is right' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Two Way is right' }));
+    fireEvent.click(commit);
+    await waitFor(() => expect(commitStocktake).toHaveBeenCalledWith('st1'));
+  });
+
+  it('asks again after Back to the count, since the review is a new one', async () => {
+    await review();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the count' }));
+    createStocktake.mockResolvedValue({ ...draft, id: 'st2' });
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (4 counted)' }));
+    await screen.findByRole('heading', { name: 'Review the difference' });
+    expect((screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }) as HTMLInputElement).checked).toBe(false);
+  });
+});
+
+// Issue #629: a count changes only the items counted. The page says so, and an empty box is never sent.
+describe('an item left empty', () => {
+  it('says to leave an item empty if it was not counted, and never sends an empty or blank box', async () => {
+    const sheet = [row('A-1', 'Test Plug Four Way', '8.000'), row('A-2', 'Test Plug Two Way', '10.000'), row('A-3', 'Test Bulb', '10.000')];
+    listStock.mockResolvedValue(sheet);
+    createStocktake.mockResolvedValue({ id: 'st1', status: 'draft', lines: [] });
+    open();
+    await screen.findByText(EMPTY);
+    expect(screen.getByRole('note').textContent).toContain('Leave an item empty if you did not count it.');
+    fireEvent.change(document.getElementById('count-A-1') as HTMLInputElement, { target: { value: '7' } });
+    fireEvent.change(document.getElementById('count-A-2') as HTMLInputElement, { target: { value: '3' } });
+    fireEvent.change(document.getElementById('count-A-2') as HTMLInputElement, { target: { value: '' } });
+    fireEvent.change(document.getElementById('count-A-3') as HTMLInputElement, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference anyway' }));
+    await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'A-1', counted_qty: '7' }] });
   });
 });

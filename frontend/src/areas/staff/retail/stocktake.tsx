@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type StockRow, type Stocktake, type StocktakeLine } from '../../../api/retail';
-import { milliOf, parseCount, parseQty, showQty } from './maths';
+import { milliOf, parseCount, parseQty, qtyString, showQty } from './maths';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
@@ -14,7 +14,8 @@ import { UNITS, capabilityOn, needsOf } from './permissions';
 import { chosenPack } from './units-state';
 import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { WORDS } from '../../../app/glossary';
+import { WORDS, plural } from '../../../app/glossary';
+import { icons } from '../../../components/icons';
 import { NewItemHere, type AddedItem } from './new-item-here';
 import { ScreenToast, useItemAdded } from './toast';
 import { entryWarnings } from './entry-checks-state';
@@ -26,10 +27,38 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 /** The variance written at commit once committed, otherwise the draft's (counted less expected). */
 const variance = (l: StocktakeLine): string => l.committed_variance_qty ?? l.variance_qty ?? '0';
 
-export function StocktakeReview({ stocktake, onCommit, busy }: { stocktake: Stocktake; onCommit?: () => void; busy?: boolean }) {
+/**
+ * Issue #629: a count that takes an item holding stock to 0, or to less than half of what it held, is the likely slip of a
+ * tap (a 0 meant for the next line). It asks before it is committed; a count that keeps more than half stays as it is.
+ */
+export function bigDrop(l: StocktakeLine): boolean {
+  const expected = milliOf(l.expected_qty ?? '0');
+  return expected > 0 && milliOf(l.counted_qty ?? '0') * 2 < expected;
+}
+
+/** "This removes 8 pieces. Is that right?" for a big drop, in the item's unit when the sheet gives it. */
+export function dropWords(l: StocktakeLine, unit: string | undefined): string {
+  const removed = milliOf(l.expected_qty ?? '0') - milliOf(l.counted_qty ?? '0');
+  const word = unit ? ` ${removed === 1000 ? unit : plural(unit)}` : '';
+  return `This removes ${showQty(qtyString(removed))}${word}. Is that right?`;
+}
+
+export function StocktakeReview({ stocktake, onCommit, busy, units }: {
+  stocktake: Stocktake;
+  onCommit?: () => void;
+  busy?: boolean;
+  /** Each item's unit by product id, for the words of a big drop. */
+  units?: ReadonlyMap<string, string | undefined>;
+}) {
   const changed = (stocktake.lines ?? []).filter((l) => milliOf(variance(l)) !== 0);
+  const draft = stocktake.status === 'draft';
+  // The big drops ticked as right; Commit the count waits for every one of them.
+  const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
+  const asked = draft ? changed.filter(bigDrop).map((l) => l.product_id ?? '') : [];
+  const open = asked.filter((id) => !ticked.has(id)).length;
+  const tick = (id: string, on: boolean) => setTicked((t) => { const n = new Set(t); if (on) n.add(id); else n.delete(id); return n; });
   return (
-    <section aria-label="Stock count review">
+    <form aria-label="Stock count review" noValidate onSubmit={(e) => e.preventDefault()}>
       <h2>{stocktake.status === 'committed' ? 'Stock count committed' : 'Review the difference'}</h2>
       {changed.length === 0 ? (
         <p>Every counted item matches the system.</p>
@@ -46,26 +75,49 @@ export function StocktakeReview({ stocktake, onCommit, busy }: { stocktake: Stoc
           <tbody>
             {changed.map((l) => {
               const v = milliOf(variance(l));
+              const id = l.product_id ?? '';
               return (
-                <tr key={l.product_id}>
-                  <td>{l.description ?? l.product_id}</td>
-                  <td className="num">{showQty(l.expected_qty ?? '0')}</td>
-                  <td className="num">{showQty(l.counted_qty ?? '0')}</td>
-                  <td className="num">
-                    <strong>{v > 0 ? '+' : ''}{showQty(variance(l))}</strong> {v > 0 ? '(more)' : '(less)'}
-                  </td>
-                </tr>
+                <Fragment key={id}>
+                  <tr>
+                    <td>{l.description ?? l.product_id}</td>
+                    <td className="num">{showQty(l.expected_qty ?? '0')}</td>
+                    <td className="num">{showQty(l.counted_qty ?? '0')}</td>
+                    <td className="num">
+                      <strong>{v > 0 ? '+' : ''}{showQty(variance(l))}</strong> {v > 0 ? '(more)' : '(less)'}
+                    </td>
+                  </tr>
+                  {asked.includes(id) && (
+                    <tr className="count-drop-row">
+                      <td colSpan={4}>
+                        <div className="alert alert-warning entry-warning" data-testid={`count-drop-${id}`}>
+                          <span className="entry-warning-icon" aria-hidden="true">{icons.error}</span>
+                          <div>
+                            <p id={`count-drop-${id}-words`}>{dropWords(l, units?.get(id))}</p>
+                            <label className="count-drop-tick">
+                              <input type="checkbox" checked={ticked.has(id)} aria-describedby={`count-drop-${id}-words`}
+                                data-needed={ticked.has(id) ? undefined : ''} onChange={(e) => tick(id, e.target.checked)} />
+                              {`Yes, ${l.description ?? 'this item'} is right`}
+                            </label>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
         </table></div>
       )}
-      {stocktake.status === 'draft' && onCommit && (
-        <BusyButton type="button" className="rt-primary" busy={busy === true} onClick={onCommit}>
-          Commit the count
-        </BusyButton>
+      {draft && onCommit && (
+        <>
+          {open > 0 && <p className="hint">{open === 1 ? 'Tick the line marked above before you commit the count.' : `Tick the ${open} lines marked above before you commit the count.`}</p>}
+          <BusyButton type="button" className="rt-primary" busy={busy === true} notReady={open > 0} onClick={onCommit}>
+            Commit the count
+          </BusyButton>
+        </>
       )}
-    </section>
+    </form>
   );
 }
 
@@ -107,7 +159,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   // The lines whose count is entered, in the order they were done; and the question asked before a count with lines left.
   const [done, setDone] = useState<string[]>([]);
   // The question answers the counts it was asked about: it shows only while the counts are those it was asked on, so any
-  // change to a count withdraws it in the same render and Finish anyway never sends counts it was not asked about (#535).
+  // change to a count withdraws it in the same render and Review the difference anyway never sends counts it was not asked about (#535).
   const [askedOn, setAskedOn] = useState<Record<string, string> | null>(null);
   const confirming = askedOn !== null && askedOn === counts;
   const setConfirming = (on: boolean) => setAskedOn(on ? counts : null);
@@ -183,7 +235,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   if (draft) {
     return (
       <>
-        <StocktakeReview stocktake={draft} onCommit={() => commit.mutate()} busy={commit.isPending} />
+        <StocktakeReview key={draft.id} stocktake={draft} onCommit={() => commit.mutate()} busy={commit.isPending} units={new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r.unit]))} />
         <Problem error={commit.error} />
         {draft.status === 'draft' && <button type="button" onClick={() => setDraft(null)}>Back to the count</button>}
         {draft.status === 'committed' && <button type="button" onClick={() => { setDraft(null); setCounts({}); setListed([]); setDone([]); setConfirming(false); }}>Start another count</button>}
@@ -242,7 +294,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   };
   return (
     <>
-      <Note>Find or scan each item you count, or work down the list Not counted yet. Type how many you counted, or 0 for an item that is gone.</Note>
+      <Note>Find or scan each item you count, or work down the list Not counted yet. Type how many you counted, or 0 for an item that is gone. Leave an item empty if you did not count it.</Note>
       <div data-tour="count-search">
         <ItemCombobox
           id="count-search"
@@ -282,10 +334,10 @@ function CountSheet({ branchId }: { branchId: string }) {
       <Problem error={review.error} />
       {confirming && uncounted > 0 && (
         <div role="alert" className="alert alert-warning" data-testid="count-not-done">
-          <p>{`${uncounted} ${uncounted === 1 ? 'item' : 'items'} not counted. Finish anyway?`}</p>
+          <p>{`${uncounted} ${uncounted === 1 ? 'item' : 'items'} not counted. Review the difference anyway?`}</p>
           <p className="cluster">
             <button type="button" className="btn-sm" onClick={() => setConfirming(false)}>Keep counting</button>
-            <BusyButton type="button" className="btn-sm" busy={review.isPending} disabled={entered.length === 0 || bad} onClick={finish}>Finish anyway</BusyButton>
+            <BusyButton type="button" className="btn-sm" busy={review.isPending} disabled={entered.length === 0 || bad} onClick={finish}>Review the difference anyway</BusyButton>
           </p>
         </div>
       )}

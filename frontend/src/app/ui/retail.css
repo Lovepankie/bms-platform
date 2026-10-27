@@ -1075,6 +1075,30 @@ th[scope='rowgroup'] .cat-head {
   min-width: 112px;
 }
 
+/* A count that wipes or halves an item's stock (issue #629): the entry warning's note under its line on Review the difference,
+   with a 48px tick in words, so the check never rests on the tint alone. */
+.count-drop-row td {
+  padding-top: 0;
+}
+
+.count-drop-row .alert {
+  margin: 0;
+}
+
+.count-drop-tick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  color: var(--color-text);
+}
+
+.count-drop-tick input {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+
 /* Did you mean and the category of similar items while a new item is named (issue #353): a neutral note with one row per
    item and its 48px button, then a one-line hint with a button to choose the category. */
 .name-hints-list {

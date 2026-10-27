@@ -229,7 +229,7 @@ class StockCorrectionService {
                     "stocktake_in_progress",
                     "Stock count in progress",
                     "A stock count of this branch that counts " + product.description()
-                            + " is not finished. Finish it first (commit it), then correct the quantity.");
+                            + " is not committed yet. Open Count stock and tap Commit the count first, then correct the quantity.");
         }
         BigDecimal difference = r.newQty().subtract(old);
         if (difference.signum() == 0) {

@@ -348,7 +348,7 @@ describe('Count stock', () => {
     const review = screen.getByRole('button', { name: /Review the difference/ });
     fireEvent.click(review);
     // Other items are not counted: the screen asks first, as before.
-    fireEvent.click(await screen.findByRole('button', { name: 'Finish anyway' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review the difference anyway' }));
     await screen.findByTestId('entry-warning-quantity');
     expect(warning()?.textContent).toContain('The records show 10 pieces here; you counted 1,000 pieces. Is that right?');
     looksRight(review);
@@ -358,7 +358,7 @@ describe('Count stock', () => {
 
     await settle();
     fireEvent.click(review);
-    fireEvent.click(await screen.findByRole('button', { name: 'Finish anyway' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review the difference anyway' }));
     await screen.findByTestId('entry-warning-quantity');
     press('Confirm');
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));

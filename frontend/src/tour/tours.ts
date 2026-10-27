@@ -956,7 +956,8 @@ export const stocktakePage: Tour = {
   // Version 3 words the Count step for the search on top and the list Not counted yet below it (issue #534).
   // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 5 says a count far from the records is asked about before the review (issue #353, ADR-093).
-  version: 5,
+  // Version 6 says an empty box is not counted and a count that removes most of an item asks for a tick (issue #629).
+  version: 6,
   title: 'This page: count stock',
   audience: (me) => STOCKTAKE.every((p) => held(me, p)),
   autoStart: false,
@@ -966,7 +967,7 @@ export const stocktakePage: Tour = {
       id: 'count',
       target: 'count-search',
       title: 'Count each item',
-      body: 'Find an item by typing part of its name, or work down the list Not counted yet. Type how many you counted, or tap 0 for an item that is gone.',
+      body: 'Find an item by typing part of its name, or work down the list Not counted yet. Type how many you counted, or tap 0 for an item that is gone. Leave an item empty if you did not count it.',
     },
     {
       id: 'scan',
@@ -978,7 +979,7 @@ export const stocktakePage: Tour = {
       id: 'review',
       target: 'count-review',
       title: 'Check before saving',
-      body: 'Tap Review to see what differs. A count far from what the records hold is asked about first: Confirm or Change it. Nothing changes until you commit the count.',
+      body: 'Tap Review the difference to see what differs. A count far from what the records hold is asked about first: Confirm or Change it. A line that takes an item to 0 or removes more than half needs a tick. Nothing changes until you tap Commit the count.',
     },
   ],
 };

@@ -6,6 +6,7 @@ import { mockMe } from '../api/retail-mock';
 import { offendingWords } from '../app/glossary';
 import { router } from '../app/router';
 import { ARTICLES, JOBS, REVISION, type Inline, articleById, articleForScreen, articleText, articlesFor, parseArticle, relatedArticles, searchArticles } from './corpus';
+import { stocktakePage } from '../tour/tours';
 
 // The help corpus (issue #598, ADR-095): every article is well formed, every picture it names is a 412x900 WebP in public/help and
 // every picture there is used, the revision is the content hash the ADR states, the permissions and screens it names exist, the
@@ -404,5 +405,34 @@ describe('an empty list (issue #619)', () => {
     const inline = source(['areas/staff/retail/unit-picker.tsx', 'areas/staff/retail/category-picker.tsx', 'areas/staff/retail/purchasing-ui.tsx', 'areas/staff/retail/buyer-pricing.tsx']);
     for (const create of ['retail.createUnit', 'createCategory', 'retail.createSupplier', 'retail.createCustomerGroup']) expect(inline).toContain(create);
     for (const screen of ['catalogue-people.tsx', 'price-lists.tsx', '../branches/page.tsx']) expect(source([`areas/staff/retail/${screen}`]), screen).toMatch(/useComeBack\(\)[\s\S]*back\?\.\(\)/);
+  });
+});
+
+// Issue #629: a help caption said Finish where the button says Commit the count. The count article, its pictures' captions and
+// the count tour name the buttons the count screen shows, and none of them says Finish for committing the count.
+describe('the count stock words (issue #629)', () => {
+  const screen = readFileSync(new URL('../areas/staff/retail/stocktake.tsx', import.meta.url), 'utf8');
+  const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const whole = (label: string) => new RegExp(`(^|[>'"\`])\\s*${escape(label)}\\s*($|[<'"\`(])`, 'm');
+  const counting = ARTICLES.filter((a) => a.job === 'count-stock');
+
+  it('put in bold, and as captions, only labels the count screen shows, Commit the count among them', () => {
+    const count = articleById('count-stock')!;
+    const labels = [...new Set([...count.intro, ...count.steps.map((s) => s.text), ...count.notes].flat().filter((r) => r.strong).map((r) => r.text))];
+    expect(labels).toContain('Commit the count');
+    expect(count.steps.map((s) => s.picture?.caption)).toContain('Commit the count');
+    // Switch branch, Count stock and the warning's Confirm and Change are drawn by the shell, the menu and the entry checks.
+    for (const label of labels.filter((l) => !['Switch branch', 'Count stock', 'Confirm', 'Change'].includes(l))) expect(screen, label).toMatch(whole(label));
+    expect(count.words).toContain('commit the count');
+  });
+
+  it('never say Finish for committing a count, in an article, a word a person searches with or the tour', () => {
+    for (const a of counting) {
+      expect(articleText(a), a.id).not.toMatch(/\bfinish/i);
+      expect(a.words.join(' '), a.id).not.toMatch(/\bfinish/i);
+    }
+    const tour = stocktakePage.steps.map((s) => `${s.title} ${s.body}`).join('\n');
+    expect(tour).not.toMatch(/\bfinish/i);
+    expect(tour).toContain('Commit the count');
   });
 });

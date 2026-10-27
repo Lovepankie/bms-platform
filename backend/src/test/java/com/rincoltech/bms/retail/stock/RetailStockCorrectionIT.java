@@ -349,7 +349,7 @@ class RetailStockCorrectionIT extends IntegrationTest {
         ResponseEntity<JsonNode> refused = correct(hq, "6", "entry_mistake", null);
         assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(code(refused)).isEqualTo("stocktake_in_progress");
-        assertThat(refused.getBody().get("detail").asString()).contains("Finish it first");
+        assertThat(refused.getBody().get("detail").asString()).contains("tap Commit the count first");
         assertThat(stockAt(hq)).isEqualByComparingTo("10");
 
         // Another branch is not covered by it, and once it is committed the correction is allowed again.
