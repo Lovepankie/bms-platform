@@ -458,6 +458,8 @@ class ProductImportService {
                     product.id());
             UUID packUnitId = null;
             if (p.packUnit() != null) {
+                // Issue #637: the rules of CatalogueService.addPack with no purpose and no price (a pack for both),
+                // whatever the unit's usual purpose; RetailSellingPacksIT holds the two paths together.
                 packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
                 UUID packId = UUID.randomUUID();
                 repo.insertPack(packId, product.id(), packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by);
