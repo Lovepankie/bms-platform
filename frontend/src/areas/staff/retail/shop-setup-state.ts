@@ -102,23 +102,30 @@ export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'create
         result.skipped.push({ name: item.name, why: level });
         continue;
       }
-      const pack = { size: String(item.size), of_unit_id: of.id, purpose: item.purpose ?? 'both' };
+      const pack = { size: String(item.size), of_unit_id: of.id, purpose: asPurpose(item.purpose) };
       if (had?.id && item.status === 'size') await api.updateUnit(had.id, had.version ?? 1, { usual_pack: pack });
       else await api.createUnit(item.name, pack);
       result.added.push({ kind: 'pack', name: item.name, detail: packText(pack.size, of.name ?? '', pack.purpose) });
     } catch (error) {
       // Added meanwhile, on another phone: it is there, which is what was asked.
       if (error instanceof RetailError && (error.code === 'duplicate_category' || error.code === 'duplicate_unit')) {
-        result.skipped.push({ name: item.name, why: ADDED_MEANWHILE });
-        // Review of #628 (issue #637): a unit added meanwhile is read back, so its packs find it and are not skipped as missing.
-        if (item.kind === 'unit') {
-          try {
-            known = await api.listUnits();
-          } catch (again) {
-            result.error = again;
-            return result;
+        // Review of #628 (issue #637): a unit added meanwhile is read back, so its packs find it and are not skipped as missing,
+        // and a pack's unit added there with no usual size gets this one.
+        try {
+          if (item.kind !== 'category') known = await api.listUnits();
+          const now = item.kind === 'pack' ? known.find((u) => same(u.name, item.name)) : undefined;
+          const of = known.find((u) => same(u.name, item.of ?? ''));
+          if (now?.id && !now.usual_pack && of?.id && !of.usual_pack && of.active !== false) {
+            const pack = { size: String(item.size), of_unit_id: of.id, purpose: asPurpose(item.purpose) };
+            await api.updateUnit(now.id, now.version ?? 1, { usual_pack: pack });
+            result.added.push({ kind: 'pack', name: item.name, detail: packText(pack.size, of.name ?? '', pack.purpose) });
+            continue;
           }
+        } catch (again) {
+          result.error = again;
+          return result;
         }
+        result.skipped.push({ name: item.name, why: ADDED_MEANWHILE });
         continue;
       }
       result.error = error;

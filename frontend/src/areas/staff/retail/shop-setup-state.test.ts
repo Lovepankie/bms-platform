@@ -207,6 +207,24 @@ describe('Set up your shop', () => {
     expect(shop.units.map((u) => u.name)).not.toContain('Roll');
   });
 
+  it("gives a pack's unit another phone added meanwhile, with no usual size, this one (review of #637)", async () => {
+    const shop = fakeShop();
+    const plan = planSetup(shopTypeById('hardware')!, [], [...shop.units]);
+    await shop.api.createUnit('Roll');
+    const result = await applySetup(shop.api, plan, allTicked(plan), [...shop.units].filter((u) => u.name !== 'Roll'));
+    expect(result.error).toBeNull();
+    expect(result.skipped.map((s) => s.name)).not.toContain('Roll');
+    expect(shop.units.filter((u) => u.name === 'Roll')).toHaveLength(1);
+    expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack?.of_unit).toBe('Metre');
+  });
+
+  it('holds no pack in a starting set whose smaller unit is a pack of that set, one level only (ADR-100 note)', () => {
+    for (const type of SHOP_TYPES) {
+      const packNames = new Set(type.packs.map((p) => p.name.toLowerCase()));
+      for (const p of type.packs) expect(packNames.has(p.of.toLowerCase()), `${type.id}: ${p.name} of ${p.of}`).toBe(false);
+    }
+  });
+
   it('says a pack in plain words', () => {
     expect(packText('100.000', 'Metre', 'both')).toBe('100 Metre, for buying and selling');
     expect(packText(50, 'Piece', 'buy')).toBe('50 Piece, for buying');

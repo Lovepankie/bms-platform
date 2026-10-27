@@ -8,7 +8,7 @@ import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
 import { useComeBack } from '../../../app/ui/EmptyChoice';
 import { packText } from './shop-setup-state';
-import { UsualPackSheet, usualPackChoices } from './unit-usual-pack';
+import { UsualPackSheet, mayHaveUsualPack } from './unit-usual-pack';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
 // deleted: items and their history keep pointing at it. A switched-off row stays on the items that
@@ -158,7 +158,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
               : (
                 <>
                   <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>
-                  {r.active !== false && (('usual_pack' in r && r.usual_pack) || usualPackChoices(r, rows.data ?? []).length > 0) && (
+                  {mayHaveUsualPack(r, rows.data ?? []) && (
                     <button type="button" className="btn-sm" onClick={() => setPackFor(r.id ?? null)} aria-label={`Usual pack of ${r.name}`}>
                       Usual pack
                     </button>

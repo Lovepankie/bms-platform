@@ -98,9 +98,32 @@ describe('a usual pack on the Units page (issue #637)', () => {
     const many = within(sheet).getByLabelText(/^How many in one Dozen/);
     fireEvent.change(many, { target: { value: '0.5' } });
     fireEvent.blur(many);
+    // Rule 10: the error shows on leaving the field, before Save is pressed.
+    expect(within(sheet).getByText('Enter how many Metre are in one Dozen: 1 or more, for example 12 or 12.5.')).toBeTruthy();
+    expect(many.getAttribute('aria-invalid')).toBe('true');
     fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }));
-    expect(await within(sheet).findByText(/Enter how many of the item are in one pack/)).toBeTruthy();
     expect(updateUnit).not.toHaveBeenCalled();
+  });
+
+  it('never offers a usual pack on a unit another usual pack counts, as the server refuses it', async () => {
+    units = [metre, roll, dozen];
+    draw(<UnitsPage />);
+    await screen.findByRole('button', { name: 'Usual pack of Roll' });
+    expect(screen.queryByRole('button', { name: 'Usual pack of Metre' })).toBeNull();
+  });
+
+  it('says so and offers to add a unit when the one it held is switched off, never a blank choice', async () => {
+    units = [{ ...metre, active: false }, roll];
+    draw(<UnitsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Usual pack of Roll' }));
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByText('No other unit for this pack to hold yet.')).toBeTruthy();
+    expect(within(sheet).getByRole('button', { name: 'Add a new unit' })).toBeTruthy();
+    expect(within(sheet).queryByRole('combobox')).toBeNull();
+    // The old smaller unit counts as not chosen, so Save sends nothing and does not close the sheet quietly.
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Save' }));
+    expect(updateUnit).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 });
 
