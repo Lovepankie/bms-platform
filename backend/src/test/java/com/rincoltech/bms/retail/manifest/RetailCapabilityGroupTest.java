@@ -73,15 +73,30 @@ class RetailCapabilityGroupTest {
     }
 
     @Test
-    void aFlagChangeKeepsTheKindAndTheOtherSwitchesAndShopsOnlySwitchesTheWholesaleToolsOff() {
+    void aFlagChangeKeepsTheKindAndTheOtherSwitchesAndShopsSwitchesTheOtherWholesaleToolsOff() {
         Map<String, Object> on = group.normalise(Map.of(), Map.of("profile", "wholesale_and_shops"));
         Map<String, Object> roles = group.normalise(on, Map.of("branch_roles", true, "documents", false));
 
         assertThat(roles.get("profile")).isEqualTo("wholesale_and_shops");
         assertThat(roles.get("documents")).isEqualTo(false);
         assertThat(roles.get("units")).isEqualTo(true);
+        // Packs are only ever turned on by a kind (issue #630): Shops switches the other wholesale tools off and keeps
+        // them.
         assertThat(group.enabledCapabilities(group.normalise(roles, Map.of("profile", "shops"))))
-                .containsExactly("branch_roles");
+                .containsExactly("branch_roles", "units");
+    }
+
+    /** Issue #630: no kind switches packs off, so a new shop that picks Shops or Stores and shops keeps them. */
+    @Test
+    void noKindSwitchesPacksOff() {
+        Map<String, Object> start = group.normalise(group.normalise(Map.of(), Map.of()), Map.of("units", true));
+        for (String kind : BusinessTypes.PRESETS.keySet()) {
+            assertThat(group.normalise(start, Map.of("profile", kind)).get("units"))
+                    .as(kind)
+                    .isEqualTo(true);
+            assertThat(BusinessTypes.switchesOff(kind, "units")).as(kind).isFalse();
+        }
+        assertThat(BusinessTypes.switchesOff("shops", "price_lists")).isTrue();
     }
 
     @Test

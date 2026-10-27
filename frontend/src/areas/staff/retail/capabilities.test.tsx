@@ -59,7 +59,15 @@ describe('the kind of business is a preset of the flags (spec 1.2, issue #424)',
       expect(chooseProfile(mine, p).flags.returns).toBe(true);
       expect(chooseProfile(mine, p).flags.branch_roles).toBe(true);
     }
-    expect(KEYS.filter((k) => chooseProfile(chooseProfile(mine, 'wholesale'), 'shops').flags[k]).sort()).toEqual(['branch_roles', 'returns']);
+    // Packs are only ever turned on by a kind (issue #630): Wholesale then Shops keeps them.
+    expect(KEYS.filter((k) => chooseProfile(chooseProfile(mine, 'wholesale'), 'shops').flags[k]).sort()).toEqual(['branch_roles', 'returns', 'units']);
+  });
+
+  it('never switches packs off by a kind, so a new shop that picks Shops keeps them (issue #630)', () => {
+    const fresh = toggle(draftOf(undefined), 'units', true);
+    for (const p of PROFILE_KEYS) expect(chooseProfile(fresh, p).flags.units, p).toBe(true);
+    expect(chooseProfile(draftOf(undefined), 'shops').flags.units).toBe(false);
+    expect(chooseProfile(draftOf(undefined), 'wholesale').flags.units).toBe(true);
   });
 
   it('keeps every flag editable after a kind is chosen', () => {

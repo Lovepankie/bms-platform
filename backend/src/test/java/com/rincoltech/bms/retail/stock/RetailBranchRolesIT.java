@@ -285,10 +285,12 @@ class RetailBranchRolesIT extends IntegrationTest {
 
         JsonNode shops = putCapabilities(Map.of("profile", "shops"), SETTINGS).getBody();
         assertThat(shops.get("profile").asString()).isEqualTo("shops");
-        for (String off :
-                List.of("units", "price_lists", "customer_accounts", "documents", "purchasing", "transfer_receipt")) {
+        for (String off : List.of("price_lists", "customer_accounts", "documents", "purchasing", "transfer_receipt")) {
             assertThat(shops.get(off).asBoolean()).as(off).isFalse();
         }
+        assertThat(shops.get("units").asBoolean())
+                .as("a kind only ever turns packs on (issue #630)")
+                .isTrue();
         List<String> kinds = TestDatabase.owner()
                 .sql(
                         "SELECT coalesce(data #>> '{before,profile}', '') || '>' || (data #>> '{after,profile}') FROM audit_log"

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.TenantContext;
+import com.rincoltech.bms.retail.RetailTestSupport;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Session;
 import java.util.List;
@@ -16,6 +18,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -27,6 +30,12 @@ class RetailPacksOnAtStartIT extends IntegrationTest {
 
     @Autowired
     TestRestTemplate http;
+
+    @Autowired
+    PacksOnAtStart packsOnAtStart;
+
+    @Autowired
+    TransactionTemplate transactions;
 
     Api platform;
     Session operator;
@@ -140,5 +149,41 @@ class RetailPacksOnAtStartIT extends IntegrationTest {
 
         assertThat(stored(tenantId).path("units").asBoolean()).isFalse();
         assertThat(changes(tenantId)).isEqualTo(1);
+    }
+
+    /**
+     * Sign-up, then the kind: the start set-up of a new shop, then the owner choosing Shops or Stores and shops, as on Retail
+     * settings, keeps packs on (a kind only ever turns packs on); every other switch follows the kind.
+     */
+    @Test
+    void choosingAKindAfterTheStartKeepsPacksOn() {
+        TestDatabase.Fixture shop = TestDatabase.tenant("packs-kind", false, true);
+        TenantContext.callAs(
+                shop.tenantId(),
+                () -> transactions.execute(status -> {
+                    packsOnAtStart.switchedOn();
+                    return null;
+                }));
+        RetailTestSupport api = new RetailTestSupport(http, shop);
+
+        for (String kind : List.of("shops", "stores_and_shops", "wholesale", "shops")) {
+            String etag = api.get("/settings/capabilities", "core.settings.manage")
+                    .getHeaders()
+                    .getETag();
+            ResponseEntity<JsonNode> chosen = api.call(
+                    HttpMethod.PUT,
+                    "/settings/capabilities",
+                    Map.of("profile", kind),
+                    "core.settings.manage",
+                    "*",
+                    Map.of("If-Match", etag));
+            assertThat(chosen.getStatusCode()).as("%s", chosen.getBody()).isEqualTo(HttpStatus.OK);
+            assertThat(chosen.getBody().get("profile").asString()).isEqualTo(kind);
+            assertThat(chosen.getBody().get("units").asBoolean()).as(kind).isTrue();
+            assertThat(chosen.getBody().get("transfer_receipt").asBoolean())
+                    .as(kind)
+                    .isEqualTo(kind.equals("stores_and_shops"));
+            assertThat(chosen.getBody().get("price_lists").asBoolean()).as(kind).isEqualTo(kind.equals("wholesale"));
+        }
     }
 }

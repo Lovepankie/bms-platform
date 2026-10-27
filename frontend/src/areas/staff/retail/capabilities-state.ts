@@ -42,6 +42,9 @@ export const WHOLESALE_TOOLS: readonly CapabilityKey[] = ['units', 'price_lists'
 /** The switches a choice of kind sets on or off (BusinessTypes.GOVERNED); branch roles and returns are left as they are. */
 export const GOVERNED: readonly CapabilityKey[] = [...WHOLESALE_TOOLS, 'transfer_receipt'];
 
+/** Packs a kind only turns on, never off (issue #630, BusinessTypes.NEVER_SWITCHED_OFF): choosing Shops keeps them. */
+export const NEVER_SWITCHED_OFF: readonly CapabilityKey[] = ['units'];
+
 /** What each kind switches on, of the governed switches; the server holds the same table (BusinessTypes.PRESETS). */
 export const PRESETS: Record<Profile, readonly CapabilityKey[]> = {
   shops: [],
@@ -70,10 +73,10 @@ export function draftOf(saved: RetailCapabilities | undefined): Draft {
   return { profile: isProfile(profile) ? profile : 'shops', flags };
 }
 
-/** The draft after choosing a kind: its preset is written over the governed switches, the others are left as they are. */
+/** The draft after choosing a kind: its preset is written over the governed switches (packs only ever on), the others are left as they are. */
 export function chooseProfile(draft: Draft, profile: Profile): Draft {
   const flags = { ...draft.flags };
-  for (const k of GOVERNED) flags[k] = PRESETS[profile].includes(k);
+  for (const k of GOVERNED) if (PRESETS[profile].includes(k) || !NEVER_SWITCHED_OFF.includes(k)) flags[k] = PRESETS[profile].includes(k);
   return { profile, flags };
 }
 
