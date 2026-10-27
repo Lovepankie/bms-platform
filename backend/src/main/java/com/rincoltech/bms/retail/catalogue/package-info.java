@@ -4,7 +4,8 @@
  * {@code retail_price_history}; chapter 7 section 7.11.20). Copies the shape of
  * {@code lending.members}. A product's cost and sell price change only inside the event that
  * carries them, and every change writes an append-only history row in the same transaction
- * (ADR-020 decision 5). Retail never depends on a lending package.
+ * (ADR-020 decision 5). A business that gets the retail module starts with the default units
+ * ({@code DefaultUnits}, a {@code core.tenancy.ModuleSetUp}, ADR-098). Retail never depends on a lending package.
  */
 @ApplicationModule(
         id = "retail.catalogue",

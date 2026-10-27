@@ -813,6 +813,12 @@ class OnboardingIT extends IntegrationTest {
                         .query(String.class)
                         .list())
                 .containsExactly("retail");
+        // ADR-098: a shop signed up through onboarding starts with the default units.
+        assertThat(owner.sql("SELECT name FROM retail_units WHERE tenant_id = ? ORDER BY name")
+                        .param(tenantId)
+                        .query(String.class)
+                        .list())
+                .containsExactly("Box", "Kg", "Litre", "Metre", "Pack", "Pair", "Piece", "Set");
         assertThat(owner.sql("""
                                 SELECT count(*) FROM users u JOIN user_role_assignments a ON a.user_id = u.id
                                  WHERE u.tenant_id = ? AND u.email = ? AND u.status = 'invited' AND a.role_key = 'tenant_admin'

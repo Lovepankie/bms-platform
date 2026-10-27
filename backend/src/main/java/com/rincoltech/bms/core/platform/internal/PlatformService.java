@@ -10,6 +10,7 @@ import com.rincoltech.bms.core.platform.internal.PlatformController.FirstAdminIn
 import com.rincoltech.bms.core.platform.internal.PlatformController.TenantResponse;
 import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleManifest;
+import com.rincoltech.bms.core.tenancy.ModuleSetUp;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.kernel.ApiException;
@@ -69,6 +70,7 @@ class PlatformService implements TenantProvisioning {
     private final Set<String> moduleKeys;
     private final GoLiveDate goLive;
     private final Map<String, ModuleSettingsGroup> settingsGroups;
+    private final List<ModuleSetUp> setUps;
     private final ObjectMapper mapper;
 
     PlatformService(
@@ -80,6 +82,7 @@ class PlatformService implements TenantProvisioning {
             PlatformTransactionManager transactionManager,
             List<ModuleManifest> manifests,
             List<ModuleSettingsGroup> settingsGroups,
+            List<ModuleSetUp> setUps,
             ObjectMapper mapper,
             GoLiveDate goLive) {
         this.goLive = goLive;
@@ -92,6 +95,7 @@ class PlatformService implements TenantProvisioning {
         this.moduleKeys = manifests.stream().map(ModuleManifest::key).collect(Collectors.toUnmodifiableSet());
         this.settingsGroups = settingsGroups.stream()
                 .collect(Collectors.toUnmodifiableMap(ModuleSettingsGroup::moduleKey, g -> g, (a, b) -> a));
+        this.setUps = setUps;
         this.mapper = mapper;
     }
 
@@ -280,6 +284,7 @@ class PlatformService implements TenantProvisioning {
                         throw ApiException.rule(
                                 "invalid_tenant", "The plan, currency or modules are not valid for a new tenant.");
                     }
+                    setUp(tenantId, modules);
                     TenantAdmins.Invitation admin = tenantAdmins.inviteFirstAdmin(
                             request.adminFullName(), request.adminEmail(), request.adminPhone(), operator);
                     Map<String, Object> after = new LinkedHashMap<>();
@@ -318,21 +323,26 @@ class PlatformService implements TenantProvisioning {
                         == 0;
     }
 
-    @Transactional
+    /** In a transaction bound to the tenant, so a module switched on sets itself up there (ADR-098). */
     TenantResponse setModules(UUID tenantId, List<String> requested, String reason) {
-        TenantResponse before = tenant(tenantId);
-        List<String> modules = checkModules(requested);
-        if (modules.equals(before.modules().stream().sorted().toList())) {
-            return before;
-        }
-        switchModules(tenantId, modules, CurrentPrincipal.require().userId(), reason);
-        return tenant(tenantId);
+        UUID operator = CurrentPrincipal.require().userId();
+        return TenantContext.callAs(
+                tenantId,
+                () -> transactions.execute(status -> {
+                    TenantResponse before = tenant(tenantId);
+                    List<String> modules = checkModules(requested);
+                    if (modules.equals(before.modules().stream().sorted().toList())) {
+                        return before;
+                    }
+                    switchModules(tenantId, modules, operator, reason);
+                    return tenant(tenantId);
+                }));
     }
 
     /**
      * FR-TEN-03: switches the tenant's modules to exactly these through {@code platform_set_tenant_modules} (data kept), in
-     * the caller's transaction, and audits the change. {@code operator} is null when the Owner's own change or the nightly
-     * job switches them (ADR-073).
+     * the caller's transaction, which must be bound to that tenant, sets up each module switched on (ADR-098), and audits the
+     * change. {@code operator} is null when the Owner's own change or the nightly job switches them (ADR-073).
      */
     @Transactional
     void switchModules(UUID tenantId, List<String> requested, UUID operator, String reason) {
@@ -352,6 +362,9 @@ class PlatformService implements TenantProvisioning {
             }
             throw ApiException.rule("module_not_allowed", "The tenant's plan does not allow these modules.");
         }
+        setUp(
+                tenantId,
+                modules.stream().filter(m -> !before.modules().contains(m)).toList());
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("before", before.modules());
         data.put("after", modules);
@@ -584,6 +597,18 @@ class PlatformService implements TenantProvisioning {
                             Map.of("user_id", userId, "reason", reason.trim()));
                     return link;
                 }));
+    }
+
+    /** ADR-098: each vertical's own set-up of the modules just switched on, in the transaction bound to the tenant. */
+    private void setUp(UUID tenantId, List<String> switchedOn) {
+        for (ModuleSetUp setUp : setUps) {
+            if (switchedOn.contains(setUp.moduleKey())) {
+                if (!tenantId.equals(TenantContext.current().orElse(null))) {
+                    throw new IllegalStateException("a module is set up only in a transaction bound to its tenant");
+                }
+                setUp.switchedOn();
+            }
+        }
     }
 
     private List<String> checkModules(List<String> modules) {

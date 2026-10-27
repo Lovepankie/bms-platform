@@ -2069,6 +2069,8 @@ module on again adds nothing. `S` marks `is_system_controlled`.
 | `code_prefix` | varchar(4), categories only | V96 (issue #493, ADR-081): 2 to 4 capital letters (CHECK `retail_categories_code_prefix_letters`), unique per tenant (`retail_categories_code_prefix`); suggested from the name by `bms_category_prefix_base` and `bms_suggest_category_prefix`, backfilled oldest first, and filled by the trigger `retail_categories_prefix_default` when an insert leaves it out |
 | `code_next` | integer default 1, categories only | V96: the next number `bms_next_item_code(category_id)` tries; that function locks the row, steps over codes items already hold (ignoring case) and returns `PREFIX-0001`. Not part of `version` |
 
+Default units (issue #618, ADR-098): when retail is switched on for a business the application adds the units Piece, Pair, Set, Box, Pack, Kg, Litre and Metre with `created_by` null, skipping a name the business has; V109 added them to every retail business, not closed, that had no unit.
+
 ### `retail_products` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 
 | Column | Type | Notes |

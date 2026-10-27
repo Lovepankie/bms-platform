@@ -172,6 +172,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.loans       -> bms.api.identity "Checks that a new responsible officer is an active staff user who may create loans in the loan's branch (StaffDirectory, FR-CLN-01), once per branch of a reassignment"
         bms.api.loans       -> bms.db "Reads and writes loans, schedule items, transactions and allocations"
         bms.api.approvals   -> bms.api.loans "Executes approved loan_disbursement, repayment_reversal and loan_write_off through the action registry (ADR-015, ADR-026)"
+        bms.api.platform    -> bms.api.retailCatalogue "Sets retail up when it is switched on for a business: adds the default units through the ModuleSetUp registry, in the switching transaction (registry, no code dependency, ADR-098)"
         bms.api.approvals   -> bms.api.retailSales "Executes an approved retail_sale_return, write-off or sale void through the action registry (ADR-015, ADR-033, ADR-091)"
         bms.api.approvals   -> bms.api.retailStock "Executes an approved stock correction through the action registry (ADR-091)"
         bms.api.approvals   -> bms.api.retailCashbook "Executes an approved expense through the action registry (ADR-091)"

@@ -2361,6 +2361,64 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V109 (issue #618, ADR-098) gives the eight default units to every retail business with no unit at all, and leaves a
+     * business that has a unit, a business without retail and a closed business exactly as they were.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates retail businesses across the default units backfill.
+     */
+    @Test
+    void defaultUnitsMigrationFillsOnlyRetailBusinessesWithNoUnit() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("109") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID empty = UUID.randomUUID();
+            UUID withUnit = UUID.randomUUID();
+            UUID lendingOnly = UUID.randomUUID();
+            UUID closed = UUID.randomUUID();
+            for (UUID id : List.of(empty, withUnit, lendingOnly, closed)) {
+                owner.sql("INSERT INTO tenants (id, slug, name, plan_id, status) VALUES (?, ?, 'Test Tenant V109', "
+                                + "'00000000-0000-4000-8000-000000000001', ?)")
+                        .params(
+                                id,
+                                "test-v109-" + id.toString().substring(0, 8),
+                                id.equals(closed) ? "closed" : "active")
+                        .update();
+                owner.sql("INSERT INTO tenant_modules (tenant_id, module_key) VALUES (?, ?)")
+                        .params(id, id.equals(lendingOnly) ? "lending" : "retail")
+                        .update();
+            }
+            owner.sql("INSERT INTO retail_units (id, tenant_id, name) VALUES (gen_random_uuid(), ?, 'piece')")
+                    .param(withUnit)
+                    .update();
+
+            MigrateResult result =
+                    DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD);
+
+            assertThat(result.success).isTrue();
+            assertThat(owner.sql(
+                                    "SELECT name FROM retail_units WHERE tenant_id = ? AND created_by IS NULL ORDER BY name")
+                            .param(empty)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("Box", "Kg", "Litre", "Metre", "Pack", "Pair", "Piece", "Set");
+            assertThat(owner.sql("SELECT name FROM retail_units WHERE tenant_id = ?")
+                            .param(withUnit)
+                            .query(String.class)
+                            .list())
+                    .containsExactly("piece");
+            for (UUID untouched : List.of(lendingOnly, closed)) {
+                assertThat(owner.sql("SELECT count(*) FROM retail_units WHERE tenant_id = ?")
+                                .param(untouched)
+                                .query(Long.class)
+                                .single())
+                        .isZero();
+            }
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")
