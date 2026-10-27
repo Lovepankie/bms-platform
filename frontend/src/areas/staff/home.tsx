@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../app/ui/SearchBox';
 import { useLiveSearch } from '../../app/ui/useLiveSearch';
-import { fetchHealth, listMembers } from '../../api/client';
+import { listMembers } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
@@ -13,7 +13,6 @@ import { HomeCards } from './home-cards';
 
 export function StaffHome() {
   const { me, branch } = useStaff();
-  const health = useQuery({ queryKey: ['health'], queryFn: fetchHealth });
   // The lending module's screens are offered only to a tenant that has it (issue #185).
   const canReadMembers = (me.permissions ?? []).includes('lending.members.read') && (!me.modules || me.modules.includes('lending'));
   const search = useLiveSearch();
@@ -29,10 +28,7 @@ export function StaffHome() {
   return (
     <main>
       <div className="page-header" data-tour="staff-home-header">
-        <h1>Staff area</h1>
-        <span className={health.data === 'UP' ? 'badge badge-success' : 'badge'}>
-          API: {health.data ?? 'checking'}
-        </span>
+        <h1>Home</h1>
       </div>
       <HomeCards />
       {canReadMembers && (
