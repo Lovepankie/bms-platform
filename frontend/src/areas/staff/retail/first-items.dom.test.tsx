@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
 import type { Product } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
+import { branchLabel } from '../../../auth/branch';
 import { StaffContext } from '../context';
 import { PICKER_LABEL } from '../../../test-utils/item-picker';
 import { chooseCategory } from '../../../test-utils/category-picker';
@@ -264,5 +265,47 @@ describe('a Sell search that finds nothing', () => {
     await search('Test pillow');
     expect((await screen.findByTestId('sale-new-ask')).textContent).toBe('Not in the list? Ask the owner to add it.');
     expect(screen.queryByRole('button', { name: 'Not in the list? Add it here' })).toBeNull();
+  });
+});
+
+describe('Sell it from Quick add (issue #632)', () => {
+  const here = owner.branches?.[0]?.id ?? '';
+  const other = owner.branches?.[1]?.id ?? '';
+
+  it('puts the item on the sale at the branch Quick add added its stock at, and clears the address once it is on', async () => {
+    catalogue = [{ ...made, qty: '600' }];
+    getProduct.mockResolvedValue(made);
+    const started = vi.fn();
+    open(<RecordSale startItem="p9" startBranch={here} onStarted={started} />, owner);
+    expect(await screen.findByRole('button', { name: 'Remove Test duvet cover' })).toBeTruthy();
+    await waitFor(() => expect(started).toHaveBeenCalledTimes(1));
+    expect(listProducts.mock.calls.some((c) => (c[0] as { branchId?: string }).branchId === here)).toBe(true);
+  });
+
+  it('says where the item is when the branch in use is another, offers the switch, and never looks it up here', async () => {
+    catalogue = [{ ...made, qty: '600' }];
+    getProduct.mockResolvedValue(made);
+    const started = vi.fn();
+    open(<RecordSale startItem="p9" startBranch={other} onStarted={started} />, owner);
+    const note = await screen.findByTestId('sale-start-elsewhere');
+    const name = branchLabel(owner.branches?.[1]);
+    expect(note.textContent).toContain(`The item you just added is at ${name}. Switch to ${name} to sell it.`);
+    expect(within(note).getByRole('button', { name: `Switch to ${name}` })).toBeTruthy();
+    expect(getProduct).not.toHaveBeenCalled();
+    // Sell here without it forgets the item and clears the address, so the sale never waits.
+    fireEvent.click(within(note).getByRole('button', { name: 'Sell here without it' }));
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('sale-start-elsewhere')).toBeNull();
+    expect(getProduct).not.toHaveBeenCalled();
+  });
+});
+
+describe('the first-run card order (issue #632)', () => {
+  it('has Quick add as its one primary action, then Set up your shop, Add your first items and Import a list', async () => {
+    open(<RecordSale key="sale" />, owner);
+    const actions = await screen.findByTestId('first-items-actions');
+    const links = within(actions).getAllByRole('link');
+    expect(links.map((l) => l.textContent)).toEqual(['Quick add an item', 'Set up your shop', 'Add your first items', 'Import a list', 'How do I get my shop ready to sell?']);
+    expect(links.filter((l) => (l.className ?? '').includes('btn-primary')).map((l) => l.textContent)).toEqual(['Quick add an item']);
   });
 });

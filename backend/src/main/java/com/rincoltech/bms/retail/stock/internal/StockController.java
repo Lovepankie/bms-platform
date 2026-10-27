@@ -7,6 +7,8 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Correction;
 import com.rincoltech.bms.retail.stock.internal.StockApi.CorrectionRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
+import com.rincoltech.bms.retail.stock.internal.StockApi.QuickAdd;
+import com.rincoltech.bms.retail.stock.internal.StockApi.QuickAddRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
@@ -45,16 +47,19 @@ class StockController {
     private final UsageService usage;
     private final StockCorrectionService corrections;
     private final StockSummaryService summaries;
+    private final QuickAddService quickAdd;
 
     StockController(
             StockService service,
             UsageService usage,
             StockCorrectionService corrections,
-            StockSummaryService summaries) {
+            StockSummaryService summaries,
+            QuickAddService quickAdd) {
         this.service = service;
         this.usage = usage;
         this.corrections = corrections;
         this.summaries = summaries;
+        this.quickAdd = quickAdd;
     }
 
     @GetMapping("/stock")
@@ -179,6 +184,31 @@ class StockController {
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody UsageRequest request) {
         Outcome<UsageReport> outcome = usage.report(idempotencyKey, request);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
+        if (outcome.replayed()) {
+            response.header("Idempotent-Replayed", "true");
+        }
+        return response.body(outcome.body());
+    }
+
+    @PostMapping("/quick-add")
+    @RequiresPermission("retail.catalogue.manage")
+    @Operation(
+            summary =
+                    "Quick add: a new item (or one already in the list) and stock added at a branch as opening stock, in one"
+                            + " transaction; the stock also needs retail.stocktake.commit there (issue #632, ADR-101); M",
+            operationId = "quickAddRetailItem")
+    @ApiResponse(
+            responseCode = "201",
+            description = "The item, and the stock added when some was",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = QuickAdd.class)))
+    ResponseEntity<QuickAdd> quickAdd(
+            @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody QuickAddRequest request) {
+        Outcome<QuickAdd> outcome = quickAdd.add(idempotencyKey, request);
         ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
         if (outcome.replayed()) {
             response.header("Idempotent-Replayed", "true");

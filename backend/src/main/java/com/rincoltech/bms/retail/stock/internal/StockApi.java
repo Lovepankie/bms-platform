@@ -5,6 +5,7 @@ import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -150,6 +151,77 @@ final class StockApi {
 
     @Schema(name = "RetailStockMovementPage")
     record MovementPage(List<MovementRow> items, String nextCursor) {}
+
+    @Schema(
+            name = "RetailQuickAddRequest",
+            description =
+                    "Issue #632: an item, its prices and how many there are at a branch, in one tap. With product_id, an item"
+                            + " already in the list, only the quantity is added and the other item fields are ignored")
+    record QuickAddRequest(
+            @Schema(description = "An item already in the list, chosen instead of a new item of the same name")
+            UUID productId,
+
+            @Size(max = 300) @Schema(description = "The new item's name; required without product_id")
+            String description,
+
+            @Schema(description = "Left out: the item goes under General, made when the business has none")
+            UUID categoryId,
+
+            @Schema(description = "Left out: the shop's piece unit (Piece or pc), made when the business has none")
+            UUID unitId,
+
+            @PositiveOrZero @Max(RetailCatalogue.MAX_AMOUNT_MINOR) @Schema(description = "Required without product_id")
+            Long sellMinor,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "Left out: 0, set by the first restock")
+            Long costMinor,
+
+            @PositiveOrZero
+            @Digits(integer = 11, fraction = 3)
+            @Schema(
+                    type = "string",
+                    example = "600",
+                    description =
+                            "How many to add to the item's stock at the branch (retail.stocktake.commit there), as"
+                                    + " opening stock against opening balance equity; more than 0 with product_id; left out, no"
+                                    + " stock is recorded")
+            BigDecimal qty,
+
+            @Schema(description = "Where the stock is; defaults to the caller's one branch")
+            UUID branchId,
+
+            @Size(max = 300)
+            @Schema(description = "As on a new item: to add a name that exists already, administrators only")
+            String duplicateReason) {}
+
+    @Schema(name = "RetailQuickAdd")
+    record QuickAdd(
+            UUID productId,
+            String code,
+            String description,
+            String unit,
+
+            @Schema(description = "False when the item was already in the list")
+            boolean itemMade,
+
+            @Schema(description = "True when this add made the General category")
+            boolean categoryMade,
+
+            @Schema(description = "True when this add made the Piece unit")
+            boolean unitMade,
+
+            UUID branchId,
+
+            @Schema(type = "string", description = "The quantity added; absent when no stock was recorded")
+            String qty,
+
+            @Schema(type = "string", description = "What the branch holds now; absent when no stock was recorded")
+            String totalQty,
+
+            @Schema(description = "The opening movement of source retail.quick_add; absent when nothing was added")
+            UUID movementId) {}
 
     @Schema(
             name = "RetailStockCorrectionRequest",

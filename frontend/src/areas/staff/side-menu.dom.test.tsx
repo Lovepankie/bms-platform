@@ -146,7 +146,7 @@ afterEach(() => {
 const RETAIL_ONLY: [string, string[]][] = [
   ['', ['Home', 'How do I?']],
   ['Today', ['Sell', 'Orders']],
-  ['Stock', ['My stock', 'Buy stock', 'Count stock', 'Move stock', 'Items and categories']],
+  ['Stock', ['My stock', 'Buy stock', 'Count stock', 'Quick add', 'Move stock', 'Items and categories']],
   ['Money', ['Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances']],
   ['Business', ['Reports', 'Controls', 'Business set-up']],
 ];
@@ -234,7 +234,7 @@ describe('the groups and their order (issue #564)', () => {
     widthIs(false);
     show(admin);
     const stock = within(sidebar()).getByRole('group', { name: 'Stock' });
-    expect(within(stock).getAllByRole('link')).toHaveLength(5);
+    expect(within(stock).getAllByRole('link')).toHaveLength(6);
   });
 
   it('ends with Notifications, Help and feedback, then the initials, name and role of the person and Sign out', () => {
@@ -326,8 +326,8 @@ describe('the menu follows the permissions', () => {
     const scope = { all_branches: true, branch_ids: [] };
     const whole = { ...admin, permissions, permission_scopes: Object.fromEntries(permissions.map((p) => [p, scope])), module_capabilities: { retail: [...new Set(Object.values(SCREEN_CAPABILITY))] } } as Me;
     const shop = staffMenu(whole, { sells: true }).filter((g) => ['today', 'stock', 'money'].includes(g.id));
-    expect(shop.flatMap((g) => g.links).length).toBe(12);
-    expect(shop.find((g) => g.id === 'stock')?.links.length).toBe(5);
+    expect(shop.flatMap((g) => g.links).length).toBe(13);
+    expect(shop.find((g) => g.id === 'stock')?.links.length).toBe(6);
     expect(shop.find((g) => g.id === 'money')?.links.length).toBe(5);
   });
 });

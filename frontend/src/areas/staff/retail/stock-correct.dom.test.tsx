@@ -413,6 +413,8 @@ describe('the words', () => {
     expect(movementTitle(m({ source_type: 'retail.stocktake' }))).toBe('Stock count');
     expect(movementTitle(m({ source_type: 'retail.purchase_void' }))).toBe('Purchase voided');
     expect(movementTitle(m({ kind: 'usage', qty: '-1.000' }))).toBe('Used');
+    // Quick add's stock (issue #632, ADR-101) is an opening movement of its own source: the history names it Opening stock.
+    expect(movementTitle(m({ kind: 'opening', source_type: 'retail.quick_add', qty: '20.000' }))).toBe('Opening stock');
     expect(signedQty(m({ qty: '2.500' }))).toBe('+2.5');
     expect(signedQty(m({ qty: '-2.000' }))).toBe('-2');
     expect(correctionWords(m({}))).toBeNull();

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
@@ -39,7 +39,7 @@ import { entryWarnings, type EntryWarning } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { FirstItemsCard, useNoItemsYet } from './first-items';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
-import { addOn } from './screen-link';
+import { ScreenLink, addOn } from './screen-link';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -216,9 +216,13 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
 /** The sale form's draft: once sent with a client sale id, the request and when it was sent (ADR-067 decision 5). */
 type SaleDraft = Draft & { sent?: { body: SaleRequest; at: string } };
 
-export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
+export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startItem, onStarted }: {
   branchId: string;
   branchName?: string;
+  /** Issue #632, Sell it: the item Quick add just made, put on the sale once the form opens. */
+  startItem?: string;
+  /** Told once the start item is on the sale, or could not be put on it. */
+  onStarted?: () => void;
   onSaved?: (sale: Sale, received?: number) => void;
   /** ADR-067: the sale was kept on this phone to send later. */
   onQueued?: (item: OutboxItem) => void;
@@ -322,6 +326,21 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     mark(next.length - 1, true);
     show(addedMessage(p.description, next[next.length - 1]?.qty), 'success');
   };
+  // Issue #632, Sell it: the item Quick add made goes on the sale once, read with what this branch holds, as a search would.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!startItem || started.current) return;
+    started.current = true;
+    void retail.getProduct(startItem)
+      .then((p) => retail.listProducts({ query: p.code ?? p.description ?? '', branchId }))
+      .then((found) => {
+        const p = found.find((x) => x.id === startItem);
+        if (p) add(p);
+      })
+      .catch(() => show('The item could not be read. Search for it to add it.', 'error'))
+      .finally(() => onStarted?.());
+    // Once per form: a later change of the search parameter is the route's, not a second add.
+  }, [startItem]);
   // Issue #615: an item the search did not find, added here. The server never sells what the branch does not hold, so a new
   // item goes on the sale only with stock: whoever may count stock here types how many there are (more than 0), kept as a
   // one-line stock count; anyone else is told to put stock in first. Only an item made here is counted: an existing item chosen
@@ -470,6 +489,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
               <ScreenToast.Provider value={show}>
                 <NewItemHere id="sale-new" description={term} ask={ASK_OWNER_ITEM} askCost={profit} qtyLabel={mayCount ? 'How many you have here' : undefined}
                   qtyError="Type how many you have here, more than 0." onOpenChange={hold} onAdded={(added) => addNew(added, clear)} />
+                <ScreenLink screen="quickAdd" to="/staff/retail/quick-add" search={{ name: term }}>Quick add "{term}" with its prices and stock</ScreenLink>
               </ScreenToast.Provider>
             )}
           />
@@ -746,7 +766,30 @@ function NewSale({ sale, onNew }: { sale: Sale; onNew: () => void }) {
   );
 }
 
-export function RecordSale() {
+/**
+ * Sell it from Quick add (issue #632) named another branch than the one in use: the sale says where the item was added, offers
+ * Switch to that branch where this person may sell there, and Sell here without it, which forgets the item, so the sale never
+ * waits in silence (a reload or a shared link included).
+ */
+export function StartElsewhere({ branchId, onDrop }: { branchId: string; onDrop: () => void }) {
+  const { me, chooseBranch } = useStaff();
+  const there = (me.branches ?? []).find((b) => b.id === branchId);
+  const name = there ? branchLabel(there) : 'another branch';
+  const may = there !== undefined && there.sells_goods !== false && holdsAt(me, 'retail.sale.create', branchId);
+  return (
+    <div role="status" className="alert alert-info" data-testid="sale-start-elsewhere">
+      <div className="stack">
+        <p>{may ? `The item you just added is at ${name}. Switch to ${name} to sell it.` : `The item you just added is at ${name}, where you do not sell.`}</p>
+        <p className="cluster">
+          {may && chooseBranch && <button type="button" onClick={() => chooseBranch(branchId)}>Switch to {name}</button>}
+          <button type="button" className="btn-ghost" onClick={onDrop}>Sell here without it</button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function RecordSale({ startItem, startBranch, onStarted }: { startItem?: string; startBranch?: string; onStarted?: () => void } = {}) {
   const { me } = useStaff();
   const roles = useBranchRoles(me);
   const { branchId, branchName } = useStockingBranch();
@@ -761,6 +804,9 @@ export function RecordSale() {
   const [queued, setQueued] = useState<OutboxItem | null>(null);
   const [received, setReceived] = useState<number>();
   const [round, setRound] = useState(0);
+  // Sell here without it: the item named in the address is forgotten.
+  const [dropped, setDropped] = useState(false);
+  const elsewhere = !dropped && round === 0 && !!startItem && !!startBranch && startBranch !== branchId;
   const noItems = useNoItemsYet();
   // The receipt of the sale just made, with its number, stays until the cashier starts the next sale or leaves (#576, ADR-088).
   useUnsavedWork(sale !== null || queued !== null);
@@ -788,11 +834,22 @@ export function RecordSale() {
           {/* A shop with no items yet starts from the card (issue #615); "This branch holds no stock" would only confuse it. */}
           <FirstItemsCard />
           {!noItems && <NoStockHere branchId={branchId} />}
-          <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued} />
+          {elsewhere && startBranch && <StartElsewhere branchId={startBranch} onDrop={() => { setDropped(true); onStarted?.(); }} />}
+          <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued}
+            // Sell it names the branch its stock was added at: the item waits until that branch is the one in use, so it is never looked
+            // up (and the address cleared) at the branch the sale opened with before the switch landed.
+            startItem={!dropped && round === 0 && (!startBranch || startBranch === branchId) ? startItem : undefined} onStarted={onStarted} />
         </>
       )}
     </Gate>
   );
 }
 
-export const Route = createLazyRoute('/staff/retail/sale')({ component: RecordSale });
+/** The route's screen: the sale starts with the item of `?item=` (Quick add's Sell it), and the address forgets it once added. */
+function RecordSaleRoute() {
+  const { item, branch } = useSearch({ strict: false }) as { item?: string; branch?: string };
+  const navigate = useNavigate();
+  return <RecordSale startItem={item} startBranch={branch} onStarted={() => void navigate({ to: '/staff/retail/sale', search: {} as never, replace: true })} />;
+}
+
+export const Route = createLazyRoute('/staff/retail/sale')({ component: RecordSaleRoute });

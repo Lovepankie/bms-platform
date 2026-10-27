@@ -17,6 +17,7 @@ import { BarcodeEditor } from './catalogue-barcodes';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
 import { ItemPhoto, PhotoChoice, PhotoEditor, sendNewPhoto, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
+import { canUse } from './permissions';
 import { StockMinimumEditor } from './stock-minimum';
 import { UnitPicker } from './unit-picker';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
@@ -444,6 +445,8 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
   return (
     <>
       <p className="cluster">
+        {/* Not a second primary action (rule 6): Quick add sits with the other ways to add, as a plain button. */}
+        {canUse(me, 'quickAdd') && <Link className="btn" to={'/staff/retail/quick-add' as never}>Quick add</Link>}
         <button type="button" onClick={onAdd} data-tour="product-add">Add an item</button>
         <Link className="btn" to={SIZES_NEW as never} data-tour="product-add-sizes">Add an item with sizes and colours</Link>
         <Link className="btn" to={SIZES_JOIN as never} data-tour="product-join-sizes">Join items as sizes of one item</Link>

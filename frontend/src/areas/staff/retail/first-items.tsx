@@ -8,9 +8,9 @@ import { ScreenLink } from './screen-link';
 
 // The starting card of a shop with no items yet (issue #615): a new business opened Sell, searched, found nothing and had to
 // ask on WhatsApp how to add items. While the business has no item at all, Sell and Home show this card first. Whoever
-// manages the catalogue gets Add your first items (the Items page, whose Add an item takes the category inline), Set up your
-// shop (issue #625: the starting categories, units and packs of a kind of shop) and, with the import screen, Import a list;
-// anyone else is told to ask the owner. The read is one page of the catalogue, every item
+// manages the catalogue gets Quick add (issue #632) as the first action, Add your first items (the Items page, whose Add an
+// item takes the category inline), Set up your shop (issue #625: the starting categories, units and packs of a kind of shop)
+// and, with the import screen, Import a list; anyone else is told to ask the owner. The read is one page of the catalogue, every item
 // switched on or off, under the catalogue's own cache key, so adding an item anywhere hides the card.
 
 export const NO_ITEMS_YET = 'Your shop has no items yet. Add the things you sell, then you can sell them.';
@@ -34,14 +34,17 @@ export function FirstItemsCard() {
   if (!empty) return null;
   // Adding needs the Items screen (or the import), not only the catalogue permission: a manager who can open neither is told to
   // ask, never left with the card's words and no action (review of #616).
-  const manages = holds(me, 'retail.catalogue.manage') && (canUse(me, 'products') || canUse(me, 'importer'));
+  const manages = holds(me, 'retail.catalogue.manage') && (canUse(me, 'quickAdd') || canUse(me, 'products') || canUse(me, 'importer'));
   return (
     <Card title="Get your shop ready">
       <p data-testid="first-items-text">{NO_ITEMS_YET}</p>
       {manages ? (
         <div className="stack" data-testid="first-items-actions">
-          <ScreenLink screen="products" to="/staff/retail/catalogue/products" action>Add your first items</ScreenLink>
+          {/* Quick add first (issue #632): one form for the item, its prices and how many there are. */}
+          <ScreenLink screen="quickAdd" to="/staff/retail/quick-add" action>Quick add an item</ScreenLink>
+          {/* Then Set up your shop beside it, then the Items page and the import (owner's order, review round 4 of #632). */}
           <ScreenLink screen="shopSetup" to="/staff/retail/catalogue/set-up">Set up your shop</ScreenLink>
+          <ScreenLink screen="products" to="/staff/retail/catalogue/products">Add your first items</ScreenLink>
           <ScreenLink screen="importer" to="/staff/retail/catalogue/import">Import a list</ScreenLink>
           <Link className="link-row" to="/staff/help/$articleId" params={{ articleId: 'getting-your-shop-ready' }}>
             How do I get my shop ready to sell?

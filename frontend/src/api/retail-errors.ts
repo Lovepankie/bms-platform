@@ -9,6 +9,13 @@ export interface RetailProblem {
   errors?: { field?: string; code?: string; message?: string }[];
 }
 
+/**
+ * The idempotency answers that may hide a request that went through (chapter 7 section 7.8): a key still held by the first
+ * request, and a key sent again with another body. The same strings as Idempotency.IN_PROGRESS and Idempotency.KEY_REUSED on the
+ * server; quick-add.dom.test.tsx reads the Java source to keep them equal.
+ */
+export const IDEMPOTENCY_UNSURE_CODES: readonly string[] = ['idempotency_in_progress', 'idempotency_key_reused'];
+
 const BY_CODE: Record<string, string> = {
   insufficient_stock: 'There is not enough stock at this branch for one of the items. Lower the quantity, or buy stock first.',
   price_below_cost: 'One of the prices is not above what the item cost. Raise the price.',

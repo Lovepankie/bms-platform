@@ -92,6 +92,13 @@ class CatalogueLookup implements RetailCatalogue {
         service.noteCostUnchanged(locked, sourceId, reason);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public NewItem createItem(
+            String description, UUID categoryId, UUID unitId, long costMinor, long sellMinor, String duplicateReason) {
+        return service.createItem(description, categoryId, unitId, costMinor, sellMinor, duplicateReason);
+    }
+
     static ProductSnapshot snapshot(CatalogueApi.Product p) {
         return new ProductSnapshot(
                 p.id(),

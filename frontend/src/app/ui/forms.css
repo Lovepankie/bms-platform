@@ -257,3 +257,11 @@ legend {
   letter-spacing: 0.06em;
   text-align: center;
 }
+
+/* A fieldset that only locks its fields (Quick add while a send is not confirmed, issue #632): no frame of its own. */
+.form-lock {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}

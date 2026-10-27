@@ -58,7 +58,7 @@ describe('catalogue permission gating', () => {
   it('lists a catalogue manager without the purchase permission no Suppliers link', () => {
     const permissions = ['retail.catalogue.manage', 'retail.stock.read'];
     const labels = catalogueLinksFor({ permissions }).map((l) => l.label);
-    expect(labels).toEqual(['Items', 'Categories', 'Units', 'Barcode labels']);
+    expect(labels).toEqual(['Quick add', 'Items', 'Categories', 'Units', 'Barcode labels']);
   });
 });
 

@@ -12,6 +12,12 @@ import java.util.function.Supplier;
  */
 public interface Idempotency {
 
+    /** The code of a key still held by a concurrent request: the first attempt may yet succeed. */
+    String IN_PROGRESS = "idempotency_in_progress";
+
+    /** The code of a key sent again with a different request: the first request may have succeeded. */
+    String KEY_REUSED = "idempotency_key_reused";
+
     <T> Outcome<T> once(
             String key, String method, String path, Object request, Class<T> responseType, Supplier<T> work);
 

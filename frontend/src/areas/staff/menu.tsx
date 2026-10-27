@@ -89,6 +89,7 @@ export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: 
         shopRow(me, 'My stock', 'stock', ['stock'], { count: count(counts.low, ' low') }),
         shopRow(me, WORDS.buyStock, 'restock', ['restock']),
         shopRow(me, WORDS.countStock, 'stocktake', ['stocktake']),
+        shopRow(me, 'Quick add', 'quickAdd', ['quickAdd']),
         shopRow(me, WORDS.moveStock, 'transfer', ['transfer']),
         shopRow(me, 'Items and categories', 'catalogue', ['catalogue']),
       ],
