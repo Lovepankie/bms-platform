@@ -96,11 +96,12 @@ back to what opened it.
 
 ## Shell and navigation (issue #526)
 
-19. The staff area has one 56px top bar: the business and the branch in use as its title, which switches branch; Search; and
-    one menu for who is signed in, Help, Refresh, the theme and Sign out. The Online dot shows only when it has news (offline,
+19. The staff area has one 56px top bar: the business and the branch in use as its title, which switches branch; Search;
+    Refresh beside it, named Refresh, its icon alone on a phone (issue #631); and one menu for who is signed in, Help, the theme
+    and Sign out. The Online dot shows only when it has news (offline,
     sending, sales waiting), and always for a manager, whose sheet settles other phones' sales; below 430px wide the controls
     sit closer, the Online dot is the dot and the number waiting alone in every state (its name keeps the words, "Offline, 3
-    waiting to sync") and Ask is its icon alone, so the business and the branch keep their first word and the start of the
+    waiting to sync") and Ask is its icon alone; with Refresh in the bar the controls touch, each exactly a 48px target (issue #631), so the business and the branch keep their first word and the start of the
     second (issue #605; at a phone's double text size, their first two letters). An offline banner sits under the bar while the device has no network. The Powered-by footer
     shows only on More and the settings pages, and the page colour fills the viewport.
 20. A phone shows one crumb, a back chevron and "Back to" the parent, with no slash; a screen never adds a second Back to

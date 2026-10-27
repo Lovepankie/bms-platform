@@ -18,7 +18,7 @@ import { WORDS } from './glossary';
 const DATA_AREA = /^\/(staff|member|platform)(\/|$)/;
 const NO_DATA = /^\/platform\/(sign-in|setup)\/?$/;
 
-// The staff area draws its own one top bar, which holds Refresh in its menu (issue #526); the Powered-by footer shows there only
+// The staff area draws its own one top bar, which holds Refresh beside Search (issue #631); the Powered-by footer shows there only
 // on More and the settings pages, so a working screen ends at its content.
 const STAFF = /^\/staff(\/|$)/;
 const STAFF_FOOTER = /^\/staff\/(more|setup|retail\/settings)\/?$/;

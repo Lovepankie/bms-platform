@@ -112,7 +112,7 @@ export function RefreshButton() {
       <button
         type="button"
         className="btn-ghost btn-sm refresh-button"
-        aria-label="Refresh this page"
+        aria-label="Refresh"
         aria-describedby={visible ? describedBy : undefined}
         aria-busy={busy}
         disabled={busy}

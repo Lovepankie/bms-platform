@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { Me } from '../../api/client';
 import { useShellBrand } from '../../app/branding';
-import { RefreshButton, useDeviceOnline } from '../../app/refresh-button';
+import { useDeviceOnline } from '../../app/refresh-button';
 import { THEME_LABELS } from '../../app/shell';
 import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from '../../app/theme-mode';
 import { BusyButton } from '../../app/ui/BusyButton';
@@ -12,8 +12,9 @@ import { useHelpSheet } from '../../tour/host';
 import { ShopLogo } from './branch-picker';
 
 // The parts of the staff top bar (issue #526): one 56px bar whose title is the business and the branch in use, tappable to
-// switch branch, and one menu at the right that holds who is signed in, Help, Refresh, Light or dark and Sign out. The Online
-// dot is drawn only when it has something to say (offline, sending, or sales waiting) and the offline banner sits under the bar.
+// switch branch, and one menu at the right that holds who is signed in, Help, Light or dark and Sign out (Refresh is a button in
+// the bar again since issue #631). The Online dot is drawn only when it has something to say (offline, sending, or sales waiting)
+// and the offline banner sits under the bar.
 
 /**
  * The bar's title: the business on a small line, the branch in use under it in larger type. With more than one branch to
@@ -64,8 +65,7 @@ function ThemeChoices() {
 
 /**
  * The one menu at the right of the top bar. A disclosure, not a role=menu: it holds a status line and a Segmented as well as
- * buttons. It closes on Escape (focus back to its button) and on a press outside, and keeps its items mounted while closed so
- * Refresh keeps its live region and its "Updated" line. Help closes it and opens the Help sheet, which lives outside it.
+ * buttons. It closes on Escape (focus back to its button) and on a press outside, and keeps its items mounted while closed. Help closes it and opens the Help sheet, which lives outside it.
  */
 export function TopMenu({ me, onSignOut, busy, signOut, children }: { me: Me; onSignOut: () => void; busy: boolean; signOut: boolean; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -120,7 +120,6 @@ export function TopMenu({ me, onSignOut, busy, signOut, children }: { me: Me; on
           {icons.info}
           Help
         </button>
-        <RefreshButton />
         <ThemeChoices />
         {children}
         {signOut && (

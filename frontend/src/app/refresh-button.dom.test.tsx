@@ -59,7 +59,7 @@ describe('agoText', () => {
 describe('the refresh button', () => {
   it('is a labelled button a keyboard reaches, with the tour anchor', () => {
     draw();
-    const button = screen.getByRole('button', { name: 'Refresh this page' });
+    const button = screen.getByRole('button', { name: 'Refresh' });
     expect(button.tagName).toBe('BUTTON');
     expect(button.getAttribute('type')).toBe('button');
     expect(button.closest('[data-tour="refresh"]')).not.toBeNull();
@@ -73,7 +73,7 @@ describe('the refresh button', () => {
 
     let finish: (value: string) => void = () => undefined;
     fetchFigures.mockReturnValueOnce(new Promise<string>((resolve) => (finish = resolve)));
-    const button = screen.getByRole('button', { name: 'Refresh this page' });
+    const button = screen.getByRole('button', { name: 'Refresh' });
     fireEvent.click(button);
 
     await waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
@@ -103,7 +103,7 @@ describe('the refresh button', () => {
     await waitFor(() => expect(screen.getByTestId('figures').textContent).toBe('UGX 100'));
     setOnline(false);
     expect(screen.getByText(/^Offline/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     expect(fetchFigures).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('figures').textContent).toBe('UGX 100');
     expect(screen.getByRole('status').textContent).toMatch(/offline, so the page was not refreshed\. Showing the figures from just now\./);
@@ -113,13 +113,13 @@ describe('the refresh button', () => {
     draw();
     await waitFor(() => expect(screen.getByTestId('figures').textContent).toBe('UGX 100'));
     fetchFigures.mockRejectedValueOnce(new Error('down'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(screen.getByRole('status').textContent).toMatch(/^Could not refresh\./));
     expect(screen.getByTestId('figures').textContent).toBe('UGX 100');
     // A sighted user sees it too, in an element that is not hidden at phone width, and it clears when a refresh works.
     const marker = document.querySelector('.refresh-problem');
     expect(marker?.textContent).toMatch(/Not refreshed/);
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(document.querySelector('.refresh-problem')).toBeNull());
   });
 
@@ -133,7 +133,7 @@ describe('the refresh button', () => {
     render(<QueryClientProvider client={client}><RefreshButton /><Two /></QueryClientProvider>);
     await waitFor(() => expect(client.getQueryState(['b'])?.status).toBe('success'));
     fetchFigures.mockRejectedValueOnce(new Error('403'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(document.querySelector('.refresh-problem')?.textContent).toMatch(/Partly updated/));
     expect(screen.getByRole('status').textContent).toMatch(/^Refreshed, but some figures/);
   });
@@ -142,7 +142,7 @@ describe('the refresh button', () => {
     draw();
     await waitFor(() => expect(fetchFigures).toHaveBeenCalledTimes(1));
     fetchFigures.mockReturnValueOnce(new Promise<string>(() => undefined));
-    const button = screen.getByRole('button', { name: 'Refresh this page' }) as HTMLButtonElement;
+    const button = screen.getByRole('button', { name: 'Refresh' }) as HTMLButtonElement;
     fireEvent.click(button);
     await waitFor(() => expect(button.disabled).toBe(true));
   });
@@ -158,7 +158,7 @@ describe('the refresh button', () => {
     await waitFor(() => expect(pageFor).toHaveBeenCalledTimes(1));
     client.setQueryData(['list'], { pages: [[0], [1], [2]], pageParams: [0, 1, 2] }, { updatedAt: 5_000 });
     pageFor.mockRejectedValueOnce(new Error('down'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(document.querySelector('.refresh-problem')).not.toBeNull());
     expect((client.getQueryData(['list']) as { pages: unknown[] }).pages).toHaveLength(3);
     // The failure does not make old figures look fresh.
@@ -173,7 +173,7 @@ describe('the refresh button', () => {
     const view = render(<QueryClientProvider client={client}><Host path="/staff/a" /><Page /></QueryClientProvider>);
     await waitFor(() => expect(fetchFigures).toHaveBeenCalledTimes(1));
     fetchFigures.mockRejectedValueOnce(new Error('down'));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh this page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(document.querySelector('.refresh-problem')).not.toBeNull());
     view.rerender(<QueryClientProvider client={client}><Host path="/staff/b" /><Page /></QueryClientProvider>);
     expect(document.querySelector('.refresh-problem')).toBeNull();

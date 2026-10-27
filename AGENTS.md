@@ -197,6 +197,11 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `retail.catalogue.manage` (name only; the code start is the app's, from `prefix-suggestion`), the new one chosen at once with a
   dark toast, and `No category called "X". Add it?`. Tests `category-picker.dom.test.tsx`; other tests choose a category
   with `chooseCategory` (`frontend/src/test-utils/category-picker.ts`).
+- **Built (Refresh is a visible button in the top bar again, issue #631, FR-UXN-11):** PWA only, no migration, no API change.
+  `RefreshButton` sits in `StaffBar` just before Search on every staff screen, named Refresh, its icon alone below 720px, and
+  is gone from the person menu (`TopMenu`). Below 430px the bar's controls touch, each exactly 48px, so the branch name stays
+  readable (`layout/header.layout.test.ts`). The three welcome tours gain a Refresh step on the `refresh` anchor. Tests
+  `top-bar.dom.test.tsx`, `refresh-button.dom.test.tsx`, `model.test.ts`.
 - **Built (a buying pack's size per delivery, issue #554, owner decision D23, ADR-082, FR-RET-72):** no migration. A restock line and a
   goods received line in a pack take `pack_size` (how many base units each pack held in this delivery, at least 1), kept in the line's existing
   `unit_factor`; stock, the cost per base unit and the branch's average (ADR-079) use it, and every later reading of the line (voids, supplier

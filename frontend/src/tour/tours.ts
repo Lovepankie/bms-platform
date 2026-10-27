@@ -36,12 +36,20 @@ const isSeller = (me: Me) => held(me, SELL) && !isTenantAdmin(me);
 /** A retail capability the tenant switched on (ADR-033); /me lists them per module. */
 const capable = (me: Me, capability: string) => (me.module_capabilities?.['retail'] ?? []).includes(capability);
 
-// The one menu at the top right of the staff top bar (issue #526): Help, Refresh, Light or dark and Sign out live in it.
+// The one menu at the top right of the staff top bar (issue #526): Help, Light or dark and Sign out live in it.
 const help: TourStep = {
   id: 'help',
   target: 'top-menu',
   title: 'Your menu',
-  body: 'Tap the round button at the top right. Help takes this tour again or shows a tour of the page you are on. Refresh gets the latest figures, since the installed app has no reload button. Theme sets Light, Dark or Same as my phone, kept on this device.',
+  body: 'Tap the round button at the top right. Help takes this tour again or shows a tour of the page you are on. Theme sets Light, Dark or Same as my phone, kept on this device.',
+};
+
+// Refresh is a button in the top bar beside Search on every staff screen (issue #631), no longer in the menu.
+const refresh: TourStep = {
+  id: 'refresh',
+  target: 'refresh',
+  title: 'Get the latest figures',
+  body: 'Tap the round arrow at the top, just before Search, to load the latest figures on this page. The installed app has no reload button.',
 };
 
 // The Notifications and app page (ADR-050): install BMS as an app and turn on notifications on this device. Everyone signed in has it.
@@ -177,7 +185,8 @@ export const adminWelcome: Tour = {
   // Version 26 words the branch step for the menu's top on a laptop and the page's top on a phone (issue #564).
   // Version 27 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
   // Version 28 words the Help and feedback step for How do I...? (issue #598).
-  version: 28,
+  // Version 29 adds the Refresh step: the button beside Search in the top bar again, taken out of the menu (issue #631).
+  version: 29,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -418,6 +427,7 @@ export const adminWelcome: Tour = {
     },
     insights,
     search,
+    refresh,
     notifications,
     feedback,
     help,
@@ -448,7 +458,8 @@ export const retailSales: Tour = {
   // Version 22 words the menu, Notifications and Feedback steps for the grouped menu and its footer (issue #564).
   // Version 23 words the branch and menu steps for the menu's top on a laptop and the drawer on a phone (issue #564).
   // Version 24 words the Help and feedback step for How do I...? (issue #598).
-  version: 24,
+  // Version 25 adds the Refresh step: the button beside Search in the top bar again, taken out of the menu (issue #631).
+  version: 25,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -610,6 +621,7 @@ export const retailSales: Tour = {
       body: 'Sell and Orders are under Today in the menu, and your stock pages under Stock. On a phone, the menu button at the top left opens it. The tabs at the bottom hold Sell, My stock, Buy and Money.',
     },
     search,
+    refresh,
     notifications,
     feedback,
     help,
@@ -630,7 +642,8 @@ export const staffWelcome: Tour = {
   // Version 12 words the branch step for the menu's top on a laptop and the page's top on a phone (issue #564).
   // Version 13 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
   // Version 14 words the Help and feedback step for How do I...? (issue #598).
-  version: 14,
+  // Version 15 adds the Refresh step: the button beside Search in the top bar again, taken out of the menu (issue #631).
+  version: 15,
   title: 'Welcome tour',
   audience: (me) => !isTenantAdmin(me) && !isSeller(me),
   autoStart: true,
@@ -671,6 +684,7 @@ export const staffWelcome: Tour = {
       body: 'Sell and Orders are under Today in the menu, and your stock pages under Stock.',
     },
     search,
+    refresh,
     notifications,
     feedback,
     help,

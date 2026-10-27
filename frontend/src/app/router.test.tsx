@@ -25,7 +25,7 @@ describe('where the header shows the refresh button', () => {
     }
   });
 
-  // Issue #526: the staff area's own top bar is its one bar; Refresh is in its menu (top-bar.dom.test.tsx).
+  // Issue #526: the staff area's own top bar is its one bar; Refresh is a button in it beside Search (issue #631, top-bar.dom.test.tsx).
   it('draws no brand bar in the staff area, which has its own top bar', async () => {
     for (const path of ['/staff', '/staff/retail/sales']) {
       expect(showsRefresh(path), path).toBe(false);

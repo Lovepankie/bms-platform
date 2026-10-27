@@ -10,6 +10,7 @@ import { helpCorpus } from '../vite.config';
 // is layout/header.html under the app's own stylesheets. Since issue #605 the bar also holds the sync indicator, and below
 // 430px the controls sit closer, Ask is its icon and the sync indicator its dot and the number waiting, in every sync state, so the
 // business and the branch each show their first word and the start of the second (the accepted minimum at font scale 2 is below).
+// Since issue #631 Refresh is in the bar again beside Search, its icon alone, and the same minimum holds.
 
 let server: ViteDevServer;
 let browser: Browser;
@@ -127,6 +128,10 @@ describe.each([360, 390, 412])('the top bar at %ipx wide', (width) => {
       const button = page.locator('.staff-bar-top .ask-open');
       await button.waitFor();
       expect(await button.getAttribute('aria-label')).toBe(ask === '1' ? 'Ask BMS, New' : 'How do I?, New');
+      // Refresh is in the bar beside Search (issue #631), its icon alone, named Refresh.
+      const refresh = page.locator('.staff-bar-top .refresh-button');
+      expect(await refresh.getAttribute('aria-label')).toBe('Refresh');
+      expect(await page.locator('.staff-bar-top .refresh-label').isVisible()).toBe(false);
       // Its word stays inside the button, whatever the width and the font size.
       expect(await button.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
       const controls = await Promise.all(
@@ -138,12 +143,12 @@ describe.each([360, 390, 412])('the top bar at %ipx wide', (width) => {
         expect(c.box.x + c.box.width, `${c.cls} ends on screen`).toBeLessThanOrEqual(width + 0.5);
         for (const other of shown.slice(i + 1)) expect(overlap(c.box, other.box), `${c.cls} over ${other.cls}`).toBe(false);
       }
-      for (const target of ['.menu-button', '.sync-button', '.find-open', '.ask-open', '.top-menu-button']) {
+      for (const target of ['.menu-button', '.sync-button', '.find-open', '.refresh-button', '.ask-open', '.top-menu-button']) {
         const box = (await page.locator(`.staff-bar-top ${target}`).first().boundingBox()) as Box;
         expect(box.width, `${target} width`).toBeGreaterThanOrEqual(48);
         expect(box.height, `${target} height`).toBeGreaterThanOrEqual(48);
       }
-      for (const anchor of ['branch-picker', 'feature-search', 'top-menu']) {
+      for (const anchor of ['branch-picker', 'feature-search', 'refresh', 'top-menu']) {
         const box = (await page.locator(`[data-tour="${anchor}"]`).first().boundingBox()) as Box;
         expect(box.width, `${anchor} is drawn`).toBeGreaterThan(0);
         expect(box.x + box.width, `${anchor} is on screen`).toBeLessThanOrEqual(width + 0.5);
