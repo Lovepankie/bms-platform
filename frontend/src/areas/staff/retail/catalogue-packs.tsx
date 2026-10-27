@@ -20,13 +20,19 @@ import { Sheet } from '../../../app/ui/Sheet';
 // price), and Change opens the pack in a sheet. Offered only while /me lists the units capability and the user may manage
 // the catalogue; the price is set only by someone who may change prices (retail.price.edit).
 
-export type Purpose = 'both' | 'sell' | 'buy';
-
+/** What a pack is for, the one list (issue #637): its values, its Used for label and its words in a sentence. The first is the default. */
 export const PURPOSES = [
-  { value: 'both', label: 'Both' },
-  { value: 'sell', label: 'Selling' },
-  { value: 'buy', label: 'Buying' },
-] as const satisfies readonly { value: Purpose; label: string }[];
+  { value: 'both', label: 'Both', use: 'for buying and selling' },
+  { value: 'sell', label: 'Selling', use: 'for selling' },
+  { value: 'buy', label: 'Buying', use: 'for buying' },
+] as const;
+
+export type Purpose = (typeof PURPOSES)[number]['value'];
+
+/** The purpose of `value` from PURPOSES, or the first (both) for anything else. */
+export function asPurpose(value: string | undefined): Purpose {
+  return (PURPOSES.find((o) => o.value === value) ?? PURPOSES[0]).value;
+}
 
 /** True when the text is a factor the server accepts: at least 1, at most three places, no comma. */
 export function factorProblem(text: string): string | null {
@@ -36,7 +42,7 @@ export function factorProblem(text: string): string | null {
 }
 
 export function purposeOf(pack: Pack): Purpose {
-  return pack.purpose === 'buy' || pack.purpose === 'sell' ? pack.purpose : 'both';
+  return asPurpose(pack.purpose);
 }
 
 /** The price a walk-in sale takes for the pack, and whether it is the pack's own or the suggested one; null when not sold. */
@@ -172,9 +178,7 @@ export function factorForUnit(factor: string, filled: string, usual: string | nu
  * chose stays.
  */
 export function purposeForUnit(purpose: Purpose, filled: Purpose, unit: Unit | undefined): Purpose {
-  if (purpose !== filled) return purpose;
-  const usual = unit?.usual_pack?.purpose;
-  return usual === 'buy' || usual === 'sell' ? usual : 'both';
+  return purpose !== filled ? purpose : asPurpose(unit?.usual_pack?.purpose);
 }
 
 export function PackEditor({ product }: { product: Product }) {

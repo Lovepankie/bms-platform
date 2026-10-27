@@ -1,5 +1,5 @@
 import { RetailError, type Category, type RetailApi, type Unit } from '../../../api/retail';
-import type { Purpose } from './catalogue-packs';
+import { PURPOSES, asPurpose, type Purpose } from './catalogue-packs';
 import type { ShopType } from './shop-starters';
 
 // Set up your shop (issue #625): what a starting set would add to this shop, and adding it through the routes that add one
@@ -38,7 +38,7 @@ export function planSetup(type: ShopType, categories: Category[], units: Unit[])
 
 /** A pack in plain words: "100 Metre, for buying and selling". */
 export function packText(size: number | string, of: string, purpose: Purpose | string | undefined): string {
-  const what = purpose === 'buy' ? 'for buying' : purpose === 'sell' ? 'for selling' : 'for buying and selling';
+  const what = (PURPOSES.find((o) => o.value === asPurpose(purpose)) ?? PURPOSES[0]).use;
   return `${Number(size)} ${of}, ${what}`;
 }
 
