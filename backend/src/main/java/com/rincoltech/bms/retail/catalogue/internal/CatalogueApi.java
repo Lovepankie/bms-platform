@@ -1189,7 +1189,7 @@ final class CatalogueApi {
             @Schema(
                     description =
                             "What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624)."
-                                    + " Left out, the unit's usual purpose (issue #625), else both")
+                                    + " Left out, both; the screens fill in the unit's usual purpose (issue #637)")
             String purpose,
 
             @PositiveOrZero

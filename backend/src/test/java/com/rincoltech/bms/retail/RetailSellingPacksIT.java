@@ -574,23 +574,25 @@ class RetailSellingPacksIT extends IntegrationTest {
         assertThat(bad.getStatusCode()).isIn(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
-    /** Issue #625 and #624 merged (ADR-100): a pack added with no purpose takes its unit's usual one, the same values. */
+    /**
+     * Issue #637 (ADR-099, ADR-100): a pack added through the API with no purpose is for both, as #627 set, whatever its
+     * unit's usual purpose; the screens fill in the usual purpose themselves, and a purpose sent is kept.
+     */
     @Test
-    void aPackWithNoPurposeTakesItsUnitsUsualPurpose() {
+    void aPackAddedWithNoPurposeIsForBothWhateverItsUnitsUsualPurpose() {
         UUID piece = api.unit("piece");
         usual(carton, piece, "buy");
         usual(halfCarton, piece, "sell");
-        usual(box, piece, "buy");
-        assertThat(pack(carton, "12", null, null).get("purpose").asString()).isEqualTo("buy");
-        assertThat(pack(halfCarton, "6", null, null).get("purpose").asString()).isEqualTo("sell");
-        // A price sent with it means the pack is sold, so a usual buy-only pack is added for both.
-        assertThat(pack(box, "10", null, 900L).get("purpose").asString()).isEqualTo("both");
-        // A plain unit still gives both, and a purpose sent wins over the usual one.
-        UUID dozen = api.unit("dozen");
-        assertThat(pack(dozen, "12", null, null).get("purpose").asString()).isEqualTo("both");
+        assertThat(pack(carton, "12", null, null).get("purpose").asString()).isEqualTo("both");
+        assertThat(pack(halfCarton, "6", null, null).get("purpose").asString()).isEqualTo("both");
         UUID crate = api.unit("crate");
         usual(crate, piece, "sell");
         assertThat(pack(crate, "24", "buy", null).get("purpose").asString()).isEqualTo("buy");
+        // A usual buy-only unit with a price sent and no purpose is still for both, so the price is kept.
+        usual(box, piece, "buy");
+        JsonNode priced = pack(box, "10", null, 900L);
+        assertThat(priced.get("purpose").asString()).isEqualTo("both");
+        assertThat(priced.get("sell_minor").asLong()).isEqualTo(900);
     }
 
     void usual(UUID unit, UUID of, String purpose) {

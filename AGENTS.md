@@ -781,7 +781,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   from the first-run card (#615) and the Catalogue home, asks "What kind of shop is it?" from eight bundled starting sets
   (`shop-starters.ts`), lists their categories, units and packs ticked, and adds what stays ticked through the existing create
   routes (`shop-setup-state.ts`); a name the shop has is skipped, a unit with no usual size gets one, and a second run adds
-  nothing. The pack form of an item fills in the unit's usual size and its Used for (`purposeForUnit`), and a pack added to an item with no `purpose` takes the unit's usual one (a buy-only one sent with a price is added for `both`): one pack idea, one `Purpose` type and one `PURPOSES` list (`catalogue-packs.tsx`). Help articles `set-up-your-shop` and `add-a-unit` (How do I add a unit?, which a tester asked for), page tour `page-shop-setup`.
+  nothing. The pack form of an item fills in the unit's usual size and its Used for (`purposeForUnit`), while a pack added through the API with no `purpose` is for `both`, as #627 set (issue #637): one pack idea, one `Purpose` type and one `PURPOSES` list (`catalogue-packs.tsx`). Help articles `set-up-your-shop` and `add-a-unit` (How do I add a unit?, which a tester asked for), page tour `page-shop-setup`.
   Tests: `RetailCatalogueManagementIT.aUnitKeepsItsUsualPackSizeAndUse`, `RetailSellingPacksIT.aPackWithNoPurposeTakesItsUnitsUsualPurpose`, `MigrationOrderIT`, `shop-setup-state.test.ts`,
   `shop-setup.dom.test.tsx`, the help corpus test.
 

@@ -818,16 +818,9 @@ class CatalogueService {
                     "pack_unit_is_base_unit",
                     "A pack must be a different unit from the one the product is counted in.");
         }
-        // ADR-100: with no purpose sent, the pack takes its unit's usual purpose (V111), the same values as this
-        // column, so a
-        // unit and an item's pack are one idea; a price sent with it means the pack is sold, so a usual buy-only pack
-        // is both.
-        String usual = unit.usualPack() == null
-                ? RetailCatalogue.PACK_BOTH
-                : unit.usualPack().purpose();
-        String purpose = r.purpose() != null
-                ? r.purpose()
-                : r.sellMinor() != null && usual.equals(RetailCatalogue.PACK_BUY) ? RetailCatalogue.PACK_BOTH : usual;
+        // ADR-099: with no purpose sent, a pack is for both, whatever its unit's usual purpose (#637); the screens fill
+        // in the unit's usual purpose themselves (ADR-100).
+        String purpose = r.purpose() == null ? RetailCatalogue.PACK_BOTH : r.purpose();
         if (r.sellMinor() != null) {
             requirePriceEdit(
                     "You may not change selling prices, so you cannot set a pack's price. Ask someone who may.");
