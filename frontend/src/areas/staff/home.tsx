@@ -7,8 +7,10 @@ import { branchFilter } from '../../auth/branch';
 import { EmptyState, SkeletonList } from '../../components/states';
 import { useStaff } from './context';
 import { HomeCards } from './home-cards';
+import { FirstItemsCard } from './retail/first-items';
 
-// Staff home: a card per module the business uses (issue #471, home-cards.tsx), then the member list of the active branch
+// Staff home: a shop with no items yet starts from the card that leads to adding them (issue #615), then a card per module
+// the business uses (issue #471, home-cards.tsx), then the member list of the active branch
 // (FR-BR-04), where the user may read members.
 
 export function StaffHome() {
@@ -30,6 +32,7 @@ export function StaffHome() {
       <div className="page-header" data-tour="staff-home-header">
         <h1>Home</h1>
       </div>
+      <FirstItemsCard />
       <HomeCards />
       {canReadMembers && (
         <section aria-labelledby="members-title" data-tour="lending-members">

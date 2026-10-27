@@ -258,8 +258,10 @@ export function useProfitAccess(): boolean {
  * show only while something is typed and close once one is picked (ItemCombobox, issue #534): there is
  * no browsable list here, the Stock page has the whole list.
  */
-export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStock = true, addLabel = 'Add', label = 'Find an item by name, code or category' }: {
+export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStock = true, addLabel = 'Add', label = 'Find an item by name, code or category', notFound }: {
   id: string;
+  /** Drawn under the box once a search has found nothing, with what was typed (Sell's Add it here, issue #615). */
+  notFound?: (term: string, clear: () => void) => ReactNode;
   /** The box's label; a second picker on a screen has its own, so the two are told apart. */
   label?: string;
   /** Absent for a screen that is about an item and not a branch's stock (the price list editor), which also sets showStock false. */
@@ -275,7 +277,9 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
     queryFn: ({ signal }) => retail.listProducts({ query: search.term, branchId, signal }),
     enabled: search.term !== '',
   });
+  const nothing = notFound && search.term !== '' && !search.pending && products.data !== undefined && products.data.length === 0;
   return (
+    <>
     <ItemCombobox
       id={id}
       label={label}
@@ -312,5 +316,7 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
         );
       }}
     />
+    {nothing && notFound(search.term, search.clear)}
+    </>
   );
 }

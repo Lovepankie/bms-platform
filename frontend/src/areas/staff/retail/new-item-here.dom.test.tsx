@@ -115,7 +115,8 @@ describe('Buy stock: add an item that is not in the list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
     await within(form()).findByRole('option', { name: 'piece' });
     const labels = [...form().querySelectorAll('label')].map((l) => l.textContent?.replace(/\s*\*$/, '').trim());
-    expect(labels).toEqual(['Category', 'Description', 'Counted in', 'Buying price (UGX)', 'Selling price (UGX)', expect.stringMatching(/^Quantity bought/)]);
+    // Issue #617: the optional photo comes last, Take a picture or Choose a photo.
+    expect(labels).toEqual(['Category', 'Description', 'Counted in', 'Buying price (UGX)', 'Selling price (UGX)', expect.stringMatching(/^Quantity bought/), 'Take a picture', 'Choose a photo']);
     expect(document.activeElement).toBe(field(/^Category/));
     // Issue #562: the code comes first, as text, never a field.
     const code = within(form()).getByTestId('restock-new-code');

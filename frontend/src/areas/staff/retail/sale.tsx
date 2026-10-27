@@ -12,7 +12,7 @@ import type { OutboxItem } from '../../../offline/outbox';
 import { newIdempotencyKey } from './idempotency';
 import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
-import { showQty } from './maths';
+import { parseQty, qtyString, showQty } from './maths';
 import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
 import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
@@ -28,13 +28,16 @@ import { ChangePanel, ReceiptChange } from './sale-change';
 import { receivedFor, receivedProblem } from './sale-change-state';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
-import { addedMessage, useToast } from './toast';
+import { ScreenToast, addedMessage, useToast } from './toast';
+import { NewItemHere, type AddedItem } from './new-item-here';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
 import { Hint } from '../../../app/ui/Hint';
+import { WORDS } from '../../../app/glossary';
 import { useUnsavedWork } from '../../../app/unsaved-work';
 import { entryWarnings, type EntryWarning } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
+import { FirstItemsCard, useNoItemsYet } from './first-items';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -46,6 +49,9 @@ const METHODS: { value: SalePayment; label: string }[] = [
   { value: 'bank', label: 'Bank' },
   { value: 'credit', label: 'Credit (pay later)' },
 ];
+
+/** What someone who may not add items reads under a search that found nothing (issue #615). */
+export const ASK_OWNER_ITEM = 'Ask the owner to add it.';
 
 /** The value once it has stopped changing for the search delay, with the shared debouncer of the live search. */
 function useSettled<T>(value: T): T {
@@ -313,6 +319,37 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     mark(next.length - 1, true);
     show(addedMessage(p.description, next[next.length - 1]?.qty), 'success');
   };
+  // Issue #615: an item the search did not find, added here. The server never sells what the branch does not hold, so a new
+  // item goes on the sale only with stock: whoever may count stock here types how many there are (more than 0), kept as a
+  // one-line stock count; anyone else is told to put stock in first. Only an item made here is counted: an existing item chosen
+  // from a name warning (Use this item) keeps its stock and goes on the sale as a picked one would.
+  const profit = useProfitAccess();
+  const mayCount = holdsAt(me, 'retail.stocktake.commit', branchId);
+  const addNew = async ({ product, qty, sell }: AddedItem, clear: () => void) => {
+    const made = sell !== undefined;
+    const name = product.description ?? 'The item';
+    const counted = made && mayCount ? parseQty(qty) : null;
+    let counts = false;
+    if (counted !== null && counted > 0) {
+      try {
+        const count = await retail.createStocktake({ branch_id: branchId, lines: [{ product_id: product.id ?? '', counted_qty: qtyString(counted) }], note: 'Counted when the item was added on Sell' });
+        await retail.commitStocktake(count.id ?? '');
+        counts = true;
+      } catch {
+        show(`${name} is saved, but its count is not. Count it on ${WORDS.countStock}, then sell it.`, 'error');
+      }
+    }
+    // The card of a shop with no items, the search and the branches that hold stock all read again with the new item.
+    for (const key of [['retail', 'catalogue'], ['retail', 'products'], ['retail', 'stocked-branches']]) void queryClient.invalidateQueries({ queryKey: key });
+    clear();
+    if (!made) {
+      add(product);
+      if (qty.trim() !== '') show(`${name} is already in your items, so its stock is not changed here. If it is wrong, use ${WORDS.countStock}.`, 'info');
+      return;
+    }
+    if (counts) add({ ...product, qty: qtyString(counted ?? 0) });
+    else if (counted === null) show(`${name} is saved. It has no stock here yet: use ${WORDS.buyStock} or ${WORDS.countStock}, then sell it.`, 'info');
+  };
   // A scan (issue #345) adds the item at 1, or one more to its line in the pack the barcode is on; a pack it cannot
   // use is refused, never sold as one piece: ScanBar shows the refusal as a warning and no toast is raised.
   const scanAdd = (p: Product, unitId?: string) => {
@@ -407,7 +444,20 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
       {offlineMode && <OfflineNote />}
       <fieldset disabled={locked} className="sale-lock" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div data-tour="sale-search">
-        {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : <ProductPicker id="sale-search" branchId={branchId} showPrice onAdd={add} />}
+        {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : (
+          <ProductPicker
+            id="sale-search"
+            branchId={branchId}
+            showPrice
+            onAdd={add}
+            notFound={(term, clear) => (
+              <ScreenToast.Provider value={show}>
+                <NewItemHere id="sale-new" description={term} ask={ASK_OWNER_ITEM} askCost={profit} qtyLabel={mayCount ? 'How many you have here' : undefined}
+                  qtyError="Type how many you have here, more than 0." onAdded={(added) => addNew(added, clear)} />
+              </ScreenToast.Provider>
+            )}
+          />
+        )}
       </div>
       <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} autoFocus toasts />
 
@@ -673,6 +723,7 @@ export function RecordSale() {
   const [queued, setQueued] = useState<OutboxItem | null>(null);
   const [received, setReceived] = useState<number>();
   const [round, setRound] = useState(0);
+  const noItems = useNoItemsYet();
   // The receipt of the sale just made, with its number, stays until the cashier starts the next sale or leaves (#576, ADR-088).
   useUnsavedWork(sale !== null || queued !== null);
   return (
@@ -696,7 +747,9 @@ export function RecordSale() {
         </>
       ) : (
         <>
-          <NoStockHere branchId={branchId} />
+          {/* A shop with no items yet starts from the card (issue #615); "This branch holds no stock" would only confuse it. */}
+          <FirstItemsCard />
+          {!noItems && <NoStockHere branchId={branchId} />}
           <SaleForm key={`${branchId}-${round}`} branchId={branchId} branchName={branchName} onSaved={(s, r) => { setSale(s); setReceived(r); }} onQueued={setQueued} />
         </>
       )}

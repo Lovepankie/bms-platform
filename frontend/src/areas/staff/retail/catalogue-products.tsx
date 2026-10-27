@@ -15,7 +15,7 @@ import { ItemCodeLine } from './new-item-here';
 import { PackEditor } from './catalogue-packs';
 import { BarcodeEditor } from './catalogue-barcodes';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
-import { ItemPhoto, PhotoEditor, shownPhoto } from './item-photo';
+import { ItemPhoto, PhotoChoice, PhotoEditor, sendNewPhoto, shownPhoto } from './item-photo';
 import { ScreenLink } from './screen-link';
 import { StockMinimumEditor } from './stock-minimum';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
@@ -133,6 +133,8 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
   const [colour, setColour] = useState(variant?.colour ?? '');
   const [sell, setSell] = useState('');
   const [cost, setCost] = useState('0');
+  // Issue #617: a new item's optional photo, sent right after the item is made.
+  const [photo, setPhoto] = useState<File | null>(null);
   const sellMinor = parseMinor(sell, RETAIL_CURRENCY);
   const costMinor = parseMinor(cost, RETAIL_CURRENCY);
   // A switched-off category or unit is offered only when it is the item's own.
@@ -152,16 +154,17 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
   // A second press before the first request has started must not send another: the ref answers at once, the mutation state a render later.
   const sending = useRef(false);
   const save = useMutation({
-    mutationFn: (duplicateReason?: string) => {
+    mutationFn: async (duplicateReason?: string): Promise<{ saved: Product; photoNote: string | null }> => {
       const reason = duplicateReason ? { duplicate_reason: duplicateReason } : {};
-      if (product && variant) return retail.updateProduct(product.id ?? '', product.version ?? 1, { active, variant_size: size.trim(), variant_colour: colour.trim() });
-      return product
-        ? retail.updateProduct(product.id ?? '', product.version ?? 1, { description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason })
-        : retail.createProduct({ description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
+      if (product && variant) return { saved: await retail.updateProduct(product.id ?? '', product.version ?? 1, { active, variant_size: size.trim(), variant_colour: colour.trim() }), photoNote: null };
+      if (product) return { saved: await retail.updateProduct(product.id ?? '', product.version ?? 1, { description: description.trim(), category_id: categoryId, unit_id: unitId, active, ...reason }), photoNote: null };
+      const saved = await retail.createProduct({ description: description.trim(), category_id: categoryId, unit_id: unitId, sell_minor: sellMinor ?? 0, cost_minor: profit ? (costMinor ?? 0) : 0, ...reason });
+      // The item stands whatever happens to its photo: a failed upload only adds a line to the message.
+      return { saved, photoNote: await sendNewPhoto(saved.id ?? '', photo) };
     },
-    onSuccess: (saved) => {
+    onSuccess: ({ saved, photoNote }) => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
-      onSaved(product ? `Saved the changes to "${saved.description}".` : `Added the item "${saved.description}" (${saved.code}).`);
+      onSaved(product ? `Saved the changes to "${saved.description}".` : `Added the item "${saved.description}" (${saved.code}).${photoNote ? ` ${photoNote}` : ''}`);
     },
     onError: (error) => {
       const found = existingOf(error);
@@ -268,6 +271,17 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
       )}
       {product ? (
         <>
+          {/* Issue #617: the photo comes first, under the name, not below the packs, barcodes and stock levels. */}
+          {canManage && (
+            <PhotoEditor
+              inputId={product.id ?? 'item'}
+              photoId={product.photo_id}
+              shownId={shownPhoto(product)}
+              label={product.description ?? ''}
+              onUpload={(file) => retail.setProductPhoto(product.id ?? '', file)}
+              onClear={() => retail.clearProductPhoto(product.id ?? '')}
+            />
+          )}
           {canManage && (
             <>
               <label htmlFor="item-inactive">
@@ -283,16 +297,6 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
           <PackEditor product={product} />
           <BarcodeEditor product={product} />
           <StockMinimumEditor productId={product.id ?? ''} unit={product.unit} />
-          {canManage && (
-            <PhotoEditor
-              inputId={product.id ?? 'item'}
-              photoId={product.photo_id}
-              shownId={shownPhoto(product)}
-              label={product.description ?? ''}
-              onUpload={(file) => retail.setProductPhoto(product.id ?? '', file)}
-              onClear={() => retail.clearProductPhoto(product.id ?? '')}
-            />
-          )}
           <MakeFamilyPanel product={product} />
         </>
       ) : (
@@ -316,6 +320,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
             autoComplete="off"
           />
           {!profit && <p className="hint">The buying price is set when you buy stock.</p>}
+          <PhotoChoice id="item-photo" file={photo} onChange={setPhoto} />
         </>
       )}
       {exists && (
