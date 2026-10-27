@@ -464,8 +464,18 @@ class ProductImportService {
                 // Issue #637: made by the one pack path of POST /products/{id}/units, its checks and its audit: for
                 // both, with no price of its own, whatever the unit's usual purpose.
                 packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
-                catalogue.createPack(
-                        product, packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by, "import");
+                try {
+                    catalogue.createPack(
+                            product, packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by, "import");
+                } catch (ApiException e) {
+                    // The check passed the unit, so a refusal here is a change made meanwhile (review of #637).
+                    throw new ApiException(
+                            HttpStatus.CONFLICT,
+                            "import_conflict",
+                            "Import conflict",
+                            "Another change made the pack unit " + p.packUnit()
+                                    + " unusable while this file was being applied. Nothing was added. Run the check again and apply the file again.");
+                }
             }
             for (String c : p.barcodes()) {
                 addBarcode(product.id(), null, c, p.barcodeFormat(), by);

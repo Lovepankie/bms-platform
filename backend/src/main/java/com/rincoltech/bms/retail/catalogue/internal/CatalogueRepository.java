@@ -732,7 +732,10 @@ class CatalogueRepository {
                         """).params(productId, productId).query(Boolean.class).single();
     }
 
-    /** Issue #637: the name of a unit whose usual pack counts this one, or null. */
+    /**
+     * Issue #637: the name of a unit whose usual pack counts this one, or null. A switched-off unit counts too, by design: it
+     * keeps its usual pack and could be switched on again, which would make the cycle real.
+     */
     String unitCountedByUsualPack(UUID unitId) {
         return jdbc.sql("SELECT name FROM retail_units WHERE pack_of_unit_id = ? ORDER BY name LIMIT 1")
                 .param(unitId)

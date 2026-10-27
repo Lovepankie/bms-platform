@@ -641,7 +641,8 @@ class RetailSellingPacksIT extends IntegrationTest {
                 .contains("\"purpose\": \"both\"");
         assertThat(audited).filteredOn(a -> a.contains(pen.toString())).hasSize(1);
 
-        // A switched-off unit is refused by both paths.
+        // A switched-off unit is refused by the import's check (a change after the check is an import_conflict) and by
+        // POST.
         ResponseEntity<JsonNode> off = api.call(
                 HttpMethod.PATCH, "/units/" + box, Map.of("active", false), ADMIN, "*", Map.of("If-Match", "1"));
         assertThat(off.getStatusCode()).as("%s", off.getBody()).isEqualTo(HttpStatus.OK);
