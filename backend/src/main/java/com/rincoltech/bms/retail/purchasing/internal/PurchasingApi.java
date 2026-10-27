@@ -162,7 +162,41 @@ final class PurchasingApi {
             @Schema(
                     description =
                             "The unit the item is usually kept in (issue #351), to tell a line entered in another unit")
-            String baseUnit) {}
+            String baseUnit,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "On the response that made the line only: true when use_from_now_on was left out because"
+                                    + " the pack has its own price and the caller may not change prices (issue #624)")
+            Boolean sizeKept,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Why the usual size was kept, in one plain sentence, with size_kept")
+            String sizeKeptNote) {
+
+        PurchaseLine withSizeKept(String note) {
+            return new PurchaseLine(
+                    id,
+                    lineNo,
+                    productId,
+                    code,
+                    description,
+                    costMinor,
+                    sellMinor,
+                    qtyTotal,
+                    lineTotalMinor,
+                    qtyByBranch,
+                    unitId,
+                    unit,
+                    unitFactor,
+                    unitQtyTotal,
+                    unitCostMinor,
+                    baseUnit,
+                    true,
+                    note);
+        }
+    }
 
     @Schema(name = "RetailPurchase")
     record Purchase(

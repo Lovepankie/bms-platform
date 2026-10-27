@@ -25,7 +25,8 @@ vi.mock('../../../api/retail', async (original) => {
   return { ...real, retail: { ...real.retail, listProducts: () => Promise.resolve([]), listSuppliers: () => Promise.resolve([]) } };
 });
 
-const { RestockForm, buildPurchase, lineFactor, restockLineProblem, withUnit } = await import('./restock');
+const { RestockForm, RestockSaved, buildPurchase, lineFactor, restockLineProblem, withUnit } = await import('./restock');
+const { SizesKeptNote } = await import('./goods-receive');
 const { redraftOf } = await import('./restock-correct-state');
 const { ReceiveFormView } = await import('./goods-receive');
 const { blindLineFor, buildReceiptRequest, receiveFormFor, receiveLineProblem, stillToComeMilli, withReceiveUnit } = await import('./purchasing-state');
@@ -191,5 +192,69 @@ describe('goods received in a pack', () => {
     );
     expect(screen.getByLabelText('Use 30 from now on')).toBeTruthy();
     expect(screen.getByTestId('receive-size-note-0').textContent).toBe('Only this delivery counts as 30 in each carton.');
+  });
+});
+
+describe('a carton with its own price (issue #624)', () => {
+  /** Manages items but may not change prices: "use from now on" would not happen on a carton with its own price. */
+  const noPrices = { ...admin, permissions: (admin.permissions ?? []).filter((p) => p !== 'retail.price.edit') };
+  // The flag comes without the amount, as the server sends it to someone who may not see prices.
+  const priced: Product = { ...bulb, packs: [{ unit_id: CARTON, unit: 'carton', factor: '24.000', active: true, has_own_price: true }] };
+  const pricedLine = (over: Partial<Parameters<typeof withUnit>[0]> = {}) =>
+    ({ ...withUnit({ product: priced, cost: '', sell: '1000', qtyByBranch: { [branch]: '2' } }, CARTON), ...over });
+
+  it('on Buy stock shows why instead of the tick, to someone who may not change prices', () => {
+    screenOf(noPrices, <RestockForm initial={draft([pricedLine({ cost: '24000', packSize: '30' })])} />);
+    expect(screen.queryByLabelText(/from now on/)).toBeNull();
+    expect(screen.getByText('This pack has its own price. Ask someone who may change prices.')).toBeTruthy();
+    expect(screen.getByTestId('pack-size-note-0').textContent).toContain('Only this delivery counts as 30');
+  });
+
+  it('on Buy stock still offers the tick to someone who may change prices', () => {
+    screenOf(admin, <RestockForm initial={draft([pricedLine({ cost: '24000', packSize: '30' })])} />);
+    expect(screen.getByLabelText('Use 30 from now on')).toBeTruthy();
+    expect(screen.queryByText('This pack has its own price. Ask someone who may change prices.')).toBeNull();
+  });
+
+  it('on Goods received shows why instead of the tick, blind and against an order', () => {
+    const blind = { ...withReceiveUnit({ ...blindLineFor(priced, true, 'k'), qty: '2', cost: '18000' }, CARTON), packSize: '30' };
+    const form = { supplierId: 's1', branchId: branch, receivedOn: '2026-10-08', deliveryRef: '', note: '', lines: [blind] };
+    screenOf(noPrices, <ReceiveFormView form={form} blind suppliers={[]} branches={admin.branches ?? []} onChange={() => undefined} onSubmit={() => undefined} />);
+    expect(screen.queryByLabelText(/from now on/)).toBeNull();
+    expect(screen.getByText('This pack has its own price. Ask someone who may change prices.')).toBeTruthy();
+    cleanup();
+
+    const order: PurchaseOrder = {
+      id: 'o2', order_no: 'POHQ-000002', status: 'sent', supplier_id: 's1', supplier_name: 'Test Supplier 01',
+      lines: [{ id: 'ol2', line_no: 1, product_id: 'p1', code: 'T-BULB', description: 'Test bulb', unit_id: CARTON, unit: 'carton', base_unit: 'piece', unit_factor: '24.000', unit_qty: '2.000', qty: '48.000', unit_cost_minor: 18000, cost_minor: 750, line_total_minor: 36000, received_qty: '0.000', received_unit_qty: '0.000', received_minor: 0 }],
+    };
+    const onOrder = receiveFormFor(order, branch);
+    const marked = { ...onOrder, lines: onOrder.lines.map((l) => ({ ...l, packSize: '30', packHasOwnPrice: true })) };
+    screenOf(noPrices, <ReceiveFormView form={marked} blind={false} order={order} suppliers={[]} branches={admin.branches ?? []} onChange={() => undefined} onSubmit={() => undefined} />);
+    expect(screen.queryByLabelText(/from now on/)).toBeNull();
+    expect(screen.getByText('This pack has its own price. Ask someone who may change prices.')).toBeTruthy();
+    cleanup();
+
+    screenOf(admin, <ReceiveFormView form={marked} blind={false} order={order} suppliers={[]} branches={admin.branches ?? []} onChange={() => undefined} onSubmit={() => undefined} />);
+    expect(screen.getByLabelText('Use 30 from now on')).toBeTruthy();
+  });
+});
+
+describe('a delivery whose usual size was kept (issue #624)', () => {
+  const note = 'This pack has its own price, so only this delivery counts as 30 in each pack and its usual size stays. Ask someone who may change prices.';
+
+  it('is said on the Buy stock saved screen, on its line', () => {
+    const purchase: Purchase = {
+      id: 'pu1', purchase_no: 'PUHQ-000001', purchased_on: '2026-10-08', total_minor: 18000,
+      lines: [{ id: 'l1', product_id: 'p1', description: 'Test bulb', unit: 'carton', unit_qty_total: '1.000', unit_cost_minor: 18000, size_kept: true, size_kept_note: note }],
+    };
+    screenOf(admin, <RestockSaved purchase={purchase} context={{ supplierName: '', before: {} }} />);
+    expect(screen.getByText(`Test bulb: ${note}`)).toBeTruthy();
+  });
+
+  it('is said after goods received are saved, before the receipt opens', () => {
+    screenOf(admin, <SizesKeptNote kept={{ receiptId: 'r1', notes: [`Test bulb: ${note}`] }} />);
+    expect(screen.getByText(`Test bulb: ${note}`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open the goods received' })).toBeTruthy();
   });
 });

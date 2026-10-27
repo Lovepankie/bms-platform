@@ -2,7 +2,7 @@ import { RETAIL_CURRENCY, type Product, type ResolvedLine, type ResolveRequest, 
 import { parseMinor } from '../../../components/money';
 import { lineTotalMinor, milliOf, parseQty, qtyString, showQty } from './maths';
 import { hasNoPrice, isOverride, reasonOk } from './price-state';
-import { baseQtyMilli, chosenPack, lineCostMinor, packPriceMinor } from './units-state';
+import { baseQtyMilli, chosenPack, lineCostMinor, packWalkInPrice } from './units-state';
 
 // The sale form's pure logic: the running total, the early hints and the request it submits. The
 // hints (stock and price floor) only save a round trip: the server is the authority and refuses
@@ -23,10 +23,10 @@ export interface DraftLine {
   reason?: string;
 }
 
-/** The price the server defaults to for the line's unit: the sell price, times the factor for a pack. */
+/** The price the server defaults to for the line's unit: the sell price, or a pack's own price, else times the factor (#624). */
 export function defaultPrice(product: Product, unitId: string | undefined): number {
   const pack = chosenPack(product, unitId);
-  return pack ? packPriceMinor(product.sell_minor ?? 0, pack.factor) : (product.sell_minor ?? 0);
+  return pack ? packWalkInPrice(product.sell_minor ?? 0, pack) : (product.sell_minor ?? 0);
 }
 
 /** The line in another unit: the price goes back to that unit's default, as the form shows it. */

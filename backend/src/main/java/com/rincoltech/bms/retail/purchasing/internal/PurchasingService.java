@@ -39,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -231,7 +232,8 @@ class PurchasingService {
                     continue;
                 }
                 PackUnit pack = catalogue.packUnit(p.id(), l.unitId()).orElse(null);
-                if (pack == null || !pack.active()) {
+                // Issue #624: a pack only for selling (a half carton) is never bought.
+                if (pack == null || !pack.active() || !pack.buys()) {
                     problems.add(new FieldProblem(
                             field + ".unit_id", "unknown_pack_unit", "This item is not bought in that unit."));
                     continue;
@@ -369,13 +371,15 @@ class PurchasingService {
                 null,
                 by));
         List<Movement> movements = new ArrayList<>();
+        Map<UUID, String> sizesKept = new HashMap<>();
         for (int i = 0; i < lines.size(); i++) {
             NewLine line = lines.get(i);
             repo.insertLine(id, line);
             catalogue.applyPurchasePrices(line.productId(), line.costMinor(), line.sellMinor(), id);
-            if (fromNowOn.contains(line.id())) {
-                // Under the product lock taken above and before any balance row (ADR-079 lock order).
-                catalogue.useBuyingSize(line.productId(), line.unitId(), line.unitFactor(), PURCHASE, id);
+            // Under the product lock taken above and before any balance row (ADR-079 lock order).
+            if (fromNowOn.contains(line.id())
+                    && !catalogue.useBuyingSize(line.productId(), line.unitId(), line.unitFactor(), PURCHASE, id)) {
+                sizesKept.put(line.id(), PurchaseLines.sizeKeptNote(line.unitFactor()));
             }
             List<BranchQty> entered = r.lines().get(i).qtyByBranch();
             for (int j = 0; j < entered.size(); j++) {
@@ -424,7 +428,17 @@ class PurchasingService {
         after.put("payment_method", r.paymentMethod());
         after.put("lines", lines.size());
         audit.record(AuditLog.Entry.created("retail.purchase.created", PURCHASE, id, null, after));
-        return repo.find(id).orElseThrow();
+        Purchase made = repo.find(id).orElseThrow();
+        if (sizesKept.isEmpty()) {
+            return made;
+        }
+        // Issue #624: the line whose "use from now on" was left out says so, so nobody is told the opposite.
+        return made.withLinesAndTotal(
+                made.lines().stream()
+                        .map(l -> sizesKept.containsKey(l.id()) ? l.withSizeKept(sizesKept.get(l.id())) : l)
+                        .toList(),
+                made.totalMinor(),
+                Boolean.TRUE.equals(made.partial()));
     }
 
     /** D23, issue #554: the line asks for its size to become the pack's usual size. */

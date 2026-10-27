@@ -1,7 +1,7 @@
 import { RETAIL_CURRENCY, type NewPriceListItem, type Product } from '../../../api/retail';
 import { parseMinor } from '../../../components/money';
 import { parseCount, qtyString } from './maths';
-import { activePacks, factorMilli } from './units-state';
+import { factorMilli, sellingPacks } from './units-state';
 
 // The price list editor's pure rules (ADR-033, issue #195): what a new price needs before it is sent, the units an
 // item may be priced in, and the early warning when a price is not above cost. The server is the authority and
@@ -26,7 +26,7 @@ export const emptyItemForm = (today: string): ItemForm => ({ unitId: '', minQty:
 /** The units an item can be priced in: its base unit, then its active packs (the units capability). */
 export function unitChoices(product: Product): { id: string; label: string; base: boolean }[] {
   const base = { id: product.unit_id ?? '', label: product.unit ?? 'unit', base: true };
-  return [base, ...activePacks(product).map((k) => ({ id: k.unit_id ?? '', label: `${k.unit} (${k.factor} ${product.unit})`, base: false }))];
+  return [base, ...sellingPacks(product).map((k) => ({ id: k.unit_id ?? '', label: `${k.unit} (${k.factor} ${product.unit})`, base: false }))];
 }
 
 /** The form after choosing an item: its base unit is chosen first. */
@@ -66,7 +66,7 @@ export function belowCostHint(form: ItemForm): boolean | null {
   const price = parseMinor(form.price, RETAIL_CURRENCY);
   if (cost === undefined || price === null || !form.product) return null;
   if (form.unitId === form.product.unit_id) return price <= cost;
-  const pack = activePacks(form.product).find((k) => k.unit_id === form.unitId);
+  const pack = sellingPacks(form.product).find((k) => k.unit_id === form.unitId);
   const f = pack ? factorMilli(pack.factor) : null;
   if (f === null || f === undefined) return null;
   return price <= Number((BigInt(cost) * f + 500n) / 1000n);

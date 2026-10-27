@@ -29,7 +29,13 @@ class CatalogueLookup implements RetailCatalogue {
     @Transactional(readOnly = true)
     public Optional<PackUnit> packUnit(UUID productId, UUID unitId) {
         return repo.pack(productId, unitId)
-                .map(k -> new PackUnit(k.unitId(), k.unit(), new java.math.BigDecimal(k.factor()), k.active()));
+                .map(k -> new PackUnit(
+                        k.unitId(),
+                        k.unit(),
+                        new java.math.BigDecimal(k.factor()),
+                        k.active(),
+                        k.purpose(),
+                        k.sellMinor()));
     }
 
     @Override
@@ -46,9 +52,9 @@ class CatalogueLookup implements RetailCatalogue {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void useBuyingSize(
+    public boolean useBuyingSize(
             UUID productId, UUID unitId, java.math.BigDecimal factor, String sourceType, UUID sourceId) {
-        service.useBuyingSize(productId, unitId, factor, sourceType, sourceId);
+        return service.useBuyingSize(productId, unitId, factor, sourceType, sourceId);
     }
 
     @Override

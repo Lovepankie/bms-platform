@@ -460,7 +460,7 @@ class ProductImportService {
             if (p.packUnit() != null) {
                 packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
                 UUID packId = UUID.randomUUID();
-                repo.insertPack(packId, product.id(), packUnitId, p.packFactor(), by);
+                repo.insertPack(packId, product.id(), packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by);
                 audit.record(AuditLog.Entry.created(
                         "retail.product_unit.created",
                         "retail.product_unit",

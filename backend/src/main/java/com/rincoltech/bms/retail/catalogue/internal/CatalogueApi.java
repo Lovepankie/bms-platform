@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
@@ -1138,7 +1139,21 @@ final class CatalogueApi {
             @Schema(
                     type = "string",
                     description = "Base units in one pack, at least 1, up to three places, for example 12 or 12.5")
-            BigDecimal factor) {}
+            BigDecimal factor,
+
+            @Pattern(regexp = RetailCatalogue.PACK_PURPOSES)
+            @Schema(
+                    description =
+                            "What the pack is for: buy, sell or both (the default); a pack bought only has no selling"
+                                    + " price (issue #624)")
+            String purpose,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(
+                    description = "The selling price of one pack for a walk-in sale, in minor units; absent means the"
+                            + " piece price times the size. Needs retail.price.edit (issue #624)")
+            Long sellMinor) {}
 
     @Schema(
             name = "RetailPackUpdate",
@@ -1151,7 +1166,21 @@ final class CatalogueApi {
                     description = "Base units in one pack, at least 1; required to switch a pack on again")
             BigDecimal factor,
 
-            Boolean active) {}
+            Boolean active,
+
+            @Pattern(regexp = RetailCatalogue.PACK_PURPOSES)
+            @Schema(description = "buy, sell or both; a pack made buy only loses its selling price (issue #624)")
+            String purpose,
+
+            @PositiveOrZero
+            @Max(RetailCatalogue.MAX_AMOUNT_MINOR)
+            @Schema(description = "A new selling price of one pack; needs retail.price.edit (issue #624)")
+            Long sellMinor,
+
+            @Schema(
+                    description = "True to drop the pack's own price, so it sells at the piece price times the size"
+                            + " again; needs retail.price.edit (issue #624)")
+            Boolean clearSellMinor) {}
 
     @Schema(name = "RetailPack")
     record Pack(
@@ -1166,7 +1195,61 @@ final class CatalogueApi {
             boolean active,
 
             @Schema(description = "Send as If-Match when updating")
-            int version) {}
+            int version,
+
+            @Schema(description = "buy, sell or both (issue #624)")
+            String purpose,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The pack's own selling price for a walk-in sale; absent when it has none (it then sells"
+                                    + " at suggested_sell_minor) or the caller may not see prices (issue #624)")
+            Long sellMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The piece price times the size, rounded half up once: what the pack sells at without its"
+                                    + " own price, and the price the app suggests (issue #624)")
+            Long suggestedSellMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "For a selling pack and a caller holding retail.profit.read: true when its price is not"
+                                    + " above the size times the item's average cost per piece (ADR-079); absent otherwise")
+            Boolean belowCost,
+
+            @Schema(
+                    description =
+                            "True when the pack has its own selling price, sent to every caller (the amount only to"
+                                    + " one who may see prices): a new usual size or making it buy only then needs"
+                                    + " retail.price.edit (issue #624)")
+            boolean hasOwnPrice) {
+
+        /** True when the pack may be used on a sale, a scan at the till, a quotation or an order. */
+        boolean sells() {
+            return !RetailCatalogue.PACK_BUY.equals(purpose);
+        }
+
+        /** The pack as this caller may read it: prices only with {@code prices}, the cost flag only with {@code cost}. */
+        Pack forCaller(boolean prices, boolean cost) {
+            return new Pack(
+                    id,
+                    productId,
+                    unitId,
+                    unit,
+                    factor,
+                    active,
+                    version,
+                    purpose,
+                    prices ? sellMinor : null,
+                    prices ? suggestedSellMinor : null,
+                    prices && cost && sells() ? belowCost : null,
+                    hasOwnPrice);
+        }
+    }
 
     @Schema(name = "RetailPackList")
     record PackList(List<Pack> items) {}

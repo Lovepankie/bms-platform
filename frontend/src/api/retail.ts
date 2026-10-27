@@ -418,9 +418,10 @@ export interface RetailApi {
   photo(photoId: string, signal?: AbortSignal, small?: boolean): Promise<Blob>;
   /** The pack sizes of an item (the units capability, issue #194); 404 capability_not_enabled while it is off. */
   listPacks(productId: string): Promise<Pack[]>;
-  addPack(productId: string, body: { unit_id: string; factor: string }): Promise<Pack>;
+  /** Issue #624: `purpose` (buy, sell or both) and the pack's own selling price `sell_minor` are optional. */
+  addPack(productId: string, body: S['RetailPackRequest']): Promise<Pack>;
   /** Under If-Match with the pack's version: a new factor, or switch the pack off or on. */
-  updatePack(productId: string, unitId: string, version: number, body: { factor?: string; active?: boolean }): Promise<Pack>;
+  updatePack(productId: string, unitId: string, version: number, body: S['RetailPackUpdate']): Promise<Pack>;
   /** The CSV item import: a dry run reports, an apply adds the rows that are fine (administrators only). */
   /** Owner decision D45 (issue #562): makeCodes is Let the app make the codes, off by default. */
   importProducts(csv: string, dryRun: boolean, makeCodes?: boolean): Promise<ImportResult>;

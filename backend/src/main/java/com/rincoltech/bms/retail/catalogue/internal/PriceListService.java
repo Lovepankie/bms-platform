@@ -221,7 +221,8 @@ class PriceListService {
             if (!packOn
                     || !catalogue
                             .pack(product.id(), r.unitId())
-                            .map(CatalogueApi.Pack::active)
+                            // Issue #624: a pack only for buying is never sold, so a list does not price it.
+                            .map(k -> k.active() && k.sells())
                             .orElse(false)) {
                 throw ApiException.validation(List.of(
                         new FieldProblem("unit_id", "unknown_pack_unit", "This item is not sold in that unit.")));

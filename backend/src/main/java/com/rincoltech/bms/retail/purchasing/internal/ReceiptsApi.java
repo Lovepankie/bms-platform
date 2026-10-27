@@ -151,7 +151,40 @@ final class ReceiptsApi {
             @Schema(
                     description =
                             "What standing landed cost documents have allocated to the line (issue #199); needs retail.profit.read")
-            Long landedMinor) {}
+            Long landedMinor,
+
+            @Schema(
+                    description =
+                            "On the response that made the line only: true when use_from_now_on was left out because"
+                                    + " the pack has its own price and the caller may not change prices (issue #624)")
+            Boolean sizeKept,
+
+            @Schema(description = "Why the usual size was kept, in one plain sentence, with size_kept")
+            String sizeKeptNote) {
+
+        ReceiptLine withSizeKept(String note) {
+            return new ReceiptLine(
+                    id,
+                    lineNo,
+                    orderLineId,
+                    productId,
+                    code,
+                    description,
+                    qty,
+                    unitId,
+                    unit,
+                    unitFactor,
+                    unitQty,
+                    enteredCostMinor,
+                    costMinor,
+                    sellMinor,
+                    lineTotalMinor,
+                    billedQty,
+                    landedMinor,
+                    true,
+                    note);
+        }
+    }
 
     @Schema(name = "RetailGoodsReceipt")
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -182,7 +215,35 @@ final class ReceiptsApi {
             boolean heldForCosting,
 
             @Schema(description = "Send as If-Match where a route takes it")
-            int version) {}
+            int version) {
+
+        Receipt withLines(List<ReceiptLine> newLines) {
+            return new Receipt(
+                    id,
+                    receiptNo,
+                    branchId,
+                    supplierId,
+                    supplierName,
+                    orderId,
+                    orderNo,
+                    receivedOn,
+                    currency,
+                    totalMinor,
+                    deliveryRef,
+                    note,
+                    status,
+                    lineCount,
+                    newLines,
+                    createdAt,
+                    createdBy,
+                    voidedAt,
+                    voidedOn,
+                    voidedBy,
+                    voidReason,
+                    heldForCosting,
+                    version);
+        }
+    }
 
     @Schema(name = "RetailGoodsReceiptList")
     @JsonInclude(JsonInclude.Include.NON_NULL)

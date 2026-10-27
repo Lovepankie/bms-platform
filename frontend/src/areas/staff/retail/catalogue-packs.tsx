@@ -4,15 +4,29 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Pack, type Product, type Unit } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showQty } from './maths';
-import { Problem } from './ui';
+import { Money, Problem, money } from './ui';
 import { UNITS, capabilityOn, holds } from './permissions';
-import { factorMilli } from './units-state';
+import { factorMilli, hasOwnPrice, packPriceMinor } from './units-state';
 import { WORDS } from '../../../app/glossary';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { Hint } from '../../../app/ui/Hint';
+import { MoneyInput } from '../../../app/ui/MoneyInput';
+import { Segmented } from '../../../app/ui/Segmented';
+import { Sheet } from '../../../app/ui/Sheet';
 
-// Pack sizes of an item (ADR-033, issue #194): a unit and the number of base units in one pack, for
-// example a carton of twelve pieces. Offered only while /me lists the units capability and the user may
-// manage the catalogue. The sale and restock forms then offer the item in each active pack.
+// The packs of an item (ADR-033, issue #194): a unit and the number of base units in one pack, for example a carton of
+// twelve pieces. Issue #624 (ADR-099): each pack says what it is for, and a selling pack has its own selling price, which a
+// walk-in sale takes; the app suggests the piece price times the size. Edit item shows them in one small table (pack, size,
+// price), and Change opens the pack in a sheet. Offered only while /me lists the units capability and the user may manage
+// the catalogue; the price is set only by someone who may change prices (retail.price.edit).
+
+export type Purpose = 'both' | 'sell' | 'buy';
+
+export const PURPOSES = [
+  { value: 'both', label: 'Both' },
+  { value: 'sell', label: 'Selling' },
+  { value: 'buy', label: 'Buying' },
+] as const satisfies readonly { value: Purpose; label: string }[];
 
 /** True when the text is a factor the server accepts: at least 1, at most three places, no comma. */
 export function factorProblem(text: string): string | null {
@@ -21,40 +35,120 @@ export function factorProblem(text: string): string | null {
   return null;
 }
 
-function PackRow({ productId, pack }: { productId: string; pack: Pack }) {
+export function purposeOf(pack: Pack): Purpose {
+  return pack.purpose === 'buy' || pack.purpose === 'sell' ? pack.purpose : 'both';
+}
+
+/** The price a walk-in sale takes for the pack, and whether it is the pack's own or the suggested one; null when not sold. */
+export function shownPackPrice(product: Product, pack: Pack): { minor: number; own: boolean } | null {
+  if (purposeOf(pack) === 'buy') return null;
+  if (pack.sell_minor !== undefined) return { minor: pack.sell_minor, own: true };
+  return { minor: pack.suggested_sell_minor ?? packPriceMinor(product.sell_minor ?? 0, pack.factor), own: false };
+}
+
+/** "Suggested UGX 1,200: 12 at UGX 100 each." The piece price times the size, as the server suggests it. */
+export function suggestedHint(product: Product, factor: string): string | null {
+  if (product.sell_minor === undefined || factorProblem(factor) !== null) return null;
+  return `Suggested ${money(packPriceMinor(product.sell_minor, factor))}: ${showQty(factor)} at ${money(product.sell_minor)} each. Leave it empty to use it.`;
+}
+
+/**
+ * The warning while a price is typed (review of #624), only when the caller can see cost: the pack's price (the typed one, else
+ * the suggested one) is not above its size times the last price paid per piece. The saved pack's Below cost is judged on the
+ * server against the average cost per piece (ADR-079); a sale below cost is refused unless the seller may sell below cost.
+ */
+export function packBelowCostHint(product: Product, factor: string, priceMinor: number | null): string | null {
+  const cost = product.cost_minor;
+  if (cost === undefined || cost <= 0 || factorProblem(factor) !== null) return null;
+  const packCost = packPriceMinor(cost, factor);
+  const price = priceMinor ?? packPriceMinor(product.sell_minor ?? 0, factor);
+  if (price > packCost) return null;
+  return `This price is not above what ${showQty(factor)} ${product.unit ?? ''} cost at the last price paid, ${money(packCost)}. A sale at it is refused unless the seller may sell below cost.`;
+}
+
+/**
+ * The request that saves a pack's sheet: only what changed. An emptied price drops the pack's own price, so it sells at the
+ * suggested one again; a pack made for buying only loses its price on the server, so none is sent.
+ */
+export function packChange(pack: Pack, form: { factor: string; purpose: Purpose; priceMinor: number | null }, mayPrice: boolean) {
+  const body: { factor?: string; purpose?: Purpose; sell_minor?: number; clear_sell_minor?: boolean } = {};
+  if (form.factor.trim() !== showQty(pack.factor ?? '')) body.factor = form.factor.trim();
+  if (form.purpose !== purposeOf(pack)) body.purpose = form.purpose;
+  if (mayPrice && form.purpose !== 'buy') {
+    if (form.priceMinor === null && pack.sell_minor !== undefined) body.clear_sell_minor = true;
+    else if (form.priceMinor !== null && form.priceMinor !== pack.sell_minor) body.sell_minor = form.priceMinor;
+  }
+  return body;
+}
+
+function PackSheet({ product, pack, mayPrice, onClose }: { product: Product; pack: Pack; mayPrice: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [factor, setFactor] = useState(showQty(pack.factor ?? ''));
+  const [purpose, setPurpose] = useState<Purpose>(purposeOf(pack));
+  const [priceMinor, setPriceMinor] = useState<number | null>(pack.sell_minor ?? null);
   const change = useMutation({
-    mutationFn: (body: { factor?: string; active?: boolean }) => retail.updatePack(productId, pack.unit_id ?? '', pack.version ?? 1, body),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
+    mutationFn: (body: Parameters<typeof retail.updatePack>[3]) => retail.updatePack(product.id ?? '', pack.unit_id ?? '', pack.version ?? 1, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['retail'] });
+      onClose();
+    },
   });
   const problem = factorProblem(factor);
+  const body = packChange(pack, { factor, purpose, priceMinor }, mayPrice);
+  // Review of #624: a pack with its own price keeps its size and stays sold for someone who may not change prices. The flag
+  // comes to every caller, the amount only to one who may see prices.
+  const locked = hasOwnPrice(pack) && !mayPrice;
+  const low = purpose === 'buy' ? null : packBelowCostHint(product, factor, mayPrice ? priceMinor : (pack.sell_minor ?? null));
+  const id = pack.unit_id ?? '';
   return (
-    <li className="rt-card">
-      <p>
-        <strong>{pack.unit}</strong> {pack.active === false && <span className="badge badge-warning">Switched off</span>}
-      </p>
-      <label htmlFor={`pack-factor-${pack.unit_id}`}>Items in one {pack.unit}</label>
+    <Sheet
+      open
+      onClose={onClose}
+      title={`${pack.unit} of ${product.description}`}
+      actions={
+        <>
+          <BusyButton busy={change.isPending && change.variables?.active === undefined} type="button" className="rt-primary" disabled={problem !== null || change.isPending || Object.keys(body).length === 0} onClick={() => change.mutate(body)}>
+            Save
+          </BusyButton>
+          {/* Switching on again confirms the number: the item's unit may have changed while the pack was off. */}
+          <BusyButton busy={change.isPending && change.variables?.active !== undefined} type="button" aria-label={`${pack.active === false ? 'Switch on' : 'Switch off'} the ${pack.unit} pack`} disabled={change.isPending || (pack.active === false && problem !== null)} onClick={() => change.mutate(pack.active === false ? { active: true, factor: factor.trim() } : { active: false })}>
+            {pack.active === false ? 'Switch on' : 'Switch off'}
+          </BusyButton>
+        </>
+      }
+    >
+      <label htmlFor={`pack-factor-${id}`}>{`${product.unit ?? 'Items'} in one ${pack.unit}`}</label>
       <input
-        id={`pack-factor-${pack.unit_id}`}
+        id={`pack-factor-${id}`}
         inputMode="decimal"
         value={factor}
         onChange={(e) => setFactor(e.target.value)}
+        readOnly={locked}
         aria-invalid={problem !== null}
-        aria-describedby={problem !== null ? `pack-factor-problem-${pack.unit_id}` : undefined}
+        aria-describedby={problem !== null ? `pack-factor-problem-${id}` : undefined}
       />
-      {problem !== null && <p id={`pack-factor-problem-${pack.unit_id}`} className="rt-flag">{problem}</p>}
-      <p className="cluster">
-        <BusyButton busy={change.isPending && change.variables?.active === undefined} type="button" className="btn-sm" aria-label={`Save the number for ${pack.unit}`} disabled={problem !== null || change.isPending || factor.trim() === showQty(pack.factor ?? '')} onClick={() => change.mutate({ factor: factor.trim() })}>
-          Save the number
-        </BusyButton>
-        {/* Switching on again confirms the number: the item's unit may have changed while the pack was off. */}
-        <BusyButton busy={change.isPending && change.variables?.active !== undefined} type="button" className="btn-sm" aria-label={`${pack.active === false ? 'Switch on' : 'Switch off'} the ${pack.unit} pack`} disabled={change.isPending || (pack.active === false && problem !== null)} onClick={() => change.mutate(pack.active === false ? { active: true, factor: factor.trim() } : { active: false })}>
-          {pack.active === false ? 'Switch on' : 'Switch off'}
-        </BusyButton>
-      </p>
+      {problem !== null && <p id={`pack-factor-problem-${id}`} className="rt-flag">{problem}</p>}
+      <p className="field-label">Used for</p>
+      <Segmented label="Used for" options={locked ? PURPOSES.filter((o) => o.value !== 'buy') : PURPOSES} value={purpose} onChange={setPurpose} />
+      {purpose === 'buy' ? (
+        <Hint>A pack only for buying is not offered when selling, so it has no selling price.</Hint>
+      ) : mayPrice ? (
+        <MoneyInput id={`pack-price-${id}`} label={`Selling price of one ${pack.unit}`} valueMinor={priceMinor} onChange={setPriceMinor} hint={suggestedHint(product, factor) ?? undefined} />
+      ) : (
+        <Hint full>
+          {locked
+            ? 'This pack has its own price. Ask someone who may change prices to change its size or make it only for buying.'
+            : 'Only someone who may change prices sets a pack\'s selling price.'}
+        </Hint>
+      )}
+      {low !== null && <p className="rt-flag">{low}</p>}
+      {pack.below_cost === true && purpose !== 'buy' && (
+        <p role="note" className="alert alert-warning">
+          {`This price is not above what ${showQty(pack.factor ?? '')} ${product.unit ?? ''} cost you on average. A sale at it needs permission to sell below cost.`}
+        </p>
+      )}
       <Problem error={change.error} />
-    </li>
+    </Sheet>
   );
 }
 
@@ -62,36 +156,98 @@ export function PackEditor({ product }: { product: Product }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const allowed = capabilityOn(me, 'retail', UNITS) && holds(me, 'retail.catalogue.manage');
+  const mayPrice = holds(me, 'retail.price.edit');
   const id = product.id ?? '';
   const packs = useQuery({ queryKey: ['retail', 'packs', id], queryFn: () => retail.listPacks(id), enabled: allowed });
   const units = useQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits(), enabled: allowed });
   const [unitId, setUnitId] = useState('');
   const [factor, setFactor] = useState('');
+  const [purpose, setPurpose] = useState<Purpose>('both');
+  const [priceMinor, setPriceMinor] = useState<number | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const add = useMutation({
-    mutationFn: () => retail.addPack(id, { unit_id: unitId, factor: factor.trim() }),
+    mutationFn: () =>
+      retail.addPack(id, {
+        unit_id: unitId,
+        factor: factor.trim(),
+        purpose,
+        ...(mayPrice && purpose !== 'buy' && priceMinor !== null ? { sell_minor: priceMinor } : {}),
+      }),
     onSuccess: () => {
       setUnitId('');
       setFactor('');
+      setPurpose('both');
+      setPriceMinor(null);
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
   if (!allowed) return null;
-  const used = new Set((packs.data ?? []).map((k) => k.unit_id));
+  const rows = packs.data ?? [];
+  const used = new Set(rows.map((k) => k.unit_id));
   // The item's own unit and the units that are packs already are not offered; a switched-off unit cannot be chosen.
   const choices = (units.data ?? []).filter((u) => u.active !== false && u.id !== product.unit_id && !used.has(u.id));
   const problem = factorProblem(factor);
+  const open = rows.find((k) => k.unit_id === editing);
+  const low = purpose === 'buy' ? null : packBelowCostHint(product, factor, mayPrice ? priceMinor : null);
   return (
     <fieldset data-testid="pack-editor" onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}>
       <legend>{WORDS.packs}</legend>
-      <p className="hint">
-        Sell or buy this item by the pack, for example a carton of 12 {product.unit}. Stock is always counted in {product.unit}.
-      </p>
+      <Hint>Sell or buy this item by the pack, each with its own price. Stock is always counted in {product.unit}.</Hint>
       {packs.isPending && <p className="loading">Loading</p>}
       <Problem error={packs.error} />
-      {packs.data && packs.data.length === 0 && <p className="empty-state">No cartons, boxes or other packs yet.</p>}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {(packs.data ?? []).map((k) => <PackRow key={`${k.unit_id}-${k.version}`} productId={id} pack={k} />)}
-      </ul>
+      {packs.data && rows.length === 0 && <p className="empty-state">No cartons, boxes or other packs yet.</p>}
+      {rows.length > 0 && (
+        <div className="table-wrap" tabIndex={0}>
+          <table data-testid="pack-table">
+            <caption className="visually-hidden">{`The packs of ${product.description}: size and selling price`}</caption>
+            <thead>
+              <tr>
+                <th scope="col">Pack</th>
+                <th scope="col" className="num">Size</th>
+                <th scope="col" className="num">Selling price</th>
+                <th scope="col"><span className="visually-hidden">Change</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">{product.unit}</th>
+                <td className="num">1</td>
+                <td className="num">{product.sell_minor === undefined ? '' : <Money minor={product.sell_minor} />}</td>
+                <td />
+              </tr>
+              {rows.map((k) => {
+                const price = shownPackPrice(product, k);
+                return (
+                  <tr key={`${k.unit_id}-${k.version}`}>
+                    <th scope="row">
+                      {k.unit}
+                      {k.active === false && <> <span className="badge badge-warning">Switched off</span></>}
+                      {purposeOf(k) === 'buy' && <> <span className="badge">Buying only</span></>}
+                      {purposeOf(k) === 'sell' && <> <span className="badge">Selling only</span></>}
+                    </th>
+                    <td className="num">{`${showQty(k.factor ?? '')} ${product.unit ?? ''}`}</td>
+                    <td className="num">
+                      {price === null ? 'Not sold' : (
+                        <>
+                          <Money minor={price.minor} />
+                          {!price.own && <span className="hint"> suggested</span>}
+                          {k.below_cost === true && <> <span className="badge badge-warning">Below cost</span></>}
+                        </>
+                      )}
+                    </td>
+                    <td>
+                      <button type="button" className="btn-sm" aria-label={`Change the ${k.unit} pack`} onClick={() => setEditing(k.unit_id ?? null)}>
+                        Change
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {open && <PackSheet key={`${open.unit_id}-${open.version}`} product={product} pack={open} mayPrice={mayPrice} onClose={() => setEditing(null)} />}
       {showsEmptyChoice(units, units.data && choices) ? (
         <EmptyChoice id="pack-unit" label="Add a pack" load={units} text="No other unit to make a pack of yet." add={{
           label: 'Add a new unit', name: 'Name of the new unit, such as carton', send: 'Add unit', maxLength: 50,
@@ -122,6 +278,13 @@ export function PackEditor({ product }: { product: Product }) {
         placeholder="12"
       />
       {factor.trim() !== '' && problem !== null && <p id="pack-factor-problem" className="rt-flag">{problem}</p>}
+      <p className="field-label">Used for</p>
+      <Segmented label="Used for" options={PURPOSES} value={purpose} onChange={setPurpose} />
+      {mayPrice && purpose !== 'buy' && (
+        <MoneyInput id="pack-price" label="Selling price of one pack" valueMinor={priceMinor} onChange={setPriceMinor} hint={suggestedHint(product, factor) ?? 'Leave it empty to sell at the piece price times the size.'} />
+      )}
+      {!mayPrice && purpose !== 'buy' && <Hint>Only someone who may change prices sets a pack&apos;s price; until then it sells at the piece price times the size.</Hint>}
+      {low !== null && <p className="rt-flag">{low}</p>}
       <Problem error={add.error} />
       <BusyButton busy={add.isPending} type="button" disabled={unitId === '' || problem !== null} onClick={() => add.mutate()}>
         Add pack

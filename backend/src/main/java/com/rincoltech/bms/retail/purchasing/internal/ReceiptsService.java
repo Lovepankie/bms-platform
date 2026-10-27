@@ -309,11 +309,13 @@ class ReceiptsService {
                     "Permission denied",
                     "Setting the selling price needs the permission to change prices. Leave the selling price empty.");
         }
+        Map<UUID, String> sizesKept = new HashMap<>();
         for (NewLine l : newLines) {
             catalogue.applyPurchasePrices(l.productId(), l.costMinor(), l.sellMinor(), id);
-            if (fromNowOn.contains(l.id())) {
-                // D23, issue #554: under the product lock taken above, before any balance row (ADR-079 lock order).
-                catalogue.useBuyingSize(l.productId(), l.unitId(), l.unitFactor(), RECEIPT, id);
+            // D23, issue #554: under the product lock taken above, before any balance row (ADR-079 lock order).
+            if (fromNowOn.contains(l.id())
+                    && !catalogue.useBuyingSize(l.productId(), l.unitId(), l.unitFactor(), RECEIPT, id)) {
+                sizesKept.put(l.id(), PurchaseLines.sizeKeptNote(l.unitFactor()));
             }
         }
         stock.record(on, movements);
@@ -364,7 +366,14 @@ class ReceiptsService {
             after.put("held_for_costing", true);
         }
         audit.record(AuditLog.Entry.created("retail.goods_receipt.created", RECEIPT, id, branch, after));
-        return view(repo.find(id, false).orElseThrow(), true);
+        Receipt made = view(repo.find(id, false).orElseThrow(), true);
+        if (sizesKept.isEmpty() || made.lines() == null) {
+            return made;
+        }
+        // Issue #624: the line whose "use from now on" was left out says so, so nobody is told the opposite.
+        return made.withLines(made.lines().stream()
+                .map(l -> sizesKept.containsKey(l.id()) ? l.withSizeKept(sizesKept.get(l.id())) : l)
+                .toList());
     }
 
     /** D23, issue #554: the line asks for its size to become the pack's usual size. */
@@ -724,6 +733,8 @@ class ReceiptsService {
                 l.sellMinor(),
                 l.lineTotalMinor(),
                 billed ? Quantities.format(l.billedQty()) : null,
-                costs ? l.landedMinor() : null);
+                costs ? l.landedMinor() : null,
+                null,
+                null);
     }
 }

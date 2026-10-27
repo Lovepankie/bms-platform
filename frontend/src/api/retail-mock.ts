@@ -780,7 +780,8 @@ export function createMockRetail(): RetailApi {
         if (unit?.name === p.unit) refuse(422, 'pack_unit_is_base_unit', 'A pack must be a different unit from the one the item is counted in.');
         const rows = packs.get(p.id) ?? [];
         if (rows.some((k) => k.unit_id === body.unit_id)) refuse(409, 'duplicate_pack', 'The item has a pack of this unit already.');
-        const pack: Pack = { id: nextId('k'), product_id: p.id, unit_id: body.unit_id, unit: unit?.name ?? '', factor: body.factor, active: true, version: 1 };
+        const sell = body.purpose === 'buy' ? undefined : body.sell_minor;
+        const pack: Pack = { id: nextId('k'), product_id: p.id, unit_id: body.unit_id, unit: unit?.name ?? '', factor: body.factor, active: true, version: 1, purpose: body.purpose ?? 'both', ...(sell === undefined ? {} : { sell_minor: sell }), suggested_sell_minor: Math.round(p.sellMinor * Number(body.factor)) };
         packs.set(p.id, [...rows, pack]);
         return pack;
       }),
@@ -791,7 +792,12 @@ export function createMockRetail(): RetailApi {
         const pack = rows.find((k) => k.unit_id === unitId);
         if (!pack) refuse(404, 'not_found', 'No such pack.');
         if (pack && pack.version !== version) refuse(409, 'version_conflict', 'The pack changed since it was read.');
-        const next: Pack = { ...(pack as Pack), ...(body.factor === undefined ? {} : { factor: body.factor }), ...(body.active === undefined ? {} : { active: body.active }), version: (pack?.version ?? 0) + 1 };
+        const was = pack as Pack;
+        const purpose = body.purpose ?? was.purpose ?? 'both';
+        // Issue #624: a pack made buy only, or whose own price is dropped, sells at the piece price times the size again.
+        const sell = purpose === 'buy' || body.clear_sell_minor ? undefined : (body.sell_minor ?? was.sell_minor);
+        const { sell_minor: _dropped, ...rest } = was;
+        const next: Pack = { ...rest, ...(body.factor === undefined ? {} : { factor: body.factor }), ...(body.active === undefined ? {} : { active: body.active }), purpose, ...(sell === undefined ? {} : { sell_minor: sell }), version: (pack?.version ?? 0) + 1 };
         packs.set(productId, rows.map((k) => (k.unit_id === unitId ? next : k)));
         return next;
       }),

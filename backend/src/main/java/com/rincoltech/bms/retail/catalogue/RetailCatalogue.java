@@ -19,6 +19,14 @@ public interface RetailCatalogue {
      */
     long MAX_AMOUNT_MINOR = 10_000_000_000_000L;
 
+    /** Issue #624 (ADR-099): what a pack is for, as stored in retail_product_units.purpose and sent by the API. */
+    String PACK_BUY = "buy";
+
+    String PACK_SELL = "sell";
+    String PACK_BOTH = "both";
+    /** The three purposes, for request validation. */
+    String PACK_PURPOSES = PACK_BUY + "|" + PACK_SELL + "|" + PACK_BOTH;
+
     /** The key of the units-of-measure capability in the tenant's retail.capabilities settings group (ADR-033). */
     String UNITS_CAPABILITY = "units";
 
@@ -105,9 +113,12 @@ public interface RetailCatalogue {
      * product's pack in {@code unitId}, in the caller's transaction, with an audit row naming the delivery. The caller
      * holds the product's row lock (ADR-079: product rows before balance rows), which a pack edit also takes, so the two
      * never interleave. Lines already made keep the size they used. Nothing is written when the size is already the usual
-     * one.
+     * one, nor (issue #624) when the pack has its own selling price and the caller may not change prices: the delivery
+     * keeps its own size and the pack's usual size stays, with a {@code retail.product_unit.size_kept} audit row.
+     *
+     * @return false when the usual size was left as it was because the pack has its own price (issue #624)
      */
-    void useBuyingSize(UUID productId, UUID unitId, BigDecimal factor, String sourceType, UUID sourceId);
+    boolean useBuyingSize(UUID productId, UUID unitId, BigDecimal factor, String sourceType, UUID sourceId);
 
     /**
      * The one normal form of a product code, for the API and the importer alike (review F9):
@@ -153,8 +164,22 @@ public interface RetailCatalogue {
                                         || Character.isWhitespace(c)));
     }
 
-    /** A pack size: {@code factor} base units in one pack of {@code unit}. */
-    record PackUnit(UUID unitId, String unit, BigDecimal factor, boolean active) {}
+    /**
+     * A pack size: {@code factor} base units in one pack of {@code unit}. Issue #624: {@code purpose} says whether it is
+     * bought, sold or both, and {@code sellMinor} is its own selling price per pack, null for the piece price times the size.
+     */
+    record PackUnit(UUID unitId, String unit, BigDecimal factor, boolean active, String purpose, Long sellMinor) {
+
+        /** True when the pack may be used on a sale line (a walk-in sale, a scan, a quotation or an order). */
+        public boolean sells() {
+            return !PACK_BUY.equals(purpose);
+        }
+
+        /** True when the pack may be used on Buy stock, a purchase order or goods received. */
+        public boolean buys() {
+            return !PACK_SELL.equals(purpose);
+        }
+    }
 
     record ProductSnapshot(
             UUID id,

@@ -517,6 +517,155 @@ class RetailPackSizePerDeliveryIT extends LandedCostTestBase {
         assertBooksBalance();
     }
 
+    // ---- issue #624: a carton with its own price, and a carton made for selling only
+    // ----------------------------------
+
+    /** Buys and receives, but may not change prices. */
+    static final String BUYER_NO_PRICE = BUYER.replace("retail.price.edit,", "");
+
+    void ownPrice(long sell) {
+        String version = null;
+        for (JsonNode k :
+                api.get("/products/" + bulb + "/units", ADMIN).getBody().get("items")) {
+            if (k.get("unit_id").asString().equals(carton.toString())) {
+                version = k.get("version").asString();
+            }
+        }
+        ResponseEntity<JsonNode> r = api.call(
+                org.springframework.http.HttpMethod.PATCH,
+                "/products/" + bulb + "/units/" + carton,
+                Map.of("sell_minor", sell),
+                ADMIN,
+                "*",
+                Map.of("If-Match", version));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
+    long sizesKept() {
+        return scalar(
+                "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.product_unit.size_kept'",
+                t.tenantId());
+    }
+
+    ResponseEntity<JsonNode> received(UUID order, Map<String, Object> line, String perms) {
+        Map<String, Object> b = new LinkedHashMap<>();
+        if (order != null) {
+            b.put("order_id", order);
+        } else {
+            b.put("supplier_id", supplier);
+        }
+        b.put("branch_id", hq);
+        b.put("lines", List.of(line));
+        return keyed("/goods-receipts", b, perms);
+    }
+
+    /** A sent order of {@code qty} cartons; its line id. */
+    UUID[] sentOrder(String qty) {
+        Map<String, Object> ordered = new LinkedHashMap<>();
+        ordered.put("product_id", bulb);
+        ordered.put("unit_id", carton);
+        ordered.put("qty", qty);
+        ordered.put("cost_minor", 18_000);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("supplier_id", supplier);
+        body.put("branch_id", hq);
+        body.put("lines", List.of(ordered));
+        ResponseEntity<JsonNode> draft = keyed("/purchase-orders", body, BUYER);
+        assertThat(draft.getStatusCode()).as("%s", draft.getBody()).isEqualTo(HttpStatus.CREATED);
+        UUID order = uuid(draft.getBody(), "id");
+        ResponseEntity<JsonNode> sent = keyed("/purchase-orders/" + order + "/send", Map.of(), BUYER);
+        assertThat(sent.getStatusCode()).as("%s", sent.getBody()).isEqualTo(HttpStatus.OK);
+        return new UUID[] {order, uuid(sent.getBody().get("order").get("lines").get(0), "id")};
+    }
+
+    /**
+     * Review of #624: on goods received, blind and against an order, "use from now on" on a carton with its own price is left
+     * out for someone who may not change prices: the delivery saves at its own size, the line says why, and the skip is
+     * audited; someone who may change prices makes it the usual size and the carton keeps its price.
+     */
+    @Test
+    void goodsReceivedKeepTheUsualSizeOfAPricedCartonWithoutThePermissionToChangePrices() {
+        ownPrice(30_000);
+        Map<String, Object> blind = receiptLine(null, "1", 18_000, "30");
+        blind.put("use_from_now_on", true);
+        ResponseEntity<JsonNode> kept = received(null, blind, BUYER_NO_PRICE);
+        assertThat(kept.getStatusCode()).as("%s", kept.getBody()).isEqualTo(HttpStatus.CREATED);
+        JsonNode line = kept.getBody().get("lines").get(0);
+        assertThat(line.get("size_kept").asBoolean()).isTrue();
+        assertThat(line.get("size_kept_note").asString())
+                .contains("This pack has its own price")
+                .contains("Ask someone who may change prices.");
+        assertThat(line.get("unit_factor").asString()).isEqualTo("30.000");
+        assertThat(usual()).isEqualTo("24.000");
+        assertThat(sizesKept()).isEqualTo(1);
+
+        UUID[] order = sentOrder("2");
+        Map<String, Object> against = receiptLine(order[1], "1", 18_000, "30");
+        against.put("use_from_now_on", true);
+        ResponseEntity<JsonNode> keptOnOrder = received(order[0], against, BUYER_NO_PRICE);
+        assertThat(keptOnOrder.getStatusCode()).as("%s", keptOnOrder.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(keptOnOrder.getBody().get("lines").get(0).get("size_kept").asBoolean())
+                .isTrue();
+        assertThat(usual()).isEqualTo("24.000");
+        assertThat(sizesKept()).isEqualTo(2);
+
+        Map<String, Object> allowed = receiptLine(order[1], "1", 18_000, "30");
+        allowed.put("use_from_now_on", true);
+        ResponseEntity<JsonNode> resized = received(order[0], allowed, BUYER);
+        assertThat(resized.getStatusCode()).as("%s", resized.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(resized.getBody().get("lines").get(0).has("size_kept")).isFalse();
+        assertThat(usual()).isEqualTo("30.000");
+        JsonNode pack = api.get("/products/" + bulb + "/units", ADMIN)
+                .getBody()
+                .get("items")
+                .get(0);
+        assertThat(pack.get("sell_minor").asLong()).isEqualTo(30_000);
+        assertThat(pack.get("has_own_price").asBoolean()).isTrue();
+
+        // A blind receipt by someone who may change prices does the same.
+        Map<String, Object> blindAllowed = receiptLine(null, "1", 18_000, "36");
+        blindAllowed.put("use_from_now_on", true);
+        assertThat(received(null, blindAllowed, BUYER).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(usual()).isEqualTo("36.000");
+        assertThat(sizesKept()).isEqualTo(2);
+    }
+
+    /**
+     * Review of #624 (ADR-099 decision 1): an order line made in a carton is received in it even after the carton is made
+     * for selling only, so the order completes; a new blind receipt in that carton is refused.
+     */
+    @Test
+    void anOrderMadeBeforeTheCartonWasMadeSellingOnlyIsStillReceived() {
+        UUID[] order = sentOrder("2");
+        String version = api.get("/products/" + bulb + "/units", ADMIN)
+                .getBody()
+                .get("items")
+                .get(0)
+                .get("version")
+                .asString();
+        assertThat(api.call(
+                                org.springframework.http.HttpMethod.PATCH,
+                                "/products/" + bulb + "/units/" + carton,
+                                Map.of("purpose", "sell"),
+                                ADMIN,
+                                "*",
+                                Map.of("If-Match", version))
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<JsonNode> onOrder = received(order[0], receiptLine(order[1], "2", 18_000, null), BUYER);
+        assertThat(onOrder.getStatusCode()).as("%s", onOrder.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(api.get("/purchase-orders/" + order[0], PAYER)
+                        .getBody()
+                        .get("status")
+                        .asString())
+                .isEqualTo("received");
+
+        ResponseEntity<JsonNode> blind = received(null, receiptLine(null, "1", 18_000, null), BUYER);
+        assertThat(blind.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(blind.getBody().toString()).contains("unknown_pack_unit");
+    }
+
     static String trim(String factor) {
         return new java.math.BigDecimal(factor).stripTrailingZeros().toPlainString();
     }

@@ -553,9 +553,22 @@ class CatalogueRepository {
 
     // ---- Pack sizes (ADR-033, issue #194) ------------------------------------------------------
 
+    /*
+     * Issue #624: the suggested price is the piece price times the size, rounded half up once (Quantities.packPrice). A
+     * selling pack is below cost when its price (its own, else the suggested one) is not above the size times the item's
+     * average cost per piece: the branches' averages weighted by what each holds (ADR-079 decision 1), or the last paid
+     * cost while no branch holds any. The service drops both for a caller who may not read them.
+     */
     private static final String SELECT_PACK = """
-            SELECT k.id, k.product_id, k.unit_id, u.name AS unit, k.factor, k.active, k.version
+            SELECT k.id, k.product_id, k.unit_id, u.name AS unit, k.factor, k.active, k.version, k.purpose, k.sell_minor,
+                   round(k.factor * p.sell_minor)::bigint AS suggested_sell_minor,
+                   coalesce(k.sell_minor, round(k.factor * p.sell_minor)) <= round(k.factor * coalesce(
+                       (SELECT sum(b.qty * coalesce(b.avg_cost_minor, p.cost_minor)) / sum(b.qty)
+                          FROM retail_stock_balances b
+                         WHERE b.tenant_id = k.tenant_id AND b.product_id = k.product_id AND b.qty > 0),
+                       p.cost_minor)) AS below_cost
               FROM retail_product_units k JOIN retail_units u ON u.id = k.unit_id
+              JOIN retail_products p ON p.id = k.product_id
             """;
 
     private static Pack pack(ResultSet rs, int n) throws SQLException {
@@ -566,7 +579,12 @@ class CatalogueRepository {
                 rs.getString("unit"),
                 rs.getBigDecimal("factor").setScale(3).toPlainString(),
                 rs.getBoolean("active"),
-                rs.getInt("version"));
+                rs.getInt("version"),
+                rs.getString("purpose"),
+                rs.getObject("sell_minor", Long.class),
+                rs.getObject("suggested_sell_minor", Long.class),
+                rs.getObject("below_cost", Boolean.class),
+                rs.getObject("sell_minor") != null);
     }
 
     List<Pack> packs(UUID productId) {
@@ -615,11 +633,21 @@ class CatalogueRepository {
                 .single();
     }
 
-    void insertPack(UUID id, UUID productId, UUID unitId, java.math.BigDecimal factor, UUID by) {
+    void insertPack(
+            UUID id,
+            UUID productId,
+            UUID unitId,
+            java.math.BigDecimal factor,
+            String purpose,
+            Long sellMinor,
+            UUID by) {
         jdbc.sql("""
-                        INSERT INTO retail_product_units (id, tenant_id, product_id, unit_id, factor, created_by)
-                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
-                        """).params(id, productId, unitId, factor, by).update();
+                        INSERT INTO retail_product_units
+                            (id, tenant_id, product_id, unit_id, factor, purpose, sell_minor, created_by)
+                        VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?, ?, ?)
+                        """)
+                .params(id, productId, unitId, factor, purpose, sellMinor, by)
+                .update();
     }
 
     /** Rows changed: 0 when the version moved since it was read. */
@@ -627,6 +655,18 @@ class CatalogueRepository {
         return jdbc.sql(
                         "UPDATE retail_product_units SET factor = ?, active = ?, updated_at = now(), version = version + 1 WHERE id = ? AND version = ?")
                 .params(factor, active, id, expectedVersion)
+                .update();
+    }
+
+    /** Issue #624: the whole pack at once, with its purpose and own selling price; 0 when the version moved. */
+    int updatePack(
+            UUID id, java.math.BigDecimal factor, boolean active, String purpose, Long sellMinor, int expectedVersion) {
+        return jdbc.sql("""
+                        UPDATE retail_product_units SET factor = ?, active = ?, purpose = ?, sell_minor = ?,
+                               updated_at = now(), version = version + 1
+                         WHERE id = ? AND version = ?
+                        """)
+                .params(factor, active, purpose, sellMinor, id, expectedVersion)
                 .update();
     }
 
@@ -896,15 +936,21 @@ class CatalogueRepository {
                 .orElse(null);
     }
 
-    /** The active pack sizes of a product copied to another (a new size of the same item); rows copied. */
-    int copyPacks(UUID fromProductId, UUID toProductId, UUID by) {
+    /**
+     * The active pack sizes of a product copied to another (a new size of the same item), with their purpose, and their own
+     * selling prices only when {@code withPrices}; rows copied.
+     */
+    int copyPacks(UUID fromProductId, UUID toProductId, boolean withPrices, UUID by) {
         return jdbc.sql("""
-                        INSERT INTO retail_product_units (id, tenant_id, product_id, unit_id, factor, created_by)
-                        SELECT gen_random_uuid(), tenant_id, :to, unit_id, factor, :by
+                        INSERT INTO retail_product_units
+                            (id, tenant_id, product_id, unit_id, factor, purpose, sell_minor, created_by)
+                        SELECT gen_random_uuid(), tenant_id, :to, unit_id, factor, purpose,
+                               CASE WHEN :prices THEN sell_minor END, :by
                           FROM retail_product_units WHERE product_id = :from AND active
                         """)
                 .param("from", fromProductId)
                 .param("to", toProductId)
+                .param("prices", withPrices)
                 .param("by", by)
                 .update();
     }

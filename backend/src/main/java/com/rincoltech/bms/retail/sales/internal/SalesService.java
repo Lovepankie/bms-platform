@@ -681,7 +681,7 @@ class SalesService {
                 continue;
             }
             PackUnit pack = unit.pack();
-            long defaultPrice = pack == null ? p.sellMinor() : Quantities.packPrice(p.sellMinor(), pack.factor());
+            long defaultPrice = walkInPrice(p, pack);
             long price = l.unitPriceMinor() == null ? defaultPrice : l.unitPriceMinor();
             // ADR-067 decision 11: offline, the price rules of an online sale. A device price stands when it is the
             // catalogue or pack price in force when the phone saved its prices (or today's), or when the seller may
@@ -842,6 +842,18 @@ class SalesService {
     }
 
     /**
+     * The price of the line's unit for a walk-in sale (issue #624, ADR-099): the item's selling price, or for a pack its
+     * own selling price, else the piece price times the size, rounded half up once. A price list wins over it.
+     */
+    static long walkInPrice(ProductSnapshot p, PackUnit pack) {
+        return pack == null ? p.sellMinor() : walkInPrice(p.sellMinor(), pack);
+    }
+
+    private static long walkInPrice(long pieceSellMinor, PackUnit pack) {
+        return pack.sellMinor() != null ? pack.sellMinor() : Quantities.packPrice(pieceSellMinor, pack.factor());
+    }
+
+    /**
      * How the device price of an offline line stands against the online price rules (ADR-067 decision 11): PHONE, the
      * catalogue or pack price in force at prices_as_of or today's; ALLOWED, another price typed by a holder of
      * retail.price.override with a reason; TYPED, any other.
@@ -865,7 +877,7 @@ class SalesService {
             return OfflinePrice.PHONE;
         }
         long saved = catalogue.sellMinorAt(p.id(), pricesAsOf == null ? clock.now() : pricesAsOf);
-        if (device == (pack == null ? saved : Quantities.packPrice(saved, pack.factor()))) {
+        if (device == (pack == null ? saved : walkInPrice(saved, pack))) {
             return OfflinePrice.PHONE;
         }
         String reason = blankToNull(l.priceOverrideReason());
@@ -944,19 +956,22 @@ class SalesService {
             return null;
         }
         PackUnit pack = catalogue.packUnit(p.id(), unitId).orElse(null);
-        if (pack == null || !pack.active() && !agreed && clashes == null) {
+        // Issue #624: a pack only for buying is not sold, as a pack switched off is not.
+        boolean sold = pack != null && pack.active() && pack.sells();
+        if (pack == null || !sold && !agreed && clashes == null) {
             problems.add(
                     new FieldProblem(field + ".unit_id", "unknown_pack_unit", "This item is not sold in that unit."));
             return null;
         }
-        if (clashes != null && (unitsOff || !pack.active() && !agreed)) {
+        if (clashes != null && (unitsOff || !sold && !agreed)) {
             clashes.add(new PendingClash(
                     lineNo,
                     p.id(),
                     "pack_inactive",
                     (unitsOff
                                     ? "Pack sizes were turned off for the business"
-                                    : "The pack size " + pack.unit() + " of " + p.description() + " was switched off")
+                                    : "The pack size " + pack.unit() + " of " + p.description()
+                                            + (pack.active() ? " was made for buying only" : " was switched off"))
                             + " while this sale was offline; line " + lineNo + " is recorded as sold in " + pack.unit()
                             + "."));
         }
@@ -1016,7 +1031,7 @@ class SalesService {
                 continue;
             }
             PackUnit pack = unit.pack();
-            long defaultPrice = pack == null ? p.sellMinor() : Quantities.packPrice(p.sellMinor(), pack.factor());
+            long defaultPrice = walkInPrice(p, pack);
             Decision d = pricing.decide(
                     list, p.id(), pack == null ? p.unitId() : pack.unitId(), l.qty(), defaultPrice, saleDate);
             out.add(new ResolvedLine(

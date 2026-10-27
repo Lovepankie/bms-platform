@@ -12919,6 +12919,14 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "size_kept" : {
+            "description" : "On the response that made the line only: true when use_from_now_on was left out because the pack has its own price and the caller may not change prices (issue #624)",
+            "type" : "boolean"
+          },
+          "size_kept_note" : {
+            "description" : "Why the usual size was kept, in one plain sentence, with size_kept",
+            "type" : "string"
+          },
           "unit" : {
             "type" : "string"
           },
@@ -15094,9 +15102,17 @@
           "active" : {
             "type" : "boolean"
           },
+          "below_cost" : {
+            "description" : "For a selling pack and a caller holding retail.profit.read: true when its price is not above the size times the item's average cost per piece (ADR-079); absent otherwise",
+            "type" : "boolean"
+          },
           "factor" : {
             "description" : "Base units in one pack, three places, for example 12.000",
             "type" : "string"
+          },
+          "has_own_price" : {
+            "description" : "True when the pack has its own selling price, sent to every caller (the amount only to one who may see prices): a new usual size or making it buy only then needs retail.price.edit (issue #624)",
+            "type" : "boolean"
           },
           "id" : {
             "format" : "uuid",
@@ -15105,6 +15121,20 @@
           "product_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "purpose" : {
+            "description" : "buy, sell or both (issue #624)",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "description" : "The pack's own selling price for a walk-in sale; absent when it has none (it then sells at suggested_sell_minor) or the caller may not see prices (issue #624)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "suggested_sell_minor" : {
+            "description" : "The piece price times the size, rounded half up once: what the pack sells at without its own price, and the price the app suggests (issue #624)",
+            "format" : "int64",
+            "type" : "integer"
           },
           "unit" : {
             "type" : "string"
@@ -15137,6 +15167,18 @@
             "description" : "Base units in one pack, at least 1, up to three places, for example 12 or 12.5",
             "type" : "string"
           },
+          "purpose" : {
+            "description" : "What the pack is for: buy, sell or both (the default); a pack bought only has no selling price (issue #624)",
+            "pattern" : "buy|sell|both",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "description" : "The selling price of one pack for a walk-in sale, in minor units; absent means the piece price times the size. Needs retail.price.edit (issue #624)",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
           "unit_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -15150,9 +15192,25 @@
           "active" : {
             "type" : "boolean"
           },
+          "clear_sell_minor" : {
+            "description" : "True to drop the pack's own price, so it sells at the piece price times the size again; needs retail.price.edit (issue #624)",
+            "type" : "boolean"
+          },
           "factor" : {
             "description" : "Base units in one pack, at least 1; required to switch a pack on again",
             "type" : "string"
+          },
+          "purpose" : {
+            "description" : "buy, sell or both; a pack made buy only loses its selling price (issue #624)",
+            "pattern" : "buy|sell|both",
+            "type" : "string"
+          },
+          "sell_minor" : {
+            "description" : "A new selling price of one pack; needs retail.price.edit (issue #624)",
+            "format" : "int64",
+            "maximum" : 10000000000000,
+            "minimum" : 0,
+            "type" : "integer"
           }
         }
       },
@@ -16089,6 +16147,14 @@
           "sell_minor" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "size_kept" : {
+            "description" : "On the response that made the line only: true when use_from_now_on was left out because the pack has its own price and the caller may not change prices (issue #624)",
+            "type" : "boolean"
+          },
+          "size_kept_note" : {
+            "description" : "Why the usual size was kept, in one plain sentence, with size_kept",
+            "type" : "string"
           },
           "unit" : {
             "type" : "string"

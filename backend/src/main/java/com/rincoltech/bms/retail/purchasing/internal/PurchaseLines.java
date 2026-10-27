@@ -127,7 +127,10 @@ class PurchaseLines {
                 return null;
             }
             pack = catalogue.packUnit(p.id(), unitId).orElse(null);
-            if (pack == null || !pack.active()) {
+            // Issue #624: a pack only for selling (a half carton) is never bought, except on goods received against an
+            // order line made before the pack's purpose changed (allowInactive marks such a line), so the order
+            // completes.
+            if (pack == null || !pack.active() || !pack.buys() && !allowInactive) {
                 problems.add(new FieldProblem(
                         field + ".unit_id", "unknown_pack_unit", "This item is not bought in that unit."));
                 return null;
@@ -154,6 +157,15 @@ class PurchaseLines {
     }
 
     /**
+     * Issue #624: what a delivery line says when its "use from now on" was left out because the pack has its own selling
+     * price and the caller may not change prices.
+     */
+    static String sizeKeptNote(BigDecimal size) {
+        return "This pack has its own price, so only this delivery counts as " + Quantities.format(size)
+                + " in each pack and its usual size stays. Ask someone who may change prices.";
+    }
+
+    /**
      * D23, issue #554: a buying pack's size may change per delivery (a carton of 30 where it usually holds 24). The pack as
      * this delivery's line uses it: {@code packSize} base units in each, kept on the line only, while selling and the item
      * keep the usual size. Null with a problem added for a line not in a pack or a size below one base unit.
@@ -171,7 +183,7 @@ class PurchaseLines {
                     "Each " + pack.unit() + " holds at least one, with at most three decimal places."));
             return null;
         }
-        return new PackUnit(pack.unitId(), pack.unit(), packSize, pack.active());
+        return new PackUnit(pack.unitId(), pack.unit(), packSize, pack.active(), pack.purpose(), pack.sellMinor());
     }
 
     /**

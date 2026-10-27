@@ -21,6 +21,40 @@ export function activePacks(product: Product): Pack[] {
   return (product.packs ?? []).filter((k) => k.active && k.unit_id);
 }
 
+/** Issue #624: the packs a sale, a scan at the till, a quotation or an order may use: active and not for buying only. */
+export function sellingPacks(product: Product): Pack[] {
+  return activePacks(product).filter((k) => k.purpose !== 'buy');
+}
+
+/** Issue #624: the packs Buy stock, a purchase order or goods received may use: active and not for selling only. */
+export function buyingPacks(product: Product): Pack[] {
+  return activePacks(product).filter((k) => k.purpose !== 'sell');
+}
+
+/**
+ * Issue #624 (ADR-099): the price of one pack for a walk-in sale, as the server takes it: the pack's own price, else the piece
+ * price times the size, rounded half up once. A price list still wins over it.
+ */
+export function packWalkInPrice(pieceMinor: number, pack: Pack): number {
+  return pack.sell_minor ?? packPriceMinor(pieceMinor, pack.factor);
+}
+
+/** Issue #624 review: why "Use 30 from now on" is not offered on a pack with its own price to someone who may not change prices. */
+export const OWN_PRICE_KEEPS_SIZE = 'This pack has its own price. Ask someone who may change prices.';
+
+/** Issue #624 review: whether this person may make a delivery's size the pack's usual one (ADR-082, ADR-099). */
+export function mayKeepSize(pack: Pack | undefined, mayManageItems: boolean, mayChangePrices: boolean): boolean {
+  return mayManageItems && (!hasOwnPrice(pack) || mayChangePrices);
+}
+
+/**
+ * Issue #624 review: whether the pack has its own selling price. `has_own_price` comes to every caller, the amount only to one
+ * who may see prices, so a caller who cannot see prices is never offered a change that will not happen.
+ */
+export function hasOwnPrice(pack: Pack | undefined): boolean {
+  return pack?.has_own_price ?? pack?.sell_minor !== undefined;
+}
+
 /** The chosen pack of a line, or undefined for the base unit (no unit chosen, or one that is no longer a pack). */
 export function chosenPack(product: Product, unitId: string | undefined): Pack | undefined {
   return unitId ? activePacks(product).find((k) => k.unit_id === unitId) : undefined;

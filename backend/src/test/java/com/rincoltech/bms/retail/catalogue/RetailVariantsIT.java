@@ -958,6 +958,71 @@ class RetailVariantsIT extends IntegrationTest {
                 .hasSize(1);
     }
 
+    /**
+     * Issue #624 review: a new size takes the packs' own prices only when it sells at the same piece price, compared by value
+     * (a price far above 127, where boxed longs would not be the same object), and a pack with no own price copies without one.
+     */
+    @Test
+    void aNewSizeAtTheSamePiecePriceTakesThePacksOwnPrices() {
+        capability("units", true);
+        JsonNode f = romper();
+        UUID model = variant(f, "0-3m", "Blue");
+        // The piece prices compared are 9,000 and 12,000, far above 127, where boxed longs would not be the same
+        // object.
+        assertThat(api.get("/products/" + model, ADMIN)
+                        .getBody()
+                        .get("sell_minor")
+                        .asLong())
+                .isEqualTo(9_000);
+        UUID carton = api.unit("test-carton");
+        UUID dozen = api.unit("test-dozen");
+        assertThat(api.post(
+                                "/products/" + model + "/units",
+                                Map.of("unit_id", carton, "factor", "12", "sell_minor", 100_000),
+                                ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(api.post("/products/" + model + "/units", Map.of("unit_id", dozen, "factor", "6"), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<JsonNode> more = api.post(
+                "/product-families/" + f.get("id").asString() + "/variants",
+                Map.of(
+                        "variants",
+                        List.of(
+                                Map.of("size", "12-18m", "colour", "Blue"),
+                                Map.of("size", "18-24m", "colour", "Blue", "sell_minor", 12_000))),
+                ADMIN);
+        assertThat(more.getStatusCode()).as("%s", more.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(api.get("/products/" + variant(more.getBody(), "12-18m", "Blue"), ADMIN)
+                        .getBody()
+                        .get("sell_minor")
+                        .asLong())
+                .isEqualTo(9_000);
+        assertThat(api.get("/products/" + variant(more.getBody(), "18-24m", "Blue"), ADMIN)
+                        .getBody()
+                        .get("sell_minor")
+                        .asLong())
+                .isEqualTo(12_000);
+        Map<String, Long> same = ownPrices(variant(more.getBody(), "12-18m", "Blue"));
+        assertThat(same).containsEntry(carton.toString(), 100_000L).containsEntry(dozen.toString(), null);
+        Map<String, Long> dearer = ownPrices(variant(more.getBody(), "18-24m", "Blue"));
+        assertThat(dearer).containsEntry(carton.toString(), null).containsEntry(dozen.toString(), null);
+    }
+
+    /** Each pack's own selling price by unit, null for a pack that sells at the piece price times the size. */
+    Map<String, Long> ownPrices(UUID product) {
+        Map<String, Long> prices = new LinkedHashMap<>();
+        for (JsonNode k :
+                api.get("/products/" + product + "/units", ADMIN).getBody().get("items")) {
+            prices.put(
+                    k.get("unit_id").asString(),
+                    k.has("sell_minor") ? k.get("sell_minor").asLong() : null);
+        }
+        return prices;
+    }
+
     // ---- issue #395 review: an item never passes 100, and copied list prices keep the price list rules --------------
 
     String listPrices(UUID product) {

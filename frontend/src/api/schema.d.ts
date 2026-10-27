@@ -13847,6 +13847,10 @@ export interface components {
             qty?: string;
             /** Format: int64 */
             sell_minor?: number;
+            /** @description On the response that made the line only: true when use_from_now_on was left out because the pack has its own price and the caller may not change prices (issue #624) */
+            size_kept?: boolean;
+            /** @description Why the usual size was kept, in one plain sentence, with size_kept */
+            size_kept_note?: string;
             unit?: string;
             /** @description Base units in one pack of the line's unit */
             unit_factor?: string;
@@ -14945,12 +14949,28 @@ export interface components {
         /** @description The pack sizes of the product; present only while the units capability is on */
         RetailPack: {
             active?: boolean;
+            /** @description For a selling pack and a caller holding retail.profit.read: true when its price is not above the size times the item's average cost per piece (ADR-079); absent otherwise */
+            below_cost?: boolean;
             /** @description Base units in one pack, three places, for example 12.000 */
             factor?: string;
+            /** @description True when the pack has its own selling price, sent to every caller (the amount only to one who may see prices): a new usual size or making it buy only then needs retail.price.edit (issue #624) */
+            has_own_price?: boolean;
             /** Format: uuid */
             id?: string;
             /** Format: uuid */
             product_id?: string;
+            /** @description buy, sell or both (issue #624) */
+            purpose?: string;
+            /**
+             * Format: int64
+             * @description The pack's own selling price for a walk-in sale; absent when it has none (it then sells at suggested_sell_minor) or the caller may not see prices (issue #624)
+             */
+            sell_minor?: number;
+            /**
+             * Format: int64
+             * @description The piece price times the size, rounded half up once: what the pack sells at without its own price, and the price the app suggests (issue #624)
+             */
+            suggested_sell_minor?: number;
             unit?: string;
             /** Format: uuid */
             unit_id?: string;
@@ -14967,14 +14987,30 @@ export interface components {
         RetailPackRequest: {
             /** @description Base units in one pack, at least 1, up to three places, for example 12 or 12.5 */
             factor: string;
+            /** @description What the pack is for: buy, sell or both (the default); a pack bought only has no selling price (issue #624) */
+            purpose?: string;
+            /**
+             * Format: int64
+             * @description The selling price of one pack for a walk-in sale, in minor units; absent means the piece price times the size. Needs retail.price.edit (issue #624)
+             */
+            sell_minor?: number;
             /** Format: uuid */
             unit_id: string;
         };
         /** @description Omitted fields are unchanged; a pack is never deleted, only switched off */
         RetailPackUpdate: {
             active?: boolean;
+            /** @description True to drop the pack's own price, so it sells at the piece price times the size again; needs retail.price.edit (issue #624) */
+            clear_sell_minor?: boolean;
             /** @description Base units in one pack, at least 1; required to switch a pack on again */
             factor?: string;
+            /** @description buy, sell or both; a pack made buy only loses its selling price (issue #624) */
+            purpose?: string;
+            /**
+             * Format: int64
+             * @description A new selling price of one pack; needs retail.price.edit (issue #624)
+             */
+            sell_minor?: number;
         };
         RetailPayment: {
             /** Format: int64 */
@@ -15454,6 +15490,10 @@ export interface components {
             qty_total?: string;
             /** Format: int64 */
             sell_minor?: number;
+            /** @description On the response that made the line only: true when use_from_now_on was left out because the pack has its own price and the caller may not change prices (issue #624) */
+            size_kept?: boolean;
+            /** @description Why the usual size was kept, in one plain sentence, with size_kept */
+            size_kept_note?: string;
             unit?: string;
             /**
              * Format: int64

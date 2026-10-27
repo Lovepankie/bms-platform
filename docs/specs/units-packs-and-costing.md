@@ -1,6 +1,6 @@
 # Units, packs, buying and selling in packs, and profit per piece
 
-Status: decided (the owner, 23 and 24 Oct 2026: D14, D16, D22 to D26 and D32 yes). Built so far: average cost (#529, ADR-079, V94), shop EAN-13 barcodes (#528, V93) and the pack size per delivery on Buy stock and goods received (#554, ADR-082, no migration). It follows the set-up of an electronics shop in the pilot.
+Status: decided (the owner, 23 and 24 Oct 2026: D14, D16, D22 to D26 and D32 yes). Built so far: average cost (#529, ADR-079, V94), shop EAN-13 barcodes (#528, V93) the pack size per delivery on Buy stock and goods received (#554, ADR-082, no migration) and selling packs with their own prices (#624, ADR-099, V110). It follows the set-up of an electronics shop in the pilot.
 Applies to every retail business: small shops, wholesalers and the ones in between.
 
 ## 1. The problem, in the shop owner's words
@@ -17,7 +17,7 @@ The `units` capability, switched off by default (ADR-033, V39), already gives:
 
 - one smallest unit per item. Stock is always counted in it.
 - packs on an item (carton = 12 pieces, dozen = 12). There is one fixed size per pack type, used when buying, selling and scanning.
-- a pack's selling price defaults to the piece price times the pack size. A different pack price needs a price list, and a walk-in sale does not use price lists.
+- a pack's selling price defaults to the piece price times the pack size. Since #624 (ADR-099) a selling pack may have its own price, which walk-in sales use.
 - the buying price per piece is the carton cost divided by the pieces. Until #529 the last delivery overwrote the item's cost; ADR-079 (V94) now keeps the moving average per branch.
 - barcodes per pack, so scanning a carton barcode sells a carton.
 
@@ -25,7 +25,7 @@ The gaps:
 
 - A carton's size cannot change per delivery.
 - A half carton has no clean way in.
-- Walk-in pack prices cannot be set.
+- Fixed in #624: walk-in pack prices can now be set on the item.
 - Fixed in #529: the cost used to jump with every delivery instead of averaging; it now keeps the moving average per item per branch.
 
 ## 3. The model, in plain words
@@ -145,7 +145,7 @@ Rule: every label is a word a shop attendant in Kampala uses. There is a glossar
 
 1. **Average cost per piece** (moving weighted average), with sale lines keeping their cost. Built in #529 (ADR-079, V94). Everything else depends on profit being right.
 2. **Pack size per delivery on Buy stock.** The restock line keeps its own size. Includes "use this size from now on".
-3. **Selling packs with their own prices**, including half carton and dozen. Walk-in sales use them, the below-cost warning applies, and price lists still win.
+3. **Selling packs with their own prices**, including half carton and dozen. Walk-in sales use them, the below-cost warning applies, and price lists still win. Built in #624 (ADR-099, V110): each pack says whether it is for buying, selling or both; Edit item shows the packs in one table (pack, size, selling price) with the suggested price and Below cost.
 4. **Stock shown in packs and pieces** on Stock, Count stock and Move stock.
 5. **Starting templates** ("How do you buy and sell this?") and the Ugandan unit list.
 6. **Glossary and the banned-word test**, then the renames in section 5.

@@ -390,7 +390,9 @@ class PurchasingRepository {
                             decimal(rs.getBigDecimal("unit_factor")),
                             decimal(rs.getBigDecimal("unit_qty_total")),
                             rs.getObject("unit_cost_minor", Long.class),
-                            rs.getString("base_unit")));
+                            rs.getString("base_unit"),
+                            null,
+                            null));
         });
         return purchases.stream()
                 .map(p -> withLines(p, byPurchase.getOrDefault(p.id(), List.of()), branchIds))
@@ -462,7 +464,9 @@ class PurchasingRepository {
                 l.unitFactor(),
                 l.unitId() == null ? null : Quantities.format(unitQty),
                 l.unitCostMinor(),
-                l.baseUnit());
+                l.baseUnit(),
+                null,
+                null);
     }
 
     private static Purchase header(ResultSet rs) throws SQLException {

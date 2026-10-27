@@ -15,7 +15,7 @@ import { usePersistedDraft } from './idempotency';
 import { parseQty, qtyString, showQty } from './maths';
 import { buildSaleRequest, defaultPrice, draftProblem, draftTotal, lineFigures, lineHint, newLine, resolveRequestOf, withUnit, type Accounts, type Draft, type DraftLine, type Pricing } from './sale-state';
 import { MIN_REASON, hasNoPrice, isOverride, pricedLines, receiptNote, reasonOk, sourceNote } from './price-state';
-import { activePacks, chosenPack, enteredPriceMinor, enteredQty } from './units-state';
+import { chosenPack, enteredPriceMinor, enteredQty, sellingPacks } from './units-state';
 import { EmptyState } from '../../../components/states';
 import { BranchRequired, Gate, NoStockHere, Note, ProductPicker, Problem, money, useBranchRoles, useProfitAccess, useStockingBranch } from './ui';
 import { branchLabel } from '../../../auth/branch';
@@ -158,7 +158,7 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
   const i = index;
   const f = lineFigures(line);
   const hint = lineHint(line);
-  const packs = unitsOn ? activePacks(line.product) : [];
+  const packs = unitsOn ? sellingPacks(line.product) : [];
   const pack = unitsOn ? chosenPack(line.product, line.unitId) : undefined;
   const override = price ? isOverride(line, price.resolved) : false;
   const noPrice = price ? hasNoPrice(price.resolved) : false;
@@ -312,7 +312,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
   };
   const add = (p: Product) => {
     const now = lines.current;
-    if (now.some((l) => l.product.id === p.id) && !(unitsOn && activePacks(p).length > 0)) {
+    if (now.some((l) => l.product.id === p.id) && !(unitsOn && sellingPacks(p).length > 0)) {
       show(`${p.description} is already on the sale. Change its quantity below.`, 'info');
       return;
     }
@@ -369,7 +369,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
   // A scan (issue #345) adds the item at 1, or one more to its line in the pack the barcode is on; a pack it cannot
   // use is refused, never sold as one piece: ScanBar shows the refusal as a warning and no toast is raised.
   const scanAdd = (p: Product, unitId?: string) => {
-    const unit = unitsOn && activePacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
+    const unit = unitsOn && sellingPacks(p).some((k) => k.unit_id === unitId) ? unitId : undefined;
     if (unitId && !unit) return PACK_UNUSABLE;
     const now = lines.current;
     const next = scanInto(now, p, unit, (l) => ({ ...l, qty: plusOne(l.qty) }), () => (unit ? withUnit(newLine(p), unit) : newLine(p)));
@@ -395,7 +395,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued }: {
     const f = lineFigures(l);
     return entryWarnings(norms(l.product.id), {
       screen: 'sell', product: l.product, lineKey: `${l.product.id}-${i}`, qtyMilli: f?.qtyMilli ?? null, qtyFieldId: `qty-${i}`,
-      unitChoosable: unitsOn && activePacks(l.product).length > 0, unitFieldId: `unit-${i}`,
+      unitChoosable: unitsOn && sellingPacks(l.product).length > 0, unitFieldId: `unit-${i}`,
       ...(pack ? { unitId: pack.unit_id, unitName: pack.unit, factor: pack.factor } : {}),
       ...(l.typed ? { priceMinor: f?.priceMinor ?? null, priceFieldId: `price-${i}` } : {}),
     });
