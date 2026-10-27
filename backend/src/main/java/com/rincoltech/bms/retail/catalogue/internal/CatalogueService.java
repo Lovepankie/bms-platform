@@ -230,6 +230,22 @@ class CatalogueService {
             throw ApiException.validation(List.of(new FieldProblem(
                     "usual_pack.of_unit_id", "inactive_unit", "This unit is switched off. Choose another one.")));
         }
+        // Issue #637, ADR-100 note: one level only, so Roll of Metre and Metre of Roll can never both be kept.
+        if (of.usualPack() != null) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "usual_pack.of_unit_id",
+                    "unit_is_a_pack",
+                    of.name() + " is itself a pack of " + of.usualPack().ofUnit()
+                            + ". Choose the unit it counts, such as "
+                            + of.usualPack().ofUnit() + ".")));
+        }
+        String counting = repo.unitCountedByUsualPack(unitId);
+        if (counting != null) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "usual_pack",
+                    "unit_counted_by_pack",
+                    counting + " is a pack of this unit, so this unit cannot be a pack too.")));
+        }
         return of;
     }
 
@@ -288,15 +304,24 @@ class CatalogueService {
         Map<String, Object> now = new LinkedHashMap<>();
         diff(was, now, "name", before.name(), name);
         diff(was, now, "active", before.active(), active);
+        boolean clearUsual = Boolean.TRUE.equals(r.clearUsualPack());
+        if (clearUsual && r.usualPack() != null) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "clear_usual_pack", "invalid", "Set a usual pack or clear it, not both at once.")));
+        }
+        UsualPack had = before.usualPack();
+        String hadText = had == null ? null : usualPackText(new BigDecimal(had.size()), had.ofUnit(), had.purpose());
         if (r.usualPack() != null) {
             Unit of = requireUsualPackOf(id, r.usualPack());
-            UsualPack had = before.usualPack();
             diff(
                     was,
                     now,
                     "usual_pack",
-                    had == null ? null : usualPackText(new BigDecimal(had.size()), had.ofUnit(), had.purpose()),
+                    hadText,
                     usualPackText(r.usualPack().size(), of.name(), r.usualPack().purpose()));
+        } else if (clearUsual) {
+            // Issue #637: clearing a usual pack the unit does not have changes nothing.
+            diff(was, now, "usual_pack", hadText, null);
         }
         if (now.isEmpty()) {
             return before;

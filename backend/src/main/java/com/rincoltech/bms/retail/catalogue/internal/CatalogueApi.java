@@ -80,7 +80,12 @@ final class CatalogueApi {
             Boolean active,
 
             @Valid @Schema(description = "Issue #625: sets the usual pack; left out, it is unchanged")
-            UsualPackRequest usualPack) {}
+            UsualPackRequest usualPack,
+
+            @Schema(
+                    description = "Issue #637: true to clear the usual pack; not sent with usual_pack. Items' packs are"
+                            + " unchanged")
+            Boolean clearUsualPack) {}
 
     @Schema(name = "RetailCategory")
     record Category(
