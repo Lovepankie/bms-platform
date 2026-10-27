@@ -218,6 +218,17 @@ describe('Set up your shop', () => {
     expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack?.of_unit).toBe('Metre');
   });
 
+  it("leaves out a pack's unit added meanwhile that another pack already holds, never stopping the run (review of #637)", async () => {
+    const shop = fakeShop();
+    const plan = planSetup(shopTypeById('hardware')!, [], [...shop.units]);
+    const roll = await shop.api.createUnit('Roll');
+    await shop.api.createUnit('Bundle', { size: '4', of_unit_id: roll.id ?? '', purpose: 'both' });
+    const result = await applySetup(shop.api, plan, allTicked(plan), [...shop.units].filter((u) => u.name !== 'Roll' && u.name !== 'Bundle'));
+    expect(result.error).toBeNull();
+    expect(result.skipped).toContainEqual({ name: 'Roll', why: 'Roll holds another pack, so this pack was left out.' });
+    expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack).toBeUndefined();
+  });
+
   it('holds no pack in a starting set whose smaller unit is a pack of that set, one level only (ADR-100 note)', () => {
     for (const type of SHOP_TYPES) {
       const packNames = new Set(type.packs.map((p) => p.name.toLowerCase()));

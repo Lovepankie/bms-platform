@@ -115,6 +115,11 @@ export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'create
           if (item.kind !== 'category') known = await api.listUnits();
           const now = item.kind === 'pack' ? known.find((u) => same(u.name, item.name)) : undefined;
           const of = known.find((u) => same(u.name, item.of ?? ''));
+          const counted = now?.id !== undefined && known.some((u) => u.usual_pack?.of_unit_id === now.id);
+          if (counted) {
+            result.skipped.push({ name: item.name, why: `${now?.name ?? item.name} holds another pack, so this pack was left out.` });
+            continue;
+          }
           if (now?.id && !now.usual_pack && of?.id && !of.usual_pack && of.active !== false) {
             const pack = { size: String(item.size), of_unit_id: of.id, purpose: asPurpose(item.purpose) };
             await api.updateUnit(now.id, now.version ?? 1, { usual_pack: pack });
