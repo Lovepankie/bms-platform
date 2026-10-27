@@ -6,6 +6,8 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Pack;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Product;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Unit;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UsualPack;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UsualPackRequest;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -69,15 +71,27 @@ class CatalogueRepository {
 
     List<Unit> units() {
         return jdbc.sql("""
-                        SELECT u.id, u.name, u.active, u.version, (SELECT count(*) FROM retail_products p WHERE p.unit_id = u.id) AS used
-                          FROM retail_units u ORDER BY lower(u.name), u.id
+                        SELECT u.id, u.name, u.active, u.version, (SELECT count(*) FROM retail_products p WHERE p.unit_id = u.id) AS used,
+                               u.pack_size, u.pack_of_unit_id, o.name AS pack_of, u.pack_purpose
+                          FROM retail_units u
+                          LEFT JOIN retail_units o ON o.id = u.pack_of_unit_id
+                         ORDER BY lower(u.name), u.id
                         """)
                 .query((rs, n) -> new Unit(
                         rs.getObject("id", UUID.class),
                         rs.getString("name"),
                         rs.getBoolean("active"),
                         rs.getInt("used"),
-                        rs.getInt("version")))
+                        rs.getInt("version"),
+                        rs.getBigDecimal("pack_size") == null
+                                ? null
+                                : new UsualPack(
+                                        rs.getBigDecimal("pack_size")
+                                                .setScale(3)
+                                                .toPlainString(),
+                                        rs.getObject("pack_of_unit_id", UUID.class),
+                                        rs.getString("pack_of"),
+                                        rs.getString("pack_purpose"))))
                 .list();
     }
 
@@ -125,6 +139,13 @@ class CatalogueRepository {
                 .param(categoryId)
                 .query(String.class)
                 .single();
+    }
+
+    /** Issue #625, ADR-100: the usual size of a pack and what it is for; the V111 check keeps all three or none. */
+    void setUsualPack(UUID id, UsualPackRequest pack) {
+        jdbc.sql("UPDATE retail_units SET pack_size = ?, pack_of_unit_id = ?, pack_purpose = ? WHERE id = ?")
+                .params(pack.size(), pack.ofUnitId(), pack.purpose(), id)
+                .update();
     }
 
     int updateUnit(UUID id, String name, boolean active, int expectedVersion) {

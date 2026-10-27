@@ -35,6 +35,7 @@ export type CapabilityChange = S['UpdateRetailCapabilitiesRequest'];
 export interface CapabilitiesRead { capabilities: RetailCapabilities; version: number }
 export type Category = S['RetailCategory'];
 export type Unit = S['RetailUnit'];
+export type UsualPackRequest = S['RetailUsualPackRequest'];
 export type ProductPage = S['RetailProductPage'];
 export type PriceChange = S['RetailPriceChange'];
 export type NewProduct = S['CreateRetailProductRequest'];
@@ -437,8 +438,9 @@ export interface RetailApi {
   /** The code start a new category of this name would get, free in the business (issue #493). */
   suggestCategoryPrefix(name: string): Promise<string>;
   listUnits(): Promise<Unit[]>;
-  createUnit(name: string): Promise<Unit>;
-  updateUnit(id: string, version: number, body: { name?: string; active?: boolean }): Promise<Unit>;
+  /** Issue #625: `usualPack` makes the unit a pack with its usual size in a smaller unit and what it is for; never a price. */
+  createUnit(name: string, usualPack?: UsualPackRequest): Promise<Unit>;
+  updateUnit(id: string, version: number, body: { name?: string; active?: boolean; usual_pack?: UsualPackRequest }): Promise<Unit>;
   /** Corrects the quantity of an item at a branch (retail.stocktake.commit there); takes the Idempotency-Key of its form (issue #351). */
   correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection | ApprovalWaiting>;
   /** The stock history of an item at a branch, newest first (issue #351). */
@@ -880,8 +882,8 @@ const realRetail: RetailApi = {
     return unwrap(await api.GET('/api/v1/retail/units')).items ?? [];
   },
 
-  async createUnit(name) {
-    return unwrap(await api.POST('/api/v1/retail/units', { body: { name } }));
+  async createUnit(name, usualPack) {
+    return unwrap(await api.POST('/api/v1/retail/units', { body: { name, ...(usualPack ? { usual_pack: usualPack } : {}) } }));
   },
 
   async updateUnit(id, version, body) {

@@ -32,6 +32,8 @@ import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateCategoryR
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdatePackRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateProductRequest;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UpdateUnitRequest;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UsualPack;
+import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.UsualPackRequest;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -191,15 +193,49 @@ class CatalogueService {
 
     @Transactional
     Unit createUnit(UnitRequest r) {
-        Unit u = new Unit(UUID.randomUUID(), r.name().trim(), true, 0, 1);
+        UUID id = UUID.randomUUID();
+        String name = r.name().trim();
+        Unit of = requireUsualPackOf(id, r.usualPack());
         try {
-            repo.insertUnit(u.id(), u.name(), CurrentPrincipal.require().userId());
+            repo.insertUnit(id, name, CurrentPrincipal.require().userId());
         } catch (DuplicateKeyException e) {
             throw duplicate("duplicate_unit", "A unit with this name exists.");
         }
-        audit.record(
-                AuditLog.Entry.created("retail.unit.created", "retail.unit", u.id(), null, Map.of("name", u.name())));
-        return u;
+        Map<String, Object> after = new LinkedHashMap<>();
+        after.put("name", name);
+        if (r.usualPack() != null) {
+            repo.setUsualPack(id, r.usualPack());
+            after.put(
+                    "usual_pack",
+                    usualPackText(r.usualPack().size(), of.name(), r.usualPack().purpose()));
+        }
+        audit.record(AuditLog.Entry.created("retail.unit.created", "retail.unit", id, null, after));
+        return repo.unit(id).orElseThrow();
+    }
+
+    /**
+     * Issue #625, ADR-100: a pack's usual size counts another unit of the business that is switched on. The size is a starting
+     * number for the item's own pack, so it ties nothing down and has no price. Returns that smaller unit, or null with no pack.
+     */
+    private Unit requireUsualPackOf(UUID unitId, UsualPackRequest pack) {
+        if (pack == null) {
+            return null;
+        }
+        Unit of = repo.unit(pack.ofUnitId()).orElse(null);
+        if (of == null || of.id().equals(unitId)) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "usual_pack.of_unit_id", "unknown_unit", "Choose another unit that this pack holds.")));
+        }
+        if (!of.active()) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "usual_pack.of_unit_id", "inactive_unit", "This unit is switched off. Choose another one.")));
+        }
+        return of;
+    }
+
+    /** The audit of a usual pack names the smaller unit, as a person reads it (review of #628): "100.000 Metre both". */
+    private static String usualPackText(BigDecimal size, String ofUnit, String purpose) {
+        return size.setScale(3).toPlainString() + " " + ofUnit + " " + purpose;
     }
 
     /** Rename or (de)activate; the row stays, so products and history keep their meaning (#146). */
@@ -252,6 +288,16 @@ class CatalogueService {
         Map<String, Object> now = new LinkedHashMap<>();
         diff(was, now, "name", before.name(), name);
         diff(was, now, "active", before.active(), active);
+        if (r.usualPack() != null) {
+            Unit of = requireUsualPackOf(id, r.usualPack());
+            UsualPack had = before.usualPack();
+            diff(
+                    was,
+                    now,
+                    "usual_pack",
+                    had == null ? null : usualPackText(new BigDecimal(had.size()), had.ofUnit(), had.purpose()),
+                    usualPackText(r.usualPack().size(), of.name(), r.usualPack().purpose()));
+        }
         if (now.isEmpty()) {
             return before;
         }
@@ -266,6 +312,9 @@ class CatalogueService {
             }
         } catch (DuplicateKeyException e) {
             throw duplicate("duplicate_unit", "A unit with this name exists.");
+        }
+        if (now.containsKey("usual_pack")) {
+            repo.setUsualPack(id, r.usualPack());
         }
         audit.record(new AuditLog.Entry("retail.unit.updated", "retail.unit", id, null, was, now));
         return repo.unit(id).orElseThrow();
@@ -769,7 +818,16 @@ class CatalogueService {
                     "pack_unit_is_base_unit",
                     "A pack must be a different unit from the one the product is counted in.");
         }
-        String purpose = r.purpose() == null ? RetailCatalogue.PACK_BOTH : r.purpose();
+        // ADR-100: with no purpose sent, the pack takes its unit's usual purpose (V111), the same values as this
+        // column, so a
+        // unit and an item's pack are one idea; a price sent with it means the pack is sold, so a usual buy-only pack
+        // is both.
+        String usual = unit.usualPack() == null
+                ? RetailCatalogue.PACK_BOTH
+                : unit.usualPack().purpose();
+        String purpose = r.purpose() != null
+                ? r.purpose()
+                : r.sellMinor() != null && usual.equals(RetailCatalogue.PACK_BUY) ? RetailCatalogue.PACK_BOTH : usual;
         if (r.sellMinor() != null) {
             requirePriceEdit(
                     "You may not change selling prices, so you cannot set a pack's price. Ask someone who may.");

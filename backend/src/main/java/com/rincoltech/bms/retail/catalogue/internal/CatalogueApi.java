@@ -40,7 +40,31 @@ final class CatalogueApi {
             String codePrefix) {}
 
     @Schema(name = "RetailUnitRequest")
-    record UnitRequest(@NotBlank @Size(max = 30) String name) {}
+    record UnitRequest(
+            @NotBlank @Size(max = 30) String name, @Valid UsualPackRequest usualPack) {}
+
+    /** Issue #625, ADR-100: a unit that is a pack, with its usual size in a smaller unit and what it is for. Never a price. */
+    @Schema(
+            name = "RetailUsualPackRequest",
+            description =
+                    "The usual size of this pack in a smaller unit, such as a roll of 100 metres, and what it is for")
+    record UsualPackRequest(
+            @NotNull
+            @DecimalMin("1")
+            @Digits(integer = 11, fraction = 3)
+            @Schema(type = "string", description = "How many of the smaller unit, at least 1, up to three places")
+            BigDecimal size,
+
+            @NotNull @Schema(description = "The smaller unit, such as Metre or Piece")
+            UUID ofUnitId,
+
+            @NotNull
+            @Pattern(regexp = RetailCatalogue.PACK_PURPOSES)
+            @Schema(
+                    allowableValues = {"buy", "sell", "both"},
+                    description = "What the pack is for, the values of a pack's purpose on an item (#624); an item's"
+                            + " pack of this unit added with no purpose takes it")
+            String purpose) {}
 
     @Schema(name = "RetailCategoryUpdate", description = "Omitted fields are unchanged; a category is never deleted")
     record UpdateCategoryRequest(
@@ -51,7 +75,12 @@ final class CatalogueApi {
             String codePrefix) {}
 
     @Schema(name = "RetailUnitUpdate", description = "Omitted fields are unchanged; a unit is never deleted")
-    record UpdateUnitRequest(@Size(min = 1, max = 30) String name, Boolean active) {}
+    record UpdateUnitRequest(
+            @Size(min = 1, max = 30) String name,
+            Boolean active,
+
+            @Valid @Schema(description = "Issue #625: sets the usual pack; left out, it is unchanged")
+            UsualPackRequest usualPack) {}
 
     @Schema(name = "RetailCategory")
     record Category(
@@ -82,7 +111,22 @@ final class CatalogueApi {
             int productCount,
 
             @Schema(description = "Send as If-Match when updating")
-            int version) {}
+            int version,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Issue #625: present only when this unit is a pack with a usual size")
+            UsualPack usualPack) {}
+
+    @Schema(name = "RetailUsualPack", description = "The usual size of a pack in a smaller unit, and what it is for")
+    record UsualPack(
+            @Schema(description = "How many of the smaller unit, three places, for example 100.000")
+            String size,
+
+            UUID ofUnitId,
+            @Schema(description = "The smaller unit's name") String ofUnit,
+
+            @Schema(allowableValues = {"buy", "sell", "both"})
+            String purpose) {}
 
     @Schema(name = "RetailCategoryPrefixSuggestion")
     record PrefixSuggestion(String codePrefix) {}
@@ -1144,8 +1188,8 @@ final class CatalogueApi {
             @Pattern(regexp = RetailCatalogue.PACK_PURPOSES)
             @Schema(
                     description =
-                            "What the pack is for: buy, sell or both (the default); a pack bought only has no selling"
-                                    + " price (issue #624)")
+                            "What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624)."
+                                    + " Left out, the unit's usual purpose (issue #625), else both")
             String purpose,
 
             @PositiveOrZero

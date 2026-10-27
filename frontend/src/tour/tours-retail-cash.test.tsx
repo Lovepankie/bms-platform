@@ -18,6 +18,7 @@ import { CustomerGroups } from '../areas/staff/retail/customer-groups';
 import { ExpenseListsScreen } from '../areas/staff/retail/expense-lists';
 import { ExpensesReportScreen, ExpensesScreen } from '../areas/staff/retail/expenses';
 import { SavingsScreen } from '../areas/staff/retail/savings';
+import { ShopSetupPage } from '../areas/staff/retail/shop-setup';
 import { WithdrawalsScreen } from '../areas/staff/retail/withdrawals';
 import { RETAIL_CASH_TOURS } from './tours-retail-cash';
 import { describeTours } from './test-kit';
@@ -42,6 +43,7 @@ function screen(path: string): ReactElement {
     case '/staff/retail/catalogue/suppliers': return <SuppliersPage />;
     case '/staff/retail/catalogue/buyers': return <BuyersPage />;
     case '/staff/retail/catalogue/import': return <ImportPage />;
+    case '/staff/retail/catalogue/set-up': return <ShopSetupPage />;
     case '/staff/retail/catalogue/labels': return <LabelsPage />;
     case '/staff/retail/banking': return <BankingScreen />;
     case '/staff/retail/banking-report': return <BankingReportScreen />;
@@ -73,6 +75,7 @@ describeTours(
     'page-suppliers': [ADMIN],
     'page-buyers': [ADMIN],
     'page-import': [ADMIN],
+    'page-shop-setup': [ADMIN],
     'page-labels': [ADMIN],
     'page-banking': [ADMIN, SELLER],
     'page-banking-report': [ADMIN, SELLER],

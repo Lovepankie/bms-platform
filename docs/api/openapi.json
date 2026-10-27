@@ -15168,7 +15168,7 @@
             "type" : "string"
           },
           "purpose" : {
-            "description" : "What the pack is for: buy, sell or both (the default); a pack bought only has no selling price (issue #624)",
+            "description" : "What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624). Left out, the unit's usual purpose (issue #625), else both",
             "pattern" : "buy|sell|both",
             "type" : "string"
           },
@@ -20997,6 +20997,9 @@
             "format" : "int32",
             "type" : "integer"
           },
+          "usual_pack" : {
+            "$ref" : "#/components/schemas/RetailUsualPack"
+          },
           "version" : {
             "description" : "Send as If-Match when updating",
             "format" : "int32",
@@ -21020,6 +21023,9 @@
             "maxLength" : 30,
             "minLength" : 0,
             "type" : "string"
+          },
+          "usual_pack" : {
+            "$ref" : "#/components/schemas/RetailUsualPackRequest"
           }
         },
         "required" : [ "name" ]
@@ -21034,6 +21040,9 @@
             "maxLength" : 30,
             "minLength" : 1,
             "type" : "string"
+          },
+          "usual_pack" : {
+            "$ref" : "#/components/schemas/RetailUsualPackRequest"
           }
         }
       },
@@ -21156,6 +21165,48 @@
           }
         },
         "required" : [ "kind", "lines", "reason" ]
+      },
+      "RetailUsualPack" : {
+        "description" : "The usual size of a pack in a smaller unit, and what it is for",
+        "properties" : {
+          "of_unit" : {
+            "description" : "The smaller unit's name",
+            "type" : "string"
+          },
+          "of_unit_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purpose" : {
+            "enum" : [ "buy", "sell", "both" ],
+            "type" : "string"
+          },
+          "size" : {
+            "description" : "How many of the smaller unit, three places, for example 100.000",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailUsualPackRequest" : {
+        "description" : "The usual size of this pack in a smaller unit, such as a roll of 100 metres, and what it is for",
+        "properties" : {
+          "of_unit_id" : {
+            "description" : "The smaller unit, such as Metre or Piece",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "purpose" : {
+            "description" : "What the pack is for, the values of a pack's purpose on an item (#624); an item's pack of this unit added with no purpose takes it",
+            "enum" : [ "buy", "sell", "both" ],
+            "pattern" : "buy|sell|both",
+            "type" : "string"
+          },
+          "size" : {
+            "description" : "How many of the smaller unit, at least 1, up to three places",
+            "type" : "string"
+          }
+        },
+        "required" : [ "of_unit_id", "purpose", "size" ]
       },
       "RetailValuation" : {
         "properties" : {

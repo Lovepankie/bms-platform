@@ -16,7 +16,7 @@ export const ALL_SELLERS = 'retail.sale.all_sellers';
 
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'orders' | 'ordersReport' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'
-  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer' | 'labels'
+  | 'catalogue' | 'products' | 'categories' | 'units' | 'suppliers' | 'buyers' | 'importer' | 'labels' | 'shopSetup'
   // The trade screens of ADR-033: offered only while their capability is on (SCREEN_CAPABILITY below).
   | 'stockByLocation' | 'inTransit' | 'priceLists' | 'customerGroups' | 'customerAccounts' | 'customerAgeing' | 'documents' | 'quotations' | 'returns'
   // Optional purchasing (ADR-033, issue #198): orders and goods received, then supplier invoices, payments and what is owed. Payments
@@ -167,6 +167,8 @@ const NEEDS: Record<RetailScreen, string[]> = {
   importer: ['retail.catalogue.manage', 'retail.stock.read', 'core.settings.manage'],
   // Barcode labels (issue #345): making a code for an item is a catalogue change, so the catalogue permission.
   labels: ['retail.catalogue.manage', 'retail.stock.read'],
+  // Set up your shop (issue #625) adds categories and units, so it needs what Categories and Units need.
+  shopSetup: ['retail.catalogue.manage', 'retail.stock.read'],
   // The cash book screens each need the permission that records on them; the lists and reports on
   // them need retail.cashbook.read, and a void needs retail.cashbook.void (checked where it is offered).
   savings: [SAVINGS_RECORD, TILL],

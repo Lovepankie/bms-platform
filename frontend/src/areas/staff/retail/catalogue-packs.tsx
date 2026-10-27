@@ -152,6 +152,31 @@ function PackSheet({ product, pack, mayPrice, onClose }: { product: Product; pac
   );
 }
 
+/** Issue #625: the unit's usual pack size, when it counts what this item is counted in, as the number to start from. */
+export function usualFactor(unit: Unit | undefined, product: Product): string | null {
+  const pack = unit?.usual_pack;
+  return pack?.size && pack.of_unit_id === product.unit_id ? showQty(pack.size) : null;
+}
+
+/**
+ * Review of #628: the size to show when another unit is chosen. A size filled in from the last unit's usual pack (or none) makes
+ * way for this unit's usual size, or for nothing when it has none; a size the owner typed stays.
+ */
+export function factorForUnit(factor: string, filled: string, usual: string | null): string {
+  return factor.trim() === '' || factor === filled ? (usual ?? '') : factor;
+}
+
+/**
+ * Merge of #627 and #628: a pack on an item starts with the unit's usual Used for, the same purpose (ADR-099, ADR-100). A Used
+ * for filled in from the last unit (or the starting Both) makes way for it, or for Both when the unit has none; one the owner
+ * chose stays.
+ */
+export function purposeForUnit(purpose: Purpose, filled: Purpose, unit: Unit | undefined): Purpose {
+  if (purpose !== filled) return purpose;
+  const usual = unit?.usual_pack?.purpose;
+  return usual === 'buy' || usual === 'sell' ? usual : 'both';
+}
+
 export function PackEditor({ product }: { product: Product }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
@@ -165,6 +190,18 @@ export function PackEditor({ product }: { product: Product }) {
   const [purpose, setPurpose] = useState<Purpose>('both');
   const [priceMinor, setPriceMinor] = useState<number | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  // The size and Used for last filled in from a unit's usual pack (issue #625): another unit replaces them, but never what the
+  // owner chose.
+  const [filled, setFilled] = useState<{ factor: string; purpose: Purpose }>({ factor: '', purpose: 'both' });
+  const chooseUnit = (unit: Unit | undefined) => {
+    setUnitId(unit?.id ?? '');
+    const nextFactor = factorForUnit(factor, filled.factor, usualFactor(unit, product));
+    const nextPurpose = purposeForUnit(purpose, filled.purpose, unit);
+    setFactor(nextFactor);
+    setPurpose(nextPurpose);
+    // Only what changed counts as filled in, so a size or Used for the owner chose is never taken for one the app filled.
+    setFilled({ factor: nextFactor === factor ? filled.factor : nextFactor, purpose: nextPurpose === purpose ? filled.purpose : nextPurpose });
+  };
   const add = useMutation({
     mutationFn: () =>
       retail.addPack(id, {
@@ -178,6 +215,7 @@ export function PackEditor({ product }: { product: Product }) {
       setFactor('');
       setPurpose('both');
       setPriceMinor(null);
+      setFilled({ factor: '', purpose: 'both' });
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -261,7 +299,7 @@ export function PackEditor({ product }: { product: Product }) {
       ) : (
       <>
       <label htmlFor="pack-unit">Add a pack</label>
-      <select id="pack-unit" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
+      <select id="pack-unit" value={unitId} onChange={(e) => chooseUnit(choices.find((u) => u.id === e.target.value))}>
         <option value="">Choose a unit</option>
         {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
       </select>

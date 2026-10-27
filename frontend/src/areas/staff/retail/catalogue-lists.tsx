@@ -7,6 +7,7 @@ import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
 import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
 import { useComeBack } from '../../../app/ui/EmptyChoice';
+import { packText } from './shop-setup-state';
 
 // Categories and Units (#146): the same screen twice. A row can be renamed or switched off, never
 // deleted: items and their history keep pointing at it. A switched-off row stays on the items that
@@ -146,7 +147,9 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
             key={r.id}
             row={r}
             noun={noun}
-            detail={withPrefix && 'code_prefix' in r ? <p className="hint">Item codes start with <strong>{r.code_prefix}</strong>, next {r.next_code}.</p> : undefined}
+            detail={withPrefix && 'code_prefix' in r
+              ? <p className="hint">Item codes start with <strong>{r.code_prefix}</strong>, next {r.next_code}.</p>
+              : 'usual_pack' in r && r.usual_pack ? <p className="hint">{`Usual pack: ${packText(r.usual_pack.size ?? '', r.usual_pack.of_unit ?? '', r.usual_pack.purpose)}.`}</p> : undefined}
             extra={withPrefix
               ? <Link className="btn-sm" to={`/staff/retail/catalogue/categories/${r.id ?? ''}` as never} aria-label={`Open ${r.name} and its items`}>Open</Link>
               : <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>}

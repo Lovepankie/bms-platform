@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { Product, Sale } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
-import { PackEditor } from './catalogue-packs';
+import { PackEditor, factorForUnit, purposeForUnit } from './catalogue-packs';
 import { Receipt, SaleForm, SaleLineCard } from './sale';
 import { newLine } from './sale-state';
 
@@ -40,6 +40,27 @@ describe('pack sizes on the item', () => {
     expect(html).toContain('Cartons, boxes and other packs');
     expect(html).toContain('Add pack');
     expect(html).toContain('for="pack-factor"');
+  });
+});
+
+describe('the size a chosen unit fills in (issue #625)', () => {
+  it('fills in the usual size, replaces a filled one, clears it for a unit with none, and keeps a typed one', () => {
+    expect(factorForUnit('', '', '100')).toBe('100');
+    expect(factorForUnit('100', '100', '50')).toBe('50');
+    expect(factorForUnit('100', '100', null)).toBe('');
+    expect(factorForUnit('12', '100', '50')).toBe('12');
+    expect(factorForUnit('12', '', null)).toBe('12');
+  });
+});
+
+describe('the Used for a chosen unit fills in (one pack idea, ADR-099 and ADR-100)', () => {
+  const roll = (purpose: 'buy' | 'sell' | 'both') => ({ id: 'u-roll', name: 'Roll', usual_pack: { size: '100.000', of_unit_id: 'u-m', of_unit: 'Metre', purpose } });
+  it("takes the unit's usual purpose, replaces a filled one, goes back to Both for a unit with none, and keeps a chosen one", () => {
+    expect(purposeForUnit('both', 'both', roll('sell'))).toBe('sell');
+    expect(purposeForUnit('sell', 'sell', roll('buy'))).toBe('buy');
+    expect(purposeForUnit('buy', 'buy', { id: 'u-box', name: 'Box' })).toBe('both');
+    expect(purposeForUnit('buy', 'both', roll('sell'))).toBe('buy');
+    expect(purposeForUnit('both', 'both', undefined)).toBe('both');
   });
 });
 

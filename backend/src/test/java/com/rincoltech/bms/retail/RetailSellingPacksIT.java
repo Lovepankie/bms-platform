@@ -573,4 +573,34 @@ class RetailSellingPacksIT extends IntegrationTest {
         ResponseEntity<JsonNode> bad = change(halfCarton, Map.of("purpose", "gift"), ADMIN);
         assertThat(bad.getStatusCode()).isIn(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE_CONTENT);
     }
+
+    /** Issue #625 and #624 merged (ADR-100): a pack added with no purpose takes its unit's usual one, the same values. */
+    @Test
+    void aPackWithNoPurposeTakesItsUnitsUsualPurpose() {
+        UUID piece = api.unit("piece");
+        usual(carton, piece, "buy");
+        usual(halfCarton, piece, "sell");
+        usual(box, piece, "buy");
+        assertThat(pack(carton, "12", null, null).get("purpose").asString()).isEqualTo("buy");
+        assertThat(pack(halfCarton, "6", null, null).get("purpose").asString()).isEqualTo("sell");
+        // A price sent with it means the pack is sold, so a usual buy-only pack is added for both.
+        assertThat(pack(box, "10", null, 900L).get("purpose").asString()).isEqualTo("both");
+        // A plain unit still gives both, and a purpose sent wins over the usual one.
+        UUID dozen = api.unit("dozen");
+        assertThat(pack(dozen, "12", null, null).get("purpose").asString()).isEqualTo("both");
+        UUID crate = api.unit("crate");
+        usual(crate, piece, "sell");
+        assertThat(pack(crate, "24", "buy", null).get("purpose").asString()).isEqualTo("buy");
+    }
+
+    void usual(UUID unit, UUID of, String purpose) {
+        ResponseEntity<JsonNode> r = api.call(
+                HttpMethod.PATCH,
+                "/units/" + unit,
+                Map.of("usual_pack", Map.of("size", "12", "of_unit_id", of, "purpose", purpose)),
+                ADMIN,
+                "*",
+                Map.of("If-Match", "1"));
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+    }
 }

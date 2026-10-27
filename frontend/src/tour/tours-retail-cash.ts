@@ -198,6 +198,21 @@ export const importPage: Tour = {
   ],
 };
 
+export const shopSetupPage: Tour = {
+  id: 'page-shop-setup',
+  version: 1,
+  title: 'This page: set up your shop',
+  audience: (me) => held(me, CATALOGUE) && held(me, STOCK_READ),
+  autoStart: false,
+  page: '/staff/retail/catalogue/set-up',
+  // The list and Add these show only once a kind of shop is chosen, so those two steps point at no part of the page.
+  steps: [
+    step({ id: 'type', target: 'setup-type', title: 'What kind of shop is it?', body: 'Tap the kind of shop closest to yours. Something else gives just the common units.' }),
+    step({ id: 'list', title: 'Untick what you do not sell', body: 'Each category, unit and pack is ticked. Untick what you do not want. For a pack, change the usual size and say if you buy it, sell it or both.' }),
+    step({ id: 'add', title: 'Add these', body: 'Tap Add these. Names your shop has already are left as they are, so you can run it again safely.' }),
+  ],
+};
+
 export const labelsPage: Tour = {
   id: 'page-labels',
   // Version 2 words the Choose step for the picker that lists items only while you type (issue #534).
@@ -381,7 +396,7 @@ export const customerAgeingPage: Tour = {
 };
 
 export const RETAIL_CASH_TOURS: readonly Tour[] = [
-  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, categoryPage, unitsPage, suppliersPage, buyersPage, importPage, labelsPage,
+  productsPage, sizesNewPage, sizesJoinPage, sizesPage, categoriesPage, categoryPage, unitsPage, suppliersPage, buyersPage, importPage, shopSetupPage, labelsPage,
   bankingPage, bankingReportPage, expensesPage, expensesReportPage, expenseListsPage, withdrawalsPage, advancesPage, cashSummaryPage, savingsPage,
   branchRolesPage, customerGroupsPage, customerAgeingPage,
 ];

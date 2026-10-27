@@ -29,7 +29,7 @@ export function AddPanel({ label, open, onOpen, onClose, children }: { label: st
 }
 
 export const TILE_ICONS: Partial<Record<RetailScreen, keyof typeof icons>> = {
-  products: 'stock', categories: 'categories', units: 'units', suppliers: 'restock', buyers: 'customerAccounts', importer: 'importer', labels: 'labels',
+  products: 'stock', categories: 'categories', units: 'units', suppliers: 'restock', buyers: 'customerAccounts', importer: 'importer', labels: 'labels', shopSetup: 'shop',
 };
 
 export function CatalogueLinks() {
@@ -37,6 +37,10 @@ export function CatalogueLinks() {
   const links = catalogueLinksFor(me);
   return (
     <TileGrid label="Catalogue pages" tour="catalogue-links">
+      {/* Set up your shop (issue #625): the starting categories, units and packs of a kind of shop, first so a new shop finds it. */}
+      {canUse(me, 'shopSetup') && (
+        <Tile to="/staff/retail/catalogue/set-up" icon={icons[TILE_ICONS.shopSetup ?? 'catalogue']} label="Set up your shop" hint="Starting categories, units and packs for your kind of shop" tour="catalogue-shopSetup" />
+      )}
       {links.map((l) => (
         <Tile key={l.screen} to={l.path} icon={icons[TILE_ICONS[l.screen] ?? 'catalogue']} label={l.label} hint={l.hint} tour={`catalogue-${l.screen}`} />
       ))}

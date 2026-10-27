@@ -14987,7 +14987,7 @@ export interface components {
         RetailPackRequest: {
             /** @description Base units in one pack, at least 1, up to three places, for example 12 or 12.5 */
             factor: string;
-            /** @description What the pack is for: buy, sell or both (the default); a pack bought only has no selling price (issue #624) */
+            /** @description What the pack is for: buy, sell or both; a pack bought only has no selling price (issue #624). Left out, the unit's usual purpose (issue #625), else both */
             purpose?: string;
             /**
              * Format: int64
@@ -18037,6 +18037,7 @@ export interface components {
              * @description Products (active or not) that use this unit
              */
             product_count?: number;
+            usual_pack?: components["schemas"]["RetailUsualPack"];
             /**
              * Format: int32
              * @description Send as If-Match when updating
@@ -18048,11 +18049,13 @@ export interface components {
         };
         RetailUnitRequest: {
             name: string;
+            usual_pack?: components["schemas"]["RetailUsualPackRequest"];
         };
         /** @description Omitted fields are unchanged; a unit is never deleted */
         RetailUnitUpdate: {
             active?: boolean;
             name?: string;
+            usual_pack?: components["schemas"]["RetailUsualPackRequest"];
         };
         RetailUsageLine: {
             code?: string;
@@ -18114,6 +18117,32 @@ export interface components {
              */
             occurred_on?: string;
             reason: string;
+        };
+        /** @description The usual size of a pack in a smaller unit, and what it is for */
+        RetailUsualPack: {
+            /** @description The smaller unit's name */
+            of_unit?: string;
+            /** Format: uuid */
+            of_unit_id?: string;
+            /** @enum {string} */
+            purpose?: "buy" | "sell" | "both";
+            /** @description How many of the smaller unit, three places, for example 100.000 */
+            size?: string;
+        };
+        /** @description The usual size of this pack in a smaller unit, such as a roll of 100 metres, and what it is for */
+        RetailUsualPackRequest: {
+            /**
+             * Format: uuid
+             * @description The smaller unit, such as Metre or Piece
+             */
+            of_unit_id: string;
+            /**
+             * @description What the pack is for, the values of a pack's purpose on an item (#624); an item's pack of this unit added with no purpose takes it
+             * @enum {string}
+             */
+            purpose: "buy" | "sell" | "both";
+            /** @description How many of the smaller unit, at least 1, up to three places */
+            size: string;
         };
         RetailValuation: {
             /** Format: date */

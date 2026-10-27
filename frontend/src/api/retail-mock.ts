@@ -2,7 +2,7 @@ import type {
   ApprovalWaiting,
   Barcode,
   AllBranchesRow, Category, EntryConfirmation, EntryNorms, NameHints, CapabilitiesRead, Family, Pack, Customer, InFlightReport, LocationRow, PriceChange, DailyProfit, DailyProfitRow, Product, Purchase, RetailApi, Sale, SaleLine, SimilarProduct, StockMovement, Stocktake, StockByLocation, StockRow,
-  Supplier, Transfer, Unit, Usage, Valuation, ValuationRow,
+  Supplier, Transfer, Unit, Usage, UsualPackRequest, Valuation, ValuationRow,
 } from './retail';
 import type { SalesQuery } from './retail';
 import { NO_SUPPLIER, RetailError, businessToday, daysBefore } from './retail';
@@ -269,7 +269,11 @@ export function createMockRetail(): RetailApi {
   const cats: { id: string; name: string; active: boolean; version: number; code_prefix: string; next: number }[] = [];
   for (const c of CATEGORIES) cats.push({ id: c.id ?? '', name: c.name ?? '', active: true, version: 1, code_prefix: freePrefix(cats, c.name ?? ''), next: 1 });
   const unitNames = [...new Set(PRODUCTS.map((p) => p.unit))];
-  const unitRows: { id: string; name: string; active: boolean; version: number }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true, version: 1 }));
+  const unitRows: { id: string; name: string; active: boolean; version: number; usual_pack?: Unit['usual_pack'] }[] = unitNames.map((name, i) => ({ id: `00000000-0000-4000-8000-0000000d${String(i + 1).padStart(4, '0')}`, name, active: true, version: 1 }));
+  // Issue #625: a pack's usual size in a smaller unit, as the server keeps it (three places, with the smaller unit's name).
+  const usualPackOf = (p: UsualPackRequest): Unit['usual_pack'] => ({
+    size: Number(p.size).toFixed(3), of_unit_id: p.of_unit_id, of_unit: unitRows.find((x) => x.id === p.of_unit_id)?.name ?? '', purpose: p.purpose,
+  });
   const categoryId = (name: string): string => cats.find((c) => c.name === name)?.id ?? '';
   const history = new Map<string, PriceChange[]>();
   const packs = new Map<string, Pack[]>();
@@ -924,10 +928,10 @@ export function createMockRetail(): RetailApi {
 
     listUnits: () => delay(unitRows.map((u) => refreshed(u, 'unit') as Unit)),
 
-    createUnit: (name) =>
+    createUnit: (name, usualPack) =>
       run(() => {
         clash(unitRows, '', name, 'duplicate_unit', 'unit');
-        const u = { id: nextId('d'), name: name.trim(), active: true, version: 1 };
+        const u = { id: nextId('d'), name: name.trim(), active: true, version: 1, ...(usualPack ? { usual_pack: usualPackOf(usualPack) } : {}) };
         unitRows.push(u);
         return refreshed(u, 'unit') as Unit;
       }),
@@ -943,6 +947,7 @@ export function createMockRetail(): RetailApi {
           u.name = body.name.trim();
         }
         u.active = body.active ?? u.active;
+        if (body.usual_pack) u.usual_pack = usualPackOf(body.usual_pack);
         u.version += 1;
         return refreshed(u, 'unit') as Unit;
       }),

@@ -163,6 +163,8 @@ const retailCategoriesRoute = retailScreen('/catalogue/categories', 'Categories'
 const retailCategoryRoute = retailScreen('/catalogue/categories/$categoryId', 'Category').lazy(() => import('../areas/staff/retail/catalogue-category').then((m) => m.CategoryRoute));
 const retailUnitsRoute = retailScreen('/catalogue/units', 'Units').lazy(() => import('../areas/staff/retail/catalogue-lists').then((m) => m.UnitsRoute));
 const retailSuppliersRoute = retailScreen('/catalogue/suppliers', 'Suppliers').lazy(() => import('../areas/staff/retail/catalogue-people').then((m) => m.SuppliersRoute));
+// Set up your shop (issue #625): the starting categories, units and packs of a kind of shop, under Catalogue.
+const retailShopSetupRoute = retailScreen('/catalogue/set-up', 'Set up your shop').lazy(() => import('../areas/staff/retail/shop-setup').then((m) => m.ShopSetupRoute));
 const retailImportRoute = retailScreen('/catalogue/import', 'Import items').lazy(() => import('../areas/staff/retail/catalogue-import').then((m) => m.ImportRoute));
 // Barcode labels (issue #345): an A4 sheet of labels with the name, the price and the barcode.
 const retailLabelsRoute = retailScreen('/catalogue/labels', 'Barcode labels').lazy(() => import('../areas/staff/retail/labels').then((m) => m.LabelsRoute));
@@ -435,6 +437,7 @@ export const router = createRouter({
         retailSuppliersRoute,
         retailBuyersRoute,
         retailImportRoute,
+        retailShopSetupRoute,
         retailLabelsRoute,
         retailSavingsRoute,
         retailCashSummaryRoute,

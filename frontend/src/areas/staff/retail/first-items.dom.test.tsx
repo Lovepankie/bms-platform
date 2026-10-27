@@ -105,6 +105,8 @@ describe('the starting card of a shop with no items', () => {
     expect(within(shown).getByText('Your shop has no items yet. Add the things you sell, then you can sell them.')).toBeTruthy();
     expect(within(shown).getByRole('link', { name: 'Add your first items' }).getAttribute('href')).toBe('/staff/retail/catalogue/products');
     expect(within(shown).getByRole('link', { name: 'Import a list' }).getAttribute('href')).toBe('/staff/retail/catalogue/import');
+    // Issue #625: the starting categories, units and packs of a kind of shop are one tap away too.
+    expect(within(shown).getByRole('link', { name: 'Set up your shop' }).getAttribute('href')).toBe('/staff/retail/catalogue/set-up');
     expect(within(shown).queryByText('Ask the owner to add the items first.')).toBeNull();
   });
 

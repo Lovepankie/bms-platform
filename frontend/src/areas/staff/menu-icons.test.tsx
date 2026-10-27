@@ -104,9 +104,9 @@ describe('menu icons (issue #483)', () => {
     expect(clashes(tiles)).toEqual([]);
   });
 
-  it('gives every catalogue tile its own icon, as the Catalogue page draws them, the import tile among them', () => {
+  it('gives every catalogue tile its own icon, as the Catalogue page draws them, the set up and import tiles among them', () => {
     const tiles = tileIcons(wholeShop(), <CatalogueLinks />);
-    expect(tiles.map((t) => t.label)).toEqual([...CATALOGUE_LINKS.map((l) => l.label), 'Import items']);
+    expect(tiles.map((t) => t.label)).toEqual(['Set up your shop', ...CATALOGUE_LINKS.map((l) => l.label), 'Import items']);
     expect(clashes(tiles)).toEqual([]);
   });
 
