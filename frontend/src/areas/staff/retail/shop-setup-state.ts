@@ -70,9 +70,9 @@ export const ADDED_MEANWHILE = 'Your shop has it already.';
  * Adds what is ticked, one at a time: categories, then units, then packs, so a pack finds the unit it counts. It stops at the first
  * failure and says what was added before it; running it again adds only what is still missing.
  */
-export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'createUnit' | 'updateUnit'>, items: SetupItem[], ticked: Set<string>, units: Unit[]): Promise<SetupResult> {
+export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'createUnit' | 'updateUnit' | 'listUnits'>, items: SetupItem[], ticked: Set<string>, units: Unit[]): Promise<SetupResult> {
   const result: SetupResult = { added: [], skipped: [], error: null };
-  const known = [...units];
+  let known = [...units];
   const chosen = items.filter((i) => i.status !== 'there' && ticked.has(key(i.kind, i.name)));
   const order: ItemKind[] = ['category', 'unit', 'pack'];
   chosen.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
@@ -93,8 +93,16 @@ export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'create
         result.skipped.push({ name: item.name, why: of ? switchedOffText(item.of ?? '') : `${item.of} is not in your shop, so this pack was left out.` });
         continue;
       }
-      const pack = { size: String(item.size), of_unit_id: of.id, purpose: item.purpose ?? 'both' };
       const had = known.find((u) => same(u.name, item.name));
+      // Issue #637, ADR-100 note: a usual pack is one level only, as the server holds it.
+      const level = of.usual_pack
+        ? `${of.name ?? ''} is itself a pack, so this pack was left out.`
+        : had?.id && known.some((u) => u.usual_pack?.of_unit_id === had.id) ? `${had.name ?? ''} holds another pack, so this pack was left out.` : null;
+      if (level) {
+        result.skipped.push({ name: item.name, why: level });
+        continue;
+      }
+      const pack = { size: String(item.size), of_unit_id: of.id, purpose: item.purpose ?? 'both' };
       if (had?.id && item.status === 'size') await api.updateUnit(had.id, had.version ?? 1, { usual_pack: pack });
       else await api.createUnit(item.name, pack);
       result.added.push({ kind: 'pack', name: item.name, detail: packText(pack.size, of.name ?? '', pack.purpose) });
@@ -102,6 +110,15 @@ export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'create
       // Added meanwhile, on another phone: it is there, which is what was asked.
       if (error instanceof RetailError && (error.code === 'duplicate_category' || error.code === 'duplicate_unit')) {
         result.skipped.push({ name: item.name, why: ADDED_MEANWHILE });
+        // Review of #628 (issue #637): a unit added meanwhile is read back, so its packs find it and are not skipped as missing.
+        if (item.kind === 'unit') {
+          try {
+            known = await api.listUnits();
+          } catch (again) {
+            result.error = again;
+            return result;
+          }
+        }
         continue;
       }
       result.error = error;
