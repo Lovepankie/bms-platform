@@ -26,8 +26,8 @@ export function HowDoILink({ pathname, me }: { pathname: string; me: Me }) {
  * The Ask button of the staff top bar (issue #603, round 2), next to Search on every staff screen but /staff/help itself: Ask
  * (named Ask BMS) while the business has Ask BMS on, else How do I?, never Help, which names the top menu's tours sheet (WCAG
  * 3.2.4). It opens /staff/help#ask, where the cursor lands in the Ask BMS question box (the article search while Ask BMS is off),
- * and carries the help page's New dot, said as ", New" in its name, until the person has opened it once. Below 380px only the
- * icon shows; its name stays.
+ * and carries the help page's New dot, said as ", New" in its name, until the person has opened it once. Below 430px only the
+ * icon shows (issue #605), so the branch name beside it stays readable; its name stays.
  */
 export function AskButton() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });

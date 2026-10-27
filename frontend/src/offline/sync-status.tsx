@@ -7,7 +7,8 @@ import { discarded, failedCount, waiting, waitingWords, type OutboxItem } from '
 import { useOffline, useOnline, useOutbox } from './offline-context';
 
 // The status in the staff bar (issue #458, ADR-067 decision 10): a dot, green online, grey offline, amber while sending,
-// with the state in words (Online, Offline, Syncing) and "3 waiting to sync" beside it ("3 waiting" on a narrow screen). Since
+// with the state in words (Online, Offline, Syncing) and "3 waiting to sync" beside it ("3 waiting" on a narrow screen). Below
+// 430px it is the dot and the number alone ("3"), so the branch name keeps its room (issue #605); its name keeps the words. Since
 // issue #526 it is drawn only while offline, sending, or with sales waiting or failed; online with nothing waiting shows nothing. Tapping it opens a sheet of the queued and failed sales with Sync now and, for a
 // manager (retail.offline.resolve), the sales other people's phones could not record. Nothing is drawn for a person who
 // does not sell.
@@ -72,6 +73,7 @@ export function SyncStatus() {
             <span className="sync-count" aria-hidden="true">
               <span className="sync-long">{waitingWords(list.length)}</span>
               <span className="sync-short">{list.length} waiting</span>
+              <span className="sync-number">{list.length}</span>
             </span>
           )}
         </button>

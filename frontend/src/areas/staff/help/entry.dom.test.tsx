@@ -48,14 +48,14 @@ function screenIs(px: number, still = false) {
   );
 }
 
-function show(children: ReactNode, path = '/staff/more') {
+function show(children: ReactNode, path = '/staff/more', me: Me = admin) {
   const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: [path] }) });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   return { router, ...render(
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
-        <StaffContext.Provider value={{ me: admin, branch: admin.branches?.[0]?.id ?? null, signOut: () => undefined }}>
-          <TourProvider me={admin} saveProgress={false}>
+        <StaffContext.Provider value={{ me, branch: me.branches?.[0]?.id ?? null, signOut: () => undefined }}>
+          <TourProvider me={me} saveProgress={false}>
             {children}
           </TourProvider>
         </StaffContext.Provider>
@@ -352,6 +352,15 @@ describe('the blink and the Ask focus at their edges (issue #603, round 4)', () 
   it('keeps the badge for an article that is not found or is for another role', async () => {
     show(<ArticleView articleId="no-such-article" />, '/staff/help/no-such-article');
     await screen.findByText('This article could not be found.');
+    expect(localStorage.getItem('bms.new.ask-bms.seen')).toBeNull();
+    cleanup();
+    // A cashier opening an article only an owner may read (issue #605).
+    const cashier = { ...mockMe('cashier'), tours: TOURS_OFF } as unknown as Me;
+    const forbidden = articlesFor(admin).find((a) => !articlesFor(cashier).some((b) => b.id === a.id));
+    expect(forbidden).toBeDefined();
+    show(<ArticleView articleId={forbidden?.id ?? ''} />, `/staff/help/${forbidden?.id ?? ''}`, cashier);
+    await screen.findByText(/This article is for another role/);
+    expect(screen.queryByText(forbidden?.title ?? '')).toBeNull();
     expect(localStorage.getItem('bms.new.ask-bms.seen')).toBeNull();
   });
 });

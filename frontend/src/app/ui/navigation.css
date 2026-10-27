@@ -30,6 +30,13 @@
   min-height: 56px;
 }
 
+/* Below 430px the bar's controls sit closer, so the branch name keeps its room (issue #605); each is still a 48px target. */
+@media (max-width: 429px) {
+  .staff-bar-top {
+    gap: var(--space-1);
+  }
+}
+
 .staff-bar-spacer {
   flex: 1 1 0;
 }
@@ -125,7 +132,8 @@
   flex: none;
 }
 
-/* The Ask button (issue #603): the ask icon and its word next to Search, a 48px target, the New dot at its top right. */
+/* The Ask button (issue #603): the ask icon and its word next to Search, a 48px target, the New dot at its top right. Below
+   430px only the icon shows (issue #605), so the branch name beside it stays readable; its name is unchanged. */
 .ask-open {
   position: relative;
   flex: none;
@@ -134,7 +142,7 @@
   gap: var(--space-1);
 }
 
-@media (max-width: 379px) {
+@media (max-width: 429px) {
   .ask-open-word {
     display: none;
   }
@@ -845,8 +853,10 @@ img.menu-shop-logo {
 .sync-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  min-height: 44px;
+  min-width: var(--tap);
+  min-height: var(--tap);
 }
 
 .sync-dot {
@@ -871,7 +881,8 @@ img.menu-shop-logo {
   white-space: nowrap;
 }
 
-.sync-short {
+.sync-short,
+.sync-number {
   display: none;
 }
 
@@ -881,6 +892,19 @@ img.menu-shop-logo {
   }
 
   .sync-short {
+    display: inline;
+  }
+}
+
+/* Below 430px the button is the dot and the number waiting alone, "3", in every state (issue #605), so the branch name keeps its
+   room. Its name and title keep the words ("Offline, 3 waiting to sync"); offline, the banner under the bar says it in words too. */
+@media (max-width: 429px) {
+  .sync-word,
+  .sync-short {
+    display: none;
+  }
+
+  .sync-number {
     display: inline;
   }
 }

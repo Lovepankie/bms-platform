@@ -66,9 +66,11 @@ back to what opened it.
     later, as when the drawer opens again, blinks only for what is left), then stands still until the person opens the
     feature, and it never blinks under reduced motion. Five seconds keeps it inside WCAG 2.2.2, which asks for a way to pause
     only a blink that runs longer. The design guard holds this with a plain token ban: `infinite` (shorthand, longhand or
-    `-webkit-`) and any `var()` but the motion tokens in an animation value fail outside the named work-in-progress loops
-    (spinners, the skeleton shimmer, the loading mark, the sync dot while sending); every `.new-blink` rule must run
-    `rt-new-blink` five times; and code may not set an animation or loop one with `Infinity`.
+    `-webkit-`), a bare count above one or an iteration-count longhand that is not a plain number up to one (issue #605) and any `var()` but the motion tokens in an animation value fail outside
+    the named work-in-progress loops (the busy button while it writes, spinners, the skeleton shimmer, the loading mark, the
+    sync dot while sending) and `.new-blink`; every `.new-blink` rule must run
+    `rt-new-blink` five times; and code may not set an animation (an imported value as a style key included) or loop one with
+    `Infinity` or `Number.POSITIVE_INFINITY`.
 
 ## Feedback
 
@@ -96,7 +98,10 @@ back to what opened it.
 
 19. The staff area has one 56px top bar: the business and the branch in use as its title, which switches branch; Search; and
     one menu for who is signed in, Help, Refresh, the theme and Sign out. The Online dot shows only when it has news (offline,
-    sending, sales waiting), and always for a manager, whose sheet settles other phones' sales, and an offline banner sits under the bar while the device has no network. The Powered-by footer
+    sending, sales waiting), and always for a manager, whose sheet settles other phones' sales; below 430px wide the controls
+    sit closer, the Online dot is the dot and the number waiting alone in every state (its name keeps the words, "Offline, 3
+    waiting to sync") and Ask is its icon alone, so the business and the branch keep their first word and the start of the
+    second (issue #605; at a phone's double text size, their first two letters). An offline banner sits under the bar while the device has no network. The Powered-by footer
     shows only on More and the settings pages, and the page colour fills the viewport.
 20. A phone shows one crumb, a back chevron and "Back to" the parent, with no slash; a screen never adds a second Back to
     link under its title, nor a "Branch: X" line, since the top bar names the branch: a write screen records at exactly that
