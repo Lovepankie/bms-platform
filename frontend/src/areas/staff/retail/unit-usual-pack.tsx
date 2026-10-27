@@ -52,6 +52,8 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
   const [size, setSize] = useState(had?.size ? showQty(had.size) : '');
   const [purpose, setPurpose] = useState<Purpose>(asPurpose(had?.purpose));
   const [sent, setSent] = useState(false);
+  // Rule 10 (review of #637): each field's error shows once that field is left, or once Save is pressed.
+  const [touched, setTouched] = useState({ of: false, size: false });
   const save = useMutation({
     mutationFn: (body: { usual_pack?: UsualPackRequest; clear_usual_pack?: boolean }) => retail.updateUnit(unit.id ?? '', requireVersion(unit.version), body),
     onSuccess: (row, body) => {
@@ -121,10 +123,10 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
             label="It holds"
             required
             error={ofUnitId === '' ? 'Choose the unit this pack holds.' : null}
-            showError={sent}
+            showError={sent || touched.of}
             control={(props) => (
               // empty: with no choice the EmptyChoice above takes this field's place.
-              <select {...props} value={ofUnitId} onChange={(e) => setOfUnitId(e.target.value)}>
+              <select {...props} value={ofUnitId} onChange={(e) => setOfUnitId(e.target.value)} onBlur={(e) => { props.onBlur(e); setTouched((t) => ({ ...t, of: true })); }}>
                 <option value="">Choose a unit</option>
                 {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
@@ -136,13 +138,15 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
           label={`How many in one ${unit.name ?? ''}`}
           required
           error={sizeProblem}
-          showError={sent}
+          showError={sent || touched.size}
+          onBlur={() => setTouched((t) => ({ ...t, size: true }))}
           inputMode="decimal"
           value={size}
           onChange={(e) => setSize(e.target.value)}
           autoComplete="off"
         />
-        <p className="field-label">Used for</p>
+        {/* The group carries the name for a screen reader, so the visible label is not read twice. */}
+        <p className="field-label" aria-hidden="true">Used for</p>
         <Segmented label="Used for" options={PURPOSES} value={purpose} onChange={setPurpose} />
         <Problem error={save.error} />
       </form>

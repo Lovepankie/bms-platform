@@ -94,6 +94,12 @@ describe('a usual pack on the Units page (issue #637)', () => {
     const options = within(within(sheet).getByLabelText(/^It holds/)).getAllByRole('option').map((o) => o.textContent);
     expect(options).toEqual(['Choose a unit', 'Metre']);
     expect(within(sheet).queryByRole('button', { name: 'Remove usual pack' })).toBeNull();
+    // Rule 10: leaving It holds with no unit chosen shows its error at once, before Save.
+    const holds = within(sheet).getByLabelText(/^It holds/);
+    expect(within(sheet).queryByText('Choose the unit this pack holds.')).toBeNull();
+    fireEvent.blur(holds);
+    expect(within(sheet).getByText('Choose the unit this pack holds.')).toBeTruthy();
+    expect(holds.getAttribute('aria-invalid')).toBe('true');
     fireEvent.change(within(sheet).getByLabelText(/^It holds/), { target: { value: 'u-m' } });
     const many = within(sheet).getByLabelText(/^How many in one Dozen/);
     fireEvent.change(many, { target: { value: '0.5' } });
