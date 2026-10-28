@@ -340,6 +340,18 @@ class CatalogueRepository {
         return out;
     }
 
+    /**
+     * Up to {@code limit} items as "name (unit)", newest first: what the setup helper tells the model the shop has already
+     * (ADR-102), so it does not draft them again.
+     */
+    List<String> productLabels(int limit) {
+        return jdbc.sql("""
+                        SELECT p.description || ' (' || u.name || ')' FROM retail_products p
+                          JOIN retail_units u ON u.id = p.unit_id
+                         WHERE p.active ORDER BY p.created_at DESC, p.id LIMIT ?
+                        """).param(limit).query(String.class).list();
+    }
+
     /** Products whose name has the same key as the description, other than {@code excludeId}. */
     List<NameMatch> sameName(String description, UUID excludeId) {
         return jdbc.sql(SELECT_NAME

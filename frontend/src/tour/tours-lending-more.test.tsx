@@ -100,6 +100,8 @@ const smsTemplate: SmsTemplate = {
 
 // What the pages read before they can draw their body.
 function seed(client: QueryClient, me: Me): void {
+  // The setup helper's box shows only while the platform has it on (issue #626); on here, so its tour step has its anchor.
+  client.setQueryData(['help', 'setup'], { enabled: true, photos: true });
   const branch = me.branches?.[0]?.id ?? null;
   client.setQueryData(['approvals', branch], {
     items: [{ id: 'ap1', action_type: 'refund', amount_minor: 50000, currency: 'UGX', requested_by: 'u9', requested_by_name: 'Test Clerk 09', requested_at: '2026-10-01T08:00:00Z', can_decide: true, can_cancel: false }],

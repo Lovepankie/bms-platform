@@ -202,6 +202,46 @@ class NeverClaudeTest {
                 .containsExactly("groq");
     }
 
+    static SetupProperties setup(String geminiPhoto, String groqPhoto) {
+        return new SetupProperties("", null, null, null, null, null, geminiPhoto, groqPhoto);
+    }
+
+    /**
+     * The setup helper (ADR-102) uses the same chain and checks: text goes to Gemini, Groq and DeepSeek on Ask BMS's models;
+     * a photo to Gemini, and to Groq only with a vision model set; DeepSeek never reads a photo.
+     */
+    @Test
+    void theSetupHelperChainsAreAskBmssAndDeepSeekNeverReadsAPhoto() {
+        Factory factory = new Factory();
+        AskProperties ask = properties(gemini(GEMINI_URL, "gemini-3.5-flash-lite"), deepseek(270_000L));
+        SetupProviders chains = new AskConfiguration().setupProviders(ask, setup("", ""), factory);
+        assertThat(chains.text().chain())
+                .extracting(AskProviders.Provider::name)
+                .containsExactly("gemini", "groq", "deepseek");
+        assertThat(chains.photos().chain())
+                .extracting(AskProviders.Provider::name)
+                .containsExactly("gemini");
+        assertThat(chains.photos().chain().getFirst().client().model()).isEqualTo("gemini-3.5-flash-lite");
+        SetupProviders withGroq = new AskConfiguration()
+                .setupProviders(ask, setup("gemini-3.5-flash", "test-groq-vision"), new Factory());
+        assertThat(withGroq.photos().chain())
+                .extracting(p -> p.name() + "/" + p.client().model())
+                .containsExactly("gemini/gemini-3.5-flash", "groq/test-groq-vision");
+        assertThat(factory.built).noneMatch(b -> ANTHROPIC.matcher(b).find());
+    }
+
+    @Test
+    void aSetupPhotoModelNamingClaudeStopsStartup() {
+        AskProperties ask = properties(gemini(GEMINI_URL, "gemini-3.5-flash-lite"), deepseek(270_000L));
+        assertThatThrownBy(
+                        () -> new AskConfiguration().setupProviders(ask, setup("claude-haiku-4-5", ""), new Factory()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("never uses");
+        assertThatThrownBy(
+                        () -> new AskConfiguration().setupProviders(ask, setup("", "anthropic-vision"), new Factory()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void anythingNamingAnthropicOrClaudeStopsStartup() {
         assertThatThrownBy(() -> AskProviders.from(

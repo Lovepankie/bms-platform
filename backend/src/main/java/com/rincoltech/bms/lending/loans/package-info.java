@@ -25,6 +25,7 @@
             "core.payments",
             "core.identity",
             "lending.members",
+            "core.help",
             "lending.products",
             "lending.collateral"
         })

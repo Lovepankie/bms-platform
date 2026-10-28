@@ -1,0 +1,7 @@
+{"loans": [
+  {"ref": "Y-001", "member_name": "Test Borrower Alpha", "member_phone": "0700 000 101", "principal": "500,000", "date": "2026-08-02", "term_months": 3, "rate_percent_per_month": 10, "total_to_repay": null,
+   "payments": [{"date": "2026-09-02", "amount": 200000}, {"date": "02/10/2026", "amount": 200000}]},
+  {"ref": null, "member_name": "Test Borrower Beta", "member_phone": "+256700000102", "principal": 300000, "date": "23/08/26", "term_months": 2, "rate_percent_per_month": null, "total_to_repay": 360000, "payments": []},
+  {"ref": "Y-001", "member_name": "Test Borrower Gamma", "member_phone": "not a phone", "principal": 100000, "date": "2026-09-10", "term_months": 1.5, "rate_percent_per_month": 120, "total_to_repay": null},
+  {"ref": null, "member_name": null, "member_phone": null, "principal": null, "date": "2026-09-10"}
+]}

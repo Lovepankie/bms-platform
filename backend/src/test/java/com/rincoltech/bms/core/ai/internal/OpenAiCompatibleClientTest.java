@@ -199,6 +199,40 @@ class OpenAiCompatibleClientTest {
         assertThat(MAPPER.readTree(seen.get(0).body()).has("response_format")).isFalse();
     }
 
+    /** A picture goes as the vision shape, the text then the data URL (ADR-102); a text message stays a string. */
+    @Test
+    void aPictureIsSentAsTextThenTheDataUrl() throws Exception {
+        script.add(new Reply(200, OK_BODY));
+        String picture = "data:image/jpeg;base64,AAAA";
+        client("m", Duration.ofSeconds(30))
+                .complete(new LlmClient.Request(
+                        List.of(
+                                new LlmClient.Message("system", "Read the list."),
+                                new LlmClient.Message("user", "The list is in this picture.", picture)),
+                        50,
+                        true));
+        JsonNode messages = MAPPER.readTree(seen.get(0).body()).get("messages");
+        assertThat(messages.get(0).get("content").asString()).isEqualTo("Read the list.");
+        JsonNode content = messages.get(1).get("content");
+        assertThat(content.get(0).get("type").asString()).isEqualTo("text");
+        assertThat(content.get(0).get("text").asString()).isEqualTo("The list is in this picture.");
+        assertThat(content.get(1).get("type").asString()).isEqualTo("image_url");
+        assertThat(content.get(1).get("image_url").get("url").asString()).isEqualTo(picture);
+    }
+
+    /** Only a data URL of a picture, on a user message: a provider is never asked to fetch a link. */
+    @Test
+    void aPictureIsNeverALink() {
+        for (String bad : List.of(
+                "https://example.test/list.jpg", "data:text/html;base64,AAAA", "data:image/svg+xml;base64,AA")) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> new LlmClient.Message("user", "x", bad))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> new LlmClient.Message("system", "x", "data:image/png;base64,AAAA"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     @Test
     void withoutAUsageBlockTheTokensAreEstimatedSoTheCapsStillCount() throws Exception {
         script.add(new Reply(

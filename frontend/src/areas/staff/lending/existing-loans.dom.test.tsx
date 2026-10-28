@@ -180,7 +180,7 @@ describe('importing existing loans from a file', () => {
     type('Or paste the rows here', `${header}\nloan,REG-001,M000201,LOAN1,1000000,2026-01-15,3,,,,,,\nrepayment,REG-001,,,,,,,,15/02/2026,400000,cash,\n`);
     fireEvent.click(screen.getByRole('button', { name: 'Check the file' }));
     await screen.findByText(/must be year-month-day/);
-    expect(api.importCsv).toHaveBeenCalledWith(expect.stringContaining('REG-001'), true);
+    expect(api.importCsv).toHaveBeenCalledWith(expect.stringContaining('REG-001'), true, expect.any(String));
     expect(screen.getByText(/Nothing is recorded while a row has a problem/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Record .* loans/ })).toBeNull();
   });
@@ -198,7 +198,7 @@ describe('importing existing loans from a file', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check the file' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Record 1 loans and send them for approval' }));
     await screen.findByText(/Recorded 1 loans and skipped 0 already in/);
-    await waitFor(() => expect(importCsv).toHaveBeenLastCalledWith(expect.any(String), false));
+    await waitFor(() => expect(importCsv).toHaveBeenLastCalledWith(expect.any(String), false, expect.any(String)));
     expect(importCsv).toHaveBeenCalledTimes(2);
   });
 });

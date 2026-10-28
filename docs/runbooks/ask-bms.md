@@ -94,3 +94,39 @@ with no matching provider usage means calls that never reached it.
 ## 6. Rotate a key
 
 Create the new key at the provider, put it in `.env`, restart, ask a question (section 3 step 4), then revoke the old key.
+
+## 7. The setup helper (ADR-102, issue #626)
+
+The setup helper uses the same providers, keys, allow-list and spend log to read a business's own list (typed, a photo of a
+stock book, invoice or loan register, or a CSV, Excel or PDF file) into draft rows of the item import or the existing loans
+import. **This is business data** (item names and prices; for a lender borrowers' names, phones and amounts), so it has its own
+switch, and the owner's agreement comes first (owner decision D62). It saves nothing: the owner checks the rows in the import and
+taps once to add them.
+
+| Name | Default | Notes |
+|---|---|---|
+| `BMS_SETUP_AI_TENANTS` | empty | Tenant **ids**, comma separated. Separate from `BMS_HELP_ASK_TENANTS`. Name HATS, Modern Electronics, Dodo's and Yasad first (D62), each only once its owner has agreed |
+| `BMS_SETUP_AI_GEMINI_PHOTO_MODEL` | empty | The Gemini model that reads a photo; empty is `BMS_HELP_ASK_GEMINI_MODEL`, which reads pictures |
+| `BMS_SETUP_AI_GROQ_PHOTO_MODEL` | empty | A Groq vision model; empty leaves Groq out of photos. DeepSeek reads no pictures and is never sent one |
+| `BMS_SETUP_AI_DAILY_DRAFTS` | 30 | Drafts one business may send to the providers a day |
+| `BMS_SETUP_AI_USER_HOURLY_DRAFTS` | 10 | Drafts one person may ask for in any hour (429 `setup_ai_rate_limited` past it) |
+| `BMS_SETUP_AI_BUDGET_SECONDS` | 25 | One provider's time with its retries, at most 30 |
+| `BMS_SETUP_AI_MAX_TOKENS`, `BMS_SETUP_AI_MAX_TEXT_CHARS` | 8000, 30000 | The draft's output allowance and the longest list sent |
+
+To switch a business on: read each provider's free-tier terms on data use (a provider that trains on inputs is not used for
+this), add the tenant id to `BMS_SETUP_AI_TENANTS` and restart. The start log says `Setup helper providers: [gemini, ...]` and
+`Setup helper photos providers: [gemini]`. Sign in as an administrator, open Items, Import items, and type two fabricated items
+into Let the app read your list: the rows come back and nothing is added until Add.
+
+Watch it on the database host, as `bms_owner` (the draft log never holds the list; the spend is in `help_ask_spend` with Ask
+BMS's, and DeepSeek's monthly cap counts both):
+
+```sql
+-- Today's drafts by kind, how the list was given, outcome and provider, every business.
+SELECT kind, source, outcome, provider, count(*), sum(rows_drafted) AS rows, sum(cost_micro) AS cost_micro
+  FROM help_setup_drafts WHERE asked_at >= date_trunc('day', now())
+ GROUP BY 1, 2, 3, 4 ORDER BY 5 DESC;
+```
+
+To stop it for one business, remove its id from `BMS_SETUP_AI_TENANTS` and restart: the box disappears and the imports work as
+before. Nothing of a list is kept to delete.

@@ -238,6 +238,18 @@ services:
       BMS_HELP_ASK_GEMINI_PRICE_OUTPUT_MICRO_PER_MILLION: ${BMS_HELP_ASK_GEMINI_PRICE_OUTPUT_MICRO_PER_MILLION:-0}
       BMS_HELP_ASK_GROQ_PRICE_INPUT_MICRO_PER_MILLION: ${BMS_HELP_ASK_GROQ_PRICE_INPUT_MICRO_PER_MILLION:-0}
       BMS_HELP_ASK_GROQ_PRICE_OUTPUT_MICRO_PER_MILLION: ${BMS_HELP_ASK_GROQ_PRICE_OUTPUT_MICRO_PER_MILLION:-0}
+      # The setup helper (issue #626, ADR-102, docs/runbooks/ask-bms.md): Ask BMS's providers and keys read a business's
+      # list, photo or file into draft rows for its import. Off for every business until BMS_SETUP_AI_TENANTS names it,
+      # since the list is business data. Optional tuning; empty means the default (30 drafts a business a day, 10 a person
+      # an hour, 25 seconds a provider, 8000 output tokens, 30000 characters of list). A photo goes to Gemini, and to Groq only with a vision model.
+      BMS_SETUP_AI_TENANTS: ${BMS_SETUP_AI_TENANTS:-}
+      BMS_SETUP_AI_DAILY_DRAFTS: ${BMS_SETUP_AI_DAILY_DRAFTS:-}
+      BMS_SETUP_AI_USER_HOURLY_DRAFTS: ${BMS_SETUP_AI_USER_HOURLY_DRAFTS:-}
+      BMS_SETUP_AI_BUDGET_SECONDS: ${BMS_SETUP_AI_BUDGET_SECONDS:-}
+      BMS_SETUP_AI_MAX_TOKENS: ${BMS_SETUP_AI_MAX_TOKENS:-}
+      BMS_SETUP_AI_MAX_TEXT_CHARS: ${BMS_SETUP_AI_MAX_TEXT_CHARS:-}
+      BMS_SETUP_AI_GEMINI_PHOTO_MODEL: ${BMS_SETUP_AI_GEMINI_PHOTO_MODEL:-}
+      BMS_SETUP_AI_GROQ_PHOTO_MODEL: ${BMS_SETUP_AI_GROQ_PHOTO_MODEL:-}
       # Global sign-up caps per hour (chapter 7 section 7.10); defaults 30 and 60.
       BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR: ${BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR:-30}
       BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR: ${BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR:-60}

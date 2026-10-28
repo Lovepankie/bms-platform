@@ -15,6 +15,7 @@ import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.Search;
 import com.rincoltech.bms.kernel.Versions;
+import com.rincoltech.bms.lending.members.MemberIntake;
 import com.rincoltech.bms.lending.members.MemberLookup;
 import com.rincoltech.bms.lending.members.internal.MemberApi.BlacklistRequest;
 import com.rincoltech.bms.lending.members.internal.MemberApi.CreateMemberRequest;
@@ -41,7 +42,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class MemberService implements MemberLookup {
+class MemberService implements MemberLookup, MemberIntake {
 
     static final int DEFAULT_LIMIT = 50;
     static final int MAX_LIMIT = 200;
@@ -75,16 +76,10 @@ class MemberService implements MemberLookup {
     @Transactional
     MemberResponse create(CreateMemberRequest request) {
         Principal principal = CurrentPrincipal.require();
-        if (!principal.may("lending.members.create", request.branchId())
-                || branches.findActive(request.branchId()).isEmpty()) {
-            throw ApiException.validation(
-                    List.of(new FieldProblem("branch_id", "unknown_branch", "No such active branch in your scope.")));
-        }
-        String phone = PhoneNumbers.normaliseUganda(request.phone()).orElseThrow(() -> invalidPhone("phone"));
-        String altPhone = request.altPhone() == null || request.altPhone().isBlank()
-                ? null
-                : PhoneNumbers.normaliseUganda(request.altPhone()).orElseThrow(() -> invalidPhone("alt_phone"));
-        String nin = checkIdentity(request.idType(), request.nationalId(), request.otherIdNumber(), null);
+        Validated valid = validateNew(request, principal);
+        String phone = valid.phone();
+        String altPhone = valid.altPhone();
+        String nin = valid.nin();
         checkPhoneShared(phone, null, request.confirmedNotDuplicate());
         planLimits.checkRoomFor(PlanLimits.MAX_ACTIVE_MEMBERS, members.countActive());
 
@@ -408,6 +403,112 @@ class MemberService implements MemberLookup {
     @Transactional(readOnly = true)
     public Optional<MemberSummary> findByNumber(String memberNo) {
         return members.findByNumber(memberNo).map(MemberService::summary);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MemberSummary> findByPhone(String phone) {
+        return PhoneNumbers.normaliseUganda(phone)
+                .map(e164 -> members.duplicateCandidates(null, e164, null, null).stream()
+                        .filter(c -> c.reasons().contains("phone"))
+                        .map(c -> members.findById(c.id()))
+                        .flatMap(Optional::stream)
+                        .map(MemberService::summary)
+                        .toList())
+                .orElse(List.of());
+    }
+
+    /**
+     * In a short read-only transaction of its own, so a refusal (which marks the transaction it runs in for rollback) leaves
+     * the caller's check free to report it on its rows.
+     */
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public void checkRoomFor(int newMembers) {
+        if (newMembers > 0) {
+            planLimits.checkRoomFor(PlanLimits.MAX_ACTIVE_MEMBERS, members.countActive() + newMembers - 1);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MemberSummary addFromRegister(UUID branchId, String fullName, String phone) {
+        return summary(create(registerRequest(branchId, fullName, phone)));
+    }
+
+    /** A register line as the member form's request: name and phone, no ID (KYC later), nothing else known. */
+    private static CreateMemberRequest registerRequest(UUID branchId, String fullName, String phone) {
+        return new CreateMemberRequest(
+                branchId, fullName, null, null, phone, null, "none", null, null, null, null, "unknown", null, null,
+                null, null, null, null, null, null, null, false);
+    }
+
+    @Override
+    public Optional<String> problemAdding(UUID branchId, String fullName, String phone) {
+        // The very validation create() runs, on the very request addFromRegister sends; only whether the phone is held
+        // and the plan's member limit are left, the import's to check on the whole file. A refusal is said in words
+        // that
+        // name no member; nothing is thrown, so the caller's check goes on (validateNew writes nothing).
+        try {
+            validateNew(registerRequest(branchId, fullName, phone), CurrentPrincipal.require());
+            return Optional.empty();
+        } catch (ApiException e) {
+            String field = e.errors().isEmpty() ? "" : e.errors().getFirst().field();
+            return Optional.of(
+                    switch (field) {
+                        case "branch_id" ->
+                            "You may not add members in this branch. Choose another branch, or add the member first.";
+                        case "full_name" -> "The member's name is empty or longer than 200 characters.";
+                        case "phone" ->
+                            "The member's phone must be a Uganda number, for example 0772 123456. A new member needs one.";
+                        default -> "The member cannot be added from this row. Add the member first in Members.";
+                    });
+        }
+    }
+
+    /** What validateNew read from a request: the phones in E.164 and the national ID, if any. */
+    private record Validated(String phone, String altPhone, String nin) {}
+
+    /**
+     * Every rule of a new member that needs no write and no other member's phone: the caller's scope in an active branch,
+     * the name the form takes (its {@code @NotBlank @Size(max = 200)}, checked here too since a register's request does
+     * not pass the controller), the phones and the identity. Shared by {@link #create} and an import's check (issue #626),
+     * so the check runs exactly what the form does.
+     */
+    private Validated validateNew(CreateMemberRequest request, Principal principal) {
+        if (!principal.may("lending.members.create", request.branchId())
+                || branches.findActive(request.branchId()).isEmpty()) {
+            throw ApiException.validation(
+                    List.of(new FieldProblem("branch_id", "unknown_branch", "No such active branch in your scope.")));
+        }
+        if (request.fullName() == null
+                || request.fullName().isBlank()
+                || request.fullName().length() > 200) {
+            throw ApiException.validation(List.of(
+                    new FieldProblem("full_name", "invalid", "The name is empty or longer than 200 characters.")));
+        }
+        String phone = PhoneNumbers.normaliseUganda(request.phone()).orElseThrow(() -> invalidPhone("phone"));
+        String altPhone = request.altPhone() == null || request.altPhone().isBlank()
+                ? null
+                : PhoneNumbers.normaliseUganda(request.altPhone()).orElseThrow(() -> invalidPhone("alt_phone"));
+        String nin = checkIdentity(request.idType(), request.nationalId(), request.otherIdNumber(), null);
+        return new Validated(phone, altPhone, nin);
+    }
+
+    @Override
+    public MemberSummary preview(UUID branchId, String fullName, String phone) {
+        // From the very request addFromRegister sends, so the two cannot drift apart.
+        CreateMemberRequest r = registerRequest(branchId, fullName, phone);
+        return new MemberSummary(
+                UUID.randomUUID(),
+                r.branchId(),
+                null,
+                r.fullName().trim(),
+                MemberRepository.INITIAL_KYC_STATUS,
+                MemberRepository.INITIAL_STATUS,
+                false,
+                null,
+                null);
     }
 
     @Override

@@ -1,8 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createLazyRoute } from '@tanstack/react-router';
+import { createLazyRoute, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type ImportResult } from '../../../api/retail';
+import { setupHelper, type SetupHelperApi } from '../../../api/setup-helper';
+import { ItemDraftList, ListReader, useSetupHelper } from '../setup-helper/setup-helper';
+import { fromItemDraft, itemsCsv, type ItemEdit } from '../setup-helper/setup-helper-state';
 import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { Hint } from '../../../app/ui/Hint';
@@ -10,6 +13,8 @@ import { Hint } from '../../../app/ui/Hint';
 // Import items from a file (#146), for a new client, administrators only. Paste the rows or choose a
 // CSV file, check it first (nothing is saved), read what would be added, skipped and wrong, then add
 // the items. Adding again skips what is already there. A file with a wrong row adds nothing.
+// The setup helper (issue #626, ADR-102), while the platform has it on for the business: the app reads a typed list, a photo
+// or a file into rows the owner changes or removes; the rows become this screen's file, so this check and Add decide.
 
 const WORDS: Record<string, { label: string; tone: string }> = {
   added: { label: 'Add', tone: 'success' },
@@ -56,9 +61,12 @@ export function ImportReport({ result }: { result: ImportResult }) {
   );
 }
 
-export function ImportPage() {
+/** `shop`: the kind of shop chosen in Set up your shop, when the owner came from there; it helps the app match names. */
+export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: SetupHelperApi; shop?: string } = {}) {
   const queryClient = useQueryClient();
   const profit = useProfitAccess();
+  const helper = useSetupHelper(helperApi);
+  const [draft, setDraft] = useState<ItemEdit[] | null>(null);
   const { show, toast } = useToast();
   const [text, setText] = useState('');
   // Owner decision D45 (issue #562): Let the app make the codes, unticked by default; a check is only good for the tick it ran with.
@@ -77,6 +85,7 @@ export function ImportPage() {
       setDone(result);
       setChecked(null);
       setText('');
+      setDraft(null);
       show(`Added ${result.added} items.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
@@ -88,10 +97,18 @@ export function ImportPage() {
     setMakeCodes(codes);
     if (checked && checked.text === text) check.mutate(codes);
   };
+  const editDraft = (rows: ItemEdit[] | null) => {
+    setDraft(rows && rows.length > 0 ? rows : null);
+    setText(rows && rows.length > 0 ? itemsCsv(rows, profit) : '');
+    setChecked(null);
+    setDone(null);
+    setWarning(null);
+  };
   const choose = (file: File | undefined) => {
     if (!file) return;
     void file.text().then((raw) => {
       const read = readCsvText(raw);
+      setDraft(null);
       setText(read.text);
       setWarning(read.notUtf8 ? NOT_UTF8 : null);
       setChecked(null);
@@ -106,10 +123,21 @@ export function ImportPage() {
           {profit ? '' : ' Leave the buying price out.'} Check the file first: nothing is saved until you add the items.
         </Note>
       </div>
+      {helper.enabled && (
+        <ListReader
+          photos={helper.photos}
+          tour="import-helper"
+          noun="items"
+          read={(given) => helperApi.draftItems(given, shop)}
+          count={(d) => d.rows.length}
+          drafted={(d) => { if (d.rows.length > 0) editDraft(fromItemDraft(d.rows, d.currency_exponent)); }}
+        />
+      )}
+      {draft && <ItemDraftList rows={draft} withCost={profit} onChange={editDraft} />}
       <label htmlFor="import-file">Choose a CSV file</label>
       <input id="import-file" type="file" data-tour="import-file" accept=".csv,.txt,text/csv,text/plain" onChange={(e) => choose(e.target.files?.[0])} />
       <label htmlFor="import-text">Or paste the rows here</label>
-      <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDone(null); setWarning(null); }} spellCheck={false} />
+      <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDraft(null); setDone(null); setWarning(null); }} spellCheck={false} />
       <label htmlFor="import-make-codes">
         <input id="import-make-codes" type="checkbox" data-tour="import-make-codes" checked={makeCodes} onChange={(e) => tick(e.target.checked)} /> Let the app make the codes
       </label>
@@ -118,7 +146,7 @@ export function ImportPage() {
       <Problem error={check.error} />
       <ActionBar>
         <BusyButton busy={check.isPending} type="button" className="rt-primary" data-tour="import-check" notReady={text.trim() === ''} onClick={() => check.mutate(makeCodes)}>
-          Check the file
+          {draft ? 'Check these items' : 'Check the file'}
         </BusyButton>
       </ActionBar>
       {current && <ImportReport result={current} />}
@@ -137,4 +165,9 @@ export function ImportPage() {
   );
 }
 
-export const ImportRoute = createLazyRoute('/staff/retail/catalogue/import')({ component: ImportPage });
+function ImportScreen() {
+  const { shop } = useSearch({ strict: false }) as { shop?: string };
+  return <ImportPage shop={typeof shop === 'string' ? shop : undefined} />;
+}
+
+export const ImportRoute = createLazyRoute('/staff/retail/catalogue/import')({ component: ImportScreen });

@@ -91,4 +91,6 @@ describeTours(
     'page-customer-ageing': [ADMIN],
   },
   screen,
+  // The setup helper's box shows only while the platform has it on (issue #626); on here, so its tour step has its anchor.
+  (client) => client.setQueryData(['help', 'setup'], { enabled: true, photos: true }),
 );

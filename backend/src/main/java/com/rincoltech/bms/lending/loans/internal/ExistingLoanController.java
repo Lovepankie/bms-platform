@@ -9,7 +9,9 @@ import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.GoLive;
 import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.ImportRequest;
 import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.ImportResult;
 import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.RecordRequest;
+import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.RegisterDraft;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -25,7 +27,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * {@code /api/v1/lending/existing-loans}: loans brought in from a paper register with their real dates and past
@@ -39,8 +43,10 @@ class ExistingLoanController {
 
     private final ExistingLoanService service;
     private final ExistingLoanImport importer;
+    private final LoanRegisterDraftService drafts;
 
-    ExistingLoanController(ExistingLoanService service, ExistingLoanImport importer) {
+    ExistingLoanController(ExistingLoanService service, ExistingLoanImport importer, LoanRegisterDraftService drafts) {
+        this.drafts = drafts;
         this.service = service;
         this.importer = importer;
     }
@@ -138,6 +144,22 @@ class ExistingLoanController {
     ImportResult importLoans(
             @RequestParam(name = "dry_run", required = false, defaultValue = "true") boolean dryRun,
             @Valid @RequestBody ImportRequest request) {
-        return importer.run(request.csv(), dryRun);
+        return importer.run(request.csv(), dryRun, request.branchId());
+    }
+
+    @PostMapping(path = "/import/draft", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RequiresPermission(ExistingLoanService.PERMISSION)
+    @Operation(
+            summary = "Draft the import from a loan register: typed, a photo, or a CSV, Excel or PDF file (the setup"
+                    + " helper, issue #626); saves nothing; 403 setup_ai_off while it is off for the business",
+            operationId = "draftExistingLoansImport")
+    RegisterDraft draft(
+            @Parameter(description = "The register as typed; leave it out when a file is sent")
+                    @RequestParam(name = "text", required = false)
+                    String text,
+            @Parameter(description = "A photo, or a CSV, Excel (.xlsx) or PDF file, 5 MB at most")
+                    @RequestPart(name = "file", required = false)
+                    MultipartFile file) {
+        return drafts.draft(text, file);
     }
 }

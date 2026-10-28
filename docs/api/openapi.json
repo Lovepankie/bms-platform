@@ -2895,8 +2895,13 @@
       },
       "ExistingLoanImportRequest" : {
         "properties" : {
+          "branch_id" : {
+            "description" : "The branch members new to the app join (issue #626); empty for the only branch the caller may add members in",
+            "format" : "uuid",
+            "type" : "string"
+          },
           "csv" : {
-            "description" : "The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units",
+            "description" : "The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units. A loan row names its member by member_no, or by member_name and member_phone (issue #626): the member with that phone, else a new member added with the loan",
             "maxLength" : 1000000,
             "minLength" : 0,
             "type" : "string"
@@ -2919,6 +2924,11 @@
             "type" : "integer"
           },
           "loans" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "members_added" : {
+            "description" : "Members new to the app that come in with the loans (issue #626); 0 while any row is an error",
             "format" : "int32",
             "type" : "integer"
           },
@@ -6135,6 +6145,94 @@
           "reassigned" : {
             "format" : "int32",
             "type" : "integer"
+          }
+        }
+      },
+      "LoanRegisterDraft" : {
+        "properties" : {
+          "currency_exponent" : {
+            "description" : "Decimal places of the currency, to write the amounts in the import file",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "loans" : {
+            "description" : "The drafted loans, for the import's check; nothing is saved",
+            "items" : {
+              "$ref" : "#/components/schemas/LoanRegisterDraftLoan"
+            },
+            "type" : "array"
+          },
+          "reason" : {
+            "description" : "Null when loans were drafted; else why there are none: no_provider, all_failed, daily_cap or unreadable. The screen then offers to type it or import a file",
+            "type" : "string"
+          }
+        }
+      },
+      "LoanRegisterDraftLoan" : {
+        "description" : "The drafted loans, for the import's check; nothing is saved",
+        "properties" : {
+          "agreed_total_minor" : {
+            "description" : "The total to repay, as written or worked out",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "disbursement_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "member_full_name" : {
+            "description" : "That member's name in the app, or null",
+            "type" : "string"
+          },
+          "member_name" : {
+            "description" : "The borrower's name as the register writes it",
+            "type" : "string"
+          },
+          "member_no" : {
+            "description" : "The member who has this phone already, or null for a member new to the app",
+            "type" : "string"
+          },
+          "member_phone" : {
+            "description" : "The phone, in E.164 when it is a Uganda number, else as written",
+            "type" : "string"
+          },
+          "payments" : {
+            "items" : {
+              "$ref" : "#/components/schemas/LoanRegisterDraftPayment"
+            },
+            "type" : "array"
+          },
+          "principal_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rate_percent" : {
+            "description" : "The monthly rate in percent as written, or null",
+            "type" : "string"
+          },
+          "ref" : {
+            "description" : "The register's number for the loan, or one the app made when it has none",
+            "type" : "string"
+          },
+          "term_months" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "total_worked_out" : {
+            "description" : "The total was worked out as flat interest from the rate and the term, for the owner to check",
+            "type" : "boolean"
+          }
+        }
+      },
+      "LoanRegisterDraftPayment" : {
+        "properties" : {
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
           }
         }
       },
@@ -13305,6 +13403,58 @@
           },
           "transfer_date" : {
             "format" : "date",
+            "type" : "string"
+          }
+        }
+      },
+      "RetailItemDraft" : {
+        "properties" : {
+          "currency_exponent" : {
+            "description" : "Decimal places of the shop's currency, to write the prices in the import file",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "reason" : {
+            "description" : "Null when rows were drafted; else why there are none: no_provider, all_failed, daily_cap or unreadable. The screen then offers to type the list or import a file",
+            "type" : "string"
+          },
+          "rows" : {
+            "description" : "The drafted rows, for the import's check; nothing is saved",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailItemDraftRow"
+            },
+            "type" : "array"
+          }
+        }
+      },
+      "RetailItemDraftRow" : {
+        "description" : "The drafted rows, for the import's check; nothing is saved",
+        "properties" : {
+          "category" : {
+            "type" : "string"
+          },
+          "cost_price_minor" : {
+            "description" : "Buying price of one unit in minor units; null when none, and always for a caller without retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "pack_factor" : {
+            "description" : "How many units are in that pack, up to three decimals, or null",
+            "type" : "string"
+          },
+          "pack_unit" : {
+            "description" : "A bigger pack it comes in, or null",
+            "type" : "string"
+          },
+          "sell_price_minor" : {
+            "description" : "Selling price of one unit in minor units; null when the list gives none",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "unit" : {
             "type" : "string"
           }
         }
@@ -22841,6 +22991,18 @@
           }
         }
       },
+      "SetupHelperStatus" : {
+        "properties" : {
+          "enabled" : {
+            "description" : "The helper may read a typed list or a file for this business; while false the box is not shown",
+            "type" : "boolean"
+          },
+          "photos" : {
+            "description" : "A photo can be read too (a provider that reads pictures is set)",
+            "type" : "boolean"
+          }
+        }
+      },
       "SignInRequest" : {
         "properties" : {
           "login" : {
@@ -26362,6 +26524,25 @@
         "tags" : [ "help" ]
       }
     },
+    "/api/v1/help/setup" : {
+      "get" : {
+        "operationId" : "getSetupHelperStatus",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SetupHelperStatus"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Whether the setup helper can read a list, a photo or a file for this business",
+        "tags" : [ "help" ]
+      }
+    },
     "/api/v1/ledger/payment-methods" : {
       "get" : {
         "operationId" : "listPaymentMethods",
@@ -27253,6 +27434,50 @@
           }
         },
         "summary" : "Import existing loans and their repayments from CSV: check first (dry_run=true, the default), then commit; a commit with any error records nothing (FR-EXL-06)",
+        "tags" : [ "lending-loans" ]
+      }
+    },
+    "/api/v1/lending/existing-loans/import/draft" : {
+      "post" : {
+        "operationId" : "draftExistingLoansImport",
+        "parameters" : [ {
+          "description" : "The register as typed; leave it out when a file is sent",
+          "in" : "query",
+          "name" : "text",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "description" : "A photo, or a CSV, Excel (.xlsx) or PDF file, 5 MB at most",
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LoanRegisterDraft"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft the import from a loan register: typed, a photo, or a CSV, Excel or PDF file (the setup helper, issue #626); saves nothing; 403 setup_ai_off while it is off for the business",
         "tags" : [ "lending-loans" ]
       }
     },
@@ -39227,6 +39452,58 @@
         },
         "summary" : "Import items from CSV for a new client: dry run first, then apply; administrators only (#146)",
         "tags" : [ "retail-catalogue" ]
+      }
+    },
+    "/api/v1/retail/products/import/draft" : {
+      "post" : {
+        "operationId" : "draftRetailProductImport",
+        "parameters" : [ {
+          "description" : "The list as typed; leave it out when a file is sent",
+          "in" : "query",
+          "name" : "text",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "The kind of shop chosen in Set up your shop, such as Hardware",
+          "in" : "query",
+          "name" : "shop_type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "properties" : {
+                  "file" : {
+                    "description" : "A photo, or a CSV, Excel (.xlsx) or PDF file, 5 MB at most",
+                    "format" : "binary",
+                    "type" : "string"
+                  }
+                },
+                "type" : "object"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailItemDraft"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Draft the item import from a typed list, a photo, or a CSV, Excel or PDF file (the setup helper); saves nothing; administrators only; 403 setup_ai_off while it is off for the business",
+        "tags" : [ "retail" ]
       }
     },
     "/api/v1/retail/products/name-hints" : {

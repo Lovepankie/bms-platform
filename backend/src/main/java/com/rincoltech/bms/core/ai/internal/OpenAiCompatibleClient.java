@@ -250,9 +250,15 @@ final class OpenAiCompatibleClient implements LlmClient {
     }
 
     private byte[] body(Request request) {
-        List<Map<String, String>> messages = new ArrayList<>();
+        List<Map<String, Object>> messages = new ArrayList<>();
         for (Message m : request.messages()) {
-            messages.add(Map.of("role", m.role(), "content", m.content()));
+            // A picture goes as the OpenAI vision shape: the text, then the picture as a data URL (ADR-102).
+            Object content = m.imageDataUrl() == null
+                    ? m.content()
+                    : List.of(
+                            Map.of("type", "text", "text", m.content()),
+                            Map.of("type", "image_url", "image_url", Map.of("url", m.imageDataUrl())));
+            messages.add(Map.of("role", m.role(), "content", content));
         }
         Map<String, Object> json = new LinkedHashMap<>();
         json.put("model", model);

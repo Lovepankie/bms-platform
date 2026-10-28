@@ -20,8 +20,19 @@ public interface LlmClient {
     /** One request, one answer. Retries on 429 and 5xx and the total budget are the adapter's. */
     Result complete(Request request) throws LlmException;
 
-    /** {@code role} is {@code system} or {@code user}. */
-    record Message(String role, String content) {
+    /**
+     * {@code role} is {@code system} or {@code user}. A user message may carry one picture as a {@code data:} URL of a
+     * JPEG, PNG or WebP (the setup helper's photo of a list, ADR-102); never a link, so a provider is never asked to fetch
+     * anything.
+     */
+    record Message(String role, String content, String imageDataUrl) {
+
+        private static final java.util.regex.Pattern DATA_URL =
+                java.util.regex.Pattern.compile("^data:image/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$");
+
+        public Message(String role, String content) {
+            this(role, content, null);
+        }
 
         public Message {
             if (!"system".equals(role) && !"user".equals(role)) {
@@ -30,11 +41,17 @@ public interface LlmClient {
             if (content == null || content.isBlank()) {
                 throw new IllegalArgumentException("content must not be blank");
             }
+            if (imageDataUrl != null
+                    && (!"user".equals(role) || !DATA_URL.matcher(imageDataUrl).matches())) {
+                throw new IllegalArgumentException(
+                        "a picture is a base64 data URL of a JPEG, PNG or WebP on a user message");
+            }
         }
 
         @Override
         public String toString() {
-            return "Message[role=" + role + ", chars=" + content.length() + "]";
+            return "Message[role=" + role + ", chars=" + content.length()
+                    + (imageDataUrl == null ? "" : ", picture=" + imageDataUrl.length()) + "]";
         }
     }
 

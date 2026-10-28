@@ -14,6 +14,7 @@ import { useOnline } from '../../../offline/offline-context';
 import { PURPOSES, factorProblem, type Purpose } from './catalogue-packs';
 import { SHOP_TYPES, shopTypeById } from './shop-starters';
 import { applySetup, key, packNeeds, packText, planSetup, type SetupItem, type SetupResult } from './shop-setup-state';
+import { useSetupHelper } from '../setup-helper/setup-helper';
 import { Gate, Problem } from './ui';
 
 // Set up your shop (issue #625, docs/specs/units-packs-and-costing.md section 9 step 5): a new shop owner should not build
@@ -55,6 +56,7 @@ function Choice({ item, ticked, onTick, meta }: { item: SetupItem; ticked: boole
 export function ShopSetupPage() {
   const queryClient = useQueryClient();
   const online = useOnline();
+  const helper = useSetupHelper();
   const [typeId, setTypeId] = useState('');
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const [edits, setEdits] = useState<Record<string, PackEdit>>({});
@@ -121,7 +123,12 @@ export function ShopSetupPage() {
           level={2}
           title={result.added.length > 0 ? 'Your shop is set up' : 'Nothing new was added'}
           detail={doneText(result)}
-          actions={[{ label: 'Add your first items', to: '/staff/retail/catalogue/products' }, { label: 'Done', to: '/staff/retail/catalogue' }]}
+          actions={[
+            // Step 2 (issue #626): with the setup helper on, the app reads the owner's list of items into the item import.
+            ...(helper.enabled ? [{ label: 'Add your items from a list', to: '/staff/retail/catalogue/import', search: { shop: type?.label ?? '' } }] : []),
+            { label: 'Add your first items', to: '/staff/retail/catalogue/products' },
+            { label: 'Done', to: '/staff/retail/catalogue' },
+          ]}
         />
         {result.added.length > 0 && (
           <Card title="What was added">

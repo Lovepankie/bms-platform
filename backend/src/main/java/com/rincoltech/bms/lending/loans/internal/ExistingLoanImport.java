@@ -1,14 +1,17 @@
 package com.rincoltech.bms.lending.loans.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
+import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CsvTable;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
+import com.rincoltech.bms.kernel.PhoneNumbers;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.ImportResult;
 import com.rincoltech.bms.lending.loans.internal.ExistingLoanApi.ImportRow;
+import com.rincoltech.bms.lending.members.MemberIntake;
 import com.rincoltech.bms.lending.members.MemberLookup;
 import com.rincoltech.bms.lending.members.MemberLookup.MemberSummary;
 import com.rincoltech.bms.lending.products.ProductCatalog;
@@ -37,6 +40,12 @@ import org.springframework.transaction.annotation.Transactional;
  * already in the app is skipped, so a file committed twice records each loan once. Every loan passes exactly the checks
  * of the form ({@link ExistingLoanService#check}). The import never guesses: dates are year-month-day only, and a
  * repayment row names its loan by {@code ref}.
+ *
+ * <p>A loan row may name its member by {@code member_name} and {@code member_phone} instead of {@code member_no} (the setup
+ * helper's draft of a loan register, issue #626, ADR-102): the one member holding that phone is used; with none, the check
+ * says a new member comes in with the loan, and the commit adds the member (name and phone, no ID) through the member
+ * form's rules in the same transaction, in the branch given or the one branch the caller may add members in. Two loans
+ * with the same phone share the new member.
  */
 @Service
 class ExistingLoanImport {
@@ -44,8 +53,18 @@ class ExistingLoanImport {
     static final int MAX_CHARS = 1_000_000;
     static final int MAX_ROWS = 2_000;
 
-    static final List<String> LOAN_COLUMNS =
-            List.of("member_no", "product_code", "principal", "disbursement_date", "term", "agreed_total", "purpose");
+    static final List<String> LOAN_COLUMNS = List.of(
+            "member_no",
+            "member_name",
+            "member_phone",
+            "product_code",
+            "principal",
+            "disbursement_date",
+            "term",
+            "agreed_total",
+            "purpose");
+
+    static final String ADD_MEMBERS = "lending.members.create";
     static final List<String> REPAYMENT_COLUMNS = List.of("repayment_date", "amount", "method", "note");
 
     private static final Pattern ITEM = Pattern.compile("repayments\\[(\\d+)]\\..*");
@@ -53,6 +72,8 @@ class ExistingLoanImport {
     private final ExistingLoanService service;
     private final ExistingLoanRepository repo;
     private final MemberLookup members;
+    private final MemberIntake intake;
+    private final Branches branches;
     private final ProductCatalog products;
     private final CurrentTenant tenant;
     private final AuditLog audit;
@@ -61,12 +82,16 @@ class ExistingLoanImport {
             ExistingLoanService service,
             ExistingLoanRepository repo,
             MemberLookup members,
+            MemberIntake intake,
+            Branches branches,
             ProductCatalog products,
             CurrentTenant tenant,
             AuditLog audit) {
         this.service = service;
         this.repo = repo;
         this.members = members;
+        this.intake = intake;
+        this.branches = branches;
         this.products = products;
         this.tenant = tenant;
         this.audit = audit;
@@ -84,6 +109,8 @@ class ExistingLoanImport {
         Integer term;
         Long agreedTotal;
         String purpose;
+        NewMember newMember;
+        String matchedNote;
         final List<int[]> repaymentLines = new ArrayList<>();
         final List<BringIn.Line> repayments = new ArrayList<>();
         final Map<Integer, String> repaymentProblems = new HashMap<>();
@@ -95,9 +122,77 @@ class ExistingLoanImport {
         }
     }
 
+    /** A member the file brings in with its loans: named by its phone, added once on commit. */
+    private static final class NewMember {
+        final String name;
+        final String phone;
+        final MemberSummary placeholder;
+        MemberSummary added;
+
+        /** {@code placeholder} is the member module's preview of the member, standing in on a check, where nothing is saved. */
+        NewMember(String name, String phone, MemberSummary placeholder) {
+            this.name = name;
+            this.phone = phone;
+            this.placeholder = placeholder;
+        }
+    }
+
+    /** What one run knows of the new members: the branch they go to (or why none), and each by its phone. */
+    private final class Intake {
+        final Principal principal;
+        final UUID requested;
+        final Map<String, NewMember> byPhone = new LinkedHashMap<>();
+        final Map<String, List<MemberSummary>> holders = new HashMap<>();
+        UUID branch;
+        String branchProblem;
+        boolean branchRead;
+
+        Intake(Principal principal, UUID requested) {
+            this.principal = principal;
+            this.requested = requested;
+        }
+
+        /** The branch new members go to: the one asked for, else the only one the caller may add members in. */
+        String branch() {
+            if (branchRead) {
+                return branchProblem;
+            }
+            branchRead = true;
+            if (!principal.hasPermission(ADD_MEMBERS)) {
+                branchProblem = "You may not add members. Add this member in Members first, then put the member number"
+                        + " in member_no.";
+            } else if (requested != null) {
+                if (principal.may(ADD_MEMBERS, requested)
+                        && principal.may(ExistingLoanService.PERMISSION, requested)
+                        && branches.findActive(requested).isPresent()) {
+                    branch = requested;
+                } else {
+                    branchProblem = "You may not add members in the branch chosen. Choose another branch.";
+                }
+            } else {
+                List<UUID> open = branches.all().stream()
+                        .filter(Branches.Branch::active)
+                        .map(Branches.Branch::id)
+                        .filter(id ->
+                                principal.may(ADD_MEMBERS, id) && principal.may(ExistingLoanService.PERMISSION, id))
+                        .toList();
+                if (open.size() == 1) {
+                    branch = open.getFirst();
+                } else {
+                    branchProblem = "Choose the branch the new members join.";
+                }
+            }
+            return branchProblem;
+        }
+    }
+
+    /**
+     * @param branchId the branch members new to the app join, or null for the only branch the caller may add members in
+     */
     @Transactional
-    ImportResult run(String text, boolean dryRun) {
+    ImportResult run(String text, boolean dryRun, UUID branchId) {
         Principal principal = CurrentPrincipal.require();
+        Intake intake = new Intake(principal, branchId);
         List<List<String>> table = CsvTable.parse(text);
         if (table.isEmpty()) {
             throw problem("The file is empty.");
@@ -145,7 +240,7 @@ class ExistingLoanImport {
                 }
                 Pending p = new Pending(line, ref);
                 loans.put(key, p);
-                p.problem = readLoan(p, cells, columns, exponent, principal);
+                p.problem = readLoan(p, cells, columns, exponent, principal, intake);
             } else if (kind.equals("repayment")) {
                 repaymentRows++;
                 Pending p = loans.get(key);
@@ -213,6 +308,32 @@ class ExistingLoanImport {
                 }
             }
         }
+        // The members new to the app must fit the plan, as the member form checks one at a time: a check says what the
+        // commit would, so past the limit every loan that brings a new member is a row with a problem.
+        Set<NewMember> fresh = new java.util.LinkedHashSet<>();
+        for (Pending p : loans.values()) {
+            if (p.newMember != null && p.checked != null && !byLine.containsKey(p.line)) {
+                fresh.add(p.newMember);
+            }
+        }
+        if (!fresh.isEmpty()) {
+            try {
+                this.intake.checkRoomFor(fresh.size());
+            } catch (ApiException e) {
+                for (Pending p : loans.values()) {
+                    if (p.newMember != null && p.checked != null && !byLine.containsKey(p.line)) {
+                        byLine.put(
+                                p.line,
+                                error(
+                                        p.line,
+                                        p.ref,
+                                        "The business's plan has no room for the " + fresh.size()
+                                                + " new members this file brings. Add fewer, or ask the operator"
+                                                + " about a bigger plan."));
+                    }
+                }
+            }
+        }
         Map<Integer, List<String>> warnings = new HashMap<>();
         for (Pending p : loans.values()) {
             if (p.checked != null && !byLine.containsKey(p.line)) {
@@ -223,12 +344,20 @@ class ExistingLoanImport {
                 .filter(r -> r.outcome().equals("error"))
                 .count();
         int added = 0;
+        int membersAdded = 0;
         for (Pending p : loans.values()) {
             if (p.checked == null || byLine.containsKey(p.line)) {
                 continue;
             }
             UUID loanId = null;
             if (!dryRun && errors == 0) {
+                if (p.newMember != null) {
+                    if (p.newMember.added == null) {
+                        p.newMember.added = addMember(intake.branch, p.newMember);
+                        membersAdded++;
+                    }
+                    p.checked = withMember(p.checked, p.newMember.added);
+                }
                 loanId = service.create(p.checked);
             }
             if (errors == 0) {
@@ -240,6 +369,16 @@ class ExistingLoanImport {
                     + p.checked.plan().position().daysPastDue() + " day(s) past due");
             warnings.getOrDefault(p.line, List.of())
                     .forEach(w -> message.append(". ").append(w));
+            if (p.newMember != null) {
+                message.append(dryRun || errors > 0 ? ". Adds a new member, " : ". Added a new member, ")
+                        .append(p.newMember.name)
+                        .append(
+                                p.newMember.added == null || p.newMember.added.memberNo() == null
+                                        ? ""
+                                        : " (" + p.newMember.added.memberNo() + ")");
+            } else if (p.matchedNote != null) {
+                message.append(". ").append(p.matchedNote);
+            }
             byLine.put(p.line, new ImportRow(p.line, p.ref, outcome, message.toString(), loanId));
             for (int[] r : p.repaymentLines) {
                 byLine.put(r[0], new ImportRow(r[0], p.ref, outcome, null, null));
@@ -251,28 +390,107 @@ class ExistingLoanImport {
             after.put("rows_read", read);
             after.put("loans_recorded", added);
             after.put("loans_skipped", skipped);
+            after.put("members_added", membersAdded);
             audit.record(
                     AuditLog.Entry.created("lending.loan.existing_imported", "lending.loan_import", null, null, after));
         }
+        long newMembers = loans.values().stream()
+                .filter(p -> p.newMember != null && p.checked != null && !"error".equals(outcomeOf(byLine, p.line)))
+                .map(p -> p.newMember)
+                .distinct()
+                .count();
         return new ImportResult(
-                dryRun, read, loans.size(), repaymentRows, errors > 0 ? 0 : added, skipped, errors, report);
+                dryRun,
+                read,
+                loans.size(),
+                repaymentRows,
+                errors > 0 ? 0 : added,
+                skipped,
+                errors,
+                errors > 0 ? 0 : (int) newMembers,
+                report);
+    }
+
+    /**
+     * Adds a member new to the app, or refuses the whole commit when the phone is taken (by a member the caller may not see,
+     * or by two members), in words that name neither: the transaction rolls back and nothing is recorded.
+     */
+    private MemberSummary addMember(UUID branch, NewMember m) {
+        ApiException taken = ApiException.rule(
+                "import_member_phone_taken",
+                "A new member in the file has a phone the app cannot give them. Nothing was recorded. Ask an administrator"
+                        + " to find the member with that phone, then put their member number in member_no.");
+        if (!members.findByPhone(m.phone).isEmpty()) {
+            throw taken;
+        }
+        try {
+            return intake.addFromRegister(branch, m.name, m.phone);
+        } catch (ApiException e) {
+            // Every refusal of the member form is said in words that name no member: its own may list who holds a
+            // phone.
+            throw "duplicate_phone".equals(e.code())
+                    ? taken
+                    : ApiException.rule(
+                            "import_member_not_added",
+                            "A new member in the file could not be added. Nothing was recorded. Check the file again;"
+                                    + " if it still passes, ask an administrator.");
+        }
+    }
+
+    private static String outcomeOf(Map<Integer, ImportRow> byLine, int line) {
+        ImportRow row = byLine.get(line);
+        return row == null ? null : row.outcome();
+    }
+
+    /** The checked loan with the member the commit has just added in place of the check's stand-in. */
+    private static ExistingLoanService.Checked withMember(ExistingLoanService.Checked c, MemberSummary member) {
+        ExistingLoanService.Draft d = c.draft();
+        return new ExistingLoanService.Checked(
+                new ExistingLoanService.Draft(
+                        member,
+                        d.product(),
+                        d.principalMinor(),
+                        d.disbursementDate(),
+                        d.termCount(),
+                        d.agreedTotalMinor(),
+                        d.purposeCategory(),
+                        d.registerRef(),
+                        d.lines(),
+                        d.channel()),
+                c.goLive(),
+                c.schedule(),
+                c.plan());
     }
 
     /** The loan columns of a loan row; the first problem, or null when it reads cleanly. */
     private String readLoan(
-            Pending p, List<String> cells, Map<String, Integer> columns, int exponent, Principal principal) {
+            Pending p,
+            List<String> cells,
+            Map<String, Integer> columns,
+            int exponent,
+            Principal principal,
+            Intake intake) {
         for (String c : REPAYMENT_COLUMNS) {
             if (!cell(cells, columns, c).isBlank()) {
                 return "A loan row leaves the repayment columns empty; put each repayment on a row of its own.";
             }
         }
         String memberNo = cell(cells, columns, "member_no").strip();
-        Optional<MemberSummary> member = memberNo.isEmpty() ? Optional.empty() : members.findByNumber(memberNo);
-        if (member.isEmpty()
-                || !principal.may(ExistingLoanService.PERMISSION, member.get().branchId())) {
-            return "No member with this member number in your branches.";
+        String memberName = cell(cells, columns, "member_name").strip().replaceAll("\\s+", " ");
+        if (memberNo.isEmpty() && !memberName.isEmpty()) {
+            String problem = readNewMember(p, memberName, cell(cells, columns, "member_phone"), principal, intake);
+            if (problem != null) {
+                return problem;
+            }
+        } else {
+            Optional<MemberSummary> member = memberNo.isEmpty() ? Optional.empty() : members.findByNumber(memberNo);
+            if (member.isEmpty()
+                    || !principal.may(
+                            ExistingLoanService.PERMISSION, member.get().branchId())) {
+                return "No member with this member number in your branches.";
+            }
+            p.member = member.get();
         }
-        p.member = member.get();
         String code = cell(cells, columns, "product_code").strip();
         Optional<ProductTerms> product = code.isEmpty() ? Optional.empty() : products.currentByCode(code);
         if (product.isEmpty()) {
@@ -312,6 +530,60 @@ class ExistingLoanImport {
         }
         p.purpose = purpose.isEmpty() ? "other" : purpose;
         return null;
+    }
+
+    /**
+     * A loan row naming its member by name and phone: the one member with that phone, else a new member the commit adds.
+     * The problem, or null.
+     */
+    private String readNewMember(Pending p, String name, String phone, Principal principal, Intake intake) {
+        Optional<String> e164 = PhoneNumbers.normaliseUganda(phone);
+        // One read per phone in a file: a register lists a borrower's loans one after another.
+        List<MemberSummary> holders =
+                e164.isEmpty() ? List.of() : intake.holders.computeIfAbsent(e164.get(), members::findByPhone);
+        boolean oneInScope = holders.size() == 1
+                && principal.may(
+                        ExistingLoanService.PERMISSION, holders.getFirst().branchId());
+        if (oneInScope) {
+            MemberSummary m = holders.getFirst();
+            p.member = m;
+            p.matchedNote = "Member " + m.memberNo() + ", " + m.fullName() + ", has this phone"
+                    + (sameName(m.fullName(), name)
+                            ? ""
+                            : ". The file says " + name + ". Record this loan only if it is the same person; if not,"
+                                    + " remove it from the file");
+            return null;
+        }
+        // Two holders, or one in a branch outside the caller's, read exactly as no holder: the check says a new member
+        // comes in, word for word as for a phone nobody holds, so a check cannot tell whether a phone is held where the
+        // caller cannot see. The commit then cannot add that member (the phone is taken) and records nothing, in words
+        // that name no member and no branch.
+        NewMember known = e164.isEmpty() ? null : intake.byPhone.get(e164.get());
+        if (known != null) {
+            if (!known.name.equalsIgnoreCase(name)) {
+                return "This phone is given to " + known.name + " on another row. One phone is one member.";
+            }
+        } else {
+            String problem = intake.branch();
+            if (problem != null) {
+                return problem;
+            }
+            // The member form's own rules, other than whether the phone is held, from the members module itself.
+            Optional<String> refused = this.intake.problemAdding(intake.branch, name, phone);
+            if (refused.isPresent()) {
+                return refused.get();
+            }
+            known = new NewMember(name, e164.orElseThrow(), this.intake.preview(intake.branch, name, phone));
+            intake.byPhone.put(e164.get(), known);
+        }
+        p.newMember = known;
+        p.member = known.placeholder;
+        return null;
+    }
+
+    /** The same name ignoring case and runs of spaces. */
+    private static boolean sameName(String a, String b) {
+        return a.strip().replaceAll("\\s+", " ").equalsIgnoreCase(b.strip().replaceAll("\\s+", " "));
     }
 
     /** One repayment row of a loan already read; the problem, or null. */

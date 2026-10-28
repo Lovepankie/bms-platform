@@ -167,7 +167,7 @@ export type UploadProgress = (sent: number, total: number) => void;
  */
 export function postFile<T>(
   path: string,
-  file: Blob,
+  file: Blob | null,
   fileName: string,
   fields: Record<string, string>,
   opts: { onProgress?: UploadProgress; signal?: AbortSignal } = {},
@@ -203,7 +203,8 @@ export function postFile<T>(
       opts.signal?.addEventListener('abort', () => xhr.abort(), { once: true });
       const form = new FormData();
       for (const [k, v] of Object.entries(fields)) form.append(k, v);
-      form.append('file', file, fileName);
+      // The setup helper sends a typed list with no file (issue #626).
+      if (file) form.append('file', file, fileName);
       xhr.send(form);
     });
   return (async () => {

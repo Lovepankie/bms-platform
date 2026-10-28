@@ -10,7 +10,7 @@
 @ApplicationModule(
         id = "retail.catalogue",
         displayName = "Retail: Catalogue",
-        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.documents"})
+        allowedDependencies = {"kernel", "core.tenancy", "core.audit", "core.documents", "core.help"})
 package com.rincoltech.bms.retail.catalogue;
 
 import org.springframework.modulith.ApplicationModule;

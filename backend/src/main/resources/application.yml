@@ -265,6 +265,17 @@ bms:
         model: ${BMS_HELP_ASK_DEEPSEEK_MODEL:deepseek-chat}
         price-input-micro-per-million: ${BMS_HELP_ASK_DEEPSEEK_PRICE_INPUT_MICRO_PER_MILLION:0}
         price-output-micro-per-million: ${BMS_HELP_ASK_DEEPSEEK_PRICE_OUTPUT_MICRO_PER_MILLION:0}
+    # The setup helper (ADR-102, issue #626): Ask BMS's providers, keys and prices above, its own switch and limits. A
+    # business's list goes to a provider only for the tenant ids named here; empty is off everywhere.
+    setup:
+      enabled-tenants: ${BMS_SETUP_AI_TENANTS:}
+      daily-drafts: ${BMS_SETUP_AI_DAILY_DRAFTS:30}
+      user-hourly-drafts: ${BMS_SETUP_AI_USER_HOURLY_DRAFTS:10}
+      budget-seconds: ${BMS_SETUP_AI_BUDGET_SECONDS:25}
+      max-tokens: ${BMS_SETUP_AI_MAX_TOKENS:8000}
+      max-text-chars: ${BMS_SETUP_AI_MAX_TEXT_CHARS:30000}
+      gemini-photo-model: ${BMS_SETUP_AI_GEMINI_PHOTO_MODEL:}
+      groq-photo-model: ${BMS_SETUP_AI_GROQ_PHOTO_MODEL:}
   # JUSTIFICATION-A3: the two new configuration groups (bms.pesapal, bms.payments) for slice #213 are new settings, not wrapped code.
   # Payment collections through Pesapal (ADR-035, spec 3.11). Nothing here collects by default: with no credentials the
   # gateway is off, and startup refuses any base URL that could reach the live provider from outside production (only the

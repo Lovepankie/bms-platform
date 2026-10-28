@@ -709,6 +709,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/help/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the setup helper can read a list, a photo or a file for this business */
+        get: operations["getSetupHelperStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ledger/payment-methods": {
         parameters: {
             query?: never;
@@ -998,6 +1015,23 @@ export interface paths {
         put?: never;
         /** Import existing loans and their repayments from CSV: check first (dry_run=true, the default), then commit; a commit with any error records nothing (FR-EXL-06) */
         post: operations["importExistingLoans"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/lending/existing-loans/import/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft the import from a loan register: typed, a photo, or a CSV, Excel or PDF file (the setup helper, issue #626); saves nothing; 403 setup_ai_off while it is off for the business */
+        post: operations["draftExistingLoansImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5645,6 +5679,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/products/import/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Draft the item import from a typed list, a photo, or a CSV, Excel or PDF file (the setup helper); saves nothing; administrators only; 403 setup_ai_off while it is off for the business */
+        post: operations["draftRetailProductImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/products/name-hints": {
         parameters: {
             query?: never;
@@ -9074,7 +9125,12 @@ export interface components {
             warnings?: string[];
         };
         ExistingLoanImportRequest: {
-            /** @description The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units */
+            /**
+             * Format: uuid
+             * @description The branch members new to the app join (issue #626); empty for the only branch the caller may add members in
+             */
+            branch_id?: string;
+            /** @description The CSV text: a header row, then rows of kind loan (one per loan) and kind repayment (any number per loan), tied by ref. Comma, semicolon or tab separated; amounts in the currency's major units. A loan row names its member by member_no, or by member_name and member_phone (issue #626): the member with that phone, else a new member added with the loan */
             csv: string;
         };
         ExistingLoanImportResult: {
@@ -9088,6 +9144,11 @@ export interface components {
             errors?: number;
             /** Format: int32 */
             loans?: number;
+            /**
+             * Format: int32
+             * @description Members new to the app that come in with the loans (issue #626); 0 while any row is an error
+             */
+            members_added?: number;
             /** Format: int32 */
             repayments?: number;
             rows?: components["schemas"]["ExistingLoanImportRow"][];
@@ -10461,6 +10522,52 @@ export interface components {
             officer_user_id?: string;
             /** Format: int32 */
             reassigned?: number;
+        };
+        LoanRegisterDraft: {
+            /**
+             * Format: int32
+             * @description Decimal places of the currency, to write the amounts in the import file
+             */
+            currency_exponent?: number;
+            /** @description The drafted loans, for the import's check; nothing is saved */
+            loans?: components["schemas"]["LoanRegisterDraftLoan"][];
+            /** @description Null when loans were drafted; else why there are none: no_provider, all_failed, daily_cap or unreadable. The screen then offers to type it or import a file */
+            reason?: string;
+        };
+        /** @description The drafted loans, for the import's check; nothing is saved */
+        LoanRegisterDraftLoan: {
+            /**
+             * Format: int64
+             * @description The total to repay, as written or worked out
+             */
+            agreed_total_minor?: number;
+            /** Format: date */
+            disbursement_date?: string;
+            /** @description That member's name in the app, or null */
+            member_full_name?: string;
+            /** @description The borrower's name as the register writes it */
+            member_name?: string;
+            /** @description The member who has this phone already, or null for a member new to the app */
+            member_no?: string;
+            /** @description The phone, in E.164 when it is a Uganda number, else as written */
+            member_phone?: string;
+            payments?: components["schemas"]["LoanRegisterDraftPayment"][];
+            /** Format: int64 */
+            principal_minor?: number;
+            /** @description The monthly rate in percent as written, or null */
+            rate_percent?: string;
+            /** @description The register's number for the loan, or one the app made when it has none */
+            ref?: string;
+            /** Format: int32 */
+            term_months?: number;
+            /** @description The total was worked out as flat interest from the rate and the term, for the owner to check */
+            total_worked_out?: boolean;
+        };
+        LoanRegisterDraftPayment: {
+            /** Format: int64 */
+            amount_minor?: number;
+            /** Format: date */
+            date?: string;
         };
         /** @description FR-DIS-04: the items and a totals row that equals the loan totals */
         LoanSchedule: {
@@ -14125,6 +14232,37 @@ export interface components {
             to_branch_id?: string;
             /** Format: date */
             transfer_date?: string;
+        };
+        RetailItemDraft: {
+            /**
+             * Format: int32
+             * @description Decimal places of the shop's currency, to write the prices in the import file
+             */
+            currency_exponent?: number;
+            /** @description Null when rows were drafted; else why there are none: no_provider, all_failed, daily_cap or unreadable. The screen then offers to type the list or import a file */
+            reason?: string;
+            /** @description The drafted rows, for the import's check; nothing is saved */
+            rows?: components["schemas"]["RetailItemDraftRow"][];
+        };
+        /** @description The drafted rows, for the import's check; nothing is saved */
+        RetailItemDraftRow: {
+            category?: string;
+            /**
+             * Format: int64
+             * @description Buying price of one unit in minor units; null when none, and always for a caller without retail.profit.read
+             */
+            cost_price_minor?: number;
+            description?: string;
+            /** @description How many units are in that pack, up to three decimals, or null */
+            pack_factor?: string;
+            /** @description A bigger pack it comes in, or null */
+            pack_unit?: string;
+            /**
+             * Format: int64
+             * @description Selling price of one unit in minor units; null when the list gives none
+             */
+            sell_price_minor?: number;
+            unit?: string;
         };
         /** @description An item without sizes that becomes one size or colour of the item */
         RetailJoinItem: {
@@ -18997,6 +19135,12 @@ export interface components {
              */
             min_qty?: string;
         };
+        SetupHelperStatus: {
+            /** @description The helper may read a typed list or a file for this business; while false the box is not shown */
+            enabled?: boolean;
+            /** @description A photo can be read too (a provider that reads pictures is set) */
+            photos?: boolean;
+        };
         SignInRequest: {
             /** @description Email, or phone for staff */
             login: string;
@@ -21081,6 +21225,26 @@ export interface operations {
             };
         };
     };
+    getSetupHelperStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupHelperStatus"];
+                };
+            };
+        };
+    };
     listPaymentMethods: {
         parameters: {
             query?: never;
@@ -21677,6 +21841,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExistingLoanImportResult"];
+                };
+            };
+        };
+    };
+    draftExistingLoansImport: {
+        parameters: {
+            query?: {
+                /** @description The register as typed; leave it out when a file is sent */
+                text?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description A photo, or a CSV, Excel (.xlsx) or PDF file, 5 MB at most
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoanRegisterDraft"];
                 };
             };
         };
@@ -29608,6 +29805,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailProductImportResult"];
+                };
+            };
+        };
+    };
+    draftRetailProductImport: {
+        parameters: {
+            query?: {
+                /** @description The list as typed; leave it out when a file is sent */
+                text?: string;
+                /** @description The kind of shop chosen in Set up your shop, such as Hardware */
+                shop_type?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description A photo, or a CSV, Excel (.xlsx) or PDF file, 5 MB at most
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailItemDraft"];
                 };
             };
         };

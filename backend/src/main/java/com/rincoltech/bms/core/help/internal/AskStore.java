@@ -1,5 +1,6 @@
 package com.rincoltech.bms.core.help.internal;
 
+import com.rincoltech.bms.core.ai.LlmException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -200,6 +201,32 @@ class AskStore {
                         """)
                 .params(Timestamp.from(now), inputTokens, outputTokens, costMicro, id)
                 .update());
+    }
+
+    /** What a failed call holds against the spend, and the tokens the provider reported for it (0 when none). */
+    record Settled(long costMicro, int inputTokens, int outputTokens) {}
+
+    /**
+     * A failed call: what the provider reported is what it billed; a refusal at the first and only attempt (a rate limit, a
+     * rejected key, a bad request) billed nothing; anything else, a retry included (an earlier attempt may have been a
+     * billed 5xx), may have been billed, so its reservation stays. Shared by Ask BMS and the setup helper (ADR-102).
+     */
+    Settled settleFailed(UUID spend, Instant now, AskProperties.Provider config, LlmException e, long reserved) {
+        if (e.reportedInputTokens() >= 0 && e.reportedOutputTokens() >= 0) {
+            long cost = config.costMicro(e.reportedInputTokens(), e.reportedOutputTokens());
+            settle(spend, now, e.reportedInputTokens(), e.reportedOutputTokens(), cost);
+            return new Settled(cost, e.reportedInputTokens(), e.reportedOutputTokens());
+        }
+        boolean refusedOutright = e.attempts() <= 1
+                && switch (e.kind()) {
+                    case RATE_LIMITED, AUTH, BAD_REQUEST, UNAVAILABLE -> true;
+                    default -> false;
+                };
+        if (refusedOutright) {
+            settle(spend, now, 0, 0, 0);
+            return new Settled(0, 0, 0);
+        }
+        return new Settled(reserved, 0, 0);
     }
 
     void log(Asked a) {

@@ -71,6 +71,14 @@ class MemberRepository {
             UUID officerUserId,
             UUID createdBy) {}
 
+    /**
+     * What every new member starts as: written by the insert below and used for a check's stand-in for one (issue #626),
+     * so the two are one value. Fixed words, never input, so they are put into the statement as they are.
+     */
+    static final String INITIAL_KYC_STATUS = "incomplete";
+
+    static final String INITIAL_STATUS = "active";
+
     void insert(NewMember m) {
         jdbc.sql("""
                         INSERT INTO lending_members (
@@ -81,8 +89,10 @@ class MemberRepository {
                         VALUES (:id, current_setting('app.tenant_id')::uuid, :branchId, :memberNo, :fullName, :firstName, :lastName, :phoneE164,
                             :altPhoneE164, :idType, :nationalId, :otherIdNumber, :dateOfBirth, :gender, :maritalStatus,
                             :district, :subCounty, :village, :location, :occupation, :otherIncomeSource,
-                            :monthlyIncomeMinor, :currency, 'incomplete', 'active', :officerUserId, 'staff', :createdBy)
-                        """).paramSource(m).update();
+                            :monthlyIncomeMinor, :currency, '%s', '%s', :officerUserId, 'staff', :createdBy)
+                        """.formatted(INITIAL_KYC_STATUS, INITIAL_STATUS))
+                .paramSource(m)
+                .update();
     }
 
     List<UUID> linkedMembers(UUID memberId) {

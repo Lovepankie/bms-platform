@@ -14,6 +14,12 @@ public interface MemberLookup {
     Optional<MemberSummary> findByNumber(String memberNo);
 
     /**
+     * The members whose primary phone is this one, in any common Uganda form, across every branch; empty when it is not a
+     * phone number. The loans import matches a register line to a member by it (issue #626).
+     */
+    List<MemberSummary> findByPhone(String phone);
+
+    /**
      * {@link #find}, with the member's row locked until the caller's transaction ends. Serialises
      * per-member rules that count rows of another module, such as FR-ORG-07's loan limit.
      */

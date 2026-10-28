@@ -7,7 +7,7 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 // screen replaces the page, or an h2 (`level={2}`) under a page heading. The look is .success-screen in
 // src/app/ui/kit.css.
 
-export type SuccessAction = { label: string; to: string } | { label: string; onClick: () => void };
+export type SuccessAction = { label: string; to: string; search?: Record<string, string> } | { label: string; onClick: () => void };
 
 export function SuccessScreen({ title, amount, detail, actions, focus = true, level = 1 }: {
   title: string;
@@ -49,7 +49,7 @@ export function SuccessScreen({ title, amount, detail, actions, focus = true, le
         {actions.map((a, i) => {
           const look = i === 0 ? 'btn btn-primary' : 'btn';
           return 'to' in a ? (
-            <Link key={a.label} className={look} to={a.to as never}>
+            <Link key={a.label} className={look} to={a.to as never} search={a.search as never}>
               {a.label}
             </Link>
           ) : (

@@ -899,7 +899,8 @@ export const existingLoansPage: Tour = {
 
 export const existingLoansImportPage: Tour = {
   id: 'page-existing-loans-import',
-  version: 1,
+  // Version 2 shows the setup helper's box (issue #626).
+  version: 2,
   title: 'This page: import existing loans',
   audience: (me) => lendingTenant(me) && held(me, BRING_IN),
   autoStart: false,
@@ -911,6 +912,14 @@ export const existingLoansImportPage: Tour = {
       module: 'lending',
       title: 'Start from the template',
       body: 'Each loan has one row of kind loan, and each repayment a row of kind repayment with the same ref.',
+    },
+    {
+      id: 'helper',
+      target: 'existing-import-helper',
+      module: 'lending',
+      optional: true,
+      title: 'Let the app read your register',
+      body: 'Type the loans, take a photo of the register or choose a file. The app fills in the loans for you to check. Nothing is recorded until you tap Record.',
     },
     {
       id: 'text',

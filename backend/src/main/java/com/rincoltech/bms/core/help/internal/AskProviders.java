@@ -73,13 +73,33 @@ class AskProviders {
      * or a base URL off the provider's allowed host, stops startup.
      */
     static AskProviders from(AskProperties properties, LlmClientFactory factory) {
-        Duration budget = Duration.ofSeconds(properties.budgetSeconds());
+        return from(
+                properties,
+                factory,
+                Duration.ofSeconds(properties.budgetSeconds()),
+                name -> properties.provider(name).model(),
+                "Ask BMS");
+    }
+
+    /**
+     * The same chain, keys and checks for another caller of the free tier (the setup helper, ADR-102) with its own budget
+     * and its own model per provider: {@code modelOf} gives the model, and a blank one leaves the provider out (the
+     * photo chain, since DeepSeek reads no pictures).
+     */
+    static AskProviders from(
+            AskProperties properties,
+            LlmClientFactory factory,
+            Duration budget,
+            java.util.function.Function<String, String> modelOf,
+            String label) {
         List<Provider> chain = new ArrayList<>();
         for (String name : ORDER) {
             AskProperties.Provider config = properties.provider(name);
+            String model = modelOf.apply(name);
             refuseClaude("BMS_HELP_ASK_" + name.toUpperCase(Locale.ROOT) + "_BASE_URL", config.baseUrl());
             refuseClaude("BMS_HELP_ASK_" + name.toUpperCase(Locale.ROOT) + "_MODEL", config.model());
-            if (blank(config.apiKey()) || blank(config.baseUrl()) || blank(config.model())) {
+            refuseClaude("the " + label + " model of " + name, model);
+            if (blank(config.apiKey()) || blank(config.baseUrl()) || blank(model)) {
                 continue;
             }
             String host = ALLOWED.get(name);
@@ -95,13 +115,16 @@ class AskProviders {
             // Only Gemini gets a reasoning effort (#601); Groq and DeepSeek requests stay as they were.
             String reasoning = "gemini".equals(name) ? config.reasoning() : null;
             Optional<LlmClient> client =
-                    factory.openAiCompatible(config.baseUrl(), config.apiKey(), config.model(), budget, reasoning);
+                    factory.openAiCompatible(config.baseUrl(), config.apiKey(), model.strip(), budget, reasoning);
             client.ifPresent(c -> chain.add(new Provider(name, c, config)));
         }
         log.info(
-                "Ask BMS providers: {}",
+                "{} providers: {}",
+                label,
                 chain.isEmpty()
-                        ? "none, the articles are shown"
+                        ? "Ask BMS".equals(label)
+                                ? "none, the articles are shown"
+                                : "none, the list is typed or imported"
                         : chain.stream().map(Provider::name).toList());
         return new AskProviders(chain);
     }

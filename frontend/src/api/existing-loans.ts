@@ -99,8 +99,9 @@ export const existingLoans = {
     return unwrap(await api.POST('/api/v1/lending/existing-loans/{loan_id}/approval', { params: { path: { loan_id: id } } }));
   },
 
-  async importCsv(csv: string, dryRun: boolean): Promise<ExistingLoanImportResult> {
-    return unwrap(await api.POST('/api/v1/lending/existing-loans/import', { params: { query: { dry_run: dryRun } }, body: { csv } }));
+  /** `branchId`: where members new to the app join (issue #626); left out for the only branch the caller may add members in. */
+  async importCsv(csv: string, dryRun: boolean, branchId?: string): Promise<ExistingLoanImportResult> {
+    return unwrap(await api.POST('/api/v1/lending/existing-loans/import', { params: { query: { dry_run: dryRun } }, body: { csv, branch_id: branchId } }));
   },
 };
 

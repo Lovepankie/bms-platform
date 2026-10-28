@@ -1339,6 +1339,279 @@ class ExistingLoansIT extends LoanFixtures {
                 .isEqualTo(2);
     }
 
+    ResponseEntity<JsonNode> importCsv(String csv, boolean dryRun, String permissions, UUID branch) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("csv", csv);
+        body.put("branch_id", branch);
+        return send(HttpMethod.POST, EXISTING + "/import?dry_run=" + dryRun, as(admin, permissions, "*", null), body);
+    }
+
+    /** The outcome and message of each loan's first row (its loan row), by ref. */
+    static Map<String, String> messages(ResponseEntity<JsonNode> r) {
+        Map<String, String> out = new LinkedHashMap<>();
+        r.getBody()
+                .get("rows")
+                .forEach(row -> out.putIfAbsent(
+                        row.get("ref").asString(),
+                        row.get("outcome").asString() + ":" + row.get("message").asString("")));
+        return out;
+    }
+
+    /**
+     * A loan row may name its member by name and phone (the setup helper's draft of a register, issue #626, ADR-102): the
+     * member holding the phone is used; with none, the check says a new member comes in and saves nothing, and the commit
+     * adds the member once for two loans with the same phone, in the branch given. One phone for two names, a phone that
+     * is not one, no branch to put the member in and no permission to add members are refused on the row.
+     */
+    @Test
+    void frExl06_aLoanRowMayNameANewMemberByNameAndPhone() {
+        product("EXL8", Map.of());
+        String known = memberNo(member("Test Borrower Known", "0700000301", t.headOffice(), true));
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        LocalDate d1 = today.minusMonths(2);
+        String header = "kind,ref,member_no,member_name,member_phone,product_code,principal,disbursement_date,term,"
+                + "agreed_total,purpose,repayment_date,amount,method,note\n";
+        String csv = header
+                + "loan,REG-301,,Someone Else,0700 000 301,EXL8,400000," + d1 + ",2,,,,,,\n"
+                + "loan,REG-302,,Test Register New,0700000302,EXL8,300000," + d1 + ",2,,,,,,\n"
+                + "repayment,REG-302,,,,,,,,,," + d1.plusMonths(1) + ",100000,cash,\n"
+                + "loan,REG-303,,test register new,+256700000302,EXL8,200000," + d1 + ",1,,,,,,\n";
+        long members = count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId());
+
+        ResponseEntity<JsonNode> noBranch = importCsv(csv, true, adminPerms, null);
+        assertThat(messages(noBranch).get("REG-302")).isEqualTo("error:Choose the branch the new members join.");
+        assertThat(messages(noBranch).get("REG-301"))
+                .as("a member already holding the phone needs no branch")
+                // The whole row, nothing between its parts: the plan's position, then the match and the one warning.
+                .matches("ready:0 repayment\\(s\\); \\d+ day\\(s\\) past due\\. Member " + known
+                        + ", Test Borrower Known, has this phone\\. The file says Someone Else\\. Record this loan only"
+                        + " if it is the same person; if not, remove it from the file");
+
+        ResponseEntity<JsonNode> checked = importCsv(csv, true, adminPerms, t.headOffice());
+        assertThat(checked.getBody().get("errors").asInt())
+                .as("%s", checked.getBody())
+                .isZero();
+        assertThat(checked.getBody().get("added").asInt()).isEqualTo(3);
+        assertThat(checked.getBody().get("members_added").asInt()).isEqualTo(1);
+        assertThat(messages(checked).get("REG-302")).contains("Adds a new member, Test Register New");
+        assertThat(count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId()))
+                .as("a check saves nothing")
+                .isEqualTo(members);
+
+        ResponseEntity<JsonNode> committed = importCsv(csv, false, adminPerms, t.headOffice());
+        assertThat(committed.getBody().get("added").asInt())
+                .as("%s", committed.getBody())
+                .isEqualTo(3);
+        assertThat(count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(members + 1);
+        assertThat(count(
+                        "SELECT count(DISTINCT l.member_id) FROM lending_loans l JOIN lending_members m ON m.id = l.member_id"
+                                + " WHERE l.tenant_id = ? AND m.phone_e164 = '+256700000302' AND m.branch_id = '"
+                                + t.headOffice() + "' AND m.id_type = 'none'",
+                        t.tenantId()))
+                .as("two loans, one new member, in the branch given")
+                .isEqualTo(1);
+        assertThat(messages(committed).get("REG-302")).contains("Added a new member, Test Register New (M");
+        // The member the check stood in for is the member the commit made: the same starting KYC and status.
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT kyc_status || '/' || status FROM lending_members WHERE tenant_id = ? AND phone_e164 ="
+                                        + " '+256700000302'")
+                        .param(t.tenantId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("incomplete/active");
+
+        String refused = header
+                + "loan,REG-311,,Test Register Two,0700000311,EXL8,300000," + d1 + ",2,,,,,,\n"
+                + "loan,REG-312,,Test Register Other,0700000311,EXL8,300000," + d1 + ",2,,,,,,\n"
+                + "loan,REG-313,,Test Register Three,12345,EXL8,300000," + d1 + ",2,,,,,,\n";
+        Map<String, String> rows = messages(importCsv(refused, true, adminPerms, t.headOffice()));
+        assertThat(rows.get("REG-312")).startsWith("error:This phone is given to Test Register Two on another row");
+        assertThat(rows.get("REG-313")).startsWith("error:The member's phone must be a Uganda number");
+        String noAdding = java.util.Arrays.stream(adminPerms.split(","))
+                .filter(p -> !p.equals("lending.members.create"))
+                .collect(java.util.stream.Collectors.joining(","));
+        assertThat(messages(importCsv(refused, true, noAdding, t.headOffice())).get("REG-311"))
+                .startsWith("error:You may not add members.");
+    }
+
+    /**
+     * A phone held by a member in a branch the caller cannot see reads on the check exactly as a phone nobody holds (a new
+     * member comes in), so a check is no way to learn who holds a phone elsewhere; the commit then cannot add that member and
+     * records nothing, in words that name no member and no branch (issue #626).
+     */
+    @Test
+    void frExl06_aPhoneHeldInAnotherBranchReadsAsNewAndTheCommitRefusesWithoutNamingAnyone() {
+        product("EXL9", Map.of());
+        String elsewhere = memberNo(member("Test Borrower Elsewhere", "0700000401", t.secondBranch(), true));
+        // Two members of the head office sharing one phone (the member form allows it once confirmed).
+        String twinA = memberNo(member("Test Borrower Twin A", "0700000403", t.headOffice(), true));
+        String twinB = memberNo(member("Test Borrower Twin B", "0700000403", t.headOffice(), true));
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        LocalDate d1 = today.minusMonths(2);
+        String header = "kind,ref,member_name,member_phone,product_code,principal,disbursement_date,term\n";
+        String csv = header
+                + "loan,REG-401,Test Register Held,0700000401,EXL9,300000," + d1 + ",2\n"
+                + "loan,REG-402,Test Register Held,0700000402,EXL9,300000," + d1 + ",2\n"
+                + "loan,REG-403,Test Register Held,0700000403,EXL9,300000," + d1 + ",2\n";
+        String headOfficeOnly = t.headOffice().toString();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("csv", csv);
+        body.put("branch_id", t.headOffice());
+        ResponseEntity<JsonNode> checked = send(
+                HttpMethod.POST, EXISTING + "/import?dry_run=true", as(admin, adminPerms, headOfficeOnly, null), body);
+        assertThat(checked.getStatusCode()).as("%s", checked.getBody()).isEqualTo(HttpStatus.OK);
+        Map<String, String> rows = messages(checked);
+        assertThat(rows.get("REG-401")).startsWith("ready:").contains("Adds a new member, Test Register Held");
+        assertThat(rows.get("REG-401"))
+                .as("held only outside the caller's branches, held by nobody, held by two: one outcome, one message")
+                .isEqualTo(rows.get("REG-402"))
+                .isEqualTo(rows.get("REG-403"));
+        assertThat(checked.getBody().toString())
+                .doesNotContain(elsewhere)
+                .doesNotContain(twinA)
+                .doesNotContain(twinB)
+                .doesNotContain("Elsewhere")
+                .doesNotContain("Twin")
+                .doesNotContain("outside yours");
+
+        long members = count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId());
+        ResponseEntity<JsonNode> committed = send(
+                HttpMethod.POST, EXISTING + "/import?dry_run=false", as(admin, adminPerms, headOfficeOnly, null), body);
+        assertThat(committed.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(committed)).isEqualTo("import_member_phone_taken");
+        assertThat(committed.getBody().toString())
+                .doesNotContain(elsewhere)
+                .doesNotContain(twinA)
+                .doesNotContain("Elsewhere");
+        assertThat(count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId()))
+                .as("nothing recorded: not even the other new member")
+                .isEqualTo(members);
+        assertThat(count("SELECT count(*) FROM lending_loans WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+    }
+
+    /**
+     * A check says what its commit would: with room on the plan for one more member, a file bringing two new members is a
+     * check with problem rows and a commit that records nothing, never a Ready check and a refused commit.
+     */
+    @Test
+    void frExl06_newMembersPastThePlanLimitAreProblemRowsOnTheCheck() {
+        product("EXL10", Map.of());
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        long active =
+                count("SELECT count(*) FROM lending_members WHERE tenant_id = ? AND status = 'active'", t.tenantId());
+        String plan = "tight-members-" + t.slug();
+        TestDatabase.owner()
+                .sql("""
+                        INSERT INTO plans (id, code, name, max_branches, max_staff_users, max_active_members, allowed_modules)
+                        VALUES (?, ?, 'Test Member Plan', 10, 10, ?, '{lending}')
+                        """)
+                .params(UUID.randomUUID(), plan, active + 1)
+                .update();
+        TestDatabase.owner()
+                .sql("UPDATE tenants SET plan_id = (SELECT id FROM plans WHERE code = ?) WHERE id = ?")
+                .params(plan, t.tenantId())
+                .update();
+        LocalDate d1 = today.minusMonths(2);
+        String csv = "kind,ref,member_name,member_phone,product_code,principal,disbursement_date,term\n"
+                + "loan,REG-501,Test Register One,0700000501,EXL10,300000," + d1 + ",2\n"
+                + "loan,REG-502,Test Register Two,0700000502,EXL10,300000," + d1 + ",2\n";
+        ResponseEntity<JsonNode> checked = importCsv(csv, true, adminPerms, t.headOffice());
+        assertThat(checked.getBody().get("errors").asInt())
+                .as("%s", checked.getBody())
+                .isEqualTo(2);
+        assertThat(messages(checked).get("REG-501")).startsWith("error:The business's plan has no room for the 2 new");
+        ResponseEntity<JsonNode> committed = importCsv(csv, false, adminPerms, t.headOffice());
+        assertThat(committed.getBody().get("errors").asInt())
+                .as("the commit says what the check said")
+                .isEqualTo(2);
+        assertThat(messages(committed)).as("in the same words, row by row").isEqualTo(messages(checked));
+        assertThat(committed.getBody().get("added").asInt()).isZero();
+        assertThat(count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(active);
+        String one = "kind,ref,member_name,member_phone,product_code,principal,disbursement_date,term\n"
+                + "loan,REG-503,Test Register One,0700000501,EXL10,300000," + d1 + ",2\n";
+        assertThat(importCsv(one, true, adminPerms, t.headOffice())
+                        .getBody()
+                        .get("errors")
+                        .asInt())
+                .as("one fits")
+                .isZero();
+        assertThat(importCsv(one, false, adminPerms, t.headOffice())
+                        .getBody()
+                        .get("added")
+                        .asInt())
+                .isEqualTo(1);
+    }
+
+    /**
+     * A refusal of the member form itself (a name longer than the form takes, a branch that is not active) is on the check,
+     * row by row, in the words the commit then gives: the check runs the members module's own rules, not a copy of them.
+     */
+    @Test
+    void frExl06_theMemberFormsRefusalsAreOnTheCheckInTheCommitsWords() {
+        product("EXL11", Map.of());
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        LocalDate d1 = today.minusMonths(2);
+        String csv = "kind,ref,member_name,member_phone,product_code,principal,disbursement_date,term\n"
+                + "loan,REG-601," + "Test Long Name ".repeat(15) + ",0700000601,EXL11,300000," + d1 + ",2\n";
+        ResponseEntity<JsonNode> checked = importCsv(csv, true, adminPerms, t.headOffice());
+        assertThat(messages(checked).get("REG-601"))
+                .isEqualTo("error:The member's name is empty or longer than 200 characters.");
+        ResponseEntity<JsonNode> committed = importCsv(csv, false, adminPerms, t.headOffice());
+        assertThat(messages(committed)).isEqualTo(messages(checked));
+
+        TestDatabase.owner()
+                .sql("UPDATE branches SET status = 'inactive' WHERE id = ?")
+                .param(t.secondBranch())
+                .update();
+        String fine = "kind,ref,member_name,member_phone,product_code,principal,disbursement_date,term\n"
+                + "loan,REG-602,Test Register Closed,0700000602,EXL11,300000," + d1 + ",2\n";
+        ResponseEntity<JsonNode> closed = importCsv(fine, true, adminPerms, t.secondBranch());
+        assertThat(messages(closed).get("REG-602")).startsWith("error:");
+        assertThat(messages(importCsv(fine, false, adminPerms, t.secondBranch())))
+                .isEqualTo(messages(closed));
+        assertThat(count("SELECT count(*) FROM lending_loans WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+    }
+
+    /**
+     * The member form's duplicate gate is about the phone only (its {@code confirmed_not_duplicate} answers
+     * {@code duplicate_phone}): a register borrower whose name is a member's in another branch, under another phone, is
+     * not refused by it. The check says a new member comes in, naming no one, and the commit reaches the member form and
+     * adds that member: the check says what the commit does.
+     */
+    @Test
+    void frExl06_aNameAnotherMemberHasIsNoRefusalOnTheCheckOrTheCommit() {
+        product("EXL12", Map.of());
+        String namesake = memberNo(member("Test Borrower Namesake", "0700000701", t.secondBranch(), true));
+        assertThat(setGoLive(today.minusDays(10)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        LocalDate d1 = today.minusMonths(2);
+        String csv = "kind,ref,member_name,member_phone,product_code,principal,disbursement_date,term\n"
+                + "loan,REG-701,Test Borrower Namesake,0700000702,EXL12,300000," + d1 + ",2\n";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("csv", csv);
+        body.put("branch_id", t.headOffice());
+        String headOfficeOnly = t.headOffice().toString();
+        ResponseEntity<JsonNode> checked = send(
+                HttpMethod.POST, EXISTING + "/import?dry_run=true", as(admin, adminPerms, headOfficeOnly, null), body);
+        assertThat(messages(checked).get("REG-701")).startsWith("ready:").contains("Adds a new member, Test Borrower");
+        assertThat(checked.getBody().toString()).doesNotContain(namesake);
+        long members = count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId());
+        ResponseEntity<JsonNode> committed = send(
+                HttpMethod.POST, EXISTING + "/import?dry_run=false", as(admin, adminPerms, headOfficeOnly, null), body);
+        assertThat(committed.getStatusCode()).as("%s", committed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(messages(committed).get("REG-701"))
+                .startsWith("added:")
+                .contains("Added a new member, Test Borrower");
+        assertThat(committed.getBody().toString()).doesNotContain(namesake);
+        assertThat(count("SELECT count(*) FROM lending_members WHERE tenant_id = ?", t.tenantId()))
+                .as("the commit reached the member form, which added the member")
+                .isEqualTo(members + 1);
+    }
+
     // ---- Isolation (NFR-ISO-02) -----------------------------------------------------------
 
     /** Another business sees neither the loan nor its repayments, and its import cannot skip on this one's numbers. */

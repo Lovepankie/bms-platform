@@ -1,0 +1,9 @@
+{"items": [
+  {"name": "Test Sugar 1kg", "category": "test groceries", "unit": "pieces", "sell_price": 5500, "buy_price": "4,800", "pack_unit": "Carton", "pack_size": 10},
+  {"name": "Test  Cooking Oil   2L", "category": "Test Groceries", "unit": "Litre", "sell_price": "UGX 12,000/=", "buy_price": null, "pack_unit": null, "pack_size": null},
+  {"name": "Test Sugar 1kg", "category": "Test Groceries", "unit": "Piece", "sell_price": 5600, "buy_price": null, "pack_unit": null, "pack_size": null},
+  {"name": "Test Nails 3 inch", "category": "", "unit": "Kg", "sell_price": null, "buy_price": 7000, "pack_unit": "Kg", "pack_size": 25},
+  {"name": "Test Soap Bar", "category": "Test Cleaning", "unit": "", "sell_price": -50, "buy_price": "free", "pack_unit": "Box", "pack_size": 0.5},
+  {"name": "", "category": "Test Groceries", "unit": "Piece", "sell_price": 100},
+  {"name": "Test Rice", "category": "Test Groceries", "unit": "Kg", "sell_price": 4200.4, "pack_unit": "Bag", "pack_size": "50"}
+]}

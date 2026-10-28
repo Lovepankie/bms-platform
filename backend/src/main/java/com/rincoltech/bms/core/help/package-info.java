@@ -9,7 +9,14 @@
  * matrix version. Off unless the platform names the business in {@code BMS_HELP_ASK_TENANTS}; a daily question cap per
  * business and a per-person hourly limit, both taken before the work, and the spend of every provider call reserved before
  * it ({@code help_ask_spend}, migration V108). With no provider configured, all failing or the cap reached, the best
- * matching articles are shown instead. No public API: the module only serves {@code /help/ask}.
+ * matching articles are shown instead.
+ *
+ * <p>The setup helper (issue #626, owner decision D62, ADR-102) is the one public API, {@link
+ * com.rincoltech.bms.core.help.SetupDrafts}: a vertical's import hands over a list the owner gave (typed, a photo, or a
+ * CSV, Excel or PDF file) and gets draft rows back through the same chain, keys and spend log. Unlike a question, the list
+ * is business data, so it goes to a provider only for a business named in {@code BMS_SETUP_AI_TENANTS}; nothing is kept
+ * of it but a row of counts ({@code help_setup_drafts}, migration V112), and nothing is saved until the owner taps once in
+ * the import's own check.
  */
 @ApplicationModule(
         id = "core.help",
