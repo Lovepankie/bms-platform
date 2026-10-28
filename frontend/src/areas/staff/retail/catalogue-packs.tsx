@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
+import type { Me } from '../../../api/client';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { retail, type Pack, type Product, type Unit } from '../../../api/retail';
+import { RetailError, retail, type Pack, type Product, type Unit } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showQty } from './maths';
 import { Money, Problem, money } from './ui';
-import { UNITS, capabilityOn, holds } from './permissions';
+import { SETTINGS_MANAGE, UNITS, capabilityOn, holds } from './permissions';
 import { factorMilli, hasOwnPrice, packPriceMinor } from './units-state';
 import { WORDS } from '../../../app/glossary';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 import { Hint } from '../../../app/ui/Hint';
+import { RowChevron } from '../../../app/ui/ListRow';
 import { MoneyInput } from '../../../app/ui/MoneyInput';
 import { Segmented } from '../../../app/ui/Segmented';
 import { Sheet } from '../../../app/ui/Sheet';
@@ -332,5 +335,66 @@ export function PackEditor({ product }: { product: Product }) {
         Add pack
       </BusyButton>
     </fieldset>
+  );
+}
+
+export const PACKS_QUESTION = 'Also sold or bought in cartons or boxes?';
+export const ASK_OWNER_PACKS = 'Ask the owner to turn on cartons in Retail settings.';
+export const PACKS_ON_ADDING = 'Cartons are on. Once the item is added, tap Edit on it to add its cartons and boxes.';
+
+/** The /me of every signed-in query with packs listed among the retail capabilities. */
+export function withPacksOn(me: Me): Me {
+  const retailOn = me.module_capabilities?.retail ?? [];
+  return retailOn.includes(UNITS) ? me : { ...me, module_capabilities: { ...me.module_capabilities, retail: [...retailOn, UNITS].sort() } };
+}
+
+/**
+ * Issue #630: while packs are off, the item form says in one line that they exist. Someone who manages settings turns them on
+ * here, through the capabilities route with its If-Match, and the pack section shows at once; anyone else reads who can.
+ */
+export function PacksTurnOn({ adding }: { adding: boolean }) {
+  const { me } = useStaff();
+  const queryClient = useQueryClient();
+  const [done, setDone] = useState(false);
+  const turnOn = useMutation({
+    mutationFn: async () => {
+      // Read, then send only units with that version; the server merges it. A change by someone else in between is read
+      // again once, and a second conflict is shown.
+      for (let attempt = 0; ; attempt += 1) {
+        const read = await retail.capabilities();
+        if (read.capabilities.units === true) return read;
+        try {
+          return await retail.changeCapabilities({ units: true }, read.version);
+        } catch (error) {
+          if (attempt > 0 || !(error instanceof RetailError && error.code === 'version_conflict')) throw error;
+        }
+      }
+    },
+    onSuccess: (next) => {
+      queryClient.setQueryData(['retail', 'capabilities'], next);
+      queryClient.setQueriesData<Me>({ queryKey: ['me'] }, (was) => (was ? withPacksOn(was) : was));
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+      setDone(true);
+    },
+  });
+  if (!holds(me, 'retail.catalogue.manage')) return null;
+  if (capabilityOn(me, 'retail', UNITS)) return done && adding ? <p role="status" data-testid="packs-on">{PACKS_ON_ADDING}</p> : null;
+  return (
+    <div className="stack" data-testid="packs-turn-on">
+      <p>{PACKS_QUESTION}</p>
+      {holds(me, SETTINGS_MANAGE) ? (
+        <>
+          <Problem error={turnOn.error} />
+          {/* .btn is the secondary style (buttons.css): Add item or Save changes stays the one primary action (rule 6). */}
+          <BusyButton busy={turnOn.isPending} type="button" className="btn" onClick={() => turnOn.mutate()}>Turn on cartons</BusyButton>
+        </>
+      ) : (
+        <p className="hint" data-testid="packs-ask">{ASK_OWNER_PACKS}</p>
+      )}
+      <Link className="link-row" to="/staff/help/$articleId" params={{ articleId: 'sell-or-buy-in-cartons' }}>
+        How do I sell or buy in cartons?
+        <RowChevron />
+      </Link>
+    </div>
   );
 }

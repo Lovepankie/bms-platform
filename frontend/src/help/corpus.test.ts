@@ -47,8 +47,8 @@ const ids = (list: { id: string }[]) => list.map((a) => a.id);
 // The getting-started articles (issue #609) open before sign-in, where the picture script (docs/ui/how-do-i-598) needs a
 // local API, so they ship as text first; their pictures are a follow-up and this list shrinks as they land. Getting your shop
 // ready (issue #615), adding a photo (issue #617), an empty list (issue #619), selling packs at their own prices (issue #624),
-// setting up your shop (issue #625) and Quick add (issue #632) are text first in the same way.
-const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list', 'sell-packs-at-their-own-price', 'set-up-your-shop', 'add-a-unit', 'add-an-item-quickly'];
+// setting up your shop (issue #625), Quick add (issue #632) and selling or buying in cartons (issue #630) are text first in the same way.
+const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list', 'sell-packs-at-their-own-price', 'set-up-your-shop', 'add-a-unit', 'add-an-item-quickly', 'sell-or-buy-in-cartons'];
 
 describe('the help corpus', () => {
   // The ceiling was 30; since 27 Oct 2026 every question a tester asks that the app did not answer gets an article, so it is 40.
@@ -536,6 +536,30 @@ describe('selling packs at their own prices (issue #624)', () => {
     expect(articleText(articleById(PACKS)!)).toContain('suggests the piece price times the size');
     expect(source(['areas/staff/retail/units-state.ts'])).toContain('return pack.sell_minor ?? packPriceMinor(pieceMinor, pack.factor);');
     expect(source(['areas/staff/retail/sale-state.ts'])).toContain('packWalkInPrice(product.sell_minor ?? 0, pack)');
+  });
+});
+
+describe('selling or buying in cartons (issue #630)', () => {
+  const CARTONS = 'sell-or-buy-in-cartons';
+  const source = (files: string[]) => files.map((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')).join('\n');
+  const boldIn = (runs: Inline[]) => [...new Set(runs.flat().filter((r) => r.strong).map((r) => r.text))];
+  const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const whole = (label: string) => new RegExp(`(^|[>'"])\\s*${escape(label)}\\s*($|[<'"])`, 'm');
+  const screens = source(['areas/staff/retail/catalogue-products.tsx', 'areas/staff/retail/catalogue-packs.tsx', 'app/glossary.ts', 'app/router.tsx']);
+
+  it('has the article the item form links to, for whoever manages the catalogue, found with the words a shop owner types', () => {
+    const cartons = articleById(CARTONS)!;
+    expect(cartons.title).toBe('How do I sell or buy in cartons?');
+    expect(source(['areas/staff/retail/catalogue-packs.tsx'])).toContain(`articleId: '${CARTONS}'`);
+    for (const typed of ['turn on cartons', 'buy by the carton']) expect(searchArticles(articlesFor(owner), typed)[0]?.id, typed).toBe(CARTONS);
+    expect(ids(articlesFor(seller))).not.toContain(CARTONS);
+  });
+
+  it('puts in bold only labels the screens really show', () => {
+    const cartons = articleById(CARTONS)!;
+    const labels = boldIn([...cartons.steps.map((s) => s.text), ...cartons.notes]);
+    // Edit is the button on the item list.
+    for (const label of labels.filter((l) => l !== 'Edit')) expect(screens, label).toMatch(whole(label));
   });
 });
 

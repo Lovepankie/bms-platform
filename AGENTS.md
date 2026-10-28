@@ -61,7 +61,7 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   queries are in `scripts/db-bench/queries` (k01 to k15).
 - **Built (trade 1 of 10, issue #191, ADR-033):** migration `V37` (`retail_branch_roles`, the permission
   `retail.branch_role.manage`, a backfill of role `both`); the tenant settings group `retail.capabilities`
-  (eight flags, the `shop` or `trade` profile as a preset, all off by default; the profile is the kind of business since issue #424, ADR-092) through a vertical-neutral
+  (eight flags, the `shop` or `trade` profile as a preset, all off by default, except `units`, which a new retail business starts with on since issue #630; the profile is the kind of business since issue #424, ADR-092) through a vertical-neutral
   core hook (`core.tenancy.ModuleSettingsGroup`, supplied by `retail.manifest`); `/me` now lists `modules`
   and `module_capabilities`; branch roles `store`, `shop`, `both` owned by `retail.stock` (`BranchRoles`,
   `RetailCapabilities`), enforced on sales only (422 `branch_role_forbids_sales`; restock and transfer are

@@ -387,3 +387,31 @@ Decision 8 is completed in slice 10 (migration V48; `docs/specs/trade-capabiliti
 ADR-092 replaces the two profiles of decision 2 with four kinds named by what the owner has (`shops`, `stores_and_shops`,
 `wholesale`, `wholesale_and_shops`). A kind is still a preset of the flags and never a mode; it sets the six flags it governs and
 leaves `branch_roles` and `returns` as they are. Migration `V103` renames stored profiles without changing a flag.
+
+## Amendment of 2026-10-28 (issue #630, owner decision D64): packs on for a new retail business
+
+Decision 1 kept every flag off by default. Two pilot shops buy by the carton and could not find packs (`units`) until the owner
+switched it on in Retail settings (D63). For `units` only, that default changes: a business that gets the retail module, when it is
+created with it (by sign-up or by the operator) or when retail is switched on later, starts with `units` on. The other seven flags
+stay off.
+
+1. **Set up at the switch, not read as a default.** `retail.manifest` supplies `PacksOnAtStart`, a `core.tenancy.ModuleSetUp`
+   (ADR-098), which writes `units: true` through the core settings write in the switching transaction, audited as
+   `retail.capabilities.changed`. The stored kind is Shops, so a new business does not read as a wholesaler. The core calls the
+   set-up only for a module that was off, so a modules change that keeps retail on leaves packs as the owner set them. An absent
+   flag still reads as off, so no existing business changes and no migration is needed.
+2. **A later switch-on turns packs on again.** A business whose retail was switched off and on again finds packs on, even if the
+   owner had switched them off; they switch them off again in Retail settings. The packs and their prices are kept either way.
+3. **A kind only ever turns packs on.** Wholesale and Wholesale and shops turn packs on as before; Shops and Stores and shops no
+   longer switch them off (`BusinessTypes.NEVER_SWITCHED_OFF`), so a new shop that picks Shops on Retail settings keeps them. The
+   other wholesale tools and the two-step stock move still follow the kind (ADR-092). Neither sign-up nor the first-run set-up asks
+   for the kind; it is chosen only on Retail settings. Packs go off only on their own switch.
+4. **The item form says packs exist.** While `units` is off, Add an item and Edit show one line, "Also sold or bought in cartons
+   or boxes?". Someone with `core.settings.manage` turns packs on there through `PUT /retail/settings/capabilities` with its
+   `If-Match` (sending `units` alone, which the group merges; a version conflict is read again once), and the pack section shows
+   at once; anyone else reads "Ask the owner to turn on cartons in Retail settings." The line
+   links the help article How do I sell or buy in cartons?
+
+**Better:** a new shop that buys by the carton finds packs on the item form from the first day. **Worse:** a shop that never sells a
+pack sees the pack section on Edit until it switches packs off, and choosing a kind no longer switches packs off. **Watch for:** a new path that switches retail on must go through
+`ModuleSetUp`, or the business starts with packs off.

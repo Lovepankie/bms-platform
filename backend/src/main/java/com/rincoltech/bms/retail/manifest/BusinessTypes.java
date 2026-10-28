@@ -66,10 +66,17 @@ public final class BusinessTypes {
         return "trade".equals(profile) || Boolean.TRUE.equals(flags.get("transfer_receipt")) ? STORES_AND_SHOPS : SHOPS;
     }
 
-    /** True when choosing {@code type} switches {@code capability} off; false for a switch no kind governs. */
+    /**
+     * Packs a kind only turns on, never off (issue #630, ADR-033 amendment): a new business starts with them on, and choosing
+     * Shops or Stores and shops must not take them away. The owner switches them off on their own switch.
+     */
+    public static final Set<String> NEVER_SWITCHED_OFF = Set.of("units");
+
+    /** True when choosing {@code type} switches {@code capability} off; false for a switch no kind governs or only turns on. */
     public static boolean switchesOff(String type, String capability) {
         return isType(type)
                 && GOVERNED.contains(capability)
+                && !NEVER_SWITCHED_OFF.contains(capability)
                 && !PRESETS.get(type).contains(capability);
     }
 }

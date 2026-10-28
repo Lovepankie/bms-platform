@@ -16,6 +16,12 @@ vi.setConfig({ testTimeout: 20000 });
 const similarProducts = vi.fn();
 const createProduct = vi.fn();
 
+// The item form links to its help (issue #630); these tests draw it without a router.
+vi.mock('@tanstack/react-router', async (original) => {
+  const real = await original<typeof import('@tanstack/react-router')>();
+  return { ...real, Link: ({ children, to, className }: { children: unknown; to: string; className?: string }) => <a href={to} className={className}>{children as never}</a> };
+});
+
 vi.mock('../../../api/retail', async (original) => {
   const real = await original<typeof import('../../../api/retail')>();
   return {

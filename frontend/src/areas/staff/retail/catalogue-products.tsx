@@ -12,7 +12,7 @@ import { useStaff } from '../context';
 import { ExistsPanel, SimilarPanel, existingOf, type ExistingItem } from './catalogue-names';
 import { NameHintsPanel, useNameHints } from './name-hints';
 import { ItemCodeLine } from './new-item-here';
-import { PackEditor } from './catalogue-packs';
+import { PackEditor, PacksTurnOn } from './catalogue-packs';
 import { BarcodeEditor } from './catalogue-barcodes';
 import { MakeFamilyPanel, SIZES_JOIN, SIZES_NEW, VariantNote } from './catalogue-variants';
 import { ItemPhoto, PhotoChoice, PhotoEditor, sendNewPhoto, shownPhoto } from './item-photo';
@@ -292,6 +292,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
             </>
           )}
           <p className="hint">To change the price, use Change price on the list.</p>
+          <PacksTurnOn adding={false} />
           <PackEditor product={product} />
           <BarcodeEditor product={product} />
           <StockMinimumEditor productId={product.id ?? ''} unit={product.unit} />
@@ -319,6 +320,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
           />
           {!profit && <p className="hint">The buying price is set when you buy stock.</p>}
           <PhotoChoice id="item-photo" file={photo} onChange={setPhoto} />
+          <PacksTurnOn adding />
         </>
       )}
       {exists && (
