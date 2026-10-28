@@ -157,7 +157,8 @@ export function PhotoChoice({ id, file, onChange }: { id: string; file: File | n
         </label>
         {file && <button type="button" className="btn-ghost" onClick={() => { setProblem(null); onChange(null); }}>Take the photo off</button>}
       </p>
-      <Hint>A PNG, JPEG or WebP picture up to 5 MB. You can also add it later.</Hint>
+      {/* Whole, wrapping on a phone (issue #642): the one cut line ran past the form at a large font size. */}
+      <Hint full>A PNG, JPEG or WebP picture up to 5 MB. You can also add it later.</Hint>
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
     </div>
   );

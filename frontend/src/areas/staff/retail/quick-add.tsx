@@ -120,7 +120,8 @@ export function QuickAddForm({ initialName = '', onSell }: {
   useEffect(() => {
     if (unitId === '' && piece?.id) setUnitId(piece.id);
   }, [piece?.id, unitId]);
-  useEffect(() => { document.getElementById('qa-name')?.focus(); }, []);
+  // No focus on Name at opening (issue #642): a tour that starts over the page takes the focus, which is a blur of Name, and its
+  // error would show before the person did anything. Add another, Start again and Change the name focus it: the person asked.
 
   const sellMinor = parseMinor(sell, RETAIL_CURRENCY);
   const costMinor = cost.trim() === '' ? 0 : parseMinor(cost, RETAIL_CURRENCY);

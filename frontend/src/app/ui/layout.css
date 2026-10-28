@@ -87,6 +87,9 @@
 
 .stack {
   display: grid;
+  /* One column no wider than the stack (issue #642): an implicit column is as wide as its widest uncut line, so one nowrap
+     hint (the photo's) widened every field of Quick add past the phone. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
@@ -8,6 +9,8 @@ import { mockMe } from '../../../api/retail-mock';
 import { IDEMPOTENCY_UNSURE_CODES } from '../../../api/retail-errors';
 import { readFileSync } from 'node:fs';
 import { branchLabel } from '../../../auth/branch';
+import { router as appRouter } from '../../../app/router';
+import { TourProvider } from '../../../tour/host';
 import { StaffContext } from '../context';
 
 // Quick add (issue #632): one form and one tap for an item, its prices and how many there are. Add sends one request with the
@@ -100,9 +103,12 @@ describe('quick add', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     await screen.findByTestId('qa-done');
     expect((quickAdd.mock.calls[0] as [Record<string, unknown>])[0]).toMatchObject({ branch_id: other?.id, qty: '3.000' });
+    // The done view replaces the form, so Name comes back with the form and is focused then.
+    expect(screen.queryByLabelText(/^Name/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add another' }));
     expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe('');
     expect((screen.getByLabelText(/^Where/) as HTMLSelectElement).value).toBe(other?.id);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/^Name/)));
   });
 
   it('leaves the category out, so the server files the item under General', async () => {
@@ -261,9 +267,30 @@ describe('quick add', () => {
     await screen.findByTestId('qa-not-sure');
     expect(screen.queryByRole('button', { name: 'Start again' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Start again' }));
+    const again = await screen.findByRole('button', { name: 'Start again' });
+    expect(document.activeElement).not.toBe(screen.getByLabelText(/^Name/));
+    fireEvent.click(again);
     expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe('');
     expect((screen.getByTestId('qa-fields') as HTMLFieldSetElement).disabled).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/^Name/)));
+  });
+
+  it('closes the name panel and puts the person back in Name when they tap Change the name', async () => {
+    quickAdd.mockRejectedValueOnce(new RetailError('This product already exists: Test Cup (GNR-0003).', 422, 'duplicate_product_name', {
+      existing_id: 'p7', existing_code: 'GNR-0003', existing_name: 'Test Cup', may_add_anyway: false,
+    }));
+    open(owner);
+    type(/^Name/, 'Test Cup');
+    type(/^Selling price/, '700');
+    type(/How many do you have here now/, '2');
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const panel = await screen.findByTestId('name-exists');
+    const name = screen.getByLabelText(/^Name/) as HTMLInputElement;
+    expect(document.activeElement).not.toBe(name);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Change the name' }));
+    expect(screen.queryByTestId('name-exists')).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(name));
+    expect(name.value).toBe('Test Cup');
   });
 
   it('never refuses silently when the existing item is chosen with nothing to add', async () => {
@@ -314,6 +341,50 @@ describe('quick add', () => {
     expect(quickAdd).not.toHaveBeenCalled();
     expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe('Test Lamp');
     online.mockRestore();
+  });
+});
+
+describe('with the tour on (issue #642)', () => {
+  // The live page after sign-in: the first-run tour starts by itself over Quick add, takes the focus and is closed. Before the fix
+  // Quick add had focused Name on opening, so the tour's taking the focus was a blur of Name and its error showed at once.
+  const scrollIntoView = Element.prototype.scrollIntoView;
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+
+  it('opens with no error when the tour starts and is closed, and still shows it once the person leaves Name', async () => {
+    vi.stubGlobal('CSS', { escape: (value: string) => value });
+    Element.prototype.scrollIntoView = vi.fn();
+    const fresh = { ...owner, tours: {} } as Me;
+    const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/retail/quick-add'] }) });
+    render(
+      <RouterContextProvider router={router}>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <StaffContext.Provider value={{ me: fresh, branch: branch?.id ?? '', chooseBranch: () => undefined }}>
+            <TourProvider me={fresh} saveProgress={false}>
+              <QuickAddForm />
+            </TourProvider>
+          </StaffContext.Provider>
+        </QueryClientProvider>
+      </RouterContextProvider>,
+    );
+    const name = screen.getByLabelText(/^Name/) as HTMLInputElement;
+    // The bug's first half: Quick add focused Name on opening. Now nothing in the form has the focus.
+    expect(document.activeElement).not.toBe(name);
+    // The tour starts by itself and takes the focus into its dialog: before the fix that was the blur of Name.
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    expect(screen.queryByText('Type what the item is.')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close the tour' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Close the tour' })).toBeNull());
+    await new Promise((done) => setTimeout(done, 10));
+    expect(screen.queryByText('Type what the item is.')).toBeNull();
+    expect(name.getAttribute('aria-invalid')).toBe('false');
+    // Rule 10 is untouched: the person going into Name and leaving it empty sees the error.
+    name.focus();
+    fireEvent.blur(name);
+    expect(screen.getByText('Type what the item is.')).toBeTruthy();
   });
 });
 
