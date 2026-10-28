@@ -34,6 +34,16 @@ export function milliOf(text: string): number {
   return negative ? -magnitude : magnitude;
 }
 
+/**
+ * Issue #629: a count that takes an item holding stock to 0, or to less than half of what it held, is the likely slip of a
+ * tap (a 0 meant for the next line). It asks before it is committed; a count that keeps half or more stays as it is. The one
+ * rule of the screen and the mock; the server's StockService.bigDrop is pinned to it by the cases of maths.test.ts (#636).
+ */
+export function bigDrop(l: { expected_qty?: string; counted_qty?: string }): boolean {
+  const expected = milliOf(l.expected_qty ?? '0');
+  return expected > 0 && milliOf(l.counted_qty ?? '0') * 2 < expected;
+}
+
 /** unit price times quantity in integer minor units, rounded half up, exact via BigInt. */
 export function lineTotalMinor(unitPriceMinor: number, qtyMilli: number): number {
   const product = BigInt(unitPriceMinor) * BigInt(qtyMilli);

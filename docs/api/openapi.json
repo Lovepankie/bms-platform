@@ -19718,6 +19718,22 @@
           }
         }
       },
+      "RetailStocktakeCommitRequest" : {
+        "description" : "Issue #636: the lines of a big drop the person ticked as right on Review the difference",
+        "properties" : {
+          "acknowledged" : {
+            "description" : "The product ids of the lines that take an item holding stock to 0, or to less than half of it, that were ticked as right. Every such line must be here, or the commit is refused with 409 big_drop_not_acknowledged",
+            "items" : {
+              "description" : "The product ids of the lines that take an item holding stock to 0, or to less than half of it, that were ticked as right. Every such line must be here, or the commit is refused with 409 big_drop_not_acknowledged",
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "maxItems" : 2000,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        }
+      },
       "RetailStocktakeLine" : {
         "properties" : {
           "code" : {
@@ -43665,6 +43681,15 @@
             "type" : "string"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailStocktakeCommitRequest"
+              }
+            }
+          }
+        },
         "responses" : {
           "200" : {
             "content" : {
@@ -43677,7 +43702,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Write the adjustment movements and post the variance (FR-RET-08)",
+        "summary" : "Write the adjustment movements and post the variance (FR-RET-08); every big drop must be acknowledged (issue #636)",
         "tags" : [ "retail-stock" ]
       }
     },

@@ -83,6 +83,18 @@ describe('retail mock adapter (real response shapes)', () => {
     expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === row?.product_id)?.qty).toBe('10.000');
   });
 
+  // Issue #636: as the server, a count to 0 or below half of what was held commits only when its line is acknowledged.
+  it('refuses a big drop that is not acknowledged and commits it once it is', async () => {
+    const api = createMockRetail();
+    const row = (await api.listStock({ branchId: branch })).find((r) => Number(r.qty) > 0);
+    const id = row?.product_id ?? '';
+    const draft = await api.createStocktake({ branch_id: branch, lines: [{ product_id: id, counted_qty: '0' }] });
+    await expect(api.commitStocktake(draft.id ?? '')).rejects.toMatchObject({ code: 'big_drop_not_acknowledged', status: 409 });
+    expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === id)?.qty).toBe(row?.qty);
+    await api.commitStocktake(draft.id ?? '', [id]);
+    expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === id)?.qty).toBe('0.000');
+  });
+
   it('moves stock between branches at cost, refuses beyond the source balance, and voids once', async () => {
     setMockProfitAccess(true);
     const api = createMockRetail();

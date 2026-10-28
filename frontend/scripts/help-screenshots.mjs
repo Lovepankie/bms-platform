@@ -280,16 +280,30 @@ const SHOTS = {
       await page.waitForTimeout(3500);
       await page.getByLabel(/Single switch/).first().fill('15');
       await shoot(page, 'count-stock-2.webp', page.locator('.line-card').filter({ hasText: 'Single switch' }).first());
+      // A count to 0 of an item that holds stock, so the review shows the note and its tick (issue #636).
+      await page.getByLabel(/^Double socket 13A/).first().fill('0');
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(400);
+      // The first taps leave the count box and answer the entry warnings; then the question names Review the difference anyway.
+      const anyway = button(page, 'Review the difference anyway');
+      for (let i = 0; i < 6 && !(await anyway.isVisible()); i++) {
+        const confirm = button(page, 'Confirm');
+        await ((await confirm.isVisible()) ? confirm : tour(page, 'count-review')).click();
+        await page.waitForTimeout(900);
+      }
+      // The question shows Review the difference anyway; the ring stays on Review the difference, the button the caption names.
       await shoot(page, 'count-stock-3.webp', tour(page, 'count-review'));
-      // The first tap leaves the count box (the line moves to Counted items); the second asks for the review.
       const commit = button(page, 'Commit the count');
       for (let i = 0; i < 6 && !(await commit.isVisible()); i++) {
         const next = ['Confirm', 'Review the difference anyway'].map((name) => button(page, name));
-        const shown = (await next[0].isVisible()) ? next[0] : (await next[1].isVisible()) ? next[1] : tour(page, 'count-review');
-        await shown.click();
+        await ((await next[0].isVisible()) ? next[0] : next[1]).click();
         await page.waitForTimeout(900);
       }
-      await shoot(page, 'count-stock-4.webp', button(page, 'Commit the count'));
+      // Commit the count waits for a tick on every line that takes an item to 0 or below half: tick each, then ring the button.
+      const ticks = page.locator('.count-drop-tick input');
+      for (const tick of await ticks.all()) await tick.check();
+      await page.waitForTimeout(300);
+      await shoot(page, 'count-stock-4.webp', commit);
     },
   },
   'entry-warnings': {

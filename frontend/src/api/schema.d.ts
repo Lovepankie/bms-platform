@@ -7021,7 +7021,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Write the adjustment movements and post the variance (FR-RET-08) */
+        /** Write the adjustment movements and post the variance (FR-RET-08); every big drop must be acknowledged (issue #636) */
         post: operations["commitRetailStocktake"];
         delete?: never;
         options?: never;
@@ -17499,6 +17499,11 @@ export interface components {
             status?: string;
             /** Format: int32 */
             version?: number;
+        };
+        /** @description Issue #636: the lines of a big drop the person ticked as right on Review the difference */
+        RetailStocktakeCommitRequest: {
+            /** @description The product ids of the lines that take an item holding stock to 0, or to less than half of it, that were ticked as right. Every such line must be here, or the commit is refused with 409 big_drop_not_acknowledged */
+            acknowledged?: string[];
         };
         RetailStocktakeLine: {
             code?: string;
@@ -32175,7 +32180,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RetailStocktakeCommitRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

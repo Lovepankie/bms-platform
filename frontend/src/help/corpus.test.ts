@@ -572,7 +572,12 @@ describe('the count stock words (issue #629)', () => {
   const screen = readFileSync(new URL('../areas/staff/retail/stocktake.tsx', import.meta.url), 'utf8');
   const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const whole = (label: string) => new RegExp(`(^|[>'"\`])\\s*${escape(label)}\\s*($|[<'"\`(])`, 'm');
-  const counting = ARTICLES.filter((a) => a.job === 'count-stock');
+  // Issue #636: every article that mentions a stock count, not only the count's own, since Ask BMS reads them all.
+  const counting = ARTICLES.filter((a) => a.job === 'count-stock' || /stock count|count(ing)? (the )?stock/i.test(articleText(a)));
+  // The server's refusals about a stock count, as one text of their string literals, file by file.
+  const java = (file: string) => readFileSync(new URL(`../../../backend/src/main/java/com/rincoltech/bms/${file}`, import.meta.url), 'utf8');
+  const literals = (file: string) => [...java(file).matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]).join('');
+  const refusals = ['retail/stock/internal/StockService.java', 'retail/stock/internal/StockCorrectionService.java', 'core/tenancy/internal/BranchService.java'];
 
   it('put in bold, and as captions, only labels the count screen shows, Commit the count among them', () => {
     const count = articleById('count-stock')!;
@@ -592,6 +597,17 @@ describe('the count stock words (issue #629)', () => {
     const tour = stocktakePage.steps.map((s) => `${s.title} ${s.body}`).join('\n');
     expect(tour).not.toMatch(/\bfinish/i);
     expect(tour).toContain('Commit the count');
+  });
+
+  it('reads every article that mentions a stock count', () => {
+    expect(counting.map((a) => a.id)).toEqual(expect.arrayContaining(['count-stock', 'entry-warnings', 'getting-your-shop-ready']));
+  });
+
+  // Issue #636: the server's refusals about a stock count say to commit it, the big drop refusal among them.
+  it('never say Finish for a stock count in a server refusal', () => {
+    for (const file of refusals) expect(literals(file), file).not.toMatch(/stock counts?[^.]{0,80}\bfinish|\bfinish\w* (the |a |your )?stock count/i);
+    expect(literals(refusals[0]!)).toContain('tick each line marked before you commit the count.');
+    expect(literals(refusals[2]!)).toContain(' stock counts started and not committed');
   });
 });
 

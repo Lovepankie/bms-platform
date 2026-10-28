@@ -174,7 +174,8 @@ class RetailStockIT extends IntegrationTest {
                 ADMIN));
         api.sell(t.headOffice(), "cash", product, "5");
 
-        ResponseEntity<JsonNode> refused = api.post("/stocktakes/" + id + "/commit", Map.of(), ADMIN);
+        ResponseEntity<JsonNode> refused =
+                api.post("/stocktakes/" + id + "/commit", Map.of("acknowledged", List.of(product)), ADMIN);
         assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(refused.getBody().get("code").asString()).isEqualTo("stock_moved_since_count");
         assertThat(refused.getBody().get("detail").asString())
@@ -183,6 +184,83 @@ class RetailStockIT extends IntegrationTest {
         assertThat(qty()).isEqualTo("5.000");
         assertThat(api.get("/stocktakes/" + id, ADMIN).getBody().get("status").asString())
                 .isEqualTo("draft");
+    }
+
+    /**
+     * Issue #636: a count that takes an item holding stock to 0, or to less than half of it, is committed only when its
+     * line is acknowledged, so a stale draft from another tab or a direct call never writes it unasked; nothing moves on
+     * the refusal.
+     */
+    @Test
+    void aBigDropNotAcknowledgedIsRefused() {
+        UUID other = api.product("SKT-14B", 400, 600);
+        api.stockUp(t.headOffice(), product, "10");
+        api.stockUp(t.headOffice(), other, "8");
+        UUID id = count(
+                Map.of("product_id", product, "counted_qty", "4.5"), Map.of("product_id", other, "counted_qty", "0"));
+
+        for (Map<String, Object> body : List.<Map<String, Object>>of(
+                Map.of(), Map.of("acknowledged", List.of()), Map.of("acknowledged", List.of(product)))) {
+            ResponseEntity<JsonNode> refused = api.post("/stocktakes/" + id + "/commit", body, ADMIN);
+            assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(refused.getBody().get("code").asString()).isEqualTo("big_drop_not_acknowledged");
+            assertThat(refused.getBody().get("detail").asString())
+                    .contains("Test Product SKT-14B")
+                    .contains("more than half")
+                    .contains("commit the count")
+                    .doesNotContainIgnoringCase("finish");
+        }
+        assertThat(refused(id, Map.of()).get("detail").asString()).contains("SKT-13A");
+        assertThat(qty()).isEqualTo("10.000");
+        assertThat(api.get("/stocktakes/" + id, ADMIN).getBody().get("status").asString())
+                .isEqualTo("draft");
+    }
+
+    /** Issue #636: with every big drop acknowledged the count is committed as before. */
+    @Test
+    void aBigDropAcknowledgedIsCommitted() {
+        UUID other = api.product("SKT-14B", 400, 600);
+        api.stockUp(t.headOffice(), product, "10");
+        api.stockUp(t.headOffice(), other, "8");
+        UUID id = count(
+                Map.of("product_id", product, "counted_qty", "4.5"), Map.of("product_id", other, "counted_qty", "0"));
+
+        ResponseEntity<JsonNode> committed =
+                api.post("/stocktakes/" + id + "/commit", Map.of("acknowledged", List.of(other, product)), ADMIN);
+        assertThat(committed.getStatusCode()).as("%s", committed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(committed.getBody().get("status").asString()).isEqualTo("committed");
+        assertThat(qty()).isEqualTo("4.500");
+    }
+
+    /**
+     * Issue #636: a count that keeps half or more, or adds, is not a big drop and needs no acknowledgement; neither does a
+     * count of an item that held nothing.
+     */
+    @Test
+    void aLineThatIsNotABigDropNeedsNoAcknowledgement() {
+        UUID added = api.product("SKT-14B", 400, 600);
+        UUID empty = api.product("SKT-14C", 400, 600);
+        api.stockUp(t.headOffice(), product, "10");
+        api.stockUp(t.headOffice(), added, "2");
+        UUID id = count(
+                Map.of("product_id", product, "counted_qty", "5"),
+                Map.of("product_id", added, "counted_qty", "3"),
+                Map.of("product_id", empty, "counted_qty", "0"));
+
+        ResponseEntity<JsonNode> committed = api.post("/stocktakes/" + id + "/commit", Map.of(), ADMIN);
+        assertThat(committed.getStatusCode()).as("%s", committed.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(qty()).isEqualTo("5.000");
+    }
+
+    private UUID count(Map<?, ?>... lines) {
+        return RetailTestSupport.id(
+                api.post("/stocktakes", Map.of("branch_id", t.headOffice(), "lines", List.of(lines)), ADMIN));
+    }
+
+    private JsonNode refused(UUID id, Map<String, Object> body) {
+        ResponseEntity<JsonNode> refused = api.post("/stocktakes/" + id + "/commit", body, ADMIN);
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        return refused.getBody();
     }
 
     /** FR-RET-03: movements are append-only for the application and the owner alike. */

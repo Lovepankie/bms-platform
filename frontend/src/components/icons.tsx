@@ -583,6 +583,13 @@ export const icons = {
       <path d="M12 7.5v5.5M12 16.5v.01" />
     </Svg>
   ),
+  // A triangle with an exclamation mark: a warning that asks before going on, such as a count that wipes stock (issue #636).
+  warning: (
+    <Svg>
+      <path d="M12 3.5 2.5 20h19z" />
+      <path d="M12 10v4.5M12 17.5v.01" />
+    </Svg>
+  ),
   // A question mark in a circle: Help and feedback at the foot of the staff menu (issue #564).
   help: (
     <Svg>

@@ -11,6 +11,7 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.QuickAdd;
 import com.rincoltech.bms.retail.stock.internal.StockApi.QuickAddRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
+import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeCommitRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
 import com.rincoltech.bms.retail.stock.internal.StockSummaryApi.Summary;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageReport;
@@ -237,9 +238,13 @@ class StockController {
     @PostMapping("/stocktakes/{stocktake_id}/commit")
     @RequiresPermission("retail.stocktake.commit")
     @Operation(
-            summary = "Write the adjustment movements and post the variance (FR-RET-08)",
+            summary = "Write the adjustment movements and post the variance (FR-RET-08); every big drop must be"
+                    + " acknowledged (issue #636)",
             operationId = "commitRetailStocktake")
-    Stocktake commit(@PathVariable("stocktake_id") UUID id) {
-        return service.commit(id);
+    Stocktake commit(
+            @PathVariable("stocktake_id") UUID id,
+            @Valid @RequestBody(required = false) StocktakeCommitRequest request) {
+        return service.commit(
+                id, request == null || request.acknowledged() == null ? List.of() : request.acknowledged());
     }
 }

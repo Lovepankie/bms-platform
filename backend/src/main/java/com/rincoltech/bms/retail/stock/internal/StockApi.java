@@ -307,6 +307,18 @@ final class StockApi {
             @NotEmpty @Size(max = 2000) List<@Valid @NotNull StocktakeLineRequest> lines,
             @Size(max = 300) String note) {}
 
+    @Schema(
+            name = "RetailStocktakeCommitRequest",
+            description = "Issue #636: the lines of a big drop the person ticked as right on Review the difference")
+    record StocktakeCommitRequest(
+            @Size(max = 2000)
+            @Schema(
+                    description =
+                            "The product ids of the lines that take an item holding stock to 0, or to less than half of"
+                                    + " it, that were ticked as right. Every such line must be here, or the commit is"
+                                    + " refused with 409 big_drop_not_acknowledged")
+            List<@NotNull UUID> acknowledged) {}
+
     @Schema(name = "RetailStocktakeLine")
     record StocktakeLine(
             UUID productId,

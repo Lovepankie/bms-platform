@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { lineTotalMinor, milliOf, parseCount, parseQty, qtyString, showPercent, showQty } from './maths';
+import { bigDrop, lineTotalMinor, milliOf, parseCount, parseQty, qtyString, showPercent, showQty } from './maths';
 
 describe('retail quantity maths', () => {
   it('parses quantities with up to three places', () => {
@@ -46,5 +47,17 @@ describe('percent from basis points', () => {
     expect(showPercent(-250)).toBe('-2.5%');
     expect(showPercent(0)).toBe('0%');
     expect(showPercent(undefined)).toBe('n/a');
+  });
+});
+
+// Issue #636: the server refuses a commit that leaves out a big drop, so the screen must ask for every tick the server needs.
+// The rows of the server's unit test are the shared cases: the client rule gives the same answer for each.
+describe('the big drop rule', () => {
+  const java = readFileSync(new URL('../../../../../backend/src/test/java/com/rincoltech/bms/retail/stock/internal/StockServiceBigDropTest.java', import.meta.url), 'utf8');
+  const rows = [...java.matchAll(/"(-?[\d.]+), (-?[\d.]+), (true|false)"/g)].map((m) => [m[1]!, m[2]!, m[3] === 'true'] as const);
+
+  it('agrees with the server on every shared case: half, nothing held, a negative balance, fractions', () => {
+    expect(rows.length).toBeGreaterThanOrEqual(10);
+    for (const [expected, counted, big] of rows) expect(bigDrop({ expected_qty: expected, counted_qty: counted }), `${expected} to ${counted}`).toBe(big);
   });
 });

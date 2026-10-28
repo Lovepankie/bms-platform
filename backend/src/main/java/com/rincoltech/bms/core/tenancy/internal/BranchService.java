@@ -445,7 +445,7 @@ class BranchService implements BranchProvisioning {
                 words.append("has ")
                         .append(f.count())
                         .append(f.count() == 1 ? " stock count" : " stock counts")
-                        .append(" started and not finished");
+                        .append(" started and not committed");
             } else {
                 words.append("has ")
                         .append(f.count())

@@ -343,9 +343,14 @@ class StockService {
      * in the balance. The net value posts to stock shrinkage against inventory in one entry for the
      * branch. When later movements mean the adjustment would take a balance below zero, the count no
      * longer describes the shelf: the commit is refused with 409 {@code stock_moved_since_count}.
+     *
+     * <p>Issue #636: a line that takes an item holding stock to 0, or to less than half of it, is the likely slip of a tap.
+     * Review the difference asks a tick for each; the commit names the ticked ones in {@code acknowledged}, and is refused
+     * with 409 {@code big_drop_not_acknowledged} while one is missing, so a stale draft from another tab or the API never
+     * writes such a drop unasked.
      */
     @Transactional
-    Stocktake commit(UUID id) {
+    Stocktake commit(UUID id, List<UUID> acknowledged) {
         Principal principal = CurrentPrincipal.require();
         Stocktake s = repo.stocktake(id, true)
                 .filter(x -> principal.may("retail.stocktake.commit", x.branchId()))
@@ -360,6 +365,20 @@ class StockService {
         // A draft made before the branch was closed or marked as not stocking must not write stock there (issue #329,
         // ADR-041).
         branches.requireStocks(s.branchId(), "branch_id");
+        Set<UUID> ticked = new HashSet<>(acknowledged);
+        List<String> unticked = s.lines().stream()
+                .filter(l -> bigDrop(l) && !ticked.contains(l.productId()))
+                .map(l -> l.description() == null ? l.code() : l.description())
+                .toList();
+        if (!unticked.isEmpty()) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "big_drop_not_acknowledged",
+                    "Tick the lines marked before you commit",
+                    "The count of " + String.join(", ", unticked)
+                            + " removes more than half of what was there. Review the difference again and tick each line marked"
+                            + " before you commit the count.");
+        }
         List<StocktakeLine> lines = new ArrayList<>(s.lines());
         lines.sort(Comparator.comparing(StocktakeLine::productId));
         List<Movement> movements = new ArrayList<>();
@@ -419,6 +438,13 @@ class StockService {
         audit.record(new AuditLog.Entry(
                 "retail.stocktake.committed", STOCKTAKE, id, s.branchId(), Map.of("status", "draft"), after));
         return visible(repo.stocktake(id, false).orElseThrow());
+    }
+
+    /** Issue #629, #636: the count takes an item holding stock to 0, or to less than half of what it held. */
+    static boolean bigDrop(StocktakeLine l) {
+        BigDecimal expected = new BigDecimal(l.expectedQty());
+        return expected.signum() > 0
+                && new BigDecimal(l.countedQty()).multiply(BigDecimal.TWO).compareTo(expected) < 0;
     }
 
     private Stocktake visible(Stocktake s) {

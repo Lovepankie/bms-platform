@@ -100,12 +100,16 @@ public final class RetailTestSupport {
         return postKeyed("/sales", body, ADMIN, "*", UUID.randomUUID().toString());
     }
 
-    /** Brings a branch's balance to {@code qty} with a committed stock-take, as an admin. */
+    /**
+     * Brings a branch's balance to {@code qty} with a committed stock-take, as an admin; a drop to it is acknowledged
+     * (issue #636).
+     */
     public void stockUp(UUID branchId, UUID productId, String qty) {
         Map<String, Object> body = Map.of(
                 "branch_id", branchId, "lines", java.util.List.of(Map.of("product_id", productId, "counted_qty", qty)));
         UUID stocktake = id(post("/stocktakes", body, ADMIN));
-        ResponseEntity<JsonNode> committed = post("/stocktakes/" + stocktake + "/commit", Map.of(), ADMIN);
+        ResponseEntity<JsonNode> committed = post(
+                "/stocktakes/" + stocktake + "/commit", Map.of("acknowledged", java.util.List.of(productId)), ADMIN);
         if (!committed.getStatusCode().is2xxSuccessful()) {
             throw new AssertionError("stock-take commit: " + committed.getBody());
         }

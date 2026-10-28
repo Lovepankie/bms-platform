@@ -25,7 +25,7 @@ vi.mock('../../../api/retail', async (original) => {
   return { ...real, retail: { ...real.retail, listStock: (...a: unknown[]) => listStock(...a), createStocktake: (...a: unknown[]) => createStocktake(...a), commitStocktake: (...a: unknown[]) => commitStocktake(...a) } };
 });
 
-const { StocktakePage } = await import('./stocktake');
+const { StocktakePage, StocktakeReview } = await import('./stocktake');
 
 afterEach(() => {
   cleanup();
@@ -279,6 +279,8 @@ describe('a count that wipes or halves stock', () => {
     await review();
     const commit = screen.getByRole('button', { name: 'Commit the count' });
     expect(screen.getByText('Tick the 2 lines marked above before you commit the count.')).toBeTruthy();
+    // Issue #636: the hint is the button's description, so a screen reader hears why a press goes to a tick.
+    expect(document.getElementById(commit.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Tick the 2 lines marked above before you commit the count.');
     fireEvent.click(commit);
     expect(commitStocktake).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));
@@ -288,8 +290,41 @@ describe('a count that wipes or halves stock', () => {
     expect(commitStocktake).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: 'Yes, Test Plug Two Way is right' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Two Way is right' }));
+    expect(commit.getAttribute('aria-describedby')).toBeNull();
     fireEvent.click(commit);
-    await waitFor(() => expect(commitStocktake).toHaveBeenCalledWith('st1'));
+    // Issue #636: the commit names the ticked lines, so the server can refuse a big drop nobody ticked.
+    await waitFor(() => expect(commitStocktake).toHaveBeenCalledWith('st1', ['A-1', 'A-2']));
+  });
+
+  // Issue #636: no screen of the count says Finish, the review and the committed screen included.
+  it('never says Finish on Review the difference or once committed', async () => {
+    const noFinish = () => {
+      expect(document.body.textContent).not.toMatch(/finish/i);
+      expect([...document.querySelectorAll('[aria-label]')].map((e) => e.getAttribute('aria-label')).join(' ')).not.toMatch(/finish/i);
+    };
+    await review();
+    noFinish();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Two Way is right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
+    await screen.findByRole('heading', { name: 'Stock count committed' });
+    noFinish();
+  });
+
+  // Issue #636: lines without a product id never share a tick, and the warning shows the warning icon, not the error one.
+  it('gives each line without a product id a tick of its own, under the warning icon', () => {
+    const onCommit = vi.fn();
+    const noId = (description: string) => ({ ...line('', description, '8.000', '0.000'), product_id: undefined });
+    render(<StocktakeReview stocktake={{ id: 'st9', status: 'draft', lines: [noId('Test Fuse One'), noId('Test Fuse Two')] }} onCommit={onCommit} />);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    expect(document.querySelector('.entry-warning-icon path')?.getAttribute('d')).toBe('M12 3.5 2.5 20h19z');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Fuse One is right' }));
+    expect((screen.getByRole('checkbox', { name: 'Yes, Test Fuse Two is right' }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
+    expect(onCommit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Fuse Two is right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
+    expect(onCommit).toHaveBeenCalledWith([]);
   });
 
   it('asks again after Back to the count, since the review is a new one', async () => {

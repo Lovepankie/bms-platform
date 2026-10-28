@@ -18,6 +18,7 @@ import { createDocumentsMock } from './retail-documents-mock';
 import { createReturnsMock } from './retail-returns-mock';
 import { createPurchasingMock } from './retail-purchasing-mock';
 import { barcodeKey, checkBarcode, scanKeys, shopEan } from '../areas/staff/retail/barcode-state';
+import { bigDrop } from '../areas/staff/retail/maths';
 import { MAX_VARIANTS, cleanOption, planVariants, variantDescription, variantKey, variantLabel } from './retail-variants';
 
 // Fabricated retail data for VITE_RETAIL_MOCK and for tests: invented products, branches and
@@ -1293,10 +1294,16 @@ export function createMockRetail(): RetailApi {
       stocktakes.set(st.id ?? '', st);
       return delay(st);
     },
-    commitStocktake: (id) => {
+    commitStocktake: (id, acknowledged = []) => {
       const st = stocktakes.get(id);
       if (!st) return Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
       if (st.status === 'committed') return Promise.reject(new RetailError(retailMessage({ code: 'stocktake_committed' }, 409), 409, 'stocktake_committed'));
+      // Issue #636, as the server: a big drop left out of the acknowledged lines refuses the commit.
+      const unticked = (st.lines ?? []).filter((l) => bigDrop(l) && !acknowledged.includes(l.product_id ?? '')).map((l) => l.description ?? l.code);
+      if (unticked.length > 0) {
+        const detail = `The count of ${unticked.join(', ')} removes more than half of what was there. Review the difference again and tick each line marked before you commit the count.`;
+        return Promise.reject(new RetailError(retailMessage({ code: 'big_drop_not_acknowledged', detail }, 409), 409, 'big_drop_not_acknowledged'));
+      }
       (st.lines ?? []).forEach((l) => move(st.branch_id ?? BRANCH_A, l.product_id ?? '', toMilli(l.variance_qty ?? '0')));
       st.status = 'committed';
       return delay({ ...st });

@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { retail, type Product, type StockRow, type Stocktake, type StocktakeLine } from '../../../api/retail';
-import { milliOf, parseCount, parseQty, qtyString, showQty } from './maths';
+import { bigDrop, milliOf, parseCount, parseQty, qtyString, showQty } from './maths';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
@@ -27,15 +27,6 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 /** The variance written at commit once committed, otherwise the draft's (counted less expected). */
 const variance = (l: StocktakeLine): string => l.committed_variance_qty ?? l.variance_qty ?? '0';
 
-/**
- * Issue #629: a count that takes an item holding stock to 0, or to less than half of what it held, is the likely slip of a
- * tap (a 0 meant for the next line). It asks before it is committed; a count that keeps more than half stays as it is.
- */
-export function bigDrop(l: StocktakeLine): boolean {
-  const expected = milliOf(l.expected_qty ?? '0');
-  return expected > 0 && milliOf(l.counted_qty ?? '0') * 2 < expected;
-}
-
 /** "This removes 8 pieces. Is that right?" for a big drop, in the item's unit when the sheet gives it. */
 export function dropWords(l: StocktakeLine, unit: string | undefined): string {
   const removed = milliOf(l.expected_qty ?? '0') - milliOf(l.counted_qty ?? '0');
@@ -45,16 +36,20 @@ export function dropWords(l: StocktakeLine, unit: string | undefined): string {
 
 export function StocktakeReview({ stocktake, onCommit, busy, units }: {
   stocktake: Stocktake;
-  onCommit?: () => void;
+  /** Called with the product ids of the big drops ticked as right, which the server checks too (issue #636). */
+  onCommit?: (acknowledged: string[]) => void;
   busy?: boolean;
   /** Each item's unit by product id, for the words of a big drop. */
   units?: ReadonlyMap<string, string | undefined>;
 }) {
   const changed = (stocktake.lines ?? []).filter((l) => milliOf(variance(l)) !== 0);
   const draft = stocktake.status === 'draft';
-  // The big drops ticked as right; Commit the count waits for every one of them.
+  // The big drops ticked as right; Commit the count waits for every one of them. A line without a product id has a key of its
+  // own, so one tick never answers for another (issue #636).
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
-  const asked = draft ? changed.filter(bigDrop).map((l) => l.product_id ?? '') : [];
+  const hintId = useId();
+  const keyOf = (l: StocktakeLine, i: number) => l.product_id ?? `line-${i}`;
+  const asked = draft ? changed.flatMap((l, i) => (bigDrop(l) ? [keyOf(l, i)] : [])) : [];
   const open = asked.filter((id) => !ticked.has(id)).length;
   const tick = (id: string, on: boolean) => setTicked((t) => { const n = new Set(t); if (on) n.add(id); else n.delete(id); return n; });
   return (
@@ -73,9 +68,9 @@ export function StocktakeReview({ stocktake, onCommit, busy, units }: {
             </tr>
           </thead>
           <tbody>
-            {changed.map((l) => {
+            {changed.map((l, i) => {
               const v = milliOf(variance(l));
-              const id = l.product_id ?? '';
+              const id = keyOf(l, i);
               return (
                 <Fragment key={id}>
                   <tr>
@@ -90,7 +85,7 @@ export function StocktakeReview({ stocktake, onCommit, busy, units }: {
                     <tr className="count-drop-row">
                       <td colSpan={4}>
                         <div className="alert alert-warning entry-warning" data-testid={`count-drop-${id}`}>
-                          <span className="entry-warning-icon" aria-hidden="true">{icons.error}</span>
+                          <span className="entry-warning-icon" aria-hidden="true">{icons.warning}</span>
                           <div>
                             <p id={`count-drop-${id}-words`}>{dropWords(l, units?.get(id))}</p>
                             <label className="count-drop-tick">
@@ -111,8 +106,10 @@ export function StocktakeReview({ stocktake, onCommit, busy, units }: {
       )}
       {draft && onCommit && (
         <>
-          {open > 0 && <p className="hint">{open === 1 ? 'Tick the line marked above before you commit the count.' : `Tick the ${open} lines marked above before you commit the count.`}</p>}
-          <BusyButton type="button" className="rt-primary" busy={busy === true} notReady={open > 0} onClick={onCommit}>
+          {/* Issue #636: the button names its hint, so a press that goes to a tick says why. */}
+          {open > 0 && <p className="hint" id={hintId}>{open === 1 ? 'Tick the line marked above before you commit the count.' : `Tick the ${open} lines marked above before you commit the count.`}</p>}
+          <BusyButton type="button" className="rt-primary" busy={busy === true} notReady={open > 0}
+            aria-describedby={open > 0 ? hintId : undefined} onClick={() => onCommit(changed.flatMap((l, i) => (l.product_id && ticked.has(keyOf(l, i)) ? [l.product_id] : [])))}>
             Commit the count
           </BusyButton>
         </>
@@ -223,7 +220,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   });
   const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), counts);
   const commit = useMutation({
-    mutationFn: () => retail.commitStocktake(draft?.id ?? ''),
+    mutationFn: (acknowledged: string[]) => retail.commitStocktake(draft?.id ?? '', acknowledged),
     onSuccess: (st) => {
       // Issue #353: a count is saved when it is committed, so that is when its confirmed warnings are recorded.
       entry.saved();
@@ -235,7 +232,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   if (draft) {
     return (
       <>
-        <StocktakeReview key={draft.id} stocktake={draft} onCommit={() => commit.mutate()} busy={commit.isPending} units={new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r.unit]))} />
+        <StocktakeReview key={draft.id} stocktake={draft} onCommit={(acknowledged) => commit.mutate(acknowledged)} busy={commit.isPending} units={new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r.unit]))} />
         <Problem error={commit.error} />
         {draft.status === 'draft' && <button type="button" onClick={() => setDraft(null)}>Back to the count</button>}
         {draft.status === 'committed' && <button type="button" onClick={() => { setDraft(null); setCounts({}); setListed([]); setDone([]); setConfirming(false); }}>Start another count</button>}

@@ -169,7 +169,7 @@ class BranchClosingIT extends IntegrationTest {
                         "lines",
                         List.of(Map.of("product_id", product, "counted_qty", "0"))),
                 ADMIN));
-        assertThat(retail.post("/stocktakes/" + count + "/commit", Map.of(), ADMIN)
+        assertThat(retail.post("/stocktakes/" + count + "/commit", Map.of("acknowledged", List.of(product)), ADMIN)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
         long before = movements(t.secondBranch());

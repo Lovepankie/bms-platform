@@ -597,7 +597,8 @@ export interface RetailApi {
   voidPurchase(id: string, reason: string, idempotencyKey: string): Promise<Purchase>;
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
-  commitStocktake(id: string): Promise<Stocktake>;
+  /** Issue #636: `acknowledged` names the big drops ticked on the review; the server refuses with 409 while one is left out. */
+  commitStocktake(id: string, acknowledged?: string[]): Promise<Stocktake>;
   /** Quick add (issue #632): makes the item and adds its stock at the branch as opening stock in one transaction; takes the Idempotency-Key of its form. */
   quickAdd(body: QuickAddRequest, idempotencyKey: string): Promise<QuickAdd>;
   /** Every product with its balance in each branch the caller may read (#144). */
@@ -1394,8 +1395,8 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/stocktakes', { body }));
   },
 
-  async commitStocktake(id) {
-    return unwrap(await api.POST('/api/v1/retail/stocktakes/{stocktake_id}/commit', { params: { path: { stocktake_id: id } } }));
+  async commitStocktake(id, acknowledged = []) {
+    return unwrap(await api.POST('/api/v1/retail/stocktakes/{stocktake_id}/commit', { params: { path: { stocktake_id: id } }, body: { acknowledged } }));
   },
 
   async quickAdd(body, key) {

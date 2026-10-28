@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import type { Product } from '../../../api/retail';
+import { RetailError, type Product, type Stocktake } from '../../../api/retail';
+import { bigDrop } from './maths';
 import { mockMe } from '../../../api/retail-mock';
 import { branchLabel } from '../../../auth/branch';
 import { StaffContext } from '../context';
@@ -241,6 +242,35 @@ describe('a Sell search that finds nothing', () => {
   it('keeps the item off the sale when its count fails, and says to count it', async () => {
     createProduct.mockResolvedValue(made);
     createStocktake.mockRejectedValue(new Error('down'));
+    open(<RecordSale />, owner);
+    await fill('4');
+    expect(await screen.findByText('Test duvet cover is saved, but its count is not. Count it on Count stock, then sell it.')).toBeTruthy();
+    expect(commitStocktake).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Remove Test duvet cover' })).toBeNull();
+  });
+
+  // Issue #636: the server refuses a commit that leaves out a big drop. Here the commit is the server's rule, on the shared bigDrop.
+  const serverCommit = (draft: Stocktake) => (id: string, acknowledged: string[] = []) => {
+    const unticked = (draft.lines ?? []).filter((l) => bigDrop(l) && !acknowledged.includes(l.product_id ?? ''));
+    return unticked.length > 0 ? Promise.reject(new RetailError('Tick the lines marked before you commit', 409, 'big_drop_not_acknowledged')) : Promise.resolve({ ...draft, id, status: 'committed' });
+  };
+  const draftOf = (expected: string): Stocktake => ({ id: 's1', status: 'draft', lines: [{ product_id: 'p9', code: 'DUV-0001', description: 'Test duvet cover', expected_qty: expected, counted_qty: '4.000', variance_qty: (4 - Number(expected)).toFixed(3) }] });
+
+  it('commits the count of a new item, which holds nothing, so the server never asks for a tick (issue #636)', async () => {
+    createProduct.mockResolvedValue(made);
+    createStocktake.mockResolvedValue(draftOf('0.000'));
+    commitStocktake.mockImplementation(serverCommit(draftOf('0.000')));
+    open(<RecordSale />, owner);
+    await fill('4');
+    expect(await screen.findByRole('button', { name: 'Remove Test duvet cover' })).toBeTruthy();
+    expect(commitStocktake).toHaveBeenCalledWith('s1');
+    expect(screen.queryByText(/its count is not/)).toBeNull();
+  });
+
+  it('never sends a big drop to be refused: the count is left for Count stock, and the screen says so (issue #636)', async () => {
+    createProduct.mockResolvedValue(made);
+    createStocktake.mockResolvedValue(draftOf('10.000'));
+    commitStocktake.mockImplementation(serverCommit(draftOf('10.000')));
     open(<RecordSale />, owner);
     await fill('4');
     expect(await screen.findByText('Test duvet cover is saved, but its count is not. Count it on Count stock, then sell it.')).toBeTruthy();

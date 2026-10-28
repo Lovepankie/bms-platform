@@ -1383,6 +1383,11 @@ the items show only while you search, and go away once one is picked. Every item
   `page-stocktake` tour (version 6) say both, and name the button **Commit the count**, never Finish; the question before the
   review names the button it leads to, Review the difference anyway; the server's refusals that
   told a person to finish a count now say to commit it.
+- **Count stock: the server checks big drops too (issue #636).** **Commit the count** sends the product ids of the ticked lines,
+  and the server refuses a commit that leaves out a big drop with 409 `big_drop_not_acknowledged`, naming the lines, so a draft
+  committed from another tab or the API never writes one unasked. The screen shows the server's words under the button.
+  The count Sell makes of an item added there is of a new item, which holds nothing, so it is never a big drop; should the
+  records ever hold more, Sell leaves the count for Count stock and says so, rather than sending it to be refused.
 - **Scan box.** Unchanged (ADR-070 decision 11, owner decision D7): a scanner types only into the Scan box, which adds the item or one more.
 - **Tours.** `retail-sales` version 16, `page-stocktake` 3 (the search on top and the list Not counted yet), `page-restock` 3, `page-usage` 2, `page-transfer` 3,
   `page-sizes-join` 2 and `page-labels` 2 word their search steps for the list that shows while you type.
