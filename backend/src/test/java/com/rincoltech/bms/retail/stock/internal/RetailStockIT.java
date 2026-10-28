@@ -216,6 +216,24 @@ class RetailStockIT extends IntegrationTest {
                 .isEqualTo("draft");
     }
 
+    /** Issue #656: a count with many big drops is refused naming the first five and counting the rest. */
+    @Test
+    void theBigDropRefusalNamesAtMostFiveItems() {
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (int i = 1; i <= 7; i++) {
+            UUID p = api.product("SKT-15" + i, 400, 600);
+            api.stockUp(t.headOffice(), p, "6");
+            lines.add(Map.of("product_id", p, "counted_qty", "0"));
+        }
+        UUID id = count(lines.toArray(Map<?, ?>[]::new));
+
+        String detail = refused(id, Map.of()).get("detail").asString();
+        assertThat(detail).contains(" and 2 more removes more than half");
+        assertThat(detail.split("SKT-15", -1)).hasSize(6);
+        assertThat(api.get("/stocktakes/" + id, ADMIN).getBody().get("status").asString())
+                .isEqualTo("draft");
+    }
+
     /** Issue #636: with every big drop acknowledged the count is committed as before. */
     @Test
     void aBigDropAcknowledgedIsCommitted() {

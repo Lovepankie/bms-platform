@@ -375,7 +375,7 @@ class StockService {
                     HttpStatus.CONFLICT,
                     "big_drop_not_acknowledged",
                     "Tick the lines marked before you commit",
-                    "The count of " + String.join(", ", unticked)
+                    "The count of " + firstNames(unticked)
                             + " removes more than half of what was there. Review the difference again and tick each line marked"
                             + " before you commit the count.");
         }
@@ -438,6 +438,17 @@ class StockService {
         audit.record(new AuditLog.Entry(
                 "retail.stocktake.committed", STOCKTAKE, id, s.branchId(), Map.of("status", "draft"), after));
         return visible(repo.stocktake(id, false).orElseThrow());
+    }
+
+    /** Issue #656: the most items a refusal names; the rest are counted, so a long count's refusal stays short. */
+    static final int NAMED_AT_MOST = 5;
+
+    /** Issue #656: the first {@link #NAMED_AT_MOST} names, then "and N more" for the rest. */
+    static String firstNames(List<String> names) {
+        if (names.size() <= NAMED_AT_MOST) {
+            return String.join(", ", names);
+        }
+        return String.join(", ", names.subList(0, NAMED_AT_MOST)) + " and " + (names.size() - NAMED_AT_MOST) + " more";
     }
 
     /** Issue #629, #636: the count takes an item holding stock to 0, or to less than half of what it held. */
