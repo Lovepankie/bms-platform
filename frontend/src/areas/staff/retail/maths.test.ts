@@ -51,8 +51,6 @@ describe('percent from basis points', () => {
   });
 });
 
-// Issue #636: the server refuses a commit that leaves out a big drop, so the screen must ask for every tick the server needs.
-// The rows of the server's unit test are the shared cases: the client rule gives the same answer for each.
 /** Issue #656: the server's cases, read from its unit test; a missing file fails with what to do, not a bare ENOENT. */
 function serverCases(url: URL): string {
   const path = fileURLToPath(url);
@@ -60,6 +58,8 @@ function serverCases(url: URL): string {
   return readFileSync(path, 'utf8');
 }
 
+// Issue #636: the server refuses a commit that leaves out a big drop, so the screen must ask for every tick the server needs.
+// The rows of the server's unit test are the shared cases: the client rule gives the same answer for each.
 describe('the big drop rule', () => {
   const java = serverCases(new URL('../../../../../backend/src/test/java/com/rincoltech/bms/retail/stock/internal/StockServiceBigDropTest.java', import.meta.url));
   const rows = [...java.matchAll(/"(-?[\d.]+), (-?[\d.]+), (true|false)"/g)].map((m) => [m[1]!, m[2]!, m[3] === 'true'] as const);
