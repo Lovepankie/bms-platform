@@ -16773,12 +16773,25 @@
             "type" : "boolean"
           },
           "movement_id" : {
-            "description" : "The opening movement of source retail.quick_add; absent when nothing was added",
+            "description" : "The opening movement of source retail.quick_add; absent when nothing was added or when it was paid for (the purchase's movement)",
             "format" : "uuid",
             "type" : "string"
           },
+          "paid_from" : {
+            "description" : "cash or mobile_money when the goods were paid for (issue #646); absent otherwise",
+            "type" : "string"
+          },
+          "paid_minor" : {
+            "description" : "What left the cash or mobile money account; absent when not paid for",
+            "format" : "int64",
+            "type" : "integer"
+          },
           "product_id" : {
             "format" : "uuid",
+            "type" : "string"
+          },
+          "purchase_no" : {
+            "description" : "The purchase recorded when the goods were paid for, as on Buy stock",
             "type" : "string"
           },
           "qty" : {
@@ -16828,6 +16841,11 @@
             "description" : "As on a new item: to add a name that exists already, administrators only",
             "maxLength" : 300,
             "minLength" : 0,
+            "type" : "string"
+          },
+          "paid_from" : {
+            "description" : "Issue #646: the goods were just bought and paid from the branch's cash or mobile money (retail.purchase.create there). qty above 0 and cost_minor above 0 are then needed, and the stock is recorded as a purchase, as Buy stock does, never against opening balance equity. Left out: opening stock, as before",
+            "pattern" : "cash|mobile_money",
             "type" : "string"
           },
           "product_id" : {

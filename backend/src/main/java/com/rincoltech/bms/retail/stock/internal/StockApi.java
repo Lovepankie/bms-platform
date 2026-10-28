@@ -194,7 +194,16 @@ final class StockApi {
 
             @Size(max = 300)
             @Schema(description = "As on a new item: to add a name that exists already, administrators only")
-            String duplicateReason) {}
+            String duplicateReason,
+
+            @Pattern(regexp = "cash|mobile_money")
+            @Schema(
+                    description =
+                            "Issue #646: the goods were just bought and paid from the branch's cash or mobile money"
+                                    + " (retail.purchase.create there). qty above 0 and cost_minor above 0 are then needed, and the"
+                                    + " stock is recorded as a purchase, as Buy stock does, never against opening balance equity."
+                                    + " Left out: opening stock, as before")
+            String paidFrom) {}
 
     @Schema(name = "RetailQuickAdd")
     record QuickAdd(
@@ -220,8 +229,20 @@ final class StockApi {
             @Schema(type = "string", description = "What the branch holds now; absent when no stock was recorded")
             String totalQty,
 
-            @Schema(description = "The opening movement of source retail.quick_add; absent when nothing was added")
-            UUID movementId) {}
+            @Schema(
+                    description =
+                            "The opening movement of source retail.quick_add; absent when nothing was added or when"
+                                    + " it was paid for (the purchase's movement)")
+            UUID movementId,
+
+            @Schema(description = "cash or mobile_money when the goods were paid for (issue #646); absent otherwise")
+            String paidFrom,
+
+            @Schema(description = "The purchase recorded when the goods were paid for, as on Buy stock")
+            String purchaseNo,
+
+            @Schema(description = "What left the cash or mobile money account; absent when not paid for")
+            Long paidMinor) {}
 
     @Schema(
             name = "RetailStockCorrectionRequest",

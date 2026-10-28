@@ -8,6 +8,8 @@ import { WORDS } from '../../../app/glossary';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { EmptyChoice } from '../../../app/ui/EmptyChoice';
 import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Field';
+import { Hint } from '../../../app/ui/Hint';
+import { Segmented } from '../../../app/ui/Segmented';
 import { parseMinor } from '../../../components/money';
 import { useOnline } from '../../../offline/offline-context';
 import { useStaff } from '../context';
@@ -26,6 +28,8 @@ import { Gate, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 // unit), and a photo if wanted. Add makes the item and adds the quantity to its stock at that branch as opening stock, in one
 // request (POST /retail/quick-add, ADR-101), so no other item's stock is touched and it is never profit. A name already in the
 // list offers to use that item and just add the quantity to its stock. Nothing is kept for later: offline, the form says it needs the internet, as Add it here does.
+// Goods just bought with shop money (issue #646): a tick, off by default, books them as a purchase paid from the branch's cash or
+// mobile money, as Buy stock does, for whoever may buy stock there and see the buying price; the total that comes out shows before Add.
 
 export const QUICK_ADD = 'Quick add';
 export const QUICK_ADD_OFFLINE = 'You are offline. Quick add needs the internet. Connect, then tap Add again.';
@@ -33,6 +37,10 @@ export const NO_PLACE = 'You have no branch where you can add stock.';
 export const NO_COUNT_HERE = 'The item is added with no stock. Ask your manager to add its stock.';
 
 const COUNT = 'retail.stocktake.commit';
+const BUY = 'retail.purchase.create';
+export const PAID_TICK = 'I just bought these, take the money from cash';
+type PaidFrom = 'cash' | 'mobile_money';
+const PAID_FROM: { value: PaidFrom; label: string }[] = [{ value: 'cash', label: 'Cash' }, { value: 'mobile_money', label: 'Mobile money' }];
 /** The piece unit a shop may already have, lower case, in the order the server prefers them. */
 const PIECE_NAMES = ['piece', 'pc', 'pcs'];
 
@@ -93,6 +101,8 @@ export function QuickAddForm({ initialName = '', onSell }: {
   const [categoryId, setCategoryId] = useState('');
   const [unitId, setUnitId] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
+  const [paid, setPaid] = useState(false);
+  const [paidFrom, setPaidFrom] = useState<PaidFrom>('cash');
   const [showErrors, setShowErrors] = useState(false);
   const [offline, setOffline] = useState(false);
   const [exists, setExists] = useState<ExistingItem | null>(null);
@@ -126,8 +136,17 @@ export function QuickAddForm({ initialName = '', onSell }: {
   const sellMinor = parseMinor(sell, RETAIL_CURRENCY);
   const costMinor = cost.trim() === '' ? 0 : parseMinor(cost, RETAIL_CURRENCY);
   const counted = mayCount ? parseCount(qty) : null;
+  // Paid for now from cash: only where this person may buy stock, and with the buying price, which the purchase needs.
+  const paying = paid && profit && mayCount && holdsAt(me, BUY, where);
+  // Ticked, then Where moved to a place where this person may not buy stock: Add is held until they untick or move back, so
+  // goods meant as paid for never go in as opening stock unnoticed.
+  const cannotPayHere = paid && profit && mayCount && !holdsAt(me, BUY, where);
+  // The place named on the paid lines; never empty, even before Where is known.
+  const whereName = branchLabel(places.find((b) => b.id === where)) || 'this place';
+  const paidMinor = paying && counted !== null && costMinor !== null ? Math.round((counted * costMinor) / 1000) : null;
   const complete = name.trim() !== '' && sellMinor !== null && costMinor !== null && (!mayCount || (counted !== null && where !== ''))
-    && (!pieceOff || unitId !== '') && (!generalOff || categoryId !== '');
+    && (!pieceOff || unitId !== '') && (!generalOff || categoryId !== '')
+    && (!paying || (costMinor > 0 && counted !== null && counted > 0)) && !cannotPayHere;
   const canAddAnyway = (me.permissions ?? []).includes('core.settings.manage');
 
   const add = useMutation({
@@ -144,6 +163,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
                 ...(extra.duplicateReason ? { duplicate_reason: extra.duplicateReason } : {}),
               }),
           ...(mayCount && counted !== null ? { qty: qtyString(counted), branch_id: where } : {}),
+          ...(paying && costMinor ? { paid_from: paidFrom, cost_minor: costMinor } : {}),
         };
       unsure.current = body;
       const added = await retail.quickAdd(body, key.current);
@@ -208,6 +228,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
     setUnitId(piece?.id ?? '');
     setWhere(null);
     setPhoto(null);
+    setPaid(false);
     setShowErrors(false);
     setRefused(false);
     add.reset();
@@ -221,6 +242,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
     setCost('');
     setQty('');
     setPhoto(null);
+    setPaid(false);
     setShowErrors(false);
     add.reset();
     setTimeout(() => document.getElementById('qa-name')?.focus());
@@ -239,6 +261,9 @@ export function QuickAddForm({ initialName = '', onSell }: {
     return (
       <section className="rt-card stack" aria-labelledby="qa-done">
         <p id="qa-done" role="status" className="alert alert-success" data-testid="qa-done">{addedLine(done.added, atName)}</p>
+        {done.added.paid_from && done.added.paid_minor !== undefined && (
+          <p className="hint" data-testid="qa-paid"><span className="num">{money(done.added.paid_minor)}</span> taken from {done.added.paid_from === 'cash' ? 'Cash' : 'Mobile money'} at {atName}, recorded as Buy stock {done.added.purchase_no}.</p>
+        )}
         {done.note && <p className="hint" data-testid="qa-photo-note">{done.note}</p>}
         {notHere && <p className="hint" data-testid="qa-not-here">{sellsThere ? `You do not sell at ${atName}, so Sell it is not offered here.` : `${atName} is a store, so the item is sold from a shop.`}</p>}
         <p className="cluster">
@@ -281,8 +306,9 @@ export function QuickAddForm({ initialName = '', onSell }: {
         <Field
           id="qa-cost"
           label={`${WORDS.buyingPrice} (${RETAIL_CURRENCY})`}
-          optional
-          error={costMinor === null ? `Type what you pay for one, in ${RETAIL_CURRENCY}, or leave it empty.` : null}
+          optional={!paying}
+          required={paying}
+          error={paying && !costMinor ? `Type what you paid for one, in ${RETAIL_CURRENCY}.` : costMinor === null ? `Type what you pay for one, in ${RETAIL_CURRENCY}, or leave it empty.` : null}
           showError={showErrors}
           hint={sellMinor !== null && costMinor !== null && costMinor > 0 && sellMinor <= costMinor ? `This is not below the selling price, ${money(sellMinor)}.` : costMinor === 0 ? NO_COST_HINT : undefined}
           inputMode="numeric"
@@ -297,7 +323,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
             id="qa-qty"
             label="How many do you have here now?"
             required
-            error={counted === null ? 'Type how many you have, or 0.' : null}
+            error={counted === null ? 'Type how many you have, or 0.' : paying && counted === 0 ? 'Type how many you bought, more than 0.' : null}
             showError={showErrors}
             inputMode="decimal"
             value={qty}
@@ -311,6 +337,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
             error={where === '' ? 'Choose where the stock is.' : null}
             showError={showErrors}
             control={(props) => (
+              // empty: drawn only while places has a branch; with none, the EmptyChoice below stands in its place.
               <select {...props} value={where} onChange={(e) => setWhere(e.target.value)}>
                 {places.map((b) => (
                   <option key={b.id} value={b.id}>{branchLabel(b)}{b.sells_goods === false ? ' (store)' : ''}</option>
@@ -318,6 +345,35 @@ export function QuickAddForm({ initialName = '', onSell }: {
               </select>
             )}
           />
+          {profit && (holdsAt(me, BUY, where) || paid) && (
+            <div className="stack" data-testid="qa-paid-from">
+              <label htmlFor="qa-paid">
+                <input
+                  id="qa-paid"
+                  type="checkbox"
+                  checked={paid}
+                  onChange={(e) => setPaid(e.target.checked)}
+                  aria-invalid={cannotPayHere || undefined}
+                  aria-describedby={cannotPayHere ? 'qa-paid-here' : undefined}
+                /> {PAID_TICK}
+              </label>
+              {cannotPayHere && (
+                <p id="qa-paid-here" role="alert" className="alert alert-warning" data-testid="qa-paid-here">
+                  {`You may not buy stock at ${whereName}, so the money cannot be taken there. Choose another place, or untick this.`}
+                </p>
+              )}
+              {paying && (
+                <>
+                  <Segmented label="Paid from" options={PAID_FROM} value={paidFrom} onChange={setPaidFrom} />
+                  <Hint full>
+                    {paidMinor !== null && paidMinor > 0
+                      ? <><span className="num" data-testid="qa-paid-total">{money(paidMinor)}</span>{` comes out of ${paidFrom === 'cash' ? 'Cash' : 'Mobile money'} at ${whereName}.`}</>
+                      : 'Type the buying price and how many, to see what comes out.'}
+                  </Hint>
+                </>
+              )}
+            </div>
+          )}
         </>
       ) : (
         // No branch where this person may add stock (rule 25): the field says so and who to ask, and the item is added with no stock.

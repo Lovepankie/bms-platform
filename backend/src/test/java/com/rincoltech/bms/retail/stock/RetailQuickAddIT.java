@@ -468,4 +468,262 @@ class RetailQuickAddIT extends IntegrationTest {
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(r.getBody().toString()).contains("description").contains("sell_minor");
     }
+    // Issue #646: "I just bought these, take the money from cash" books the goods as a purchase paid from the branch's
+    // cash or
+    // mobile money, as Buy stock does: the cash goes down by qty times cost and nothing posts to opening balance
+    // equity.
+
+    @Test
+    void paidFromCashTheCashGoesDownByQtyTimesCostAndTheStockGoesUp() {
+        Map<String, Object> body = item("Test Soap Bar", 3_000, "12", br2);
+        body.put("cost_minor", 2_500);
+        body.put("paid_from", "cash");
+        ResponseEntity<JsonNode> r = quickAdd(body);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+        UUID product = productOf(r);
+        assertThat(r.getBody().get("paid_from").asString()).isEqualTo("cash");
+        assertThat(r.getBody().get("paid_minor").asLong()).isEqualTo(30_000);
+        assertThat(r.getBody().get("total_qty").asString()).isEqualTo("12");
+        String purchaseNo = r.getBody().get("purchase_no").asString();
+        assertThat(stockAt(br2, product)).isEqualByComparingTo("12");
+        // One cash purchase at the branch, with no supplier, read by the cash book as cash out of the till.
+        assertThat(scalar(
+                        "SELECT count(*) FROM retail_purchases WHERE tenant_id = ? AND purchase_no = ?"
+                                + " AND payment_method = 'cash' AND supplier_id IS NULL AND total_minor = 30000",
+                        t.tenantId(),
+                        purchaseNo))
+                .isEqualTo(1);
+        assertThat(scalar(
+                        "SELECT count(*) FROM retail_stock_movements WHERE product_id = ? AND branch_id = ?"
+                                + " AND kind = 'purchase' AND source_type = 'retail.purchase' AND qty = 12 AND unit_cost_minor = 2500",
+                        product,
+                        br2))
+                .isEqualTo(1);
+        assertThat(scalar("SELECT count(*) FROM retail_stock_movements WHERE product_id = ?", product))
+                .isEqualTo(1);
+        // Dr stock, Cr cash; never opening balance equity.
+        assertThat(sourceTotal("inventory", "retail.purchase")).isEqualTo(30_000);
+        assertThat(sourceTotal("cash_on_hand", "retail.purchase")).isEqualTo(-30_000);
+        assertThat(sourceTotal("opening_balance_equity", "retail.quick_add")).isZero();
+        assertThat(sourceTotal("inventory", "retail.quick_add")).isZero();
+        assertThat(scalar(
+                        "SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.stock.quick_added'"
+                                + " AND data -> 'after' ->> 'paid_from' = 'cash' AND entity_type = 'retail.quick_add'"
+                                + " AND data -> 'after' ->> 'purchase_id' = (SELECT id::text FROM retail_purchases"
+                                + " WHERE tenant_id = ? AND purchase_no = ?)"
+                                + " AND entity_id <> (SELECT id FROM retail_purchases WHERE tenant_id = ? AND purchase_no = ?)",
+                        t.tenantId(),
+                        t.tenantId(),
+                        purchaseNo,
+                        t.tenantId(),
+                        purchaseNo))
+                .isEqualTo(1);
+        // The purchase sets the same cost the new item was made with, so the price history gains no second row.
+        assertThat(scalar(
+                        "SELECT count(*) FROM retail_price_history WHERE product_id = ? AND source = 'purchase'",
+                        product))
+                .isZero();
+    }
+
+    @Test
+    void anItemAlreadyInTheListPaidFromMobileMoneyIsAPurchaseOnMobileMoney() {
+        UUID product = productOf(quickAdd(item("Test Rice 1kg", 5_000, "10", hq)));
+        Map<String, Object> more = new LinkedHashMap<>();
+        more.put("product_id", product);
+        more.put("qty", "4");
+        more.put("branch_id", hq);
+        more.put("cost_minor", 4_200);
+        more.put("paid_from", "mobile_money");
+        ResponseEntity<JsonNode> r = quickAdd(more);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(r.getBody().get("total_qty").asString()).isEqualTo("14");
+        assertThat(stockAt(hq, product)).isEqualByComparingTo("14");
+        assertThat(sourceTotal("mobile_money", "retail.purchase")).isEqualTo(-16_800);
+        assertThat(sourceTotal("cash_on_hand", "retail.purchase")).isZero();
+    }
+
+    @Test
+    void aRetryOfAPaidAddPostsOnce() {
+        Map<String, Object> body = item("Test Sugar 2kg", 9_000, "5", hq);
+        body.put("cost_minor", 7_000);
+        body.put("paid_from", "cash");
+        String key = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> first = quickAdd(body, ADMIN, "*", key);
+        ResponseEntity<JsonNode> retry = quickAdd(body, ADMIN, "*", key);
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(retry.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+        assertThat(retry.getBody().get("purchase_no").asString())
+                .isEqualTo(first.getBody().get("purchase_no").asString());
+        assertThat(scalar("SELECT count(*) FROM retail_purchases WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
+        assertThat(sourceTotal("cash_on_hand", "retail.purchase")).isEqualTo(-35_000);
+        assertThat(stockAt(hq, productOf(first))).isEqualByComparingTo("5");
+    }
+
+    @Test
+    void payingFromCashNeedsBuyStockPermissionOnTheServerAndNothingIsMadeWithoutIt() {
+        Map<String, Object> body = item("Test Salt", 1_000, "3", hq);
+        body.put("cost_minor", 700);
+        body.put("paid_from", "cash");
+        // The same body without paid_from is accepted for this caller, so the refusal is the permission and nothing
+        // else.
+        String counter = "retail.catalogue.manage,retail.stock.read,retail.stocktake.commit";
+        ResponseEntity<JsonNode> refused =
+                quickAdd(body, counter, "*", UUID.randomUUID().toString());
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("permission_denied");
+
+        // Buy stock held only at the second branch: refused at the head office, the branch the money would leave.
+        ResponseEntity<JsonNode> elsewhere = api.call(
+                org.springframework.http.HttpMethod.POST,
+                "/quick-add",
+                body,
+                counter,
+                "*",
+                Map.of(
+                        "Idempotency-Key",
+                        UUID.randomUUID().toString(),
+                        "X-Dev-Scopes",
+                        "retail.purchase.create=" + br2));
+        assertThat(elsewhere.getStatusCode()).as("%s", elsewhere.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(elsewhere.getBody().get("code").asString()).isEqualTo("permission_denied");
+        assertThat(scalar(
+                        "SELECT count(*) FROM retail_products WHERE tenant_id = ? AND description = 'Test Salt'",
+                        t.tenantId()))
+                .isZero();
+        assertThat(scalar("SELECT count(*) FROM retail_purchases WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+
+        // At the branch where it is held, the same add goes through as a purchase.
+        body.put("branch_id", br2);
+        ResponseEntity<JsonNode> there = api.call(
+                org.springframework.http.HttpMethod.POST,
+                "/quick-add",
+                body,
+                counter,
+                "*",
+                Map.of(
+                        "Idempotency-Key",
+                        UUID.randomUUID().toString(),
+                        "X-Dev-Scopes",
+                        "retail.purchase.create=" + br2));
+        assertThat(there.getStatusCode()).as("%s", there.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(scalar("SELECT count(*) FROM retail_purchases WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void aBankedCashDayTreatsAPaidQuickAddExactlyAsBuyStockTreatsACashRestock() {
+        // Buy stock has no banked-day refusal (only a supplier payment in cash has one, cash_day_banked): its cash
+        // restock is
+        // dated today and leaves the till today. A paid Quick add runs the same record(), so it must give the same
+        // outcome.
+        String today = java.time.LocalDate.now(com.rincoltech.bms.kernel.BusinessClock.DEFAULT_ZONE)
+                .toString();
+        String owner = ADMIN + ",retail.banking.record";
+        Map<String, Object> banking = new LinkedHashMap<>();
+        banking.put("branch_id", hq);
+        banking.put("business_date", today);
+        banking.put("amount_minor", 1_000);
+        ResponseEntity<JsonNode> banked = api.postKeyed(
+                "/bankings", banking, owner, "*", UUID.randomUUID().toString());
+        assertThat(banked.getStatusCode()).as("%s", banked.getBody()).isEqualTo(HttpStatus.CREATED);
+
+        UUID bought = productOf(quickAdd(item("Test Beans 1kg", 6_000, null, null)));
+        Map<String, Object> restock = new LinkedHashMap<>();
+        restock.put("purchased_on", today);
+        restock.put("payment_method", "cash");
+        restock.put(
+                "lines",
+                List.of(Map.of(
+                        "product_id",
+                        bought,
+                        "cost_minor",
+                        4_000,
+                        "qty_by_branch",
+                        List.of(Map.of("branch_id", hq, "qty", "2")))));
+        ResponseEntity<JsonNode> buyStock = api.postKeyed(
+                "/purchases", restock, owner, "*", UUID.randomUUID().toString());
+
+        Map<String, Object> body = item("Test Peas 1kg", 7_000, "2", hq);
+        body.put("cost_minor", 5_000);
+        body.put("paid_from", "cash");
+        ResponseEntity<JsonNode> paid =
+                quickAdd(body, owner, "*", UUID.randomUUID().toString());
+
+        assertThat(paid.getStatusCode()).as("%s", paid.getBody()).isEqualTo(buyStock.getStatusCode());
+        assertThat(buyStock.getStatusCode()).as("%s", buyStock.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(scalar(
+                        "SELECT count(*) FROM retail_purchases WHERE tenant_id = ? AND payment_method = 'cash'"
+                                + " AND purchased_on = ?::date",
+                        t.tenantId(),
+                        today))
+                .isEqualTo(2);
+        assertThat(sourceTotal("cash_on_hand", "retail.purchase")).isEqualTo(-18_000);
+    }
+
+    @Test
+    void whatBuyStockRefusesAPaidQuickAddRefusesTheSameWayAndTakesNoCash() {
+        UUID item = productOf(quickAdd(item("Test Flour 2kg", 9_000, null, null)));
+        String today = java.time.LocalDate.now(com.rincoltech.bms.kernel.BusinessClock.DEFAULT_ZONE)
+                .toString();
+        // A quantity finer than a thousandth, and a cost above the largest amount: Buy stock refuses both.
+        List<Map<String, Object>> refusedValues = List.of(
+                Map.of("qty", "1.2345", "cost_minor", 1_000L),
+                Map.of(
+                        "qty",
+                        "1",
+                        "cost_minor",
+                        com.rincoltech.bms.retail.catalogue.RetailCatalogue.MAX_AMOUNT_MINOR + 1));
+        for (Map<String, Object> v : refusedValues) {
+            Map<String, Object> restock = new LinkedHashMap<>();
+            restock.put("purchased_on", today);
+            restock.put("payment_method", "cash");
+            restock.put(
+                    "lines",
+                    List.of(Map.of(
+                            "product_id",
+                            item,
+                            "cost_minor",
+                            v.get("cost_minor"),
+                            "qty_by_branch",
+                            List.of(Map.of("branch_id", hq, "qty", v.get("qty"))))));
+            ResponseEntity<JsonNode> buyStock = api.postKeyed(
+                    "/purchases", restock, ADMIN, "*", UUID.randomUUID().toString());
+
+            Map<String, Object> paid = new LinkedHashMap<>();
+            paid.put("product_id", item);
+            paid.put("qty", v.get("qty"));
+            paid.put("branch_id", hq);
+            paid.put("cost_minor", v.get("cost_minor"));
+            paid.put("paid_from", "cash");
+            ResponseEntity<JsonNode> quick = quickAdd(paid);
+
+            assertThat(buyStock.getStatusCode())
+                    .as("%s %s", v, buyStock.getBody())
+                    .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(quick.getStatusCode()).as("%s %s", v, quick.getBody()).isEqualTo(buyStock.getStatusCode());
+            assertThat(quick.getBody().get("code").asString())
+                    .isEqualTo(buyStock.getBody().get("code").asString());
+        }
+        assertThat(scalar("SELECT count(*) FROM retail_purchases WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(sourceTotal("cash_on_hand", "retail.purchase")).isZero();
+        assertThat(stockAt(hq, item)).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void payingFromCashNeedsTheBuyingPriceAndAQuantity() {
+        Map<String, Object> body = item("Test Oil 1L", 8_000, null, hq);
+        body.put("paid_from", "cash");
+        ResponseEntity<JsonNode> r = quickAdd(body);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(r.getBody().toString()).contains("cost_minor").contains("qty");
+        body.put("paid_from", "bank");
+        body.put("qty", "1");
+        body.put("cost_minor", 6_000);
+        assertThat(quickAdd(body).getStatusCode()).isIn(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(scalar("SELECT count(*) FROM retail_purchases WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+    }
 }

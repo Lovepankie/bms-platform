@@ -15880,11 +15880,20 @@ export interface components {
             item_made?: boolean;
             /**
              * Format: uuid
-             * @description The opening movement of source retail.quick_add; absent when nothing was added
+             * @description The opening movement of source retail.quick_add; absent when nothing was added or when it was paid for (the purchase's movement)
              */
             movement_id?: string;
+            /** @description cash or mobile_money when the goods were paid for (issue #646); absent otherwise */
+            paid_from?: string;
+            /**
+             * Format: int64
+             * @description What left the cash or mobile money account; absent when not paid for
+             */
+            paid_minor?: number;
             /** Format: uuid */
             product_id?: string;
+            /** @description The purchase recorded when the goods were paid for, as on Buy stock */
+            purchase_no?: string;
             /** @description The quantity added; absent when no stock was recorded */
             qty?: string;
             /** @description What the branch holds now; absent when no stock was recorded */
@@ -15914,6 +15923,8 @@ export interface components {
             description?: string;
             /** @description As on a new item: to add a name that exists already, administrators only */
             duplicate_reason?: string;
+            /** @description Issue #646: the goods were just bought and paid from the branch's cash or mobile money (retail.purchase.create there). qty above 0 and cost_minor above 0 are then needed, and the stock is recorded as a purchase, as Buy stock does, never against opening balance equity. Left out: opening stock, as before */
+            paid_from?: string;
             /**
              * Format: uuid
              * @description An item already in the list, chosen instead of a new item of the same name

@@ -27,6 +27,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplie
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
 import com.rincoltech.bms.retail.stock.Quantities;
+import com.rincoltech.bms.retail.stock.QuickAddPurchase;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
@@ -35,6 +36,7 @@ import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.StockLedger.Recorded;
+import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -58,7 +60,7 @@ import org.springframework.transaction.annotation.Transactional;
  * and their history rows, its movements and its journal entries commit together or not at all.
  */
 @Service
-class PurchasingService {
+class PurchasingService implements QuickAddPurchase {
 
     static final String PURCHASE = "retail.purchase";
     static final String PERMISSION = "retail.purchase.create";
@@ -77,6 +79,7 @@ class PurchasingService {
     private final BusinessClock clock;
     private final AuditLog audit;
     private final RetailCapabilities capabilities;
+    private final Validator validator;
 
     PurchasingService(
             PurchasingRepository repo,
@@ -89,7 +92,8 @@ class PurchasingService {
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit,
-            RetailCapabilities capabilities) {
+            RetailCapabilities capabilities,
+            Validator validator) {
         this.repo = repo;
         this.catalogue = catalogue;
         this.stock = stock;
@@ -101,6 +105,7 @@ class PurchasingService {
         this.clock = clock;
         this.audit = audit;
         this.capabilities = capabilities;
+        this.validator = validator;
     }
 
     static String accountFor(String method) {
@@ -180,6 +185,42 @@ class PurchasingService {
     @Transactional
     Outcome<Purchase> create(String idempotencyKey, PurchaseRequest r) {
         return idempotency.once(idempotencyKey, "POST", PATH, r, Purchase.class, () -> record(r));
+    }
+
+    /**
+     * Issue #646: goods just bought, added through Quick add and paid from cash or mobile money, are one restock of one line,
+     * dated today, recorded by the same steps as Buy stock, in Quick add's transaction (its key covers a retry).
+     */
+    @Override
+    @Transactional
+    public Bought buy(UUID branchId, UUID productId, BigDecimal qty, long costMinor, String method) {
+        PurchaseRequest r = new PurchaseRequest(
+                null,
+                clock.today(tenant.profile().timezone()),
+                method,
+                "Quick add",
+                List.of(new PurchaseLineRequest(
+                        productId, costMinor, null, List.of(new BranchQty(branchId, qty)), null, null, null)));
+        // The bounds Buy stock's route checks before record(), so nothing Buy stock refuses is taken here; named by the
+        // Quick add field the value came from.
+        List<FieldProblem> problems = validator.validate(r).stream()
+                .map(v -> new FieldProblem(quickAddField(v.getPropertyPath().toString()), "invalid", v.getMessage()))
+                .toList();
+        if (!problems.isEmpty()) {
+            throw ApiException.validation(problems);
+        }
+        Purchase made = record(r);
+        return new Bought(made.id(), made.purchaseNo(), made.totalMinor());
+    }
+
+    private static String quickAddField(String path) {
+        if (path.endsWith(".qty")) {
+            return "qty";
+        }
+        if (path.endsWith(".costMinor")) {
+            return "cost_minor";
+        }
+        return path.equals("paymentMethod") ? "paid_from" : path;
     }
 
     /**
