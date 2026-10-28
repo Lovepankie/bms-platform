@@ -33,16 +33,19 @@ public interface RetailCatalogue {
     /**
      * Issue #650 (ADR-103): the standard pack of the product aliased {@code product}, the one its stock is shown and counted
      * in, as a subquery of {@code pack_id}, {@code pack_unit} and {@code pack_factor} (one row or none). Of its active packs
-     * holding more than one base unit: first a pack whose unit has a usual pack (ADR-100) and that is used for selling or
-     * both (ADR-099); else a pack used for selling or both; else any. Within each, the biggest, and on a tie the unit id. The
-     * stock lists and an item's packs (its {@code standard} flag, which the PWA reads) both use it, so there is one rule.
+     * holding more than one base unit: first a pack used for selling or both (ADR-099) whose unit has a usual pack (ADR-100) of
+     * the item's own base unit and for selling or both (issue #660: a box of 50 metres is never promoted on an item counted in
+     * pieces; a null size or purpose never promotes); else a pack used for selling or both; else any. Within each, the
+     * biggest, and on a tie the unit id. The stock lists and an item's packs (its {@code standard} flag, which the PWA reads)
+     * both use it, so there is one rule.
      */
     static String standardPackSql(String product) {
         return """
                 SELECT sk.id AS pack_id, su.name AS pack_unit, sk.factor AS pack_factor
                   FROM retail_product_units sk JOIN retail_units su ON su.id = sk.unit_id
                  WHERE sk.tenant_id = %1$s.tenant_id AND sk.product_id = %1$s.id AND sk.active AND sk.factor > 1
-                 ORDER BY CASE WHEN sk.purpose <> 'buy' AND su.pack_size IS NOT NULL THEN 0
+                 ORDER BY CASE WHEN sk.purpose <> 'buy' AND su.pack_size IS NOT NULL
+                                    AND su.pack_of_unit_id = %1$s.unit_id AND su.pack_purpose IN ('sell', 'both') THEN 0
                                WHEN sk.purpose <> 'buy' THEN 1 ELSE 2 END,
                           sk.factor DESC, sk.unit_id
                  LIMIT 1

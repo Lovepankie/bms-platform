@@ -121,8 +121,8 @@ export type PackSize = { unit?: string; factor?: string };
 
 /**
  * Issue #650 (ADR-103): the pack an item's stock is shown and counted in, the one the server marks `standard` by its one rule
- * (a selling pack whose unit has a usual pack, else the biggest selling pack, else the biggest; a tie to the unit id), as it
- * sends `standard_pack` on a stock row. None while packs are off.
+ * (a selling pack whose unit's usual pack is of the item's base unit and for selling or both, issue #660; else the biggest
+ * selling pack, else the biggest; a tie to the unit id), as it sends `standard_pack` on a stock row. None while packs are off.
  */
 export function standardPack(product: Product): Pack | undefined {
   return activePacks(product).find((k) => k.standard === true && (factorMilli(k.factor) ?? 0n) > 1000n);

@@ -1,0 +1,8 @@
+{
+  "_comment": "Issue #660 (ADR-103): an item counted in pieces with a box of 10 and a carton of 24, both for buying and selling, whose box unit's usual pack is 50 metres for selling. RetailUnitsIT.aUsualPackOfAnotherUnitIsNotPromoted asserts the live /products/{id} packs and /retail/stock row equal this file; transfer-packs.dom.test.tsx feeds it to Move stock. So the payload the PWA is tested with is the one the server sends. Fabricated units and quantities.",
+  "item_packs": [
+    { "unit": "box", "factor": "10.000", "purpose": "both", "standard": false },
+    { "unit": "carton", "factor": "24.000", "purpose": "both", "standard": true }
+  ],
+  "stock_row": { "unit": "u-unit-pen", "qty": "127.000", "standard_pack": { "unit": "carton", "factor": "24.000" } }
+}

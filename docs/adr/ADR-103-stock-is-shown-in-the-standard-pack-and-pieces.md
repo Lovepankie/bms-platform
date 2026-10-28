@@ -42,3 +42,24 @@ pieces is always shown before a count is reviewed or a move is saved.
 
 **Worse:** a pack switched off or resized changes how stock reads at once, by design; only a count already typed keeps its
 pack. Another rule is one subquery and one test to change.
+
+## Note (28 October 2026, issue #660, reviews of #654 and #658)
+
+Tier one of decision 1 is tightened. A pack comes first only when it is used for selling or both and its unit has a usual
+pack (ADR-100) with a size (`pack_size` not null) that counts the item's own base unit (`pack_of_unit_id` is the item's
+unit) and is itself for selling or both (`pack_purpose IN ('sell', 'both')`). `pack_purpose` has no default, so a null one
+is excluded rather than read as both; V111's check keeps the three columns all set or all null, so neither null occurs today.
+A unit whose usual pack is a box of 50 metres is no longer promoted on an item counted in pieces, and a usual pack only
+bought promotes nothing. The other tiers and the tie-break (the biggest, then the lower unit id) are unchanged.
+
+The rule stays one subquery, `RetailCatalogue.standardPackSql`, and the PWA only reads it: it takes the pack marked
+`standard` and never ranks packs itself (a pack it is sent carries no usual pack), so server and client cannot disagree.
+`RetailUnitsIT.aUsualPackOfAnotherUnitIsNotPromoted` pins the usual-pack cases and the tie-break;
+`RetailUnitsIT.stockRowsCarryTheStandardPack` pins the fallbacks (the biggest pack for selling, then the biggest of any, a
+tie going to the lower unit id, and an item pack only for buying never promoted). The first test also asserts that the live
+item packs and stock row of the box of 50 metres case equal `fixtures/retail/standard-pack-660.json`. The PWA's contract test
+(`transfer-packs.dom.test.tsx`) feeds that same file to Move stock, which moves the item in cartons, never in boxes.
+
+Folded in from the review of #659: Move stock says "That is more pieces than BMS can move at once" when the pieces alone are
+too large to hold, and "That is more than BMS can move at once" when the cartons, or cartons and pieces together, are. Cartons
+typed for an item with no pack or no unit never read as too many.

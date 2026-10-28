@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Units of measure (ADR-033, issue #194; docs/specs/trade-capabilities.md section 4 and 13): pack
@@ -824,6 +826,82 @@ class RetailUnitsIT extends IntegrationTest {
         assertThat(row.has("standard_pack")).isFalse();
         assertThat(rowOf(api.get("/stock/all-branches", ADMIN).getBody(), pen).has("standard_pack"))
                 .isFalse();
+    }
+
+    /**
+     * Issue #660 (ADR-103): a unit's usual pack promotes a pack only when it counts the item's own base unit and is for selling
+     * or both. A box whose usual pack is 50 metres is not promoted on an item counted in pieces, nor a box of pieces only
+     * bought; the biggest selling pack stays the standard one. A usual pack of pieces for selling or both promotes its pack,
+     * and two promoted packs of one size go to the lower unit id.
+     */
+    @Test
+    void aUsualPackOfAnotherUnitIsNotPromoted() {
+        switchUnits(true);
+        UUID box = api.unit("box");
+        UUID metre = api.unit("metre");
+        pack(pen, box, "10");
+        pack(pen, carton, "24");
+        api.stockUp(t.headOffice(), pen, "127");
+        assertThat(standardOf(pen)).isEqualTo("carton 24.000");
+
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_size = 50, pack_of_unit_id = ?, pack_purpose = 'sell' WHERE id = ?")
+                .params(metre, box)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("carton 24.000");
+        assertThat(standardOnItem(pen)).isEqualTo("carton");
+        // The payload the PWA's contract test reads is this one (fixtures/retail/standard-pack-660.json).
+        JsonNode contract = JsonMapper.builder()
+                .build()
+                .readTree(Path.of("../fixtures/retail/standard-pack-660.json").toFile());
+        List<String> packs = new ArrayList<>();
+        for (JsonNode k : api.get("/products/" + pen, ADMIN).getBody().get("packs")) {
+            packs.add(k.get("unit").asString() + " " + k.get("factor").asString() + " "
+                    + k.get("purpose").asString() + " " + k.get("standard").asBoolean());
+        }
+        List<String> expected = new ArrayList<>();
+        for (JsonNode k : contract.get("item_packs")) {
+            expected.add(k.get("unit").asString() + " " + k.get("factor").asString() + " "
+                    + k.get("purpose").asString() + " " + k.get("standard").asBoolean());
+        }
+        assertThat(packs).containsExactlyInAnyOrderElementsOf(expected);
+        JsonNode row =
+                rowOf(api.get("/stock?branch_id=" + t.headOffice(), ADMIN).getBody(), pen);
+        JsonNode want = contract.get("stock_row");
+        assertThat(row.get("unit").asString()).isEqualTo(want.get("unit").asString());
+        assertThat(row.get("qty").asString()).isEqualTo(want.get("qty").asString());
+        assertThat(row.get("standard_pack")).isEqualTo(want.get("standard_pack"));
+
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_size = 10, pack_of_unit_id = ?, pack_purpose = 'buy' WHERE id = ?")
+                .params(piece, box)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("carton 24.000");
+
+        // A usual pack of pieces for selling promotes the box over the bigger carton.
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_purpose = 'sell' WHERE id = ?")
+                .params(box)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("box 10.000");
+        assertThat(standardOnItem(pen)).isEqualTo("box");
+        // A usual pack for both promotes it too.
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_purpose = 'both' WHERE id = ?")
+                .params(box)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("box 10.000");
+
+        // Two promoted packs of the same size: the lower unit id wins, as in the other tiers.
+        UUID bundle = api.unit("bundle");
+        pack(pen, bundle, "10");
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_size = 10, pack_of_unit_id = ?, pack_purpose = 'sell' WHERE id = ?")
+                .params(piece, bundle)
+                .update();
+        String lower = bundle.toString().compareTo(box.toString()) < 0 ? "bundle" : "box";
+        assertThat(standardOf(pen)).isEqualTo(lower + " 10.000");
+        assertThat(standardOnItem(pen)).isEqualTo(lower);
     }
 
     String standardOf(UUID product) {

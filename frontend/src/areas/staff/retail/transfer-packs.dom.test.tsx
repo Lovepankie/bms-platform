@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../../../api/retail';
 import type { TransferLineDraft } from './transfer-state';
@@ -115,6 +116,20 @@ describe('a pack that changes while moving', () => {
     const saved = JSON.parse(sessionStorage.getItem(`retail-draft:transfer:${me.user_id}:${from}`) ?? '{}');
     expect(saved.draft.lines[0]).toMatchObject({ packs: '3', pack: { unit: 'Carton', factor: '24.000' } });
     expect(screen.queryByText(/pack has changed since/)).toBeNull();
+  });
+
+  it('moves in the pack the server marks, not a box whose usual pack is 50 metres (#660, the payload RetailUnitsIT asserts)', () => {
+    const contract = JSON.parse(readFileSync('../fixtures/retail/standard-pack-660.json', 'utf8')) as {
+      item_packs: { unit: string; factor: string; purpose: string; standard: boolean }[];
+      stock_row: { unit: string; qty: string };
+    };
+    const pen: Product = {
+      id: 'p3', code: 'TP-1', description: 'Test Pen', unit: contract.stock_row.unit, sell_minor: 100, active: true, qty: contract.stock_row.qty,
+      packs: contract.item_packs.map((k, i) => ({ id: `k${i}`, product_id: 'p3', unit_id: `u${i}`, active: true, version: 1, ...k })),
+    };
+    open([{ product: pen, qty: '' }]);
+    expect(screen.getByRole('textbox', { name: 'Test Pen cartons' })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: /box/i })).toBeNull();
   });
 
   it('says a number of cartons too large to hold is too many, not too few', () => {
