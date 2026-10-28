@@ -116,6 +116,11 @@ export async function applySetup(api: Pick<RetailApi, 'createCategory' | 'create
           const now = item.kind === 'pack' ? known.find((u) => same(u.name, item.name)) : undefined;
           const of = known.find((u) => same(u.name, item.of ?? ''));
           if (now?.id && !now.usual_pack && of?.id && !of.usual_pack && of.active !== false) {
+            // Issue #662: the same one level check as above, so a unit another phone made a pack of is skipped, not refused.
+            if (known.some((u) => u.usual_pack?.of_unit_id === now.id)) {
+              result.skipped.push({ name: item.name, why: `${now.name ?? ''} holds another pack, so this pack was left out.` });
+              continue;
+            }
             const pack = { size: String(item.size), of_unit_id: of.id, purpose: asPurpose(item.purpose) };
             await api.updateUnit(now.id, now.version ?? 1, { usual_pack: pack });
             result.added.push({ kind: 'pack', name: item.name, detail: packText(pack.size, of.name ?? '', pack.purpose) });

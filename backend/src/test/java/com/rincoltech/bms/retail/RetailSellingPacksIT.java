@@ -574,6 +574,29 @@ class RetailSellingPacksIT extends IntegrationTest {
         assertThat(bad.getStatusCode()).isIn(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
+    // JUSTIFICATION-A3: issue #662 asks for an IT that pins the order of the checks; no existing test covers it.
+    /**
+     * Issue #662, ADR-100 note: adding a pack checks the price and what the pack is for before its unit, so a caller who
+     * may not change prices and sends a price with an unknown unit is refused for the price, and a priced pack only for
+     * buying is pack_not_sold whatever its unit.
+     */
+    @Test
+    void addingAPackChecksThePriceBeforeTheUnit() {
+        UUID unknown = UUID.randomUUID();
+        ResponseEntity<JsonNode> noPermission = addPack(unknown, "12", null, 1_200L, CATALOGUE_ONLY);
+        assertThat(noPermission.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(noPermission.getBody().get("code").asString()).isEqualTo("permission_denied");
+
+        ResponseEntity<JsonNode> buyOnly = addPack(unknown, "12", "buy", 1_200L, ADMIN);
+        assertThat(buyOnly.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(buyOnly.getBody().toString()).contains("pack_not_sold").doesNotContain("unknown_unit");
+
+        // With no price, the unit is checked.
+        ResponseEntity<JsonNode> noPrice = addPack(unknown, "12", null, null, CATALOGUE_ONLY);
+        assertThat(noPrice.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(noPrice.getBody().toString()).contains("unknown_unit");
+    }
+
     /**
      * Issue #637 (ADR-099, ADR-100): a pack added through the API with no purpose is for both, as #627 set, whatever its
      * unit's usual purpose; the screens fill in the usual purpose themselves, and a purpose sent is kept.

@@ -464,8 +464,21 @@ class ProductImportService {
                 // Issue #637: made by the one pack path of POST /products/{id}/units, its checks and its audit: for
                 // both, with no price of its own, whatever the unit's usual purpose.
                 packUnitId = unitIds.get(p.packUnit().toLowerCase(Locale.ROOT));
-                catalogue.createPack(
-                        product, packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by, "import");
+                try {
+                    catalogue.createPack(
+                            product, packUnitId, p.packFactor(), RetailCatalogue.PACK_BOTH, null, by, "import");
+                } catch (ApiException e) {
+                    // Issue #662: a pack unit switched off after the check read the units is a change made meanwhile.
+                    if (e.errors().stream().anyMatch(f -> f.code().equals("inactive_unit"))) {
+                        throw new ApiException(
+                                HttpStatus.CONFLICT,
+                                "import_conflict",
+                                "Import conflict",
+                                "Another change switched off the unit " + p.packUnit()
+                                        + " while this file was being applied. Nothing was added. Run the check again and apply the file again.");
+                    }
+                    throw e;
+                }
             }
             for (String c : p.barcodes()) {
                 addBarcode(product.id(), null, c, p.barcodeFormat(), by);

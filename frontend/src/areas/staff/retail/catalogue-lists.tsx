@@ -158,7 +158,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
               : (
                 <>
                   <ScreenLink screen="products" to="/staff/retail/catalogue/products" label={`See the items of ${r.name}`}>Items</ScreenLink>
-                  {mayHaveUsualPack(r, rows.data ?? []) && (
+                  {('usual_pack' in r && r.usual_pack || mayHaveUsualPack(r, rows.data ?? [])) && (
                     <button type="button" className="btn-sm" onClick={() => setPackFor(r.id ?? null)} aria-label={`Usual pack of ${r.name}`}>
                       Usual pack
                     </button>

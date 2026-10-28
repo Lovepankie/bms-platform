@@ -33,6 +33,8 @@ function fakeShop(start: { categories?: string[]; units?: string[] } = {}) {
     updateUnit: (id: string, version: number, body: { usual_pack?: UsualPackRequest }) => {
       const u = units.find((x) => x.id === id)!;
       if (u.version !== version) throw new RetailError('stale', 409, 'stale');
+      // One level only, as the server holds it (ADR-100 note).
+      if (body.usual_pack && units.some((x) => x.usual_pack?.of_unit_id === id)) throw new RetailError('counted', 422, 'unit_counted_by_pack');
       if (body.usual_pack) u.usual_pack = usual(body.usual_pack);
       u.version = (u.version ?? 1) + 1;
       return Promise.resolve(u);
@@ -216,6 +218,22 @@ describe('Set up your shop', () => {
     expect(result.skipped.map((s) => s.name)).not.toContain('Roll');
     expect(shop.units.filter((u) => u.name === 'Roll')).toHaveLength(1);
     expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack?.of_unit).toBe('Metre');
+  });
+
+  it('skips a pack whose unit another phone added and made a pack of meanwhile, with a plain reason, and goes on (issue #662)', async () => {
+    const shop = fakeShop();
+    const plan = planSetup(shopTypeById('hardware')!, [], [...shop.units]);
+    // Another phone adds Roll and makes Bundle a pack of Roll after the plan was read.
+    const roll = await shop.api.createUnit('Roll');
+    await shop.api.createUnit('Bundle', { size: '5', of_unit_id: roll.id!, purpose: 'both' });
+    const result = await applySetup(shop.api, plan, allTicked(plan), [...shop.units].filter((u) => u.name !== 'Roll' && u.name !== 'Bundle'));
+    expect(result.error).toBeNull();
+    expect(result.skipped).toContainEqual({ name: 'Roll', why: 'Roll holds another pack, so this pack was left out.' });
+    expect(shop.units.find((u) => u.name === 'Roll')?.usual_pack).toBeUndefined();
+    // The other packs are still added.
+    const after = plan.filter((i) => i.kind === 'pack' && i.name !== 'Roll').map((i) => i.name);
+    expect(after.length).toBeGreaterThan(0);
+    for (const name of after) expect(result.added.map((a) => a.name)).toContain(name);
   });
 
   it('holds no pack in a starting set whose smaller unit is a pack of that set, one level only (ADR-100 note)', () => {

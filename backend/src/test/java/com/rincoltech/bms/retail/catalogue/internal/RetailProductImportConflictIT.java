@@ -9,10 +9,12 @@ import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -70,5 +72,45 @@ class RetailProductImportConflictIT extends IntegrationTest {
         assertThat(r.getBody().get("code").asString()).isEqualTo("import_conflict");
         assertThat(count("retail_products")).isEqualTo(products);
         assertThat(count("retail_categories")).isEqualTo(categories);
+    }
+
+    /**
+     * Issue #662: a pack unit switched off after the check read the units is a change made meanwhile, so the apply is a
+     * 409 {@code import_conflict}, as for a code or a name, not a 422 {@code inactive_unit}, and nothing is added.
+     */
+    @Test
+    void aPackUnitSwitchedOffAfterTheReadIsA409AndNothingIsAdded() {
+        String etag = api.get("/settings/capabilities", "core.settings.manage")
+                .getHeaders()
+                .getETag();
+        ResponseEntity<JsonNode> units = api.call(
+                HttpMethod.PUT,
+                "/settings/capabilities",
+                Map.of("units", true),
+                "core.settings.manage",
+                "*",
+                etag == null ? Map.of() : Map.of("If-Match", etag));
+        assertThat(units.getStatusCode()).as("%s", units.getBody()).isEqualTo(HttpStatus.OK);
+        UUID carton = api.unit("Test carton");
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET active = false WHERE tenant_id = ? AND id = ?")
+                .params(t.tenantId(), carton)
+                .update();
+        long products = count("retail_products");
+        // The import reads the switched off units before the unit is switched off: it sees none.
+        doReturn(Set.of()).when(repo).inactiveUnitNames();
+
+        ResponseEntity<JsonNode> r = api.post(
+                "/products/import?dry_run=false",
+                Map.of(
+                        "csv",
+                        "code,description,category,unit,sell price,pack unit,pack factor\n"
+                                + "IMP-PACK,Test packed item,Test New Category,piece,100,test carton,12\n"),
+                ADMINISTRATOR);
+
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("import_conflict");
+        assertThat(r.getBody().get("detail").asString()).contains("switched off the unit test carton");
+        assertThat(count("retail_products")).isEqualTo(products);
     }
 }

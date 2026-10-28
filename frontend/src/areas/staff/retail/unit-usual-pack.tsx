@@ -25,6 +25,17 @@ export function mayHaveUsualPack(unit: Unit, units: Unit[]): boolean {
   return unit.active !== false && !units.some((u) => u.id !== unit.id && u.usual_pack?.of_unit_id === unit.id);
 }
 
+/**
+ * Issue #662: why a unit that has a usual pack may not change it, or null when it may. The sheet then offers only Remove, so a
+ * usual pack set before the unit was switched off, or before another pack counted it, can still be cleared.
+ */
+export function removeOnlyReason(unit: Unit, units: Unit[]): string | null {
+  if (mayHaveUsualPack(unit, units)) return null;
+  if (unit.active === false) return `${unit.name ?? ''} is switched off, so its usual pack can only be removed.`;
+  const counting = units.find((u) => u.id !== unit.id && u.usual_pack?.of_unit_id === unit.id);
+  return `${counting?.name ?? ''} is a pack of ${unit.name ?? ''}, so ${unit.name ?? ''} cannot be a pack too. You can remove its usual pack.`;
+}
+
 /** The size's problem in the words of units, or null: at least 1, at most three places, as an item's pack (factorProblem). */
 export function usualSizeProblem(size: string, unit: Unit, of: Unit | undefined): string | null {
   return factorProblem(size) === null ? null : `Enter how many ${of?.name ?? 'of the smaller unit'} are in one ${unit.name ?? ''}: 1 or more, for example 12 or 12.5.`;
@@ -45,6 +56,7 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
 }) {
   const queryClient = useQueryClient();
   const had = unit.usual_pack;
+  const removeOnly = removeOnlyReason(unit, units);
   const choices = usualPackChoices(unit, units);
   const [picked, setOfUnitId] = useState(had?.of_unit_id ?? '');
   // Review of #637: a smaller unit that is no longer a choice (switched off, or a pack now) counts as not chosen.
@@ -70,7 +82,7 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
       title={`Usual pack of ${unit.name ?? ''}`}
       actions={
         <>
-          <BusyButton
+          {removeOnly === null && <BusyButton
             busy={save.isPending && save.variables?.clear_usual_pack !== true}
             type="submit"
             form={formId}
@@ -79,7 +91,7 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
             disabled={save.isPending}
           >
             Save
-          </BusyButton>
+          </BusyButton>}
           {had && (
             <BusyButton busy={save.isPending && save.variables?.clear_usual_pack === true} type="button" disabled={save.isPending} onClick={() => save.mutate({ clear_usual_pack: true })}>
               Remove usual pack
@@ -88,7 +100,12 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
         </>
       }
     >
-      <form
+      {removeOnly !== null ? (
+        <div className="stack">
+          <p>{removeOnly}</p>
+          <Problem error={save.error} />
+        </div>
+      ) : <form
         id={formId}
         className="stack"
         onSubmit={(e) => {
@@ -142,10 +159,9 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
           onChange={(e) => setSize(e.target.value)}
           autoComplete="off"
         />
-        <p className="field-label">Used for</p>
         <Segmented label="Used for" options={PURPOSES} value={purpose} onChange={setPurpose} />
         <Problem error={save.error} />
-      </form>
+      </form>}
     </Sheet>
   );
 }
