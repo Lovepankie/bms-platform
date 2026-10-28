@@ -1387,7 +1387,10 @@ the items show only while you search, and go away once one is picked. Every item
   and the server refuses a commit that leaves out a big drop with 409 `big_drop_not_acknowledged`, naming the lines, so a draft
   committed from another tab or the API never writes one unasked. The screen shows the server's words under the button.
   The count Sell makes of an item added there is of a new item, which holds nothing, so it is never a big drop; should the
-  records ever hold more, Sell leaves the count for Count stock and says so, rather than sending it to be refused.
+  records ever hold more, Sell asks that line's tick itself (issue #656): the words of Count stock, **Yes, ... is right** and
+  **Commit the count**, which sends the line acknowledged and then puts the item on the sale. The draft is never left open
+  behind the sale, where it would block stock corrections of the item and keep the branch closing reporting a count; a failed
+  commit keeps the tick on screen to send again.
 - **Scan box.** Unchanged (ADR-070 decision 11, owner decision D7): a scanner types only into the Scan box, which adds the item or one more.
 - **Tours.** `retail-sales` version 16, `page-stocktake` 3 (the search on top and the list Not counted yet), `page-restock` 3, `page-usage` 2, `page-transfer` 3,
   `page-sizes-join` 2 and `page-labels` 2 word their search steps for the list that shows while you type.

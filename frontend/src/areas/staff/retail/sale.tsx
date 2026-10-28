@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { Stepper } from '../../../app/ui/Stepper';
-import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
+import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest, type Stocktake } from '../../../api/retail';
 import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
 import { useOffline, useOnline } from '../../../offline/offline-context';
 import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../offline/offline-sale';
@@ -40,6 +40,8 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { FirstItemsCard, useNoItemsYet } from './first-items';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 import { ScreenLink, addOn } from './screen-link';
+import { dropWords } from './stocktake';
+import { icons } from '../../../components/icons';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -349,6 +351,17 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   // from a name warning (Use this item) keeps its stock and goes on the sale as a picked one would.
   const profit = useProfitAccess();
   const mayCount = holdsAt(me, 'retail.stocktake.commit', branchId);
+  // Issue #656: the count of an item added here that came back as a big drop, waiting for its tick.
+  const [heldCount, setHeldCount] = useState<{ count: Stocktake; product: Product; counted: number } | null>(null);
+  const commitHeld = useMutation({
+    mutationFn: (h: NonNullable<typeof heldCount>) => retail.commitStocktake(h.count.id ?? '', [h.product.id ?? '']),
+    onSuccess: (_, h) => {
+      setHeldCount(null);
+      for (const key of [['retail', 'products'], ['retail', 'stocked-branches']]) void queryClient.invalidateQueries({ queryKey: key });
+      add({ ...h.product, qty: qtyString(h.counted) });
+    },
+    onError: (_, h) => show(`The count of ${h.product.description ?? 'the item'} is not committed. Try again, or use ${WORDS.countStock}.`, 'error'),
+  });
   const addNew = async ({ product, qty, sell }: AddedItem, clear: () => void) => {
     const made = sell !== undefined;
     const name = product.description ?? 'The item';
@@ -358,10 +371,13 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       try {
         const count = await retail.createStocktake({ branch_id: branchId, lines: [{ product_id: product.id ?? '', counted_qty: qtyString(counted) }], note: 'Counted when the item was added on Sell' });
         // Issue #636: an item made here holds nothing and is counted above 0, so this is never a big drop. Should the records
-        // ever hold more, the count is left for Count stock, where the line has its tick, rather than sent to be refused.
-        if ((count.lines ?? []).some(bigDrop)) throw new Error('big drop');
-        await retail.commitStocktake(count.id ?? '');
-        counts = true;
+        // ever hold more, the count asks its tick here (issue #656): never sent to be refused, never left open as a draft that
+        // blocks stock corrections and the branch closing.
+        if ((count.lines ?? []).some(bigDrop)) setHeldCount({ count, product, counted });
+        else {
+          await retail.commitStocktake(count.id ?? '');
+          counts = true;
+        }
       } catch {
         show(`${name} is saved, but its count is not. Count it on ${WORDS.countStock}, then sell it.`, 'error');
       }
@@ -501,6 +517,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         )}
       </div>
       <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} autoFocus toasts />
+      {heldCount && <HeldCount held={heldCount} busy={commitHeld.isPending} onCommit={() => commitHeld.mutate(heldCount)} />}
 
       <h2>
         Items{' '}
@@ -741,6 +758,32 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
  * Says plainly that the chosen branch is a store, which never sells (ADR-033), with a button for each
  * branch the user can sell at; or that there is none, and where to go instead.
  */
+/**
+ * Issue #656: the count Sell made of a new item came back as a big drop, so the records already hold more of it here. The line
+ * asks its tick, as on Count stock, and Commit the count sends it acknowledged; the draft is never left open behind the sale.
+ */
+function HeldCount({ held, busy, onCommit }: { held: { count: Stocktake; product: Product }; busy: boolean; onCommit: () => void }) {
+  const [ok, setOk] = useState(false);
+  const line = (held.count.lines ?? []).find(bigDrop);
+  const name = held.product.description ?? 'this item';
+  if (!line) return null;
+  return (
+    <div className="alert alert-warning entry-warning" data-testid="sale-count-drop">
+      <span className="entry-warning-icon" aria-hidden="true">{icons.warning}</span>
+      <div>
+        <p id="sale-count-drop-words">
+          The records show {showQty(line.expected_qty ?? '0')} of {name} here, and you counted {showQty(line.counted_qty ?? '0')}. {dropWords(line, undefined)}
+        </p>
+        <label className="count-drop-tick">
+          <input type="checkbox" checked={ok} aria-describedby="sale-count-drop-words" data-needed={ok ? undefined : ''} onChange={(e) => setOk(e.target.checked)} />
+          {`Yes, ${name} is right`}
+        </label>
+        <BusyButton type="button" className="rt-primary" busy={busy} notReady={!ok} onClick={onCommit}>Commit the count</BusyButton>
+      </div>
+    </div>
+  );
+}
+
 export function StoreBranch({ branchName, roles }: { branchName: string; roles?: BranchRole[] }) {
   const { me, chooseBranch } = useStaff();
   const shops = sellingBranches(branchesWhere(me, 'retail.sale.create'), roles);

@@ -267,15 +267,39 @@ describe('a Sell search that finds nothing', () => {
     expect(screen.queryByText(/its count is not/)).toBeNull();
   });
 
-  it('never sends a big drop to be refused: the count is left for Count stock, and the screen says so (issue #636)', async () => {
+  it('never sends a big drop to be refused, nor leaves its draft open: the line asks its tick on Sell (issues #636, #656)', async () => {
     createProduct.mockResolvedValue(made);
     createStocktake.mockResolvedValue(draftOf('10.000'));
     commitStocktake.mockImplementation(serverCommit(draftOf('10.000')));
     open(<RecordSale />, owner);
     await fill('4');
-    expect(await screen.findByText('Test duvet cover is saved, but its count is not. Count it on Count stock, then sell it.')).toBeTruthy();
+    const ask = await screen.findByTestId('sale-count-drop');
+    expect(ask.textContent).toContain('The records show 10 of Test duvet cover here, and you counted 4. This removes 6. Is that right?');
+    expect(screen.queryByText(/its count is not/)).toBeNull();
     expect(commitStocktake).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Remove Test duvet cover' })).toBeNull();
+    // Commit the count waits for the tick.
+    fireEvent.click(within(ask).getByRole('button', { name: 'Commit the count' }));
+    expect(commitStocktake).not.toHaveBeenCalled();
+    fireEvent.click(within(ask).getByRole('checkbox', { name: 'Yes, Test duvet cover is right' }));
+    fireEvent.click(within(ask).getByRole('button', { name: 'Commit the count' }));
+    await waitFor(() => expect(commitStocktake).toHaveBeenCalledWith('s1', ['p9']));
+    expect(await screen.findByRole('button', { name: 'Remove Test duvet cover' })).toBeTruthy();
+    expect(screen.queryByTestId('sale-count-drop')).toBeNull();
+  });
+
+  it('keeps the tick on Sell when the commit fails, so the count can be sent again (issue #656)', async () => {
+    createProduct.mockResolvedValue(made);
+    createStocktake.mockResolvedValue(draftOf('10.000'));
+    commitStocktake.mockRejectedValueOnce(new RetailError('Offline', 503, 'unavailable')).mockImplementation(serverCommit(draftOf('10.000')));
+    open(<RecordSale />, owner);
+    await fill('4');
+    const ask = await screen.findByTestId('sale-count-drop');
+    fireEvent.click(within(ask).getByRole('checkbox', { name: 'Yes, Test duvet cover is right' }));
+    fireEvent.click(within(ask).getByRole('button', { name: 'Commit the count' }));
+    expect(await screen.findByText('The count of Test duvet cover is not committed. Try again, or use Count stock.')).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId('sale-count-drop')).getByRole('button', { name: 'Commit the count' }));
+    expect(await screen.findByRole('button', { name: 'Remove Test duvet cover' })).toBeTruthy();
+    expect(commitStocktake).toHaveBeenCalledTimes(2);
   });
 
   it('keeps an open Add it here with what was typed when a later search finds something (review of #616)', async () => {
