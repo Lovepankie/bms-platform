@@ -363,6 +363,13 @@ class StockService {
         Stocktake s = repo.stocktake(id, true)
                 .filter(x -> principal.may("retail.stocktake.commit", x.branchId()))
                 .orElseThrow(ApiException::notFound);
+        if (s.status().equals("discarded")) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "stocktake_discarded",
+                    "Stock count discarded",
+                    "This stock count was discarded, so it cannot be committed. Count the items again.");
+        }
         if (!s.status().equals("draft")) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
@@ -374,8 +381,10 @@ class StockService {
         // ADR-041).
         branches.requireStocks(s.branchId(), "branch_id");
         Set<UUID> ticked = new HashSet<>(acknowledged);
+        // Issue #656: sorted by item code, so a refusal capped at five names the same five every time.
         List<String> unticked = s.lines().stream()
                 .filter(l -> bigDrop(l) && !ticked.contains(l.productId()))
+                .sorted(Comparator.comparing(StocktakeLine::code, Comparator.nullsLast(Comparator.naturalOrder())))
                 .map(l -> l.description() == null ? l.code() : l.description())
                 .toList();
         if (!unticked.isEmpty()) {
@@ -383,7 +392,7 @@ class StockService {
                     HttpStatus.CONFLICT,
                     "big_drop_not_acknowledged",
                     "Tick the lines marked before you commit",
-                    "The count of " + String.join(", ", unticked)
+                    "The count of " + firstNames(unticked)
                             + " removes more than half of what was there. Review the difference again and tick each line marked"
                             + " before you commit the count.");
         }
@@ -446,6 +455,49 @@ class StockService {
         audit.record(new AuditLog.Entry(
                 "retail.stocktake.committed", STOCKTAKE, id, s.branchId(), Map.of("status", "draft"), after));
         return visible(repo.stocktake(id, false).orElseThrow());
+    }
+
+    /**
+     * Issue #656: ends a draft count without writing stock, so it no longer blocks a correction of its items or the closing of
+     * its branch. The person who made it, or anyone who may count at its branch, may discard it. Discarding a discarded count
+     * again returns it unchanged; a committed count is refused with 409 {@code stocktake_committed}.
+     */
+    @Transactional
+    Stocktake discard(UUID id) {
+        Principal principal = CurrentPrincipal.require();
+        Stocktake s = repo.stocktake(id, true)
+                .filter(x -> principal.userId().equals(x.createdBy())
+                        || principal.may("retail.stocktake.commit", x.branchId()))
+                .orElseThrow(ApiException::notFound);
+        if (s.status().equals("committed")) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "stocktake_committed",
+                    "Stock count committed",
+                    "This stock count has been committed already, so it cannot be discarded.");
+        }
+        if (s.status().equals("draft")) {
+            repo.markDiscarded(id, principal.userId());
+            audit.record(new AuditLog.Entry(
+                    "retail.stocktake.discarded",
+                    STOCKTAKE,
+                    id,
+                    s.branchId(),
+                    Map.of("status", "draft"),
+                    Map.of("status", "discarded")));
+        }
+        return visible(repo.stocktake(id, false).orElseThrow());
+    }
+
+    /** Issue #656: the most items a refusal names; the rest are counted, so a long count's refusal stays short. */
+    static final int NAMED_AT_MOST = 5;
+
+    /** Issue #656: the first {@link #NAMED_AT_MOST} names, then "and N more" for the rest. */
+    static String firstNames(List<String> names) {
+        if (names.size() <= NAMED_AT_MOST) {
+            return String.join(", ", names);
+        }
+        return String.join(", ", names.subList(0, NAMED_AT_MOST)) + " and " + (names.size() - NAMED_AT_MOST) + " more";
     }
 
     /** Issue #629, #636: the count takes an item holding stock to 0, or to less than half of what it held. */

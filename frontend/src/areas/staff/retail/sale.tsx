@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { Stepper } from '../../../app/ui/Stepper';
@@ -40,6 +40,9 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { FirstItemsCard, useNoItemsYet } from './first-items';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 import { ScreenLink, addOn } from './screen-link';
+import { dropWords } from './stocktake';
+import { useBranchHold } from '../branch-picker';
+import { icons } from '../../../components/icons';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -349,21 +352,147 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   // from a name warning (Use this item) keeps its stock and goes on the sale as a picked one would.
   const profit = useProfitAccess();
   const mayCount = holdsAt(me, 'retail.stocktake.commit', branchId);
+  // Issue #656: a count that would be a big drop asks its tick before any draft is made. Each item has its own tick, its own
+  // count and its own press. A draft made on Commit the count and not committed (its answer lost) is discarded when the sale is
+  // cleared, the screen left or the branch switched; offline, Clear this sale, Not now and the branch switch wait until it is.
+  const [held, setHeld] = useState<HeldCount[]>([]);
+  const drop = (id: string | undefined) => setHeld((l) => l.filter((x) => x.product.id !== id));
+  // The drafts made here and not committed or discarded yet, by item.
+  const drafts = useRef(new Map<string, string>());
+  const [stuck, setStuck] = useState(false);
+  // A count pressed before Clear this sale (`round`) or before the screen closed (`gone`; a branch switch makes this form again)
+  // is stale: its answer is ignored and its draft discarded.
+  const round = useRef(0);
+  const gone = useRef(false);
+  useEffect(() => {
+    gone.current = false;
+    return () => {
+      gone.current = true;
+      for (const id of drafts.current.values()) discardCount(id);
+      drafts.current.clear();
+    };
+  }, []);
+  // A discard that could not be sent (the screen left offline, a reload) is sent again once Sell is open and online.
+  useEffect(() => {
+    if (!online) return;
+    setStuck(false);
+    const live = [...drafts.current.values()];
+    for (const id of keptCounts()) if (!live.includes(id)) discardCount(id);
+  }, [online]);
+  const holdsDraft = () => {
+    if (drafts.current.size === 0 || online) return false;
+    setStuck(true);
+    return true;
+  };
+  useBranchHold(holdsDraft);
+  const commitCount = async (h: HeldCount) => {
+    const id = h.product.id ?? '';
+    const startedIn = round.current;
+    const stale = () => gone.current || round.current !== startedIn;
+    try {
+      // A draft whose commit was lost is sent again, never made twice.
+      let draftId = drafts.current.get(id);
+      if (draftId === undefined) {
+        draftId = (await retail.createStocktake({ branch_id: branchId, lines: [{ product_id: id, counted_qty: qtyString(h.counted) }], note: 'Counted when the item was added on Sell' })).id ?? '';
+        keepCount(draftId, true);
+        drafts.current.set(id, draftId);
+      }
+      if (stale()) {
+        drafts.current.delete(id);
+        discardCount(draftId);
+        throw new StaleCount();
+      }
+      await commitMade(draftId, [id]);
+      drafts.current.delete(id);
+      keepCount(draftId, false);
+    } catch (e) {
+      throw stale() ? new StaleCount() : e;
+    }
+    // Committed after the sale was cleared or the screen closed: the count stands, the item goes on no sale.
+    if (stale()) throw new StaleCount();
+  };
+  const countCommitted = (h: HeldCount) => {
+    drop(h.product.id);
+    for (const key of [['retail', 'products'], ['retail', 'stocked-branches']]) void queryClient.invalidateQueries({ queryKey: key });
+    add({ ...h.product, qty: qtyString(h.counted) });
+  };
+  const countFailed = (h: HeldCount, e: unknown) => {
+    if (e instanceof StaleCount) return;
+    const name = h.product.description ?? 'the item';
+    // A refusal never passes on a second press: the server's words, the draft discarded and the item left for Count stock.
+    if (refused(e)) {
+      const draftId = drafts.current.get(h.product.id ?? '');
+      drafts.current.delete(h.product.id ?? '');
+      if (draftId !== undefined) discardCount(draftId);
+      drop(h.product.id);
+      const words = typeof e.problem?.detail === 'string' ? e.problem.detail : e.message;
+      show(`${words} ${name} is not on the sale: use ${WORDS.countStock}, then sell it.`, 'error');
+    } else show(`The count of ${name} is not committed. Try again.`, 'error');
+  };
+  const notNow = (h: HeldCount) => {
+    const draftId = drafts.current.get(h.product.id ?? '');
+    if (draftId !== undefined) {
+      if (!online) {
+        setStuck(true);
+        return;
+      }
+      drafts.current.delete(h.product.id ?? '');
+      discardCount(draftId);
+    }
+    drop(h.product.id);
+    show(`${h.product.description ?? 'The item'} is saved. It is not on the sale: count it on ${WORDS.countStock}, then sell it.`, 'info');
+  };
   const addNew = async ({ product, qty, sell }: AddedItem, clear: () => void) => {
     const made = sell !== undefined;
     const name = product.description ?? 'The item';
     const counted = made && mayCount ? parseQty(qty) : null;
     let counts = false;
+    let asks = false;
+    let lost = false;
+    // Issue #656: an answer that comes after Clear this sale or after the screen closed is ignored, as on a held count: a draft
+    // not committed yet is discarded, a count that landed stands, and the item goes on no sale.
+    const startedIn = round.current;
+    const stale = () => gone.current || round.current !== startedIn;
     if (counted !== null && counted > 0) {
       try {
-        const count = await retail.createStocktake({ branch_id: branchId, lines: [{ product_id: product.id ?? '', counted_qty: qtyString(counted) }], note: 'Counted when the item was added on Sell' });
-        // Issue #636: an item made here holds nothing and is counted above 0, so this is never a big drop. Should the records
-        // ever hold more, the count is left for Count stock, where the line has its tick, rather than sent to be refused.
-        if ((count.lines ?? []).some(bigDrop)) throw new Error('big drop');
-        await retail.commitStocktake(count.id ?? '');
-        counts = true;
-      } catch {
-        show(`${name} is saved, but its count is not. Count it on ${WORDS.countStock}, then sell it.`, 'error');
+        // Issue #636: an item made here holds nothing, so its count is never a big drop. Should the records hold more, the tick is
+        // asked first from the balance read here (issue #656), and the draft is made only when Commit the count is pressed.
+        const here = (await retail.listProducts({ query: product.code ?? product.description ?? '', branchId })).find((p) => p.id === product.id);
+        if (stale()) throw new StaleCount();
+        const expected = here?.qty ?? '0';
+        if (bigDrop({ expected_qty: expected, counted_qty: qtyString(counted) })) {
+          setHeld((l) => [...l.filter((x) => x.product.id !== product.id), { product, counted, expected }]);
+          asks = true;
+        } else {
+          const count = await retail.createStocktake({ branch_id: branchId, lines: [{ product_id: product.id ?? '', counted_qty: qtyString(counted) }], note: 'Counted when the item was added on Sell' });
+          const draftId = count.id ?? '';
+          keepCount(draftId, true);
+          // Stock that arrived between the read and the count (or a balance the search did not return): never sent to be
+          // refused, and the draft is discarded (issue #656), so the item is counted again on Count stock with its tick.
+          if (stale() || (count.lines ?? []).some(bigDrop)) {
+            discardCount(draftId);
+            throw stale() ? new StaleCount() : new Error('big drop');
+          }
+          try {
+            // No press to try again here: a commit whose answer was lost is sent once more on the same draft.
+            await commitMade(draftId).catch((e: unknown) => {
+              if (refused(e)) throw e;
+              return commitMade(draftId);
+            });
+          } catch (e) {
+            // Only a refusal is discarded. A commit whose answer is still lost may have landed: its draft stays kept, and is
+            // discarded when Sell next opens online unless it was committed.
+            if (refused(e)) discardCount(draftId);
+            else lost = true;
+            throw e;
+          }
+          keepCount(draftId, false);
+          if (stale()) throw new StaleCount();
+          counts = true;
+        }
+      } catch (e) {
+        if (lost) show(`The count of ${name} may not be committed. Check it on ${WORDS.countStock} before you sell it.`, 'error');
+        else if (!(e instanceof StaleCount)) show(`${name} is saved, but its count is not. Count it on ${WORDS.countStock}, then sell it.`, 'error');
       }
     }
     // The card of a shop with no items, the search and the branches that hold stock all read again with the new item.
@@ -379,6 +508,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         show(`${name} is in your items, but its stock here could not be read. Search for it again.`, 'error');
         return;
       }
+      if (stale()) return;
       if (!here || !(Number(here.qty ?? '0') > 0)) {
         show(`${name} is already in your items, but it has no stock here yet, so it is not on the sale. Use ${WORDS.buyStock} or ${WORDS.countStock} first.`, 'info');
         return;
@@ -387,7 +517,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       if (qty.trim() !== '') show(`${name} is already in your items, so its stock is not changed here. If it is wrong, use ${WORDS.countStock}.`, 'info');
       return;
     }
+    if (stale()) return;
     if (counts) add({ ...product, qty: qtyString(counted ?? 0) });
+    else if (asks) return;
     else if (counted === null) show(`${name} is saved. It has no stock here yet: use ${WORDS.buyStock} or ${WORDS.countStock}, then sell it.`, 'info');
   };
   // A scan (issue #345) adds the item at 1, or one more to its line in the pack the barcode is on; a pack it cannot
@@ -457,6 +589,16 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
     },
   });
   const clear = () => {
+    // Issue #656: a tick still asked goes with the sale, and a draft made for it is discarded; offline the sale waits.
+    if (holdsDraft()) {
+      setConfirmClear(false);
+      return;
+    }
+    round.current += 1;
+    for (const id of drafts.current.values()) discardCount(id);
+    drafts.current.clear();
+    setHeld([]);
+    setStuck(false);
     discard();
     setAddingBuyer(false);
     setReceived('');
@@ -501,6 +643,14 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         )}
       </div>
       <ScanBar id="sale-scan" branchId={branchId} onFound={scanAdd} autoFocus toasts />
+      {held.map((h) => (
+        <HeldCountTick key={h.product.id} held={h} commit={commitCount} onCommitted={countCommitted} onFailed={countFailed} onCancel={notNow} />
+      ))}
+      {stuck && !online && held.length > 0 && (
+        <p role="alert" className="alert alert-warning" data-testid="sale-count-offline">
+          A count on this sale is not committed. Connect to the internet, then commit the count or press Not now, before you clear the sale or switch branch.
+        </p>
+      )}
 
       <h2>
         Items{' '}
@@ -734,6 +884,92 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       )}
       {toast}
     </form>
+  );
+}
+
+/** Issue #656: a new item counted on Sell, waiting for its tick. */
+type HeldCount = { product: Product; counted: number; expected: string };
+
+/** Issue #656: the answer of a count pressed before the sale was cleared or the screen closed, which is ignored. */
+class StaleCount extends Error {}
+
+// Issue #656: the drafts Sell made in this tab and has not seen committed or discarded, so a discard lost offline or to a reload
+// is sent again. Kept per tab: another tab's Sell may still be committing its own.
+const KEPT_COUNTS = 'sale-held-counts';
+
+function keptCounts(): string[] {
+  try {
+    const kept: unknown = JSON.parse(sessionStorage.getItem(KEPT_COUNTS) ?? '[]');
+    return Array.isArray(kept) ? kept.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function keepCount(id: string, kept: boolean) {
+  try {
+    const rest = keptCounts().filter((x) => x !== id);
+    sessionStorage.setItem(KEPT_COUNTS, JSON.stringify(kept ? [...rest, id] : rest));
+  } catch {
+    // Without storage the discard is tried once.
+  }
+}
+
+/** A clear refusal from the server, which a second try would only meet again (a timeout or too many requests is not one). */
+const refused = (e: unknown): e is RetailError => e instanceof RetailError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
+
+/** Issue #656: commits a count Sell made; one the server already took (409 stocktake_committed, its first answer lost) stands. */
+async function commitMade(id: string, acknowledged?: string[]) {
+  await (acknowledged ? retail.commitStocktake(id, acknowledged) : retail.commitStocktake(id)).catch((e: unknown) => {
+    if (!(e instanceof RetailError && e.code === 'stocktake_committed')) throw e;
+  });
+}
+
+/** Issue #656: ends a draft Sell made; one already committed or discarded, or not found, is forgotten too. */
+function discardCount(id: string) {
+  keepCount(id, true);
+  retail.discardStocktake(id).then(
+    () => keepCount(id, false),
+    (e: unknown) => {
+      if (e instanceof RetailError && (e.status === 404 || e.status === 409)) keepCount(id, false);
+    },
+  );
+}
+
+/**
+ * Issue #656: the count Sell would make of a new item is a big drop, so the records already hold more of it here. The line asks
+ * its tick first, as on Count stock; Commit the count then makes the count and sends it acknowledged. Not now leaves nothing open.
+ */
+function HeldCountTick({ held, commit, onCommitted, onFailed, onCancel }: {
+  held: HeldCount;
+  commit: (h: HeldCount) => Promise<void>;
+  onCommitted: (h: HeldCount) => void;
+  onFailed: (h: HeldCount, e: unknown) => void;
+  onCancel: (h: HeldCount) => void;
+}) {
+  const [ok, setOk] = useState(false);
+  // Its own press: another item's count on its way never makes this one look busy or idle.
+  const sending = useMutation({ mutationFn: () => commit(held), onSuccess: () => onCommitted(held), onError: (e) => onFailed(held, e) });
+  const busy = sending.isPending;
+  const wordsId = useId();
+  const name = held.product.description ?? 'this item';
+  const line = { expected_qty: held.expected, counted_qty: qtyString(held.counted) };
+  return (
+    <div className="alert alert-warning entry-warning" data-testid={`sale-count-drop-${held.product.id ?? ''}`}>
+      <span className="entry-warning-icon" aria-hidden="true">{icons.warning}</span>
+      <div>
+        <p id={wordsId}>
+          The records show {showQty(line.expected_qty)} of {name} here, and you counted {showQty(line.counted_qty)}. {dropWords(line, undefined)}
+        </p>
+        <label className="count-drop-tick">
+          <input type="checkbox" checked={ok} aria-describedby={wordsId} data-needed={ok ? undefined : ''} onChange={(e) => setOk(e.target.checked)} />
+          {`Yes, ${name} is right`}
+        </label>
+        <BusyButton type="button" className="rt-primary" busy={busy} notReady={!ok} onClick={() => sending.mutate()}>Commit the count</BusyButton>
+        {/* Not now discards a draft whose commit was lost; while the count is on its way it waits. */}
+        {!busy && <button type="button" onClick={() => onCancel(held)}>Not now</button>}
+      </div>
+    </div>
   );
 }
 

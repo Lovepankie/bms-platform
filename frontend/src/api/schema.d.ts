@@ -7029,6 +7029,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/stocktakes/{stocktake_id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a draft count without writing stock; idempotent, a committed count is refused (issue #656) */
+        post: operations["discardRetailStocktake"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/supplier-bills": {
         parameters: {
             query?: never;
@@ -32195,6 +32212,28 @@ export interface operations {
                 "application/json": components["schemas"]["RetailStocktakeCommitRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktake"];
+                };
+            };
+        };
+    };
+    discardRetailStocktake: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stocktake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {

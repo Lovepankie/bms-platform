@@ -60,7 +60,8 @@ export function StocktakeReview({ stocktake, onCommit, busy, units, packs }: {
   const tick = (id: string, on: boolean) => setTicked((t) => { const n = new Set(t); if (on) n.add(id); else n.delete(id); return n; });
   return (
     <form aria-label="Stock count review" noValidate onSubmit={(e) => e.preventDefault()}>
-      <h2>{stocktake.status === 'committed' ? 'Stock count committed' : 'Review the difference'}</h2>
+      {/* Issue #656: a discarded count never reads as committed. */}
+      <h2>{stocktake.status === 'committed' ? 'Stock count committed' : stocktake.status === 'discarded' ? 'Stock count cancelled' : 'Review the difference'}</h2>
       {changed.length === 0 ? (
         <p>Every counted item matches the system.</p>
       ) : (

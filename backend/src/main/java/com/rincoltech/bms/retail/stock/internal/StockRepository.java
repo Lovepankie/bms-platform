@@ -511,6 +511,15 @@ class StockRepository {
                         """).params(by, entryId, id).update();
     }
 
+    /** Issue #656: ends a draft count without writing stock. */
+    void markDiscarded(UUID id, UUID by) {
+        jdbc.sql("""
+                        UPDATE retail_stocktakes SET status = 'discarded', discarded_by = ?, discarded_at = now(),
+                               updated_at = now(), version = version + 1
+                         WHERE id = ? AND status = 'draft'
+                        """).params(by, id).update();
+    }
+
     Optional<Stocktake> stocktake(UUID id, boolean lock) {
         Optional<Stocktake> header = jdbc.sql("""
                         SELECT id, branch_id, status, note, created_at, created_by, committed_at, committed_by,

@@ -43728,6 +43728,34 @@
         "tags" : [ "retail-stock" ]
       }
     },
+    "/api/v1/retail/stocktakes/{stocktake_id}/discard" : {
+      "post" : {
+        "operationId" : "discardRetailStocktake",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "stocktake_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStocktake"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "End a draft count without writing stock; idempotent, a committed count is refused (issue #656)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
     "/api/v1/retail/supplier-bills" : {
       "get" : {
         "operationId" : "listRetailSupplierBills",

@@ -95,6 +95,21 @@ describe('retail mock adapter (real response shapes)', () => {
     expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === id)?.qty).toBe('0.000');
   });
 
+  // Issue #656: as the server, a draft is discarded without moving stock, once; it never commits after, and a committed count stays.
+  it('discards a draft count without moving stock, and never a committed one', async () => {
+    const api = createMockRetail();
+    const row = (await api.listStock({ branchId: branch })).find((r) => Number(r.qty) > 0);
+    const id = row?.product_id ?? '';
+    const draft = await api.createStocktake({ branch_id: branch, lines: [{ product_id: id, counted_qty: '0' }] });
+    expect((await api.discardStocktake(draft.id ?? '')).status).toBe('discarded');
+    expect((await api.discardStocktake(draft.id ?? '')).status).toBe('discarded');
+    await expect(api.commitStocktake(draft.id ?? '', [id])).rejects.toMatchObject({ code: 'stocktake_discarded', status: 409 });
+    expect((await api.listStock({ branchId: branch })).find((r) => r.product_id === id)?.qty).toBe(row?.qty);
+    const done = await api.createStocktake({ branch_id: branch, lines: [{ product_id: id, counted_qty: row?.qty ?? '0' }] });
+    await api.commitStocktake(done.id ?? '');
+    await expect(api.discardStocktake(done.id ?? '')).rejects.toMatchObject({ code: 'stocktake_committed', status: 409 });
+  });
+
   it('moves stock between branches at cost, refuses beyond the source balance, and voids once', async () => {
     setMockProfitAccess(true);
     const api = createMockRetail();

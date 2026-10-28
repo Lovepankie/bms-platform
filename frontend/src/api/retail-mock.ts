@@ -1298,6 +1298,7 @@ export function createMockRetail(): RetailApi {
       const st = stocktakes.get(id);
       if (!st) return Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
       if (st.status === 'committed') return Promise.reject(new RetailError(retailMessage({ code: 'stocktake_committed' }, 409), 409, 'stocktake_committed'));
+      if (st.status === 'discarded') return Promise.reject(new RetailError(retailMessage({ code: 'stocktake_discarded' }, 409), 409, 'stocktake_discarded'));
       // Issue #636, as the server: a big drop left out of the acknowledged lines refuses the commit.
       const unticked = (st.lines ?? []).filter((l) => bigDrop(l) && !acknowledged.includes(l.product_id ?? '')).map((l) => l.description ?? l.code);
       if (unticked.length > 0) {
@@ -1306,6 +1307,14 @@ export function createMockRetail(): RetailApi {
       }
       (st.lines ?? []).forEach((l) => move(st.branch_id ?? BRANCH_A, l.product_id ?? '', toMilli(l.variance_qty ?? '0')));
       st.status = 'committed';
+      return delay({ ...st });
+    },
+    // Issue #656, as the server: a draft ends without moving stock, again is the same, a committed count is refused.
+    discardStocktake: (id) => {
+      const st = stocktakes.get(id);
+      if (!st) return Promise.reject(new RetailError('That could not be found.', 404, 'not_found'));
+      if (st.status === 'committed') return Promise.reject(new RetailError(retailMessage({ code: 'stocktake_committed' }, 409), 409, 'stocktake_committed'));
+      st.status = 'discarded';
       return delay({ ...st });
     },
 

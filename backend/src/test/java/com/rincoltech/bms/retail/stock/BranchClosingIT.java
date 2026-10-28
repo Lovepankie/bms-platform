@@ -439,6 +439,31 @@ class BranchClosingIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.OK);
     }
 
+    /** Issue #656: a discarded count writes nothing later, so it blocks neither a correction of its item nor the closing. */
+    @Test
+    void aDiscardedStockTakeBlocksNeitherACorrectionNorTheClosing() {
+        retail.stockUp(t.secondBranch(), product, "2");
+        UUID draft = RetailTestSupport.id(stocktake(t.secondBranch()));
+        Map<String, Object> correction = Map.of(
+                "branch_id", t.secondBranch(),
+                "product_id", product,
+                "new_qty", "0",
+                "expected_qty", "2",
+                "reason_code", "miscount");
+        ResponseEntity<JsonNode> blocked = retail.postKeyed(
+                "/stock/corrections", correction, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(code(blocked)).isEqualTo("stocktake_in_progress");
+
+        assertThat(retail.post("/stocktakes/" + draft + "/discard", null, ADMIN).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> corrected = retail.postKeyed(
+                "/stock/corrections", correction, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(corrected.getStatusCode()).as("%s", corrected.getBody()).isEqualTo(HttpStatus.CREATED);
+        // The shelves are empty and nothing is left open, so the branch closes with no reason asked.
+        ResponseEntity<JsonNode> closed = close(t.secondBranch(), null);
+        assertThat(closed.getStatusCode()).as("%s", closed.getBody()).isEqualTo(HttpStatus.OK);
+    }
+
     /** Marking a branch as not stocking is refused while goods remain, so the stock is not stranded. */
     @Test
     void notStockingIsRefusedWhileTheBranchHoldsStock() {

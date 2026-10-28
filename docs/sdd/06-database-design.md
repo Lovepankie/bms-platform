@@ -2245,7 +2245,10 @@ was recorded) and, after commit, `committed_variance_qty` (counted less `expecte
 under the balance lock, so movements recorded between count and commit stay in the balance; a
 commit that would leave a balance negative is refused with `stock_moved_since_count`) and the
 `unit_cost_minor` it was valued at. One line per product. Once committed, the stock-take and its
-lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10).
+lines are refused any UPDATE (trigger `retail_stocktake_guard_update`, V14, review F10). Since `V113`
+(issue #656) a draft can also be `discarded` (with `discarded_by` and `discarded_at`, set together with that status):
+it never wrote stock, no longer blocks a correction or the closing of its branch, and is refused any UPDATE as a committed
+one is.
 
 ### `retail_customers` (RLS; `bms_app` SELECT, INSERT, UPDATE)
 

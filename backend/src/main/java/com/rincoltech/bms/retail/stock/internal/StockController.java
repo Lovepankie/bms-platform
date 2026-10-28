@@ -247,4 +247,13 @@ class StockController {
         return service.commit(
                 id, request == null || request.acknowledged() == null ? List.of() : request.acknowledged());
     }
+
+    @PostMapping("/stocktakes/{stocktake_id}/discard")
+    @RequiresPermission("retail.stocktake.commit")
+    @Operation(
+            summary = "End a draft count without writing stock; idempotent, a committed count is refused (issue #656)",
+            operationId = "discardRetailStocktake")
+    Stocktake discard(@PathVariable("stocktake_id") UUID id) {
+        return service.discard(id);
+    }
 }

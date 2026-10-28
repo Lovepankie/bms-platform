@@ -599,6 +599,8 @@ export interface RetailApi {
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   /** Issue #636: `acknowledged` names the big drops ticked on the review; the server refuses with 409 while one is left out. */
   commitStocktake(id: string, acknowledged?: string[]): Promise<Stocktake>;
+  /** Issue #656: ends a draft count without writing stock; a second call returns it unchanged, a committed one is refused with 409. */
+  discardStocktake(id: string): Promise<Stocktake>;
   /** Quick add (issue #632): makes the item and adds its stock at the branch as opening stock in one transaction; takes the Idempotency-Key of its form. */
   quickAdd(body: QuickAddRequest, idempotencyKey: string): Promise<QuickAdd>;
   /** Every product with its balance in each branch the caller may read (#144). */
@@ -1397,6 +1399,9 @@ const realRetail: RetailApi = {
 
   async commitStocktake(id, acknowledged = []) {
     return unwrap(await api.POST('/api/v1/retail/stocktakes/{stocktake_id}/commit', { params: { path: { stocktake_id: id } }, body: { acknowledged } }));
+  },
+  async discardStocktake(id) {
+    return unwrap(await api.POST('/api/v1/retail/stocktakes/{stocktake_id}/discard', { params: { path: { stocktake_id: id } } }));
   },
 
   async quickAdd(body, key) {

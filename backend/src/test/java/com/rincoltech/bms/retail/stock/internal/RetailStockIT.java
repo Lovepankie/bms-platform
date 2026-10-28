@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
@@ -216,6 +217,29 @@ class RetailStockIT extends IntegrationTest {
                 .isEqualTo("draft");
     }
 
+    /** Issue #656: a count with many big drops is refused naming the first five and counting the rest. */
+    @Test
+    void theBigDropRefusalNamesAtMostFiveItems() {
+        List<Map<String, Object>> lines = new ArrayList<>();
+        for (int i = 7; i >= 1; i--) {
+            UUID p = api.product("SKT-15" + i, 400, 600);
+            api.stockUp(t.headOffice(), p, "6");
+            lines.add(Map.of("product_id", p, "counted_qty", "0"));
+        }
+        UUID id = count(lines.toArray(Map<?, ?>[]::new));
+
+        String detail = refused(id, Map.of()).get("detail").asString();
+        assertThat(detail).contains(" and 2 more removes more than half");
+        assertThat(detail.split("SKT-15", -1)).hasSize(6);
+        // The first five by item code, the same on every refusal.
+        assertThat(detail)
+                .contains(
+                        "SKT-151, Test Product SKT-152, Test Product SKT-153, Test Product SKT-154, Test Product SKT-155 and");
+        assertThat(refused(id, Map.of()).get("detail").asString()).isEqualTo(detail);
+        assertThat(api.get("/stocktakes/" + id, ADMIN).getBody().get("status").asString())
+                .isEqualTo("draft");
+    }
+
     /** Issue #636: with every big drop acknowledged the count is committed as before. */
     @Test
     void aBigDropAcknowledgedIsCommitted() {
@@ -250,6 +274,75 @@ class RetailStockIT extends IntegrationTest {
         ResponseEntity<JsonNode> committed = api.post("/stocktakes/" + id + "/commit", Map.of(), ADMIN);
         assertThat(committed.getStatusCode()).as("%s", committed.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(qty()).isEqualTo("5.000");
+    }
+
+    /**
+     * Issue #656: a draft count is discarded without writing stock, by the person who made it or by anyone who may count at
+     * its branch; a second discard returns it unchanged, it can no longer be committed, a committed count is refused, and
+     * the discarded draft no longer blocks a correction or the closing of the branch.
+     */
+    @Test
+    void aDraftCountIsDiscardedOnceAndNeverWritesStock() {
+        api.stockUp(t.headOffice(), product, "10");
+        UUID id = count(Map.of("product_id", product, "counted_qty", "0"));
+        String elsewhere = t.secondBranch().toString();
+
+        // Someone else who may not count at the branch finds no such count; the maker may discard it from anywhere.
+        RetailTestSupport other = new RetailTestSupport(http, t);
+        assertThat(other.call(HttpMethod.POST, "/stocktakes/" + id + "/discard", null, ADMIN, elsewhere, Map.of())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(api.post("/stocktakes/" + id + "/discard", null, SALES).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        ResponseEntity<JsonNode> discarded =
+                api.call(HttpMethod.POST, "/stocktakes/" + id + "/discard", null, ADMIN, elsewhere, Map.of());
+        assertThat(discarded.getStatusCode()).as("%s", discarded.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(discarded.getBody().get("status").asString()).isEqualTo("discarded");
+        assertThat(qty()).isEqualTo("10.000");
+
+        // Idempotent: the same count back, audited once.
+        ResponseEntity<JsonNode> again = other.post("/stocktakes/" + id + "/discard", null, ADMIN);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(again.getBody().get("status").asString()).isEqualTo("discarded");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = ? AND entity_id = ?")
+                        .params(t.tenantId(), "retail.stocktake.discarded", id)
+                        .query(Long.class)
+                        .single())
+                .isEqualTo(1);
+
+        JsonNode refused = refused(id, Map.of("acknowledged", List.of(product)));
+        assertThat(refused.get("code").asString()).isEqualTo("stocktake_discarded");
+        assertThat(qty()).isEqualTo("10.000");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_stocktakes WHERE status = 'draft' AND branch_id = ?")
+                        .param(t.headOffice())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+
+        UUID done = count(Map.of("product_id", product, "counted_qty", "9"));
+        assertThat(api.post("/stocktakes/" + done + "/commit", Map.of(), ADMIN).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> late = api.post("/stocktakes/" + done + "/discard", null, ADMIN);
+        assertThat(late.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(late.getBody().get("code").asString()).isEqualTo("stocktake_committed");
+        assertThat(api.get("/stocktakes/" + done, ADMIN).getBody().get("status").asString())
+                .isEqualTo("committed");
+    }
+
+    /** Issue #656: a discarded count is as final as a committed one, for the application and the owner alike. */
+    @Test
+    void aDiscardedCountCannotChange() {
+        UUID id = count(Map.of("product_id", product, "counted_qty", "2"));
+        api.post("/stocktakes/" + id + "/discard", null, ADMIN);
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE retail_stocktakes SET status = 'draft', discarded_at = NULL, discarded_by = NULL"
+                                + " WHERE id = ?")
+                        .param(id)
+                        .update())
+                .rootCause()
+                .hasMessageContaining("discarded stock-take is not allowed");
     }
 
     private UUID count(Map<?, ?>... lines) {

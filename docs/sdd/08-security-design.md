@@ -694,6 +694,8 @@ Notes:
   the correction (ADR-044 decision 5); ADR-091 (issue #343) later lets a business switch an approval on for the correction (section
   8.4), and the void of a purchase stays without one. The audit entries
   `retail.purchase.voided`, `retail.stock.corrected` and `retail.product.updated` (with the old and new category) carry the reason.
+- Discarding a draft stock count (`POST /retail/stocktakes/{id}/discard`, issue #656) adds no permission: it needs `retail.stocktake.commit`, and
+  the count is the caller's own or at a branch where they hold that permission (404 otherwise). The audit entry is `retail.stocktake.discarded`.
 - The entry warnings (issue #353, ADR-093, FR-RET-74 and FR-RET-75) add no permission, so the matrix is unchanged. `GET
   /retail/products/{id}/entry-norms` and `POST /retail/entry-warnings/confirmations` need `retail.stock.read`, which every retail role
   that enters stock or sales holds; the last selling price is in the norms only for a caller who sees prices (ADR-055), so a storekeeper
