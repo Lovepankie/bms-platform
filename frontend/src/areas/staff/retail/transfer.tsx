@@ -7,14 +7,14 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { ToStock } from './analytics-ui';
 import { parseQty, showQty } from './maths';
-import { buildTransfer, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
+import { buildTransfer, lineMilli, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
 import { TRANSFER, TRANSFER_RECEIPT, UNITS, capabilityOn, holdsAt, needsOf } from './permissions';
-import { BranchRequired, Gate, NoStockHere, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
+import { BranchRequired, Gate, NoStockHere, PacksAndPiecesFields, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { useItemAdded } from './toast';
-import { chosenPack } from './units-state';
+import { chosenPack, packsAndPiecesProblem, standardPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
@@ -118,7 +118,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   // Issue #353: each line against the item's own moves (or its purchases while it has few moves), said before saving, never blocking.
   const norms = useEntryNorms(draft.lines.map((l) => l.product.id));
   const warnings = draft.lines.flatMap((l, i) => entryWarnings(norms(l.product.id), {
-    screen: 'move', product: l.product, lineKey: l.product.id ?? String(i), qtyMilli: parseQty(l.qty), qtyFieldId: `tq-${i}`,
+    screen: 'move', product: l.product, lineKey: l.product.id ?? String(i), qtyMilli: lineMilli(l), qtyFieldId: `tq-${i}`,
   }));
   const entry = useEntryChecks('move', fromBranchId, warnings, () => save.mutate(), draft.lines);
 
@@ -153,14 +153,27 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
       {draft.lines.length === 0 && <p>No items yet. Type an item above and tap it in the list, or scan it.</p>}
       {draft.lines.map((l, i) => {
         const hint = transferLineHint(l);
+        const change = (patch: Partial<TransferDraft['lines'][number]>) => setDraft((d) => ({ ...d, lines: d.lines.map((x, n) => (n === i ? { ...x, ...patch } : x)) }));
+        // Issue #650: an item with a standard pack is moved in cartons and pieces, or pieces alone, with the total in pieces.
+        const pack = standardPack(l.product);
+        const unit = l.product.unit;
+        const inPacks = pack?.unit && unit ? { unit: pack.unit, factor: pack.factor } : null;
+        // The fields say a quantity they cannot read themselves; the line's hint says the rest, such as more than the branch holds.
+        const unreadable = inPacks && unit ? packsAndPiecesProblem(l.packs ?? '', l.qty, unit, inPacks.unit) !== null : false;
         return (
           <div key={l.product.id} className="rt-card line-card">
             {flashOf(l.product.id ?? '')}
-            <strong>{l.product.description}</strong>
-            <label htmlFor={`tq-${i}`}>Quantity ({l.product.unit})</label>
-            <input id={`tq-${i}`} inputMode="decimal" value={l.qty} aria-invalid={hint !== null}
-              onChange={(e) => setDraft((d) => ({ ...d, lines: d.lines.map((x, n) => (n === i ? { ...x, qty: e.target.value } : x)) }))} />
-            {hint && <p role="alert" className="rt-flag">{hint}</p>}
+            <strong id={`tq-${i}-name`}>{l.product.description}</strong>
+            {inPacks && unit ? (
+              <PacksAndPiecesFields id={`tq-${i}`} nameId={`tq-${i}-name`} unit={unit} pack={inPacks} totalWord="Moving"
+                packs={l.packs ?? ''} pieces={l.qty} onPacks={(v) => change({ packs: v })} onPieces={(v) => change({ qty: v })} invalid={hint !== null && !unreadable} />
+            ) : (
+              <>
+                <label htmlFor={`tq-${i}`}>Quantity ({l.product.unit})</label>
+                <input id={`tq-${i}`} inputMode="decimal" value={l.qty} aria-invalid={hint !== null} onChange={(e) => change({ qty: e.target.value })} />
+              </>
+            )}
+            {hint && !unreadable && <p role="alert" className="rt-flag">{hint}</p>}
             {entry.notes(l.product.id ?? String(i))}
             <button type="button" aria-label={`Remove ${l.product.description}`}
               onClick={() => setDraft((d) => ({ ...d, lines: d.lines.filter((_, n) => n !== i) }))}>Remove</button>

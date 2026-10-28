@@ -534,6 +534,14 @@ one pack), change the number, switch a pack off. The unit choice on the sale scr
 whoever manages the catalogue (`capability-units`: an introduction and the Catalogue tile); `units` is marked ready in `capabilities-state.ts`.
 It adds no routes, so there is no new breadcrumb: the item screen already adds the item's name as its last crumb.
 
+**Stock in packs and pieces (#650, ADR-103).** An item with a standard pack (the pack the shop counts and sells in, ADR-103, sent as `standard_pack` on the stock rows and `standard` on its packs) shows
+its stock on Stock as "5 Cartons and 7 Pieces" with "(127 Pieces)" under it; less than a carton reads in pieces only, and below zero reads "1 Carton
+and 3 Pieces short (27 Pieces short)"; on a wide screen each branch column reads the same way. On Count stock and Move stock the line has two boxes, Cartons and Pieces, each with its own label; the person types cartons and
+the pieces left, or pieces alone, and the total in pieces shows under the boxes before Review the difference or Move stock. A scan still adds to the
+pieces. What is sent is pieces. A count keeps the pack its cartons were typed in: if the pack changes while the sheet is open, the line says so and the count stays as typed. A big drop on the review says what it removes in cartons and pieces, and still asks for its tick (#635). One
+formatter and one parser (`packsAndPieces`, `packsAndPiecesMilli` in `units-state.ts`) and one entry (`PacksAndPiecesFields` in `ui.tsx`) serve all
+three screens; `layout/stock-packs.layout.test.ts` lays them out, All branches on a phone too, at 360px at font scale 1 and 2.
+
 ## Price lists (#195, ADR-033)
 
 Two screens exist while `/me` lists `price_lists` and the user holds `retail.pricelist.manage` (and, for the first, `retail.stock.read`):

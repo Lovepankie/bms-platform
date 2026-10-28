@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Product, SaleLine } from '../../../api/retail';
+import type { Pack, Product, SaleLine } from '../../../api/retail';
 import { buildPurchase, restockLineProblem, restockTotal, withUnit as restockWithUnit, type RestockLine } from './restock';
 import { buildSaleRequest, defaultPrice, draftTotal, lineHint, newLine, withUnit, type Draft } from './sale-state';
 import { factorProblem } from './catalogue-packs';
-import { baseCostMinor, baseQtyMilli, enteredPriceMinor, enteredQty, packPriceMinor } from './units-state';
+import { baseCostMinor, baseQtyMilli, enteredPriceMinor, enteredQty, packPriceMinor, packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, samePack, standardPack } from './units-state';
 
 // Units of measure (ADR-033, issue #194): the forms convert with the same rules as the server
 // (Quantities.java) so a line is judged before it is sent. Names and amounts are fabricated.
@@ -138,5 +138,62 @@ describe('the restock form with a pack', () => {
     const odd: Product = { ...pen, packs: [{ id: 'k3', product_id: 'e1', unit_id: BOX, unit: 'box', factor: '1.500', active: true, version: 1 }] };
     expect(restockLineProblem({ product: odd, unitId: BOX, cost: '100', sell: '100', qtyByBranch: { b1: '0.001' } })).toContain('does not convert exactly');
     expect(restockLineProblem({ product: odd, unitId: BOX, cost: '100', sell: '100', qtyByBranch: { b1: '3' } })).toBeNull();
+  });
+});
+
+describe('stock in packs and pieces (issue #650)', () => {
+  const carton = { unit: 'Carton', factor: '24.000' };
+  it('shows whole packs, the pieces left and the total', () => {
+    expect(packsAndPieces('127.000', 'Piece', carton)).toBe('5 Cartons and 7 Pieces (127 Pieces)');
+    expect(packsAndPieces('24.000', 'Piece', carton)).toBe('1 Carton (24 Pieces)');
+    expect(packsAndPieces('25.000', 'Piece', carton)).toBe('1 Carton and 1 Piece (25 Pieces)');
+    expect(packsAndPieces('48.500', 'Piece', carton)).toBe('2 Cartons and 0.5 Pieces (48.5 Pieces)');
+  });
+  it('reads part of a pack and nothing in the base unit only', () => {
+    expect(packsAndPieces('7.000', 'Piece', carton)).toBe('7 Pieces');
+    expect(packsAndPieces('1.000', 'Piece', carton)).toBe('1 Piece');
+    expect(packsAndPieces('0.000', 'Piece', carton)).toBe('0 Pieces');
+  });
+  it('says how far short a negative stock is', () => {
+    expect(packsAndPieces('-27.000', 'Piece', carton)).toBe('1 Carton and 3 Pieces short (27 Pieces short)');
+    expect(packsAndPieces('-3.000', 'Piece', carton)).toBe('3 Pieces short');
+  });
+  it('shows an item with no pack as it always did', () => {
+    expect(packsAndPieces('127.000', 'Piece', undefined)).toBe('127 Piece');
+    expect(packsAndPieces('5.000', 'Piece', { unit: 'Pair', factor: '1.000' })).toBe('5 Piece');
+    expect(packsAndPieces('5.000', undefined, carton)).toBe('5');
+  });
+  it('works with a pack of a decimal size', () => {
+    expect(packsAndPieces('26.000', 'Kg', { unit: 'Sack', factor: '12.500' })).toBe('2 Sacks and 1 Kg (26 Kgs)');
+  });
+  it('reads packs and pieces as one quantity in pieces', () => {
+    expect(packsAndPiecesMilli('5', '7', carton)).toBe(127_000);
+    expect(packsAndPiecesMilli('5', '', carton)).toBe(120_000);
+    expect(packsAndPiecesMilli('', '127', carton)).toBe(127_000);
+    expect(packsAndPiecesMilli('0', '0', carton)).toBe(0);
+    expect(packsAndPiecesMilli('2', '0.5', carton)).toBe(48_500);
+    expect(packsAndPiecesMilli('', '', carton)).toBeNull();
+    expect(packsAndPiecesMilli('1.5', '', carton)).toBeNull();
+    expect(packsAndPiecesMilli('2', 'x', carton)).toBeNull();
+    expect(packsAndPiecesMilli('99999999999999', '', carton)).toBeNull();
+  });
+  it('says plainly what cannot be read', () => {
+    expect(packsAndPiecesProblem('1.5', '', 'Piece', 'Carton')).toBe('Type whole Cartons, and the rest in Pieces.');
+    expect(packsAndPiecesProblem('2', 'x', 'Piece', 'Carton')).toBe('Type Pieces as a number, with at most three decimals.');
+    expect(packsAndPiecesProblem('2', '3', 'Piece', 'Carton')).toBeNull();
+  });
+  it('takes the pack the server marks standard, while it is active and holds more than one', () => {
+    const [carton, box] = (pen.packs ?? []) as [Pack, Pack];
+    expect(standardPack(pen)).toBeUndefined();
+    expect(standardPack({ ...pen, packs: [{ ...carton, standard: true }, box] })?.unit).toBe('carton');
+    expect(standardPack({ ...pen, packs: [carton, { ...box, standard: true }] })).toBeUndefined();
+    expect(standardPack({ ...pen, packs: [{ ...carton, factor: '1.000', standard: true }] })).toBeUndefined();
+    expect(standardPack({ ...pen, packs: undefined })).toBeUndefined();
+  });
+  it('tells a pack changed in unit or size from the same one', () => {
+    expect(samePack({ unit: 'Carton', factor: '24' }, { unit: 'Carton', factor: '24.000' })).toBe(true);
+    expect(samePack({ unit: 'Carton', factor: '24.000' }, { unit: 'Carton', factor: '30.000' })).toBe(false);
+    expect(samePack({ unit: 'Carton', factor: '24.000' }, { unit: 'Dozen', factor: '24.000' })).toBe(false);
+    expect(samePack({ unit: 'Carton', factor: '24.000' }, undefined)).toBe(false);
   });
 });

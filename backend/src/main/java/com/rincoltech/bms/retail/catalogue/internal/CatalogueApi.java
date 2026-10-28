@@ -1275,7 +1275,13 @@ final class CatalogueApi {
                             "True when the pack has its own selling price, sent to every caller (the amount only to"
                                     + " one who may see prices): a new usual size or making it buy only then needs"
                                     + " retail.price.edit (issue #624)")
-            boolean hasOwnPrice) {
+            boolean hasOwnPrice,
+
+            @Schema(
+                    description =
+                            "Issue #650 (ADR-103): true for the item's standard pack, the one its stock is shown and"
+                                    + " counted in; at most one pack of an item")
+            boolean standard) {
 
         /** True when the pack may be used on a sale, a scan at the till, a quotation or an order. */
         boolean sells() {
@@ -1296,7 +1302,8 @@ final class CatalogueApi {
                     prices ? sellMinor : null,
                     prices ? suggestedSellMinor : null,
                     prices && cost && sells() ? belowCost : null,
-                    hasOwnPrice);
+                    hasOwnPrice,
+                    standard);
         }
     }
 

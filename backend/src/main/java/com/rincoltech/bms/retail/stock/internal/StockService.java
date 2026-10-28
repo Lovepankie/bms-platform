@@ -17,6 +17,7 @@ import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
 import com.rincoltech.bms.retail.stock.RetailBooks.Posting;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
+import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import com.rincoltech.bms.retail.stock.StockLedger;
 import com.rincoltech.bms.retail.stock.StockLedger.Movement;
 import com.rincoltech.bms.retail.stock.internal.StockApi.AllBranchesPage;
@@ -75,6 +76,7 @@ class StockService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
+    private final RetailCapabilities capabilities;
 
     StockService(
             StockRepository repo,
@@ -84,7 +86,8 @@ class StockService {
             RetailBranchContext branches,
             CurrentTenant tenant,
             BusinessClock clock,
-            AuditLog audit) {
+            AuditLog audit,
+            RetailCapabilities capabilities) {
         this.repo = repo;
         this.ledger = ledger;
         this.catalogue = catalogue;
@@ -93,6 +96,7 @@ class StockService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
+        this.capabilities = capabilities;
     }
 
     /**
@@ -147,6 +151,7 @@ class StockService {
         Map<UUID, Map<UUID, BigDecimal>> held =
                 repo.balances(page.stream().map(ProductTotal::id).toList(), ids);
         boolean cost = ids.stream().allMatch(b -> principal.may(PROFIT_READ, b));
+        boolean packs = capabilities.enabled(RetailCapabilities.UNITS);
         List<AllBranchesRow> items = page.stream()
                 .map(p -> new AllBranchesRow(
                         p.id(),
@@ -165,7 +170,8 @@ class StockService {
                                             held.getOrDefault(p.id(), Map.of()).getOrDefault(b, BigDecimal.ZERO);
                                     return new BranchBalance(b, Quantities.format(q), q.signum() < 0);
                                 })
-                                .toList()))
+                                .toList(),
+                        packs ? p.standardPack() : null))
                 .toList();
         String next = more
                 ? Search.wrap(
@@ -218,10 +224,11 @@ class StockService {
         boolean cost = mayReadCost(branch);
         // ADR-055: a storekeeper sees no selling price.
         boolean price = RetailCatalogue.maySeePrices(CurrentPrincipal.require());
+        boolean packs = capabilities.enabled(RetailCapabilities.UNITS);
         return new StockPage(
                 branch,
                 items.stream()
-                        .map(r -> cost && price
+                        .map(r -> cost && price && packs
                                 ? r
                                 : new StockRow(
                                         r.productId(),
@@ -234,7 +241,8 @@ class StockService {
                                         r.negative(),
                                         price ? r.sellMinor() : null,
                                         cost ? r.costMinor() : null,
-                                        r.reservedQty()))
+                                        r.reservedQty(),
+                                        packs ? r.standardPack() : null))
                         .toList(),
                 Quantities.format(lowStock()),
                 next);

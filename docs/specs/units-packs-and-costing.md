@@ -1,6 +1,6 @@
 # Units, packs, buying and selling in packs, and profit per piece
 
-Status: decided (the owner, 23 and 24 Oct 2026: D14, D16, D22 to D26 and D32 yes). Built so far: average cost (#529, ADR-079, V94), shop EAN-13 barcodes (#528, V93), the pack size per delivery on Buy stock and goods received (#554, ADR-082, no migration), selling packs with their own prices (#624, ADR-099, V110), and Set up your shop, the starting templates of section 9 step 5 (#625, ADR-100, V111). It follows the set-up of an electronics shop in the pilot.
+Status: decided (the owner, 23 and 24 Oct 2026: D14, D16, D22 to D26 and D32 yes). Built so far: average cost (#529, ADR-079, V94), shop EAN-13 barcodes (#528, V93), the pack size per delivery on Buy stock and goods received (#554, ADR-082, no migration), selling packs with their own prices (#624, ADR-099, V110), and Set up your shop, the starting templates of section 9 step 5 (#625, ADR-100, V111), and stock shown in packs and pieces (#650, ADR-103). It follows the set-up of an electronics shop in the pilot.
 Applies to every retail business: small shops, wholesalers and the ones in between.
 
 ## 1. The problem, in the shop owner's words
@@ -146,7 +146,7 @@ Rule: every label is a word a shop attendant in Kampala uses. There is a glossar
 1. **Average cost per piece** (moving weighted average), with sale lines keeping their cost. Built in #529 (ADR-079, V94). Everything else depends on profit being right.
 2. **Pack size per delivery on Buy stock.** The restock line keeps its own size. Includes "use this size from now on".
 3. **Selling packs with their own prices**, including half carton and dozen. Walk-in sales use them, the below-cost warning applies, and price lists still win. Built in #624 (ADR-099, V110): each pack says whether it is for buying, selling or both; Edit item shows the packs in one table (pack, size, selling price) with the suggested price and Below cost.
-4. **Stock shown in packs and pieces** on Stock, Count stock and Move stock.
+4. **Stock shown in packs and pieces** on Stock, Count stock and Move stock. Built in #650 (ADR-103, no migration): the item's standard pack is the pack the shop counts and sells in (a selling pack whose unit has a usual pack, else the biggest selling pack, else the biggest pack; a tie goes to the unit id); Stock reads "5 Cartons and 7 Pieces (127 Pieces)", and Count stock and Move stock take cartons and pieces, or pieces alone, show the total in pieces, and still save pieces.
 5. **Starting templates** ("How do you buy and sell this?") and the Ugandan unit list. Built in #625 (ADR-100, V111) as **Set up your shop**, reached from the first-run card (#615) and from Items and categories:
    - The owner answers "What kind of shop is it?": bedding and home, electrical and electronics, hardware and building, phones and accessories, clothing and shoes, supermarket and general, pharmacy and cosmetics, or Something else (just the common units).
    - Each kind lists its categories (the app makes their code letters, section 6), its units, and its packs with the usual size, such as roll = 100 metres and box = 50 pieces for hardware. Each is ticked; the owner unticks what they do not sell, may change a pack's size, chooses what each pack is **Used for** (`both`, `sell` or `buy`, the purpose of a pack on an item, ADR-099), then taps **Add these**.

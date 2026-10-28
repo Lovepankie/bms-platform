@@ -516,7 +516,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('11'));
     scan('TEST-LAMP-BOX');
     await waitFor(() => expect((document.getElementById('tq-0') as HTMLInputElement).value).toBe('21'));
-    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(1);
+    expect(document.querySelectorAll('.line-card')).toHaveLength(1);
   });
 
   it('refuses a barcode on a pack that was switched off, and moves no single piece in its place', async () => {
@@ -527,7 +527,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     screenOf(<TransferForm fromBranchId={BRANCH} />, 'admin', BRANCH, ['units']);
     scan('TEST-LAMP-BOX');
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('switched off'));
-    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
+    expect(document.querySelectorAll('.line-card')).toHaveLength(0);
   });
 
   it('refuses a match on a pack that is switched off with the pack message, and moves no single piece in its place', async () => {
@@ -538,7 +538,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     screenOf(<TransferForm fromBranchId={BRANCH} />, 'admin', BRANCH, ['units']);
     scan('TEST-LAMP-BOX');
     await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain(PACK_UNUSABLE));
-    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
+    expect(document.querySelectorAll('.line-card')).toHaveLength(0);
   });
 
   it('refuses a pack barcode while pack sizes are off', async () => {
@@ -548,7 +548,7 @@ describe('FR-RET-68 scanning a pack on the move stock form', () => {
     screenOf(<TransferForm fromBranchId={BRANCH} />);
     scan('TEST-LAMP-BOX');
     await waitFor(() => expect(screen.getByTestId('scan-refused').textContent).toContain('pack that is switched off'));
-    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(0);
+    expect(document.querySelectorAll('.line-card')).toHaveLength(0);
   });
 });
 

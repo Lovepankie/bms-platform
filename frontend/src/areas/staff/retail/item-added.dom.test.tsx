@@ -140,7 +140,7 @@ describe('#498 Move stock', () => {
     await pickItem(NAME);
     await waitFor(() => expect(toast()?.className).toBe('toast toast-info'));
     expect(toast()?.textContent).toBe(`${NAME} is already on the move. Change its quantity below.`);
-    expect(document.querySelectorAll('[id^="tq-"]')).toHaveLength(1);
+    expect(document.querySelectorAll('.line-card')).toHaveLength(1);
   });
 });
 

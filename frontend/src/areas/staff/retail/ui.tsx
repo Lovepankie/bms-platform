@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { TOAST_MS, useToast as useToastOf } from './toast';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
@@ -12,7 +12,9 @@ import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { ItemPhoto, shownPhoto } from './item-photo';
-import { showQty } from './maths';
+import { parseCount, qtyString, showQty } from './maths';
+import { packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem } from './units-state';
+import { plural } from '../../../app/glossary';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
 import { keptWords } from './orders-state';
 import { NoAccess } from '../../../app/ui/EmptyState';
@@ -321,6 +323,58 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
       }}
     />
     {notFound && (nothing || held) && notFound(search.term, search.clear, setHeld)}
+    </>
+  );
+}
+
+/**
+ * Issue #650: the quantity of an item with a standard pack on Count stock and Move stock, typed as whole packs and the pieces
+ * left, or as pieces alone, with the total in pieces under it before anything is sent. Each box has its own label and is
+ * named with the item (`nameId`); the pieces box takes `id`, so a scan, a warning and the cursor find it as before.
+ */
+export function PacksAndPiecesFields({ id, nameId, unit, pack, packs, pieces, onPacks, onPieces, onBlur, onPiecesKeyDown, totalWord, after, invalid = false }: {
+  id: string;
+  nameId: string;
+  unit: string;
+  pack: { unit: string; factor?: string };
+  packs: string;
+  pieces: string;
+  onPacks: (text: string) => void;
+  onPieces: (text: string) => void;
+  onBlur?: () => void;
+  onPiecesKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => void;
+  /** "Counted" or "Moving", before the total. */
+  totalWord: string;
+  /** Shown at the end of the row, such as the 0 button of a count. */
+  after?: ReactNode;
+  /** The quantity is refused for a reason of its own, such as more than the branch holds: both boxes are marked. */
+  invalid?: boolean;
+}) {
+  const problem = packsAndPiecesProblem(packs, pieces, unit, pack.unit);
+  const total = problem === null ? packsAndPiecesMilli(packs, pieces, pack) : null;
+  // Going from one box to the other is not leaving the quantity: a count line moves to Counted items only once both are done.
+  const leave = (other: string) => (e: FocusEvent<HTMLInputElement>) => { if (e.relatedTarget?.id !== other) onBlur?.(); };
+  return (
+    <>
+      <div className="count-entry count-packs">
+        <span className="count-part">
+          <label id={`${id}-packs-label`} htmlFor={`${id}-packs`}>{plural(pack.unit)}</label>
+          <input id={`${id}-packs`} inputMode="numeric" value={packs} aria-labelledby={`${nameId} ${id}-packs-label`}
+            aria-invalid={invalid || (packs.trim() !== '' && !/^\d+$/.test(packs.trim()))} onChange={(e) => onPacks(e.target.value)} onBlur={leave(id)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById(id)?.focus(); } }} />
+        </span>
+        <span className="count-part">
+          <label id={`${id}-label`} htmlFor={id}>{plural(unit)}</label>
+          <input id={id} inputMode="decimal" value={pieces} aria-labelledby={`${nameId} ${id}-label`} aria-describedby={`${id}-total`}
+            aria-invalid={invalid || (pieces.trim() !== '' && parseCount(pieces) === null)} onChange={(e) => onPieces(e.target.value)} onBlur={leave(`${id}-packs`)}
+            onKeyDown={onPiecesKeyDown} />
+        </span>
+        {after}
+      </div>
+      <p id={`${id}-total`} className="hint count-total" aria-live="polite">
+        {total !== null ? `${totalWord} ${packsAndPieces(qtyString(total), unit, pack)}` : `Type the ${plural(pack.unit)} and the ${plural(unit)} left, or all of it in ${plural(unit)}.`}
+      </p>
+      {problem && <p role="alert" className="rt-flag">{problem}</p>}
     </>
   );
 }

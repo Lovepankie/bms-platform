@@ -5,13 +5,14 @@ order: 10
 module: retail
 needs: retail.stocktake.commit, retail.stock.read
 screens: /staff/retail/stocktake
-words: count, counting, shelf, check stock, missing, stock check, difference, commit the count, not counted, empty
+words: count, counting, shelf, check stock, missing, stock check, difference, commit the count, not counted, empty, cartons and pieces, carton, pieces
 ---
 Count what is on the shelf and enter it. BMS shows the difference before anything changes.
 
 1. Choose the branch you are counting with **Switch branch**, then open **Count stock** under Stock.
    ![Open Count stock](count-stock-1.webp)
 2. Find each item by typing part of its name, or scan it, or work down the list **Not counted yet**. Type how many you counted, or tap 0 for an item that is gone. Leave an item empty if you did not count it: it stays as it is.
+   For an item kept in cartons and pieces, type the full cartons and the pieces left, or all of it in pieces. BMS shows the total in pieces under the boxes, and saves the count in pieces.
    ![Type how many you counted](count-stock-2.webp)
 3. Tap **Review the difference**. You see each item where the count and the records differ.
    ![Review the difference](count-stock-3.webp)

@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.catalogue.internal;
 
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Category;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.Pack;
 import com.rincoltech.bms.retail.catalogue.internal.CatalogueApi.PriceChange;
@@ -618,7 +619,9 @@ class CatalogueRepository {
                        (SELECT sum(b.qty * coalesce(b.avg_cost_minor, p.cost_minor)) / sum(b.qty)
                           FROM retail_stock_balances b
                          WHERE b.tenant_id = k.tenant_id AND b.product_id = k.product_id AND b.qty > 0),
-                       p.cost_minor)) AS below_cost
+                       p.cost_minor)) AS below_cost,
+                   k.id IS NOT DISTINCT FROM (SELECT pack_id FROM (""" + RetailCatalogue.standardPackSql("p") + """
+                   ) sp) AS standard
               FROM retail_product_units k JOIN retail_units u ON u.id = k.unit_id
               JOIN retail_products p ON p.id = k.product_id
             """;
@@ -636,7 +639,8 @@ class CatalogueRepository {
                 rs.getObject("sell_minor", Long.class),
                 rs.getObject("suggested_sell_minor", Long.class),
                 rs.getObject("below_cost", Boolean.class),
-                rs.getObject("sell_minor") != null);
+                rs.getObject("sell_minor") != null,
+                rs.getBoolean("standard"));
     }
 
     List<Pack> packs(UUID productId) {

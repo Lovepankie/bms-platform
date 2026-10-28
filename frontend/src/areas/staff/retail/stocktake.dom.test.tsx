@@ -138,7 +138,7 @@ describe('counting the sheet', () => {
     expect(createStocktake).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Review the difference anyway' }));
     await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
-    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'I-1', counted_qty: '0' }] });
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'I-1', counted_qty: '0.000' }] });
   });
 
   it('on Enter moves the counted line up and the cursor to the next line not counted yet', async () => {
@@ -354,6 +354,116 @@ describe('an item left empty', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review the difference anyway' }));
     await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
-    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'A-1', counted_qty: '7' }] });
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'A-1', counted_qty: '7.000' }] });
+  });
+});
+
+// Issue #650: an item with a standard pack is counted in cartons and pieces, or pieces alone; the total in pieces shows before
+// Review the difference, what is sent is pieces, and a big drop (#635) says what it removes in cartons and pieces.
+describe('counting in cartons and pieces', () => {
+  const carton = { unit: 'Carton', factor: '24.000' };
+  const soap: StockRow = { ...row('S-1', 'Test Soap', '130.000'), unit: 'Piece', standard_pack: carton };
+  const lamp = row('A-1', 'Test Lamp Active', '5.000');
+
+  it('takes cartons and pieces, shows the total in pieces and sends pieces', async () => {
+    listStock.mockResolvedValue([soap, lamp]);
+    createStocktake.mockResolvedValue({ id: 'st1', status: 'draft', lines: [] });
+    open();
+    await screen.findByText(EMPTY);
+    const cartons = screen.getByRole('textbox', { name: 'Test Soap Cartons' }) as HTMLInputElement;
+    const pieces = screen.getByRole('textbox', { name: 'Test Soap Pieces' }) as HTMLInputElement;
+    expect(document.getElementById('count-S-1-total')?.textContent).toBe('Type the Cartons and the Pieces left, or all of it in Pieces.');
+    fireEvent.change(cartons, { target: { value: '5' } });
+    fireEvent.change(pieces, { target: { value: '7' } });
+    expect(document.getElementById('count-S-1-total')?.textContent).toBe('Counted 5 Cartons and 7 Pieces (127 Pieces)');
+    // An item with no pack keeps its one box.
+    expect(screen.getByLabelText('Test Lamp Active (piece)')).toBeTruthy();
+    fireEvent.change(document.getElementById('count-A-1') as HTMLInputElement, { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (2 counted)' }));
+    await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'S-1', counted_qty: '127.000' }, { product_id: 'A-1', counted_qty: '5.000' }] });
+  });
+
+  it('takes pieces alone, and refuses part of a carton in plain words', async () => {
+    listStock.mockResolvedValue([soap]);
+    createStocktake.mockResolvedValue({ id: 'st1', status: 'draft', lines: [] });
+    open();
+    await screen.findByText(EMPTY);
+    const cartons = screen.getByRole('textbox', { name: 'Test Soap Cartons' }) as HTMLInputElement;
+    fireEvent.change(screen.getByRole('textbox', { name: 'Test Soap Pieces' }), { target: { value: '130' } });
+    expect(document.getElementById('count-S-1-total')?.textContent).toBe('Counted 5 Cartons and 10 Pieces (130 Pieces)');
+    fireEvent.change(cartons, { target: { value: '1.5' } });
+    expect(screen.getByText('Type whole Cartons, and the rest in Pieces.').getAttribute('role')).toBe('alert');
+    expect(cartons.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
+    expect(createStocktake).not.toHaveBeenCalled();
+    fireEvent.change(cartons, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
+    await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'S-1', counted_qty: '130.000' }] });
+  });
+
+  it('counts 0 with the 0 button, emptying the cartons', async () => {
+    listStock.mockResolvedValue([soap]);
+    open();
+    await screen.findByText(EMPTY);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Test Soap Cartons' }), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Count 0 of Test Soap' }));
+    expect((screen.getByRole('textbox', { name: 'Test Soap Cartons' }) as HTMLInputElement).value).toBe('');
+    expect(document.getElementById('count-S-1-total')?.textContent).toBe('Counted 0 Pieces');
+    expect(heading(/^Counted items \(1\)$/)).toBeTruthy();
+  });
+
+  it('says what a big drop removes in cartons and pieces, and still asks for the tick', async () => {
+    listStock.mockResolvedValue([soap]);
+    const draft = { id: 'st1', status: 'draft', lines: [{ product_id: 'S-1', description: 'Test Soap', expected_qty: '130.000', counted_qty: '24.000', variance_qty: '-106.000' }] };
+    createStocktake.mockResolvedValue(draft);
+    commitStocktake.mockResolvedValue({ ...draft, status: 'committed' });
+    open();
+    await screen.findByText(EMPTY);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Test Soap Cartons' }), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
+    await screen.findByRole('heading', { name: 'Review the difference' });
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'S-1', counted_qty: '24.000' }] });
+    expect(screen.getByTestId('count-drop-S-1').textContent).toContain('This removes 4 Cartons and 10 Pieces (106 Pieces). Is that right?');
+    fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
+    expect(commitStocktake).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Soap is right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
+    await waitFor(() => expect(commitStocktake).toHaveBeenCalledWith('st1', ['S-1']));
+  });
+});
+
+// Review of #654: a count keeps the pack its cartons were typed in. The stock list read again (window focus, another change)
+// with the carton switched off or resized never reads the same number in another size, nor drops the cartons.
+describe('a pack that changes while counting', () => {
+  const soap: StockRow = { ...row('S-1', 'Test Soap', '130.000'), unit: 'Piece', standard_pack: { unit: 'Carton', factor: '24.000' } };
+
+  it.each([
+    ['the carton is switched off and a dozen is the pack now', { ...soap, standard_pack: { unit: 'Dozen', factor: '12.000' } }],
+    ['the item has no pack any more', { ...soap, standard_pack: undefined }],
+  ])('keeps 5 Cartons and 7 Pieces as 127 when %s', async (_, after) => {
+    listStock.mockResolvedValue([soap]);
+    createStocktake.mockResolvedValue({ id: 'st1', status: 'draft', lines: [] });
+    const me = mockMe('admin');
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <StaffContext.Provider value={{ me, branch: me.branches?.[0]?.id ?? '' }}>
+          <StocktakePage />
+        </StaffContext.Provider>
+      </QueryClientProvider>,
+    );
+    await screen.findByText(EMPTY);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Test Soap Cartons' }), { target: { value: '5' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Test Soap Pieces' }), { target: { value: '7' } });
+    listStock.mockResolvedValue([after]);
+    await client.refetchQueries({ queryKey: ['retail', 'stock'] });
+    await screen.findByText('Counted in Cartons of 24, as when you started. This item\'s pack has changed since.');
+    expect((screen.getByRole('textbox', { name: 'Test Soap Cartons' }) as HTMLInputElement).value).toBe('5');
+    expect(document.getElementById('count-S-1-total')?.textContent).toBe('Counted 5 Cartons and 7 Pieces (127 Pieces)');
+    fireEvent.click(screen.getByRole('button', { name: 'Review the difference (1 counted)' }));
+    await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1));
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'S-1', counted_qty: '127.000' }] });
   });
 });

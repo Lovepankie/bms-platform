@@ -8,7 +8,8 @@ import { retail, type AllBranchesStock, type StockLevel, type StockRow } from '.
 import { branchLabel } from '../../../auth/branch';
 import { useCrumbTail } from '../../../components/breadcrumbs';
 import { GroupControls, GroupedBodies, GroupedCards, sameUnitQty, useCategoryGroups } from './category-groups';
-import { lineTotalMinor, milliOf, showQty } from './maths';
+import { lineTotalMinor, milliOf } from './maths';
+import { packsAndPiecesParts, type PackSize } from './units-state';
 import { EmptyState, SkeletonList } from '../../../components/states';
 import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { CorrectItem, mayCorrect } from './stock-correct';
@@ -60,8 +61,8 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
           )}
         </td>
         {!phone && !grouping && <td>{r.category}</td>}
-        <td className="num">
-          {showQty(r.qty ?? '0')} {r.unit}
+        <td className={r.standard_pack ? 'num qty-packs' : 'num'}>
+          <InPacks qty={r.qty ?? '0'} unit={r.unit} pack={r.standard_pack} />
           {r.negative && <div className="rt-flag">Negative</div>}
           {keptWords(r.qty, r.reserved_qty) && <div className="hint">{keptWords(r.qty, r.reserved_qty)}</div>}
         </td>
@@ -92,11 +93,20 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
   );
 }
 
-/** One quantity with its unit and the negative flag in words. */
-function Qty({ qty, unit, negative }: { qty: string; unit?: string; negative?: boolean }) {
+/**
+ * Issue #650: a quantity in the item's standard pack and pieces, the total in pieces on a line of its own so a narrow cell
+ * wraps between the two, never inside a number. The words are packsAndPieces' own.
+ */
+function InPacks({ qty, unit, pack }: { qty: string; unit?: string; pack?: PackSize }) {
+  const { inPacks, total } = packsAndPiecesParts(qty, unit, pack);
+  return total ? <><span className="qty-in-packs">{inPacks}</span> <span className="qty-total">({total})</span></> : <>{inPacks}</>;
+}
+
+/** One quantity with its unit, in the item's standard pack and pieces when it has one (issue #650), and the negative flag in words. */
+function Qty({ qty, unit, negative, pack }: { qty: string; unit?: string; negative?: boolean; pack?: PackSize }) {
   return (
     <>
-      {showQty(qty)}{unit ? ` ${unit}` : ''}
+      <InPacks qty={qty} unit={unit} pack={pack} />
       {negative && <div className="rt-flag">Negative</div>}
     </>
   );
@@ -116,9 +126,9 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
   const row = (r: AllBranchesStock['items'][number]) => (
     <tr key={r.product_id}>
       <td>{r.description}{!grouping && <><br /><CategoryLabel category={r.category} /></>}</td>
-      <td className="num"><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></td>
+      <td className={r.standard_pack ? 'num qty-packs' : 'num'}><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} pack={r.standard_pack} /></strong></td>
       {(r.balances ?? []).map((c) => (
-        <td key={c.branch_id} className="num"><Qty qty={c.qty ?? '0'} negative={c.negative} /></td>
+        <td key={c.branch_id} className={r.standard_pack ? 'num qty-packs' : 'num'}><Qty qty={c.qty ?? '0'} unit={r.standard_pack ? r.unit : undefined} negative={c.negative} pack={r.standard_pack} /></td>
       ))}
       {showCost && <td className="num">{r.cost_minor !== undefined ? money(r.cost_minor) : ''}</td>}
       <td className="num">{r.sell_minor !== undefined ? money(r.sell_minor) : ''}</td>
@@ -160,7 +170,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
                 <strong>{r.description}</strong>
                 {!grouping && <><br /><CategoryLabel category={r.category} /></>}
               </span>
-              <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} /></strong></span>
+              <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} pack={r.standard_pack} /></strong></span>
             </div>
             {r.sell_minor !== undefined && <p className="hint">{showCost && r.cost_minor !== undefined ? `Average cost ${money(r.cost_minor)}, price` : 'Price'} {money(r.sell_minor)} each</p>}
             <button type="button" className="btn-sm" aria-expanded={expanded} onClick={() => setOpen({ ...open, [id]: !expanded })}>
@@ -171,7 +181,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
                 {(r.balances ?? []).map((c) => (
                   <div key={c.branch_id} className="rt-row">
                     <span>{names[c.branch_id ?? '']}</span>
-                    <span className="num"><Qty qty={c.qty ?? '0'} unit={r.unit} negative={c.negative} /></span>
+                    <span className="num"><Qty qty={c.qty ?? '0'} unit={r.unit} negative={c.negative} pack={r.standard_pack} /></span>
                   </div>
                 ))}
               </div>

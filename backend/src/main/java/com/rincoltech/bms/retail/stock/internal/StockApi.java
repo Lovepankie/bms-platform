@@ -50,7 +50,21 @@ final class StockApi {
                     description =
                             "Issue #385: of qty, what open customer orders keep aside (not free to sell); absent when"
                                     + " nothing is kept")
-            String reservedQty) {}
+            String reservedQty,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = STANDARD_PACK)
+            StandardPack standardPack) {}
+
+    static final String STANDARD_PACK =
+            "Issue #650: the pack the stock is shown in (packs and pieces); absent while the units"
+                    + " capability is off or the item has no active pack holding more than one";
+
+    @Schema(name = "RetailStandardPack", description = "An item's standard pack: its unit and the base units one holds")
+    record StandardPack(
+            String unit,
+
+            @Schema(description = "Base units in one pack, three places, for example 24.000")
+            String factor) {}
 
     @Schema(name = "RetailStockPage")
     record StockPage(
@@ -104,7 +118,10 @@ final class StockApi {
             Long costMinor,
 
             @Schema(description = "One entry per branch of the page, in the page's branch order")
-            List<BranchBalance> balances) {}
+            List<BranchBalance> balances,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = STANDARD_PACK)
+            StandardPack standardPack) {}
 
     @Schema(name = "RetailAllBranchesStock")
     record AllBranchesPage(

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { Fragment, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -9,9 +9,9 @@ import { bigDrop, milliOf, parseCount, parseQty, qtyString, showQty } from './ma
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne } from './barcode-state';
 import { SkeletonList } from '../../../components/states';
-import { BranchRequired, CategoryLabel, Gate, Note, Problem, useProfitAccess, useStockingBranch } from './ui';
+import { BranchRequired, CategoryLabel, Gate, Note, PacksAndPiecesFields, Problem, useProfitAccess, useStockingBranch } from './ui';
 import { UNITS, capabilityOn, needsOf } from './permissions';
-import { chosenPack } from './units-state';
+import { chosenPack, packsAndPieces, packsAndPiecesMilli, samePack, type PackSize } from './units-state';
 import { useStaff } from '../context';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { WORDS, plural } from '../../../app/glossary';
@@ -27,20 +27,26 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 /** The variance written at commit once committed, otherwise the draft's (counted less expected). */
 const variance = (l: StocktakeLine): string => l.committed_variance_qty ?? l.variance_qty ?? '0';
 
-/** "This removes 8 pieces. Is that right?" for a big drop, in the item's unit when the sheet gives it. */
-export function dropWords(l: StocktakeLine, unit: string | undefined): string {
+/**
+ * "This removes 8 pieces. Is that right?" for a big drop, in the item's unit when the sheet gives it, and in its standard pack
+ * and pieces when it has one (issue #650): "This removes 2 Cartons and 3 Pieces (51 Pieces). Is that right?".
+ */
+export function dropWords(l: StocktakeLine, unit: string | undefined, pack?: PackSize): string {
   const removed = milliOf(l.expected_qty ?? '0') - milliOf(l.counted_qty ?? '0');
+  if (unit && pack) return `This removes ${packsAndPieces(qtyString(removed), unit, pack)}. Is that right?`;
   const word = unit ? ` ${removed === 1000 ? unit : plural(unit)}` : '';
   return `This removes ${showQty(qtyString(removed))}${word}. Is that right?`;
 }
 
-export function StocktakeReview({ stocktake, onCommit, busy, units }: {
+export function StocktakeReview({ stocktake, onCommit, busy, units, packs }: {
   stocktake: Stocktake;
   /** Called with the product ids of the big drops ticked as right, which the server checks too (issue #636). */
   onCommit?: (acknowledged: string[]) => void;
   busy?: boolean;
   /** Each item's unit by product id, for the words of a big drop. */
   units?: ReadonlyMap<string, string | undefined>;
+  /** Each item's standard pack by product id (issue #650), for the same words in packs and pieces. */
+  packs?: ReadonlyMap<string, PackSize | undefined>;
 }) {
   const changed = (stocktake.lines ?? []).filter((l) => milliOf(variance(l)) !== 0);
   const draft = stocktake.status === 'draft';
@@ -87,7 +93,7 @@ export function StocktakeReview({ stocktake, onCommit, busy, units }: {
                         <div className="alert alert-warning entry-warning" data-testid={`count-drop-${id}`}>
                           <span className="entry-warning-icon" aria-hidden="true">{icons.warning}</span>
                           <div>
-                            <p id={`count-drop-${id}-words`}>{dropWords(l, units?.get(id))}</p>
+                            <p id={`count-drop-${id}-words`}>{dropWords(l, units?.get(id), packs?.get(id))}</p>
                             <label className="count-drop-tick">
                               <input type="checkbox" checked={ticked.has(id)} aria-describedby={`count-drop-${id}-words`}
                                 data-needed={ticked.has(id) ? undefined : ''} onChange={(e) => tick(id, e.target.checked)} />
@@ -134,6 +140,9 @@ function CountSheet({ branchId }: { branchId: string }) {
   const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   const [counts, setCounts] = useState<Record<string, string>>({});
+  // Issue #650: the cartons typed for an item with a standard pack, with the pack they were typed in, so a pack changed or
+  // removed while counting never reads the same number in another size; its pieces stay in counts, the total is what is sent.
+  const [packCounts, setPackCounts] = useState<Record<string, { text: string; pack: PackSize }>>({});
   // Every pick, scan or new item says so (issue #498): a short toast with the count it now has, and the line flashes once.
   // The counts as of the last add are kept, as on the sale, so a scan answered after a render sees the latest.
   const { added, flashOf, show, toast } = useItemAdded();
@@ -158,16 +167,28 @@ function CountSheet({ branchId }: { branchId: string }) {
   // The question answers the counts it was asked about: it shows only while the counts are those it was asked on, so any
   // change to a count withdraws it in the same render and Review the difference anyway never sends counts it was not asked about (#535).
   const [askedOn, setAskedOn] = useState<Record<string, string> | null>(null);
-  const confirming = askedOn !== null && askedOn === counts;
-  const setConfirming = (on: boolean) => setAskedOn(on ? counts : null);
   // A picked item's count box takes the cursor, after the picker has put it back in the search (review of #535).
   const [focusOn, setFocusOn] = useState<{ id: string; pick: number } | null>(null);
   useEffect(() => {
-    if (focusOn) document.getElementById(`count-${focusOn.id}`)?.focus();
+    if (focusOn) (document.getElementById(`count-${focusOn.id}-packs`) ?? document.getElementById(`count-${focusOn.id}`))?.focus();
   }, [focusOn]);
-  /** A line leaves Not counted yet once its count is in, and goes back if the count is emptied. */
-  const settle = (id: string) => setDone((d) => ((counts[id] ?? '').trim() === '' ? d.filter((x) => x !== id) : d.includes(id) ? d : [...d, id]));
   const stock = useQuery({ queryKey: ['retail', 'stock', branchId, '', false], queryFn: () => countableStock(branchId) });
+  const packOf = useMemo(() => new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r.standard_pack])), [stock.data]);
+  // Each count as it is sent, in pieces (issue #650): the cartons and pieces of an item with a standard pack added up, or the
+  // pieces typed. A count that cannot be read stays as typed, so it is marked as not valid and never sent.
+  const totals = useMemo(() => {
+    const out: Record<string, string> = { ...counts };
+    for (const [id, { text, pack }] of Object.entries(packCounts)) {
+      if (text.trim() === '') continue;
+      const milli = packsAndPiecesMilli(text, counts[id] ?? '', pack);
+      out[id] = milli === null ? `${text} ${counts[id] ?? ''}` : qtyString(milli);
+    }
+    return out;
+  }, [counts, packCounts]);
+  const confirming = askedOn !== null && askedOn === totals;
+  const setConfirming = (on: boolean) => setAskedOn(on ? totals : null);
+  /** A line leaves Not counted yet once its count is in, and goes back if the count is emptied. */
+  const settle = (id: string) => setDone((d) => ((totals[id] ?? '').trim() === '' ? d.filter((x) => x !== id) : d.includes(id) ? d : [...d, id]));
   const profit = useProfitAccess();
   // Issue #505: a first count of an item not in the list. The new item joins the sheet once it is read again, with its count done.
   // An item already counted (one chosen from the name warning) has the count added to it, as a scan adds; an item the sheet of
@@ -198,10 +219,10 @@ function CountSheet({ branchId }: { branchId: string }) {
     setScanned(id);
     return undefined;
   };
-  const entered = Object.entries(counts).filter(([, v]) => v.trim() !== '');
+  const entered = Object.entries(totals).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const review = useMutation({
-    mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: entered.map(([productId, countedQty]) => ({ product_id: productId, counted_qty: countedQty.trim() })) }),
+    mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: entered.map(([productId, countedQty]) => ({ product_id: productId, counted_qty: qtyString(parseCount(countedQty) ?? 0) })) }),
     onSuccess: setDraft,
   });
   // Issue #353: each count against what the records hold here, or, where they hold nothing, against the item's usual purchase;
@@ -218,7 +239,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     const usual = here > 0 ? { product_id: id, unit: row.unit, quantity_factor: norms(id)?.quantity_factor ?? 10 } : norms(id);
     return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
   });
-  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), counts);
+  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), totals);
   const commit = useMutation({
     mutationFn: (acknowledged: string[]) => retail.commitStocktake(draft?.id ?? '', acknowledged),
     onSuccess: (st) => {
@@ -232,10 +253,10 @@ function CountSheet({ branchId }: { branchId: string }) {
   if (draft) {
     return (
       <>
-        <StocktakeReview key={draft.id} stocktake={draft} onCommit={(acknowledged) => commit.mutate(acknowledged)} busy={commit.isPending} units={new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r.unit]))} />
+        <StocktakeReview key={draft.id} stocktake={draft} onCommit={(acknowledged) => commit.mutate(acknowledged)} busy={commit.isPending} units={new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r.unit]))} packs={packOf} />
         <Problem error={commit.error} />
         {draft.status === 'draft' && <button type="button" onClick={() => setDraft(null)}>Back to the count</button>}
-        {draft.status === 'committed' && <button type="button" onClick={() => { setDraft(null); setCounts({}); setListed([]); setDone([]); setConfirming(false); }}>Start another count</button>}
+        {draft.status === 'committed' && <button type="button" onClick={() => { setDraft(null); setCounts({}); setPackCounts({}); setListed([]); setDone([]); setConfirming(false); }}>Start another count</button>}
       </>
     );
   }
@@ -246,7 +267,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   // Owner decision on #535: the whole sheet stays below the search, as "Not counted yet", so a full count walks the shelf list.
   // A line leaves it once its count is entered (on leaving the box, on Enter, or on 0), and "Counted items" holds the done
   // ones. An item found or scanned and not yet counted heads the list, marked, for its count.
-  const isCounted = (id: string) => (counts[id] ?? '').trim() !== '';
+  const isCounted = (id: string) => (totals[id] ?? '').trim() !== '';
   // Sets, so a sheet of thousands of lines is not walked line by line for every key in a count box.
   const doneSet = new Set(done);
   const listedSet = new Set(listed);
@@ -254,13 +275,47 @@ function CountSheet({ branchId }: { branchId: string }) {
   const counted = done.flatMap((id) => byId.get(id) ?? []);
   const uncounted = (stock.data ?? []).filter((r) => !isCounted(r.product_id ?? '')).length;
   const finish = () => {
-    setDone((d) => [...d, ...Object.keys(counts).filter((id) => isCounted(id) && !d.includes(id))]);
+    setDone((d) => [...d, ...Object.keys(totals).filter((id) => isCounted(id) && !d.includes(id))]);
     if (uncounted > 0 && !confirming) return setConfirming(true);
     setConfirming(false);
     entry.check();
   };
   const line = (r: StockRow, waiting: boolean) => {
     const id = r.product_id ?? '';
+    // The pack the cartons were typed in, while any are typed; else the item's standard pack now.
+    const typed = packCounts[id];
+    const pack = typed && typed.text.trim() !== '' ? typed.pack : r.standard_pack;
+    const enter = (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== 'Enter') return;
+      settle(id);
+      // A keypad counter goes on down the list: the line moves up to Counted items, the cursor to the next line.
+      const next = waiting ? notCounted[notCounted.findIndex((x) => x.product_id === id) + 1]?.product_id : undefined;
+      if (next) setFocusOn((f) => ({ id: next, pick: (f?.pick ?? 0) + 1 }));
+    };
+    const zero = waiting && (
+      <button type="button" className="btn-sm" aria-label={`Count 0 of ${r.description ?? ''}`} onClick={() => { setCounts((c) => ({ ...c, [id]: '0' })); setPackCounts((c) => { const n = { ...c }; delete n[id]; return n; }); setDone((d) => (d.includes(id) ? d : [...d, id])); }}>
+        0
+      </button>
+    );
+    if (pack?.unit && r.unit) {
+      // Issue #650: an item with a standard pack is counted in cartons and pieces, or pieces alone, and shows its total in pieces.
+      return (
+        <div key={id} className={id === scanned ? 'rt-card line-card scan-hit' : 'rt-card line-card'} data-testid={id === scanned ? 'scan-hit' : undefined}
+          ref={id === scanned ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}>
+          {flashOf(id)}
+          <strong id={`count-${id}-name`}>{r.description}</strong>
+          <CategoryLabel category={r.category} />
+          <PacksAndPiecesFields id={`count-${id}`} nameId={`count-${id}-name`} unit={r.unit} pack={{ unit: pack.unit, factor: pack.factor }} totalWord="Counted"
+            packs={typed?.text ?? ''} pieces={counts[id] ?? ''} onBlur={() => settle(id)} onPiecesKeyDown={enter} after={zero}
+            onPacks={(v) => setPackCounts((c) => ({ ...c, [id]: { text: v, pack: c[id] && c[id].text.trim() !== '' ? c[id].pack : { unit: pack.unit, factor: pack.factor } } }))}
+            onPieces={(v) => setCounts((c) => ({ ...c, [id]: v }))} />
+          {typed && typed.text.trim() !== '' && !samePack(typed.pack, r.standard_pack) && (
+            <p className="hint">{`Counted in ${plural(pack.unit ?? '')} of ${showQty(pack.factor ?? '')}, as when you started. This item's pack has changed since.`}</p>
+          )}
+          {entry.notes(id)}
+        </div>
+      );
+    }
     return (
       <div key={id} className={id === scanned ? 'rt-card line-card scan-hit' : 'rt-card line-card'} data-testid={id === scanned ? 'scan-hit' : undefined}
         ref={id === scanned ? (el) => el?.scrollIntoView?.({ block: 'nearest' }) : undefined}>
@@ -272,18 +327,8 @@ function CountSheet({ branchId }: { branchId: string }) {
             aria-invalid={(counts[id] ?? '').trim() !== '' && parseCount(counts[id] ?? '') === null}
             onChange={(e) => { const v = e.target.value; setCounts((c) => ({ ...c, [id]: v })); }}
             onBlur={() => settle(id)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return;
-              settle(id);
-              // A keypad counter goes on down the list: the line moves up to Counted items, the cursor to the next line.
-              const next = waiting ? notCounted[notCounted.findIndex((x) => x.product_id === id) + 1]?.product_id : undefined;
-              if (next) setFocusOn((f) => ({ id: next, pick: (f?.pick ?? 0) + 1 }));
-            }} />
-          {waiting && (
-            <button type="button" className="btn-sm" aria-label={`Count 0 of ${r.description ?? ''}`} onClick={() => { setCounts((c) => ({ ...c, [id]: '0' })); setDone((d) => (d.includes(id) ? d : [...d, id])); }}>
-              0
-            </button>
-          )}
+            onKeyDown={enter} />
+          {zero}
         </div>
         {entry.notes(id)}
       </div>
@@ -291,7 +336,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   };
   return (
     <>
-      <Note>Find or scan each item you count, or work down the list Not counted yet. Type how many you counted, or 0 for an item that is gone. Leave an item empty if you did not count it.</Note>
+      <Note>Find or scan each item you count, or work down the list Not counted yet. Type how many you counted, or 0 for an item that is gone. An item kept in cartons takes cartons and pieces, or pieces alone. Leave an item empty if you did not count it.</Note>
       <div data-tour="count-search">
         <ItemCombobox
           id="count-search"

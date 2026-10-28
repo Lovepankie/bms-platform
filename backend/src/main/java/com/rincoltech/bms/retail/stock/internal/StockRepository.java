@@ -1,11 +1,13 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.rincoltech.bms.kernel.Search;
+import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.stock.LowStockRule;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Correction;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementCorrection;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
+import com.rincoltech.bms.retail.stock.internal.StockApi.StandardPack;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLine;
@@ -59,12 +61,13 @@ class StockRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
                        coalesce(b.avg_cost_minor, p.cost_minor) AS cost_minor, coalesce(b.qty, 0) AS qty,
-                       coalesce(b.reserved_qty, 0) AS reserved_qty
+                       coalesce(b.reserved_qty, 0) AS reserved_qty, sp.pack_unit, sp.pack_factor
                   FROM retail_products p
                   JOIN retail_units u ON u.id = p.unit_id
                   JOIN retail_categories c ON c.id = p.category_id
                   LEFT JOIN retail_stock_balances b ON b.tenant_id = p.tenant_id AND b.product_id = p.id
                        AND b.branch_id = :branch
+                """ + STANDARD_PACK + """
                  WHERE (p.active OR :includeInactive)
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
@@ -130,7 +133,8 @@ class StockRepository {
                                     rs.getLong("cost_minor"),
                                     rs.getBigDecimal("reserved_qty").signum() == 0
                                             ? null
-                                            : Quantities.format(rs.getBigDecimal("reserved_qty")));
+                                            : Quantities.format(rs.getBigDecimal("reserved_qty")),
+                                    standardPack(rs));
                         },
                         match != null))
                 .list();
@@ -146,7 +150,20 @@ class StockRepository {
             long sellMinor,
             long costMinor,
             BigDecimal total,
-            boolean negative) {}
+            boolean negative,
+            StandardPack standardPack) {}
+
+    /**
+     * Issue #650: the pack a product's stock is shown in, its standard pack, by the catalogue's one rule (ADR-103); the
+     * service leaves it out while the units capability is off.
+     */
+    static final String STANDARD_PACK =
+            "  LEFT JOIN LATERAL (" + RetailCatalogue.standardPackSql("p") + ") sp ON true\n";
+
+    private static StandardPack standardPack(ResultSet rs) throws SQLException {
+        String unit = rs.getString("pack_unit");
+        return unit == null ? null : new StandardPack(unit, Quantities.format(rs.getBigDecimal("pack_factor")));
+    }
 
     /**
      * Products with their quantity summed over {@code branchIds} (the caller's scope; never empty),
@@ -169,7 +186,7 @@ class StockRepository {
         StringBuilder sql = new StringBuilder("""
                 SELECT p.id, p.code, p.description, p.category_id, c.name AS category, u.name AS unit, p.sell_minor,
                        coalesce(round(t.held_value / nullif(t.held_qty, 0)), p.cost_minor)::bigint AS cost_minor,
-                       coalesce(t.total, 0) AS total, coalesce(t.negs, 0) > 0 AS negative
+                       coalesce(t.total, 0) AS total, coalesce(t.negs, 0) > 0 AS negative, sp.pack_unit, sp.pack_factor
                   FROM retail_products p
                   JOIN retail_units u ON u.id = p.unit_id
                   JOIN retail_categories c ON c.id = p.category_id
@@ -179,6 +196,7 @@ class StockRepository {
                                     sum(qty) FILTER (WHERE qty > 0) AS held_qty
                                FROM retail_stock_balances WHERE branch_id IN (:branchIds)
                               GROUP BY product_id) t ON t.product_id = p.id
+                """ + STANDARD_PACK + """
                  WHERE (p.active OR :includeInactive OR (:keepHeld AND coalesce(t.held, 0) > 0))
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
@@ -241,7 +259,8 @@ class StockRepository {
                                 rs.getLong("sell_minor"),
                                 rs.getLong("cost_minor"),
                                 rs.getBigDecimal("total"),
-                                rs.getBoolean("negative")),
+                                rs.getBoolean("negative"),
+                                standardPack(rs)),
                         match != null))
                 .list();
     }

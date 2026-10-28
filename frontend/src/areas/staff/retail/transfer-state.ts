@@ -1,5 +1,6 @@
 import type { Product, TransferRequest } from '../../../api/retail';
 import { milliOf, parseQty, qtyString, showQty } from './maths';
+import { packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, standardPack } from './units-state';
 
 // The stock move form's pure logic (FR-RET-16): the early stock hint and the request it submits.
 // The hint only saves a round trip: the server refuses a quantity above the source branch's
@@ -7,7 +8,18 @@ import { milliOf, parseQty, qtyString, showQty } from './maths';
 
 export interface TransferLineDraft {
   product: Product;
+  /** The pieces to move, or all of it in pieces. */
   qty: string;
+  /** Issue #650: the whole cartons to move, for an item with a standard pack; the pieces are added to them. */
+  packs?: string;
+}
+
+/** Issue #650: the quantity of a line in base unit thousandths, its cartons and pieces added up; null when it cannot be read. */
+export function lineMilli(line: TransferLineDraft): number | null {
+  const pack = standardPack(line.product);
+  if (!pack || (line.packs ?? '').trim() === '') return parseQty(line.qty);
+  const milli = packsAndPiecesMilli(line.packs ?? '', line.qty, pack);
+  return milli !== null && milli > 0 ? milli : null;
 }
 
 export interface TransferDraft {
@@ -19,10 +31,14 @@ export interface TransferDraft {
 
 /** More than the source branch holds, in plain words, or null. */
 export function transferLineHint(line: TransferLineDraft): string | null {
-  const milli = parseQty(line.qty);
-  if (milli === null) return 'Enter a quantity above zero.';
+  const pack = standardPack(line.product);
   const { qty, unit } = line.product;
+  const unreadable = pack?.unit && unit ? packsAndPiecesProblem(line.packs ?? '', line.qty, unit, pack.unit) : null;
+  if (unreadable) return unreadable;
+  const milli = lineMilli(line);
+  if (milli === null) return 'Enter a quantity above zero.';
   if (qty !== undefined && milli > Math.max(milliOf(qty), 0)) {
+    if (pack && !qty.startsWith('-')) return `Only ${packsAndPieces(qty, unit, pack)} in stock at this branch.`;
     return `Only ${qty.startsWith('-') ? '0' : showQty(qty)} ${unit ?? 'items'} in stock at this branch.`;
   }
   return null;
@@ -44,6 +60,6 @@ export function buildTransfer(fromBranchId: string, draft: TransferDraft): Trans
     to_branch_id: draft.toBranchId,
     ...(draft.transferDate ? { transfer_date: draft.transferDate } : {}),
     ...(note ? { note } : {}),
-    lines: draft.lines.map((l) => ({ product_id: l.product.id ?? '', qty: qtyString(parseQty(l.qty) ?? 0) })),
+    lines: draft.lines.map((l) => ({ product_id: l.product.id ?? '', qty: qtyString(lineMilli(l) ?? 0) })),
   };
 }

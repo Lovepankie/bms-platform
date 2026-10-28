@@ -1145,3 +1145,35 @@ th[scope='rowgroup'] .cat-head {
 .photo-choice label.btn:focus-within {
   box-shadow: var(--focus-ring);
 }
+
+/* Issue #650: an item counted or moved in cartons and pieces: the two boxes, each under its own label, share the row. */
+.count-packs {
+  align-items: flex-end;
+}
+
+.count-part {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.count-part label {
+  overflow-wrap: anywhere;
+}
+
+/* Issue #650: stock in cartons and pieces is a short sentence, so its cell wraps between words, the total in pieces on its own line, instead of widening the table. */
+td.num.qty-packs {
+  white-space: normal;
+}
+
+.qty-packs .qty-in-packs {
+  display: inline-block;
+  min-width: 12ch;
+}
+
+.qty-packs .qty-total {
+  display: block;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}

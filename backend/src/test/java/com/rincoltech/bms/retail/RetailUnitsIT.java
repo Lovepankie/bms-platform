@@ -752,4 +752,104 @@ class RetailUnitsIT extends IntegrationTest {
                 ADMINISTRATOR);
         assertThat(plain.getBody().get("added").asInt()).isEqualTo(1);
     }
+
+    // ---- stock in packs and pieces (issue #650) ---------------------------------------------
+
+    /**
+     * The stock lists and the item carry the standard pack (ADR-103), only while the capability is on: a selling pack whose
+     * unit has a usual pack first, then the biggest selling pack, then the biggest of any, a tie going to the unit id.
+     */
+    @Test
+    void stockRowsCarryTheStandardPack() {
+        switchUnits(true);
+        UUID dozen = api.unit("dozen");
+        UUID bale = api.unit("bale");
+        UUID pair = api.unit("pair");
+        pack(pen, dozen, "12");
+        pack(pen, carton, "24");
+        pack(pen, pair, "1");
+        ResponseEntity<JsonNode> baled = api.post(
+                "/products/" + pen + "/units", Map.of("unit_id", bale, "factor", "100", "purpose", "buy"), ADMIN);
+        assertThat(baled.getStatusCode()).as("%s", baled.getBody()).isEqualTo(HttpStatus.CREATED);
+        api.stockUp(t.headOffice(), pen, "127");
+        // A bale only bought is never counted in while a pack for buying and selling exists: the biggest of those wins.
+        assertThat(standardOf(pen)).isEqualTo("carton 24.000");
+        JsonNode all = rowOf(api.get("/stock/all-branches", ADMIN).getBody(), pen);
+        assertThat(all.get("standard_pack").get("unit").asString()).isEqualTo("carton");
+        assertThat(standardOnItem(pen)).isEqualTo("carton");
+
+        // A bale only bought keeps its place even with a usual pack: only a pack used for selling or both comes first.
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_size = 100, pack_of_unit_id = ?, pack_purpose = 'buy' WHERE id = ?")
+                .params(piece, bale)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("carton 24.000");
+        // A selling pack whose unit has a usual pack, dozen of twelve pieces (ADR-100), comes first.
+        TestDatabase.owner()
+                .sql("UPDATE retail_units SET pack_size = 12, pack_of_unit_id = ?, pack_purpose = 'both' WHERE id = ?")
+                .params(piece, dozen)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("dozen 12.000");
+        assertThat(standardOnItem(pen)).isEqualTo("dozen");
+
+        // A pack switched off is never the standard one; an item with no pack has none.
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE retail_product_units SET active = false WHERE tenant_id = ? AND product_id = ? AND unit_id = ?")
+                .params(t.tenantId(), pen, dozen)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("carton 24.000");
+        // Only packs for buying left: the biggest of any; on a tie of size, the lower unit id.
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE retail_product_units SET purpose = 'buy', sell_minor = NULL WHERE tenant_id = ? AND product_id = ?")
+                .params(t.tenantId(), pen)
+                .update();
+        assertThat(standardOf(pen)).isEqualTo("bale 100.000");
+        TestDatabase.owner()
+                .sql(
+                        "UPDATE retail_product_units SET factor = 24 WHERE tenant_id = ? AND product_id = ? AND unit_id = ?")
+                .params(t.tenantId(), pen, bale)
+                .update();
+        String lower = bale.toString().compareTo(carton.toString()) < 0 ? "bale" : "carton";
+        assertThat(standardOf(pen)).isEqualTo(lower + " 24.000");
+        UUID plain = api.product("UNIT-PLAIN", 50, 60);
+        assertThat(rowOf(api.get("/stock?branch_id=" + t.headOffice(), ADMIN).getBody(), plain)
+                        .has("standard_pack"))
+                .isFalse();
+
+        switchUnits(false);
+        JsonNode row =
+                rowOf(api.get("/stock?branch_id=" + t.headOffice(), ADMIN).getBody(), pen);
+        assertThat(row.has("standard_pack")).isFalse();
+        assertThat(rowOf(api.get("/stock/all-branches", ADMIN).getBody(), pen).has("standard_pack"))
+                .isFalse();
+    }
+
+    String standardOf(UUID product) {
+        JsonNode pack = rowOf(
+                        api.get("/stock?branch_id=" + t.headOffice(), ADMIN).getBody(), product)
+                .get("standard_pack");
+        return pack.get("unit").asString() + " " + pack.get("factor").asString();
+    }
+
+    String standardOnItem(UUID product) {
+        List<String> marked = new ArrayList<>();
+        for (JsonNode k : api.get("/products/" + product, ADMIN).getBody().get("packs")) {
+            if (k.get("standard").asBoolean()) {
+                marked.add(k.get("unit").asString());
+            }
+        }
+        assertThat(marked).hasSize(1);
+        return marked.getFirst();
+    }
+
+    static JsonNode rowOf(JsonNode page, UUID product) {
+        for (JsonNode r : page.get("items")) {
+            if (r.get("product_id").asString().equals(product.toString())) {
+                return r;
+            }
+        }
+        throw new AssertionError("no row for " + product + " in " + page);
+    }
 }
