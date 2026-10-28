@@ -29,9 +29,9 @@ carry any pack: a stock row had the unit and the quantity only.
    in pieces only ("7 Pieces"); below zero reads "1 Carton and 3 Pieces short (27 Pieces short)". `packsAndPiecesMilli` reads a
    count or a move typed as whole packs and pieces, or pieces alone, into pieces. Stock, Count stock (its total, and the
    words of a big drop, issue #635) and Move stock use only these.
-4. **A count keeps the pack it was typed in.** Count stock keeps the pack with the cartons typed, so a pack switched off,
-   resized or gone while the sheet is open never reads the same number in another size; the line says the pack has
-   changed since.
+4. **A count or a move keeps the pack it was typed in.** Count stock and Move stock keep the pack (unit and size) with the
+   first carton typed, so a pack switched off, resized or gone while the sheet is open, or an item read again into a saved
+   move, never reads the same number in another size; the line says the pack has changed since.
 5. **Storage and the API stay in pieces.** A count and a move still send `counted_qty` and `qty` in the base unit. Nothing
    stored changes.
 

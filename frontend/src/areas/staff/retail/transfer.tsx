@@ -7,14 +7,15 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from './idempotency';
 import { ToStock } from './analytics-ui';
 import { parseQty, showQty } from './maths';
-import { buildTransfer, lineMilli, transferLineHint, transferProblem, type TransferDraft } from './transfer-state';
+import { plural } from '../../../app/glossary';
+import { buildTransfer, lineMilli, linePack, transferLineHint, transferProblem, withPacks, type TransferDraft } from './transfer-state';
 import { milliOf } from './maths';
 import { TRANSFER, TRANSFER_RECEIPT, UNITS, capabilityOn, holdsAt, needsOf } from './permissions';
 import { BranchRequired, Gate, NoStockHere, PacksAndPiecesFields, ProductPicker, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto } from './barcode-state';
 import { useItemAdded } from './toast';
-import { chosenPack, packsAndPiecesProblem, standardPack } from './units-state';
+import { chosenPack, packsAndPiecesProblem, samePack, standardPack } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { showDate } from './maths';
@@ -155,7 +156,8 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
         const hint = transferLineHint(l);
         const change = (patch: Partial<TransferDraft['lines'][number]>) => setDraft((d) => ({ ...d, lines: d.lines.map((x, n) => (n === i ? { ...x, ...patch } : x)) }));
         // Issue #650: an item with a standard pack is moved in cartons and pieces, or pieces alone, with the total in pieces.
-        const pack = standardPack(l.product);
+        const pack = linePack(l);
+        const now = standardPack(l.product);
         const unit = l.product.unit;
         const inPacks = pack?.unit && unit ? { unit: pack.unit, factor: pack.factor } : null;
         // The fields say a quantity they cannot read themselves; the line's hint says the rest, such as more than the branch holds.
@@ -166,12 +168,15 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
             <strong id={`tq-${i}-name`}>{l.product.description}</strong>
             {inPacks && unit ? (
               <PacksAndPiecesFields id={`tq-${i}`} nameId={`tq-${i}-name`} unit={unit} pack={inPacks} totalWord="Moving"
-                packs={l.packs ?? ''} pieces={l.qty} onPacks={(v) => change({ packs: v })} onPieces={(v) => change({ qty: v })} invalid={hint !== null && !unreadable} />
+                packs={l.packs ?? ''} pieces={l.qty} onPacks={(v) => setDraft((d) => ({ ...d, lines: d.lines.map((x, n) => (n === i ? withPacks(x, v) : x)) }))} onPieces={(v) => change({ qty: v })} invalid={hint !== null && !unreadable} />
             ) : (
               <>
                 <label htmlFor={`tq-${i}`}>Quantity ({l.product.unit})</label>
                 <input id={`tq-${i}`} inputMode="decimal" value={l.qty} aria-invalid={hint !== null} onChange={(e) => change({ qty: e.target.value })} />
               </>
+            )}
+            {inPacks && unit && (l.packs ?? '').trim() !== '' && !samePack(inPacks, now ? { unit: now.unit, factor: now.factor } : undefined) && (
+              <p className="hint">{`Moving in ${plural(inPacks.unit)} of ${showQty(inPacks.factor ?? '')}, as when you typed them. This item's pack has changed since.`}</p>
             )}
             {hint && !unreadable && <p role="alert" className="rt-flag">{hint}</p>}
             {entry.notes(l.product.id ?? String(i))}

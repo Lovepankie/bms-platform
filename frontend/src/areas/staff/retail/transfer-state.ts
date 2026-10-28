@@ -1,6 +1,6 @@
 import type { Product, TransferRequest } from '../../../api/retail';
 import { milliOf, parseQty, qtyString, showQty } from './maths';
-import { packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, standardPack } from './units-state';
+import { packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, standardPack, type PackSize } from './units-state';
 
 // The stock move form's pure logic (FR-RET-16): the early stock hint and the request it submits.
 // The hint only saves a round trip: the server refuses a quantity above the source branch's
@@ -12,11 +12,29 @@ export interface TransferLineDraft {
   qty: string;
   /** Issue #650: the whole cartons to move, for an item with a standard pack; the pieces are added to them. */
   packs?: string;
+  /** The pack the cartons were typed in, kept from the first carton typed so a fresher item never reads them in another size. */
+  pack?: PackSize;
+}
+
+/**
+ * Issue #650: the pack a line is moved in: the one its cartons were typed in while any are typed, else the item's standard
+ * pack now. Undefined for an item with neither.
+ */
+export function linePack(line: TransferLineDraft): PackSize | undefined {
+  if ((line.packs ?? '').trim() !== '' && line.pack) return line.pack;
+  const pack = standardPack(line.product);
+  return pack ? { unit: pack.unit, factor: pack.factor } : undefined;
+}
+
+/** Issue #650: a line with its cartons typed as `packs`, keeping the pack of the first carton typed (review of #654). */
+export function withPacks(line: TransferLineDraft, packs: string): TransferLineDraft {
+  const kept = (line.packs ?? '').trim() !== '' && line.pack ? line.pack : linePack(line);
+  return { ...line, packs, pack: packs.trim() === '' ? undefined : kept };
 }
 
 /** Issue #650: the quantity of a line in base unit thousandths, its cartons and pieces added up; null when it cannot be read. */
 export function lineMilli(line: TransferLineDraft): number | null {
-  const pack = standardPack(line.product);
+  const pack = linePack(line);
   if (!pack || (line.packs ?? '').trim() === '') return parseQty(line.qty);
   const milli = packsAndPiecesMilli(line.packs ?? '', line.qty, pack);
   return milli !== null && milli > 0 ? milli : null;
@@ -31,12 +49,16 @@ export interface TransferDraft {
 
 /** More than the source branch holds, in plain words, or null. */
 export function transferLineHint(line: TransferLineDraft): string | null {
-  const pack = standardPack(line.product);
+  const pack = linePack(line);
   const { qty, unit } = line.product;
   const unreadable = pack?.unit && unit ? packsAndPiecesProblem(line.packs ?? '', line.qty, unit, pack.unit) : null;
   if (unreadable) return unreadable;
   const milli = lineMilli(line);
-  if (milli === null) return 'Enter a quantity above zero.';
+  if (milli === null) {
+    // Whole cartons that read but add up to more than a quantity can hold are too many, not too few (review of #654).
+    const typed = (line.packs ?? '').trim() !== '' && packsAndPiecesMilli(line.packs ?? '', '0', pack) === null;
+    return typed ? 'That is more than BMS can move at once. Check the number.' : 'Enter a quantity above zero.';
+  }
   if (qty !== undefined && milli > Math.max(milliOf(qty), 0)) {
     if (pack && !qty.startsWith('-')) return `Only ${packsAndPieces(qty, unit, pack)} in stock at this branch.`;
     return `Only ${qty.startsWith('-') ? '0' : showQty(qty)} ${unit ?? 'items'} in stock at this branch.`;

@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Product } from '../../../api/retail';
+import type { TransferLineDraft } from './transfer-state';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
@@ -44,7 +45,7 @@ const soap: Product = {
 };
 const lamp: Product = { id: 'p2', code: 'TL-1', description: 'Test Lamp', unit: 'piece', sell_minor: 5000, active: true, qty: '9.000' };
 
-function open(lines: { product: Product; qty: string; packs?: string }[]) {
+function open(lines: TransferLineDraft[]) {
   const draft = { toBranchId: to, transferDate: '2026-10-23', note: '', lines };
   sessionStorage.setItem(`retail-draft:transfer:${me.user_id}:${from}`, JSON.stringify({ key: 'test-key-650', draft }));
   render(
@@ -86,5 +87,38 @@ describe('Move stock in cartons and pieces', () => {
     expect(screen.getAllByRole('alert').map((a) => a.textContent)).toEqual(['Type whole Cartons, and the rest in Pieces.']);
     fireEvent.click(screen.getByRole('button', { name: 'Move stock' }));
     expect(createTransfer).not.toHaveBeenCalled();
+  });
+});
+
+// Review of #654: a move keeps the pack its cartons were typed in, so an item read again (a draft restored after the catalogue
+// changed, a line merged with a fresher item) never reads the same cartons in another size or drops them.
+describe('a pack that changes while moving', () => {
+  const dozenNow: Product = { ...soap, packs: [{ ...(soap.packs ?? [])[1]!, standard: true }] };
+  const noPack: Product = { ...soap, packs: [] };
+
+  it.each([
+    ['the carton is switched off and a dozen is the pack now', dozenNow],
+    ['the item has no pack any more', noPack],
+  ])('keeps 2 Cartons and 6 Pieces as 54 when %s', async (_, product) => {
+    createTransfer.mockReturnValue(new Promise(() => undefined));
+    open([{ product, qty: '6', packs: '2', pack: { unit: 'Carton', factor: '24.000' } }]);
+    expect(document.getElementById('tq-0-total')?.textContent).toBe('Moving 2 Cartons and 6 Pieces (54 Pieces)');
+    expect(screen.getByText("Moving in Cartons of 24, as when you typed them. This item's pack has changed since.")).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Move stock' }));
+    await waitFor(() => expect(createTransfer).toHaveBeenCalledTimes(1));
+    expect(createTransfer.mock.calls[0]?.[0].lines).toEqual([{ product_id: 'p1', qty: '54.000' }]);
+  });
+
+  it('keeps the pack of the first carton typed with the line', () => {
+    open([{ product: soap, qty: '' }]);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Test Soap Cartons' }), { target: { value: '3' } });
+    const saved = JSON.parse(sessionStorage.getItem(`retail-draft:transfer:${me.user_id}:${from}`) ?? '{}');
+    expect(saved.draft.lines[0]).toMatchObject({ packs: '3', pack: { unit: 'Carton', factor: '24.000' } });
+    expect(screen.queryByText(/pack has changed since/)).toBeNull();
+  });
+
+  it('says a number of cartons too large to hold is too many, not too few', () => {
+    open([{ product: soap, qty: '', packs: '99999999999999' }]);
+    expect(screen.getByRole('alert').textContent).toBe('That is more than BMS can move at once. Check the number.');
   });
 });
