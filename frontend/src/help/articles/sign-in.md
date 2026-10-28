@@ -12,7 +12,7 @@ Staff sign in on their own business page, with the email or phone and the passwo
 3. Forgot your password? Tap **Forgot password?**, type the email or phone you sign in with and tap **Send me a link**. Open the link in the email, choose a new password and tap **Save and sign in**.
 4. Do not know your business page? On the BMS home page, tap **Staff of a business? Find your sign-in page**. Type **Your work email** and tap **Email me the link**. Open the link in the email and sign in there.
 
-> You stay signed in on this phone or computer for 7 days from when you sign in, then BMS asks for your password again. Lock your phone's screen, and sign out from your menu on a phone you share or lend. Signing out, a new password, or your administrator turning off your sign-in ends it at once.
+> You stay signed in on this phone or computer while you open BMS at least once every 30 days. After 90 days BMS asks for your password again. Lock your phone's screen, and sign out from your menu on a phone you share or lend. Signing out, a new password, or your administrator turning off your sign-in ends it at once.
 
 > The password link works once and for one hour. If nothing arrives, look in your spam folder, or ask your administrator, who can give you a link.
 

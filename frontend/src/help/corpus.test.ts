@@ -47,8 +47,9 @@ const ids = (list: { id: string }[]) => list.map((a) => a.id);
 // The getting-started articles (issue #609) open before sign-in, where the picture script (docs/ui/how-do-i-598) needs a
 // local API, so they ship as text first; their pictures are a follow-up and this list shrinks as they land. Getting your shop
 // ready (issue #615), adding a photo (issue #617), an empty list (issue #619), selling packs at their own prices (issue #624),
-// setting up your shop (issue #625), Quick add (issue #632) and selling or buying in cartons (issue #630) are text first in the same way.
-const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list', 'sell-packs-at-their-own-price', 'set-up-your-shop', 'add-a-unit', 'add-an-item-quickly', 'sell-or-buy-in-cartons'];
+// setting up your shop (issue #625), Quick add (issue #632), selling or buying in cartons (issue #630) and the lost phone (issue #647)
+// are text first in the same way.
+const PICTURES_PENDING = ['start-using-bms', 'open-my-invitation', 'sign-in', 'install-bms', 'getting-your-shop-ready', 'add-a-photo', 'empty-list', 'sell-packs-at-their-own-price', 'set-up-your-shop', 'add-a-unit', 'add-an-item-quickly', 'sell-or-buy-in-cartons', 'lost-phone'];
 
 describe('the help corpus', () => {
   // The ceiling was 30; since 27 Oct 2026 every question a tester asks that the app did not answer gets an article, so it is 40.
@@ -60,7 +61,9 @@ describe('the help corpus', () => {
 
   it('gives every article a title, an introduction and at least two steps, every step with a captioned picture but those pending', () => {
     for (const a of ARTICLES) {
-      expect(a.title, a.id).toMatch(/^(How do I|What|Why) .+\?$/);
+      // The lost phone's title, set by issue #647, says what happened before it asks; every other title asks at once.
+      if (a.id === 'lost-phone') expect(a.title).toBe('My phone was lost. How do I sign it out?');
+      else expect(a.title, a.id).toMatch(/^(How do I|What|Why) .+\?$/);
       expect(a.intro.length, a.id).toBeGreaterThan(0);
       expect(a.steps.length, a.id).toBeGreaterThanOrEqual(2);
       if (PICTURES_PENDING.includes(a.id)) expect(a.steps.some((s) => s.picture), a.id).toBe(false);
@@ -623,5 +626,33 @@ describe('adding an item quickly (issue #632)', () => {
     }
     expect(articleForScreen('/staff/retail/quick-add', owner)?.id).toBe(QUICK);
     expect(ids(articlesFor(seller))).not.toContain(QUICK);
+  });
+});
+
+describe('the lost phone article (issue #647)', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+  const a = articleById('lost-phone')!;
+
+  it('is for everyone, under Getting started, and found by the words a person types', () => {
+    expect(a.title).toBe('My phone was lost. How do I sign it out?');
+    expect(a.job).toBe('start');
+    for (const people of [seller, owner, officer]) expect(ids(articlesFor(people))).toContain('lost-phone');
+    expect(searchArticles(ARTICLES, 'my phone was stolen')[0]?.id).toBe('lost-phone');
+  });
+
+  it('puts in bold only the labels the person menu, the staff page and the sign-in page show', () => {
+    const code = ['../areas/staff/top-bar.tsx', '../areas/staff/users/page.tsx', '../areas/auth/sign-in.tsx'].map(read).join('\n');
+    const labels = [...new Set([...a.intro, ...a.steps.map((s) => s.text), ...a.notes].flat().filter((r) => r.strong).map((r) => r.text))];
+    expect(labels).toEqual(expect.arrayContaining(['Sign out everywhere', 'Sign out their devices', 'Yes, sign them out', 'Forgot password?']));
+    for (const label of labels) expect(code, label).toContain(label);
+  });
+
+  it('gives the limits the server keeps', () => {
+    const staff = read('../../../backend/src/main/java/com/rincoltech/bms/core/identity/internal/StaffAccounts.java');
+    expect(articleText(a)).toContain('at least once every 30 days');
+    expect(staff).toContain('Duration.ofDays(30)');
+    expect(articleText(a)).toContain('after 90 days');
+    expect(staff).toContain('Duration.ofDays(90)');
+    expect(articleText(a)).not.toMatch(/[\u2013\u2014]| - /);
   });
 });

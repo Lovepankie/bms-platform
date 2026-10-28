@@ -6,16 +6,16 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 /**
- * Issue #644, ADR-014 as amended on 28 October 2026: a staff session lasts seven days idle and seven days absolute, so a
- * phone stays signed in for a week from sign-in; a platform operator's stays two hours idle and twelve hours absolute.
+ * Issue #647, ADR-014 as amended on 28 October 2026: a staff session lasts while it is used at least once every thirty days,
+ * and at most ninety days from sign-in; a platform operator's stays two hours idle and twelve hours absolute.
  */
 class SessionLimitsTest {
 
     @Test
-    void staffStaySignedInForAWeekFromSignIn() {
+    void staffStaySignedInWhileUsedForUpToNinetyDays() {
         StaffAccounts staff = new StaffAccounts(null, null, null, null, null, null);
-        assertThat(staff.idleTtl()).isEqualTo(Duration.ofDays(7));
-        assertThat(staff.absoluteTtl()).isEqualTo(Duration.ofDays(7));
+        assertThat(staff.idleTtl()).isEqualTo(Duration.ofDays(30));
+        assertThat(staff.absoluteTtl()).isEqualTo(Duration.ofDays(90));
     }
 
     @Test

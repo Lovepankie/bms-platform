@@ -21,7 +21,7 @@ import { useHelpSheet } from '../../tour/host';
 import { BrandLoader } from '../../components/states';
 import { BillingBanner } from './billing/banner';
 import { MenuShop, initials, useActiveBranch } from './branch-picker';
-import { BranchTitle, OfflineBanner, TopMenu } from './top-bar';
+import { BranchTitle, OfflineBanner, SignOutEverywhere, TopMenu } from './top-bar';
 import { StaffContext, useOptionalStaff } from './context';
 import { FeatureSearch } from './feature-search';
 import { PlanNotice } from './plan';
@@ -62,6 +62,7 @@ function StaffLayout() {
   const [askSignOut, setAskSignOut] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [askEverywhere, setAskEverywhere] = useState(false);
 
   useEffect(() => {
     if (token !== null || mock) return;
@@ -118,9 +119,9 @@ function StaffLayout() {
 
   const profile = profileNow;
   if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
-  async function signOut(confirmed = false) {
-    // ADR-067 decision 9: sales still on this phone are never signed out of without asking.
-    if (!confirmed && waitingNow(offline) > 0) {
+  async function signOut(confirmed = false, everywhere = false) {
+    // ADR-067 decision 9: sales still on this phone are never signed out of without asking (Sign out everywhere asks in its sheet).
+    if (!confirmed && !everywhere && waitingNow(offline) > 0) {
       setAskSignOut((n) => n + 1);
       return;
     }
@@ -131,9 +132,17 @@ function StaffLayout() {
       let ended: boolean;
       try {
         if (!mock) await push.forget();
-        ended = (await api.POST('/api/v1/auth/logout')).response.ok;
+        ended = (await api.POST(everywhere ? '/api/v1/auth/logout-everywhere' : '/api/v1/auth/logout')).response.ok;
       } catch {
         ended = false;
+      }
+      // Sign out everywhere ends other devices' sessions, which only the server can do: without an answer nothing is signed out.
+      if (!ended && everywhere && !mock) {
+        // Still signed in here: this device hears this person's notifications again.
+        void push.sync();
+        setSignOutError('Connect to the internet to sign out everywhere.');
+        setAskEverywhere(false);
+        return;
       }
       // No answer: the server session (its HttpOnly cookie) is still alive. It is ended on the next start before anything
       // restores it; without a place to note that, this person stays signed in (ADR-067 decision 9).
@@ -141,8 +150,10 @@ function StaffLayout() {
         setSignOutError('Connect to the internet to sign out.');
         return;
       }
+      // Keeps the outbox: sales still waiting are sent when this person signs in here again (offline-context.dom.test.tsx).
       await offline?.forget();
       offline?.engine.stop();
+      setAskEverywhere(false);
       setOfflineMe(null);
       setAccessToken(null);
       queryClient.clear();
@@ -162,7 +173,7 @@ function StaffLayout() {
           <div className="nav-layout">
             <StaffSideNav me={profile} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} />
             <div className="nav-layout-main">
-              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} signOutInBar={mustSetUp(profile)} />
+              <StaffBar me={profile} branch={branch} onBranch={choose} busy={signingOut} onSignOut={() => void signOut()} onSignOutEverywhere={() => setAskEverywhere(true)} signOutInBar={mustSetUp(profile)} />
               <InstallPrompt />
               <OthersWaitingNote />
               {!mock && <NewLogoCard />}
@@ -186,6 +197,7 @@ function StaffLayout() {
               </div>
               {mustSetUp(profile) ? <OwnTwoStep blocking /> : <Outlet />}
               <SignOutWarning ask={askSignOut} onSignOut={() => void signOut(true)} />
+              <SignOutEverywhere open={askEverywhere} waiting={waitingNow(offline)} busy={signingOut} onConfirm={() => void signOut(true, true)} onClose={() => setAskEverywhere(false)} />
             </div>
             {!mustSetUp(profile) && <StaffTabBar me={profile} />}
           </div>
@@ -315,6 +327,7 @@ export function StaffBar({
   branch,
   onBranch,
   onSignOut,
+  onSignOutEverywhere,
   busy = false,
   signOutInBar = false,
 }: {
@@ -322,6 +335,8 @@ export function StaffBar({
   branch: string | null;
   onBranch: (selection: string) => void;
   onSignOut: () => void;
+  /** Opens the sheet that asks before signing out on every device (issue #647). */
+  onSignOutEverywhere?: () => void;
   /** True while signing out runs: Sign out shows its spinner and takes no second press. */
   busy?: boolean;
   /** Sign out in the menu on a phone too: while two-step set-up blocks the page there are no tabs and no More page to reach it. */
@@ -342,7 +357,7 @@ export function StaffBar({
           <FeatureSearch me={me} />
           {/* The Ask button (issue #603); none while two-step set-up blocks the page, whose header is kept minimal. */}
           {!mustSetUp(me) && <AskButton />}
-          <TopMenu me={me} busy={busy} onSignOut={onSignOut} signOut={!phone || signOutInBar} />
+          <TopMenu me={me} busy={busy} onSignOut={onSignOut} onSignOutEverywhere={onSignOutEverywhere} signOut={!phone || signOutInBar} />
         </div>
       </header>
       <OfflineBanner />

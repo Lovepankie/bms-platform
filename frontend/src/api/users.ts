@@ -35,6 +35,7 @@ export function planLimitWords(detail: string | undefined): string {
 const MESSAGES: Record<string, string | undefined> = {
   last_tenant_admin: 'A business must always keep one active administrator. Make someone else an administrator first, then try again.',
   cannot_deactivate_self: 'You cannot deactivate your own account. Ask another administrator to do it.',
+  cannot_sign_out_self_here: 'To sign yourself out on every device, open your menu at the top and tap Sign out everywhere.',
   duplicate_email: 'Someone on your staff already uses this email address.',
   duplicate_phone: 'Someone on your staff already uses this phone number.',
   invalid_phone: 'Use a Uganda mobile number such as 0712 345 678 or +256 712 345 678.',
@@ -144,5 +145,10 @@ export const users = {
 
   async deactivate(userId: string): Promise<StaffUser> {
     return unwrap(await sent(api.POST('/api/v1/users/{user_id}/deactivate', { params: { path: { user_id: userId } } })), 'Could not deactivate this person.');
+  },
+
+  /** Ends every session of another person at once, for a lost or stolen phone; they stay active (issue #647). */
+  async signOutDevices(userId: string): Promise<StaffUser> {
+    return unwrap(await sent(api.POST('/api/v1/users/{user_id}/sign-out', { params: { path: { user_id: userId } } })), 'Could not sign this person out.');
   },
 };

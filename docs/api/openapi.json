@@ -25040,6 +25040,18 @@
         "tags" : [ "auth" ]
       }
     },
+    "/api/v1/auth/logout-everywhere" : {
+      "post" : {
+        "operationId" : "logoutEverywhere",
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign out everywhere: revokes every session of the signed-in user, this one included (issue #647)",
+        "tags" : [ "auth" ]
+      }
+    },
     "/api/v1/auth/refresh" : {
       "post" : {
         "operationId" : "refreshSession",
@@ -45561,6 +45573,34 @@
           }
         },
         "summary" : "Replace a user's roles and branch scopes (FR-IAM-01)",
+        "tags" : [ "users" ]
+      }
+    },
+    "/api/v1/users/{user_id}/sign-out" : {
+      "post" : {
+        "operationId" : "signOutUserDevices",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "user_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/User"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Sign another user out on every device, for a lost or stolen phone; they stay active and sign in again with their password (issue #647)",
         "tags" : [ "users" ]
       }
     },

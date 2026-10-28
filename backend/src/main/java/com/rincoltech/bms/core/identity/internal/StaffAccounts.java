@@ -70,15 +70,16 @@ class StaffAccounts implements Accounts {
         return "BMS " + tenant.profile().slug();
     }
 
-    /** Seven days, the same as the absolute limit, so a phone stays signed in for a week (issue #644, ADR-014). */
+    /** Thirty days: a phone that opens BMS at least once a month stays signed in (issue #647, ADR-014). */
     @Override
     public Duration idleTtl() {
-        return Duration.ofDays(7);
+        return Duration.ofDays(30);
     }
 
+    /** Ninety days from sign-in, however often the phone is used; then the password again (issue #647, ADR-014). */
     @Override
     public Duration absoluteTtl() {
-        return Duration.ofDays(7);
+        return Duration.ofDays(90);
     }
 
     @Override

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.kernel.ApiException;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -63,6 +64,15 @@ class SuspendedTenantInterceptorTest {
         assertThat(active.getAttribute(Documents.ENDED_BUSINESS_ATTRIBUTE)).isNull();
 
         assertThat(refusal("suspended", DOWNLOAD_URL)).isEqualTo("tenant_suspended");
+    }
+
+    /** Issue #647: a suspended or ended business may still sign out, here and everywhere, as for a lost phone. */
+    @Test
+    void signingOutPassesWhenSuspendedOrEnded() {
+        for (String path : List.of("/api/v1/auth/logout", "/api/v1/auth/logout-everywhere")) {
+            assertThat(refusal("suspended", path)).as(path).isNull();
+            assertThat(refusal("ended", path)).as(path).isNull();
+        }
     }
 
     @Test

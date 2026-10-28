@@ -613,6 +613,44 @@ class UserService implements TenantAdmins {
         return find(userId).orElseThrow();
     }
 
+    /**
+     * Issue #647: whoever may manage users ends every session of another staff user at once, for a lost or stolen phone. The
+     * person stays active and signs in again with their password; another administrator's sessions only by the Owner, as for
+     * the other changes to an administrator (ADR-062), and only a person inside the caller's branches, as for the reset of a
+     * sign-in (404 otherwise). One's own devices are signed out from the person menu instead.
+     */
+    @Transactional
+    UserResponse signOutDevices(UUID userId) {
+        owners.lockShared();
+        Principal admin = CurrentPrincipal.require();
+        if (admin.userId().equals(userId)) {
+            throw ApiException.rule(
+                    "cannot_sign_out_self_here", "Use Sign out everywhere in your own menu to sign out your devices.");
+        }
+        // 404 for an id that is not a staff user of this business, before anything is revoked.
+        UserResponse before = lockUser(userId);
+        resets.requireInScope(admin, userId);
+        if (!"active".equals(before.status())) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "invalid_status_transition",
+                    "Invalid status transition",
+                    "Only an active person can be signed out; this person has no session.");
+        }
+        if (isTenantAdmin(userId)) {
+            owners.requireMayChangeAdmin(admin, userId, "sign out an administrator's devices");
+        }
+        int ended = accounts.sessions().revokeAllOf(userId, "admin", clock.now());
+        audit.record(new AuditLog.Entry(
+                "core.user.signed_out_everywhere",
+                "core.user",
+                userId,
+                null,
+                Map.of(),
+                Map.of("sessions_ended", ended)));
+        return find(userId).orElseThrow();
+    }
+
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void resetAdminMfa(UUID userId, UUID platformUserId) {

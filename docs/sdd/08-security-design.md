@@ -24,15 +24,24 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 | Principal | Factor(s) | Lockout | Session |
 |---|---|---|---|
 | Platform super admin | Email plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 2 hours, absolute 12 hours |
-| Tenant admin | Email or phone plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 7 days, absolute 7 days |
-| Other staff | Email or phone plus password; TOTP optional or tenant-mandated | 5 failures, 15 minutes | Access 15 minutes, refresh idle 7 days, absolute 7 days |
+| Tenant admin | Email or phone plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 30 days, absolute 90 days |
+| Other staff | Email or phone plus password; TOTP optional or tenant-mandated | 5 failures, 15 minutes | Access 15 minutes, refresh idle 30 days, absolute 90 days |
 | Member | Phone plus 5 digit PIN, set after an SMS one-time code | 5 failures, 30 minutes | Access 15 minutes, refresh idle 30 days |
 
-A staff phone stays signed in for 7 days from sign-in, however rarely it is used, and then signs in again (ADR-014
-amendment of 2026-10-28, issue #644: the idle limit was 12 hours, so a shop owner signed in every morning). Using the app
-never extends the week. Sign-out, deactivation, a password reset, an MFA reset and the step-up lock still end sessions on
-the next request. The cost is that an unlocked phone, or a copied refresh cookie, stays usable for up to 7 days rather
-than 12 idle hours; the phone's screen lock, sign-out and an administrator's deactivation or reset are the controls.
+A staff phone stays signed in while it opens BMS at least once every 30 days, and signs in again with the password 90 days
+after sign-in however often it is used (ADR-014 amendments of 2026-10-28, issues #644 and #647: the idle limit was 12
+hours, so a shop owner signed in every morning, and then a week). Each refresh gives another 30 idle days; none moves the 90.
+Sign-out, deactivation, a password reset, an MFA reset and the step-up lock still end sessions on the next request.
+
+**Lost or stolen device (issue #647).** Any staff user signs out of every device from the person menu (Sign out
+everywhere, `POST /auth/logout-everywhere`, audited `core.auth.signed_out_everywhere`), and whoever holds
+`core.users.manage` signs one staff member out of every device from their card on the Staff page (Sign out their devices,
+`POST /users/{user_id}/sign-out`, audited `core.user.signed_out_everywhere` by the administrator, with the number of
+sessions ended); another administrator's devices only by the Owner. Both revoke the session rows, so the next request of
+any of those devices is refused, its access token and refresh cookie alike. The person stays active and signs in again with
+the password. The cost of the longer limits is that an unlocked phone, or a copied refresh cookie, stays usable for up to
+30 idle days and 90 in all; the phone's screen lock, the two sign-outs above, a new password and deactivation are the
+controls.
 
 - Passwords and PINs are hashed with argon2id (memory 64 MiB, iterations 3,
   parallelism 1, tuned so one hash takes about 100 ms on the production host). Passwords are
@@ -164,7 +173,7 @@ than 12 idle hours; the phone's screen lock, sign-out and an administrator's dea
 | A stale or stolen session surviving a reset | Every session and refresh token of the user ends in the transaction that sets the password |
 | A reset for an account that should not get back in | Only active users; a deactivated user's open links are revoked and refused; an invited user keeps the invitation path |
 | One tenant's link or admin reaching another's user | The table has forced row-level security with the tenant policy; the lookup runs inside the tenant of the host, so a link of tenant A used on tenant B's host is not found, and an admin of B cannot issue a link for A's user (`PasswordResetIT`, `RlsIsolationIT`) |
-| An admin resetting users outside their branches | The route needs `core.users.manage`; an admin whose scope is not every branch reaches only users whose every role is inside it |
+| An admin resetting users outside their branches | The route needs `core.users.manage`; an admin whose scope is not every branch reaches only users whose every role is inside it. The same holds for signing a person out of their devices (`POST /users/{user_id}/sign-out`, issue #647) |
 | A hijacked tenant admin session chaining the MFA reset and the sign-in reset to take an account over | The tenant route refuses oneself and any tenant admin (a locked-out admin is recovered by the platform operator), checks the target first, then asks the acting admin to prove they are still themselves: a fresh authenticator code when they have one enrolled, otherwise their own current password (two-step sign-in is optional only where the `tenant_admin` role's `mfa_required` was hand-edited off, which is staging alone; the V2 seed requires it, so elsewhere an admin with no factor never gets a session and the password branch is not reached; whoever reads a no-factor tenant admin's mailbox can take the account over on staging until #348 lands, a consequence of the optional setting listed for Hillary's explicit acceptance); a stolen session or token has neither. A wrong password counts on the sign-in lock like one at sign-in, and the fifth wrong password a session sends here ends that session (and only it), so a thief with a stolen token cannot keep guessing. The user is emailed when a link is issued (ADR-042 decision 9) |
 | A stolen platform operator token resetting an admin's second factor and then issuing a link for the same admin, on any tenant | Both platform reset routes need the operator's own fresh, single-use authenticator code and fail closed without one; five wrong codes lock the step-up and end the operator's sessions; both audit logs record the act; the admin is emailed when a link is issued, before it is used, which is the detective control (ADR-042 decision 9(b2)) |
 | A stolen platform operator token moving a business's referral to another referrer, or changing a commission rule, so later commissions go elsewhere | `PUT /platform/tenants/{id}/referrer`, `PUT /platform/referrals/default-rule` and `PUT /platform/referrals/{id}/rule` need the operator's own fresh, single-use authenticator code (`totp_code`) checked before the change; every change is audited with the reason, before and after (ADR-069 decision 6) |
@@ -227,9 +236,9 @@ checked in `core.identity` (`Owners`) on top of `core.users.manage`:
 
 | Act on the Users routes | Owner | Other tenant admin |
 |---|---|---|
-| Invite, change roles, deactivate, send a new link, reset two-step sign-in, unlock: a staff member who is not an administrator | Y | Y |
+| Invite, change roles, deactivate, send a new link, reset two-step sign-in, sign out their devices, unlock: a staff member who is not an administrator | Y | Y |
 | Invite an administrator, make someone an administrator | Y | 403 `owner_only` |
-| Change another administrator's roles or contact, deactivate them, reset their two-step sign-in, send them a new link | Y | 403 `owner_only` |
+| Change another administrator's roles or contact, deactivate them, reset their two-step sign-in, sign out their devices, send them a new link | Y | 403 `owner_only` |
 | Any of those on the Owner | own contact only; not their own administrator role (422 `owner_must_transfer_first`) | 403 `owner_protected` |
 | Change one's own email or phone | Y, with the step-up (authenticator code, else own password); the old address is told | Y |
 | Transfer ownership to another active administrator (step-up: authenticator code, else own password; not within 24 hours of the Owner's email, phone or password change) | Y | 403 `owner_only` |

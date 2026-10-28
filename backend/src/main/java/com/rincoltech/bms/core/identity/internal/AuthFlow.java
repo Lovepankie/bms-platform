@@ -490,9 +490,15 @@ class AuthFlow {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw unauthenticated();
         }
-        SessionStore.Row row = accounts.sessions()
-                .byRefreshHashForUpdate(Secrets.sha256(refreshToken))
-                .orElseThrow(AuthFlow::unauthenticated);
+        String hash = Secrets.sha256(refreshToken);
+        SessionStore.Row seen = accounts.sessions().byRefreshHash(hash).orElseThrow(AuthFlow::unauthenticated);
+        // The user's row is locked before the session row, in the order every revocation of all of a user's sessions
+        // takes
+        // (sign out everywhere, deactivation, a password or MFA reset), so none of them can miss the session this
+        // refresh adds
+        // (issue #647). The session row is then read again under its own lock.
+        Account account = accounts.byIdForUpdate(seen.userId()).orElseThrow(AuthFlow::revoked);
+        SessionStore.Row row = accounts.sessions().byRefreshHashForUpdate(hash).orElseThrow(AuthFlow::unauthenticated);
         if (row.revokedAt() != null) {
             throw revoked();
         }
@@ -505,7 +511,6 @@ class AuthFlow {
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED, "session_expired", "Session expired", "Sign in again to continue.");
         }
-        Account account = accounts.byIdForUpdate(row.userId()).orElseThrow(AuthFlow::revoked);
         if (!account.active()) {
             accounts.sessions().revokeFamily(row.familyId(), "user_deactivated", now);
             throw revoked();
@@ -531,6 +536,21 @@ class AuthFlow {
             accounts.sessions().revokeFamily(row.familyId(), "sign_out", now);
             accounts.audit("core.auth.signed_out", row.userId(), Map.of());
         });
+    }
+
+    /**
+     * Sign out everywhere (issue #647): every session of the user ends, this one included, so a lost or lent phone is
+     * refused on its next request. Audited with how many sessions ended.
+     */
+    @Transactional
+    int logoutEverywhere(Accounts accounts, UUID userId) {
+        // The user's row first, as a refresh takes it before its session row: a refresh running now either finishes
+        // first, and
+        // its new session is revoked here, or waits and then finds its session revoked.
+        accounts.byIdForUpdate(userId).orElseThrow(AuthFlow::revoked);
+        int ended = accounts.sessions().revokeAllOf(userId, "sign_out", clock.now());
+        accounts.audit("core.auth.signed_out_everywhere", userId, Map.of("sessions_ended", ended));
+        return ended;
     }
 
     private Outcome signIn(

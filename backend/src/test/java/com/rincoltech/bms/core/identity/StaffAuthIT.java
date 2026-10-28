@@ -9,6 +9,8 @@ import com.rincoltech.bms.core.notifications.internal.RecordingNotifier;
 import com.rincoltech.bms.testsupport.Api;
 import com.rincoltech.bms.testsupport.Api.Role;
 import com.rincoltech.bms.testsupport.Api.Session;
+import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -381,53 +383,292 @@ class StaffAuthIT extends IntegrationTest {
                 .update();
     }
 
-    /** Issue #644: a phone opened again 13 hours after its last use still refreshes, within the same week. */
+    /** The idle and absolute expiry of the user's one live session. */
+    Map<String, Object> liveSession(UUID userId) {
+        return TestDatabase.owner()
+                .sql("SELECT created_at, expires_at, idle_expires_at FROM auth_sessions"
+                        + " WHERE user_id = ? AND rotated_at IS NULL AND revoked_at IS NULL")
+                .param(userId)
+                .query()
+                .singleRow();
+    }
+
+    static Instant at(Map<String, Object> row, String column) {
+        return ((Timestamp) row.get(column)).toInstant();
+    }
+
+    /**
+     * Issue #647: a phone that opens BMS 29 days after its last use still refreshes, and the refresh gives it another 30
+     * idle days but never moves the 90 days from sign-in.
+     */
     @Test
-    void aSessionUsedAgainAfterThirteenHoursStillRefreshes() {
+    void aSessionUsedWithinThirtyDaysStaysSignedIn() {
         String email = Api.email("phone");
         UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
         Session session = api.signIn(seller, email, Api.PASSWORD, null);
-        Map<String, Object> signedIn = TestDatabase.owner()
-                .sql("SELECT expires_at, idle_expires_at FROM auth_sessions WHERE user_id = ?")
-                .param(seller)
-                .query()
-                .singleRow();
-        // Idle and absolute are both seven days, so the idle limit is the absolute one.
-        assertThat(signedIn.get("idle_expires_at")).isEqualTo(signedIn.get("expires_at"));
+        Map<String, Object> signedIn = liveSession(seller);
+        assertThat(Duration.between(at(signedIn, "created_at"), at(signedIn, "idle_expires_at")))
+                .isBetween(
+                        Duration.ofDays(30).minusMinutes(1), Duration.ofDays(30).plusMinutes(1));
+        assertThat(Duration.between(at(signedIn, "created_at"), at(signedIn, "expires_at")))
+                .isBetween(
+                        Duration.ofDays(90).minusMinutes(1), Duration.ofDays(90).plusMinutes(1));
 
-        ageSessions(seller, "13 hours");
+        ageSessions(seller, "29 days");
         ResponseEntity<JsonNode> refreshed = api.refresh(session.refreshToken());
         assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(api.get("/api/v1/me", refreshed.getBody().get("access_token").asString())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
+        // The cookie lives as long as the absolute limit, so the phone keeps it for the 90 days.
+        assertThat(refreshed.getHeaders().getFirst(org.springframework.http.HttpHeaders.SET_COOKIE))
+                .contains("Max-Age=" + Duration.ofDays(90).toSeconds());
 
-        // The refresh never moves the week on: the new session ends when the first one would have.
-        java.sql.Timestamp weekEnds = TestDatabase.owner()
-                .sql("SELECT expires_at FROM auth_sessions WHERE user_id = ? AND rotated_at IS NULL")
-                .param(seller)
-                .query(java.sql.Timestamp.class)
-                .single();
-        assertThat(weekEnds.toInstant())
-                .isEqualTo(((java.sql.Timestamp) signedIn.get("expires_at"))
-                        .toInstant()
-                        .minus(java.time.Duration.ofHours(13)));
+        Map<String, Object> used = liveSession(seller);
+        assertThat(at(used, "expires_at")).isEqualTo(at(signedIn, "expires_at").minus(Duration.ofDays(29)));
+        assertThat(at(used, "idle_expires_at")).isAfter(at(signedIn, "idle_expires_at"));
     }
 
-    /** Issue #644: a session past its seven days absolute is refused, however recently it was used. */
+    /** Issue #647: a session not used for 30 days is refused, well inside its 90 days. */
     @Test
-    void aSessionPastSevenDaysAbsoluteIsRefused() {
-        String email = Api.email("week");
+    void aSessionIdleForThirtyDaysIsRefused() {
+        String email = Api.email("idle30");
         UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
         Session session = api.signIn(seller, email, Api.PASSWORD, null);
-        ageSessions(seller, "6 days 12 hours");
-        ResponseEntity<JsonNode> refreshed = api.refresh(session.refreshToken());
-        assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
-
-        ageSessions(seller, "12 hours 1 minute");
-        ResponseEntity<JsonNode> expired = api.refresh(api.refreshCookie(refreshed));
+        ageSessions(seller, "30 days 1 minute");
+        ResponseEntity<JsonNode> expired = api.refresh(session.refreshToken());
         assertThat(expired.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(expired.getBody().get("code").asString()).isEqualTo("session_expired");
+    }
+
+    /** Issue #647: a session past its 90 days absolute is refused, however recently it was used. */
+    @Test
+    void aSessionPastNinetyDaysAbsoluteIsRefused() {
+        String email = Api.email("quarter");
+        UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
+        String refresh = api.signIn(seller, email, Api.PASSWORD, null).refreshToken();
+        for (int month = 0; month < 3; month++) {
+            ageSessions(seller, "29 days");
+            ResponseEntity<JsonNode> refreshed = api.refresh(refresh);
+            assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
+            refresh = api.refreshCookie(refreshed);
+        }
+
+        ageSessions(seller, "3 days 1 minute");
+        ResponseEntity<JsonNode> expired = api.refresh(refresh);
+        assertThat(expired.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(expired.getBody().get("code").asString()).isEqualTo("session_expired");
+    }
+
+    /** The audit row of an action on a user: who did it and how many sessions it ended. */
+    Map<String, Object> auditRow(String action, UUID entityId) {
+        return TestDatabase.owner()
+                .sql("SELECT actor_user_id, data -> 'after' ->> 'sessions_ended' AS sessions_ended FROM audit_log"
+                        + " WHERE tenant_id = ? AND action = ? AND entity_id = ?")
+                .params(t.tenantId(), action, entityId)
+                .query()
+                .singleRow();
+    }
+
+    /**
+     * Issue #647: Sign out everywhere ends every session of the person at once, on this phone and every other; the next
+     * request of a still-valid access token and every refresh cookie are refused, and it is audited.
+     */
+    @Test
+    void signOutEverywhereEndsEveryDeviceAtOnce() {
+        String email = Api.email("everywhere");
+        UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
+        Session phone = api.signIn(seller, email, Api.PASSWORD, null);
+        Session laptop = api.signIn(seller, email, Api.PASSWORD, null);
+
+        ResponseEntity<JsonNode> out = api.post("/api/v1/auth/logout-everywhere", null, laptop.accessToken());
+        assertThat(out.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(out.getHeaders().getFirst(org.springframework.http.HttpHeaders.SET_COOKIE))
+                .contains("Max-Age=0");
+
+        for (Session device : List.of(phone, laptop)) {
+            assertThat(api.get("/api/v1/me", device.accessToken())
+                            .getBody()
+                            .get("code")
+                            .asString())
+                    .isEqualTo("session_revoked");
+            assertThat(api.refresh(device.refreshToken()).getBody().get("code").asString())
+                    .isEqualTo("session_revoked");
+        }
+        Map<String, Object> audited = auditRow("core.auth.signed_out_everywhere", seller);
+        assertThat(audited.get("actor_user_id")).isEqualTo(seller);
+        assertThat(audited.get("sessions_ended")).isEqualTo("2");
+        // Nobody else is touched, and the person signs in again with the password.
+        assertThat(api.get("/api/v1/me", adminSession.accessToken()).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(api.login(email, Api.PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * Issue #647: whoever may manage users signs one staff member out on every device, for a lost phone; the person stays
+     * active. Without the permission it is refused and nothing ends, and nobody uses it on themselves.
+     */
+    @Test
+    void anAdministratorSignsOutOnePersonsDevices() {
+        String email = Api.email("lostphone");
+        UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
+        Session phone = api.signIn(seller, email, Api.PASSWORD, null);
+        Session tablet = api.signIn(seller, email, Api.PASSWORD, null);
+        String colleagueEmail = Api.email("colleague");
+        UUID colleague = Api.staff(t, colleagueEmail, new Role("cashier", t.headOffice()));
+        Session colleagueSession = api.signIn(colleague, colleagueEmail, Api.PASSWORD, null);
+
+        ResponseEntity<JsonNode> refused =
+                api.post("/api/v1/users/" + seller + "/sign-out", null, colleagueSession.accessToken());
+        assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("permission_denied");
+        assertThat(api.get("/api/v1/me", phone.accessToken()).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(audits("core.user.signed_out_everywhere", seller)).isZero();
+
+        ResponseEntity<JsonNode> self =
+                api.post("/api/v1/users/" + admin + "/sign-out", null, adminSession.accessToken());
+        assertThat(self.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(self.getBody().get("code").asString()).isEqualTo("cannot_sign_out_self_here");
+
+        ResponseEntity<JsonNode> done =
+                api.post("/api/v1/users/" + seller + "/sign-out", null, adminSession.accessToken());
+        assertThat(done.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(done.getBody().get("status").asString()).isEqualTo("active");
+        for (Session device : List.of(phone, tablet)) {
+            assertThat(api.get("/api/v1/me", device.accessToken())
+                            .getBody()
+                            .get("code")
+                            .asString())
+                    .isEqualTo("session_revoked");
+            assertThat(api.refresh(device.refreshToken()).getBody().get("code").asString())
+                    .isEqualTo("session_revoked");
+        }
+        Map<String, Object> audited = auditRow("core.user.signed_out_everywhere", seller);
+        assertThat(audited.get("actor_user_id")).isEqualTo(admin);
+        assertThat(audited.get("sessions_ended")).isEqualTo("2");
+        // The administrator and the colleague stay signed in; the person signs in again with the password.
+        assertThat(api.get("/api/v1/me", adminSession.accessToken()).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(api.get("/api/v1/me", colleagueSession.accessToken()).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(api.login(email, Api.PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * Issue #647: a session that was refreshed before Sign out everywhere is ended too; neither the rotated cookie nor the
+     * new one, nor the new access token, works afterwards.
+     */
+    @Test
+    void signOutEverywhereEndsARefreshedSessionToo() {
+        String email = Api.email("rotated");
+        UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
+        Session first = api.signIn(seller, email, Api.PASSWORD, null);
+        ResponseEntity<JsonNode> rotated = api.refresh(first.refreshToken());
+        assertThat(rotated.getStatusCode()).isEqualTo(HttpStatus.OK);
+        String newCookie = api.refreshCookie(rotated);
+        String newAccess = rotated.getBody().get("access_token").asString();
+
+        assertThat(api.post("/api/v1/auth/logout-everywhere", null, newAccess).getStatusCode())
+                .isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(api.get("/api/v1/me", newAccess).getBody().get("code").asString())
+                .isEqualTo("session_revoked");
+        assertThat(api.refresh(newCookie).getBody().get("code").asString()).isEqualTo("session_revoked");
+        assertThat(api.refresh(first.refreshToken()).getBody().get("code").asString())
+                .isEqualTo("session_revoked");
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM auth_sessions WHERE user_id = ? AND revoked_at IS NULL")
+                        .param(seller)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    /** Issue #647: only an active person is signed out; someone still invited or deactivated has no session (409). */
+    @Test
+    void onlyAnActivePersonIsSignedOut() {
+        UUID invited = Api.staff(t, Api.email("invited"), new Role("cashier", t.headOffice()));
+        TestDatabase.owner()
+                .sql("UPDATE users SET status = 'invited' WHERE id = ?")
+                .param(invited)
+                .update();
+        String leaverEmail = Api.email("gone");
+        UUID leaver = Api.staff(t, leaverEmail, new Role("cashier", t.headOffice()));
+        assertThat(api.post("/api/v1/users/" + leaver + "/deactivate", null, adminSession.accessToken())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        for (UUID target : List.of(invited, leaver)) {
+            ResponseEntity<JsonNode> refused =
+                    api.post("/api/v1/users/" + target + "/sign-out", null, adminSession.accessToken());
+            assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            assertThat(refused.getBody().get("code").asString()).isEqualTo("invalid_status_transition");
+            assertThat(audits("core.user.signed_out_everywhere", target)).isZero();
+        }
+    }
+
+    /**
+     * Issue #647: another business's staff member, or an id that is nobody, is not found (404) before anything is revoked,
+     * and that person's sessions stay alive.
+     */
+    @Test
+    void anotherBusinessesStaffIsNotFound() {
+        TestDatabase.Fixture other = TestDatabase.tenant("auth-signout-other", true);
+        Api otherApi = Api.tenant(http, other.slug());
+        String email = Api.email("elsewhere");
+        UUID elsewhere = Api.staff(other, email, new Role("cashier", other.headOffice()));
+        Session theirs = otherApi.signIn(elsewhere, email, Api.PASSWORD, null);
+
+        for (UUID target : List.of(elsewhere, UUID.randomUUID())) {
+            ResponseEntity<JsonNode> refused =
+                    api.post("/api/v1/users/" + target + "/sign-out", null, adminSession.accessToken());
+            assertThat(refused.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        }
+        assertThat(otherApi.get("/api/v1/me", theirs.accessToken()).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM auth_sessions WHERE user_id = ? AND revoked_at IS NOT NULL")
+                        .param(elsewhere)
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    /** Issue #647 and ADR-017: an administrator whose permission covers some branches signs out only people inside them. */
+    @Test
+    void aBranchScopedAdminSignsOutOnlyPeopleInTheirBranches() {
+        String inEmail = Api.email("branch2-seller");
+        UUID inBranch = Api.staff(t, inEmail, new Role("cashier", t.secondBranch()));
+        Session inSession = api.signIn(inBranch, inEmail, Api.PASSWORD, null);
+        String hqEmail = Api.email("hq-seller");
+        UUID headOffice = Api.staff(t, hqEmail, new Role("cashier", t.headOffice()));
+        Session hqSession = api.signIn(headOffice, hqEmail, Api.PASSWORD, null);
+        Map<String, String> scoped = Map.of(
+                "X-Dev-User-Id", admin.toString(),
+                "X-Dev-Permissions", "core.users.manage",
+                "X-Dev-Branch-Ids", t.secondBranch().toString());
+
+        ResponseEntity<JsonNode> outside = api.call(
+                org.springframework.http.HttpMethod.POST,
+                "/api/v1/users/" + headOffice + "/sign-out",
+                null,
+                null,
+                scoped);
+        assertThat(outside.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(api.get("/api/v1/me", hqSession.accessToken()).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(audits("core.user.signed_out_everywhere", headOffice)).isZero();
+
+        ResponseEntity<JsonNode> inside = api.call(
+                org.springframework.http.HttpMethod.POST,
+                "/api/v1/users/" + inBranch + "/sign-out",
+                null,
+                null,
+                scoped);
+        assertThat(inside.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(api.get("/api/v1/me", inSession.accessToken())
+                        .getBody()
+                        .get("code")
+                        .asString())
+                .isEqualTo("session_revoked");
     }
 
     /** FR-IAM-08: deactivation refuses the next request of a still-valid access token. */

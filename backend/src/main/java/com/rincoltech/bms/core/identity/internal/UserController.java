@@ -140,6 +140,16 @@ class UserController {
         return service.resetMfa(userId);
     }
 
+    @PostMapping("/{user_id}/sign-out")
+    @RequiresPermission("core.users.manage")
+    @Operation(
+            summary =
+                    "Sign another user out on every device, for a lost or stolen phone; they stay active and sign in again with their password (issue #647)",
+            operationId = "signOutUserDevices")
+    UserResponse signOutDevices(@PathVariable("user_id") UUID userId) {
+        return service.signOutDevices(userId);
+    }
+
     @PostMapping("/{user_id}/unlock")
     @RequiresPermission("core.users.manage")
     @Operation(

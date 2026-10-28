@@ -149,6 +149,10 @@ class TenantOwnerIT extends IntegrationTest {
                 HttpStatus.FORBIDDEN,
                 "owner_protected");
         assertRefused(patchEmail(owner, adminSession), HttpStatus.FORBIDDEN, "owner_protected");
+        assertRefused(
+                api.post(ownerBase + "/sign-out", null, adminSession.accessToken()),
+                HttpStatus.FORBIDDEN,
+                "owner_protected");
 
         assertRefused(invite("tenant_admin", null, adminSession), HttpStatus.FORBIDDEN, "owner_only");
         assertRefused(
@@ -164,6 +168,10 @@ class TenantOwnerIT extends IntegrationTest {
                 HttpStatus.FORBIDDEN,
                 "owner_only");
         assertRefused(patchEmail(adminB, adminSession), HttpStatus.FORBIDDEN, "owner_only");
+        assertRefused(
+                api.post("/api/v1/users/" + adminB + "/sign-out", null, adminSession.accessToken()),
+                HttpStatus.FORBIDDEN,
+                "owner_only");
 
         // Nothing changed: the Owner is still the one Owner and an active administrator, B is still an administrator.
         assertThat(owners(t.tenantId())).containsExactly(owner);
@@ -202,6 +210,13 @@ class TenantOwnerIT extends IntegrationTest {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);
         assertThat(patchEmail(adminA, ownerSession).getStatusCode()).isEqualTo(HttpStatus.OK);
+        // Issue #647: the Owner signs another administrator out on every device; the administrator stays active.
+        ResponseEntity<JsonNode> signedOut =
+                api.post("/api/v1/users/" + adminA + "/sign-out", null, ownerSession.accessToken());
+        assertThat(signedOut.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(signedOut.getBody().get("status").asString()).isEqualTo("active");
+        assertThat(api.get("/api/v1/me", adminSession.accessToken()).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(api.post("/api/v1/users/" + adminA + "/deactivate", null, ownerSession.accessToken())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);

@@ -6,6 +6,7 @@ import { THEME_LABELS } from '../../app/shell';
 import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from '../../app/theme-mode';
 import { BusyButton } from '../../app/ui/BusyButton';
 import { Segmented } from '../../app/ui/Segmented';
+import { Sheet } from '../../app/ui/Sheet';
 import { ALL_BRANCHES, branchLabel } from '../../auth/branch';
 import { icons } from '../../components/icons';
 import { useHelpSheet } from '../../tour/host';
@@ -67,7 +68,7 @@ function ThemeChoices() {
  * The one menu at the right of the top bar. A disclosure, not a role=menu: it holds a status line and a Segmented as well as
  * buttons. It closes on Escape (focus back to its button) and on a press outside, and keeps its items mounted while closed. Help closes it and opens the Help sheet, which lives outside it.
  */
-export function TopMenu({ me, onSignOut, busy, signOut, children }: { me: Me; onSignOut: () => void; busy: boolean; signOut: boolean; children?: ReactNode }) {
+export function TopMenu({ me, onSignOut, onSignOutEverywhere, busy, signOut, children }: { me: Me; onSignOut: () => void; onSignOutEverywhere?: () => void; busy: boolean; signOut: boolean; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrap = useRef<HTMLDivElement>(null);
@@ -128,9 +129,53 @@ export function TopMenu({ me, onSignOut, busy, signOut, children }: { me: Me; on
             Sign out
           </BusyButton>
         )}
+        {onSignOutEverywhere && (
+          // On every screen size: a lost phone is signed out from whichever device is at hand (issue #647).
+          <button
+            type="button" /* busy-exempt: opens a sheet that asks first */
+            className="btn-ghost top-menu-item"
+            aria-haspopup="dialog"
+            disabled={busy}
+            onClick={() => {
+              setOpen(false);
+              onSignOutEverywhere();
+            }}
+          >
+            {icons.signOut}
+            Sign out everywhere
+          </button>
+        )}
       </div>
       {help.sheet}
     </div>
+  );
+}
+
+/**
+ * Asks before Sign out everywhere (issue #647): it ends every session of the person, this device included, so a lost or lent
+ * phone is refused on its next request. Sales still waiting on this phone stay here, as with Sign out.
+ */
+export function SignOutEverywhere({ open, waiting, busy, onConfirm, onClose }: { open: boolean; waiting: number; busy: boolean; onConfirm: () => void; onClose: () => void }) {
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Sign out everywhere?"
+      actions={
+        <>
+          <BusyButton type="button" className="btn-danger" busy={busy} onClick={onConfirm}>
+            Sign out everywhere
+          </BusyButton>
+          <button type="button" /* busy-exempt: closes the sheet */ className="btn-ghost" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <p>You are signed out on every phone and computer, this one too. Use it when a phone is lost or someone else may be using your account.</p>
+      <p>You sign in again with your password.</p>
+      {waiting > 0 && <p className="muted">{waiting === 1 ? '1 sale is' : `${waiting} sales are`} still on this phone. They stay here and are sent when you sign in here again.</p>}
+    </Sheet>
   );
 }
 

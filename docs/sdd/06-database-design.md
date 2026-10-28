@@ -844,6 +844,8 @@ bound business only, by `tenant_referrals_mine()`.
 `revoked_at timestamptz`, `revoked_reason text` [`sign_out`, `rotation_reuse`,
 `user_deactivated`, `admin`, `mfa_reset`, `password_reset` (added by the migration of #320), `two_step_required` (added by
 `V67`: a session not renewed because its holder must have two-step sign-in and has none, ADR-046)], `ip inet`, `user_agent text`.
+Sign out everywhere writes `sign_out` on every session of the user and an administrator's sign-out of one staff member's
+devices writes `admin` (issue #647, no migration); the audit row tells them apart.
 One row per refresh token: a rotation marks the row `rotated_at` and inserts the next row of the
 same family; the access token's `sid` is the row id.
 Index `(tenant_id, user_id) WHERE revoked_at IS NULL`. FR-IAM-07, FR-IAM-08.

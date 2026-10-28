@@ -103,6 +103,7 @@ class SuspendedTenantInterceptor implements HandlerInterceptor {
     static boolean staffSessionPath(String path) {
         return path.startsWith("/api/v1/auth/staff/")
                 || path.equals("/api/v1/auth/refresh")
-                || path.equals("/api/v1/auth/logout");
+                || path.equals("/api/v1/auth/logout")
+                || path.equals("/api/v1/auth/logout-everywhere");
     }
 }

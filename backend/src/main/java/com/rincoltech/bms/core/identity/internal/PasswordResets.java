@@ -497,7 +497,7 @@ class PasswordResets {
      * A tenant admin whose permission covers some branches only may reset a user whose every role is in those branches. A user
      * with a role over every branch, or with no role at all, needs an admin who covers every branch.
      */
-    private void requireInScope(Principal admin, UUID userId) {
+    void requireInScope(Principal admin, UUID userId) {
         boolean all = admin.scopeOf("core.users.manage")
                 .map(Principal.BranchScope::all)
                 .orElse(false);

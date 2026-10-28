@@ -220,6 +220,21 @@ class StaffAuthController {
                 .build();
     }
 
+    @PostMapping("/logout-everywhere")
+    @AuthenticatedEndpoint(kind = "staff")
+    @Operation(
+            summary =
+                    "Sign out everywhere: revokes every session of the signed-in user, this one included (issue #647)",
+            operationId = "logoutEverywhere")
+    ResponseEntity<Void> logoutEverywhere() {
+        flow.logoutEverywhere(accounts, CurrentPrincipal.require().userId());
+        return ResponseEntity.noContent()
+                .header(
+                        HttpHeaders.SET_COOKIE,
+                        AuthApi.cookie(AuthApi.STAFF_COOKIE, "", AuthApi.STAFF_COOKIE_PATH, Duration.ZERO))
+                .build();
+    }
+
     private void pad(long startedNanos) {
         long remaining = resetMinResponseMillis - (System.nanoTime() - startedNanos) / 1_000_000;
         if (remaining > 0) {

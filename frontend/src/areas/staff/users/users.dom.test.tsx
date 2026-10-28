@@ -14,7 +14,7 @@ import { StaffContext } from '../context';
 // closed, a branch is asked for only when the role is not the administrator, the plan's refusal is shown, and someone who may only
 // read sees the list and no action. Every name, number and link below is invented.
 
-const api = { list: vi.fn(), roles: vi.fn(), branches: vi.fn(), invite: vi.fn(), reissue: vi.fn(), setRoles: vi.fn(), deactivate: vi.fn(), transferOwnership: vi.fn() };
+const api = { list: vi.fn(), roles: vi.fn(), branches: vi.fn(), invite: vi.fn(), reissue: vi.fn(), setRoles: vi.fn(), deactivate: vi.fn(), signOutDevices: vi.fn(), transferOwnership: vi.fn() };
 
 vi.mock('../../../api/users', async (original) => {
   const real = await original<typeof import('../../../api/users')>();
@@ -758,6 +758,53 @@ describe('Reset sign-in (issue #339)', () => {
 });
 
 // The Owner of the business (ADR-062, FR-IAM-18): the badge, the actions an administrator is not offered, and the transfer.
+describe('sign out their devices (issue #647)', () => {
+  it('is offered only on an active person who is not you, asks first, and signs them out at once', async () => {
+    api.signOutDevices.mockResolvedValue({ ...SECOND_ADMIN });
+    shell(<UsersScreen />);
+    const card = (await screen.findByText('Test Admin 03')).closest('li') as HTMLElement;
+    expect(screen.getAllByRole('button', { name: 'Sign out their devices' })).toHaveLength(1);
+    const self = screen.getByText('Test Owner 01').closest('li') as HTMLElement;
+    expect(within(self).queryByRole('button', { name: 'Sign out their devices' })).toBeNull();
+    const waiting = screen.getByText('Test Seller 02').closest('li') as HTMLElement;
+    expect(within(waiting).queryByRole('button', { name: 'Sign out their devices' })).toBeNull();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Sign out their devices' }));
+    expect(api.signOutDevices).not.toHaveBeenCalled();
+    expect(within(card).getByText(/every phone and computer/)).toBeTruthy();
+    const yes = within(card).getByRole('button', { name: 'Yes, sign them out' });
+    fireEvent.click(yes);
+    fireEvent.click(yes);
+    await waitFor(() => expect(api.signOutDevices).toHaveBeenCalledWith('u-admin2'));
+    expect(api.signOutDevices).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Test Admin 03 is signed out on every phone and computer. They sign in again with their password.')).toBeTruthy();
+  });
+
+  it('sends nothing when cancelled', async () => {
+    shell(<UsersScreen />);
+    const card = (await screen.findByText('Test Admin 03')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Sign out their devices' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }));
+    expect(api.signOutDevices).not.toHaveBeenCalled();
+    expect(within(card).getByRole('button', { name: 'Sign out their devices' })).toBeTruthy();
+  });
+
+  it('shows a refusal in plain words inside the question', async () => {
+    api.signOutDevices.mockRejectedValue(new UsersError('Only the owner of the business can add, remove or change an administrator.', 403, 'owner_only'));
+    shell(<UsersScreen />);
+    const card = (await screen.findByText('Test Admin 03')).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Sign out their devices' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Yes, sign them out' }));
+    expect((await within(card).findByRole('alert')).textContent).toMatch(/Only the owner/);
+  });
+
+  it('is not offered to someone who may only read the list', async () => {
+    shell(<UsersScreen />, READER);
+    await screen.findByText('Test Admin 03');
+    expect(screen.queryByRole('button', { name: 'Sign out their devices' })).toBeNull();
+  });
+});
+
 describe('the owner', () => {
   const OWNER: StaffUser = { id: 'u-owner', full_name: 'Test Owner 09', email: 'owner09@example.com', status: 'active', is_owner: true, roles: [{ role_key: 'tenant_admin' }] };
   const SELF_ADMIN: StaffUser = { ...SELF, full_name: 'Test Admin 01' };

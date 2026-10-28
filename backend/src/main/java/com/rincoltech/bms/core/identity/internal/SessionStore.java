@@ -70,6 +70,13 @@ final class SessionStore {
                 .update();
     }
 
+    Optional<Row> byRefreshHash(String refreshTokenHash) {
+        return jdbc.sql(select() + " WHERE refresh_token_hash = ?")
+                .param(refreshTokenHash)
+                .query(this::map)
+                .optional();
+    }
+
     Optional<Row> byRefreshHashForUpdate(String refreshTokenHash) {
         return jdbc.sql(select() + " WHERE refresh_token_hash = ? FOR UPDATE")
                 .param(refreshTokenHash)

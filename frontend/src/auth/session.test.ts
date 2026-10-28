@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getAccessToken, refreshSession, setAccessToken } from './session';
 
 // #112 item 7: a reload starts with no access token in memory; the staff layout calls refreshSession,
-// which must sign the user back in from the HttpOnly refresh cookie while that is valid (7 days from
-// sign-in, ADR-014 as amended by #644), and send them to sign-in only when the server refuses it.
+// which must sign the user back in from the HttpOnly refresh cookie while that is valid (used at least
+// once every 30 days, at most 90 days from sign-in, ADR-014 as amended by #647), and send them to sign-in
+// only when the server refuses it.
 
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -97,8 +97,8 @@ back to what opened it.
 ## Shell and navigation (issue #526)
 
 19. The staff area has one 56px top bar: the business and the branch in use as its title, which switches branch; Search;
-    Refresh beside it, named Refresh, its icon alone on a phone (issue #631); and one menu for who is signed in, Help, the theme
-    and Sign out. The Online dot shows only when it has news (offline,
+    Refresh beside it, named Refresh, its icon alone on a phone (issue #631); and one menu for who is signed in, Help, the theme,
+    Sign out and Sign out everywhere (issue #647, on every screen size, after a question in the kit's Sheet). The Online dot shows only when it has news (offline,
     sending, sales waiting), and always for a manager, whose sheet settles other phones' sales; below 430px wide the controls
     sit closer, the Online dot is the dot and the number waiting alone in every state (its name keeps the words, "Offline, 3
     waiting to sync") and Ask is its icon alone; with Refresh in the bar the controls touch, each exactly a 48px target (issue #631), so the business and the branch keep their first word and the start of the

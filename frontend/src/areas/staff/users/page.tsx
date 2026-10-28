@@ -21,13 +21,14 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 // The one-time link of a resend is shown once, in a box, and is never kept. Reset sign-in (issue #339) makes such a link for an active
 // person who forgot their password, after the administrator types a code from their own authenticator app (or their own password).
 // The Owner (ADR-062) carries a badge; only the Owner is offered the actions on another administrator and Transfer ownership, and the
-// Owner's own card offers no action to anyone else. The server refuses the same with 403 owner_only and owner_protected.
+// Owner's own card offers no action to anyone else. The server refuses the same with 403 owner_only and owner_protected. Sign out
+// their devices (issue #647) ends every session of an active person at once, for a lost or stolen phone; they stay active.
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Try again.');
 
 const BADGE: Record<string, string> = { invited: 'badge badge-warning', active: 'badge badge-success', deactivated: 'badge' };
 
-type Mode = { kind: 'roles' | 'deactivate' | 'reset'; id: string } | null;
+type Mode = { kind: 'roles' | 'deactivate' | 'reset' | 'sign-out'; id: string } | null;
 
 export function UsersScreen() {
   const { me } = useStaff();
@@ -116,6 +117,14 @@ export function UsersScreen() {
       return `${user.full_name} is deactivated and signed out.`;
     });
 
+  // A lost or stolen phone (issue #647): every device of the person is signed out at once; they stay active.
+  const signOutDevices = (user: StaffUser) =>
+    act(user, async () => {
+      await users.signOutDevices(user.id ?? '');
+      setMode(null);
+      return `${user.full_name} is signed out on every phone and computer. They sign in again with their password.`;
+    });
+
   async function transferOwnership(to: StaffUser, credential: { totpCode?: string; password?: string }): Promise<string | null> {
     if (working.current) return null;
     working.current = true;
@@ -190,7 +199,7 @@ export function UsersScreen() {
       )}
       {link && <LinkBox link={link} business={brand.name} onDone={() => setLink(null)} doneLabel="I have sent it" />}
       {notice && <p role="status" className="alert alert-success">{notice}</p>}
-      {error && mode?.kind !== 'deactivate' && <p role="alert" className="alert alert-danger">{error}</p>}
+      {error && mode?.kind !== 'deactivate' && mode?.kind !== 'sign-out' && <p role="alert" className="alert alert-danger">{error}</p>}
       {list.isPending && <p className="loading">Loading your staff</p>}
       {list.isError && <p role="alert" className="alert alert-danger">{messageOf(list.error)}</p>}
       {roles.isError && <p role="alert" className="alert alert-warning">The role names could not be loaded, so roles are shown by their key.</p>}
@@ -236,6 +245,11 @@ export function UsersScreen() {
                             Reset sign-in
                           </button>
                         )}
+                        {u.id !== me.user_id && u.status === 'active' && (
+                          <button type="button" /* busy-exempt: opens a panel */ className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'sign-out', id: u.id ?? '' }); setError(null); }}>
+                            Sign out their devices
+                          </button>
+                        )}
                         {u.id !== me.user_id && (
                           <button type="button" /* busy-exempt: opens a panel */ className="btn-ghost btn-sm" disabled={busyId !== null} onClick={() => { setMode({ kind: 'deactivate', id: u.id ?? '' }); setError(null); }}>
                             Deactivate
@@ -248,6 +262,18 @@ export function UsersScreen() {
                     )}
                     {mode?.id === u.id && mode?.kind === 'reset' && (
                       <ResetPanel user={u} mfaEnabled={me.mfa_enabled === true} openLinkFor={link?.name ?? null} onSend={(credential) => resetSignIn(u, credential)} onCancel={() => setMode(null)} />
+                    )}
+                    {mode?.id === u.id && mode?.kind === 'sign-out' && (
+                      <div className="alert alert-warning stack" role="group" aria-label={`Sign out ${u.full_name}`}>
+                        {error && <p role="alert" className="alert alert-danger">{error}</p>}
+                        <p>Sign <strong>{u.full_name}</strong> out on every phone and computer? Use this when their phone is lost or stolen. They stay on your business's staff and sign in again with their password.</p>
+                        <p className="cluster">
+                          <BusyButton type="button" className="btn-danger" busy={busyId === u.id} disabled={busyId !== null} onClick={() => void signOutDevices(u)}>
+                            Yes, sign them out
+                          </BusyButton>
+                          <button type="button" /* busy-exempt: cancel waits for the request */ className="btn-ghost" disabled={busyId !== null} onClick={() => setMode(null)}>Cancel</button>
+                        </p>
+                      </div>
                     )}
                     {mode?.id === u.id && mode?.kind === 'deactivate' && (
                       <div className="alert alert-warning stack" role="group" aria-label={`Deactivate ${u.full_name}`}>
