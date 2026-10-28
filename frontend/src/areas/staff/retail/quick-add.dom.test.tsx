@@ -148,6 +148,31 @@ describe('quick add', () => {
     expect(screen.queryByTestId('qa-adds-to')).toBeNull();
   });
 
+  // JUSTIFICATION-A3: #641 asks for a DOM test of the 502 on just add stock; no existing case sends from the panel twice.
+  it('after a 502 on just add stock, names the panel button, which sends the same request again (issue #641)', async () => {
+    quickAdd.mockRejectedValueOnce(new RetailError('This product already exists: Test Rice 1kg (GNR-0001).', 422, 'duplicate_product_name', {
+      existing_id: 'p9', existing_code: 'GNR-0001', existing_name: 'Test Rice 1kg', may_add_anyway: false,
+    }));
+    quickAdd.mockRejectedValueOnce(new RetailError('Bad gateway', 502, 'bad_gateway'));
+    quickAdd.mockResolvedValueOnce({ product_id: 'p9', code: 'GNR-0001', description: 'Test Rice 1kg', unit: 'pc', item_made: false, branch_id: branch?.id, qty: '8', total_qty: '58' });
+    open(owner);
+    type(/^Name/, 'Test Rice 1kg');
+    type(/^Selling price/, '5000');
+    type(/How many do you have here now/, '8');
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    const panel = await screen.findByTestId('name-exists');
+    const use = within(panel).getByRole('button', { name: 'Use the existing one and just add stock' });
+    fireEvent.click(use);
+    expect((await screen.findByTestId('qa-not-sure')).textContent).toBe('We could not tell whether this was saved. Tap Use the existing one and just add stock again: it sends exactly the same, and it is never added twice.');
+    // Add stays off while the panel shows; the button named is the one that works.
+    expect((screen.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(use);
+    await screen.findByTestId('qa-done');
+    const [, second, third] = quickAdd.mock.calls as [Record<string, unknown>, string][];
+    expect(third?.[1]).toBe(second?.[1]);
+    expect(third?.[0]).toEqual({ product_id: 'p9', qty: '8.000', branch_id: branch?.id });
+  });
+
   it('says why there is no Sell it when the person may not sell at that branch', async () => {
     quickAdd.mockResolvedValue({ product_id: 'p7', description: 'Test Tray', unit: 'pc', item_made: true, branch_id: other?.id, qty: '2', total_qty: '2' });
     const scopes = { ...(owner.permission_scopes ?? {}), 'retail.sale.create': { all_branches: false, branch_ids: [branch?.id ?? ''] } };

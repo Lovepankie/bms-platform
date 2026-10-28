@@ -32,7 +32,8 @@ import { Gate, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 // mobile money, as Buy stock does, for whoever may buy stock there and see the buying price; the total that comes out shows before Add.
 
 export const QUICK_ADD = 'Quick add';
-export const QUICK_ADD_OFFLINE = 'You are offline. Quick add needs the internet. Connect, then tap Add again.';
+/** Offline at the press; `button` is the one that sends again (issue #641): Add, or the name panel's button that was tapped. */
+export const quickAddOffline = (button = 'Add') => `You are offline. Quick add needs the internet. Connect, then tap ${button} again.`;
 export const NO_PLACE = 'You have no branch where you can add stock.';
 export const NO_COUNT_HERE = 'The item is added with no stock. Ask your manager to add its stock.';
 
@@ -73,7 +74,8 @@ export function refusedForCertain(error: unknown): boolean {
 }
 
 export const NO_COST_HINT = 'Add a buying price so profit is right. If you do not know it yet, buying stock sets it.';
-export const NOT_SURE = 'We could not tell whether this was saved. Tap Add again: it sends exactly the same, and it is never added twice.';
+/** The answer was lost; `button` is the one that sends again, since Add is off while the name panel shows (issue #641). */
+export const notSureLine = (button = 'Add') => `We could not tell whether this was saved. Tap ${button} again: it sends exactly the same, and it is never added twice.`;
 
 export function QuickAddForm({ initialName = '', onSell }: {
   /** What the name starts with: on Sell's not-found, what was typed in the search. */
@@ -148,6 +150,9 @@ export function QuickAddForm({ initialName = '', onSell }: {
     && (!pieceOff || unitId !== '') && (!generalOff || categoryId !== '')
     && (!paying || (costMinor > 0 && counted !== null && counted > 0)) && !cannotPayHere;
   const canAddAnyway = (me.permissions ?? []).includes('core.settings.manage');
+  const openLabel = mayCount ? 'Use the existing one and just add stock' : 'Keep the existing one';
+  // The button that sends the held request again: Add is off while the name panel shows, so then the panel button that sent it.
+  const resend = exists === null ? 'Add' : unsure.current?.duplicate_reason ? 'Add anyway' : openLabel;
 
   const add = useMutation({
     mutationFn: async (extra: { productId?: string; duplicateReason?: string }) => {
@@ -417,7 +422,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
           item={exists}
           canAddAnyway={exists.mayAddAnyway}
           busy={add.isPending}
-          openLabel={mayCount ? 'Use the existing one and just add stock' : 'Keep the existing one'}
+          openLabel={openLabel}
           onOpen={(id) => {
             if (mayCount && counted !== null && counted > 0) {
               setPanelNote(null);
@@ -446,9 +451,9 @@ export function QuickAddForm({ initialName = '', onSell }: {
       )}
       {kept && <p role="status" className="hint" data-testid="qa-kept">{kept}</p>}
       {offline ? (
-        <p role="alert" className="alert alert-warning" data-testid="qa-offline">{QUICK_ADD_OFFLINE}</p>
+        <p role="alert" className="alert alert-warning" data-testid="qa-offline">{quickAddOffline(resend)}</p>
       ) : notSure ? (
-        <p role="alert" className="alert alert-warning" data-testid="qa-not-sure">{NOT_SURE}</p>
+        <p role="alert" className="alert alert-warning" data-testid="qa-not-sure">{notSureLine(resend)}</p>
       ) : (
         !exists && <Problem error={add.error} />
       )}

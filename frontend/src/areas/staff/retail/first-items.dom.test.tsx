@@ -27,6 +27,7 @@ const similarProducts = vi.fn();
 const listCatalogue = vi.fn();
 const getProduct = vi.fn();
 const listProducts = vi.fn();
+const chooseBranch = vi.fn();
 const made: Product = { id: 'p9', code: 'DUV-0001', description: 'Test duvet cover', category_id: 'c9', category: 'Duvets', unit_id: 'u1', unit: 'piece', sell_minor: 45000, cost_minor: 0, active: true, version: 1 };
 const duvets = { id: 'c9', name: 'Duvets', active: true, product_count: 0, version: 1, code_prefix: 'DUV', next_code: 'DUV-0001' };
 
@@ -82,6 +83,7 @@ afterEach(() => {
   similarProducts.mockResolvedValue({ exact: [], similar: [] });
   getProduct.mockReset();
   listProducts.mockReset();
+  chooseBranch.mockReset();
   listProducts.mockImplementation(() => Promise.resolve(catalogue));
 });
 listProducts.mockImplementation(() => Promise.resolve(catalogue));
@@ -91,7 +93,7 @@ similarProducts.mockResolvedValue({ exact: [], similar: [] });
 function open(node: JSX.Element, me: Me) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me, branch: me.branches?.[0]?.id ?? '', chooseBranch: () => undefined }}>{node}</StaffContext.Provider>
+      <StaffContext.Provider value={{ me, branch: me.branches?.[0]?.id ?? '', chooseBranch }}>{node}</StaffContext.Provider>
     </QueryClientProvider>,
   );
 }
@@ -290,13 +292,24 @@ describe('Sell it from Quick add (issue #632)', () => {
     const note = await screen.findByTestId('sale-start-elsewhere');
     const name = branchLabel(owner.branches?.[1]);
     expect(note.textContent).toContain(`The item you just added is at ${name}. Switch to ${name} to sell it.`);
-    expect(within(note).getByRole('button', { name: `Switch to ${name}` })).toBeTruthy();
+    fireEvent.click(within(note).getByRole('button', { name: `Switch to ${name}` }));
+    expect(chooseBranch).toHaveBeenCalledWith(other);
     expect(getProduct).not.toHaveBeenCalled();
     // Sell here without it forgets the item and clears the address, so the sale never waits.
     fireEvent.click(within(note).getByRole('button', { name: 'Sell here without it' }));
     expect(started).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('sale-start-elsewhere')).toBeNull();
     expect(getProduct).not.toHaveBeenCalled();
+  });
+
+  it('says to search for the item when the branch list does not return it, and never drops it in silence (issue #641)', async () => {
+    catalogue = [];
+    getProduct.mockResolvedValue(made);
+    const started = vi.fn();
+    open(<RecordSale startItem="p9" startBranch={here} onStarted={started} />, owner);
+    expect((await screen.findByText('Test duvet cover did not come up here. Search for it to add it.'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove Test duvet cover' })).toBeNull();
+    await waitFor(() => expect(started).toHaveBeenCalledTimes(1));
   });
 });
 

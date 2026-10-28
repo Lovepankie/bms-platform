@@ -256,6 +256,12 @@ class RetailQuickAddIT extends IntegrationTest {
         assertThat(moves.get(0).get("kind").asString()).isEqualTo("opening");
         assertThat(moves.get(0).get("source_type").asString()).isEqualTo("retail.quick_add");
         assertThat(moves.get(0).get("qty").asString()).isEqualTo("20.000");
+        // The item's cost changes after the Quick add (issue #641): the opening layer keeps 10,000, so every figure
+        // below proves the stock is costed from that layer, never from the item's cost now.
+        ResponseEntity<JsonNode> repriced = api.editPrices(
+                product, Map.of("cost_minor", 14_000, "sell_minor", 15_000, "reason", "Test new cost"), ADMIN);
+        assertThat(repriced.getStatusCode()).as("%s", repriced.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(costOf(product)).isEqualTo(14_000);
         String today = java.time.LocalDate.now(com.rincoltech.bms.kernel.BusinessClock.DEFAULT_ZONE)
                 .toString();
         // Sell two at 15,000 and report one used, so every report has a row of this item and its checks cannot pass
