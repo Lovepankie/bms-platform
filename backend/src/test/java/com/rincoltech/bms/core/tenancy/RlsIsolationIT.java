@@ -78,7 +78,7 @@ public class RlsIsolationIT {
                 .update();
         owner.sql(
                         "INSERT INTO auth_sessions (id, tenant_id, user_id, family_id, refresh_token_hash, expires_at, idle_expires_at)"
-                                + " VALUES (?, ?, ?, ?, ?, now() + interval '7 days', now() + interval '12 hours')")
+                                + " VALUES (?, ?, ?, ?, ?, now() + interval '7 days', now() + interval '7 days')")
                 .params(UUID.randomUUID(), t.tenantId(), user, UUID.randomUUID(), randomHash())
                 .update();
         owner.sql("INSERT INTO user_role_assignments (id, tenant_id, user_id, role_key, branch_id, granted_by)"

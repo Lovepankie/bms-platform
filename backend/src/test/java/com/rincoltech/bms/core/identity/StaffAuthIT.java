@@ -371,6 +371,65 @@ class StaffAuthIT extends IntegrationTest {
                 .isEqualTo("session_expired");
     }
 
+    /** Moves every time of the user's sessions back, as if that much time had passed since they were written. */
+    void ageSessions(UUID userId, String interval) {
+        TestDatabase.owner()
+                .sql("UPDATE auth_sessions SET created_at = created_at - ?::interval,"
+                        + " expires_at = expires_at - ?::interval, idle_expires_at = idle_expires_at - ?::interval"
+                        + " WHERE user_id = ?")
+                .params(interval, interval, interval, userId)
+                .update();
+    }
+
+    /** Issue #644: a phone opened again 13 hours after its last use still refreshes, within the same week. */
+    @Test
+    void aSessionUsedAgainAfterThirteenHoursStillRefreshes() {
+        String email = Api.email("phone");
+        UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
+        Session session = api.signIn(seller, email, Api.PASSWORD, null);
+        Map<String, Object> signedIn = TestDatabase.owner()
+                .sql("SELECT expires_at, idle_expires_at FROM auth_sessions WHERE user_id = ?")
+                .param(seller)
+                .query()
+                .singleRow();
+        // Idle and absolute are both seven days, so the idle limit is the absolute one.
+        assertThat(signedIn.get("idle_expires_at")).isEqualTo(signedIn.get("expires_at"));
+
+        ageSessions(seller, "13 hours");
+        ResponseEntity<JsonNode> refreshed = api.refresh(session.refreshToken());
+        assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(api.get("/api/v1/me", refreshed.getBody().get("access_token").asString())
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        // The refresh never moves the week on: the new session ends when the first one would have.
+        java.sql.Timestamp weekEnds = TestDatabase.owner()
+                .sql("SELECT expires_at FROM auth_sessions WHERE user_id = ? AND rotated_at IS NULL")
+                .param(seller)
+                .query(java.sql.Timestamp.class)
+                .single();
+        assertThat(weekEnds.toInstant())
+                .isEqualTo(((java.sql.Timestamp) signedIn.get("expires_at"))
+                        .toInstant()
+                        .minus(java.time.Duration.ofHours(13)));
+    }
+
+    /** Issue #644: a session past its seven days absolute is refused, however recently it was used. */
+    @Test
+    void aSessionPastSevenDaysAbsoluteIsRefused() {
+        String email = Api.email("week");
+        UUID seller = Api.staff(t, email, new Role("cashier", t.headOffice()));
+        Session session = api.signIn(seller, email, Api.PASSWORD, null);
+        ageSessions(seller, "6 days 12 hours");
+        ResponseEntity<JsonNode> refreshed = api.refresh(session.refreshToken());
+        assertThat(refreshed.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        ageSessions(seller, "12 hours 1 minute");
+        ResponseEntity<JsonNode> expired = api.refresh(api.refreshCookie(refreshed));
+        assertThat(expired.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(expired.getBody().get("code").asString()).isEqualTo("session_expired");
+    }
+
     /** FR-IAM-08: deactivation refuses the next request of a still-valid access token. */
     @Test
     void deactivationRevokesSessionsImmediately() {

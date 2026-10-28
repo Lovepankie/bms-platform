@@ -79,7 +79,7 @@ platform host is `localhost`.
 | Token | Form | Lifetime | Transport |
 |---|---|---|---|
 | Access token | Signed JWT (asymmetric signature, `kid` header for rotation) | 15 minutes | `Authorization: Bearer <token>`; held in memory by the SPA, never in local storage |
-| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 12 hours, absolute 7 days; members idle 30 days, absolute 90 days | Cookie `__Host-bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/` on the tenant host |
+| Refresh token | 256-bit random, stored hashed (`auth_sessions.refresh_token_hash`) | Staff idle 7 days, absolute 7 days (ADR-014 amendment of 2026-10-28, issue #644); members idle 30 days, absolute 90 days | Cookie `__Host-bms_rt`, `HttpOnly; Secure; SameSite=Strict; Path=/` on the tenant host |
 
 Access token claims: `sub` (user id), `tid` (tenant id; absent for platform operators), `knd`
 (`staff`, `member` or `platform`), `sid` (session id), `iat`, `exp`, `iss` (the request host),

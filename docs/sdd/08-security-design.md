@@ -23,10 +23,16 @@ Summarised from chapter 7 section 7.4 and chapter 3 section 3.7.
 
 | Principal | Factor(s) | Lockout | Session |
 |---|---|---|---|
-| Platform super admin | Email plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 2 hours |
-| Tenant admin | Email or phone plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 12 hours |
-| Other staff | Email or phone plus password; TOTP optional or tenant-mandated | 5 failures, 15 minutes | Access 15 minutes, refresh idle 12 hours |
+| Platform super admin | Email plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 2 hours, absolute 12 hours |
+| Tenant admin | Email or phone plus password plus TOTP (mandatory) | 5 failures, 15 minutes | Access 15 minutes, refresh idle 7 days, absolute 7 days |
+| Other staff | Email or phone plus password; TOTP optional or tenant-mandated | 5 failures, 15 minutes | Access 15 minutes, refresh idle 7 days, absolute 7 days |
 | Member | Phone plus 5 digit PIN, set after an SMS one-time code | 5 failures, 30 minutes | Access 15 minutes, refresh idle 30 days |
+
+A staff phone stays signed in for 7 days from sign-in, however rarely it is used, and then signs in again (ADR-014
+amendment of 2026-10-28, issue #644: the idle limit was 12 hours, so a shop owner signed in every morning). Using the app
+never extends the week. Sign-out, deactivation, a password reset, an MFA reset and the step-up lock still end sessions on
+the next request. The cost is that an unlocked phone, or a copied refresh cookie, stays usable for up to 7 days rather
+than 12 idle hours; the phone's screen lock, sign-out and an administrator's deactivation or reset are the controls.
 
 - Passwords and PINs are hashed with argon2id (memory 64 MiB, iterations 3,
   parallelism 1, tuned so one hash takes about 100 ms on the production host). Passwords are

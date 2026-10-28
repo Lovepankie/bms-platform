@@ -5,7 +5,8 @@
 Accepted (2026-09-29). Implements chapter 7 section 7.4 and chapter 8 section 8.2 for tenant staff
 and platform operators in MVP increment 1 (issue #7). Takes in review items 1 and 2 of
 `docs/meetings/2026-09-29/spec-review-recommendations.md`, accepted on PR #8. Member sign-in (phone
-and PIN, FR-IAM-09) is phase 2 and will reuse the session design below.
+and PIN, FR-IAM-09) is phase 2 and will reuse the session design below. Amended 2026-10-28 (issue #644): the
+staff idle limit is 7 days.
 
 ## Context
 
@@ -45,7 +46,8 @@ Options considered for each part:
   `auth_sessions` row per token. Rotation marks the row rotated and inserts the next row of the
   family; presenting a rotated token revokes the whole family. The authentication filter checks
   the session row and the user's status on every request, so sign-out, deactivation and an MFA
-  reset take effect on the next request. Staff: idle 12 hours, absolute 7 days. Platform
+  reset take effect on the next request. Staff: idle 7 days, absolute 7 days (idle 12 hours until the
+  amendment of 2026-10-28). Platform
   operators: idle 2 hours, absolute 12 hours (`platform_sessions`).
 - **TOTP** is RFC 6238 with the defaults every authenticator app supports (HMAC-SHA1, 6 digits,
   30 seconds, 160 bit secret), implemented in place and tested against the RFC vectors. One step
@@ -103,3 +105,26 @@ Options considered for each part:
 - Rotating the signing key needs two keys valid during the change; today one key is configured.
 - When the email provider is chosen, the invitation keeps showing the link to the admin unless
   chapter 3 is changed again.
+
+## Amendment of 2026-10-28 (issue #644): staff stay signed in for a week
+
+A tester on a phone was sent back to Staff sign-in every day: a shop owner who opens the app each morning has been idle
+for more than 12 hours overnight, so every morning began with the password. The owner asked on 28 October 2026 that the
+app remember the device for about a week.
+
+1. **The staff idle limit is 7 days**, the same as the absolute limit (`StaffAccounts.idleTtl`). A staff session now
+   lasts 7 days from sign-in however rarely it is used; a refresh still rotates the token, and the rotated session keeps
+   the family's absolute expiry, so using the app never extends the week. The refresh cookie's `Max-Age` was already the
+   absolute 7 days and is unchanged. No migration: `auth_sessions.idle_expires_at` is written by the application, and a
+   session open at release keeps its 12 hour idle expiry until its next refresh.
+2. **Platform operators are unchanged**: idle 2 hours, absolute 12 hours.
+3. **What ends a session at once is unchanged**: sign-out (the family), deactivation, a password reset, an
+   administrator's or operator's MFA reset and the step-up lock (every session of the user), and a reused refresh token
+   (the family). The authentication filter still checks the session row and the user on every request.
+4. **The trade-off.** An unlocked phone left with someone else, or a copied refresh cookie, now stays usable for up to
+   7 days instead of 12 idle hours. The mitigations are those of point 3: anyone can sign out, an administrator can
+   deactivate a person or reset their sign-in, and a password reset ends every session. The phone's own screen lock is
+   the first line, and the sign-in help says so.
+5. **Tests**: `SessionLimitsTest` pins both principals' limits; `StaffAuthIT` shows that a session used again after 13
+   hours still refreshes without moving the week on, and that one past its 7 days absolute is refused with
+   `session_expired`.
