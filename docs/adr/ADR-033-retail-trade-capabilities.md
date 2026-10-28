@@ -386,7 +386,7 @@ Decision 8 is completed in slice 10 (migration V48; `docs/specs/trade-capabiliti
 
 ADR-092 replaces the two profiles of decision 2 with four kinds named by what the owner has (`shops`, `stores_and_shops`,
 `wholesale`, `wholesale_and_shops`). A kind is still a preset of the flags and never a mode; it sets the six flags it governs and
-leaves `branch_roles` and `returns` as they are. Migration `V103` renames stored profiles without changing a flag.
+leaves `branch_roles` and `returns` as they are. Migration `V103` renames stored profiles without changing a flag. Since issue #630 a kind only ever turns `units` on and never off; see the amendment below.
 
 ## Amendment of 2026-10-28 (issue #630, owner decision D64): packs on for a new retail business
 

@@ -111,7 +111,8 @@ describe('the turn-on line on the item form', () => {
   });
 
   it('reads the settings again once when someone changed them in between, and shows a second conflict', async () => {
-    const conflict = () => new RetailError('The resource changed since it was read.', 409, 'version_conflict');
+    // The body the server sends for a stale If-Match (RetailBranchRolesIT.theCapabilitiesWriteNeedsTheCurrentSettingsVersion).
+    const conflict = () => new RetailError('The resource changed since it was read; the current version is 6.', 409, 'version_conflict');
     capabilities.mockResolvedValueOnce({ capabilities: { units: false }, version: 5 }).mockResolvedValueOnce({ capabilities: { units: false }, version: 6 });
     changeCapabilities.mockRejectedValueOnce(conflict()).mockResolvedValueOnce({ capabilities: { units: true }, version: 7 });
     screenOf(owner, water);
@@ -130,6 +131,28 @@ describe('the turn-on line on the item form', () => {
     await waitFor(() => expect(changeCapabilities).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByTestId('packs-turn-on').querySelector('[role="alert"]')?.textContent).toContain('changed since it was read'));
     expect(screen.queryByTestId('pack-editor')).toBeNull();
+  });
+
+  it('reads the settings again once on a 412 too, whatever its code', async () => {
+    capabilities.mockResolvedValueOnce({ capabilities: { units: false }, version: 2 }).mockResolvedValueOnce({ capabilities: { units: false }, version: 3 });
+    changeCapabilities.mockRejectedValueOnce(new RetailError('Precondition failed', 412)).mockResolvedValueOnce({ capabilities: { units: true }, version: 4 });
+    screenOf(owner, water);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
+
+    await screen.findByTestId('pack-editor');
+    expect(changeCapabilities.mock.calls).toEqual([[{ units: true }, 2], [{ units: true }, 3]]);
+  });
+
+  it('shows any other refusal at once, with no second try', async () => {
+    capabilities.mockResolvedValue({ capabilities: { units: false }, version: 2 });
+    changeCapabilities.mockRejectedValue(new RetailError('You do not have permission to do this.', 403, 'forbidden'));
+    screenOf(owner, water);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
+
+    await waitFor(() => expect(screen.getByTestId('packs-turn-on').querySelector('[role="alert"]')?.textContent).toContain('permission'));
+    expect(changeCapabilities).toHaveBeenCalledTimes(1);
   });
 
   it('tells someone who may not change settings who can turn packs on, with no button', () => {

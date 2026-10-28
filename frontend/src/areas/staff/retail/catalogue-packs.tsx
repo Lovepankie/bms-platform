@@ -338,6 +338,11 @@ export const PACKS_QUESTION = 'Also sold or bought in cartons or boxes?';
 export const ASK_OWNER_PACKS = 'Ask the owner to turn on cartons in Retail settings.';
 export const PACKS_ON_ADDING = 'Cartons are on. Once the item is added, tap Edit on it to add its cartons and boxes.';
 
+/** A write refused because the settings changed since they were read: 409 version_conflict today, or a 412 precondition. */
+export function staleVersion(error: unknown): boolean {
+  return error instanceof RetailError && (error.status === 412 || error.status === 409 || error.code === 'version_conflict');
+}
+
 /** The /me of every signed-in query with packs listed among the retail capabilities. */
 export function withPacksOn(me: Me): Me {
   const retailOn = me.module_capabilities?.retail ?? [];
@@ -354,15 +359,15 @@ export function PacksTurnOn({ adding }: { adding: boolean }) {
   const [done, setDone] = useState(false);
   const turnOn = useMutation({
     mutationFn: async () => {
-      // Read, then send only units with that version; the server merges it. A change by someone else in between is read
-      // again once, and a second conflict is shown.
+      // Read, then send only units with that version; the server merges it. A change by someone else in between (409, or
+      // 412) is read again once, and a second conflict is shown.
       for (let attempt = 0; ; attempt += 1) {
         const read = await retail.capabilities();
         if (read.capabilities.units === true) return read;
         try {
           return await retail.changeCapabilities({ units: true }, read.version);
         } catch (error) {
-          if (attempt > 0 || !(error instanceof RetailError && error.code === 'version_conflict')) throw error;
+          if (attempt > 0 || !staleVersion(error)) throw error;
         }
       }
     },

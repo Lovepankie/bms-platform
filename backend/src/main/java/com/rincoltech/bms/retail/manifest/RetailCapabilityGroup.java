@@ -170,9 +170,7 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         }
         if (proposed.get(PROFILE) instanceof String profile) {
             out.put(PROFILE, profile);
-            // The kind sets the switches it governs; branch roles and returns are left as they are, and packs are only
-            // turned on
-            // (issue #630).
+            // A kind sets its switches; branch roles and returns stay; packs only go on (#630).
             for (String key : BusinessTypes.GOVERNED) {
                 if (BusinessTypes.PRESETS.get(profile).contains(key)) {
                     out.put(key, true);

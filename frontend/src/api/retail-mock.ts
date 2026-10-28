@@ -1391,7 +1391,11 @@ export function createMockRetail(): RetailApi {
       const next: Record<string, unknown> = { ...caps.value };
       if (body.profile) {
         next.profile = body.profile;
-        for (const key of MOCK_GOVERNED) if (key !== 'units' || (MOCK_PRESETS[body.profile] ?? []).includes(key)) next[key] = (MOCK_PRESETS[body.profile] ?? []).includes(key);
+        // As BusinessTypes: on when the kind presets it, else off, except packs, which no kind switches off (issue #630).
+        for (const key of MOCK_GOVERNED) {
+          if ((MOCK_PRESETS[body.profile] ?? []).includes(key)) next[key] = true;
+          else if (key !== 'units') next[key] = false;
+        }
       }
       for (const key of MOCK_FLAGS) if (typeof body[key] === 'boolean') next[key] = body[key];
       // The slow mover rules of Stock health (issue #414), whole numbers in the server's ranges.

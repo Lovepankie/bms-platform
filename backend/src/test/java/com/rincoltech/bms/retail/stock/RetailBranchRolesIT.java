@@ -302,6 +302,25 @@ class RetailBranchRolesIT extends IntegrationTest {
         assertThat(kinds).contains("shops>wholesale", "wholesale>stores_and_shops", "stores_and_shops>shops");
     }
 
+    /** Issue #630: the item form sends units alone; the route merges it and keeps the kind and every other switch. */
+    @Test
+    void aWriteOfPacksAloneKeepsTheKindAndTheOtherSwitches() {
+        assertThat(putCapabilities(
+                                Map.of("profile", "stores_and_shops", "branch_roles", true, "returns", true), SETTINGS)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+
+        JsonNode after = putCapabilities(Map.of("units", true), SETTINGS).getBody();
+
+        assertThat(after.get("profile").asString()).isEqualTo("stores_and_shops");
+        for (String on : List.of("units", "branch_roles", "returns", "transfer_receipt")) {
+            assertThat(after.get(on).asBoolean()).as(on).isTrue();
+        }
+        for (String off : List.of("price_lists", "customer_accounts", "documents", "purchasing")) {
+            assertThat(after.get(off).asBoolean()).as(off).isFalse();
+        }
+    }
+
     /** A write without the current settings version is refused like PATCH /settings. */
     @Test
     void theCapabilitiesWriteNeedsTheCurrentSettingsVersion() {
@@ -316,6 +335,8 @@ class RetailBranchRolesIT extends IntegrationTest {
                 "*",
                 Map.of("If-Match", "999"));
         assertThat(stale.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        // The code the item form's Turn on cartons reads again on (issue #630).
+        assertThat(code(stale)).isEqualTo("version_conflict");
         assertThat(api.get("/settings/capabilities", SETTINGS)
                         .getBody()
                         .get("units")
