@@ -524,6 +524,15 @@ class StockRepository {
                         """).params(by, id).update();
     }
 
+    /** Issue #681: the ids of the draft counts a person made at a branch, newest first. */
+    List<UUID> draftStocktakesBy(UUID branchId, UUID by, int limit) {
+        return jdbc.sql("""
+                        SELECT id FROM retail_stocktakes
+                         WHERE branch_id = ? AND created_by = ? AND status = 'draft'
+                         ORDER BY created_at DESC, id LIMIT ?
+                        """).params(branchId, by, limit).query(UUID.class).list();
+    }
+
     Optional<Stocktake> stocktake(UUID id, boolean lock) {
         Optional<Stocktake> header = jdbc.sql("""
                         SELECT id, branch_id, status, note, created_at, created_by, committed_at, committed_by,

@@ -1437,8 +1437,16 @@ the items show only while you search, and go away once one is picked. Every item
   this page open.** when the device cannot store it. After Commit the count a success screen (the kit's `SuccessScreen`)
   says **Stock updated for N items** with how many went up, went down and matched and the first five changes in words
   ("Test Lamp: 2 pieces more"), with **Start another count** and **Back to My stock**, and a success toast; the device and
-  the server keep nothing more of that count. The server draft is found again by its id on this device; another device
-  has no route to look it up yet.
+  the server keep nothing more of that count. Every draft Count stock makes carries the note "Counted on Count stock", so
+  it never takes a draft Sell made for one of its own. On opening, Count stock reads the person's own drafts at the branch
+  once (`GET /retail/stocktakes?branch_id=`): with nothing saved on this device it picks up the newest count from another
+  device, and a draft whose send a reload or a lost connection cut off (its lines are kept on the device as pending before
+  each send) is found by its lines and discarded, so no draft is left open where nobody can see it. A send that fails is
+  tried again after 10 seconds, whether the connection dropped or the server refused it. One tab or window counts at a
+  time on a device: the one that opens Count stock last takes the count, and the other shows "Count stock is open in another
+  tab or window, and your counts are kept there." with **Count here instead**, which reads the count afresh. A branch switch
+  opens that branch's own saved count. A restored count opened offline says "Saved on this phone, will send when online",
+  never All counts saved, and a restored count of an item no longer on the sheet is dropped once the sheet is read.
 - **Count stock: the server checks big drops too (issue #636).** **Commit the count** sends the product ids of the ticked lines,
   and the server refuses a commit that leaves out a big drop with 409 `big_drop_not_acknowledged`, naming the lines, so a draft
   committed from another tab or the API never writes one unasked. The screen shows the server's words under the button.

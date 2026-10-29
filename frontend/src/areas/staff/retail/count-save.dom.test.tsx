@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { StockRow } from '../../../api/retail';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Stocktake, StockRow } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { COUNT_NOTE, countKey, countRetry } from './count-save-state';
 
 // Issue #681: Count stock keeps each count as it is typed, on the device at once and in a server draft once typing rests, says
-// so, brings it back after a reload or a lost connection, and ends with a clear success screen after Commit the count. Only the
-// person's Commit ever commits. Fabricated names and amounts.
+// so, brings it back after a reload, a lost connection or on another device, and ends with a clear success screen after
+// Commit the count. Only the person's Commit ever commits. Fabricated names and amounts.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -16,6 +17,7 @@ const listStock = vi.fn();
 const createStocktake = vi.fn();
 const commitStocktake = vi.fn();
 const discardStocktake = vi.fn();
+const myDraftStocktakes = vi.fn();
 
 vi.mock('@tanstack/react-router', async (original) => {
   const real = await original<typeof import('@tanstack/react-router')>();
@@ -32,6 +34,7 @@ vi.mock('../../../api/retail', async (original) => {
       createStocktake: (...a: unknown[]) => createStocktake(...a),
       commitStocktake: (...a: unknown[]) => commitStocktake(...a),
       discardStocktake: (...a: unknown[]) => discardStocktake(...a),
+      myDraftStocktakes: (...a: unknown[]) => myDraftStocktakes(...a),
     },
   };
 });
@@ -43,28 +46,37 @@ const setOnline = (on: boolean) => {
   window.dispatchEvent(new Event(on ? 'online' : 'offline'));
 };
 
+beforeEach(() => {
+  myDraftStocktakes.mockResolvedValue([]);
+  discardStocktake.mockResolvedValue({ status: 'discarded' });
+});
+
 afterEach(() => {
   cleanup();
   listStock.mockReset();
   createStocktake.mockReset();
   commitStocktake.mockReset();
   discardStocktake.mockReset();
+  myDraftStocktakes.mockReset();
   localStorage.clear();
   setOnline(true);
+  countRetry.delayMs = 10_000;
 });
 
 const row = (code: string, description: string, qty: string): StockRow => ({ product_id: code, code, description, category: 'Lamps', unit: 'piece', qty, negative: false, sell_minor: 1500 });
 const sheet = [row('A-1', 'Test Lamp', '5.000'), row('A-2', 'Test Plug', '8.000')];
 const SENT = { timeout: 5000 };
+const me = mockMe('admin');
+const branchA = me.branches?.[0]?.id ?? '';
+const branchB = me.branches?.[1]?.id ?? '';
 
-function open() {
-  const me = mockMe('admin');
-  render(
+function page(branch = branchA) {
+  return (
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me, branch: me.branches?.[0]?.id ?? '' }}>
+      <StaffContext.Provider value={{ me, branch }}>
         <StocktakePage />
       </StaffContext.Provider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 
@@ -72,7 +84,7 @@ const countBox = (id: string) => document.getElementById(`count-${id}`) as HTMLI
 const status = () => screen.getByTestId('count-saved-all').textContent;
 async function ready() {
   listStock.mockResolvedValue(sheet);
-  open();
+  render(page());
   await screen.findByText(/^Not counted yet/);
 }
 /** Review the difference, answering the question about items not counted. */
@@ -82,6 +94,8 @@ async function reviewIt(n: number) {
   if (anyway) fireEvent.click(anyway);
   await screen.findByRole('heading', { name: 'Review the difference' });
 }
+const draftOf = (id: string, lines: [string, string][], note = COUNT_NOTE): Stocktake =>
+  ({ id, status: 'draft', note, lines: lines.map(([product_id, counted_qty]) => ({ product_id, counted_qty })) });
 
 describe('a count kept as it is typed', () => {
   it('says Saved under each count at once, then All counts saved once the server draft holds them', async () => {
@@ -94,7 +108,7 @@ describe('a count kept as it is typed', () => {
     expect(status()).toBe('Saving...');
     await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
     expect(createStocktake).toHaveBeenCalledTimes(1);
-    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: expect.any(String), lines: [{ product_id: 'A-1', counted_qty: '4.000' }] });
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: branchA, note: COUNT_NOTE, lines: [{ product_id: 'A-1', counted_qty: '4.000' }] });
     expect(commitStocktake).not.toHaveBeenCalled();
   });
 
@@ -137,6 +151,17 @@ describe('a count kept as it is typed', () => {
     expect(createStocktake).toHaveBeenCalledTimes(1);
   });
 
+  // Review of #681: a drop the browser does not notice (flaky data, a deploy) is tried again on its own.
+  it('sends again by itself after the connection drops mid send while the phone still says online', async () => {
+    countRetry.delayMs = 300;
+    createStocktake.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+    await ready();
+    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
+    await waitFor(() => expect(status()).toBe('Saved on this phone, will send when online'), SENT);
+    await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
+    expect(createStocktake).toHaveBeenCalledTimes(2);
+  });
+
   it('loses nothing when the connection drops while a count is sent, and still has it after a reload', async () => {
     createStocktake.mockRejectedValue(new TypeError('Failed to fetch'));
     await ready();
@@ -147,10 +172,80 @@ describe('a count kept as it is typed', () => {
     expect(countBox('A-1').value).toBe('4');
   });
 
+  // Review of #681: a restored count that never reached the server never reads as All counts saved, even with no sheet.
+  it('opened offline with counts that were never sent, says they are on the phone, not All counts saved', async () => {
+    localStorage.setItem(countKey(window.location.host, branchA, me.user_id ?? ''), JSON.stringify({ counts: { 'A-1': '4' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], draftId: null, stale: [], pending: [] }));
+    setOnline(false);
+    listStock.mockRejectedValue(new TypeError('Failed to fetch'));
+    render(page());
+    await waitFor(() => expect(status()).toBe('Saved on this phone, will send when online'));
+    expect(document.body.textContent).not.toContain('All counts saved');
+  });
+
   it('never says Saved for a count that is not a quantity', async () => {
     await ready();
     fireEvent.change(countBox('A-1'), { target: { value: 'abc' } });
     expect(screen.queryByTestId('count-saved-A-1')).toBeNull();
+  });
+});
+
+// Review of #681: a draft whose id never reached the device, two tabs, a branch switch and another device.
+describe('a count kept safely', () => {
+  it('discards on the next open a draft a reload cut off before its answer came back', async () => {
+    createStocktake.mockImplementation(() => new Promise(() => {}));
+    await ready();
+    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
+    await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1), SENT);
+    cleanup();
+    // The server made it all the same; a Sell count and a different count of this person stay as they are.
+    myDraftStocktakes.mockResolvedValue([draftOf('st-lost', [['A-1', '4.000']]), draftOf('st-sell', [['A-1', '4.000']], 'Counted when the item was added on Sell'), draftOf('st-other', [['A-2', '1.000']])]);
+    await ready();
+    await waitFor(() => expect(discardStocktake).toHaveBeenCalledWith('st-lost'));
+    expect(discardStocktake).not.toHaveBeenCalledWith('st-sell');
+    expect(discardStocktake).not.toHaveBeenCalledWith('st-other');
+    expect(countBox('A-1').value).toBe('4');
+  });
+
+  it('lets one tab count at a time: the tab that opens last takes the count, and the first can take it back', async () => {
+    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+    await ready();
+    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
+    const key = `${countKey(window.location.host, branchA, me.user_id ?? '')}.tab`;
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key, newValue: JSON.stringify({ tab: 'zz-other', since: Date.now() + 1000 }) }));
+    });
+    expect(screen.getByTestId('count-other-tab').textContent).toContain('Count stock is open in another tab or window');
+    expect(document.getElementById('count-A-1')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Count here instead' }));
+    await screen.findByText(/^Not counted yet/);
+    expect(countBox('A-1').value).toBe('4');
+  });
+
+  it('keeps each branch its own count when the branch is switched', async () => {
+    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+    listStock.mockResolvedValue(sheet);
+    const view = render(page(branchA));
+    await screen.findByText(/^Not counted yet/);
+    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
+    view.rerender(page(branchB));
+    await screen.findByText(/^Not counted yet/);
+    expect(countBox('A-1').value).toBe('');
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(createStocktake.mock.calls.every(([body]) => body.branch_id === branchA || body.lines.length === 0)).toBe(true);
+    view.rerender(page(branchA));
+    await screen.findByText(/^Not counted yet/);
+    expect(countBox('A-1').value).toBe('4');
+  });
+
+  it('picks up a count from another device when this one has none, and never a draft Sell made', async () => {
+    myDraftStocktakes.mockResolvedValue([draftOf('st-sell', [['A-2', '1.000']], 'Counted when the item was added on Sell'), draftOf('st-phone', [['A-1', '4.000'], ['A-2', '6.000']])]);
+    await ready();
+    await waitFor(() => expect(countBox('A-1').value).toBe('4'));
+    expect(countBox('A-2').value).toBe('6');
+    expect(status()).toBe('All counts saved, 2 items');
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(createStocktake).not.toHaveBeenCalled();
+    expect(discardStocktake).not.toHaveBeenCalled();
   });
 });
 

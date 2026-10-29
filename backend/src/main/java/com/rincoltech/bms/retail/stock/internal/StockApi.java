@@ -369,4 +369,9 @@ final class StockApi {
             UUID committedBy,
             UUID adjustmentEntryId,
             int version) {}
+
+    @Schema(
+            name = "RetailStocktakeDrafts",
+            description = "Issue #681: the caller's own draft counts at a branch, newest first, with their lines")
+    record StocktakeDrafts(List<Stocktake> items) {}
 }

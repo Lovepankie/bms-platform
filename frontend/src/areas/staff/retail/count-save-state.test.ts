@@ -7,7 +7,7 @@ import { changeWords, countKey, readCount, saveWords, unreachable, writeCount, t
 
 afterEach(() => localStorage.clear());
 
-const saved: SavedCount = { counts: { 'A-1': '4' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], draftId: 'st-a', stale: ['st-0'] };
+const saved: SavedCount = { counts: { 'A-1': '4' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], draftId: 'st-a', stale: ['st-0'], pending: [] };
 
 describe('the count kept on the device', () => {
   it('keeps one count per business, branch and person', () => {

@@ -19756,6 +19756,17 @@
           }
         }
       },
+      "RetailStocktakeDrafts" : {
+        "description" : "Issue #681: the caller's own draft counts at a branch, newest first, with their lines",
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailStocktake"
+            },
+            "type" : "array"
+          }
+        }
+      },
       "RetailStocktakeLine" : {
         "properties" : {
           "code" : {
@@ -43635,6 +43646,32 @@
       }
     },
     "/api/v1/retail/stocktakes" : {
+      "get" : {
+        "operationId" : "listMyDraftRetailStocktakes",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStocktakeDrafts"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The caller's own draft counts at a branch, newest first, at most ten, with their lines (issue #681)",
+        "tags" : [ "retail-stock" ]
+      },
       "post" : {
         "operationId" : "createRetailStocktake",
         "requestBody" : {

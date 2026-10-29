@@ -6985,7 +6985,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** The caller's own draft counts at a branch, newest first, at most ten, with their lines (issue #681) */
+        get: operations["listMyDraftRetailStocktakes"];
         put?: never;
         /** Record a count; returns the variance per line (FR-RET-08) */
         post: operations["createRetailStocktake"];
@@ -17531,6 +17532,10 @@ export interface components {
         RetailStocktakeCommitRequest: {
             /** @description The product ids of the lines that take an item holding stock to 0, or to less than half of it, that were ticked as right. Every such line must be here, or the commit is refused with 409 big_drop_not_acknowledged */
             acknowledged?: string[];
+        };
+        /** @description Issue #681: the caller's own draft counts at a branch, newest first, with their lines */
+        RetailStocktakeDrafts: {
+            items?: components["schemas"]["RetailStocktake"][];
         };
         RetailStocktakeLine: {
             code?: string;
@@ -32148,6 +32153,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailStockSummary"];
+                };
+            };
+        };
+    };
+    listMyDraftRetailStocktakes: {
+        parameters: {
+            query?: {
+                branch_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStocktakeDrafts"];
                 };
             };
         };

@@ -21,7 +21,7 @@ import { ScreenToast, useItemAdded } from './toast';
 import { entryWarnings } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { SuccessScreen } from '../../../app/ui/SuccessScreen';
-import { changeWords, countKey, readCount, saveWords, useCountSave } from './count-save-state';
+import { COUNT_NOTE, changeWords, countKey, readCount, saveWords, typedQty, useCountSave, useCountTab } from './count-save-state';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -137,13 +137,12 @@ export async function countableStock(branchId: string, api: Pick<typeof retail, 
   return [...active, ...withInactive.filter((r) => !shown.has(r.product_id) && Number(r.qty) !== 0)].sort((x, y) => (x.code ?? '').localeCompare(y.code ?? ''));
 }
 
-function CountSheet({ branchId }: { branchId: string }) {
+function CountSheet({ branchId, saveKey }: { branchId: string; saveKey: string }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   // Issue #681: a count in progress is kept on this device for this business, branch and person, and comes back on a reload.
-  const saveKey = countKey(typeof window === 'undefined' ? '' : window.location.host, branchId, me.user_id ?? 'staff');
   const [restored] = useState(() => readCount(saveKey));
   const [counts, setCounts] = useState<Record<string, string>>(restored?.counts ?? {});
   // Issue #650: the cartons typed for an item with a standard pack, with the pack they were typed in, so a pack changed or
@@ -231,14 +230,31 @@ function CountSheet({ branchId }: { branchId: string }) {
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const valid = entered.flatMap(([productId, v]) => { const c = parseCount(v); return c === null ? [] : [{ product_id: productId, counted_qty: qtyString(c) }]; });
   const review = useMutation({
-    mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: valid }),
-    onSuccess: (st) => {
-      saving.adopt(st.id ?? null);
+    mutationFn: (lines: typeof valid) => retail.createStocktake({ branch_id: branchId, lines, note: COUNT_NOTE }),
+    onSuccess: (st, lines) => {
+      saving.adopt(st.id ?? null, lines);
       setDraft(st);
     },
   });
-  const saving = useCountSave({ branchId, saveKey, restored, saved: { counts, packCounts, listed, done }, lines: valid, ready: stock.data !== undefined, paused: draft !== null || review.isPending });
+  // Issue #681: a count picked up from another device takes its place only while nothing is typed here.
+  const pickUp = (d: Stocktake) => {
+    if (Object.values(current.current).some((v) => v.trim() !== '')) return false;
+    const ids = (d.lines ?? []).flatMap((l) => (l.product_id ? [l.product_id] : []));
+    const typed = Object.fromEntries((d.lines ?? []).flatMap((l) => (l.product_id ? [[l.product_id, typedQty(l.counted_qty)]] : [])));
+    current.current = typed;
+    setCounts(typed); setListed(ids); setDone(ids);
+    return true;
+  };
+  const saving = useCountSave({ branchId, saveKey, restored, saved: { counts, packCounts, listed, done }, lines: valid, ready: stock.data !== undefined, blocked: stock.isError, paused: draft !== null || review.isPending, pickUp });
   const savedWords = saveWords(valid.length, saving.onDevice, saving.send);
+  // A restored count for an item no longer on the sheet is dropped once the sheet is read, so the device never keeps it.
+  const pruned = useRef(restored === null);
+  useEffect(() => {
+    if (pruned.current || !onSheet) return;
+    pruned.current = true;
+    const keep = <T,>(m: Record<string, T>) => Object.fromEntries(Object.entries(m).filter(([id]) => onSheet.has(id)));
+    setCounts((c) => keep(c)); setPackCounts((c) => keep(c)); setListed((l) => l.filter((id) => onSheet.has(id))); setDone((d) => d.filter((id) => onSheet.has(id)));
+  }, [onSheet]);
   // Issue #353: each count against what the records hold here, or, where they hold nothing, against the item's usual purchase;
   // said before the review, never blocking. Only the counts whose records hold nothing read the item's history.
   const sheet = new Map((stock.data ?? []).map((r) => [r.product_id ?? '', r]));
@@ -253,7 +269,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     const usual = here > 0 ? { product_id: id, unit: row.unit, quantity_factor: norms(id)?.quantity_factor ?? 10 } : norms(id);
     return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
   });
-  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), totals);
+  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(valid), totals);
   const commit = useMutation({
     mutationFn: (acknowledged: string[]) => retail.commitStocktake(draft?.id ?? '', acknowledged),
     onSuccess: (st) => {
@@ -312,7 +328,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     entry.check();
   };
   // Issue #681: each count kept on this device says so under its box, the moment it is stored.
-  const savedOn = new Set(saving.onDevice ? valid.map((l) => l.product_id) : []);
+  const savedOn = new Set(saving.savedHere ? valid.map((l) => l.product_id) : []);
   const savedMark = (id: string) => savedOn.has(id) && <p className="hint count-saved" data-testid={`count-saved-${id}`}>Saved</p>;
   const line = (r: StockRow, waiting: boolean) => {
     const id = r.product_id ?? '';
@@ -430,6 +446,25 @@ function CountSheet({ branchId }: { branchId: string }) {
   );
 }
 
+/**
+ * Issue #681: the count of this branch on this device, for one tab at a time. A tab that another tab took the count from says
+ * so and counts nothing, until the person counts here again, which reads the count afresh.
+ */
+function CountHere({ branchId }: { branchId: string }) {
+  const { me } = useStaff();
+  const saveKey = countKey(typeof window === 'undefined' ? '' : window.location.host, branchId, me.user_id ?? me.email ?? 'staff');
+  const tab = useCountTab(saveKey);
+  if (!tab.mine) {
+    return (
+      <div className="alert alert-info" role="status" data-testid="count-other-tab">
+        <p>Count stock is open in another tab or window, and your counts are kept there.</p>
+        <button type="button" onClick={tab.takeOver}>Count here instead</button>
+      </div>
+    );
+  }
+  return <CountSheet key={tab.epoch} branchId={branchId} saveKey={saveKey} />;
+}
+
 export function StocktakePage() {
   const { branchId } = useStockingBranch();
   return (
@@ -438,7 +473,8 @@ export function StocktakePage() {
         <BranchRequired permissions={needsOf('stocktake')} stocking />
       ) : (
         <>
-          <CountSheet key={branchId} branchId={branchId} />
+          {/* Keyed by branch, so a branch switch starts afresh from that branch's own saved count (review of #681). */}
+          <CountHere key={branchId} branchId={branchId} />
         </>
       )}
     </Gate>

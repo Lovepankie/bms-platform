@@ -29,6 +29,7 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.StockBranch;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
+import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeDrafts;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLine;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeLineRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
@@ -333,6 +334,21 @@ class StockService {
                 branch,
                 Map.of("lines", r.lines().size())));
         return visible(repo.stocktake(id, false).orElseThrow());
+    }
+
+    private static final int MY_DRAFTS = 10;
+
+    /**
+     * Issue #681: the caller's own draft counts at a branch, newest first and at most {@code MY_DRAFTS}, so Count stock can
+     * pick up a count on another device and discard a draft whose id never reached the device that made it.
+     */
+    @Transactional(readOnly = true)
+    StocktakeDrafts myDrafts(UUID branchId) {
+        UUID branch = branches.resolveStocking("retail.stocktake.commit", branchId);
+        UUID by = CurrentPrincipal.require().userId();
+        return new StocktakeDrafts(repo.draftStocktakesBy(branch, by, MY_DRAFTS).stream()
+                .map(id -> visible(repo.stocktake(id, false).orElseThrow()))
+                .toList());
     }
 
     @Transactional(readOnly = true)

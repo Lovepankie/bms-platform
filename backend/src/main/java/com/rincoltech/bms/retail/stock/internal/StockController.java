@@ -12,6 +12,7 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.QuickAddRequest;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.Stocktake;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeCommitRequest;
+import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeDrafts;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StocktakeRequest;
 import com.rincoltech.bms.retail.stock.internal.StockSummaryApi.Summary;
 import com.rincoltech.bms.retail.stock.internal.UsageApi.UsageReport;
@@ -226,6 +227,16 @@ class StockController {
         Stocktake s = service.createStocktake(request);
         return ResponseEntity.created(URI.create("/api/v1/retail/stocktakes/" + s.id()))
                 .body(s);
+    }
+
+    @GetMapping("/stocktakes")
+    @RequiresPermission("retail.stocktake.commit")
+    @Operation(
+            summary =
+                    "The caller's own draft counts at a branch, newest first, at most ten, with their lines (issue #681)",
+            operationId = "listMyDraftRetailStocktakes")
+    StocktakeDrafts myDrafts(@RequestParam(name = "branch_id", required = false) UUID branchId) {
+        return service.myDrafts(branchId);
     }
 
     @GetMapping("/stocktakes/{stocktake_id}")
