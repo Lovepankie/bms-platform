@@ -23,6 +23,14 @@ public interface RetailBooks {
     /** Posts the reversal of an entry (a void), in the original entry's branch. */
     PostedEntry reverse(UUID entryId, LocalDate date, String reference, String idempotencyKey);
 
+    /**
+     * Where a leg naming {@code systemKey} posts at this branch, as a {@code LedgerAccounts.byRef} reference (FR-GL-08,
+     * ADR-105): the till ({@code cash_on_hand}) and the bank ({@code bank}) go to the account the tenant maps the
+     * payment method {@code cash} or {@code bank} to (the branch's mapping, else the tenant's), and to the seeded account
+     * while the method is unmapped or switched off; any other key is itself. The cash book reads the same account.
+     */
+    String accountRef(String systemKey, UUID branchId);
+
     record Posting(
             UUID branchId,
             LocalDate date,
@@ -53,8 +61,9 @@ public interface RetailBooks {
     }
 
     /**
-     * One side of an entry, naming its account by {@code systemKey} or, for an account the tenant
-     * chose (an expense category's, ADR-022 decision 5), by {@code accountId} with the key null.
+     * One side of an entry, naming its account by {@code systemKey} (resolved by {@link #accountRef} at the posting's
+     * branch) or, for an account the tenant chose (an expense category's, ADR-022 decision 5), by {@code accountId}
+     * with the key null.
      */
     record Leg(
             String systemKey, UUID accountId, boolean debit, long amountMinor, String subledgerType, UUID subledgerId) {

@@ -1058,10 +1058,15 @@ posts to its seeded account (`cash` to `cash_on_hand`, `bank` to `bank`, `mtn_mo
 `is_active = false` switches the method off. `core.ledger`'s `PaymentMethods` is the one lookup;
 lending's loans, savings and investments post through it, at the branch of the loan, account or
 investment (request checks included). A correction credits the account its original entry debited.
-Retail postings and the cash book do not use it yet (#236), so while the retail module is on `cash`
-and `bank` can be mapped only to `cash_on_hand` and `bank` (`account_used_by_retail`, ADR-026), and
-`platform_set_tenant_modules` (replaced in V43) refuses to switch retail on while an active cash or
-bank mapping points elsewhere. `bms_app` holds SELECT, INSERT, UPDATE and DELETE on the table (a
+Retail uses it too since #236 (ADR-105, `V117`): a retail leg on `cash_on_hand` or `bank` posts to the
+account `cash` or `bank` is mapped to at the posting's branch, or to the seeded account while the method
+is unmapped or switched off (retail has no switch-off), and the cash book reads the seeded account with every account
+the method was ever mapped to for the branch or the tenant (this table and the audit of `core.payment_method.set`), so a
+remap moves no past day.
+Retail's `mobile_money` account has no method here and stays on its system key. The V43 restrictions
+(`account_used_by_retail`, and the check in `platform_set_tenant_modules` that refused to switch retail
+on while cash or bank was mapped elsewhere) are gone; `V117` replaces the function with its V10 body.
+`bms_app` holds SELECT, INSERT, UPDATE and DELETE on the table (a
 mapping is removed to return the method to its default).
 
 ### `payment_intents` (RLS)
@@ -2121,7 +2126,10 @@ every role (section 6.2.4).
 
 Every rule posts through `post_entry` in the transaction of its event, one entry per branch, with
 `source_module = 'retail'`. "PM" is the account of the payment method: `cash_on_hand` (cash),
-`mobile_money`, `bank`, or `trade_debtors` (credit, with the sale as subledger). Amounts are line
+`mobile_money`, `bank`, or `trade_debtors` (credit, with the sale as subledger). Every retail leg on
+`cash_on_hand` or `bank`, in these rules and in the cash book's (section 6.11.5), posts to the account the
+payment method `cash` or `bank` is mapped to at the entry's branch (`payment_methods`, FR-GL-08), and to the
+seeded account while it is unmapped or switched off (#236, ADR-105). Amounts are line
 values rounded half up once per line (R-ROUND); a leg of zero is left out and an entry whose legs
 are all zero is not posted.
 

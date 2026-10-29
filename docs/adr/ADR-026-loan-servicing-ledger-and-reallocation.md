@@ -4,7 +4,8 @@
 
 Proposed (issue #108, MVP increment 5). Builds on ADR-004 (ledger), ADR-015 (approval actions) and
 ADR-002 (module boundaries). Implements FR-DIS-01 to FR-DIS-04, FR-REP-01 to FR-REP-06 and
-FR-LCL-01 to FR-LCL-03 with migration `V29`.
+FR-LCL-01 to FR-LCL-03 with migration `V29`. Amended by ADR-105 (#236, migration V117: retail posts and reads cash and
+bank through `PaymentMethods`, so the retail restrictions on the mapping are superseded).
 
 ## Context
 
@@ -136,7 +137,8 @@ Also decided here, within the rules of chapter 3:
   is done. Saving or removing a mapping needs the manage permission in the branch concerned, and
   authority over every branch for the tenant-wide row. A mapping can be removed (`DELETE /ledger/payment-methods/{method_key}`,
   optional `branch_id`), which returns the method to its seeded account. Lifting the restrictions
-  needs retail to post and read through `PaymentMethods` (#236). A correction credits the account the original entry
+  needs retail to post and read through `PaymentMethods` (#236). *Superseded by ADR-105: retail now posts and reads cash
+  and bank through `PaymentMethods`, and both restrictions are gone (V117).* A correction credits the account the original entry
   debited, never the method's mapping at the time of the correction. A request is checked at the
   branch of the loan, account or investment, the same row that execution resolves.
 

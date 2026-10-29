@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.cashbook.internal;
 
 import com.rincoltech.bms.core.ledger.LedgerAccounts;
+import com.rincoltech.bms.core.ledger.PaymentMethods;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.Agg;
 import com.rincoltech.bms.retail.purchasing.CashPurchases;
@@ -29,6 +30,7 @@ class CashFigures {
     private final CashSales sales;
     private final CashPurchases purchases;
     private final LedgerAccounts ledger;
+    private final PaymentMethods methods;
     private final CurrentTenant tenant;
 
     CashFigures(
@@ -36,11 +38,13 @@ class CashFigures {
             CashSales sales,
             CashPurchases purchases,
             LedgerAccounts ledger,
+            PaymentMethods methods,
             CurrentTenant tenant) {
         this.repo = repo;
         this.sales = sales;
         this.purchases = purchases;
         this.ledger = ledger;
+        this.methods = methods;
         this.tenant = tenant;
     }
 
@@ -200,11 +204,16 @@ class CashFigures {
      * The ledger's cash on hand for the branch around each of the given days: opening is the
      * balance at the end of the previous day, closing is the listed movements added to it, and
      * the remainder to the balance at the end of the day is {@code otherMovements} (a manual
-     * journal or an unlisted source), never hidden.
+     * journal or an unlisted source), never hidden. The till is {@link #accounts}: the seeded one and
+     * the one the branch's cash is mapped to (ADR-105), so a day before a remap reads as it did.
      */
     Map<LocalDate, Position> positions(UUID branch, NavigableMap<LocalDate, Day> days, LocalDate from, LocalDate to) {
-        long base = ledger.balanceByBranch("cash_on_hand", from.minusDays(1)).getOrDefault(branch, 0L);
-        Map<LocalDate, Long> movement = ledger.movementByDay("cash_on_hand", branch, from, to);
+        long base = 0;
+        Map<LocalDate, Long> movement = new TreeMap<>();
+        for (String till : accounts("cash_on_hand", branch)) {
+            base += ledger.balanceByBranch(till, from.minusDays(1)).getOrDefault(branch, 0L);
+            ledger.movementByDay(till, branch, from, to).forEach((d, m) -> movement.merge(d, m, Long::sum));
+        }
         Map<LocalDate, Position> out = new TreeMap<>();
         long running = base;
         for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
@@ -238,15 +247,26 @@ class CashFigures {
         return out;
     }
 
-    /** The cash on hand now, from the ledger, for one branch. */
+    /** The cash on hand now, from the ledger, for one branch, over {@link #accounts} of the till. */
     long cashOnHand(UUID branch, LocalDate asOf) {
-        return ledger.balanceByBranch("cash_on_hand", asOf).getOrDefault(branch, 0L);
+        return accounts("cash_on_hand", branch).stream()
+                .mapToLong(till -> ledger.balanceByBranch(till, asOf).getOrDefault(branch, 0L))
+                .sum();
     }
 
-    /** The bank balance across every branch, from the ledger. */
-    long bankBalance(LocalDate asOf) {
-        return ledger.balanceByBranch("bank", asOf).values().stream()
+    /** The balance across every branch, from the ledger, over {@link #accounts} of the bank the branch banks into. */
+    long bankBalance(UUID branch, LocalDate asOf) {
+        return accounts("bank", branch).stream()
+                .flatMap(bank -> ledger.balanceByBranch(bank, asOf).values().stream())
                 .mapToLong(Long::longValue)
                 .sum();
+    }
+
+    /**
+     * ADR-105: the seeded account and every account the method was ever mapped to at the branch, so a remap moves no past
+     * figure. Money left on an earlier till keeps counting until the business moves it with a journal, which nets to nothing.
+     */
+    private Set<String> accounts(String seededKey, UUID branch) {
+        return methods.accountRefsEverUsed(seededKey.equals("bank") ? "bank" : "cash", branch);
     }
 }

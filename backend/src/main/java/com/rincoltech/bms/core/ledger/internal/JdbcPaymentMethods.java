@@ -5,6 +5,8 @@ import com.rincoltech.bms.core.ledger.PaymentMethods;
 import com.rincoltech.bms.kernel.ApiException;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -55,5 +57,28 @@ class JdbcPaymentMethods implements PaymentMethods {
         String ref = mapping.map(m -> m.active() ? JdbcLedgerAccounts.ACCOUNT_REF + m.accountId() : null)
                 .orElseGet(() -> mapping.isPresent() ? null : DEFAULT_ACCOUNTS.get(methodKey));
         return ref == null || accounts.byRef(ref).isEmpty() ? Optional.empty() : Optional.of(ref);
+    }
+
+    // JUSTIFICATION-A3: the review of #677 asks the cash book to read every account cash was ever mapped to; no read
+    // has it.
+    @Override
+    @Transactional(readOnly = true)
+    public Set<String> accountRefsEverUsed(String methodKey, UUID branchId) {
+        return new TreeSet<>(jdbc.sql("""
+                        SELECT id FROM gl_accounts WHERE system_key = :seeded
+                        UNION
+                        SELECT gl_account_id FROM payment_methods
+                         WHERE method_key = :key AND (branch_id IS NULL OR branch_id = CAST(:branch AS uuid))
+                        UNION
+                        SELECT (data -> 'after' ->> 'gl_account_id')::uuid FROM audit_log
+                         WHERE entity_type = 'core.payment_method' AND action = 'core.payment_method.set'
+                           AND data -> 'after' ->> 'method_key' = :key
+                           AND (data -> 'after' ->> 'branch_id' IS NULL OR data -> 'after' ->> 'branch_id' = CAST(:branch AS text))
+                        """)
+                .param("seeded", DEFAULT_ACCOUNTS.get(methodKey))
+                .param("key", methodKey)
+                .param("branch", branchId)
+                .query((rs, n) -> JdbcLedgerAccounts.ACCOUNT_REF + rs.getObject(1, UUID.class))
+                .list());
     }
 }

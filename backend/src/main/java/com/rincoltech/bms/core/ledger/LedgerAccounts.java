@@ -28,16 +28,18 @@ public interface LedgerAccounts {
     Optional<String> debitedAccountRef(UUID entryId);
 
     /**
-     * The balance (debits less credits, in minor units) of the account with this key per branch, over
-     * entries dated on or before {@code asOf}. Branches without entries are absent.
+     * The balance (debits less credits, in minor units) of the account with this reference (a {@code system_key} or
+     * {@code gl:<account id>}, as {@link #byRef}) per branch, over entries dated on or before {@code asOf}. Branches
+     * without entries are absent.
      */
-    Map<UUID, Long> balanceByBranch(String systemKey, LocalDate asOf);
+    Map<UUID, Long> balanceByBranch(String ref, LocalDate asOf);
 
     /**
-     * The net movement (debits less credits, in minor units) of the account with this key in one
-     * branch for each entry date from {@code from} to {@code to}. Dates without entries are absent.
+     * The net movement (debits less credits, in minor units) of the account with this reference (as {@link
+     * #balanceByBranch}) in one branch for each entry date from {@code from} to {@code to}. Dates without entries
+     * are absent.
      */
-    Map<LocalDate, Long> movementByDay(String systemKey, UUID branchId, LocalDate from, LocalDate to);
+    Map<LocalDate, Long> movementByDay(String ref, UUID branchId, LocalDate from, LocalDate to);
 
     /**
      * The balance (debits less credits, in minor units) of the account with this key over the entries

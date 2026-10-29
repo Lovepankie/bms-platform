@@ -2,7 +2,6 @@ package com.rincoltech.bms.core.ledger.internal;
 
 import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.tenancy.Branches;
-import com.rincoltech.bms.core.tenancy.TenantModules;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
@@ -74,22 +73,13 @@ class PaymentMethodController {
             @Schema(description = "Default true; false switches the method off for this scope")
             Boolean isActive) {}
 
-    /**
-     * The methods whose seeded account retail also posts to and reads (ADR-026): retail's sales,
-     * purchases, cash book and cash figures use {@code cash_on_hand} and {@code bank} by key, not through
-     * this table, so with the retail module on these two stay on those accounts.
-     */
-    static final Map<String, String> RETAIL_SHARED = Map.of("cash", "cash_on_hand", "bank", "bank");
-
     private final JdbcClient jdbc;
     private final Branches branches;
-    private final TenantModules modules;
     private final AuditLog audit;
 
-    PaymentMethodController(JdbcClient jdbc, Branches branches, TenantModules modules, AuditLog audit) {
+    PaymentMethodController(JdbcClient jdbc, Branches branches, AuditLog audit) {
         this.jdbc = jdbc;
         this.branches = branches;
-        this.modules = modules;
         this.audit = audit;
     }
 
@@ -158,16 +148,14 @@ class PaymentMethodController {
     @ApiResponse(
             responseCode = "409",
             description = "Another first save of the same method and scope won (payment_method_changed)")
-    @ApiResponse(
-            responseCode = "422",
-            description =
-                    "invalid_payment_account, unknown_branch, account_used_by_retail (cash and bank with retail on)")
+    @ApiResponse(responseCode = "422", description = "invalid_payment_account, unknown_branch")
     @Transactional
     MappingList set(@Valid @RequestBody SetRequest r) {
         requireScope(r.branchId());
-        // Serialises with platform_set_tenant_modules (V43), which takes the same lock before it looks
-        // at the mappings: a save that passed the retail check cannot interleave with retail being
-        // switched on, and the other way round. The lock ends with the transaction.
+        // Saves of one tenant's mappings run one after the other, so each reads the row it replaces. Nothing outside
+        // this
+        // controller takes the lock since V117 dropped it from platform_set_tenant_modules. It ends with the
+        // transaction.
         jdbc.sql(
                         "SELECT pg_advisory_xact_lock(hashtextextended('payment_methods:' || current_setting('app.tenant_id'), 0))")
                 .query()
@@ -176,32 +164,17 @@ class PaymentMethodController {
         if (r.branchId() != null && branches.findActive(r.branchId()).isEmpty()) {
             problems.add(new FieldProblem("branch_id", "unknown_branch", "No such active branch."));
         }
-        Optional<String[]> account = jdbc.sql("""
-                        SELECT code, system_key FROM gl_accounts
+        Optional<String> code =
+                jdbc.sql("""
+                        SELECT code FROM gl_accounts
                          WHERE id = ? AND is_postable AND is_active AND account_type = 'asset' AND NOT is_system_controlled
-                        """)
-                .param(r.glAccountId())
-                .query((rs, n) -> new String[] {rs.getString(1), rs.getString(2)})
-                .optional();
-        Optional<String> code = account.map(a -> a[0]);
+                        """).param(r.glAccountId()).query(String.class).optional();
         boolean active = r.isActive() == null || r.isActive();
         if (code.isEmpty()) {
             problems.add(new FieldProblem(
                     "gl_account_id",
                     "invalid_payment_account",
                     "Must be a postable, active asset account that no module controls."));
-        } else if (active
-                && RETAIL_SHARED.containsKey(r.methodKey())
-                && !RETAIL_SHARED.get(r.methodKey()).equals(account.get()[1])
-                && modules.isEnabled("retail")) {
-            problems.add(new FieldProblem(
-                    "gl_account_id",
-                    "account_used_by_retail",
-                    "Retail posts its cash and bank to the seeded accounts, so with the retail module on "
-                            + r.methodKey()
-                            + " stays on "
-                            + RETAIL_SHARED.get(r.methodKey())
-                            + "."));
         }
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);

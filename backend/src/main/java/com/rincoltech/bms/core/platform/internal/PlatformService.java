@@ -354,12 +354,6 @@ class PlatformService implements TenantProvisioning {
                     .query()
                     .singleRow();
         } catch (DataIntegrityViolationException e) {
-            if (String.valueOf(e.getMessage()).contains("payment_methods_remap_blocks_retail")) {
-                throw ApiException.rule(
-                        "payment_methods_remap_blocks_retail",
-                        "Retail posts cash and bank to the seeded accounts. Map cash and bank back to them"
-                                + " (clear the payment method mappings) before switching retail on.");
-            }
             throw ApiException.rule("module_not_allowed", "The tenant's plan does not allow these modules.");
         }
         setUp(

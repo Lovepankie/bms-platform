@@ -58,17 +58,17 @@ class JdbcLedgerAccounts implements LedgerAccounts {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<UUID, Long> balanceByBranch(String systemKey, LocalDate asOf) {
+    public Map<UUID, Long> balanceByBranch(String ref, LocalDate asOf) {
         Map<UUID, Long> balances = new LinkedHashMap<>();
         jdbc.sql("""
                         SELECT e.branch_id, sum(l.debit - l.credit) AS balance
                           FROM journal_lines l
                           JOIN journal_entries e ON e.id = l.entry_id
                           JOIN gl_accounts a ON a.id = l.account_id
-                         WHERE a.system_key = ? AND e.entry_date <= ?
+                         WHERE (a.system_key = ? OR a.id = ?) AND e.entry_date <= ?
                          GROUP BY e.branch_id
                         """)
-                .params(systemKey, Date.valueOf(asOf))
+                .params(refKey(ref), refId(ref), Date.valueOf(asOf))
                 .query((rs, n) -> balances.put(rs.getObject(1, UUID.class), rs.getLong(2)))
                 .list();
         return balances;
@@ -91,19 +91,28 @@ class JdbcLedgerAccounts implements LedgerAccounts {
 
     @Override
     @Transactional(readOnly = true)
-    public Map<LocalDate, Long> movementByDay(String systemKey, UUID branchId, LocalDate from, LocalDate to) {
+    public Map<LocalDate, Long> movementByDay(String ref, UUID branchId, LocalDate from, LocalDate to) {
         Map<LocalDate, Long> movement = new LinkedHashMap<>();
         jdbc.sql("""
                         SELECT e.entry_date, sum(l.debit - l.credit) AS movement
                           FROM journal_lines l
                           JOIN journal_entries e ON e.id = l.entry_id
                           JOIN gl_accounts a ON a.id = l.account_id
-                         WHERE a.system_key = ? AND e.branch_id = ? AND e.entry_date BETWEEN ? AND ?
+                         WHERE (a.system_key = ? OR a.id = ?) AND e.branch_id = ? AND e.entry_date BETWEEN ? AND ?
                          GROUP BY e.entry_date ORDER BY e.entry_date
                         """)
-                .params(systemKey, branchId, Date.valueOf(from), Date.valueOf(to))
+                .params(refKey(ref), refId(ref), branchId, Date.valueOf(from), Date.valueOf(to))
                 .query((rs, n) -> movement.put(rs.getDate(1).toLocalDate(), rs.getLong(2)))
                 .list();
         return movement;
+    }
+
+    /** A {@link #byRef} reference split into its {@code system_key} or its account id; the other is null. */
+    private static String refKey(String ref) {
+        return ref.startsWith(ACCOUNT_REF) ? null : ref;
+    }
+
+    private static UUID refId(String ref) {
+        return ref.startsWith(ACCOUNT_REF) ? UUID.fromString(ref.substring(ACCOUNT_REF.length())) : null;
     }
 }

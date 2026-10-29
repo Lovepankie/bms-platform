@@ -23,4 +23,12 @@ public interface PaymentMethods {
      * not postable. For a caller that has a fallback and must not mark its transaction rollback-only by a refusal.
      */
     java.util.Optional<String> accountRefIfMapped(String methodKey, UUID branchId);
+
+    /**
+     * Every account a payment by this method can have gone to at this branch, as {@code gl:<account id>} references, each
+     * account once: the seeded account, the current mappings (the branch's and the tenant's) and every account a save ever
+     * mapped it to for them (the audit of {@code core.payment_method.set}). For a reader whose past figures must not move
+     * when the method is remapped (ADR-105).
+     */
+    java.util.Set<String> accountRefsEverUsed(String methodKey, UUID branchId);
 }

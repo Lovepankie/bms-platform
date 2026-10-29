@@ -26640,7 +26640,7 @@
                 }
               }
             },
-            "description" : "invalid_payment_account, unknown_branch, account_used_by_retail (cash and bank with retail on)"
+            "description" : "invalid_payment_account, unknown_branch"
           }
         },
         "summary" : "Map a payment method to an asset account (FR-GL-08)",

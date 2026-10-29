@@ -431,12 +431,11 @@ class LoanServicingIT extends LoanFixtures {
     }
 
     /**
-     * Review of #206: retail posts its cash and bank to the seeded accounts and reads them for its
-     * cash book, so with the retail module on cash and bank cannot be mapped elsewhere (it would take
-     * lending cash out of the retail cash book). Other methods, and switching a method off, stay free.
+     * Issue #236 (ADR-105): retail posts and reads cash and bank through the mapping too, so with the retail module on
+     * both can be mapped elsewhere, for the tenant or a branch, like any other method.
      */
     @Test
-    void frGl08_withRetailOnCashAndBankStayOnTheSeededAccounts() {
+    void frGl08_withRetailOnCashAndBankCanBeMappedElsewhere() {
         String perms = permissionsOf("tenant_admin");
         String till = assetAccount("1017", "Test till");
         TestDatabase.owner()
@@ -446,25 +445,14 @@ class LoanServicingIT extends LoanFixtures {
                 .single();
 
         for (String method : List.of("cash", "bank")) {
-            ResponseEntity<JsonNode> refused = setMethod(method, null, till, null, perms);
-            assertThat(refused.getStatusCode().value())
-                    .as("%s", refused.getBody())
-                    .isEqualTo(422);
-            assertThat(refused.getBody().get("errors").findValuesAsString("code"))
-                    .containsExactly("account_used_by_retail");
-            assertThat(setMethod(method, t.headOffice(), till, null, perms)
-                            .getBody()
-                            .get("errors")
-                            .findValuesAsString("code"))
-                    .as("a branch mapping is refused too")
-                    .containsExactly("account_used_by_retail");
+            ResponseEntity<JsonNode> tenantWide = setMethod(method, null, till, null, perms);
+            assertThat(tenantWide.getStatusCode())
+                    .as("%s", tenantWide.getBody())
+                    .isEqualTo(HttpStatus.OK);
+            assertThat(setMethod(method, t.headOffice(), till, null, perms).getStatusCode())
+                    .as("a branch mapping too")
+                    .isEqualTo(HttpStatus.OK);
         }
-        assertThat(setMethod("mtn_momo", null, till, null, perms).getStatusCode())
-                .as("mobile money is not retail's")
-                .isEqualTo(HttpStatus.OK);
-        assertThat(setMethod("cash", t.headOffice(), till, false, perms).getStatusCode())
-                .as("switching lending cash off at a branch leaves retail alone")
-                .isEqualTo(HttpStatus.OK);
     }
 
     /**

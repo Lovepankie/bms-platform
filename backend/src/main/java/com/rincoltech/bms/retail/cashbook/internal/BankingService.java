@@ -287,7 +287,7 @@ class BankingService {
         }
         long amount = r.amountMinor();
         List<String> warnings = new ArrayList<>();
-        if (figures.bankBalance(support.today()) - amount < 0) {
+        if (figures.bankBalance(branch, support.today()) - amount < 0) {
             warnings.add("bank_balance_negative");
         }
         UUID id = UUID.randomUUID();

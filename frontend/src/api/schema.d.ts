@@ -21328,7 +21328,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentMethodMappingList"];
                 };
             };
-            /** @description invalid_payment_account, unknown_branch, account_used_by_retail (cash and bank with retail on) */
+            /** @description invalid_payment_account, unknown_branch */
             422: {
                 headers: {
                     [name: string]: unknown;
