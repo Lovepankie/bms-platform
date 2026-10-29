@@ -71,7 +71,7 @@ describe('groupSummary', () => {
 
 describe('sameUnitQty', () => {
   it('adds quantities of one unit exactly, and gives nothing for mixed or missing units', () => {
-    expect(sameUnitQty([{ qty: '0.100', unit: 'kg' }, { qty: '0.200', unit: 'kg' }])).toBe('0.3 kg');
+    expect(sameUnitQty([{ qty: '0.100', unit: 'kg' }, { qty: '0.200', unit: 'kg' }])).toBe('0.3 kilograms');
     expect(sameUnitQty([{ qty: '1', unit: 'kg' }, { qty: '1', unit: 'piece' }])).toBeNull();
     expect(sameUnitQty([{ qty: '1' }])).toBeNull();
     expect(sameUnitQty([])).toBeNull();

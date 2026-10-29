@@ -45,7 +45,7 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth), 'page width').toBeLessThanOrEqual(WIDTH);
     expect(await page.locator('table').count()).toBe(0);
     expect(await page.getByText('Extensions').first().isVisible()).toBe(true);
-    expect(await page.getByText('1 item, 8 pc, worth UGX 64,000 at selling price').isVisible()).toBe(true);
+    expect(await page.getByText('1 item, 8 pieces, worth UGX 64,000 at selling price').isVisible()).toBe(true);
     const cards = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>('.stock-card')].map((card) => {
         const box = card.getBoundingClientRect();
@@ -69,7 +69,7 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
       }),
     );
     expect(cards).toHaveLength(3);
-    expect(cards.some((c) => c.text.includes('In stock: 8 pc') && c.text.includes('Buying price UGX 6,000 · Selling price UGX 8,000'))).toBe(true);
+    expect(cards.some((c) => c.text.includes('In stock: 8 pieces') && c.text.includes('Buying price UGX 6,000 · Selling price UGX 8,000'))).toBe(true);
     for (const c of cards) {
       expect(c.left, c.text).toBeGreaterThanOrEqual(0);
       expect(c.right, c.text).toBeLessThanOrEqual(WIDTH);
@@ -84,7 +84,7 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
     await page.close();
   });
 
-  it('names the shop under the title as a 48px target the switcher covers, and a switch shows the toast', async () => {
+  it('names the shop above the page as a 48px target the switcher covers, and a switch shows the toast', async () => {
     const page = await open(font);
     const label = page.getByTestId('shop-here');
     expect(await label.textContent()).toContain('Test Branch A (BR1)');
@@ -92,14 +92,14 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
       const shop = document.querySelector<HTMLElement>('.shop-here')?.getBoundingClientRect();
       const select = document.querySelector<HTMLElement>('.shop-here-select')?.getBoundingClientRect();
       const title = document.querySelector<HTMLElement>('main h1')?.getBoundingClientRect();
-      return { shop: shop && { top: shop.top, height: shop.height, right: shop.right, width: shop.width }, select: select && { height: select.height, width: select.width }, titleBottom: title?.bottom ?? 0 };
+      return { shop: shop && { bottom: shop.bottom, height: shop.height, right: shop.right, width: shop.width }, select: select && { height: select.height, width: select.width }, titleTop: title?.top ?? 0 };
     });
     expect(boxes.shop?.height ?? 0).toBeGreaterThanOrEqual(48);
     expect(boxes.shop?.right ?? Infinity).toBeLessThanOrEqual(WIDTH);
     // The select covers the label inside its 1px edge, so a tap anywhere on it opens the picker.
     expect(boxes.select?.height ?? 0).toBeGreaterThanOrEqual((boxes.shop?.height ?? 0) - 2);
     expect(boxes.select?.width ?? 0).toBeGreaterThanOrEqual((boxes.shop?.width ?? 0) - 2);
-    expect(boxes.shop?.top ?? 0).toBeGreaterThanOrEqual(boxes.titleBottom);
+    expect(boxes.shop?.bottom ?? Infinity).toBeLessThanOrEqual(boxes.titleTop);
     await page.getByRole('combobox', { name: 'Shop: Test Branch A (BR1). Switch shop' }).selectOption({ label: 'Test Branch B (BR2)' });
     const toast = page.getByRole('status').filter({ hasText: 'You are now in Test Branch B (BR2).' });
     await toast.waitFor();
@@ -123,13 +123,13 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
   });
 });
 
-it('shows one toast at a time: the switch gives way to a toast of the screen', async () => {
+it('shows one toast at a time: the switch replaces a toast of the screen', async () => {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
   await page.goto(`${base}layout/my-stock.html?screenToast=1`);
-  await page.locator('.stock-card').first().waitFor();
+  await page.getByText('Stock corrected.').waitFor();
   await page.getByRole('combobox', { name: /Switch shop/ }).selectOption({ label: 'Test Branch B (BR2)' });
   await page.locator('.shop-here-name', { hasText: 'Test Branch B (BR2)' }).waitFor();
-  expect(await page.locator('.toast:visible').allTextContents()).toEqual(['Stock corrected.']);
+  expect(await page.locator('.toast').allTextContents()).toEqual(['You are now in Test Branch B (BR2).']);
   await page.close();
 });
 

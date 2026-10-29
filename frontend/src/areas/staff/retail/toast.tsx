@@ -1,4 +1,4 @@
-import { createContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { icons } from '../../../components/icons';
 import { announceToSheet } from '../../../app/ui/announce';
 
@@ -41,9 +41,24 @@ export function Toast({ message, tone, silent = false }: { message: string; tone
   );
 }
 
+// Issue #680: one toast at a time in the whole app. Every show takes the next number, and only the toast holding the newest one is
+// drawn, so the layout's "You are now in <shop>." replaces a screen's toast, and a screen's next toast replaces it.
+let newest = 0;
+const newestListeners = new Set<() => void>();
+const takeNewest = () => {
+  newest += 1;
+  for (const listener of newestListeners) listener();
+  return newest;
+};
+const subscribeNewest = (listener: () => void) => {
+  newestListeners.add(listener);
+  return () => void newestListeners.delete(listener);
+};
+
 export function useToast(ms: number = TOAST_MS, silent = false): { show: (message: string, tone: ToastTone) => void; toast: ReactNode } {
   // `error` is the error a later info was said after, so a second info replaces the first instead of piling up.
-  const [shown, setShown] = useState<{ message: string; tone: ToastTone; error?: string } | null>(null);
+  const [shown, setShown] = useState<{ message: string; tone: ToastTone; error?: string; turn: number } | null>(null);
+  const current = useSyncExternalStore(subscribeNewest, () => newest, () => newest);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clear = () => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -53,18 +68,19 @@ export function useToast(ms: number = TOAST_MS, silent = false): { show: (messag
   const show = useCallback(
     (message: string, tone: ToastTone) => {
       clear();
+      const turn = takeNewest();
       // An info never hides an error still showing (review of #616: a photo not saved after a count not saved): it is said after
       // the error, in the error's toast, so the one toast a screen shows keeps what went wrong.
       setShown((was) => {
-        if (was?.tone !== 'error' || tone !== 'info') return { message, tone };
+        if (was?.tone !== 'error' || tone !== 'info') return { message, tone, turn };
         const error = was.error ?? was.message;
-        return { message: `${error} ${message}`, tone: 'error', error };
+        return { message: `${error} ${message}`, tone: 'error', error, turn };
       });
       timer.current = setTimeout(() => setShown(null), ms);
     },
     [ms],
   );
-  return { show, toast: shown ? <Toast message={shown.message} tone={shown.tone} silent={silent} /> : null };
+  return { show, toast: shown && shown.turn === current ? <Toast message={shown.message} tone={shown.tone} silent={silent} /> : null };
 }
 
 /** What the toast says when an item goes on a form's lines (issue #498): the quantity it now has, or that one is still to type. */

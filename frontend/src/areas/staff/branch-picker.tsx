@@ -153,6 +153,33 @@ export function BranchOptions({ me }: { me: Me }) {
   );
 }
 
+/**
+ * The shop the page works in, above every staff page's content on a phone and a laptop (issue #680): "Test Shop One", or All
+ * branches. With more than one to choose, a native select laid over it opens the phone's own picker in one tap, as the top bar's
+ * title does. A business without retail says branch. JUSTIFICATION-A3: a new component the issue asks for, its options shared
+ * with the bar and the menu through BranchOptions.
+ */
+export function ShopHere({ me, branch, onChoose }: { me: Me; branch: string | null; onChoose: (selection: string) => void }) {
+  const active = (me.branches ?? []).find((b) => b.id === branch);
+  const choices = (me.branches ?? []).length + (me.all_branches ? 1 : 0);
+  const word = (me.modules ?? []).includes('retail') ? 'shop' : 'branch';
+  const name = active ? branchLabel(active) : branch === ALL_BRANCHES ? 'All branches' : choices > 1 ? `Choose a ${word}` : '';
+  if (!name) return null;
+  return (
+    <p className="shop-here" data-testid="shop-here">
+      <span className="shop-here-icon" aria-hidden="true">{icons.shop}</span>
+      <span className="shop-here-name">{name}</span>
+      {choices > 1 && <span className="shop-here-chevron" aria-hidden="true">{icons.chevron}</span>}
+      {choices > 1 && (
+        <select className="shop-here-select" aria-label={`${word === 'shop' ? 'Shop' : 'Branch'}: ${name}. Switch ${word}`} value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
+          {!active && branch !== ALL_BRANCHES && <option value="">{`Choose a ${word}`}</option>}
+          <BranchOptions me={me} />
+        </select>
+      )}
+    </p>
+  );
+}
+
 /** Up to two capitals from a name, for a business with no logo: "Test Shop 01" gives "TS". */
 export function initials(name: string): string {
   return name

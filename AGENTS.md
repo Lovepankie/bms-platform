@@ -810,13 +810,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   price. Buying price and selling price everywhere a shopkeeper reads them (Average buying price, Selling price, at buying price,
   at selling price; profit reports keep Cost of goods sold), with "average cost", "cost price" and "unit cost" retired in the
   glossary guard and a design-guard test that fails a bare Price or Cost column on a retail screen; tours `page-retail-home` v5,
-  `page-restock` v6, `page-valuation` v3. `ShopHere` names the shop under every retail page's title (through `Gate`) and on
-  Retail home, one tap switching it; every change of branch shows the info toast "You are now in <shop>." (`useBranchSwitch`).
-  My stock on a phone is a card per item. A negative quantity's line total now rounds away from zero (`lineTotalMinor`). Ask BMS
-  (`AskService`, prompt `ask-v2`) is told to say buying price and selling price, and an answer with a retired price word is a bad
-  answer; the Sell line's price field is Selling price, and the sale lines export sheet's price column too. Tests:
-  `shop-here.dom.test.tsx`, `stock-cards.dom.test.tsx`, `layout/my-stock.layout.test.ts`, `design-guard.test.ts`,
-  `glossary.test.ts`, `maths.test.ts`, `DataExportIT`.
+  `page-restock` v6, `page-valuation` v3. `ShopHere` (`branch-picker.tsx`), drawn once by the staff layout above every staff
+  page, names the shop in use, one tap switching it; every change of branch shows the info toast "You are now in <shop>."
+  (`useBranchSwitch`), and the app shows one toast at a time, the newest (`useToast`). My stock on a phone is a card per item, its
+  quantity in full words with a correct plural (`quantityIn`: "8 pieces", a unit typed "pc" too). A negative quantity's line
+  total now rounds away from zero (`lineTotalMinor`). Ask BMS (`AskService`, prompt `ask-v2`) is told to say buying price and
+  selling price, and an answer with a retired price word is a bad answer; the Sell line's price field is Selling price, and the
+  sale lines export sheet's price column too. `client-names.test.ts` fails a denied real client name, stored folded, anywhere in
+  frontend/src, frontend/layout and docs. Tests: `shop-here.dom.test.tsx`, `stock-cards.dom.test.tsx`,
+  `layout/my-stock.layout.test.ts`, `design-guard.test.ts`, `glossary.test.ts`, `maths.test.ts`, `units-state.test.ts`,
+  `client-names.test.ts`, `corpus.test.ts`, `AskBmsIT`, `DataExportIT`.
 
 ## Reading order
 

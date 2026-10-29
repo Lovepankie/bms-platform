@@ -133,16 +133,20 @@ export function samePack(a: PackSize | undefined, b: PackSize | undefined): bool
   return a?.unit === b?.unit && sameFactor(a?.factor, b?.factor);
 }
 
-/** "1 Carton", "3 Cartons", "2.5 Kgs": a count with its unit, singular only for exactly one. */
-/**
- * Issue #680: a quantity with its unit as a person says it, "1 piece" and "8 pieces". A unit has no short code of its own, so a
- * name with no vowel is taken as one ("pc", "kg", "pcs", "ltr") and stays as typed: "8 pc".
- */
+/** Issue #680: the full word of a unit a shop typed as a short code, so a quantity never reads "8 pc". */
+const UNIT_WORDS: Record<string, string> = {
+  pc: 'piece', pcs: 'piece', ltr: 'litre', ltrs: 'litre', l: 'litre', kg: 'kilogram', kgs: 'kilogram', g: 'gram', m: 'metre',
+  ml: 'millilitre', pkt: 'packet', pkts: 'packet', ctn: 'carton', ctns: 'carton', doz: 'dozen', pr: 'pair', btl: 'bottle',
+};
+
+/** Issue #680: a quantity with its unit in full words as a person says it: "1 piece", "8 pieces", and "8 pieces" for "pc". */
 export function quantityIn(qty: string, unit: string): string {
   const shown = showQty(qty);
-  return `${shown} ${!/[aeiou]/i.test(unit) || shown.replace(/^-/, '') === '1' ? unit : plural(unit)}`;
+  const word = UNIT_WORDS[unit.trim().toLowerCase()] ?? unit;
+  return `${shown} ${shown.replace(/^-/, '') === '1' ? word : plural(word)}`;
 }
 
+/** "1 Carton", "3 Cartons", "2.5 kilograms": a count with its unit, singular only for exactly one. */
 function counted(milli: bigint, unit: string): string {
   return quantityIn(qtyString(Number(milli)), unit);
 }
