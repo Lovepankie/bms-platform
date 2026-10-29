@@ -14,7 +14,7 @@ import {
 import { usePersistedDraft, newIdempotencyKey } from './idempotency';
 import { CREDIT_MANAGE, DOCUMENT_ISSUE, SALE_VOID, branchesWhere, canIssueDocuments, canOpenAccount, holds, holdsAt, sellingBranches } from './permissions';
 import { openMadePdf } from './documents-ui';
-import { Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
+import { Problem, changeFailureText, money, requireVersion, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { showDate } from './maths';
 import { PeriodPicker } from '../../../app/ui/PeriodPicker';
@@ -281,7 +281,6 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const range = defaultStatementRange();
   const [from, setFrom] = useState(range.from);
   const [to, setTo] = useState(range.to);
-  const [message, setMessage] = useState<string | null>(null);
   // One key per receipt: a failed reversal of one receipt must not give the next receipt the same key on another path.
   const reverseKeys = useRef(reversalKeys(newIdempotencyKey));
   const payBranches = sellingBranches(branchesWhere(me, 'retail.sale.create'), undefined);
@@ -293,21 +292,21 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
   const ranged = from !== '' && to !== '' && from <= to;
   const statement = useQuery({ queryKey: ['retail', 'account-statement', customerId, from, to], queryFn: () => retail.customerStatement(customerId, { from, to }), enabled: allowed && ranged });
   useCrumbLabel(account.data?.name);
-  const done = (text: string) => { setMessage(text); show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
+  const done = (text: string) => { show(text, 'success'); void queryClient.invalidateQueries({ queryKey: ['retail'] }); };
   const save = useMutation({
     mutationFn: (form: AccountForm) => retail.setCustomerAccount(customerId, requireVersion(account.data?.version), accountRequest(form)),
-    onSuccess: () => done('Saved the credit limit and terms.'),
+    onSuccess: () => done('Credit limit and terms saved'),
   });
   const pay = useMutation({
     mutationFn: () => retail.payOnAccount(customerId, buildPaymentRequest(settledPayment(draft, balance.data?.open_sales ?? [], today)), key),
-    onMutate: () => setMessage(null),
-    onSuccess: (r) => { discard(); done(`Saved ${r.receipt_no}: ${money(r.amount_minor ?? 0)}.`); },
+    onSuccess: (r) => { discard(); done(r.receipt_no ? `Receipt ${r.receipt_no} saved` : 'Payment saved'); },
   });
   const reverse = useMutation({
     mutationFn: (v: { receipt: AccountPayment; reason: string }) => retail.reverseAccountPayment(customerId, v.receipt.id ?? '', v.reason, reverseKeys.current.keyFor(v.receipt.id ?? '', v.reason)),
-    onSuccess: (r, v) => { reverseKeys.current.done(v.receipt.id ?? ''); done(`Reversed ${r.receipt_no}.`); },
+    onSuccess: (r, v) => { reverseKeys.current.done(v.receipt.id ?? ''); done(r.receipt_no ? `Receipt ${r.receipt_no} reversed` : 'Payment reversed'); },
   });
   // The statement as a PDF (documents capability, issue #197): rendered as at today for the dates chosen, never stored.
+  // toast-exempt: it only opens the statement PDF in a new tab and saves nothing
   const statementPdf = useMutation({ mutationFn: () => openMadePdf(() => retail.customerStatementPdf(customerId, { from, to })) });
   const nameOf = (id: string | undefined) => branchLabel((me.branches ?? []).find((b) => b.id === id));
   if (!allowed) {
@@ -323,7 +322,6 @@ export function AccountScreen({ customerId, me, branch }: { customerId: string; 
       <h1>{account.data?.name ?? 'Customer account'}</h1>
       {account.isPending && <SkeletonList label="Loading the account" />}
       <Problem error={account.error} />
-      {message && <Success>{message}</Success>}
       {account.data && (
         <AccountSummary
           account={account.data}

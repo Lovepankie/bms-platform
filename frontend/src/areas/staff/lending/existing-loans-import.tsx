@@ -75,11 +75,13 @@ export function ExistingLoansImport({ api = existingLoans, helperApi = setupHelp
   const [checked, setChecked] = useState<{ text: string; result: ExistingLoanImportResult } | null>(null);
   const [done, setDone] = useState<ExistingLoanImportResult | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  // toast-exempt: checking the file saves nothing; the report below says what would happen
   const check = useMutation({
     mutationFn: () => api.importCsv(text, true, branchId ?? undefined),
     onMutate: () => setDone(null),
     onSuccess: (result) => setChecked({ text, result }),
   });
+  // toast-exempt: every recorded loan waits for approval, and the Success note on this screen says so
   const commit = useMutation({
     mutationFn: () => api.importCsv(text, false, branchId ?? undefined),
     onSuccess: (result) => {

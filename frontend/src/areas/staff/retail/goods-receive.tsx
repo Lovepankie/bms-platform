@@ -180,6 +180,8 @@ function useSaveReceipt(key: string, finish: () => void, build: () => GoodsRecei
       if (notes.length > 0) setKept({ receiptId: receipt.id ?? '', notes });
       else void navigate({ to: '/staff/retail/goods-received/$receiptId', params: { receiptId: receipt.id ?? '' } });
     },
+    // A receipt with sizes kept opens the Goods received saved note instead, which says it.
+    meta: { success: (r: Awaited<ReturnType<typeof retail.createGoodsReceipt>>) => ((r?.lines ?? []).some((l) => l.size_kept && l.size_kept_note) ? null : 'Goods received saved') },
   });
 }
 

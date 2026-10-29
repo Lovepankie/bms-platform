@@ -99,6 +99,7 @@ export function ShopSetupPage() {
       document.getElementById(`setup-size-${firstBadSize.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)?.focus();
       return;
     }
+    // toast-exempt: success screen, it says what was added
     setBusy(true);
     try {
       // Read what the shop has now, not what was on screen, so a name another phone added meanwhile is skipped too.

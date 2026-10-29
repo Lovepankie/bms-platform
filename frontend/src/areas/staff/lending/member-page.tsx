@@ -50,6 +50,7 @@ function KycPanel({ member, kinCount, hasIdFront }: { member: MemberRecord; kinC
       setRejecting(false);
       void queryClient.invalidateQueries({ queryKey: ['members'] });
     },
+    meta: { success: (_r: unknown, v: { decision: 'verified' | 'rejected' }) => (v.decision === 'verified' ? 'Details accepted' : 'Details not accepted') },
   });
   const missing = kycMissing(member, kinCount, hasIdFront);
   const canCheck = mayVerifyKyc(me, member.branch_id) && member.kyc_status === 'pending_verification';

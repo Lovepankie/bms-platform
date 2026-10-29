@@ -52,6 +52,7 @@ export function InviteScreen() {
     setTouched(true);
     if (hasProblems(problems) || sending.current) return;
     sending.current = true;
+    // toast-exempt: success screen, the invitation link screen replaces the form
     setBusy(true);
     setError(null);
     setLookInList(false);

@@ -9,6 +9,7 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 import { exponentOf } from '../../../components/money';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { sayDone } from '../retail/toast';
 import { APPRAISAL_ORDER, appraisalBody, appraisalProblems, type AppraisalDraft } from './application-state';
 import { ApplicationFacts } from './application-view';
 import { Group, SaveBar, TextField, useFormErrors } from './form-fields';
@@ -50,6 +51,7 @@ export function AppraiseForm({ loan }: { loan: Loan }) {
     setFailure(null);
     try {
       await api.appraise(loan.id ?? '', loan.version ?? 0, appraisalBody(draft, currency));
+      sayDone('Appraisal saved');
       void queryClient.invalidateQueries({ queryKey: ['lending'] });
       void navigate({ to: '/staff/lending/loans/$loanId', params: { loanId: loan.id ?? '' } });
     } catch (raw) {

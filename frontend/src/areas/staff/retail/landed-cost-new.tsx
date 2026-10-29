@@ -29,6 +29,7 @@ export function GoodsPicker({ onAdd, chosen }: { onAdd: (receipt: GoodsReceipt) 
   const search = useLiveSearch();
   const term = search.term;
   const found = useQuery({ queryKey: ['retail', 'goods-receipts', 'pick', term], queryFn: ({ signal }) => retail.listGoodsReceipts({ query: term, status: 'posted', signal }) });
+  // toast-exempt: it reads a delivery to put on the form and saves nothing; the delivery shows on the form at once
   const add = useMutation({ mutationFn: (id: string) => retail.getGoodsReceipt(id), onSuccess: onAdd });
   const rows = (found.data?.items ?? []).filter((r) => !chosen.includes(r.id ?? ''));
   return (
@@ -245,6 +246,7 @@ export function LandedCostNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/landed-costs/$landedCostId', params: { landedCostId: made.id ?? '' } });
     },
+    meta: { success: 'Landed cost saved' },
   });
   const picker = <GoodsPicker chosen={draft.receipts.map((r) => r.id)} onAdd={(receipt) => setDraft((d) => addReceipt(d, receipt))} />;
   return (

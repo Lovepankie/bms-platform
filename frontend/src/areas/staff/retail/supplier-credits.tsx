@@ -13,7 +13,7 @@ import { showQty } from './maths';
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
-import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { Gate, Problem, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -140,7 +140,6 @@ export function SupplierCreditPage() {
   const { show, toast } = useToast();
   const nameOf = useBranchName();
   const keys = useActionKeys();
-  const [message, setMessage] = useState<string | null>(null);
   const allowed = canUse(me, 'supplierCredits');
   const credit = useQuery({ queryKey: ['retail', 'supplier-credit', creditId], queryFn: () => retail.getSupplierCredit(creditId), enabled: allowed });
   useCrumbLabel(credit.data?.credit_no);
@@ -148,9 +147,7 @@ export function SupplierCreditPage() {
     mutationFn: (reason: string) => retail.voidSupplierCredit(creditId, reason, keys.keyFor(creditId, reason)),
     onSuccess: (c) => {
       keys.done(creditId);
-      const text = `Voided ${c.credit_no ?? 'the credit note'}. The invoice is owed for what the credit note took off.`;
-      setMessage(text);
-      show(text, 'success');
+      show(`Voided ${c.credit_no ?? 'the credit note'}. The invoice is owed for what the credit note took off.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -168,7 +165,6 @@ export function SupplierCreditPage() {
       <h1>{c?.credit_no ?? 'Supplier credit note'}</h1>
       {credit.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={credit.error} />
-      {message && <Success>{message}</Success>}
       {c && <SupplierCreditView credit={c} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {c && c.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, c.branch_id) && (
         <div data-tour="credit-void">

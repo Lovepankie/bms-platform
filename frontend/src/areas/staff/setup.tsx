@@ -12,6 +12,7 @@ import { NewIconNote, rememberIconVersion } from '../../install/NewIcon';
 import { useStaff } from './context';
 import { PlanCard } from './plan';
 import { Hint } from '../../app/ui/Hint';
+import { sayDone } from './retail/toast';
 
 // Business set-up (FR-TEN-08): name, logo, theme colour and receipt footer, with a checklist a new
 // tenant admin lands on until it is dismissed. The logo is checked and re-encoded by the API; the
@@ -130,7 +131,8 @@ export function Setup() {
     setBusy(true);
     setMessage(null);
     try {
-      setMessage(await action());
+      const done = await action();
+      if (done) sayDone(done);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : (problemOf(error).detail ?? 'Something went wrong. Try again.'));
     } finally {
@@ -144,7 +146,10 @@ export function Setup() {
       if (name.trim() !== (current.display_name ?? '')) body.display_name = name.trim();
       if (footer !== (current.receipt_footer ?? '')) body.receipt_footer = footer;
       if (colour.toUpperCase() !== (current.theme_primary ?? '')) body.theme_primary = colour;
-      if (Object.keys(body).length === 0) return 'Nothing to save.';
+      if (Object.keys(body).length === 0) {
+        setMessage('Nothing to save.');
+        return null;
+      }
       const { error } = await api.PATCH('/api/v1/settings', {
         params: { header: { 'If-Match': `"${current.version}"` } },
         body,
@@ -159,7 +164,7 @@ export function Setup() {
         await refreshIcon();
         setIconSaved(true);
       }
-      return colour === '' ? 'Saved. The platform colour is in use.' : 'Saved.';
+      return colour === '' ? 'Saved, platform colour used' : 'Settings saved';
     });
   }
 
@@ -183,9 +188,9 @@ export function Setup() {
       if (found) {
         setColour(found);
         setSuggested(true);
-        return 'Logo saved. A theme colour was suggested from it: check the preview, then save.';
+        setMessage('A theme colour was suggested from the logo: check the preview, then save.');
       }
-      return 'Logo saved.';
+      return 'Logo saved';
     });
   }
 
@@ -195,7 +200,7 @@ export function Setup() {
       if (error) throw new Error(problemOf(error).detail ?? 'Could not remove the logo.');
       await refreshIcon();
       setIconSaved(false);
-      return 'Logo removed.';
+      return 'Logo removed';
     });
   }
 
@@ -208,7 +213,7 @@ export function Setup() {
       if (error) throw new Error(problemOf(error).detail ?? 'Could not change the reports setting.');
       await refresh();
       await queryClient.invalidateQueries({ queryKey: ['me'] });
-      return on ? 'Reports are on. The Reports tab is now shown to staff who may run reports.' : 'Reports are off.';
+      return on ? 'Reports turned on' : 'Reports turned off';
     });
   }
 
@@ -224,7 +229,7 @@ export function Setup() {
         throw new Error(problem.errors?.[0]?.message ?? problem.detail ?? 'Could not save the go-live date.');
       }
       await refresh();
-      return `The go-live date is ${date}. Existing loans given out before it can be brought in.`;
+      return 'Go live date saved';
     });
   }
 
@@ -241,7 +246,7 @@ export function Setup() {
         throw new Error(problem.errors?.[0]?.message ?? problem.detail ?? 'Could not save the end of the financial year.');
       }
       await refresh();
-      return `The financial year ends on the last day of ${MONTHS[month - 1]}.`;
+      return `Year end set to ${MONTHS[month - 1]}`;
     });
   }
 

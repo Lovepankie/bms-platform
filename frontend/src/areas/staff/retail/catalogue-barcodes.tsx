@@ -81,9 +81,10 @@ export function BarcodeEditor({ product }: { product: Product }) {
       setAsPrinted(false);
       refresh();
     },
+    meta: { success: 'Barcode added' },
   });
-  const remove = useMutation({ mutationFn: (barcodeId: string) => retail.removeBarcode(id, barcodeId), onSuccess: refresh });
-  const make = useMutation({ mutationFn: () => retail.generateBarcodes([id]), onSuccess: refresh });
+  const remove = useMutation({ mutationFn: (barcodeId: string) => retail.removeBarcode(id, barcodeId), onSuccess: refresh, meta: { success: 'Barcode removed' } });
+  const make = useMutation({ mutationFn: () => retail.generateBarcodes([id]), onSuccess: refresh, meta: { success: 'Barcode made' } });
   const inferred = code.trim() === '' ? null : checkBarcode(code);
   const checked = inferred && !inferred.ok && inferred.spreadsheet && asPrinted ? checkBarcode(code, 'code128') : inferred;
   const list = codes.data ?? [];

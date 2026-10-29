@@ -8,6 +8,7 @@ import type { StaffUser } from '../../../api/users';
 import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
+import { DoneToast } from '../retail/toast';
 
 // The Users screens in a browser (issue #319), with the API client replaced: the form refuses a bad phone or an empty role before
 // anything is sent, a double tap invites once, the one-time link is shown once with Copy and WhatsApp and is gone when the box is
@@ -66,6 +67,7 @@ function shell(node: ReactElement, permissions: string[] = ADMIN, mfaEnabled = f
     <RouterContextProvider router={router}>
       <QueryClientProvider client={client}>
         <StaffContext.Provider value={{ me, branch: null }}>{node}</StaffContext.Provider>
+        <DoneToast />
       </QueryClientProvider>
     </RouterContextProvider>,
   );
@@ -455,7 +457,7 @@ describe('the staff list', () => {
     fireEvent.click(within(card).getByRole('checkbox', { name: 'Every shop and store' }));
     fireEvent.click(within(card).getByRole('button', { name: 'Save the roles' }));
     await waitFor(() => expect(api.setRoles).toHaveBeenCalledWith('u-wait', [{ role_key: 'cashier' }]));
-    expect(await screen.findByText('The roles of Test Seller 02 are saved.')).toBeTruthy();
+    expect(await screen.findByText('Roles saved for Test Seller 02')).toBeTruthy();
   });
 });
 
@@ -777,7 +779,7 @@ describe('sign out their devices (issue #647)', () => {
     fireEvent.click(yes);
     await waitFor(() => expect(api.signOutDevices).toHaveBeenCalledWith('u-admin2'));
     expect(api.signOutDevices).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('Test Admin 03 is signed out on every phone and computer. They sign in again with their password.')).toBeTruthy();
+    expect(await screen.findByText('Test Admin 03 signed out everywhere')).toBeTruthy();
   });
 
   it('sends nothing when cancelled', async () => {
@@ -838,7 +840,7 @@ describe('the owner', () => {
     const yes = within(form).getByRole('button', { name: 'Yes, make Test Admin 03 the owner' });
     fireEvent.click(yes);
     fireEvent.click(yes);
-    await screen.findByText(/Test Admin 03 is now the owner of the business/);
+    await screen.findByText('Owner changed to Test Admin 03');
     expect(api.transferOwnership).toHaveBeenCalledTimes(1);
     expect(api.transferOwnership).toHaveBeenCalledWith('u-admin2', { password: 'Fabricated-Pass-2026' });
   });

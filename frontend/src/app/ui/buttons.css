@@ -25,7 +25,7 @@ button,
   text-decoration: none;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+  transition: transform var(--transition), opacity var(--transition);
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
@@ -43,12 +43,15 @@ button:focus-visible,
   box-shadow: var(--focus-ring);
 }
 
-/* Pressed (#106): the button sinks a little and darkens, so a tap on a phone is felt at once. */
+/*
+ * Pressed (#106, #682): the button sinks a little and dims, so a tap on a phone is felt at once. Only transform and opacity
+ * change, in --motion-fast on the ease-out curve; under reduced motion it no longer shrinks and only dims, at once. A hover
+ * fill changes at once too, so nothing but the press moves.
+ */
 button:active:not(:disabled, [aria-disabled='true']),
 .btn:active:not([aria-disabled='true']) {
   transform: scale(var(--press-scale));
-  background: var(--color-neutral-tint);
-  box-shadow: none;
+  opacity: var(--press-opacity);
 }
 
 /* Disabled: a flat grey control with muted text, never only a fade, so it reads as off. */
@@ -77,12 +80,6 @@ button[aria-disabled='true'],
   background: var(--color-primary-hover);
 }
 
-.btn-primary:active:not(:disabled),
-.btn-brand:active:not(:disabled),
-.rt-primary:active:not(:disabled) {
-  background: var(--color-primary-active);
-}
-
 .btn-danger {
   background: var(--color-danger-fill);
   color: var(--rt-white);
@@ -91,10 +88,6 @@ button[aria-disabled='true'],
 
 .btn-danger:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-danger-fill) 86%, var(--rt-black));
-}
-
-.btn-danger:active:not(:disabled) {
-  background: color-mix(in srgb, var(--color-danger-fill) 76%, var(--rt-black));
 }
 
 .btn-ghost {
@@ -106,10 +99,6 @@ button[aria-disabled='true'],
 
 .btn-ghost:hover:not(:disabled) {
   background: var(--color-accent-tint);
-}
-
-.btn-ghost:active:not(:disabled) {
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
 }
 
 .btn-lg {

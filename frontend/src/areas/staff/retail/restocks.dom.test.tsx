@@ -41,6 +41,7 @@ const { RetailError } = await import('../../../api/retail');
 const { retailMessage } = await import('../../../api/retail-errors');
 const { CorrectPanel, RestockCard } = await import('./restocks');
 const { RestockForm } = await import('./restock');
+const { DoneToast, doneToasts } = await import('./toast');
 const { chosenUnitHint, redraftOf, unitHint, voidReasonOf } = await import('./restock-correct-state');
 
 afterEach(() => {
@@ -67,6 +68,18 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
     </QueryClientProvider>,
   );
 }
+
+/** As screenOf, with the app's success toast: one success signal per action (review of #685). */
+function toastScreenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
+  return render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } }, mutationCache: doneToasts() })}>
+      <StaffContext.Provider value={{ me, branch }}>{node}</StaffContext.Provider>
+      <DoneToast />
+    </QueryClientProvider>,
+  );
+}
+
+const toasts = () => Array.from(document.querySelectorAll('.toast')).map((t) => t.textContent ?? '');
 
 const reason = () => screen.getByLabelText(/Why is it being corrected/) as HTMLInputElement;
 const again = () => screen.getByRole('button', { name: 'Void and enter it again' }) as HTMLButtonElement;
@@ -130,11 +143,11 @@ describe('correcting a restock', () => {
     expect(voidReasonOf('abcd')).toBeNull();
   });
 
-  it('voids once however often the button is pressed, says so, and keeps one key for a retry', async () => {
+  it('voids once however often the button is pressed, says so in one toast, and keeps one key for a retry', async () => {
     let finish: (v: unknown) => void = () => undefined;
     voidPurchase.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
     const done = vi.fn();
-    screenOf(admin, <CorrectPanel purchase={restock} onDone={done} onCancel={() => undefined} />);
+    toastScreenOf(admin, <CorrectPanel purchase={restock} onDone={done} onCancel={() => undefined} />);
     fireEvent.change(reason(), { target: { value: 'Entered twenty, there were ten' } });
     fireEvent.click(only());
     fireEvent.click(only());
@@ -144,7 +157,9 @@ describe('correcting a restock', () => {
     const firstKey = voidPurchase.mock.calls[0]?.[2];
     expect(typeof firstKey).toBe('string');
     finish({ ...restock, status: 'voided' });
-    await waitFor(() => expect(done).toHaveBeenCalledWith(expect.stringContaining('RP00000001 is voided')));
+    await waitFor(() => expect(toasts()).toEqual(['Purchase RP00000001 voided']));
+    // The panel closes with no words of its own: the toast is the one success signal.
+    expect(done).toHaveBeenCalledWith(null);
     expect(navigate).not.toHaveBeenCalled();
   });
 

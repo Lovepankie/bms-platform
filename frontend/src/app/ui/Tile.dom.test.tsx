@@ -55,10 +55,11 @@ describe('the tile stylesheet', () => {
   const css = readFileSync(join(process.cwd(), 'src/app/ui/navigation.css'), 'utf8');
   const rule = (selector: string) => css.match(new RegExp(`\\n${selector.replace(/[.:]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
 
-  it('is at least a 48px target that shrinks to 0.98 on a press in 120 ms, animating the transform only', () => {
+  it('is at least a 48px target that shrinks to 0.98 and dims on a press in 120 ms, animating transform and opacity only (#682)', () => {
     expect(rule('.tile')).toMatch(/min-height: 132px/);
-    expect(rule('.tile')).toMatch(/transition: transform var\(--motion-fast\) var\(--ease-out\);/);
+    expect(rule('.tile')).toMatch(/transition: transform var\(--motion-fast\) var\(--ease-out\), opacity var\(--motion-fast\) var\(--ease-out\);/);
     expect(rule('.tile:active')).toMatch(/transform: scale\(var\(--press-scale\)\)/);
+    expect(rule('.tile:active')).toMatch(/opacity: var\(--press-opacity\)/);
   });
 
   it('shows a 3px focus ring and a hover edge without growing the shadow', () => {

@@ -115,6 +115,7 @@ export function AssistantSettingsPage() {
       void queryClient.invalidateQueries({ queryKey: ['advisor', 'brief'] });
     },
     onError: () => void queryClient.invalidateQueries({ queryKey: ['advisor', 'settings'] }),
+    meta: { success: 'Settings saved' },
   });
   if (!canConfigureAdvisor(me)) {
     return (

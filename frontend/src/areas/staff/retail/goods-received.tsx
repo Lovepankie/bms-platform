@@ -12,7 +12,7 @@ import { PAYABLE_MANAGE, PURCHASE_CREATE, canUse, holdsAt } from './permissions'
 import { RECEIPT_STATUS_WORDS, canVoidReceipt, inLineUnit } from './purchasing-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
-import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { Gate, Problem, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -149,7 +149,6 @@ export function GoodsReceiptPage() {
   const { show, toast } = useToast();
   const nameOf = useBranchName();
   const keys = useActionKeys();
-  const [message, setMessage] = useState<string | null>(null);
   const allowed = canUse(me, 'goodsReceived');
   const receipt = useQuery({ queryKey: ['retail', 'goods-receipt', receiptId], queryFn: () => retail.getGoodsReceipt(receiptId), enabled: allowed });
   useCrumbLabel(receipt.data?.receipt_no);
@@ -157,9 +156,7 @@ export function GoodsReceiptPage() {
     mutationFn: (reason: string) => retail.voidGoodsReceipt(receiptId, reason, keys.keyFor(receiptId, reason)),
     onSuccess: (r) => {
       keys.done(receiptId);
-      const text = `Voided ${r.receipt_no ?? 'the delivery'}. The goods are out of stock again.`;
-      setMessage(text);
-      show(text, 'success');
+      show(`Voided ${r.receipt_no ?? 'the delivery'}. The goods are out of stock again.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -169,9 +166,7 @@ export function GoodsReceiptPage() {
     mutationFn: (reason: string) => retail.releaseReceiptHold(receiptId, reason, releaseKeys.keyFor(receiptId, reason)),
     onSuccess: (r) => {
       releaseKeys.done(receiptId);
-      const text = `Released ${r.receipt_no ?? 'the delivery'}. It no longer waits for a landed cost.`;
-      setMessage(text);
-      show(text, 'success');
+      show(`Released ${r.receipt_no ?? 'the delivery'}. It no longer waits for a landed cost.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -189,7 +184,6 @@ export function GoodsReceiptPage() {
       <h1>{r?.receipt_no ?? 'Goods received'}</h1>
       {receipt.isPending && <SkeletonList label="Loading the delivery" />}
       <Problem error={receipt.error} />
-      {message && <Success>{message}</Success>}
       {r && <GoodsReceiptView receipt={r} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {r && r.status === 'posted' && canUse(me, 'landedCosts') && holdsAt(me, PAYABLE_MANAGE, r.branch_id) && (
         <p><Link className="btn-sm" to="/staff/retail/landed-costs/new" search={{ receipt: r.id } as never} data-tour="receipt-landed">Add landed cost</Link></p>

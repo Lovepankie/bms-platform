@@ -226,10 +226,11 @@ button.list-row:hover:not(:disabled) {
   text-decoration: none;
 }
 
+/* A row is too wide to sink, so a pressed row only dims (#682). */
 a.list-row:active,
 button.list-row:active:not(:disabled) {
   transform: none;
-  background: var(--color-neutral-tint);
+  opacity: var(--press-opacity);
 }
 
 a.list-row:focus-visible,

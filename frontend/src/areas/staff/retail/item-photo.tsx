@@ -70,10 +70,12 @@ export function PhotoEditor({ inputId, photoId, shownId, label, onUpload, onClea
   const upload = useMutation({
     mutationFn: (file: File) => onUpload(file),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['retail'] }); onSaved?.(`Saved the photo of ${label}.`); },
+    meta: { success: () => (onSaved ? null : 'Photo saved') },
   });
   const clear = useMutation({
     mutationFn: () => onClear(),
     onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['retail'] }); onSaved?.(`Took the photo of ${label} off.`); },
+    meta: { success: () => (onSaved ? null : 'Photo removed') },
   });
   const id = `photo-${inputId}`;
   return (

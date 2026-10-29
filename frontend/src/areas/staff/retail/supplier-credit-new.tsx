@@ -180,6 +180,7 @@ export function SupplierCreditNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/supplier-credits/$creditId', params: { creditId: made.id ?? '' } });
     },
+    meta: { success: 'Credit note saved' },
   });
   return (
     <Gate screen="supplierCredits" title="New supplier credit note">

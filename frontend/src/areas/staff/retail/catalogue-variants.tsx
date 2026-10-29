@@ -214,6 +214,7 @@ export function NewFamilyPage() {
       void navigate({ to: familyPath(family.id ?? '') as never });
     },
     onSettled: () => { sending.current = false; },
+    meta: { success: 'Item added' },
   });
   const submit = () => {
     if (!complete || save.isPending || sending.current) return;
@@ -286,6 +287,7 @@ export function MakeFamilyPanel({ product }: { product: Product }) {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: familyPath(family.id ?? '') as never });
     },
+    meta: { success: 'Sizes and colours added' },
   });
   if (!canManage || product.variant) return null;
   if (!open) return <p><button type="button" onClick={() => setOpen(true)}>Give this item sizes and colours</button></p>;
@@ -362,6 +364,7 @@ export function JoinPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: familyPath(family.id ?? '') as never });
     },
+    meta: { success: 'Items joined' },
   });
   const change = (i: number, patch: Partial<JoinRow>) => setRows((all) => all.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (

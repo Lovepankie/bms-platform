@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeedbackError, type FeedbackItem, type FeedbackSend } from '../../../api/feedback';
 import { FeedbackForm, FeedbackHistory } from './page';
+import { DoneToast, doneToasts } from '../retail/toast';
 
 // The Feedback form and the list of what a person sent (issue #447, ADR-065): nothing is sent until the kind and the message are
 // there, a wrong picture is refused at once, a sent form says so in plain words and empties itself, the server's refusal is shown as
@@ -13,8 +14,8 @@ import { FeedbackForm, FeedbackHistory } from './page';
 afterEach(cleanup);
 
 function show(node: ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
+  const client = new QueryClient({ mutationCache: doneToasts(), defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{node}<DoneToast /></QueryClientProvider>);
 }
 
 const SENT: FeedbackItem = { id: 'f-1', kind: 'idea', message: 'Test idea', status: 'new', has_screenshot: false, created_at: '2026-10-22T08:00:00Z' };
@@ -40,7 +41,8 @@ describe('the feedback form', () => {
     const picture = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'screen.png', { type: 'image/png' });
     fireEvent.change(screen.getByLabelText(/A picture of the screen/), { target: { files: [picture] } });
     fireEvent.click(sendButton());
-    await screen.findByText(/Thank you. Your feedback was sent to the BMS team./);
+    await screen.findByText('Feedback sent');
+    expect(screen.queryByText(/Thank you. Your feedback was sent to the BMS team./)).toBeNull();
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0]?.[0]).toEqual({ kind: 'problem', message: 'The till froze after the third item.', pagePath: '/staff/retail/sale', screenshot: picture });
     expect(message().value).toBe('');
@@ -88,7 +90,7 @@ describe('the feedback form', () => {
     fireEvent.click(busy);
     expect(send).toHaveBeenCalledTimes(1);
     finish(SENT);
-    await screen.findByText(/Thank you. Your feedback was sent to the BMS team./);
+    await screen.findByText('Feedback sent');
     expect(send).toHaveBeenCalledTimes(1);
   });
 

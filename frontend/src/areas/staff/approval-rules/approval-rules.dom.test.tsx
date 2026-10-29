@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApprovalRule, ApprovalRules } from '../../../api/approval-rules';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { DoneToast } from '../retail/toast';
 import { changesOf, draftOf, loosens, reviewLines, ruleWords, zeroWords } from './state';
 
 // The approval rules screen (issue #343, ADR-091): lending always on, retail switches with an amount, a review in plain words, the
@@ -48,6 +49,7 @@ function screenOf(me = { ...admin, permissions: [...(admin.permissions ?? []), '
       <StaffContext.Provider value={{ me, branch: null }}>
         <ApprovalRulesScreen />
       </StaffContext.Provider>
+      <DoneToast />
     </QueryClientProvider>,
   );
 }
@@ -105,7 +107,8 @@ describe('the approval rules screen', () => {
     fireEvent.click(within(review).getByRole('button', { name: 'Yes, save this' }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]).toEqual([4, [{ action_type: 'retail_sale_void', on: true, threshold_minor: 50_000 }], { password: 'Fabricated-Pass-2026' }]);
-    expect((await screen.findByRole('status')).textContent).toContain('Saved.');
+    expect(await screen.findByText('Approval rules saved')).toBeTruthy();
+    expect(screen.queryByText(/Saved\. It applies from the next action/)).toBeNull();
   });
 
   it('says the others will be told before a rule is switched off', async () => {

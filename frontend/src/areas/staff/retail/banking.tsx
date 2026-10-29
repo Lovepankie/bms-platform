@@ -46,6 +46,7 @@ export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const expected = useQuery({ queryKey: ['retail', 'banking-expected', branchId, draft.date], queryFn: () => retail.bankingExpected({ branchId, date: draft.date }) });
   const shown = draft.amount ?? bankingPrefill(expected.data);
   const minor = amountOrNull(shown);
+  // toast-exempt: success screen, the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => retail.createBanking({ branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) }, key),
     onSuccess: (saved) => {
@@ -145,7 +146,7 @@ export function BankingScreen() {
         </Saved>
       ) : (
         <>
-          <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(b) => { setSaved(b); show('Banking recorded.', 'success'); }} />
+          <BankingForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSaved} />
         </>
       )}
       </div>

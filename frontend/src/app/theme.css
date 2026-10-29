@@ -280,6 +280,7 @@ body {
   --motion-slow: 250ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --press-scale: 0.98;
+  --press-opacity: 0.8; /* a pressed button, tile, card or row dims as it sinks (#682) */
 
   /* The display size (docs/ui-rules.md rule 8): the one key amount of a screen, such as a sale's total, 40px on a phone to 56px. */
   --text-display: clamp(2.5rem, 2rem + 2.5vw, 3.5rem);

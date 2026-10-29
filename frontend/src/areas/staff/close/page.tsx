@@ -50,6 +50,7 @@ export function CloseScreen() {
     await queryClient.invalidateQueries({ queryKey: ['plan-status'] });
   }
 
+  // toast-exempt: success screen, the Closing asked for screen replaces the form
   const ask = useMutation({
     mutationFn: () => requestClosure(mfaEnabled ? { totp_code: typed.trim() } : { password: typed }),
     onSuccess: async (saved) => {
@@ -59,7 +60,7 @@ export function CloseScreen() {
     },
     onError: () => setTyped(''),
   });
-  const cancel = useMutation({ mutationFn: cancelClosure, onSuccess: refresh });
+  const cancel = useMutation({ mutationFn: cancelClosure, onSuccess: refresh, meta: { success: 'Closing cancelled' } });
 
   if (closure.isError) {
     return (
@@ -98,7 +99,6 @@ export function CloseScreen() {
             Save your copy of the data: Download my data in Business set-up
             <RowChevron />
           </Link>
-          {cancel.isSuccess && <p role="status">The closing was cancelled. Everything works again.</p>}
           {cancel.isError && (
             <p role="alert" className="alert alert-danger">
               {cancel.error instanceof Error ? cancel.error.message : 'Could not cancel the closing. Try again.'}
@@ -136,7 +136,6 @@ export function CloseScreen() {
             This is for a business that is stopping for good and wants its data removed, as the Data Protection and Privacy Act allows.
             To stop paying but keep everything, cancel the subscription in Business set-up instead.
           </p>
-          {cancel.isSuccess && <p role="status">The closing was cancelled. Everything works again.</p>}
         </section>
         <ActionBar>
           <button type="button" /* busy-exempt: shows the review, sends nothing */ className="btn-primary btn-block" onClick={() => setStep('review')} data-tour="close-continue">

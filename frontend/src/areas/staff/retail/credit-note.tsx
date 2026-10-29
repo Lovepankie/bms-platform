@@ -12,7 +12,7 @@ import { newIdempotencyKey } from './idempotency';
 import { SALE_RETURN, canOpenAccount, canUse, holdsAt } from './permissions';
 import { DISPOSITION_WORDS, reasonWords, returnedWords, settledWords, type Disposition } from './returns-state';
 import { showDate } from './transfers';
-import { Problem, Success, money, useBranchName, useToast } from './ui';
+import { Note, Problem, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -102,13 +102,15 @@ export function VoidPanel({ busy, error, onVoid }: { busy?: boolean; error?: unk
 
 const route = getRouteApi('/staff/retail/returns/$returnId');
 
+// A void large enough to need a second administrator waits; the page keeps saying so. A done void is said by the toast alone.
+const VOID_WAITS = 'This return is large enough to need a second administrator. It will be voided when they approve it in Approvals.';
+
 export function CreditNotePage() {
   const { returnId } = route.useParams();
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
   const nameOf = useBranchName();
-  const [message, setMessage] = useState<string | null>(null);
   const keys = useRef(reversalKeys(newIdempotencyKey));
   const allowed = canUse(me, 'returns');
   const note = useQuery({ queryKey: ['retail', 'return', returnId], queryFn: () => retail.getReturn(returnId), enabled: allowed });
@@ -117,9 +119,7 @@ export function CreditNotePage() {
     mutationFn: (reason: string) => retail.voidReturn(returnId, reason, keys.current.keyFor(returnId, reason)),
     onSuccess: (r) => {
       keys.current.done(returnId);
-      const text = r.executed ? `Voided ${r.sale_return?.credit_note_no ?? 'the credit note'}.` : 'This return is large enough to need a second administrator. It will be voided when they approve it in Approvals.';
-      setMessage(text);
-      show(text, r.executed ? 'success' : 'info');
+      show(r.executed ? `Voided ${r.sale_return?.credit_note_no ?? 'the credit note'}.` : VOID_WAITS, r.executed ? 'success' : 'info');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -136,7 +136,7 @@ export function CreditNotePage() {
       <h1>{note.data?.credit_note_no ?? 'Credit note'}</h1>
       {note.isPending && <SkeletonList label="Loading the credit note" />}
       <Problem error={note.error} />
-      {message && <Success>{message}</Success>}
+      {voided.data && !voided.data.executed && <Note>{VOID_WAITS}</Note>}
       {note.data && <CreditNoteView note={note.data} nameOf={nameOf} buyerOpens={canOpenAccount(me)} />}
       {note.data && <CreditNotePdf returnId={returnId} branchId={note.data.branch_id} />}
       {note.data && note.data.status === 'completed' && holdsAt(me, SALE_RETURN, note.data.branch_id) && (

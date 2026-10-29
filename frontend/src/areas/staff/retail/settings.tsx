@@ -10,7 +10,7 @@ import {
 import { CreditRecognitionSetting } from './credit-recognition';
 import { PurchasingSettings } from './purchasing-settings';
 import { SlowMoverSetting } from './slow-movers';
-import { Gate, Problem, Success, changeFailureText, useToast } from './ui';
+import { Gate, Problem, changeFailureText, useToast } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -91,7 +91,7 @@ export function ChangeReview({ change, busy, onConfirm, onBack }: { change: Chan
   );
 }
 
-function Editor({ read, onSaved, onEdit }: { read: CapabilitiesRead; onSaved: () => void; onEdit: () => void }) {
+function Editor({ read, onSaved }: { read: CapabilitiesRead; onSaved: () => void }) {
   const queryClient = useQueryClient();
   const saved = draftOf(read.capabilities);
   const [draft, setDraft] = useState<Draft>(saved);
@@ -119,8 +119,8 @@ function Editor({ read, onSaved, onEdit }: { read: CapabilitiesRead; onSaved: ()
         <ChangeReview change={change} busy={save.isPending} onConfirm={() => save.mutate()} onBack={() => setReviewing(false)} />
       ) : (
         <>
-          <ProfileChoice draft={draft} onChoose={(p) => { onEdit(); setDraft(chooseProfile(draft, p)); }} />
-          <FlagList draft={draft} saved={saved} onToggle={(k, on) => { onEdit(); setDraft(toggle(draft, k, on)); }} />
+          <ProfileChoice draft={draft} onChoose={(p) => setDraft(chooseProfile(draft, p))} />
+          <FlagList draft={draft} saved={saved} onToggle={(k, on) => setDraft(toggle(draft, k, on))} />
           <p className="cluster">
             <button type="button" className="rt-primary" disabled={!isChange(change)} onClick={() => setReviewing(true)} data-tour="retail-settings-save">
               Review changes
@@ -158,18 +158,16 @@ export function ReturnsThresholdWarning({ capabilities }: { capabilities: Capabi
 
 export function RetailSettings() {
   const read = useQuery({ queryKey: ['retail', 'capabilities'], queryFn: () => retail.capabilities() });
-  const [saved, setSaved] = useState(false);
   const { show, toast } = useToast();
   return (
     <Gate screen="settings" title="Retail settings">
       {toast}
-      {saved && <Success>Saved. The menus now follow your choice.</Success>}
       <p>Say what kind of business this is, and which features to use. Every feature starts off.</p>
       {read.isPending && <SkeletonList label="Loading settings" />}
       <Problem error={read.error} />
       {read.data && <ReturnsThresholdWarning capabilities={read.data.capabilities} />}
       {/* Keyed by the version, so a fresh read after someone else's change starts from what is saved. */}
-      {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => { setSaved(true); show('Saved', 'success'); }} onEdit={() => setSaved(false)} />}
+      {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => show('Saved', 'success')} />}
       {read.data && <CreditRecognitionSetting key={`credit-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
       {read.data && <SlowMoverSetting key={`slow-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
       <PurchasingSettings />

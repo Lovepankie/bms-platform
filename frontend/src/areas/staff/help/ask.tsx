@@ -104,6 +104,7 @@ function Answer({ result, question }: { result: AskAnswer; question: string }) {
 export function AskBms({ onAsked, onNotFound }: { onAsked?: (question: string) => void; onNotFound?: (shown: boolean) => void }) {
   const [question, setQuestion] = useState('');
   const [tried, setTried] = useState(false);
+  // toast-exempt: asking a question saves nothing, the answer shows in the box
   const ask = useMutation({ mutationFn: (q: string) => askBms.ask(q) });
   const tellNotFound = useRef(onNotFound);
   useEffect(() => {

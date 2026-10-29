@@ -49,6 +49,7 @@ export function LabelsPage() {
       setMade((m) => [...m, ...codes]);
       setReady(true);
     },
+    meta: { success: 'Labels ready' },
   });
   const sheet = ready ? sheetOf(rows, made) : [];
   return (

@@ -23,7 +23,7 @@ import { UnitPicker } from './unit-picker';
 import { GroupControls, GroupedCards, useCategoryGroups } from './category-groups';
 import { CategoryPicker } from './category-picker';
 import { ScreenToast } from './toast';
-import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
+import { Gate, Problem, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -174,6 +174,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
     },
     onSettled: () => { sending.current = false; },
   });
+  // toast-exempt: a look for items with the same name that saves nothing; the save it hands on to says it
   const check = useMutation({
     mutationFn: () => retail.similarProducts({ description: description.trim(), unitId, ...(product ? { excludeId: product.id } : {}) }),
     onSuccess: (found) => {
@@ -292,7 +293,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
             </>
           )}
           <p className="hint">To change the price, use Change price on the list.</p>
-          <PacksTurnOn adding={false} />
+          <PacksTurnOn />
           <PackEditor product={product} />
           <BarcodeEditor product={product} />
           <StockMinimumEditor productId={product.id ?? ''} unit={product.unit} />
@@ -320,7 +321,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
           />
           {!profit && <p className="hint">The buying price is set when you buy stock.</p>}
           <PhotoChoice id="item-photo" file={photo} onChange={setPhoto} />
-          <PacksTurnOn adding />
+          <PacksTurnOn />
         </>
       )}
       {exists && (
@@ -481,15 +482,13 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
 
 export function ProductsPage() {
   const [view, setView] = useState<View>({ mode: 'list' });
-  const [message, setMessage] = useState<string | null>(null);
   const { show, toast } = useToast();
   const back = () => setView({ mode: 'list' });
-  const open = (id: string) => { setMessage(null); setView({ mode: 'edit', id }); };
-  const saved = (text: string) => { setMessage(text); show(text, 'success'); back(); };
+  const open = (id: string) => setView({ mode: 'edit', id });
+  const saved = (text: string) => { show(text, 'success'); back(); };
   return (
     <Gate screen="products" title="Items">
-      {message && view.mode === 'list' && <Success>{message}</Success>}
-      {view.mode === 'list' && <ProductList onAdd={() => { setMessage(null); setView({ mode: 'new' }); }} onEdit={(id) => { setMessage(null); setView({ mode: 'edit', id }); }} onPrice={(id) => { setMessage(null); setView({ mode: 'price', id }); }} />}
+      {view.mode === 'list' && <ProductList onAdd={() => setView({ mode: 'new' })} onEdit={open} onPrice={(id) => setView({ mode: 'price', id })} />}
       <ScreenToast.Provider value={show}>
         {view.mode === 'new' && <ProductForm onSaved={saved} onCancel={back} onOpen={open} />}
         {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}

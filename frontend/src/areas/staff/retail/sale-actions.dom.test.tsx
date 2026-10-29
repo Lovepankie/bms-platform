@@ -34,6 +34,7 @@ const { RetailError } = await import('../../../api/retail');
 const { retailMessage } = await import('../../../api/retail-errors');
 const { PayFormView, PaySaleAction, VoidFormView, VoidSaleAction } = await import('./sale-actions');
 const { SaleDetail } = await import('./sales');
+const { DoneToast, doneToasts } = await import('./toast');
 
 afterEach(() => {
   cleanup();
@@ -53,11 +54,15 @@ const refusal = (code: string, status = 422) => new RetailError(retailMessage({ 
 
 function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } }, mutationCache: doneToasts() })}>
       <StaffContext.Provider value={{ me, branch }}>{node}</StaffContext.Provider>
+      <DoneToast />
     </QueryClientProvider>,
   );
 }
+
+/** The words of the app's success toast, or null when none shows. */
+const toastText = () => document.querySelector('.toast-success')?.textContent ?? null;
 
 const save = () => screen.getByRole('button', { name: 'Save payment' }) as HTMLButtonElement;
 const amount = () => screen.getByLabelText('Amount received') as HTMLInputElement;
@@ -170,7 +175,8 @@ describe('recording a payment', () => {
     expect(body).toEqual({ amount_minor: 4000, method: 'mobile_money', paid_on: today });
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     finish({ payment: { amount_minor: 4000 }, sale_paid_minor: 6000, sale_balance_minor: 6000 });
-    await waitFor(() => expect(screen.getAllByRole('status').map((s) => s.textContent)).toContain('Recorded UGX 4,000. Still owes UGX 6,000.'));
+    await waitFor(() => expect(toastText()).toBe('Payment recorded'));
+    expect(screen.queryByText('Recorded UGX 4,000. Still owes UGX 6,000.')).toBeNull();
     expect(screen.queryByLabelText('Amount received')).toBeNull();
   });
 
@@ -206,7 +212,8 @@ describe('recording a payment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
     await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
     expect(paySale.mock.calls[0]?.[1]).toEqual({ amount_minor: 12000, method: 'bank', paid_on: today });
-    expect((await screen.findByRole('status')).textContent).toBe('Recorded UGX 12,000. This sale is now paid in full.');
+    await waitFor(() => expect(toastText()).toBe('Sale paid in full'));
+    expect(screen.queryByText('Recorded UGX 12,000. This sale is now paid in full.')).toBeNull();
   });
 
   it('says each refusal in plain words and repeats the key on a retry', async () => {

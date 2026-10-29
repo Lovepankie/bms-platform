@@ -174,6 +174,7 @@ function NewItemForm({ id, qtyLabel, qtyError, counting, askCost, initial = '', 
     },
     onSettled: () => { sending.current = false; },
   });
+  // toast-exempt: a look for items with the same name that saves nothing; the save it hands on to says it
   const check = useMutation({
     mutationFn: () => retail.similarProducts({ description: description.trim(), unitId }),
     onSuccess: (found) => {

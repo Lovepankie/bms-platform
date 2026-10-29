@@ -6,7 +6,7 @@ import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, SAVINGS_OVERWRITE, SAVINGS_RECORD, holds } from './permissions';
-import { SAVINGS_REASONS, afterSavingsConflict, nowAboveWords, planSavings, reasonText, savedWords, seesAmounts } from './savings-state';
+import { SAVINGS_REASONS, afterSavingsConflict, nowAboveWords, planSavings, reasonText, seesAmounts } from './savings-state';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './ui';
@@ -62,6 +62,7 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const reason = reasonText(draft.reason, draft.other ?? '');
   const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
+  // toast-exempt: success screen, the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => {
       if (!plan) throw new Error('The suggestion has not loaded');
@@ -217,7 +218,7 @@ export function SavingsScreen() {
         </Saved>
       ) : (
         <>
-          <SavingsForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(s) => { setSaved(s); show(savedWords(s), 'success'); }} />
+          <SavingsForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSaved} />
         </>
       )}
       </div>

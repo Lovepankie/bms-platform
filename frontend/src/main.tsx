@@ -5,11 +5,12 @@ import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { AutoUpdateLayer, setWorkerRegistration, startAutoUpdate, updater } from './app/auto-update';
 import { router } from './app/router';
+import { DoneToast, doneToasts } from './areas/staff/retail/toast';
 import { reloadOnce } from './app/stale-app';
 import './app/theme.css';
 import './app/ui/index.css';
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } } });
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } }, mutationCache: doneToasts() });
 
 // A new worker that has taken over replaces the old app at a safe moment, never by an immediate reload (#576, ADR-088): the
 // plugin's own answer to a new worker is location.reload(), which could land in the middle of a sale.
@@ -33,6 +34,7 @@ createRoot(root).render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
       <AutoUpdateLayer />
+      <DoneToast />
     </QueryClientProvider>
   </StrictMode>,
 );

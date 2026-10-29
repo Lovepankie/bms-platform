@@ -7,6 +7,7 @@ import { useCollateralApi } from '../../../api/lending-context';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { sayDone } from '../retail/toast';
 import {
   blankValuation, canRequestRelease, custodyBadge, custodyWords, eventBody, eventProblems, EVENT_WORDS, eventsFrom, ownerWords, typeWords,
   valuationBody, valuationProblems, type EventType,
@@ -114,6 +115,7 @@ function Valuations({ id, currency, valuations, canAdd }: { id: string; currency
     setFailure(null);
     try {
       await api.addValuation(id, valuationBody(d, unit));
+      sayDone('Valuation saved');
       void queryClient.invalidateQueries({ queryKey: ['collateral'] });
       setOpen(false);
       setD(blankValuation(today));
@@ -179,6 +181,7 @@ function CustodyChange({ id, version, custody, onDone }: { id: string; version: 
     setFailure(null);
     try {
       await api.recordEvent(id, version, eventBody(type, location, counterparty, note));
+      sayDone('Change recorded');
       void queryClient.invalidateQueries({ queryKey: ['collateral'] });
       onDone();
     } catch (raw) {
@@ -215,6 +218,7 @@ function ReleaseRequest({ id, version, onDone }: { id: string; version: number; 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (busy || by.trim() === '') return;
+    // toast-exempt: success screen, the request sent screen replaces the form
     setBusy(true);
     setFailure(null);
     try {
