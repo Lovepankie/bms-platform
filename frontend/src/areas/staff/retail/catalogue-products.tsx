@@ -447,7 +447,7 @@ export function Editing({ id, mode, onSaved, onCancel, onOpen }: { id: string; m
   return mode === 'edit' ? <ProductForm key={product.data.id} product={product.data} onSaved={onSaved} onCancel={onCancel} onOpen={onOpen} /> : <PriceForm product={product.data} onSaved={onSaved} onCancel={onCancel} />;
 }
 
-export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) => void; onPrice: (id: string) => void; onAdd: () => void }) {
+export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: string) => void; onPrice: (id: string) => void; onAdd: () => void; added?: Product }) {
   const { me } = useStaff();
   const profit = useProfitAccess();
   const search = useLiveSearch();
@@ -464,7 +464,9 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
     placeholderData: keepPreviousData,
   });
   const finding = page.isPlaceholderData || (page.isFetching && !page.isFetchingNextPage);
-  const items = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  const listed = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
+  // Issue #689: the item just added leads the unfiltered list, wherever it would fall in the pages.
+  const items = added && page.data && query === '' && categoryId === '' && activeFilter !== 'off' ? [added, ...listed.filter((p) => p.id !== added.id)] : listed;
   const canPrice = (me.permissions ?? []).includes(PRICE);
   const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
   const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink>} />;
@@ -508,14 +510,15 @@ export function ProductList({ onEdit, onPrice, onAdd }: { onEdit: (id: string) =
 export function ProductsPage() {
   const [view, setView] = useState<View>({ mode: 'list' });
   const [message, setMessage] = useState<string | null>(null);
+  const [added, setAdded] = useState<Product | undefined>(undefined);
   const { show, toast } = useToast();
   const back = () => setView({ mode: 'list' });
   const open = (id: string) => { setMessage(null); setView({ mode: 'edit', id }); };
-  const saved = (text: string) => { setMessage(text); show(text, 'success'); back(); };
+  const saved = (text: string, item?: Product) => { setMessage(text); setAdded(item); show(text, 'success'); back(); };
   return (
     <Gate screen="products" title="Items">
       {message && view.mode === 'list' && <Success>{message}</Success>}
-      {view.mode === 'list' && <ProductList onAdd={() => { setMessage(null); setView({ mode: 'new' }); }} onEdit={(id) => { setMessage(null); setView({ mode: 'edit', id }); }} onPrice={(id) => { setMessage(null); setView({ mode: 'price', id }); }} />}
+      {view.mode === 'list' && <ProductList added={added} onAdd={() => { setMessage(null); setView({ mode: 'new' }); }} onEdit={(id) => { setMessage(null); setView({ mode: 'edit', id }); }} onPrice={(id) => { setMessage(null); setView({ mode: 'price', id }); }} />}
       <ScreenToast.Provider value={show}>
         {view.mode === 'new' && <ProductForm onSaved={saved} onCancel={back} onOpen={open} />}
         {(view.mode === 'edit' || view.mode === 'price') && <Editing id={view.id} mode={view.mode} onSaved={saved} onCancel={back} onOpen={open} />}
