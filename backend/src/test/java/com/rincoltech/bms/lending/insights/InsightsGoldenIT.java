@@ -8,7 +8,10 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.lending.insights.GoldenModel.Loan;
 import com.rincoltech.bms.lending.insights.GoldenModel.Pos;
 import com.rincoltech.bms.lending.seed.internal.LendingSeeder;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +22,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,9 +39,23 @@ import tools.jackson.databind.JsonNode;
  * demo seed, plus a reversal with re-allocation made through the staff routes), and must match to
  * the minor unit. The edge cases are all in the data: overpayment credits, write-offs and
  * recoveries, a reversed repayment, partial months at both ends of a range, a past range read from
- * the snapshots, branch and officer filters, and a second tenant that must never show through.
+ * the snapshots, branch and officer filters, and a second tenant that must never show through. The clock is pinned at
+ * 2026-10-08 13:00 (Kampala), so the test and the server read one business date even when a run crosses midnight (#666).
  */
+@Import(InsightsGoldenIT.FixedClock.class)
 class InsightsGoldenIT extends IntegrationTest {
+
+    /** 2026-10-08 13:00 in Kampala, far from either midnight. */
+    static final Instant NOW = Instant.parse("2026-10-08T10:00:00Z");
+
+    @TestConfiguration
+    static class FixedClock {
+        @Bean
+        @Primary
+        Clock fixedClock() {
+            return Clock.fixed(NOW, ZoneOffset.UTC);
+        }
+    }
 
     static final String BASE = "/api/v1/lending/insights";
     static final String ALL =
