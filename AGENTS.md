@@ -1251,6 +1251,9 @@ Accepted (this list is the ADR index):
   goes to the account `cash` or `bank` is mapped to at the entry's branch, the seeded account while unmapped or switched
   off, and the cash book reads the same account; the ADR-026 refusals of a cash or bank remap with retail on are gone
   (proposed, #236; supersedes that part of ADR-026; migration `V117`)
+- ADR-106 A new item is added in its smallest unit, with its packages in one save: a package word (box, carton, dozen, set
+  of N and the rest of `RetailCatalogue.PACKAGE_WORDS`) is refused as a new item's unit with 422 `unit_is_package`, every
+  unit carries `is_package`, and `POST /retail/products` takes `packs`, made in the item's transaction (#689; no migration)
 
 Pending (cite only as "pending ADR-NNN"):
 
