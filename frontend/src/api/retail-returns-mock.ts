@@ -28,7 +28,7 @@ const share = (amount: number, part: number, whole: number): number => Number((B
 export function createReturnsMock(env: ReturnsEnv): ReturnsMock {
   const returns: SaleReturn[] = [];
   const sequence = new Map<string, number>();
-  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.')));
+  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.')));
   const saleOf = (id: string): Sale => env.sales().find((s) => s.id === id) ?? env.refuse(404, 'not_found', 'That could not be found.');
   const done = (saleId: string, saleLineId: string | undefined): { qty: number; total: number } => {
     let qty = 0;

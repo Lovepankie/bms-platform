@@ -150,6 +150,8 @@ class RetailUnitsIT extends IntegrationTest {
         ResponseEntity<JsonNode> packs = api.get("/products/" + pen + "/units", ADMIN);
         assertThat(packs.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(code(packs)).isEqualTo("capability_not_enabled");
+        assertThat(packs.getBody().get("detail").asString())
+                .isEqualTo("This feature is not switched on for your business.");
         assertThat(addPack(pen, carton, "12").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(api.get("/products/" + pen, ADMIN).getBody().has("packs")).isFalse();
 

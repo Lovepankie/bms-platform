@@ -675,7 +675,7 @@ class RetailTradePurchasingIT extends IntegrationTest {
         assertThat(list.getBody().get("items")).hasSize(1);
         ResponseEntity<JsonNode> create = api.postKeyed(
                 "/purchase-orders", orderBody(supplier, br2, orderLine(product, "1", 100)), BUYER, scope, key());
-        assertThat(create.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(create.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     // ---- goods received --------------------------------------------------------------------------

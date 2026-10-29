@@ -350,8 +350,11 @@ class BranchClosingIT extends IntegrationTest {
         retail.stockUp(t.headOffice(), product, "10");
         assertThat(close(t.secondBranch(), null).getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        assertThat(retail.sell(t.secondBranch(), "cash", product, "1").getStatusCode())
-                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        ResponseEntity<JsonNode> closedSale = retail.sell(t.secondBranch(), "cash", product, "1");
+        assertThat(closedSale.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        // Issue #257: a closed branch inside the scope keeps 422 unknown_branch, with its own plain message.
+        assertThat(closedSale.getBody().get("errors").get(0).get("message").asString())
+                .isEqualTo("That branch is closed.");
         assertThat(restock(t.secondBranch()).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(transfer(t.headOffice(), t.secondBranch()).getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);

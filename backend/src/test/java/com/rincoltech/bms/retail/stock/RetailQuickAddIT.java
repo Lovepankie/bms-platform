@@ -388,8 +388,15 @@ class RetailQuickAddIT extends IntegrationTest {
 
     @Test
     void addingStockNeedsStockCountPermissionAndNothingIsMadeWithoutIt() {
-        ResponseEntity<JsonNode> refused = quickAdd(item("Test Pen Blue", 500, "30", hq), CATALOGUE_ONLY, "*", "k-1");
-        assertThat(refused.getStatusCode()).isIn(HttpStatus.FORBIDDEN, HttpStatus.UNPROCESSABLE_CONTENT);
+        // The route's permission is held but not the one RetailBranchContext.resolve checks for the stock: 403
+        // permission_denied (spec trade-capabilities section 2.2, issue #257).
+        ResponseEntity<JsonNode> refused = quickAdd(
+                item("Test Pen Blue", 500, "30", hq),
+                CATALOGUE_ONLY,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("permission_denied");
         assertThat(scalar(
                         "SELECT count(*) FROM retail_products WHERE tenant_id = ? AND description = 'Test Pen Blue'",
                         t.tenantId()))
@@ -422,7 +429,9 @@ class RetailQuickAddIT extends IntegrationTest {
                 ADMIN,
                 hq.toString(),
                 UUID.randomUUID().toString());
-        assertThat(r.getStatusCode().is4xxClientError()).isTrue();
+        // Issue #257: a branch outside the scope is 404 unknown_branch.
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(r.getBody().get("code").asString()).isEqualTo("unknown_branch");
         assertThat(scalar(
                         "SELECT count(*) FROM retail_products WHERE tenant_id = ? AND description = 'Test Torch'",
                         t.tenantId()))

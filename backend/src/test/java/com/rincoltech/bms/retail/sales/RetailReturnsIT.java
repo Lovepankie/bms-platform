@@ -496,6 +496,35 @@ class RetailReturnsIT extends IntegrationTest {
         assertThat(code(again)).isEqualTo("sale_voided");
     }
 
+    /**
+     * Issue #257: a return needs only retail.sale.return. A clerk without any stock permission (no restock, count or
+     * transfer) takes goods back written off and back into stock alike; the restock branch is checked against the return's
+     * own permission, never through RetailBranchContext.resolve, so the new 403 there cannot reach a return.
+     */
+    @Test
+    void aClerkWithOnlyTheReturnPermissionTakesGoodsBackWithOrWithoutRestock() {
+        String clerk = CLERK + ",retail.sale.return";
+        UUID s = cashSale(hq, "5", null);
+        ResponseEntity<JsonNode> written = ret(
+                s,
+                List.of(line(lineOf(s, 0), "1", "write_off")),
+                "cash",
+                null,
+                clerk,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(written.getStatusCode()).as("%s", written.getBody()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> restocked = ret(
+                s,
+                List.of(line(lineOf(s, 0), "1", "restock")),
+                "cash",
+                null,
+                clerk,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(restocked.getStatusCode()).as("%s", restocked.getBody()).isEqualTo(HttpStatus.CREATED);
+    }
+
     @Test
     void damagedGoodsAreWrittenOffAndNeverEnterStock() {
         UUID s = cashSale(hq, "5", null);

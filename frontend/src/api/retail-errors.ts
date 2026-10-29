@@ -177,6 +177,9 @@ const BY_STATUS: Record<number, string> = {
 /** The message to show a person for a failed retail call. */
 export function retailMessage(problem: RetailProblem | undefined, status: number): string {
   const p = problem ?? {};
+  // Issue #257: only the 404 is a branch outside the caller's scope (trade-capabilities 2.2). A closed branch or a transfer's
+  // destination is a 422 whose field message the server words for its own case, shown below.
+  if (p.code === 'unknown_branch' && status === 404) return 'That branch is not one you work in. Choose another branch in the Branch box.';
   const known = p.code ? BY_CODE[p.code] : undefined;
   if (known) return known;
   if (p.code === 'validation_failed') {

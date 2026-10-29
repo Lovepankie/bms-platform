@@ -78,7 +78,7 @@ export function createPurchasingMock(env: PurchasingEnv): PurchasingMock {
   // One fabricated credit restock, so a payment can clear both kinds of open item.
   const restocks: Restock[] = [{ id: 'restock0-0000-4000-8000-000000000001', purchase_no: 'P-900001', supplier_id: env.suppliers()[0]?.id ?? '', date: env.today(), total_minor: 12_000, paid_minor: 0 }];
 
-  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.')));
+  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.')));
   // Paying suppliers and what is owed need no capability (issue #557, ADR-084): a shop that buys on credit in Buy stock uses them.
   const open = <T>(fn: () => T): Promise<T> => env.run(fn);
   const next = (prefix: string): string => {

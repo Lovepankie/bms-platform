@@ -245,6 +245,9 @@ class RetailTransfersIT extends IntegrationTest {
         ResponseEntity<JsonNode> unknown = transfer(body(t.headOffice(), UUID.randomUUID(), product, "1"), ADMIN, "*");
         assertThat(unknown.getBody().get("errors").get(0).get("code").asString())
                 .isEqualTo("unknown_branch");
+        // Issue #257: the destination's own plain message, never "not one you work in" (any branch may receive).
+        assertThat(unknown.getBody().get("errors").get(0).get("message").asString())
+                .isEqualTo("Choose an open branch of this business to move the stock to.");
         Map<String, Object> future = body(t.headOffice(), t.secondBranch(), product, "1");
         future.put("transfer_date", "2999-01-01");
         assertThat(transfer(future, ADMIN, "*")
@@ -432,7 +435,9 @@ class RetailTransfersIT extends IntegrationTest {
         String two = t.secondBranch().toString();
 
         ResponseEntity<JsonNode> outside = transfer(body(t.headOffice(), third, product, "1"), ADMIN, two);
-        assertThat(outside.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        // Spec section 2.2 (issue #257): a source outside the scope is 404 unknown_branch, still naming the field.
+        assertThat(outside.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(outside.getBody().get("code").asString()).isEqualTo("unknown_branch");
         assertThat(outside.getBody().get("errors").get(0).get("field").asString())
                 .isEqualTo("from_branch_id");
         assertThat(qty(t.headOffice(), product)).isEqualTo("10.000");

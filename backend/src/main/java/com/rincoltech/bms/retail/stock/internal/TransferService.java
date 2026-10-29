@@ -148,7 +148,11 @@ class TransferService implements ModuleSettingsChangeGuard {
         } else {
             to = branches.findActive(r.toBranchId()).orElse(null);
             if (to == null) {
-                problems.add(new FieldProblem("to_branch_id", "unknown_branch", "No such active branch."));
+                // Any open branch of the business may receive, in or out of the caller's scope (issue #257).
+                problems.add(new FieldProblem(
+                        "to_branch_id",
+                        "unknown_branch",
+                        "Choose an open branch of this business to move the stock to."));
             } else {
                 branchContext.requireStocks(to.id(), "to_branch_id");
             }

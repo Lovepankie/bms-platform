@@ -82,8 +82,8 @@ class PriceListService {
             throw new ApiException(
                     HttpStatus.NOT_FOUND,
                     "capability_not_enabled",
-                    "Capability not enabled",
-                    "This capability is not enabled for the tenant.");
+                    "Not switched on",
+                    "This feature is not switched on for your business.");
         }
     }
 

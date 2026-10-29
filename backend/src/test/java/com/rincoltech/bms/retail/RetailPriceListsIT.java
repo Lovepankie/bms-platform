@@ -296,6 +296,8 @@ class RetailPriceListsIT extends IntegrationTest {
             ResponseEntity<JsonNode> r = api.get(path, MANAGER);
             assertThat(r.getStatusCode()).as(path).isEqualTo(HttpStatus.NOT_FOUND);
             assertThat(code(r)).isEqualTo("capability_not_enabled");
+            assertThat(r.getBody().get("detail").asString())
+                    .isEqualTo("This feature is not switched on for your business.");
         }
         assertThat(api.post("/price-lists", Map.of("name", "Late"), MANAGER).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);

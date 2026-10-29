@@ -110,14 +110,14 @@ public class RetailCapabilities {
         return settings.group(MODULE).get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0;
     }
 
-    /** 404 {@code capability_not_enabled} for a route of a capability that is off. */
+    /** 404 {@code capability_not_enabled} for a route of a capability that is off, in plain words (issue #257). */
     public void require(String capability) {
         if (!enabled(capability)) {
             throw new ApiException(
                     HttpStatus.NOT_FOUND,
                     "capability_not_enabled",
-                    "Capability not enabled",
-                    "This capability is not enabled for the tenant.");
+                    "Not switched on",
+                    "This feature is not switched on for your business.");
         }
     }
 
