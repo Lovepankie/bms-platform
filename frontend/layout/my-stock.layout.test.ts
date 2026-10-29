@@ -84,7 +84,7 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
     await page.close();
   });
 
-  it('names the shop under the title as a 48px target the switcher covers, and a switch shows the toast', async () => {
+  it('names the shop above the page content as a 48px target the switcher covers, and a switch shows the toast', async () => {
     const page = await open(font);
     const label = page.getByTestId('shop-here');
     expect(await label.textContent()).toContain('Test Branch A (BR1)');
@@ -92,14 +92,14 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
       const shop = document.querySelector<HTMLElement>('.shop-here')?.getBoundingClientRect();
       const select = document.querySelector<HTMLElement>('.shop-here-select')?.getBoundingClientRect();
       const title = document.querySelector<HTMLElement>('main h1')?.getBoundingClientRect();
-      return { shop: shop && { top: shop.top, height: shop.height, right: shop.right, width: shop.width }, select: select && { height: select.height, width: select.width }, titleBottom: title?.bottom ?? 0 };
+      return { shop: shop && { bottom: shop.bottom, height: shop.height, right: shop.right, width: shop.width }, select: select && { height: select.height, width: select.width }, titleTop: title?.top ?? 0 };
     });
     expect(boxes.shop?.height ?? 0).toBeGreaterThanOrEqual(48);
     expect(boxes.shop?.right ?? Infinity).toBeLessThanOrEqual(WIDTH);
     // The select covers the label inside its 1px edge, so a tap anywhere on it opens the picker.
     expect(boxes.select?.height ?? 0).toBeGreaterThanOrEqual((boxes.shop?.height ?? 0) - 2);
     expect(boxes.select?.width ?? 0).toBeGreaterThanOrEqual((boxes.shop?.width ?? 0) - 2);
-    expect(boxes.shop?.top ?? 0).toBeGreaterThanOrEqual(boxes.titleBottom);
+    expect(boxes.shop?.bottom ?? Infinity).toBeLessThanOrEqual(boxes.titleTop);
     await page.getByRole('combobox', { name: 'Shop: Test Branch A (BR1). Switch shop' }).selectOption({ label: 'Test Branch B (BR2)' });
     const toast = page.getByRole('status').filter({ hasText: 'You are now in Test Branch B (BR2).' });
     await toast.waitFor();

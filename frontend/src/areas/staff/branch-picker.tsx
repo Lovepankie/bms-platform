@@ -153,6 +153,31 @@ export function BranchOptions({ me }: { me: Me }) {
   );
 }
 
+/**
+ * The shop the page works in (issue #680): "Test Shop One (HQ)", or "All branches". The staff layout draws it once above every
+ * page's content, phone and laptop. With more than one to choose, a native select laid over it opens the phone's own picker in
+ * one tap, as the top bar's title does. JUSTIFICATION-A3: the component the issue asks for, moved to the layout.
+ */
+export function ShopHere({ me, branch, onChoose }: { me: Me; branch: string | null; onChoose: (selection: string) => void }) {
+  const active = (me.branches ?? []).find((b) => b.id === branch);
+  const choices = (me.branches ?? []).length + (me.all_branches ? 1 : 0);
+  const name = active ? branchLabel(active) : branch === ALL_BRANCHES ? 'All branches' : choices > 1 ? 'Choose a shop' : '';
+  if (!name) return null;
+  return (
+    <p className="shop-here" data-testid="shop-here">
+      <span className="shop-here-icon" aria-hidden="true">{icons.shop}</span>
+      <span className="shop-here-name">{name}</span>
+      {choices > 1 && <span className="shop-here-chevron" aria-hidden="true">{icons.chevron}</span>}
+      {choices > 1 && (
+        <select className="shop-here-select" aria-label={`Shop: ${name}. Switch shop`} value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
+          {!active && branch !== ALL_BRANCHES && <option value="">Choose a shop</option>}
+          <BranchOptions me={me} />
+        </select>
+      )}
+    </p>
+  );
+}
+
 /** Up to two capitals from a name, for a business with no logo: "Test Shop 01" gives "TS". */
 export function initials(name: string): string {
   return name

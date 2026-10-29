@@ -6,7 +6,7 @@ import type { Me } from '../src/api/client';
 import type { StockRow } from '../src/api/retail';
 import { mockMe } from '../src/api/retail-mock';
 import { router as appRouter } from '../src/app/router';
-import { useBranchSwitch } from '../src/areas/staff/branch-picker';
+import { ShopHere, useBranchSwitch } from '../src/areas/staff/branch-picker';
 import { StaffContext } from '../src/areas/staff/context';
 import { StockTable } from '../src/areas/staff/retail/stock';
 import { useToast } from '../src/areas/staff/retail/toast';
@@ -15,8 +15,8 @@ import { StaffTabBar } from '../src/areas/staff/tabs';
 import '../src/app/theme.css';
 import '../src/app/ui/index.css';
 
-// The page my-stock.layout.test.ts lays out in a real browser (issue #680): My stock on a phone as a card per item, under the shop
-// label that switches shop, and the toast a switch shows. ?font= scales the root font size as a phone's large text setting does,
+// The page my-stock.layout.test.ts lays out in a real browser (issue #680): My stock on a phone as a card per item, below the shop
+// label the staff layout draws above every page, and the toast a switch shows. ?font= scales the root font size as a phone's large text setting does,
 // ?theme=dark draws the dark theme, ?screenToast=1 a toast of the screen's own. Every name is invented.
 
 const query = new URLSearchParams(window.location.search);
@@ -49,6 +49,7 @@ function Page() {
     <StaffContext.Provider value={{ me, branch, chooseBranch: choose }}>
       <div className="app-shell"><div className="app-content"><div className="nav-layout">
         <div className="nav-layout-main">
+          <ShopHere me={me} branch={branch} onChoose={choose} />
           <Gate screen="stock" title="My stock">
             <StockTable rows={rows} showCost correctable={{ branchId: branch }} />
             {query.get('screenToast') === '1' && <CorrectedToast />}

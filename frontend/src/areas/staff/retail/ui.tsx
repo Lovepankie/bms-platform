@@ -9,7 +9,7 @@ import type { Me } from '../../../api/client';
 import { RETAIL_CURRENCY, RetailError, retail, type BranchRole, type Product } from '../../../api/retail';
 import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
-import { BranchOptions, useStockedBranches } from '../branch-picker';
+import { useStockedBranches } from '../branch-picker';
 import { useStaff } from '../context';
 import { ItemPhoto, shownPhoto } from './item-photo';
 import { parseCount, qtyString, showQty } from './maths';
@@ -18,7 +18,6 @@ import { plural } from '../../../app/glossary';
 import { BRANCH_ROLES, branchesWhere, canSeeProfit, canUse, capabilityOn, sellingBranches, type RetailScreen } from './permissions';
 import { keptWords } from './orders-state';
 import { NoAccess } from '../../../app/ui/EmptyState';
-import { icons } from '../../../components/icons';
 
 // Shared pieces of the retail screens. Phone first: one column, 44px tap targets, labels on every
 // input, a visible focus ring, and state shown in words as well as colour.
@@ -120,35 +119,8 @@ export function Gate({ screen, title, children, wide }: { screen: RetailScreen; 
   return (
     <main className={wide ? 'rt rt-wide' : 'rt'}>
       <h1>{title}</h1>
-      <ShopHere />
       {children}
     </main>
-  );
-}
-
-/**
- * The shop the page works in, under its title (issue #680): "Test Shop One", or "All branches". With more than one to choose, a
- * native select laid over it opens the phone's own picker in one tap, as the top bar's title does. JUSTIFICATION-A3: a new
- * component the issue asks for, its options shared with the bar and the menu through BranchOptions.
- */
-export function ShopHere() {
-  const { me, branch, chooseBranch } = useStaff();
-  const active = (me.branches ?? []).find((b) => b.id === branch);
-  const choices = chooseBranch ? (me.branches ?? []).length + (me.all_branches ? 1 : 0) : 0;
-  const name = active ? branchLabel(active) : branch === ALL_BRANCHES ? 'All branches' : choices > 1 ? 'Choose a shop' : '';
-  if (!name) return null;
-  return (
-    <p className="shop-here" data-testid="shop-here">
-      <span className="shop-here-icon" aria-hidden="true">{icons.shop}</span>
-      <span className="shop-here-name">{name}</span>
-      {choices > 1 && <span className="shop-here-chevron" aria-hidden="true">{icons.chevron}</span>}
-      {choices > 1 && (
-        <select className="shop-here-select" aria-label={`Shop: ${name}. Switch shop`} value={branch ?? ''} onChange={(e) => chooseBranch?.(e.target.value)}>
-          {!active && branch !== ALL_BRANCHES && <option value="">Choose a shop</option>}
-          <BranchOptions me={me} />
-        </select>
-      )}
-    </p>
   );
 }
 

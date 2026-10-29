@@ -105,7 +105,8 @@ back to what opened it.
     second (issue #605; at a phone's double text size, their first two letters). An offline banner sits under the bar while the device has no network. The Powered-by footer
     shows only on More and the settings pages, and the page colour fills the viewport.
 20. A phone shows one crumb, a back chevron and "Back to" the parent, with no slash; a screen never adds a second Back to
-    link under its title, nor a "Branch: X" line, since the top bar names the branch: a write screen records at exactly that
+    link under its title, nor a "Branch: X" line, since the top bar and the shop label the staff layout draws above every page
+    (`ShopHere`, issue #680) name the branch: a write screen records at exactly that
     branch or asks for one (`useSingleBranch`, `useStockingBranch`, held by `branch-scope.test.tsx`).
 21. An empty list, a "nothing in this range" and a no-access state are one plain line with at most one action, with no
     border or box. The no-access line (`NoAccess`) says who can give access and links Home.

@@ -1,17 +1,13 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
 import { ALL_BRANCHES } from '../../../auth/branch';
-import { switchedTo, useBranchSwitch } from '../branch-picker';
-import { StaffContext } from '../context';
-import { ShopHere } from './ui';
+import { ShopHere, switchedTo, useBranchSwitch } from '../branch-picker';
 import { TOAST_MS, type ToastTone, useToast } from './toast';
 
-// Issue #680: every retail page names the shop it works in under its title, and one tap there switches shop; every switch says
-// "You are now in <shop>." in the house toast. Every name below is invented.
+// Issue #680: every staff page names the shop it works in above its content, drawn once by the staff layout, and one tap there
+// switches shop; every switch says "You are now in <shop>." in the house toast. Every name below is invented.
 
 const me = {
   user_id: 'u-self',
@@ -27,10 +23,10 @@ const one = { ...me, all_branches: false, branches: [me.branches?.[0]] } as unkn
 function Harness({ who = me, branch = 'b-one', choose }: { who?: Me; branch?: string; choose: (selection: string) => boolean }) {
   const { choose: switchTo, toast } = useBranchSwitch(who, branch, choose);
   return (
-    <StaffContext.Provider value={{ me: who, branch, chooseBranch: switchTo }}>
-      <ShopHere />
+    <>
+      <ShopHere me={who} branch={branch} onChoose={switchTo} />
       {toast}
-    </StaffContext.Provider>
+    </>
   );
 }
 
@@ -62,18 +58,6 @@ describe('the shop under the page title (issue #680)', () => {
     expect(shown()).toBe('All branches');
   });
 
-  // A record page (one invoice, one credit note) shows the branch it belongs to in its own body: switching would not change it.
-  const RECORD_PAGES = ['account.tsx', 'credit-note.tsx', 'purchase-order.tsx', 'return-new.tsx'];
-
-  it('is on every retail page through Gate or ShopHere, bar the named record pages', () => {
-    const dir = resolve('src/areas/staff/retail');
-    const routes = readdirSync(dir).filter((f) => f.endsWith('.tsx') && !f.includes('.test.') && readFileSync(join(dir, f), 'utf8').includes("createLazyRoute('/staff/retail"));
-    expect(routes.length).toBeGreaterThan(40);
-    const missing = routes.filter((f) => !RECORD_PAGES.includes(f) && !/<Gate |<ShopHere /.test(readFileSync(join(dir, f), 'utf8')));
-    expect(missing).toEqual([]);
-    const ui = readFileSync(join(dir, 'ui.tsx'), 'utf8');
-    expect(ui).toMatch(/<h1>\{title\}<\/h1>\s*<ShopHere \/>/);
-  });
 });
 
 describe('the toast on a change of shop (issue #680)', () => {

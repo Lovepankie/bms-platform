@@ -19,11 +19,8 @@
   margin-bottom: var(--space-4);
 }
 
-/* Issue #680: the shop the page works in, under its title, a 48px target that opens the branch picker in one tap. */
-.rt > h1:has(+ .shop-here) {
-  margin-bottom: var(--space-2);
-}
-
+/* Issue #680: the shop the page works in, drawn by the staff layout above every page's content, a 48px target that opens the
+   branch picker in one tap. */
 .shop-here {
   position: relative;
   display: inline-flex;
