@@ -45,7 +45,7 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth), 'page width').toBeLessThanOrEqual(WIDTH);
     expect(await page.locator('table').count()).toBe(0);
     expect(await page.getByText('Extensions').first().isVisible()).toBe(true);
-    expect(await page.getByText('1 item, 8 pc, worth UGX 64,000 at selling price').isVisible()).toBe(true);
+    expect(await page.getByText('1 item, 8 pieces, worth UGX 64,000 at selling price').isVisible()).toBe(true);
     const cards = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>('.stock-card')].map((card) => {
         const box = card.getBoundingClientRect();
@@ -69,7 +69,7 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
       }),
     );
     expect(cards).toHaveLength(3);
-    expect(cards.some((c) => c.text.includes('In stock: 8 pc') && c.text.includes('Buying price UGX 6,000 · Selling price UGX 8,000'))).toBe(true);
+    expect(cards.some((c) => c.text.includes('In stock: 8 pieces') && c.text.includes('Buying price UGX 6,000 · Selling price UGX 8,000'))).toBe(true);
     for (const c of cards) {
       expect(c.left, c.text).toBeGreaterThanOrEqual(0);
       expect(c.right, c.text).toBeLessThanOrEqual(WIDTH);

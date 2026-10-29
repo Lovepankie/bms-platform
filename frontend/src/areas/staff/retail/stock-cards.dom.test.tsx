@@ -8,7 +8,7 @@ import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { StockTable } from './stock';
 
-// Issue #680: My stock on a phone is a card per item: the name, "In stock: 8 pieces" (or "8 pc" for a short unit) large, the buying and selling price in small
+// Issue #680: My stock on a phone is a card per item: the name, "In stock: 8 pieces" (a unit stored as "pc" too) large, the buying and selling price in small
 // words under it, and Correct as a secondary button. A wide screen keeps the table with the new headers. Every name is invented.
 
 const rows: StockRow[] = [
@@ -48,10 +48,10 @@ describe('My stock on a phone (issue #680)', () => {
     expect(correct.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('keeps a short unit code as typed, and one of a unit in the singular', () => {
+  it('says a short unit code in full words, and one of a unit in the singular', () => {
     screenAt(true);
     show(<StockTable rows={[{ ...rows[0], unit: 'pc' }, { ...rows[0], product_id: 'p2', description: 'Test plug', qty: '1.000' }]} showCost={false} />);
-    expect([...document.querySelectorAll('.stock-card-qty')].map((q) => q.textContent)).toEqual(['In stock: 8 pc', 'In stock: 1 piece']);
+    expect([...document.querySelectorAll('.stock-card-qty')].map((q) => q.textContent)).toEqual(['In stock: 8 pieces', 'In stock: 1 piece']);
     expect(screen.getByText('2 items, worth UGX 72,000 at selling price')).toBeTruthy();
   });
 
