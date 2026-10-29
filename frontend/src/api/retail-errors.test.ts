@@ -21,7 +21,7 @@ describe('retail problem details in plain words', () => {
     ['duplicate_product_code', 409, /code already exists/i],
     ['inactive_category', 422, /switched off/i],
     ['stocktake_committed', 409, /already been committed/i],
-    ['stocktake_discarded', 409, /was discarded/i],
+    ['stocktake_discarded', 409, /was cancelled/i],
     ['token_expired', 401, /sign in/i],
   ])('maps %s', (code, status, text) => {
     const message = retailMessage({ code, detail: 'Product 00000000-0000-4000-8000-000000000001 has 2 in stock' }, status);

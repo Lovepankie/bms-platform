@@ -313,6 +313,8 @@ class RetailStockIT extends IntegrationTest {
 
         JsonNode refused = refused(id, Map.of("acknowledged", List.of(product)));
         assertThat(refused.get("code").asString()).isEqualTo("stocktake_discarded");
+        // Issue #664: the owner reads one word for it, cancelled.
+        assertThat(refused.get("detail").asString()).contains("cancelled").doesNotContain("discarded");
         assertThat(qty()).isEqualTo("10.000");
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM retail_stocktakes WHERE status = 'draft' AND branch_id = ?")

@@ -376,7 +376,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   useEffect(() => {
     if (!online) return;
     setStuck(false);
-    const live = [...drafts.current.values()];
+    const live = [...drafts.current.values(), ...sending];
     for (const id of keptCounts()) if (!live.includes(id)) discardCount(id);
   }, [online]);
   const holdsDraft = () => {
@@ -473,6 +473,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
             discardCount(draftId);
             throw stale() ? new StaleCount() : new Error('big drop');
           }
+          sending.add(draftId);
           try {
             // No press to try again here: a commit whose answer was lost is sent once more on the same draft.
             await commitMade(draftId).catch((e: unknown) => {
@@ -485,14 +486,18 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
             if (refused(e)) discardCount(draftId);
             else lost = true;
             throw e;
+          } finally {
+            sending.delete(draftId);
           }
           keepCount(draftId, false);
           if (stale()) throw new StaleCount();
           counts = true;
         }
       } catch (e) {
-        if (lost) show(`The count of ${name} may not be committed. Check it on ${WORDS.countStock} before you sell it.`, 'error');
-        else if (!(e instanceof StaleCount)) show(`${name} is saved, but its count is not. Count it on ${WORDS.countStock}, then sell it.`, 'error');
+        // A sale cleared or a screen left meanwhile hears nothing of it (issue #664); the kept draft is dealt with as above.
+        if (lost) {
+          if (!stale()) show(`The count of ${name} may not be committed. Check it on ${WORDS.countStock} before you sell it.`, 'error');
+        } else if (!(e instanceof StaleCount)) show(`${name} is saved, but its count is not. Count it on ${WORDS.countStock}, then sell it.`, 'error');
       }
     }
     // The card of a shop with no items, the search and the branches that hold stock all read again with the new item.
@@ -896,6 +901,10 @@ class StaleCount extends Error {}
 // Issue #656: the drafts Sell made in this tab and has not seen committed or discarded, so a discard lost offline or to a reload
 // is sent again. Kept per tab: another tab's Sell may still be committing its own.
 const KEPT_COUNTS = 'sale-held-counts';
+
+// Issue #664: the drafts of new items whose commit is on its way. Shared by every Sell form, as the kept drafts are, so a form
+// opened again (the screen left and come back to, or a branch switch) leaves another form's commit alone.
+const sending = new Set<string>();
 
 function keptCounts(): string[] {
   try {

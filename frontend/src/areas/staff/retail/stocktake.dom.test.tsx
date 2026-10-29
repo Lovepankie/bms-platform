@@ -327,6 +327,17 @@ describe('a count that wipes or halves stock', () => {
     expect(onCommit).toHaveBeenCalledWith([]);
   });
 
+  // Issue #664: a cancelled count (status discarded) says cancelled, and asks no tick and no commit, big drops and all.
+  it('shows a cancelled count with no tick and no Commit the count, and never says discarded', () => {
+    render(<StocktakeReview stocktake={{ ...draft, status: 'discarded' }} onCommit={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: 'Stock count cancelled' })).toBeTruthy();
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.queryByTestId('count-drop-A-1')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Commit the count' })).toBeNull();
+    expect(screen.queryByText(/before you commit the count/)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/discard/i);
+  });
+
   it('asks again after Back to the count, since the review is a new one', async () => {
     await review();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));

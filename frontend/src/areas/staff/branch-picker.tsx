@@ -23,6 +23,9 @@ export function useStockedBranches(me: Me | undefined) {
 
 // Issue #656: a screen that must not change branch yet (Sell, offline, holding a count it cannot discard) is asked first, and says why.
 const branchHolds = new Set<() => boolean>();
+// Issue #664: told after each render of a holding screen and when it closes, since its hold may have lifted then. A hold must
+// only lift on a render: one lifted by a ref change alone is not seen until the screen next renders.
+const holdLifts = new Set<() => void>();
 
 /** While the calling screen is open, `holds` is asked before every change of branch: true keeps the branch, and the screen says why. */
 export function useBranchHold(holds: () => boolean): void {
@@ -31,8 +34,14 @@ export function useBranchHold(holds: () => boolean): void {
   useEffect(() => {
     const ask = () => latest.current();
     branchHolds.add(ask);
-    return () => void branchHolds.delete(ask);
+    return () => {
+      branchHolds.delete(ask);
+      for (const lift of holdLifts) lift();
+    };
   }, []);
+  useEffect(() => {
+    for (const lift of holdLifts) lift();
+  });
 }
 
 /** The active branch, a way to choose it (remembered per tenant and user), and whether it is known yet. */
@@ -44,6 +53,18 @@ export function useActiveBranch(me: Me | undefined): { branch: string | null; ch
   const stocked = useStockedBranches(me);
   // Waits for the stock read only while it is on its way (a failure or no stock read starts as before).
   const waiting = (me?.permissions ?? []).includes('retail.stock.read') && stocked.isPending;
+  // Issue #664: a change of branch a hold kept waiting is tried again once the hold lifts.
+  const [retry, setRetry] = useState(0);
+  const held = useRef(false);
+  useEffect(() => {
+    const lift = () => {
+      if (!held.current || [...branchHolds].some((holds) => holds())) return;
+      held.current = false;
+      setRetry((n) => n + 1);
+    };
+    holdLifts.add(lift);
+    return () => void holdLifts.delete(lift);
+  }, []);
 
   useEffect(() => {
     if (!me || waiting) return;
@@ -53,9 +74,10 @@ export function useActiveBranch(me: Me | undefined): { branch: string | null; ch
     if (current === null || !valid(current)) {
       const next = initialBranch(me, loadBranch(me.user_id ?? ''), stocked.data ? new Set(stocked.data) : null);
       if (current === null || next === current || ![...branchHolds].some((holds) => holds())) setBranch(next);
-    }
+      else held.current = true;
+    } else held.current = false;
     setReady(true);
-  }, [me, waiting, stocked.data]);
+  }, [me, waiting, stocked.data, retry]);
 
   const choose = (selection: string) => {
     if ([...branchHolds].some((holds) => holds())) return;

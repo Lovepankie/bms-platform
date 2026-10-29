@@ -367,8 +367,8 @@ class StockService {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "stocktake_discarded",
-                    "Stock count discarded",
-                    "This stock count was discarded, so it cannot be committed. Count the items again.");
+                    "Stock count cancelled",
+                    "This stock count was cancelled, so it cannot be committed. Count the items again.");
         }
         if (!s.status().equals("draft")) {
             throw new ApiException(

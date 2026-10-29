@@ -1420,13 +1420,18 @@ the items show only while you search, and go away once one is picked. Every item
   branch switched is ignored when its answer comes, and its draft discarded, so the item never lands on another sale. Offline,
   Not now, Clear this sale and the branch switch wait, with the line "A count on this sale is not committed. Connect to the
   internet, then commit the count or press Not now, before you clear the sale or switch branch."; a discard lost to leaving the
-  screen offline or a reload is sent again the next time Sell is open and online. A refusal shows the server's words, discards
+  screen offline or a reload is sent again the next time Sell is open and online. A branch taken away from the person while the
+  sale holds it is left once the hold lifts (issue #664). A refusal shows the server's words, discards
   the draft and leaves the item for Count stock. Stock that arrives between the read and the count, or a balance the search did
   not return, is never sent to be refused: that draft is discarded and the line has its tick on Count stock. The usual count of
   a new item (no tick asked) follows the same rules: an answer after **Clear this sale** or leaving the screen puts nothing on
   the sale (a draft not yet committed is discarded, a commit that landed stands), and a commit whose answer is lost is sent once
-  more on the same draft; still lost, the draft is kept for a later discard and Sell says the count may not be committed.
-  Count stock shows a discarded count as cancelled, never as committed.
+  more on the same draft; still lost, the draft is kept for a later discard and Sell says the count may not be committed. The
+  later discard never takes a draft whose commit is still on its way, so a connection that comes back between the two tries
+  leaves the count to be sent again, and Sell opened again (the screen left and come back to, or a branch switch) leaves the
+  commit of the Sell it replaced to land and stand (issue #664). A sale cleared or a screen left before the lost answer hears nothing of it.
+  Count stock shows a discarded count as cancelled, never as committed, with no tick and no Commit the count; the refusal of
+  a commit on it (409 `stocktake_discarded`) says cancelled too, so the owner reads one word for it (issue #664).
 - **Scan box.** Unchanged (ADR-070 decision 11, owner decision D7): a scanner types only into the Scan box, which adds the item or one more.
 - **Tours.** `retail-sales` version 16, `page-stocktake` 3 (the search on top and the list Not counted yet), `page-restock` 3, `page-usage` 2, `page-transfer` 3,
   `page-sizes-join` 2 and `page-labels` 2 word their search steps for the list that shows while you type.
