@@ -23,6 +23,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Component
 public class RetailBranchContext {
 
+    /** The field message a screen may show for a closed branch inside the caller's scope, in plain words (issue #257). */
+    private static final String CLOSED = "That branch is closed.";
+
     private final Branches branches;
 
     RetailBranchContext(Branches branches) {
@@ -77,8 +80,7 @@ public class RetailBranchContext {
     /** Refuses a branch that is closed or keeps no goods, reading the branch row under a share lock (see {@link #active}). */
     public void requireStocks(UUID branch, String field) {
         Branches.Branch found = active(branch)
-                .orElseThrow(() -> ApiException.validation(
-                        List.of(new FieldProblem(field, "unknown_branch", "No such active branch in your scope."))));
+                .orElseThrow(() -> ApiException.validation(List.of(new FieldProblem(field, "unknown_branch", CLOSED))));
         refuseIfNotStocking(found, field);
     }
 
@@ -147,21 +149,39 @@ public class RetailBranchContext {
         return writing() ? branches.lockBranch(branch).filter(Branches.Branch::active) : branches.findActive(branch);
     }
 
-    /** As {@link #resolve(String, UUID)}, naming the request field the branch came from. */
+    /**
+     * As {@link #resolve(String, UUID)}, naming the request field the branch came from. Spec trade-capabilities section 2.2
+     * (issue #257): a caller without the permission at all is refused with 403 {@code permission_denied}; a branch outside its
+     * scope is 404 {@code unknown_branch}, with the same code as a field problem for clients that read {@code errors}. An
+     * unknown id is outside every scope but one over all branches, so a scoped caller cannot tell it from another's branch; a
+     * closed branch inside the scope stays the 422 field problem {@code unknown_branch}.
+     */
     public UUID resolve(String permission, UUID requested, String field) {
-        Principal principal = CurrentPrincipal.require();
+        BranchScope scope = CurrentPrincipal.require()
+                .scopeOf(permission)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "permission_denied",
+                        "Permission denied",
+                        "You do not have permission to perform this action."));
         UUID branch = requested;
         if (branch == null) {
-            BranchScope scope = principal.scopeOf(permission).orElse(null);
-            if (scope == null || scope.all() || scope.branchIds().size() != 1) {
+            if (scope.all() || scope.branchIds().size() != 1) {
                 throw ApiException.validation(List.of(new FieldProblem(
                         field, "branch_required", "Name the branch; your role covers more than one.")));
             }
             branch = scope.branchIds().iterator().next();
         }
-        if (!principal.may(permission, branch) || active(branch).isEmpty()) {
-            throw ApiException.validation(
-                    List.of(new FieldProblem(field, "unknown_branch", "No such active branch in your scope.")));
+        if (!scope.covers(branch)) {
+            throw new ApiException(
+                    HttpStatus.NOT_FOUND,
+                    "unknown_branch",
+                    "Branch not found",
+                    "That branch is not one you work in. Choose another branch.",
+                    List.of(new FieldProblem(field, "unknown_branch", "That branch is not one you work in.")));
+        }
+        if (active(branch).isEmpty()) {
+            throw ApiException.validation(List.of(new FieldProblem(field, "unknown_branch", CLOSED)));
         }
         return branch;
     }

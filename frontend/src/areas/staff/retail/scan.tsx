@@ -99,6 +99,7 @@ export function ScanBar({ id, branchId, onFound, autoFocus = false, toasts = fal
   const lookUp = async (raw: string) => {
     const code = raw.trim();
     if (code === '') return;
+    // toast-exempt: looking up a barcode saves nothing; the scan box shows what was found
     setBusy(true);
     setAssigning(false);
     setAsPrinted(false);

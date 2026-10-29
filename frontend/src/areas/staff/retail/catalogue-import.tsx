@@ -6,7 +6,7 @@ import { retail, type ImportResult } from '../../../api/retail';
 import { setupHelper, type SetupHelperApi } from '../../../api/setup-helper';
 import { ItemDraftList, ListReader, useSetupHelper } from '../setup-helper/setup-helper';
 import { fromItemDraft, itemsCsv, type ItemEdit } from '../setup-helper/setup-helper-state';
-import { Gate, Note, Problem, Success, useProfitAccess, useToast } from './ui';
+import { Gate, Note, Problem, useProfitAccess, useToast } from './ui';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -72,21 +72,22 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
   // Owner decision D45 (issue #562): Let the app make the codes, unticked by default; a check is only good for the tick it ran with.
   const [makeCodes, setMakeCodes] = useState(false);
   const [checked, setChecked] = useState<{ text: string; makeCodes: boolean; result: ImportResult } | null>(null);
-  const [done, setDone] = useState<ImportResult | null>(null);
+  const [report, setReport] = useState<ImportResult | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  // toast-exempt: a check of the file that saves nothing; the report below says what it found
   const check = useMutation({
     mutationFn: (codes: boolean) => retail.importProducts(text, true, codes),
-    onMutate: () => setDone(null),
+    onMutate: () => setReport(null),
     onSuccess: (result, codes) => setChecked({ text, makeCodes: codes, result }),
   });
   const apply = useMutation({
     mutationFn: () => retail.importProducts(text, false, makeCodes),
     onSuccess: (result) => {
-      setDone(result);
+      setReport(result);
       setChecked(null);
       setText('');
       setDraft(null);
-      show(`Added ${result.added} items.`, 'success');
+      show(`Added ${result.added ?? 0} items, skipped ${result.skipped ?? 0}`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -101,7 +102,7 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
     setDraft(rows && rows.length > 0 ? rows : null);
     setText(rows && rows.length > 0 ? itemsCsv(rows, profit) : '');
     setChecked(null);
-    setDone(null);
+    setReport(null);
     setWarning(null);
   };
   const choose = (file: File | undefined) => {
@@ -112,7 +113,7 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
       setText(read.text);
       setWarning(read.notUtf8 ? NOT_UTF8 : null);
       setChecked(null);
-      setDone(null);
+      setReport(null);
     });
   };
   return (
@@ -137,7 +138,7 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
       <label htmlFor="import-file">Choose a CSV file</label>
       <input id="import-file" type="file" data-tour="import-file" accept=".csv,.txt,text/csv,text/plain" onChange={(e) => choose(e.target.files?.[0])} />
       <label htmlFor="import-text">Or paste the rows here</label>
-      <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDraft(null); setDone(null); setWarning(null); }} spellCheck={false} />
+      <textarea id="import-text" data-tour="import-text" rows={8} value={text} onChange={(e) => { setText(e.target.value); setDraft(null); setReport(null); setWarning(null); }} spellCheck={false} />
       <label htmlFor="import-make-codes">
         <input id="import-make-codes" type="checkbox" data-tour="import-make-codes" checked={makeCodes} onChange={(e) => tick(e.target.checked)} /> Let the app make the codes
       </label>
@@ -158,8 +159,7 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
           {`Add ${current.added} items`}
         </BusyButton>
       )}
-      {done && <Success>Added {done.added} items and skipped {done.skipped} that were already there.</Success>}
-      {done && <ImportReport result={done} />}
+      {report && <ImportReport result={report} />}
       {toast}
     </Gate>
   );

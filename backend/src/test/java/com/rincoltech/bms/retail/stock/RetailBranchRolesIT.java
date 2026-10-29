@@ -100,6 +100,9 @@ class RetailBranchRolesIT extends IntegrationTest {
         ResponseEntity<JsonNode> listed = api.get("/branch-roles", ADMIN);
         assertThat(listed.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(code(listed)).isEqualTo("capability_not_enabled");
+        // Issue #257: plain words for API callers, the code kept for clients.
+        assertThat(listed.getBody().get("detail").asString())
+                .isEqualTo("This feature is not switched on for your business.");
         // A role row can exist while the capability is off (set directly); it is ignored.
         TestDatabase.owner()
                 .sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'shop')")
@@ -219,15 +222,21 @@ class RetailBranchRolesIT extends IntegrationTest {
                                 UUID.randomUUID().toString())
                         .getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        // Nor does it widen the scope: a seller scoped to head office cannot sell at the shop.
+        // Nor does it widen the scope: a seller scoped to head office cannot sell at the shop. Spec section 2.2
+        // (issue #257): 404 for a branch outside scope, the code unknown_branch kept at the top and on the field.
         ResponseEntity<JsonNode> outside = api.postKeyed(
                 "/sales",
                 body,
                 "retail.sale.create",
                 t.headOffice().toString(),
                 UUID.randomUUID().toString());
-        assertThat(outside.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(outside.getBody().toString()).contains("unknown_branch");
+        assertThat(outside.getStatusCode()).as("%s", outside.getBody()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(outside.getBody().get("code").asString()).isEqualTo("unknown_branch");
+        assertThat(outside.getBody().get("errors").get(0).get("code").asString())
+                .isEqualTo("unknown_branch");
+        assertThat(outside.getBody().get("detail").asString()).doesNotContain("scope");
+        assertThat(outside.getBody().get("errors").get(0).get("message").asString())
+                .isEqualTo("That branch is not one you work in.");
     }
 
     /**

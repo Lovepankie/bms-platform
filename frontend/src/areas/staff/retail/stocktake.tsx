@@ -238,6 +238,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   const entered = Object.entries(totals).filter(([id, v]) => v.trim() !== '' && (!onSheet || onSheet.has(id)));
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const valid = entered.flatMap(([productId, v]) => { const c = parseCount(v); return c === null ? [] : [{ product_id: productId, counted_qty: qtyString(c) }]; });
+  // toast-exempt: success screen, the review of the count replaces the form
   const review = useMutation({
     mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: valid }),
     onSuccess: setDraft,
@@ -285,6 +286,8 @@ function CountSheet({ branchId }: { branchId: string }) {
     return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
   });
   const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), totals);
+  // toast-exempt: success screen, the review turns into Stock updated for N items, with the toast issue #681 asks for too;
+  // setDone there is the list of counted items, not a success note
   const commit = useMutation({
     mutationFn: (acknowledged: string[]) => retail.commitStocktake(draft?.id ?? '', acknowledged),
     onSuccess: (st) => {

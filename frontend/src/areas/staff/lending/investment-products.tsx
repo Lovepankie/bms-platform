@@ -115,6 +115,7 @@ function ProductForm({ product, currency, onDone }: { product?: InvestmentProduc
       // Opened from an empty product list (issue #619): a new product takes the person back to the form that needed it.
       if (!product) back?.();
     },
+    meta: { success: product ? 'Product saved' : 'Product added' },
   });
   const field = (id: string, label: string, value: string, set: (v: string) => void, hint?: string, mode?: 'decimal') => (
     <>
@@ -219,6 +220,7 @@ export function Products() {
   const archive = useMutation({
     mutationFn: (p: InvestmentProduct) => investments.archiveProduct(p.id ?? '', p.version ?? 1),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['lending', 'investment-products'] }),
+    meta: { success: 'Product archived' },
   });
   const currency = list.data?.[0]?.currency;
   return (

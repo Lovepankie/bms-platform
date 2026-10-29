@@ -9,6 +9,7 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 import { exponentOf } from '../../../components/money';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { sayDone } from '../retail/toast';
 import {
   applicationOrder, applicationProblems, blankApplication, createBody, draftOf, guarantorsBody, partiesChanged, pledgeable, pledgesBody,
   PURPOSES, rateWords, termsOf, termWords, updateBody, type ApplicationDraft, type GuarantorDraft,
@@ -107,6 +108,7 @@ export function ApplicationForm({ loan: loaded, memberId }: Props) {
       if (changed.guarantors) keep(await api.setGuarantors(loan.id ?? '', (current as Loan).version ?? 0, guarantorsBody(draft, currency)));
       if (changed.pledges) keep(await api.setCollateral(loan.id ?? '', (current as Loan).version ?? 0, pledgesBody(draft, currency)));
       const sent = await api.submit(loan.id ?? '', (current as Loan).version ?? 0);
+      sayDone('Application sent for appraisal');
       void queryClient.invalidateQueries({ queryKey: ['lending'] });
       void navigate({ to: '/staff/lending/loans/$loanId', params: { loanId: sent.id ?? '' } });
     } catch (raw) {

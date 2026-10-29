@@ -96,6 +96,7 @@ export function VoidAction({ what, run, onVoided }: { what: string; run: (reason
   const [reason, setReason] = useState('');
   const key = useRef(newIdempotencyKey());
   const id = useId();
+  // toast-exempt: each screen says it through onVoided (Expenses, Banking, Savings, Withdrawals and Advances call show with success)
   const void_ = useMutation({
     mutationFn: () => run(reason.trim(), key.current),
     onSuccess: () => {

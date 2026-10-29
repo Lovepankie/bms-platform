@@ -415,12 +415,13 @@ class RetailCashbookBankingIT extends IntegrationTest {
     @Test
     void aBranchOutsideTheCallersScopeIsRefusedOnEveryRoute() {
         String second = t.secondBranch().toString();
+        // Spec trade-capabilities section 2.2 (issue #257): 404 for a branch outside scope.
         assertThat(cb.get("/bankings/expected?branch_id=" + hq, ALL, second).getStatusCode())
-                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+                .isEqualTo(HttpStatus.NOT_FOUND);
         Map<String, Object> b = new LinkedHashMap<>();
         b.put("branch_id", hq);
         b.put("amount_minor", 1_000);
-        assertThat(cb.post("/bankings", b, ALL, second).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(cb.post("/bankings", b, ALL, second).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         cb.sale(hq, "cash", product, "1", day);
         assertThat(report(ALL, day, day).get("items").size()).isEqualTo(1);
         ResponseEntity<JsonNode> scoped = cb.get("/reports/cash/banking?from=" + day + "&to=" + day, ALL, second);

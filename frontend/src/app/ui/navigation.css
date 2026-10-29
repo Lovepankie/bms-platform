@@ -1004,7 +1004,7 @@ img.menu-shop-logo {
   color: var(--color-text);
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform var(--motion-fast) var(--ease-out);
+  transition: transform var(--motion-fast) var(--ease-out), opacity var(--motion-fast) var(--ease-out);
 }
 
 .tile:hover {
@@ -1021,6 +1021,7 @@ img.menu-shop-logo {
 
 .tile:active {
   transform: scale(var(--press-scale));
+  opacity: var(--press-opacity);
 }
 
 .tile .icon-chip {

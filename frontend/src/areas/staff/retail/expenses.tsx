@@ -36,6 +36,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
   const items = itemsOf(list, draft.categoryId);
   const explain = needsExplanation(list, draft.categoryId, draft.itemId);
   const plan = planExpense({ branchId, ...draft }, list);
+  // toast-exempt: success screen, the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => retail.createExpense(plan.request, key),
     onSuccess: (saved) => {
@@ -174,7 +175,7 @@ export function ExpensesScreen() {
         </Saved>
       ) : (
         <>
-          <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(x) => { setSaved(x); show('Expense recorded.', 'success'); }} onWaiting={(amount) => { setWaiting(amount); show('Sent for approval.', 'info'); }} />
+          <ExpenseForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSaved} onWaiting={(amount) => { setWaiting(amount); show('Sent for approval.', 'info'); }} />
         </>
       )}
       </div>

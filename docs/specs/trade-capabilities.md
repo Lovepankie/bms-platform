@@ -159,6 +159,7 @@ only narrow what the branch accepts.
 | Transfer from a store to a shop | needs `retail.stock.transfer` at the source (as today); the destination branch must be active and may be outside the caller's scope (as today) |
 | A manager scoped to Store 1 and the shop | sees both in stock views; sells only at the shop |
 | A branch-scoped caller reads the stock of Store 2 | 404 as today for a branch outside scope |
+| A caller names a branch for a retail event (`RetailBranchContext.resolve`, issue #257) | 404 `unknown_branch` outside the permission's scope, an unknown id included for a scoped caller; 403 `permission_denied` where the permission is not held at all; a closed branch inside the scope, or an unknown id for a caller over all branches (who sees every branch), stays 422 `unknown_branch` on the field |
 
 A new tenant branch defaults to `both` through the absence of a row (section 2.3), so adding a
 branch never needs the role step.

@@ -42,6 +42,8 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(u);
     },
+    // With onSaved the Usage and damage page opens its Saved screen, which says it.
+    meta: { success: (u: Usage) => (onSaved ? null : u?.kind === 'damaged' ? 'Damage recorded' : 'Usage recorded') },
   });
   const valid = lines.length > 0 && reason.trim() !== '' && lines.every((l) => parseQty(l.qty) !== null);
 

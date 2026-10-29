@@ -27,6 +27,7 @@ export function TransferOwner({ targets, mfaEnabled, onSend, onCancel }: {
   async function send() {
     if (!ready || !to || sending.current) return;
     sending.current = true;
+    // toast-exempt: the Staff users screen says who is now the owner through onSend
     setBusy(true);
     setError(null);
     const credential = mfaEnabled ? { totpCode: typed.trim() } : { password: typed };

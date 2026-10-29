@@ -1103,7 +1103,7 @@ export function createMockRetail(): RetailApi {
 
     setCustomerPricing: (id, version, body) =>
       run(() => {
-        if (caps.value['price_lists'] !== true) refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.');
+        if (caps.value['price_lists'] !== true) refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.');
         const c = customers.find((x) => x.id === id);
         if (!c) return refuse(404, 'not_found', 'That could not be found.');
         staleRow(c, version);

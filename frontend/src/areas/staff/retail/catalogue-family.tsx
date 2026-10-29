@@ -13,7 +13,7 @@ import { showQty } from './maths';
 import { ScreenLink } from './screen-link';
 import { CategoryPicker } from './category-picker';
 import { ScreenToast } from './toast';
-import { Gate, Problem, Success, money, useProfitAccess, useToast } from './ui';
+import { Gate, Problem, money, useProfitAccess, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -38,13 +38,13 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
   const { me } = useStaff();
   const profit = useProfitAccess();
   const { show, toast } = useToast();
-  const [message, setMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const family = useQuery({ queryKey: ['retail', 'family', familyId], queryFn: () => retail.getFamily(familyId) });
   useCrumbLabel(family.data?.name);
   const canManage = (me.permissions ?? []).includes(CATALOGUE);
   const canPrice = (me.permissions ?? []).includes(PRICE);
-  const done = (text: string) => { setMessage(text); show(text, 'success'); setEditing(null); };
+  const said = (text: string) => show(text, 'success');
+  const done = (text: string) => { said(text); setEditing(null); };
   const f = family.data;
   return (
     <Gate screen="products" title={f?.name ?? 'Sizes and colours'}>
@@ -57,7 +57,6 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
         <ScreenLink screen="salesHistory" to="/staff/retail/sales">Sales</ScreenLink>
       </p>
       <p className="hint">Each size and colour is an item of its own when you sell, buy, move or count stock: look for its name with the size and colour, such as {f?.variants?.[0]?.description ?? 'Baby romper (0-3m, Blue)'}.</p>
-      {message && <Success>{message}</Success>}
       {family.isPending && <p className="loading">Loading</p>}
       <Problem error={family.error} />
       {f && <p>{f.category}, counted in {f.unit}. {f.variants?.length ?? 0} sizes and colours.</p>}
@@ -74,7 +73,7 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
                 label={f.name ?? ''}
                 onUpload={(file) => retail.setFamilyPhoto(f.id ?? '', file)}
                 onClear={() => retail.clearFamilyPhoto(f.id ?? '')}
-                onSaved={(text) => { setMessage(text); show(text, 'success'); }}
+                onSaved={said}
               />
             )}
             {f && !canManage && (f.photo_id ? <ItemPhoto photoId={f.photo_id} label={f.name ?? ''} size={96} /> : <p className="empty-state">No photo yet.</p>)}
@@ -102,8 +101,8 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
                       . In stock: <strong>{showQty(v.stock_on_hand ?? '0')}</strong>
                     </p>
                     <p className="cluster">
-                      {canPrice && <button type="button" className="btn-sm" onClick={() => { setMessage(null); setEditing({ kind: 'price', product: v }); }} aria-label={`Change the price of ${v.description}`}>Change price</button>}
-                      {canManage && <button type="button" className="btn-sm" onClick={() => { setMessage(null); setEditing({ kind: 'variant', product: v }); }} aria-label={`Change ${v.description}`}>Change</button>}
+                      {canPrice && <button type="button" className="btn-sm" onClick={() => setEditing({ kind: 'price', product: v })} aria-label={`Change the price of ${v.description}`}>Change price</button>}
+                      {canManage && <button type="button" className="btn-sm" onClick={() => setEditing({ kind: 'variant', product: v })} aria-label={`Change ${v.description}`}>Change</button>}
                     </p>
                   </li>
                 ))}
@@ -113,10 +112,10 @@ export function FamilyScreen({ familyId }: { familyId: string }) {
           {canManage && (
             <section data-tour="family-add" aria-label="Add more sizes or colours">
               <h2>Add more sizes or colours</h2>
-              {f && <AddVariants family={f} onDone={(text) => { setMessage(text); show(text, 'success'); }} />}
+              {f && <AddVariants family={f} onDone={said} />}
             </section>
           )}
-          {canManage && f && <ScreenToast.Provider value={show}><RenameFamily family={f} onDone={(text) => { setMessage(text); show(text, 'success'); }} /></ScreenToast.Provider>}
+          {canManage && f && <ScreenToast.Provider value={show}><RenameFamily family={f} onDone={said} /></ScreenToast.Provider>}
         </>
       )}
       {toast}

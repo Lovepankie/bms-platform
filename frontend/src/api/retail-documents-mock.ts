@@ -44,7 +44,7 @@ export function createDocumentsMock(env: DocumentsEnv): DocumentsMock {
   const quotations: (Quotation & { source?: string })[] = [];
   const counters = new Map<string, number>();
   const prefixes = new Map<DocumentType, string>();
-  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.')));
+  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.')));
   const branch = (id: string) => env.branches().find((b) => b.id === id)?.code ?? 'HQ';
   const number = (type: DocumentType, branchId: string, seq: number) => `${prefixes.get(type) ?? DEFAULT_PREFIX[type]}-${branch(branchId)}-${String(seq).padStart(6, '0')}`;
   const take = (type: DocumentType, branchId: string): { number: string; seq: number } => {
@@ -212,7 +212,7 @@ export function createDocumentsMock(env: DocumentsEnv): DocumentsMock {
       }),
 
     convertQuotation: (id, body, key) =>
-      env.run(() => (env.on() ? undefined : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.'))).then(
+      env.run(() => (env.on() ? undefined : env.refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.'))).then(
         () => {
           const q = quotations.find((x) => x.id === id) ?? env.refuse(404, 'not_found', 'That could not be found.');
           if (q.status !== 'open') env.refuse(409, 'quotation_not_open', `This quotation is ${q.status} already.`);

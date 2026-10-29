@@ -58,6 +58,7 @@ export function PushToggle({ push = defaultPush }: { push?: ReturnType<typeof cr
       void queryClient.invalidateQueries({ queryKey: ['push-devices'] });
     },
     onError: (e) => setError(messageOf(e)),
+    meta: { success: (_: unknown, on: boolean) => (on ? 'Notifications turned on' : 'Notifications turned off') },
   });
   const current = state.data;
   const on = current === 'on';
@@ -100,6 +101,7 @@ function Devices() {
       void queryClient.invalidateQueries({ queryKey: ['push-state'] });
     },
     onError: (e) => setError(messageOf(e)),
+    meta: { success: 'Device removed' },
   });
   const devices = list.data ?? [];
   return (

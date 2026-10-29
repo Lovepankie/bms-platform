@@ -64,6 +64,7 @@ export function CreditRecognitionSetting({ read, onSaved }: { read: Capabilities
   const saved = recognitionOf(read.capabilities);
   const [choice, setChoice] = useState<CreditRecognition>(saved);
   const [reviewing, setReviewing] = useState(false);
+  // toast-exempt: the Settings screen shows the success toast through onSaved
   const save = useMutation({
     mutationFn: () => retail.changeCapabilities({ credit_sale_recognition: choice }, read.version),
     onSuccess: (next) => {

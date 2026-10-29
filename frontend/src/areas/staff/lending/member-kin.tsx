@@ -44,6 +44,7 @@ function KinForm({ kin, memberId, onDone }: { kin?: NextOfKin; memberId: string;
       // No other save of a new next of kin until a look at the list has worked: the answer may have been lost.
       if (!kin && unknownOutcome(e)) void guard.check(lookUp);
     },
+    meta: { success: kin ? 'Next of kin saved' : 'Next of kin added' },
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -78,8 +79,13 @@ function KinRow({ kin, memberId, canChange, onEdit }: { kin: NextOfKin; memberId
   const [asking, setAsking] = useState(false);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ['members', 'kin', memberId] });
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
-  const remove = useMutation({ mutationFn: () => api.removeKin(kin.id ?? '', kin.version ?? 0), onSuccess: () => { setAsking(false); refresh(); }, onError: fail });
-  const decide = useMutation({ mutationFn: (d: 'confirm' | 'reject') => api.decideKinLink(kin.id ?? '', kin.version ?? 0, d), onSuccess: refresh, onError: fail });
+  const remove = useMutation({ mutationFn: () => api.removeKin(kin.id ?? '', kin.version ?? 0), onSuccess: () => { setAsking(false); refresh(); }, onError: fail, meta: { success: 'Next of kin removed' } });
+  const decide = useMutation({
+    mutationFn: (d: 'confirm' | 'reject') => api.decideKinLink(kin.id ?? '', kin.version ?? 0, d),
+    onSuccess: refresh,
+    onError: fail,
+    meta: { success: (_r: unknown, d: 'confirm' | 'reject') => (d === 'confirm' ? 'Link confirmed' : 'Link refused') },
+  });
   return (
     <li className="rt-card stack">
       <p className="ln-item-head">

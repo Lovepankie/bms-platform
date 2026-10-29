@@ -31,6 +31,7 @@ function OpenAccount({ memberId }: { memberId: string }) {
       void queryClient.invalidateQueries({ queryKey: ['savings', 'accounts'] });
       void navigate({ to: '/staff/lending/savings/accounts/$accountId', params: { accountId: a.id ?? '' } });
     },
+    meta: { success: 'Savings account opened' },
   });
   if (showsEmptyChoice(products, products.data && active)) {
     return (

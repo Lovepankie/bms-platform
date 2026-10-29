@@ -15,6 +15,7 @@ import { ResetPanel } from './reset-panel';
 import { TransferOwner } from './transfer-owner';
 import { canActOn, canManageUsers, canResetSignIn, contactLine, matchesSearch, offeredChoices, ownershipTargets, roleChoices, roleLines, showUsers, statusWords } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { sayDone } from '../retail/toast';
 
 // Staff users (issue #319; FR-IAM-01, FR-IAM-02, FR-IAM-08): who works in the business, what each person may do, and who has not
 // joined yet. Anyone who may read the list sees it; an administrator also invites, sends a new link, changes roles and deactivates.
@@ -42,7 +43,6 @@ export function UsersScreen() {
   const branches = useQuery({ queryKey: ['staff-branches'], queryFn: users.branches, enabled: allowed });
   const [mode, setMode] = useState<Mode>(null);
   const [link, setLink] = useState<ShownLink | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferring, setTransferring] = useState(false);
@@ -63,9 +63,9 @@ export function UsersScreen() {
     working.current = true;
     setBusyId(user.id ?? null);
     setError(null);
-    setNotice(null);
     try {
-      setNotice(await run());
+      const done = await run();
+      if (done) sayDone(done);
       await queryClient.invalidateQueries({ queryKey: ['staff-users'] });
       void queryClient.invalidateQueries({ queryKey: ['setup-users'] });
     } catch (e) {
@@ -89,7 +89,6 @@ export function UsersScreen() {
     if (working.current) return 'Another change is still being sent. Wait for it to finish, then type it again.';
     working.current = true;
     setBusyId(user.id ?? null);
-    setNotice(null);
     try {
       const made = await resetUserSignIn(user.id ?? '', credential);
       setLink({ userId: user.id, name: user.full_name ?? 'this person', phone: user.phone_e164 ?? null, url: made.url, expiresAt: made.expiresAt, kind: 'reset' });
@@ -114,7 +113,7 @@ export function UsersScreen() {
       setMode(null);
       // A link made for this person is of no use now.
       setLink((shownLink) => (shownLink?.userId === user.id ? null : shownLink));
-      return `${user.full_name} is deactivated and signed out.`;
+      return `${user.full_name ?? 'Person'} deactivated`;
     });
 
   // A lost or stolen phone (issue #647): every device of the person is signed out at once; they stay active.
@@ -122,17 +121,16 @@ export function UsersScreen() {
     act(user, async () => {
       await users.signOutDevices(user.id ?? '');
       setMode(null);
-      return `${user.full_name} is signed out on every phone and computer. They sign in again with their password.`;
+      return `${user.full_name ?? 'Person'} signed out everywhere`;
     });
 
   async function transferOwnership(to: StaffUser, credential: { totpCode?: string; password?: string }): Promise<string | null> {
     if (working.current) return null;
     working.current = true;
-    setNotice(null);
     try {
       await users.transferOwnership(to.id ?? '', credential);
       setTransferring(false);
-      setNotice(`${to.full_name} is now the owner of the business. You are still an administrator.`);
+      sayDone(to.full_name ? `Owner changed to ${to.full_name}` : 'Owner changed');
       await queryClient.invalidateQueries({ queryKey: ['me'] });
       await queryClient.invalidateQueries({ queryKey: ['staff-users'] });
       return null;
@@ -147,7 +145,7 @@ export function UsersScreen() {
     try {
       await users.setRoles(user.id ?? '', next);
       setMode(null);
-      setNotice(`The roles of ${user.full_name} are saved.`);
+      sayDone(user.full_name ? `Roles saved for ${user.full_name}` : 'Roles saved');
       // One's own roles decide what this page offers, and they come from /me: read them again.
       if (user.id === me.user_id) await queryClient.invalidateQueries({ queryKey: ['me'] });
       await queryClient.invalidateQueries({ queryKey: ['staff-users'] });
@@ -198,7 +196,6 @@ export function UsersScreen() {
         </div>
       )}
       {link && <LinkBox link={link} business={brand.name} onDone={() => setLink(null)} doneLabel="I have sent it" />}
-      {notice && <p role="status" className="alert alert-success">{notice}</p>}
       {error && mode?.kind !== 'deactivate' && mode?.kind !== 'sign-out' && <p role="alert" className="alert alert-danger">{error}</p>}
       {list.isPending && <p className="loading">Loading your staff</p>}
       {list.isError && <p role="alert" className="alert alert-danger">{messageOf(list.error)}</p>}

@@ -44,6 +44,7 @@ const { RetailError } = await import('../../../api/retail');
 const { retailMessage } = await import('../../../api/retail-errors');
 const { StockTable } = await import('./stock');
 const { CorrectItem } = await import('./stock-correct');
+const { DoneToast, doneToasts } = await import('./toast');
 const { correctionWords, differenceWords, movementTitle, quantityProblem, signedQty } = await import('./stock-correct-state');
 
 afterEach(() => {
@@ -68,6 +69,18 @@ function screenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
     </QueryClientProvider>,
   );
 }
+
+/** As screenOf, with the app's success toast: one success signal per action (review of #685). */
+function toastScreenOf(me: ReturnType<typeof mockMe>, node: ReactElement) {
+  return render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } }, mutationCache: doneToasts() })}>
+      <StaffContext.Provider value={{ me, branch }}>{node}</StaffContext.Provider>
+      <DoneToast />
+    </QueryClientProvider>,
+  );
+}
+
+const toasts = () => Array.from(document.querySelectorAll('.toast')).map((t) => t.textContent ?? '');
 
 const open = (name: string) => fireEvent.click(screen.getByRole('radio', { name }));
 const qty = () => screen.getByLabelText(/Right quantity/) as HTMLInputElement;
@@ -122,10 +135,10 @@ describe('the right quantity', () => {
     expect(screen.getByText('That adds 2.5 roll.')).toBeTruthy();
   });
 
-  it('sends one request however often Save is pressed, then says what happened', async () => {
+  it('sends one request however often Save is pressed, then says what happened in one toast', async () => {
     let finish: (v: unknown) => void = () => undefined;
     correctStock.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
-    screenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
+    toastScreenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
     open('The quantity is wrong');
     fireEvent.change(qty(), { target: { value: '6' } });
     fireEvent.change(reason(), { target: { value: 'entry_mistake' } });
@@ -137,15 +150,9 @@ describe('the right quantity', () => {
     expect(correctStock.mock.calls[0]?.[0]).toEqual({ branch_id: branch, product_id: 'p1', new_qty: '6.000', expected_qty: '10.000', reason_code: 'entry_mistake', note: 'Typed ten, really six' });
     expect(typeof correctStock.mock.calls[0]?.[1]).toBe('string');
     finish({ id: 'c1', old_qty: '10.000', new_qty: '6.000', reason_code: 'entry_mistake' });
-    const done = await waitFor(() => {
-      const shown = screen.getAllByRole('status').find((s) => (s.textContent ?? '').includes('is now'));
-      expect(shown).toBeDefined();
-      return shown as HTMLElement;
-    });
-
-
-    expect(done.textContent).toContain('Cable 2.5mm is now 6 roll (it was 10)');
-    expect(done.textContent).toContain('does not count as lost or damaged stock');
+    await waitFor(() => expect(toasts()).toEqual(['Corrected to 6 roll']));
+    // The one signal is the toast: no note beside it says it again.
+    expect(screen.queryByText(/is now 6/)).toBeNull();
   });
 
   it('says a refusal in plain words and a retry keeps the same key', async () => {
@@ -358,10 +365,10 @@ describe('a unit in use', () => {
 });
 
 describe('the category', () => {
-  it('moves the item to the right category and says from where to where', async () => {
+  it('moves the item to the right category and says where in one toast', async () => {
     getProduct.mockResolvedValue({ id: 'p1', description: 'Cable 2.5mm', category_id: 'c1', category: 'Cables', version: 4 });
     updateProduct.mockResolvedValue({ id: 'p1', description: 'Cable 2.5mm', category: 'Fittings' });
-    screenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
+    toastScreenOf(admin, <CorrectItem row={row} branchId={branch} onClose={() => undefined} />);
     open('The category is wrong');
     const select = (await screen.findByLabelText('The right category')) as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.text)).toEqual(['Cables', 'Fittings']);
@@ -372,7 +379,8 @@ describe('the category', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Change the category' }));
     await waitFor(() => expect(updateProduct).toHaveBeenCalledTimes(1));
     expect(updateProduct).toHaveBeenCalledWith('p1', 4, { category_id: 'c2' });
-    expect((await screen.findByRole('status')).textContent).toContain('Cable 2.5mm is now in Fittings. It was in Cables.');
+    await waitFor(() => expect(toasts()).toEqual(['Moved to Fittings']));
+    expect(screen.queryByText(/is now in Fittings/)).toBeNull();
   });
 });
 

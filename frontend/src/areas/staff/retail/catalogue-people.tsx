@@ -11,7 +11,7 @@ import { BuyerPricing } from './buyer-pricing';
 import { AddPanel } from './catalogue';
 import { canUse } from './permissions';
 import { ScreenLink } from './screen-link';
-import { Gate, Problem, Success, changeFailureText, money, requireVersion, useToast } from './ui';
+import { Gate, Problem, changeFailureText, money, requireVersion, useToast } from './ui';
 import { WORDS } from '../../../app/glossary';
 import { useComeBack } from '../../../app/ui/EmptyChoice';
 
@@ -98,7 +98,6 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const queryClient = useQueryClient();
   const back = useComeBack();
   const { show, toast } = useToast();
-  const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
@@ -115,13 +114,11 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   const finding = rows.isPlaceholderData || (rows.isFetching && !rows.isFetchingNextPage);
   const people = (rows.data?.pages ?? []).flatMap((p) => p.items ?? []);
   const done = (text: string) => {
-    setMessage(text);
     show(text, 'success');
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
   const add = useMutation({
     mutationFn: () => create({ name: name.trim(), ...(contact.trim() ? { contact: contact.trim() } : {}) }),
-    onMutate: () => setMessage(null),
     onSuccess: (row) => {
       setName(''); setContact(''); setAdding(false); done(`Added the ${noun} "${row.name}".`);
       // Opened from an empty list on a form (issue #619): what was added takes the person back to that form.
@@ -130,7 +127,7 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
   });
   const change = useMutation({
     mutationFn: (v: { id: string; version: number | undefined; body: PersonEdit & { active?: boolean }; text: (row: Person) => string }) => update(v.id, requireVersion(v.version), v.body).then((row) => ({ row, text: v.text })),
-    onMutate: () => { setMessage(null); setFailure(null); },
+    onMutate: () => setFailure(null),
     onSuccess: ({ row, text }) => done(text(row)),
     onError: (error) => setFailure(changeFailureText(error, queryClient)),
   });
@@ -151,7 +148,6 @@ function PeopleList({ noun, plural, queryKey, list, create, update, canAdd, canS
         </AddPanel>
         </div>
       )}
-      {message && <Success>{message}</Success>}
       <Problem error={failure && new Error(failure)} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />

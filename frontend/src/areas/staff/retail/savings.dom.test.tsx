@@ -5,10 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Savings, SavingsSuggestion } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
+import { showDate } from './transfers';
 
 // Saving the day's savings as a person does it (issue #538): the three figures (profit, expenses, available), an amount above the
-// available refused under the field in plain words before anything is sent, and after a save the dark toast with the amount and
-// the day, the saved state and the record in Savings records at once. Fabricated names and amounts.
+// available refused under the field in plain words before anything is sent, and after a save the Saved panel with the amount and
+// the day (no success toast besides it) and the record in Savings records at once. Fabricated names and amounts.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -129,7 +130,7 @@ describe('the savings screen', () => {
     expect('overwrite_reason' in body).toBe(false);
   });
 
-  it('after a save shows the dark toast with the amount and the day, the saved state and the record at once', async () => {
+  it('after a save shows the Saved panel with the amount and the day, no success toast, and the record at once', async () => {
     savingsSuggestion.mockResolvedValue(day);
     // The refetch after the save is held back, so the record can only come from the save itself.
     let release: (rows: Savings[]) => void = () => {};
@@ -140,10 +141,11 @@ describe('the savings screen', () => {
     await screen.findByText('No savings recorded in this period.');
     fireEvent.click(saveButton());
 
-    const words = `Savings of UGX 4,000 saved for ${today.slice(8, 10).replace(/^0/, '')} `;
-    const toast = await screen.findByText((t) => t.startsWith(words));
-    expect(toast.closest('.toast')?.className).toContain('toast-success');
-    expect(screen.getByRole('region', { name: 'Savings recorded' })).toBeTruthy();
+    // The Saved panel replaces the form and is the one success signal: it carries the amount and the day, and no toast says it again.
+    const panel = await screen.findByRole('region', { name: 'Savings recorded' });
+    expect(panel.textContent).toContain('Amount saved: UGX 4,000');
+    expect(panel.textContent).toContain(showDate(today));
+    expect(document.querySelector('.toast-success')).toBeNull();
     expect(screen.getByText('Record another day')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Save savings' })).toBeNull();
     const records = screen.getByRole('region', { name: 'Savings records' });

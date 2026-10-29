@@ -60,6 +60,7 @@ export function ListReader<T extends { reason: DraftReason | null }>({
   const ready = mode === 'type' ? text.trim() !== '' : file !== null;
   const go = async () => {
     if (!ready || busy) return;
+    // toast-exempt: only reads the list into the rows below, nothing is saved until the import's own Add
     setBusy(true);
     setMessage(null);
     setError(null);

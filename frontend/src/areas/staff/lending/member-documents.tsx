@@ -24,6 +24,7 @@ function OpenButton({ documentId, label }: { documentId: string; label: string }
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const open = async () => {
+    // toast-exempt: it only opens the file in a new tab and saves nothing
     setBusy(true);
     setError(null);
     try {

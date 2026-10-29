@@ -7,6 +7,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { DEFAULT_GRACE, canManageTwoStep, choiceOf, deadlineWords, differs, graceChoices, needsProof, policyOf, ready, reviewLines } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
+import { sayDone } from '../retail/toast';
 
 // Two-step sign-in (issue #348; ADR-046): who must use a code from their phone as well as their password. It is optional until an
 // administrator chooses otherwise. Three choices (nobody, chosen roles, everyone), a grace period, and a plain-words review that is read
@@ -33,7 +34,6 @@ export function TwoStepPolicyScreen() {
   const [proof, setProof] = useState('');
   // The server asked for the proof the screen did not think was needed (the settings changed meanwhile, issue #377).
   const [serverAsks, setServerAsks] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // One save at a time: a second tap before the first answer must not send a second request.
   const working = useRef(false);
@@ -63,7 +63,6 @@ export function TwoStepPolicyScreen() {
   function pick(policy: Policy) {
     if (!choice) return;
     setReviewing(false);
-    setNotice(null);
     setProof('');
     setServerAsks(false);
     setChoice({ ...choice, policy });
@@ -89,13 +88,7 @@ export function TwoStepPolicyScreen() {
       setServerAsks(false);
       const now = policyOf(after);
       const date = deadlineWords(after.mfa_enforce_from, after.timezone);
-      setNotice(
-        now === 'off'
-          ? 'Saved. Two-step sign-in is optional again.'
-          : date
-            ? `Saved. People who have not set it up have until the end of ${date}.`
-            : 'Saved. People who have not set it up are asked at their next sign-in.',
-      );
+      sayDone(now === 'off' ? 'Saved, now optional' : date ? `Saved, due by ${date}` : 'Saved, asked at sign in');
       setReviewing(false);
       setChoice(choiceOf(after));
       await queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -123,11 +116,6 @@ export function TwoStepPolicyScreen() {
         Two-step sign-in asks for a code from a person&apos;s phone as well as their password. Then nobody can sign in as them, even if they learn
         the password. It takes each person about two minutes to set up.
       </p>
-      {notice && (
-        <p role="status" className="alert alert-success">
-          {notice}
-        </p>
-      )}
       {settings.isPending && <p className="loading">Loading your choice</p>}
       {settings.isError && (
         <p role="alert" className="alert alert-danger">

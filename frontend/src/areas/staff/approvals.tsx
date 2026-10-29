@@ -96,6 +96,10 @@ function Row({ item, id }: { item: Approval; id: string }) {
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['approvals'] }),
     onError: (error) => setMessage(problemOf(error).detail ?? 'The decision failed.'),
+    meta: {
+      success: (_: unknown, kind: 'approve' | 'reject' | 'cancel') =>
+        kind === 'approve' ? 'Request approved' : kind === 'reject' ? 'Request rejected' : 'Request cancelled',
+    },
   });
 
   return (

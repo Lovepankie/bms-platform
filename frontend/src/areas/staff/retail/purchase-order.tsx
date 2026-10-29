@@ -101,6 +101,7 @@ export function PurchaseOrderPage() {
     show(text, tone);
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
+  // toast-exempt: done above shows the success toast through show(text, tone), its tone 'success' unless it waits for approval
   const send = useMutation({
     mutationFn: () => retail.sendPurchaseOrder(orderId, keys.keyFor(orderId, 'send')),
     onSuccess: (r) => {
@@ -108,6 +109,7 @@ export function PurchaseOrderPage() {
       done(sendOutcomeWords(r), r.executed === false ? 'info' : 'success');
     },
   });
+  // toast-exempt: done above shows the success toast through show(text, tone), its tone 'success' by default
   const cancel = useMutation({
     mutationFn: (reason: string) => retail.cancelPurchaseOrder(orderId, reason, keys.keyFor(orderId, reason)),
     onSuccess: (o) => {

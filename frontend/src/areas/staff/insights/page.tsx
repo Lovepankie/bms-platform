@@ -610,6 +610,7 @@ function DrillPanel({ target, filter, exportable, onClose }: {
     queryFn: () => insights.table(target.table, filter, target.params),
     refetchInterval: REFRESH_MS,
   });
+  // toast-exempt: the browser downloads the CSV file itself, nothing is saved
   const download = useMutation({ mutationFn: () => insights.exportCsv(target.table, filter, target.params) });
   const ref = useRef<HTMLElement>(null);
   // The panel opens below the page: bring it into view and give it focus for keyboard users.
@@ -665,6 +666,7 @@ function DigestSettings() {
       queryClient.setQueryData(['insights', 'digest'], data);
       setDraft(null);
     },
+    meta: { success: 'Digest settings saved' },
   });
   const s = settings.data;
   if (!s) return <>{settings.error ? <Problem error={settings.error} /> : <p className="loading">Loading</p>}</>;
@@ -704,7 +706,6 @@ function DigestSettings() {
           </select>
         </label>
         <Problem error={save.error} />
-        {save.isSuccess && !draft && <p role="status" className="alert alert-success">Saved.</p>}
         <div className="rt-row">
           <BusyButton type="submit" busy={save.isPending}>Save</BusyButton>
           <button type="button" className="btn-ghost" onClick={() => void preview.refetch()}>Preview today&apos;s text</button>

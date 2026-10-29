@@ -4,6 +4,7 @@ import { api, problemOf } from '../../api/client';
 import { BusyButton } from '../../app/ui/BusyButton';
 import type { components } from '../../api/schema';
 import { resetProofProblem } from './users/state';
+import { sayDone } from './retail/toast';
 
 // The Plan and modules card of Business set-up and the end-date notices (issue #472, ADR-073). Administrators see the card;
 // only the Owner (ADR-062) asks for a module, stops one, cancels or undoes. Adding, stopping and cancelling say plainly what
@@ -143,7 +144,6 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
 
@@ -174,7 +174,6 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
     sending.current = true;
     setBusy(true);
     setError(null);
-    setMessage(null);
     try {
       const { error: failed } = await action();
       if (failed) {
@@ -183,7 +182,7 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
         return;
       }
       setConfirm(null);
-      setMessage(done);
+      sayDone(done);
       await refresh();
     } finally {
       sending.current = false;
@@ -197,21 +196,21 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
     const body = mfaEnabled ? { totp_code: typed.trim() } : { password: typed };
     if (confirm.kind === 'add') {
       const module = confirm.module;
-      void run(() => api.POST('/api/v1/plan/module-requests', { body: { module, ...body } }), `${moduleName(module)}: your request is sent.`);
+      void run(() => api.POST('/api/v1/plan/module-requests', { body: { module, ...body } }), 'Module requested');
     } else if (confirm.kind === 'stop') {
       void run(
         () => api.POST('/api/v1/plan/modules/{module}/stop', { params: { path: { module: confirm.module } }, body }),
-        `${moduleName(confirm.module)} will stop as described.`,
+        'Module stop scheduled',
       );
     } else {
-      void run(() => api.POST('/api/v1/plan/cancel', { body }), 'The subscription is cancelled as described. You can undo it until that day.');
+      void run(() => api.POST('/api/v1/plan/cancel', { body }), 'Subscription cancelled');
     }
   }
 
   function undo(change: Change) {
     void run(
       () => api.POST('/api/v1/plan/changes/{change_id}/undo', { params: { path: { change_id: change.id ?? '' } } }),
-      'Undone. Everything goes on as before.',
+      'Change undone',
     );
   }
 
@@ -336,7 +335,6 @@ export function PlanCard({ mfaEnabled }: { mfaEnabled: boolean }) {
         </ul>
       )}
       {error && <p role="alert" className="alert alert-danger">{error}</p>}
-      {message && <p role="status">{message}</p>}
     </fieldset>
   );
 }

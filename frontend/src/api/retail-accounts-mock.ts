@@ -62,7 +62,7 @@ const addDays = (date: string, days: number): string => {
 export function createAccountsMock(env: AccountsEnv): AccountsMock {
   const terms = new Map<string, Terms>();
   const receipts: Receipt[] = [];
-  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.')));
+  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.')));
   const customer = (id: string): Customer => env.customers().find((c) => c.id === id) ?? env.refuse(404, 'not_found', 'That could not be found.');
   const open = (id: string): Sale[] =>
     env.sales().filter((s) => s.customer_id === id && s.payment_method === 'credit' && s.status === 'completed' && (s.balance_minor ?? 0) > 0);

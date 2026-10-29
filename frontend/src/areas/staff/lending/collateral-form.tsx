@@ -7,6 +7,7 @@ import { useCollateralApi, useMembersApi } from '../../../api/lending-context';
 import { useStaff } from '../context';
 import { newIdempotencyKey } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
+import { sayDone } from '../retail/toast';
 import { blankCollateral, collateralProblems, createBody, CUSTODY, draftOf, OWNERS, referenceLabel, TYPES, updateBody, type CollateralDraft } from './collateral-state';
 import { CollateralGate } from './member-ui';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
@@ -42,7 +43,9 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
   const [failure, setFailure] = useState<string | null>(null);
   const guard = useSaveGuard<CollateralItem>();
   const [stale, setStale] = useState(false);
-  const [saved, setSaved] = useState<CollateralItem | null>(null);
+  // The new item whose photos still need sending: its retry screen shows only when a photo failed, and then `done` (the toast)
+  // has not run, so success is said once.
+  const [photosFor, setPhotosFor] = useState<CollateralItem | null>(null);
   const photos = usePhotoQueue();
   const original = useMemo(() => (item ? draftOf(item) : undefined), [item]);
   // The value is typed in the item's currency, or the business's for a new item (issue #289).
@@ -56,6 +59,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
 
   const sender = (id: string): Sender<unknown> => (p, o) => api.uploadDocument(id, p.blob, p.fileName, o);
   const done = (c: CollateralItem) => {
+    sayDone(item ? 'Collateral saved' : 'Collateral registered');
     void queryClient.invalidateQueries({ queryKey: ['collateral'] });
     void navigate({ to: '/staff/lending/collateral/$collateralId', params: { collateralId: c.id ?? '' } });
   };
@@ -79,7 +83,7 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
         return;
       }
       const created = await api.create(createBody(draft, currency), idempotencyKey);
-      setSaved(created);
+      setPhotosFor(created);
       if (photos.waiting === 0) done(created);
       else if ((await photos.sendAll(sender(created.id ?? ''))).failed === 0) done(created);
     } catch (raw) {
@@ -95,13 +99,13 @@ export function CollateralForm({ item: loaded, memberId }: { item?: CollateralIt
     }
   }
 
-  if (saved) {
+  if (photosFor) {
     return (
       <section className="rt-card stack" aria-live="polite">
         <h2>The collateral is registered</h2>
         <p>A photo did not go through. Send it again, or open the item and add it later.</p>
-        <PhotoQueueControl id="cf-photos-retry" label="Photos of the item" queue={photos} sender={sender(saved.id ?? '')} max={5} />
-        <Link to="/staff/lending/collateral/$collateralId" params={{ collateralId: saved.id ?? '' }} className="btn btn-block rt-primary">Open the item</Link>
+        <PhotoQueueControl id="cf-photos-retry" label="Photos of the item" queue={photos} sender={sender(photosFor.id ?? '')} max={5} />
+        <Link to="/staff/lending/collateral/$collateralId" params={{ collateralId: photosFor.id ?? '' }} className="btn btn-block rt-primary">Open the item</Link>
       </section>
     );
   }

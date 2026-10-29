@@ -98,6 +98,7 @@ export function CollectForm({ target }: { target: CollectTarget }) {
       finish();
       setIntent(made);
     },
+    meta: { success: 'Payment link made' },
   });
 
   if (intent) {
@@ -193,6 +194,7 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
   const cancel = useMutation({
     mutationFn: () => payments.cancelIntent(id),
     onSuccess: (view) => queryClient.setQueryData(['payments', 'intent', id], view),
+    meta: { success: 'Payment cancelled' },
   });
   const link = intent.redirect_url;
   const open = status === 'pending' || status === 'created';

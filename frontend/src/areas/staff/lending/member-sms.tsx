@@ -118,6 +118,7 @@ export function MemberSmsControl({ memberId }: { memberId: string }) {
       void queryClient.invalidateQueries({ queryKey: ['sms', 'opt-outs'] });
     },
     onError: (error) => setFailure(error instanceof SmsError ? error.message : 'Could not save the choice.'),
+    meta: { success: 'Text choice saved' },
   });
   // Without permission to read members the card is not shown at all; the server would refuse the read.
   if (!held.includes('lending.members.read') || read.isPending || !read.data) return null;

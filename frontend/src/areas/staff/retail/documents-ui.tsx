@@ -63,6 +63,7 @@ export async function openCreditNotePdf(returnId: string): Promise<void> {
 /** The button that opens a credit note as a PDF: only while documents are on and the user may issue them at the return's branch. */
 export function CreditNotePdf({ returnId, branchId }: { returnId: string; branchId?: string }) {
   const { me } = useStaff();
+  // toast-exempt: it only opens the credit note PDF in a new tab, which is the answer
   const open = useMutation({ mutationFn: () => openCreditNotePdf(returnId) });
   if (!canIssueDocuments(me) || !holdsAt(me, DOCUMENT_ISSUE, branchId)) return null;
   return (
@@ -94,6 +95,7 @@ export async function openMadePdf(make: () => Promise<Blob>): Promise<void> {
 
 /** The button that opens a document's PDF, with its own waiting and its own failure. */
 export function PdfButton({ doc, label = 'Open PDF' }: { doc: Pick<RetailDocument, 'id' | 'pdf_document_id' | 'number'>; label?: string }) {
+  // toast-exempt: it only opens the PDF in a new tab and saves nothing
   const open = useMutation({ mutationFn: () => openDocumentPdf(doc) });
   return (
     <>
@@ -206,6 +208,7 @@ export function SaleDocuments({ saleId, status, branchId }: { saleId: string; st
       void queryClient.invalidateQueries({ queryKey: ['retail', 'sale-documents', saleId] });
       void queryClient.invalidateQueries({ queryKey: ['retail', 'documents'] });
     },
+    meta: { success: (_: unknown, type: 'invoice' | 'delivery_note') => `${typeLabel(type) || 'Document'} made` },
   });
   if (!allowed) return null;
   const items = docs.data ?? [];
@@ -244,7 +247,7 @@ export function TransferDocument({ transferId, branchId, status }: { transferId:
   const { me } = useStaff();
   const allowed = canIssueDocuments(me) && holdsAt(me, DOCUMENT_ISSUE, branchId) && status !== 'voided' && status !== 'cancelled';
   const [made, setMade] = useState<RetailDocument | null>(null);
-  const issue = useMutation({ mutationFn: () => retail.issueTransferDocument(transferId, newIdempotencyKey()), onSuccess: setMade });
+  const issue = useMutation({ mutationFn: () => retail.issueTransferDocument(transferId, newIdempotencyKey()), onSuccess: setMade, meta: { success: 'Delivery note made' } });
   if (!allowed) return null;
   return (
     <section aria-label="Delivery note of this move" data-tour="transfer-document">

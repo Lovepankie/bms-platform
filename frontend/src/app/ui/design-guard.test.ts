@@ -27,10 +27,6 @@ const HEX = /#[0-9a-fA-F]{3,8}\b/;
 const MOVES = new Set(['transform', 'opacity']);
 // The named exceptions, each a colour or background fade with its reason; anything else that animates fails the guard.
 const MOTION_EXCEPTIONS: Record<string, { property: string; why: string }[]> = {
-  'app/ui/buttons.css': [
-    { property: 'background', why: 'a button fades to its hover and pressed fill in --motion-fast rather than flashing' },
-    { property: 'border-color', why: 'the edge of a button fades with its fill' },
-  ],
   'app/ui/forms.css': [{ property: 'border-color', why: 'a field edge fades to the hover and focus colour' }],
   'app/ui/surfaces.css': [{ property: 'border-color', why: 'a link card edge fades to the accent on hover' }],
   'app/ui/feedback.css': [{ property: 'background-position', why: 'the skeleton shimmer slides its gradient while a page loads' }],
@@ -261,6 +257,32 @@ describe('design guard', () => {
     expect(theme).toMatch(/--ease-out:\s*cubic-bezier\(0\.2,\s*0,\s*0,\s*1\)/);
     expect(theme).toMatch(/--text-display:/);
     expect(code('app/ui/base.css')).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*:root\s*\{[^}]*--motion:\s*0ms/);
+  });
+
+  // Pressed (#682): every button, tile, card and row answers a tap by the shared press alone: transform and opacity, nothing
+  // else, in --motion-fast (100 to 160 ms) on the ease-out curve, and no shrinking under reduced motion. A plain <button> takes
+  // it from buttons.css, so a screen never draws its own. The busy rule only cancels the press, so it is not a press.
+  // JUSTIFICATION-A3: #682 asks the guard to hold the press; no existing test checks :active rules.
+  it('presses by transform and opacity only, in 100 to 160 ms on the ease-out curve, and not by scale under reduced motion', () => {
+    const pressed = allStylesheets.flatMap((f) =>
+      rulesOf(code(relative(SRC, f)))
+        .filter(({ selectors }) => selectors.some((s) => /:active\b/.test(s)) && !/aria-busy/.test(selectors.join()))
+        .flatMap(({ selectors, body }) => [...body.matchAll(/([a-z-]+)\s*:/g)].map(([, prop]) => `${selectors.join(', ')} ${prop}`)),
+    );
+    expect(pressed.length).toBeGreaterThan(4);
+    expect(pressed.filter((p) => !/ (transform|opacity)$/.test(p))).toEqual([]);
+    const buttons = rulesOf(code('app/ui/buttons.css'));
+    const base = buttons.find(({ selectors }) => selectors.length === 2 && selectors.includes('button') && selectors.includes('.btn'));
+    expect(transitioned(/transition:\s*([^;]+)/.exec(base?.body ?? '')?.[1] ?? '')).toEqual(['transform', 'opacity']);
+    const press = buttons.find(({ selectors }) => selectors[0]?.startsWith('button:active:not('));
+    expect(press?.body).toMatch(/transform:\s*scale\(var\(--press-scale\)\)/);
+    expect(press?.body).toMatch(/opacity:\s*var\(--press-opacity\)/);
+    const theme = code('app/theme.css');
+    const fast = Number(/--motion-fast:\s*(\d+)ms/.exec(theme)?.[1]);
+    expect(fast).toBeGreaterThanOrEqual(100);
+    expect(fast).toBeLessThanOrEqual(160);
+    expect(theme).toMatch(/--transition:\s*var\(--motion-fast\)\s+var\(--ease-out\)/);
+    expect(code('app/ui/base.css')).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*:root\s*\{[^}]*--press-scale:\s*1;/);
   });
 
   // The palette tokens do not change with the theme (#429), so a stylesheet draws with the colour roles, which do. The only

@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { RetailError, isWaiting, retail, type StockRow } from '../../../api/retail';
+import { RetailError, isWaiting, retail, type Product, type StockRow } from '../../../api/retail';
 import { useStaff } from '../context';
 import { showWhen } from './catalogue-products';
 import { usePersistedDraft } from './idempotency';
 import { showQty } from './maths';
 import { holds, holdsAt } from './permissions';
 import { REASONS, correctionRequest, correctionWords, differenceWords, movementTitle, quantityProblem, signedQty, type ReasonCode } from './stock-correct-state';
-import { Problem, Success, WaitingForApproval } from './ui';
+import { Problem, WaitingForApproval } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
 import { WORDS } from '../../../app/glossary';
@@ -27,7 +27,7 @@ export const CATALOGUE_MANAGE = 'retail.catalogue.manage';
 type Choice = 'quantity' | 'category' | 'other' | 'history';
 
 /** The right quantity and a reason: the server posts the difference as a correction. */
-function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; branchId: string; onDone: (message: string) => void; onWaiting: (what: string) => void }) {
+function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; branchId: string; onDone: () => void; onWaiting: (what: string) => void }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const current = row.qty ?? '0';
@@ -76,7 +76,7 @@ function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; bra
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       // ADR-091: a correction worth the business's amount waits for an administrator; the quantity stays as it is until then.
       if (isWaiting(done)) onWaiting(`Changing ${row.description} to ${showQty(draft.qty)} ${row.unit ?? ''} waits for an administrator.`);
-      else onDone(`${row.description} is now ${showQty(done.new_qty ?? '0')} ${row.unit ?? ''} (it was ${showQty(done.old_qty ?? '0')}). The correction is in its history. It does not count as lost or damaged stock.`);
+      else onDone();
     },
     onError: (error) => {
       // The shelf moved while the form was open: read the list again, and type against the new quantity with a new key.
@@ -94,6 +94,7 @@ function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; bra
       }
     },
     onSettled: () => { sending.current = false; },
+    meta: { success: (r: Awaited<ReturnType<typeof retail.correctStock>>) => (!r ? 'Stock corrected' : isWaiting(r) ? null : `Corrected to ${showQty(r.new_qty ?? '0')} ${row.unit ?? ''}`.trim()) },
   });
   const difference = differenceWords(draft.qty, shown, row.unit);
   const press = () => {
@@ -128,7 +129,7 @@ function QuantityForm({ row, branchId, onDone, onWaiting }: { row: StockRow; bra
 }
 
 /** Move the item to the right category; the change is audited with the old and the new category. */
-function CategoryForm({ row, onDone }: { row: StockRow; onDone: (message: string) => void }) {
+function CategoryForm({ row, onDone }: { row: StockRow; onDone: () => void }) {
   const { me } = useStaff();
   const queryClient = useQueryClient();
   const id = row.product_id ?? '';
@@ -140,11 +141,12 @@ function CategoryForm({ row, onDone }: { row: StockRow; onDone: (message: string
   const target = chosen === '' ? own : chosen;
   const send = useMutation({
     mutationFn: () => retail.updateProduct(id, product.data?.version ?? 1, { category_id: target }),
-    onSuccess: (saved) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
-      onDone(`${saved.description} is now in ${saved.category}. It was in ${row.category}.`);
+      onDone();
     },
     onSettled: () => { sending.current = false; },
+    meta: { success: (saved: Product) => (saved?.category ? `Moved to ${saved.category}` : 'Category changed') },
   });
   if (product.isPending || categories.isPending) return <p className="loading">Loading</p>;
   if (!product.data) return <Problem error={product.error} />;
@@ -216,12 +218,11 @@ function History({ row, branchId }: { row: StockRow; branchId: string }) {
 export function CorrectItem({ row, branchId, onClose }: { row: StockRow; branchId: string; onClose: () => void }) {
   const { me } = useStaff();
   const [choice, setChoice] = useState<Choice | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<string | null>(null);
   const mayQuantity = holdsAt(me, STOCK_COUNT, branchId);
   const mayCategory = holds(me, CATALOGUE_MANAGE);
-  const done = (text: string) => { setWaiting(null); setMessage(text); setChoice(null); };
-  const wait = (what: string) => { setMessage(null); setWaiting(what); setChoice(null); };
+  const done = () => { setWaiting(null); setChoice(null); };
+  const wait = (what: string) => { setWaiting(what); setChoice(null); };
   const choices: { id: Choice; label: string; show: boolean }[] = [
     { id: 'quantity', label: 'The quantity is wrong', show: mayQuantity },
     { id: 'category', label: 'The category is wrong', show: mayCategory },
@@ -231,7 +232,6 @@ export function CorrectItem({ row, branchId, onClose }: { row: StockRow; branchI
   return (
     <section className="rt-card" aria-label={`Correct ${row.description}`} data-testid="correct-item">
       <h3>Correct {row.description}</h3>
-      {message && <Success>{message}</Success>}
       {waiting && <WaitingForApproval what={waiting} />}
       <div className="cluster">
         <Segmented
@@ -239,7 +239,7 @@ export function CorrectItem({ row, branchId, onClose }: { row: StockRow; branchI
           options={choices.filter((c) => c.show).map((c) => ({ value: c.id, label: c.label }))}
           value={choice}
           clearable
-          onChange={(id) => { setMessage(null); setWaiting(null); setChoice(id); }}
+          onChange={(id) => { setWaiting(null); setChoice(id); }}
         />
         <button type="button" className="btn-ghost btn-sm" onClick={onClose}>Close</button>
       </div>

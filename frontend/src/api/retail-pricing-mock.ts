@@ -42,7 +42,7 @@ export function createPricingMock(env: PricingEnv): PricingMock {
   const lists: PriceList[] = [];
   const items: PriceListItem[] = [];
   const groups: CustomerGroup[] = [];
-  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This capability is not enabled for the tenant.')));
+  const gate = <T>(fn: () => T): Promise<T> => env.run(() => (env.on() ? fn() : env.refuse(404, 'capability_not_enabled', 'This feature is not switched on for your business.')));
   const stale = (row: { version?: number }, version: number) => {
     if ((row.version ?? 1) !== version) env.refuse(409, 'version_conflict', 'This was changed by someone else. Reload and try again.');
   };

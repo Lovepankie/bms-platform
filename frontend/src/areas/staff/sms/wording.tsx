@@ -113,7 +113,10 @@ function Placeholders({ list, disabled, onInsert }: { list: SmsPlaceholder[]; di
 
 function TestMessage({ eventKey, text, canSend }: { eventKey: string; text: string; canSend: boolean }) {
   const [to, setTo] = useState('');
-  const send = useMutation({ mutationFn: () => sms.testMessage(eventKey, text, to) });
+  const send = useMutation({
+    mutationFn: () => sms.testMessage(eventKey, text, to),
+    meta: { success: (r: SmsTestResult) => (r.outcome === 'sent' ? 'Test message sent' : r.outcome === 'sunk' ? 'Test message recorded' : null) },
+  });
   if (!canSend) return null;
   const error = send.error instanceof SmsError ? send.error : null;
   return (
@@ -132,7 +135,7 @@ function TestMessage({ eventKey, text, canSend }: { eventKey: string; text: stri
       <label htmlFor={`sms-test-${eventKey}`}>Phone number</label>
       <input id={`sms-test-${eventKey}`} inputMode="tel" autoComplete="off" value={to} onChange={(e) => { setTo(e.target.value); send.reset(); }} />
       {error && <p role="alert" className="field-error">{error.fields.to ?? error.message}</p>}
-      {send.data && <p role="status" className="alert alert-info">{testWords(send.data)}</p>}
+      {send.data && send.data.outcome !== 'sent' && send.data.outcome !== 'sunk' && <p role="status" className="alert alert-info">{testWords(send.data)}</p>}
       <p>
         <BusyButton type="submit" className="btn-ghost" busy={send.isPending} disabled={to.trim() === ''}>
           Send a test message
@@ -167,11 +170,13 @@ export function TemplateEditor({ template, canManage, onNotice, tour = false }: 
     mutationFn: () => sms.saveTemplate(template.event_key, version, text),
     onSuccess: () => { onNotice(null); return refresh(); },
     onError: (error) => { if (error instanceof SmsError && error.code === 'version_conflict') onNotice(error.message); return refresh(); },
+    meta: { success: 'Wording saved' },
   });
   const revert = useMutation({
     mutationFn: () => sms.revertTemplate(template.event_key, version),
     onSuccess: () => { onNotice(null); return refresh(); },
     onError: (error) => { if (error instanceof SmsError && error.code === 'version_conflict') onNotice(error.message); return refresh(); },
+    meta: { success: 'Default wording restored' },
   });
   const saveError = save.error instanceof SmsError ? save.error : null;
   const dirty = text !== saved;

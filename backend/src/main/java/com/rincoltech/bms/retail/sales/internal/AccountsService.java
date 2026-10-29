@@ -257,30 +257,37 @@ class AccountsService {
 
     /**
      * The limit and the terms are each given or cleared on purpose, never left out: a body that names neither changes
-     * nothing and is refused, so an empty request cannot wipe a buyer's limit.
+     * nothing and is refused, so an empty request cannot wipe a buyer's limit. The messages are in the shop owner's words,
+     * with no field names, since a screen may show them (issue #257).
      */
     private static void requireBothDecided(AccountRequest r) {
         List<FieldProblem> problems = new ArrayList<>();
         decided(
                 problems,
                 "credit_limit_minor",
-                "clear_credit_limit",
                 r.creditLimitMinor() != null,
-                r.clearCreditLimit());
-        decided(problems, "terms_days", "clear_terms_days", r.termsDays() != null, r.clearTermsDays());
+                r.clearCreditLimit(),
+                "Also say how much this buyer may owe, or that they have no credit limit.",
+                "Either set a credit limit or say there is none, not both.");
+        decided(
+                problems,
+                "terms_days",
+                r.termsDays() != null,
+                r.clearTermsDays(),
+                "Also say how many days this buyer has to pay, or that they have no payment terms.",
+                "Either set payment terms or say there are none, not both.");
         if (!problems.isEmpty()) {
             throw ApiException.validation(problems);
         }
     }
 
     private static void decided(
-            List<FieldProblem> problems, String field, String clearField, boolean given, Boolean clear) {
+            List<FieldProblem> problems, String field, boolean given, Boolean clear, String missing, String both) {
         boolean cleared = Boolean.TRUE.equals(clear);
         if (!given && !cleared) {
-            problems.add(new FieldProblem(
-                    field, "required", "Give " + field + ", or set " + clearField + " to true to remove it."));
+            problems.add(new FieldProblem(field, "required", missing));
         } else if (given && cleared) {
-            problems.add(new FieldProblem(field, "conflict", "Give " + field + " or " + clearField + ", not both."));
+            problems.add(new FieldProblem(field, "conflict", both));
         }
     }
 
