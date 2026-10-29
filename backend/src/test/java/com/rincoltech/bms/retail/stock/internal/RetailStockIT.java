@@ -333,44 +333,6 @@ class RetailStockIT extends IntegrationTest {
                 .isEqualTo("committed");
     }
 
-    /**
-     * Issue #681: a person lists their own draft counts at a branch, newest first, with their lines; committed and discarded
-     * counts and another person's drafts are left out, and someone who may not count there is refused.
-     */
-    @Test
-    void aPersonListsOnlyTheirOwnDraftCountsAtABranch() {
-        api.stockUp(t.headOffice(), product, "10");
-        UUID older = count(Map.of("product_id", product, "counted_qty", "9"));
-        UUID newer = count(Map.of("product_id", product, "counted_qty", "8"));
-        UUID gone = count(Map.of("product_id", product, "counted_qty", "7"));
-        api.post("/stocktakes/" + gone + "/discard", null, ADMIN);
-        RetailTestSupport other = new RetailTestSupport(http, t);
-        other.post(
-                "/stocktakes",
-                Map.of(
-                        "branch_id",
-                        t.headOffice(),
-                        "lines",
-                        List.of(Map.of("product_id", product, "counted_qty", "6"))),
-                ADMIN);
-
-        ResponseEntity<JsonNode> mine = api.get("/stocktakes?branch_id=" + t.headOffice(), ADMIN);
-        assertThat(mine.getStatusCode()).as("%s", mine.getBody()).isEqualTo(HttpStatus.OK);
-        List<String> ids = new ArrayList<>();
-        mine.getBody().get("items").forEach(i -> ids.add(i.get("id").asString()));
-        assertThat(ids).containsExactly(newer.toString(), older.toString());
-        assertThat(mine.getBody()
-                        .get("items")
-                        .get(0)
-                        .get("lines")
-                        .get(0)
-                        .get("counted_qty")
-                        .asString())
-                .isEqualTo("8.000");
-        assertThat(api.get("/stocktakes?branch_id=" + t.headOffice(), SALES).getStatusCode())
-                .isEqualTo(HttpStatus.FORBIDDEN);
-    }
-
     /** Issue #656: a discarded count is as final as a committed one, for the application and the owner alike. */
     @Test
     void aDiscardedCountCannotChange() {

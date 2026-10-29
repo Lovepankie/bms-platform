@@ -621,8 +621,6 @@ export interface RetailApi {
   commitStocktake(id: string, acknowledged?: string[]): Promise<Stocktake>;
   /** Issue #656: ends a draft count without writing stock; a second call returns it unchanged, a committed one is refused with 409. */
   discardStocktake(id: string): Promise<Stocktake>;
-  /** Issue #681: the caller's own draft counts at the branch, newest first, at most ten, with their lines. */
-  myDraftStocktakes(branchId: string): Promise<Stocktake[]>;
   /** Quick add (issue #632): makes the item and adds its stock at the branch as opening stock in one transaction; takes the Idempotency-Key of its form. */
   quickAdd(body: QuickAddRequest, idempotencyKey: string): Promise<QuickAdd>;
   /** Every product with its balance in each branch the caller may read (#144). */
@@ -1425,9 +1423,6 @@ const realRetail: RetailApi = {
   },
   async discardStocktake(id) {
     return unwrap(await api.POST('/api/v1/retail/stocktakes/{stocktake_id}/discard', { params: { path: { stocktake_id: id } } }));
-  },
-  async myDraftStocktakes(branchId) {
-    return (unwrap(await api.GET('/api/v1/retail/stocktakes', { params: { query: { branch_id: branchId } } })).items ?? []);
   },
 
   async quickAdd(body, key) {

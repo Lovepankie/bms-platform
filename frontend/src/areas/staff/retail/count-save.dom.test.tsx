@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Stocktake, StockRow } from '../../../api/retail';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { StockRow } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
-import { COUNT_NOTE, countKey, countRetry } from './count-save-state';
+import { countKey, type SavedCount } from './count-save-state';
 
-// Issue #681: Count stock keeps each count as it is typed, on the device at once and in a server draft once typing rests, says
-// so, brings it back after a reload, a lost connection or on another device, and ends with a clear success screen after
-// Commit the count. Only the person's Commit ever commits. Fabricated names and amounts.
+// Issue #681 (round 2 of its review): Count stock keeps each count on this device as it is typed and says so, brings it back
+// after a reload or a lost connection, merges two tabs item by item, keeps each branch its own count, and ends with a clear
+// success screen after Commit the count. Nothing goes to the server before Review the difference. Fabricated names and amounts.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -17,7 +17,6 @@ const listStock = vi.fn();
 const createStocktake = vi.fn();
 const commitStocktake = vi.fn();
 const discardStocktake = vi.fn();
-const myDraftStocktakes = vi.fn();
 
 vi.mock('@tanstack/react-router', async (original) => {
   const real = await original<typeof import('@tanstack/react-router')>();
@@ -34,7 +33,6 @@ vi.mock('../../../api/retail', async (original) => {
       createStocktake: (...a: unknown[]) => createStocktake(...a),
       commitStocktake: (...a: unknown[]) => commitStocktake(...a),
       discardStocktake: (...a: unknown[]) => discardStocktake(...a),
-      myDraftStocktakes: (...a: unknown[]) => myDraftStocktakes(...a),
     },
   };
 });
@@ -46,29 +44,23 @@ const setOnline = (on: boolean) => {
   window.dispatchEvent(new Event(on ? 'online' : 'offline'));
 };
 
-beforeEach(() => {
-  myDraftStocktakes.mockResolvedValue([]);
-  discardStocktake.mockResolvedValue({ status: 'discarded' });
-});
-
 afterEach(() => {
+  // Back online while the page is still mounted, as React Query hears the event only then.
+  setOnline(true);
   cleanup();
   listStock.mockReset();
   createStocktake.mockReset();
   commitStocktake.mockReset();
   discardStocktake.mockReset();
-  myDraftStocktakes.mockReset();
   localStorage.clear();
-  setOnline(true);
-  countRetry.delayMs = 10_000;
 });
 
 const row = (code: string, description: string, qty: string): StockRow => ({ product_id: code, code, description, category: 'Lamps', unit: 'piece', qty, negative: false, sell_minor: 1500 });
 const sheet = [row('A-1', 'Test Lamp', '5.000'), row('A-2', 'Test Plug', '8.000')];
-const SENT = { timeout: 5000 };
 const me = mockMe('admin');
 const branchA = me.branches?.[0]?.id ?? '';
 const branchB = me.branches?.[1]?.id ?? '';
+const keyOf = (branch: string) => countKey(window.location.host, branch, me.user_id ?? '');
 
 function page(branch = branchA) {
   return (
@@ -94,39 +86,29 @@ async function reviewIt(n: number) {
   if (anyway) fireEvent.click(anyway);
   await screen.findByRole('heading', { name: 'Review the difference' });
 }
-const draftOf = (id: string, lines: [string, string][], note = COUNT_NOTE): Stocktake =>
-  ({ id, status: 'draft', note, lines: lines.map(([product_id, counted_qty]) => ({ product_id, counted_qty })) });
+/** What another tab of the same count writes. */
+const otherTab = (key: string, value: SavedCount | null) =>
+  act(() => {
+    window.dispatchEvent(new StorageEvent('storage', { key, newValue: value === null ? null : JSON.stringify(value) }));
+  });
 
-describe('a count kept as it is typed', () => {
-  it('says Saved under each count at once, then All counts saved once the server draft holds them', async () => {
-    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+describe('a count kept on this phone as it is typed', () => {
+  it('says Saved under each count at once and Saved on this phone at the top, and sends nothing before the review', async () => {
     await ready();
     expect(status()).toBe('');
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
     expect(screen.getByTestId('count-saved-A-1').textContent).toBe('Saved');
     expect(screen.queryByTestId('count-saved-A-2')).toBeNull();
-    expect(status()).toBe('Saving...');
-    await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
-    expect(createStocktake).toHaveBeenCalledTimes(1);
-    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: branchA, note: COUNT_NOTE, lines: [{ product_id: 'A-1', counted_qty: '4.000' }] });
-    expect(commitStocktake).not.toHaveBeenCalled();
-  });
-
-  it('replaces the server draft with a new one as counting goes on, and discards the one before', async () => {
-    createStocktake.mockResolvedValueOnce({ id: 'st-a', status: 'draft', lines: [] }).mockResolvedValueOnce({ id: 'st-b', status: 'draft', lines: [] });
-    await ready();
-    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
+    expect(status()).toBe('Saved on this phone, 1 item');
     fireEvent.change(countBox('A-2'), { target: { value: '6' } });
-    await waitFor(() => expect(status()).toBe('All counts saved, 2 items'), SENT);
-    expect(createStocktake.mock.calls[1]?.[0].lines).toEqual([{ product_id: 'A-1', counted_qty: '4.000' }, { product_id: 'A-2', counted_qty: '6.000' }]);
-    await waitFor(() => expect(discardStocktake).toHaveBeenCalledWith('st-a'));
-    expect(discardStocktake).not.toHaveBeenCalledWith('st-b');
+    expect(status()).toBe('Saved on this phone, 2 items');
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(createStocktake).not.toHaveBeenCalled();
+    expect(discardStocktake).not.toHaveBeenCalled();
     expect(commitStocktake).not.toHaveBeenCalled();
   });
 
   it('brings every count back after a reload', async () => {
-    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
     await ready();
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
     fireEvent.blur(countBox('A-1'));
@@ -138,48 +120,25 @@ describe('a count kept as it is typed', () => {
     expect(screen.getByRole('button', { name: 'Review the difference (1 counted)' })).toBeTruthy();
   });
 
-  it('keeps the counts on the phone while offline, says so, and sends them when the connection is back', async () => {
-    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+  it('keeps the counts when the connection is lost, and after a reload', async () => {
     await ready();
     setOnline(false);
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    expect(status()).toBe('Saved on this phone, will send when online');
-    expect(screen.getByTestId('count-saved-A-1').textContent).toBe('Saved');
-    expect(createStocktake).not.toHaveBeenCalled();
+    expect(status()).toBe('Saved on this phone, 1 item');
+    // The sheet itself needs the connection to load, so the page opens again once it is back.
     setOnline(true);
-    await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
-    expect(createStocktake).toHaveBeenCalledTimes(1);
-  });
-
-  // Review of #681: a drop the browser does not notice (flaky data, a deploy) is tried again on its own.
-  it('sends again by itself after the connection drops mid send while the phone still says online', async () => {
-    countRetry.delayMs = 300;
-    createStocktake.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
-    await ready();
-    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    await waitFor(() => expect(status()).toBe('Saved on this phone, will send when online'), SENT);
-    await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
-    expect(createStocktake).toHaveBeenCalledTimes(2);
-  });
-
-  it('loses nothing when the connection drops while a count is sent, and still has it after a reload', async () => {
-    createStocktake.mockRejectedValue(new TypeError('Failed to fetch'));
-    await ready();
-    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    await waitFor(() => expect(status()).toBe('Saved on this phone, will send when online'), SENT);
     cleanup();
     await ready();
     expect(countBox('A-1').value).toBe('4');
   });
 
-  // Review of #681: a restored count that never reached the server never reads as All counts saved, even with no sheet.
-  it('opened offline with counts that were never sent, says they are on the phone, not All counts saved', async () => {
-    localStorage.setItem(countKey(window.location.host, branchA, me.user_id ?? ''), JSON.stringify({ counts: { 'A-1': '4' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], draftId: null, stale: [], pending: [] }));
-    setOnline(false);
-    listStock.mockRejectedValue(new TypeError('Failed to fetch'));
-    render(page());
-    await waitFor(() => expect(status()).toBe('Saved on this phone, will send when online'));
-    expect(document.body.textContent).not.toContain('All counts saved');
+  it('never says Saved when the phone cannot store the count', async () => {
+    await ready();
+    const full = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceededError'); });
+    fireEvent.change(countBox('A-1'), { target: { value: '4' } });
+    expect(status()).toBe('Not saved on this phone. Keep this page open.');
+    expect(screen.queryByTestId('count-saved-A-1')).toBeNull();
+    full.mockRestore();
   });
 
   it('never says Saved for a count that is not a quantity', async () => {
@@ -189,40 +148,35 @@ describe('a count kept as it is typed', () => {
   });
 });
 
-// Review of #681: a draft whose id never reached the device, two tabs, a branch switch and another device.
-describe('a count kept safely', () => {
-  it('discards on the next open a draft a reload cut off before its answer came back', async () => {
-    createStocktake.mockImplementation(() => new Promise(() => {}));
+// Review of #681, must-fix 1 and 2: two tabs of one count, and a branch switch.
+describe('two tabs and two branches', () => {
+  it('merges a change from another tab item by item, the newest count of each item winning, and says the count is open there', async () => {
     await ready();
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    await waitFor(() => expect(createStocktake).toHaveBeenCalledTimes(1), SENT);
-    cleanup();
-    // The server made it all the same; a Sell count and a different count of this person stay as they are.
-    myDraftStocktakes.mockResolvedValue([draftOf('st-lost', [['A-1', '4.000']]), draftOf('st-sell', [['A-1', '4.000']], 'Counted when the item was added on Sell'), draftOf('st-other', [['A-2', '1.000']])]);
-    await ready();
-    await waitFor(() => expect(discardStocktake).toHaveBeenCalledWith('st-lost'));
-    expect(discardStocktake).not.toHaveBeenCalledWith('st-sell');
-    expect(discardStocktake).not.toHaveBeenCalledWith('st-other');
+    fireEvent.blur(countBox('A-1'));
+    const stamped = readStored(branchA).at['A-1'] ?? 0;
+    // The other tab counted A-2 now, and holds an older count of A-1.
+    otherTab(keyOf(branchA), { counts: { 'A-1': '9', 'A-2': '6' }, packCounts: {}, listed: ['A-1', 'A-2'], done: ['A-1', 'A-2'], at: { 'A-1': stamped - 1000, 'A-2': stamped + 1000 } });
     expect(countBox('A-1').value).toBe('4');
+    expect(countBox('A-2').value).toBe('6');
+    expect(screen.getByTestId('count-other-tab').textContent).toBe('This count is also open in another tab');
+    expect(screen.getByText('Counted items (2)')).toBeTruthy();
+    expect(readStored(branchA).counts).toEqual({ 'A-1': '4', 'A-2': '6' });
   });
 
-  it('lets one tab count at a time: the tab that opens last takes the count, and the first can take it back', async () => {
-    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+  it('starts empty and says so when the count is committed in another tab', async () => {
     await ready();
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    const key = `${countKey(window.location.host, branchA, me.user_id ?? '')}.tab`;
-    act(() => {
-      window.dispatchEvent(new StorageEvent('storage', { key, newValue: JSON.stringify({ tab: 'zz-other', since: Date.now() + 1000 }) }));
-    });
-    expect(screen.getByTestId('count-other-tab').textContent).toContain('Count stock is open in another tab or window');
-    expect(document.getElementById('count-A-1')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Count here instead' }));
-    await screen.findByText(/^Not counted yet/);
-    expect(countBox('A-1').value).toBe('4');
+    // The other tab's commit removes the key, which this tab hears.
+    localStorage.removeItem(keyOf(branchA));
+    otherTab(keyOf(branchA), null);
+    expect(countBox('A-1').value).toBe('');
+    expect(screen.getByTestId('count-other-tab').textContent).toBe('Counted and saved in another tab');
+    expect(localStorage.getItem(keyOf(branchA))).toBeNull();
   });
 
-  it('keeps each branch its own count when the branch is switched', async () => {
-    createStocktake.mockResolvedValue({ id: 'st-a', status: 'draft', lines: [] });
+  it('keeps each branch its own count when the branch is switched, and back', async () => {
+    localStorage.setItem(keyOf(branchB), JSON.stringify({ counts: { 'A-2': '3' }, packCounts: {}, listed: ['A-2'], done: ['A-2'], at: { 'A-2': 1 } }));
     listStock.mockResolvedValue(sheet);
     const view = render(page(branchA));
     await screen.findByText(/^Not counted yet/);
@@ -230,24 +184,18 @@ describe('a count kept safely', () => {
     view.rerender(page(branchB));
     await screen.findByText(/^Not counted yet/);
     expect(countBox('A-1').value).toBe('');
-    await new Promise((r) => setTimeout(r, 2000));
-    expect(createStocktake.mock.calls.every(([body]) => body.branch_id === branchA || body.lines.length === 0)).toBe(true);
+    expect(countBox('A-2').value).toBe('3');
+    expect(readStored(branchB).counts).toEqual({ 'A-2': '3' });
     view.rerender(page(branchA));
     await screen.findByText(/^Not counted yet/);
     expect(countBox('A-1').value).toBe('4');
-  });
-
-  it('picks up a count from another device when this one has none, and never a draft Sell made', async () => {
-    myDraftStocktakes.mockResolvedValue([draftOf('st-sell', [['A-2', '1.000']], 'Counted when the item was added on Sell'), draftOf('st-phone', [['A-1', '4.000'], ['A-2', '6.000']])]);
-    await ready();
-    await waitFor(() => expect(countBox('A-1').value).toBe('4'));
-    expect(countBox('A-2').value).toBe('6');
-    expect(status()).toBe('All counts saved, 2 items');
-    await new Promise((r) => setTimeout(r, 2000));
-    expect(createStocktake).not.toHaveBeenCalled();
-    expect(discardStocktake).not.toHaveBeenCalled();
+    expect(countBox('A-2').value).toBe('');
   });
 });
+
+function readStored(branch: string): SavedCount {
+  return JSON.parse(localStorage.getItem(keyOf(branch)) ?? 'null') as SavedCount;
+}
 
 describe('the end of a count', () => {
   const lines = [
@@ -255,7 +203,7 @@ describe('the end of a count', () => {
     { product_id: 'A-2', description: 'Test Plug', expected_qty: '8.000', counted_qty: '6.000', variance_qty: '-2.000' },
   ];
 
-  it('commits only on Commit the count, then shows Stock updated with the gains and losses, a toast and the next steps', async () => {
+  it('makes the draft only at Review, commits only on Commit the count, then shows Stock updated with the gains and losses', async () => {
     createStocktake.mockResolvedValue({ id: 'st-r', status: 'draft', lines });
     commitStocktake.mockResolvedValue({ id: 'st-r', status: 'committed', lines: lines.map((l) => ({ ...l, committed_variance_qty: l.variance_qty })) });
     await ready();
@@ -263,6 +211,8 @@ describe('the end of a count', () => {
     fireEvent.change(countBox('A-2'), { target: { value: '6' } });
     fireEvent.click(screen.getByRole('button', { name: 'Review the difference (2 counted)' }));
     await screen.findByRole('heading', { name: 'Review the difference' });
+    expect(createStocktake).toHaveBeenCalledTimes(1);
+    expect(createStocktake.mock.calls[0]?.[0]).toEqual({ branch_id: branchA, lines: [{ product_id: 'A-1', counted_qty: '7.000' }, { product_id: 'A-2', counted_qty: '6.000' }] });
     expect(commitStocktake).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
     await screen.findByRole('heading', { name: 'Stock updated for 2 items' });
@@ -273,7 +223,8 @@ describe('the end of a count', () => {
     expect(detail).toContain('Test Plug: 2 pieces less');
     expect(document.querySelector('.toast-success')?.textContent).toContain('Stock updated for 2 items');
     expect(screen.getByRole('link', { name: 'Back to My stock' }).getAttribute('href')).toBe('/staff/retail/stock');
-    // The count is done, so a reload starts a new one.
+    // The commit clears the device copy, so another tab hears it and a reload starts a new count.
+    expect(localStorage.getItem(keyOf(branchA))).toBeNull();
     cleanup();
     await ready();
     expect(countBox('A-1').value).toBe('');
@@ -291,20 +242,6 @@ describe('the end of a count', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start another count' }));
     expect(countBox('A-1').value).toBe('');
     expect(screen.getByText('Not counted yet (2)')).toBeTruthy();
-  });
-
-  it('keeps the review draft as the one held, discarding the draft saved while typing', async () => {
-    createStocktake.mockResolvedValueOnce({ id: 'st-a', status: 'draft', lines: [] }).mockResolvedValueOnce({ id: 'st-r', status: 'draft', lines: [lines[0]] });
-    await ready();
-    fireEvent.change(countBox('A-1'), { target: { value: '7' } });
-    await waitFor(() => expect(status()).toBe('All counts saved, 1 item'), SENT);
-    await reviewIt(1);
-    await waitFor(() => expect(discardStocktake).toHaveBeenCalledWith('st-a'));
-    expect(discardStocktake).not.toHaveBeenCalledWith('st-r');
-    // Back to the count with nothing changed sends nothing new.
-    fireEvent.click(screen.getByRole('button', { name: 'Back to the count' }));
-    await new Promise((r) => setTimeout(r, 2000));
-    expect(createStocktake).toHaveBeenCalledTimes(2);
   });
 
   it('still asks the big drop tick on the review of a restored count', async () => {

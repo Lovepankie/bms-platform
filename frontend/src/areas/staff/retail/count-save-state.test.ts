@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { changeWords, countKey, readCount, saveWords, unreachable, writeCount, type SavedCount } from './count-save-state';
+import { changeWords, countKey, mergeCounts, readCount, saveWords, writeCount, type SavedCount } from './count-save-state';
 
-// Issue #681: the rules of a count kept as it is typed, the words that say where it is kept, and the words of the success
-// screen. Fabricated names and amounts.
+// Issue #681: the rules of a count kept on the device as it is typed, the merge of two tabs, the words that say where it is
+// kept, and the words of the success screen. Fabricated names and amounts.
 
 afterEach(() => localStorage.clear());
 
-const saved: SavedCount = { counts: { 'A-1': '4' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], draftId: 'st-a', stale: ['st-0'], pending: [] };
+const saved: SavedCount = { counts: { 'A-1': '4' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], at: { 'A-1': 100 } };
 
 describe('the count kept on the device', () => {
   it('keeps one count per business, branch and person', () => {
@@ -30,31 +30,46 @@ describe('the count kept on the device', () => {
   });
 });
 
-describe('the words at the top of the count', () => {
-  it('says nothing before a count, Saving while it sends, and All counts saved once the server holds them', () => {
-    expect(saveWords(0, true, 'sent')).toBe('');
-    expect(saveWords(1, true, 'sending')).toBe('Saving...');
-    expect(saveWords(1, true, 'sent')).toBe('All counts saved, 1 item');
-    expect(saveWords(12, true, 'sent')).toBe('All counts saved, 12 items');
+describe('two tabs of one count', () => {
+  const tab = (counts: Record<string, string>, at: Record<string, number>, done = Object.keys(counts)): SavedCount =>
+    ({ counts, packCounts: {}, listed: Object.keys(counts), done, at });
+
+  it('takes the newer count of each item, never the whole sheet of one tab', () => {
+    const mine = tab({ 'A-1': '4', 'A-2': '6' }, { 'A-1': 300, 'A-2': 100 });
+    const theirs = tab({ 'A-2': '9', 'A-3': '2' }, { 'A-2': 200, 'A-3': 150 });
+    const merged = mergeCounts(mine, theirs);
+    expect(merged.counts).toEqual({ 'A-1': '4', 'A-2': '9', 'A-3': '2' });
+    expect(merged.listed).toEqual(['A-1', 'A-2', 'A-3']);
+    expect(merged.done).toEqual(['A-1', 'A-2', 'A-3']);
   });
 
-  it('says the counts are on the phone while offline, and never says saved when the phone could not keep them', () => {
-    expect(saveWords(3, true, 'offline')).toBe('Saved on this phone, will send when online');
-    expect(saveWords(3, true, 'failed')).toBe('Saved on this phone, 3 items. Will try sending again.');
-    expect(saveWords(3, false, 'offline')).toMatch(/^Not saved yet/);
-    expect(saveWords(3, false, 'failed')).toMatch(/^Not saved yet/);
+  it('keeps an item emptied in the newer tab empty, and out of the counted ones', () => {
+    const merged = mergeCounts(tab({ 'A-1': '4' }, { 'A-1': 100 }), tab({ 'A-1': '' }, { 'A-1': 200 }, []));
+    expect(merged.counts['A-1']).toBe('');
+    expect(merged.done).toEqual([]);
+  });
+
+  it('merges the same way from either side', () => {
+    const a = tab({ 'A-1': '4', 'A-2': '6' }, { 'A-1': 300, 'A-2': 100 });
+    const b = tab({ 'A-1': '5', 'A-2': '7' }, { 'A-1': 200, 'A-2': 400 });
+    expect(mergeCounts(a, b).counts).toEqual(mergeCounts(b, a).counts);
+  });
+});
+
+describe('the words at the top of the count', () => {
+  it('says nothing before a count, and how many items are saved on this phone', () => {
+    expect(saveWords(0, true)).toBe('');
+    expect(saveWords(1, true)).toBe('Saved on this phone, 1 item');
+    expect(saveWords(12, true)).toBe('Saved on this phone, 12 items');
+  });
+
+  it('never says saved when the phone could not keep the counts', () => {
+    expect(saveWords(3, false)).toBe('Not saved on this phone. Keep this page open.');
   });
 
   it('uses no dashes', () => {
     const dashes = [String.fromCharCode(0x2013), String.fromCharCode(0x2014), '-'];
-    for (const s of ['sending', 'sent', 'offline', 'failed'] as const) {
-      for (const d of [true, false]) expect(dashes.some((x) => saveWords(2, d, s).includes(x))).toBe(false);
-    }
-  });
-
-  it('reads a failed fetch as a lost connection, and an answer from the server as a refusal', () => {
-    expect(unreachable(new TypeError('Failed to fetch'))).toBe(true);
-    expect(unreachable(new Error('Conflict'))).toBe(false);
+    for (const d of [true, false]) expect(dashes.some((x) => saveWords(2, d).includes(x))).toBe(false);
   });
 });
 

@@ -1324,8 +1324,6 @@ export function createMockRetail(): RetailApi {
       st.status = 'discarded';
       return delay({ ...st });
     },
-    // Issue #681, as the server: the open counts at the branch, newest first (the mock has one person).
-    myDraftStocktakes: (branchId) => delay([...stocktakes.values()].filter((s) => s.status === 'draft' && s.branch_id === branchId).reverse().slice(0, 10)),
 
     // Quick add (issue #632, ADR-101): the item as createProduct makes it, General and Piece made when missing, then the quantity
     // added to the branch's stock as opening stock, as the server does.

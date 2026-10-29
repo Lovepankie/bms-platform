@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Highlight } from '../../../app/ui/SearchBox';
 import { ItemCombobox } from '../../../app/ui/ItemCombobox';
 import { matchesSearch, useLiveSearch } from '../../../app/ui/useLiveSearch';
@@ -21,7 +21,7 @@ import { ScreenToast, useItemAdded } from './toast';
 import { entryWarnings } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { SuccessScreen } from '../../../app/ui/SuccessScreen';
-import { COUNT_NOTE, changeWords, countKey, readCount, saveWords, typedQty, useCountSave, useCountTab } from './count-save-state';
+import { changeWords, countKey, readCount, saveWords, useCountSave, type CountState } from './count-save-state';
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -137,9 +137,11 @@ export async function countableStock(branchId: string, api: Pick<typeof retail, 
   return [...active, ...withInactive.filter((r) => !shown.has(r.product_id) && Number(r.qty) !== 0)].sort((x, y) => (x.code ?? '').localeCompare(y.code ?? ''));
 }
 
-function CountSheet({ branchId, saveKey }: { branchId: string; saveKey: string }) {
+function CountSheet({ branchId }: { branchId: string }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
+  // Issue #681: a count in progress is kept on this device for this business, branch and person, and comes back on a reload.
+  const saveKey = countKey(typeof window === 'undefined' ? '' : window.location.host, branchId, me.user_id ?? me.email ?? 'staff');
   const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   // Issue #681: a count in progress is kept on this device for this business, branch and person, and comes back on a reload.
@@ -230,23 +232,17 @@ function CountSheet({ branchId, saveKey }: { branchId: string; saveKey: string }
   const bad = entered.some(([, v]) => parseCount(v) === null);
   const valid = entered.flatMap(([productId, v]) => { const c = parseCount(v); return c === null ? [] : [{ product_id: productId, counted_qty: qtyString(c) }]; });
   const review = useMutation({
-    mutationFn: (lines: typeof valid) => retail.createStocktake({ branch_id: branchId, lines, note: COUNT_NOTE }),
-    onSuccess: (st, lines) => {
-      saving.adopt(st.id ?? null, lines);
-      setDraft(st);
-    },
+    mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: valid }),
+    onSuccess: setDraft,
   });
-  // Issue #681: a count picked up from another device takes its place only while nothing is typed here.
-  const pickUp = (d: Stocktake) => {
-    if (Object.values(current.current).some((v) => v.trim() !== '')) return false;
-    const ids = (d.lines ?? []).flatMap((l) => (l.product_id ? [l.product_id] : []));
-    const typed = Object.fromEntries((d.lines ?? []).flatMap((l) => (l.product_id ? [[l.product_id, typedQty(l.counted_qty)]] : [])));
-    current.current = typed;
-    setCounts(typed); setListed(ids); setDone(ids);
-    return true;
-  };
-  const saving = useCountSave({ branchId, saveKey, restored, saved: { counts, packCounts, listed, done }, lines: valid, ready: stock.data !== undefined, blocked: stock.isError, paused: draft !== null || review.isPending, pickUp });
-  const savedWords = saveWords(valid.length, saving.onDevice, saving.send);
+  // Issue #681: the same count changed in another tab is merged in item by item; committed there, this one starts empty.
+  const apply = useCallback((next: CountState | null) => {
+    current.current = next?.counts ?? {};
+    setCounts(next?.counts ?? {}); setPackCounts(next?.packCounts ?? {}); setListed(next?.listed ?? []); setDone(next?.done ?? []);
+    if (!next) setDraft((d) => (d?.status === 'draft' ? null : d));
+  }, []);
+  const saving = useCountSave({ saveKey, restored, saved: { counts, packCounts, listed, done }, apply });
+  const savedWords = saveWords(valid.length, saving.onDevice);
   // A restored count for an item no longer on the sheet is dropped once the sheet is read, so the device never keeps it.
   const pruned = useRef(restored === null);
   useEffect(() => {
@@ -269,15 +265,15 @@ function CountSheet({ branchId, saveKey }: { branchId: string; saveKey: string }
     const usual = here > 0 ? { product_id: id, unit: row.unit, quantity_factor: norms(id)?.quantity_factor ?? 10 } : norms(id);
     return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
   });
-  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(valid), totals);
+  const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), totals);
   const commit = useMutation({
     mutationFn: (acknowledged: string[]) => retail.commitStocktake(draft?.id ?? '', acknowledged),
     onSuccess: (st) => {
       // Issue #353: a count is saved when it is committed, so that is when its confirmed warnings are recorded.
       entry.saved();
       setDraft(st);
-      // Issue #681: the count is done, so this device and the server keep nothing more of it, and the screen says so.
-      saving.reset();
+      // Issue #681: the count is done, so this device keeps nothing more of it, another tab of it hears so, and the screen says so.
+      saving.committed();
       setCounts({}); setPackCounts({}); setListed([]); setDone([]); setConfirming(false);
       const n = st.lines?.length ?? 0;
       show(`Stock updated for ${n} ${n === 1 ? 'item' : 'items'}`, 'success');
@@ -391,6 +387,7 @@ function CountSheet({ branchId, saveKey }: { branchId: string; saveKey: string }
       <Note>Find or scan each item you count, or work down the list Not counted yet. Type how many you counted, or 0 for an item that is gone. An item kept in cartons takes cartons and pieces, or pieces alone. Leave an item empty if you did not count it.</Note>
       {/* Issue #681: the person counting always sees that their work is kept, and where. */}
       <p className="hint count-saved-all" role="status" data-testid="count-saved-all">{savedWords}</p>
+      {saving.other && <p className="hint" data-testid="count-other-tab">{saving.other === 'committed' ? 'Counted and saved in another tab' : 'This count is also open in another tab'}</p>}
       <div data-tour="count-search">
         <ItemCombobox
           id="count-search"
@@ -446,25 +443,6 @@ function CountSheet({ branchId, saveKey }: { branchId: string; saveKey: string }
   );
 }
 
-/**
- * Issue #681: the count of this branch on this device, for one tab at a time. A tab that another tab took the count from says
- * so and counts nothing, until the person counts here again, which reads the count afresh.
- */
-function CountHere({ branchId }: { branchId: string }) {
-  const { me } = useStaff();
-  const saveKey = countKey(typeof window === 'undefined' ? '' : window.location.host, branchId, me.user_id ?? me.email ?? 'staff');
-  const tab = useCountTab(saveKey);
-  if (!tab.mine) {
-    return (
-      <div className="alert alert-info" role="status" data-testid="count-other-tab">
-        <p>Count stock is open in another tab or window, and your counts are kept there.</p>
-        <button type="button" onClick={tab.takeOver}>Count here instead</button>
-      </div>
-    );
-  }
-  return <CountSheet key={tab.epoch} branchId={branchId} saveKey={saveKey} />;
-}
-
 export function StocktakePage() {
   const { branchId } = useStockingBranch();
   return (
@@ -474,7 +452,7 @@ export function StocktakePage() {
       ) : (
         <>
           {/* Keyed by branch, so a branch switch starts afresh from that branch's own saved count (review of #681). */}
-          <CountHere key={branchId} branchId={branchId} />
+          <CountSheet key={branchId} branchId={branchId} />
         </>
       )}
     </Gate>

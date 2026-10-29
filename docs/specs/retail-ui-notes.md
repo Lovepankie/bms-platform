@@ -1427,26 +1427,17 @@ the items show only while you search, and go away once one is picked. Every item
   told a person to finish a count now say to commit it.
 - **Count stock: every count is kept as it is typed (issue #681, owner 29 Oct 2026).** Each change is written at once to the
   device's local storage under `bms.count.<host>.<branch>.<user>` (the counts, the cartons with their pack, the lines found
-  and done, the server draft's id and any draft still to discard), and the page restores it when it opens again; a count for
-  an item no longer on the sheet is left out. Once typing rests for 1.5 seconds and the device is online, the valid counts
-  go to a server draft count (`POST /retail/stocktakes`); each new draft replaces the one before, which is discarded
-  (`POST /retail/stocktakes/{id}/discard`, #656), and a draft that could not be discarded offline is discarded once the
-  connection is back. The review's own draft becomes the one kept. Only **Commit the count** commits. Each valid count
-  shows **Saved** under its box once it is on the device, and a polite status line at the top says **All counts saved, N
-  items**, **Saving...** while it sends, **Saved on this phone, will send when online** offline, or **Not saved yet. Keep
-  this page open.** when the device cannot store it. After Commit the count a success screen (the kit's `SuccessScreen`)
-  says **Stock updated for N items** with how many went up, went down and matched and the first five changes in words
-  ("Test Lamp: 2 pieces more"), with **Start another count** and **Back to My stock**, and a success toast; the device and
-  the server keep nothing more of that count. Every draft Count stock makes carries the note "Counted on Count stock", so
-  it never takes a draft Sell made for one of its own. On opening, Count stock reads the person's own drafts at the branch
-  once (`GET /retail/stocktakes?branch_id=`): with nothing saved on this device it picks up the newest count from another
-  device, and a draft whose send a reload or a lost connection cut off (its lines are kept on the device as pending before
-  each send) is found by its lines and discarded, so no draft is left open where nobody can see it. A send that fails is
-  tried again after 10 seconds, whether the connection dropped or the server refused it. One tab or window counts at a
-  time on a device: the one that opens Count stock last takes the count, and the other shows "Count stock is open in another
-  tab or window, and your counts are kept there." with **Count here instead**, which reads the count afresh. A branch switch
-  opens that branch's own saved count. A restored count opened offline says "Saved on this phone, will send when online",
-  never All counts saved, and a restored count of an item no longer on the sheet is dropped once the sheet is read.
+  and done, and when each item's count last changed), written before the screen is drawn, and the page restores it when it
+  opens again. Nothing goes to the server while counting (owner, round 2 of the review): the draft is made at **Review the
+  difference** and committed only by **Commit the count**, as before. Each valid count shows **Saved** under its box once it
+  is stored, and a polite status line at the top says **Saved on this phone, N items**, or **Not saved on this phone. Keep
+  this page open.** when the device cannot store it. Two tabs of the same count hear each other through the `storage`
+  event and merge item by item, the newer count of each item winning; the page then says "This count is also open in
+  another tab". A commit removes the stored count, and another tab of it starts empty and says "Counted and saved in
+  another tab". The page is keyed by branch, so a branch switch opens that branch's own saved count. A restored count of
+  an item no longer on the sheet is dropped once the sheet is read. After Commit the count a success screen (the kit's
+  `SuccessScreen`) says **Stock updated for N items** with how many went up, went down and matched and the first five
+  changes in words ("Test Lamp: 2 pieces more"), with **Start another count** and **Back to My stock**, and a success toast.
 - **Count stock: the server checks big drops too (issue #636).** **Commit the count** sends the product ids of the ticked lines,
   and the server refuses a commit that leaves out a big drop with 409 `big_drop_not_acknowledged`, naming the lines, so a draft
   committed from another tab or the API never writes one unasked. The screen shows the server's words under the button.
