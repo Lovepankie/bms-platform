@@ -631,7 +631,8 @@ export interface RetailApi {
   stockedBranches(): Promise<string[]>;
   /** The branches in the caller's stock scope with their roles (ADR-033); 404 capability_not_enabled while branch_roles is off. */
   branchRoles(): Promise<BranchRole[]>;
-  setBranchRole(branchId: string, role: 'store' | 'shop' | 'both'): Promise<BranchRole>;
+  /** A selling branch's role; a store is marked with sells_goods on Branches, never here (ADR-104). */
+  setBranchRole(branchId: string, role: 'shop' | 'both'): Promise<BranchRole>;
   /** The tenant's capabilities and profile (administrators only, ADR-033 section 1). */
   capabilities(): Promise<CapabilitiesRead>;
   /** Switches the profile or flags under If-Match; the server audits the old and new values. */

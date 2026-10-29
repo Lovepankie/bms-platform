@@ -41,7 +41,7 @@ class BranchRoleController {
 
     @Schema(name = "SetRetailBranchRoleRequest")
     record SetRoleRequest(
-            @NotBlank @Schema(allowableValues = {"store", "shop", "both"})
+            @NotBlank @Schema(allowableValues = {"shop", "both"})
             String role) {}
 
     @GetMapping
@@ -59,7 +59,8 @@ class BranchRoleController {
     @RequiresPermission(BranchRoleService.PERMISSION)
     @Operation(
             summary =
-                    "Set a branch's role (store, shop or both); audited; 422 branch_has_open_work while a transfer is unreceived",
+                    "Set a selling branch's role (shop or both; a store is sells_goods false on PATCH /branches/{id}); audited;"
+                            + " 422 branch_is_store for a store, branch_has_open_work while a transfer is unreceived",
             operationId = "setRetailBranchRole")
     BranchRoleItem set(@PathVariable("branch_id") UUID branchId, @Valid @RequestBody SetRoleRequest request) {
         return BranchRoleItem.of(service.change(branchId, request.role()));

@@ -23013,7 +23013,7 @@
       "SetRetailBranchRoleRequest" : {
         "properties" : {
           "role" : {
-            "enum" : [ "store", "shop", "both" ],
+            "enum" : [ "shop", "both" ],
             "minLength" : 1,
             "type" : "string"
           }
@@ -35709,7 +35709,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Set a branch's role (store, shop or both); audited; 422 branch_has_open_work while a transfer is unreceived",
+        "summary" : "Set a selling branch's role (shop or both; a store is sells_goods false on PATCH /branches/{id}); audited; 422 branch_is_store for a store, branch_has_open_work while a transfer is unreceived",
         "tags" : [ "retail-stock" ]
       }
     },

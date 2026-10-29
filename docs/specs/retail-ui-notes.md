@@ -467,7 +467,8 @@ The administrator's two screens for the trade capabilities, and the rule every c
   the old and new values. Afterwards `/me` is read again, so the menu follows at once. A feature whose pages are not
   released yet says so; it can be switched on and changes nothing visible.
 - **Branch roles** (`/staff/retail/branch-roles`, tile "Branch roles", `retail.branch_role.manage`): one choice per
-  branch (store, shop, both). It exists only while `branch_roles` is on.
+  branch (shop or both). A Store is shown as "Store: keeps stock, does not sell" with a link to Branches, where it is
+  marked and unmarked (ADR-104); it has no choice here. It exists only while `branch_roles` is on.
 - **The rule** (`SCREEN_CAPABILITY` in `retail/permissions.ts`): a screen of a capability is offered, in the tiles,
   the menu rows and the route gate, only while `/me` lists the capability, whatever permissions the user
   holds. A screen not listed there behaves as before capabilities existed, so a shop (every capability off) sees the

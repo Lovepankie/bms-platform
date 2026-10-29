@@ -98,7 +98,7 @@ class LocationService {
         Principal principal = CurrentPrincipal.require();
         List<Branch> visible = context.visible(READ, stockRepo.branchesHoldingBalance(context.inactiveInScope(READ)));
         Map<UUID, BranchRole> role = new LinkedHashMap<>();
-        visible.forEach(b -> role.put(b.id(), roles.roleOf(b.id())));
+        visible.forEach(b -> role.put(b.id(), roles.roleOf(b)));
         List<Branch> columns = ordered(visible, role);
         List<UUID> ids = columns.stream().map(Branch::id).toList();
         String currency = tenant.profile().currency();

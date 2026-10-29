@@ -32,6 +32,8 @@ capabilities inside retail.
    `branch_role_forbids_sales`); a store and a shop both restock and transfer. There is no "can
    receive purchases" flag: restocking is the action, permission and branch scope decide who may,
    and the role only removes what a branch cannot do. The core `branches` table is not changed. `retail.stock` owns branch roles and capability reads; sales and purchasing depend only on stock and catalogue for them.
+   *Superseded in part by ADR-104 (issue #371, migration V115): a store is the branch flag `sells_goods = false` of ADR-048, the
+   role keeps only `shop` and `both`, a Store reads as `store`, and a refused sale answers `branch_does_not_sell`.*
 4. **The retail price stays the product's `sell_minor`.** Named lists, quantity breaks, effective
    dates and customer groups add to it; a sale with no list is priced as today. The below-cost rule
    and cost visibility apply to the resolved price.

@@ -48,7 +48,6 @@ import com.rincoltech.bms.retail.sales.internal.SalesPricing.Decision;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.LinePricing;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
-import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.CreditPeriods;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -104,7 +103,6 @@ class SalesService {
     private final CurrentTenant tenant;
     private final BusinessClock clock;
     private final AuditLog audit;
-    private final BranchRoles roles;
     private final RetailCapabilities capabilities;
     private final SalesPricing pricing;
     private final RetailPricing priceLists;
@@ -125,7 +123,6 @@ class SalesService {
             CurrentTenant tenant,
             BusinessClock clock,
             AuditLog audit,
-            BranchRoles roles,
             RetailCapabilities capabilities,
             SalesPricing pricing,
             RetailPricing priceLists,
@@ -145,7 +142,6 @@ class SalesService {
         this.tenant = tenant;
         this.clock = clock;
         this.audit = audit;
-        this.roles = roles;
         this.capabilities = capabilities;
         this.pricing = pricing;
         this.priceLists = priceLists;
@@ -288,8 +284,7 @@ class SalesService {
         }
         boolean agreed = agreements != null;
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
-        // ADR-033: a store never sells; with branch_roles off every branch acts as both.
-        roles.requireMaySell(branch);
+        // A store never sells (ADR-048, ADR-104).
         branches.requireSells(branch, "branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
         boolean offline = r.offline();
@@ -991,8 +986,7 @@ class SalesService {
     Resolution resolve(ResolveRequest r) {
         capabilities.require(RetailCapabilities.PRICE_LISTS);
         UUID branch = branches.resolveStocking("retail.sale.create", r.branchId());
-        // The same refusal as the sale: a store never sells, so it is not priced either (ADR-033).
-        roles.requireMaySell(branch);
+        // The same refusal as the sale: a store never sells, so it is not priced either (ADR-048, ADR-104).
         branches.requireSells(branch, "branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
         LocalDate saleDate = r.saleDate() == null ? today : r.saleDate();

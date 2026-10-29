@@ -43,7 +43,6 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.LinePricing;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
 import com.rincoltech.bms.retail.sales.internal.SalesService.Priced;
-import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -99,7 +98,6 @@ class CustomerOrdersService {
     private final StockLedger stock;
     private final RetailBooks books;
     private final RetailBranchContext branches;
-    private final BranchRoles roles;
     private final RetailCapabilities capabilities;
     private final Idempotency idempotency;
     private final TenantSequences sequences;
@@ -116,7 +114,6 @@ class CustomerOrdersService {
             StockLedger stock,
             RetailBooks books,
             RetailBranchContext branches,
-            BranchRoles roles,
             RetailCapabilities capabilities,
             Idempotency idempotency,
             TenantSequences sequences,
@@ -131,7 +128,6 @@ class CustomerOrdersService {
         this.stock = stock;
         this.books = books;
         this.branches = branches;
-        this.roles = roles;
         this.capabilities = capabilities;
         this.idempotency = idempotency;
         this.sequences = sequences;
@@ -156,7 +152,6 @@ class CustomerOrdersService {
         Principal principal = CurrentPrincipal.require();
         UUID branch = branches.resolveStocking(MANAGE, r.branchId());
         // An order is filled from a shop's shelf and becomes a sale there; a store never sells (ADR-048).
-        roles.requireMaySell(branch);
         branches.requireSells(branch, "branch_id");
         LocalDate today = today();
         List<FieldProblem> problems = new ArrayList<>();
@@ -477,7 +472,6 @@ class CustomerOrdersService {
         if (h.version() != expected) {
             throw Versions.conflict(h.version());
         }
-        roles.requireMaySell(h.branchId());
         branches.requireSells(h.branchId(), "branch_id");
         List<StoredLine> was = repo.lines(id);
         Map<LineKey, List<StoredLine>> onOrder = new HashMap<>();

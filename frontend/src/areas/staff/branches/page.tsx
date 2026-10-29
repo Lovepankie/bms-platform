@@ -20,10 +20,10 @@ import { useComeBack } from '../../../app/ui/EmptyChoice';
 // rules of the business logo (issue #461, ADR-068); a branch without one shows the business logo on its receipts. An administrator adds
 // a shop, a store or a head office that keeps no goods (issue #581, ADR-089); the new branch is in every list at once.
 
-// The ADR-033 branch role, when roles are on, shown beside the Store flag so the two are never read as one (ADR-048).
+// The ADR-033 branch role, when roles are on. A store is the Store flag and its badge (ADR-104), so only a shop is named here.
 const roleWords = (roles: { branch_id?: string; role?: string }[] | undefined, id: string | undefined): string | null => {
   const role = roles?.find((r) => r.branch_id === id)?.role;
-  return role && role !== 'both' ? `Branch role: ${role}` : null;
+  return role === 'shop' ? 'Branch role: shop' : null;
 };
 
 /** The types the server takes for a logo, as on Business set-up; it checks the content and re-encodes it anyway. */

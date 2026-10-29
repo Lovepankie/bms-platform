@@ -4390,7 +4390,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set a branch's role (store, shop or both); audited; 422 branch_has_open_work while a transfer is unreceived */
+        /** Set a selling branch's role (shop or both; a store is sells_goods false on PATCH /branches/{id}); audited; 422 branch_is_store for a store, branch_has_open_work while a transfer is unreceived */
         put: operations["setRetailBranchRole"];
         post?: never;
         delete?: never;
@@ -19158,7 +19158,7 @@ export interface components {
         };
         SetRetailBranchRoleRequest: {
             /** @enum {string} */
-            role: "store" | "shop" | "both";
+            role: "shop" | "both";
         };
         SetRetailStockMinimumRequest: {
             /**

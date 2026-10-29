@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,8 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Branch roles (ADR-033, docs/specs/trade-capabilities.md section 2; table {@code
  * retail_branch_roles}). A missing row means {@code both}. Roles are read and changed only with
- * the {@code branch_roles} capability on; the sales path asks {@link #requireMaySell} and nothing
- * else in retail is gated by a role.
+ * the {@code branch_roles} capability on. A Store is the branch flag {@code sells_goods} false
+ * (ADR-048, ADR-104): it reads as {@code store} and is never stored here, so the role and the flag
+ * cannot disagree, and nothing in retail is gated by a role.
  */
 @Service
 class BranchRoleService implements BranchRoles {
@@ -52,24 +52,11 @@ class BranchRoleService implements BranchRoles {
 
     @Override
     @Transactional(readOnly = true)
-    public BranchRole roleOf(UUID branchId) {
+    public BranchRole roleOf(Branches.Branch branch) {
         if (!capabilities.enabled(RetailCapabilities.BRANCH_ROLES)) {
             return BranchRole.BOTH;
         }
-        return stored(branchId);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public void requireMaySell(UUID branchId) {
-        if (!roleOf(branchId).sells()) {
-            throw new ApiException(
-                    HttpStatus.UNPROCESSABLE_CONTENT,
-                    "branch_role_forbids_sales",
-                    "This branch does not sell",
-                    "The branch is a store, so it cannot make a sale. Sell from a shop.",
-                    List.of(new FieldProblem("branch_id", "branch_role_forbids_sales", "This branch is a store.")));
-        }
+        return branch.sellsGoods() ? stored(branch.id()) : BranchRole.STORE;
     }
 
     /** The active branches the caller may read stock in, with their roles. */
@@ -87,7 +74,7 @@ class BranchRoleService implements BranchRoles {
         return context.visible("retail.stock.read").stream()
                 .filter(Branches.Branch::active)
                 .map(b -> {
-                    BranchRole r = roles.getOrDefault(b.id(), BranchRole.BOTH);
+                    BranchRole r = b.sellsGoods() ? roles.getOrDefault(b.id(), BranchRole.BOTH) : BranchRole.STORE;
                     return new Item(b.id(), b.code(), b.name(), r.wire(), r.sells());
                 })
                 .toList();
@@ -104,8 +91,14 @@ class BranchRoleService implements BranchRoles {
                 .findFirst()
                 .orElseThrow(ApiException::notFound);
         BranchRole next = BranchRole.parse(role)
-                .orElseThrow(() -> ApiException.validation(
-                        List.of(new FieldProblem("role", "invalid", "Use store, shop or both."))));
+                .filter(BranchRole::sells)
+                .orElseThrow(() -> ApiException.validation(List.of(new FieldProblem(
+                        "role", "invalid", "Use shop or both. A store is marked on the Branches screen."))));
+        if (!branch.sellsGoods()) {
+            throw ApiException.rule(
+                    "branch_is_store",
+                    "This branch is a store. Mark it as selling again on the Branches screen before choosing shop or both.");
+        }
         BranchRole before = stored(branchId);
         if (before != next) {
             if (hasOpenWork(branchId)) {

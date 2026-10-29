@@ -299,7 +299,7 @@ export function capabilityOn(me: Pick<Me, 'module_capabilities'>, module: string
 /**
  * Whether a sale may be made at the branch. `roles` is undefined while branch_roles is off or not yet
  * read, and then every branch sells, as before roles existed. The server refuses a sale at a store
- * whatever this says (422 branch_role_forbids_sales).
+ * whatever this says (422 branch_does_not_sell; a store is the branch's sells_goods flag, ADR-104).
  */
 export function sellsAt(roles: BranchRole[] | undefined, branchId: string | null | undefined): boolean {
   if (!roles || !branchId) return true;

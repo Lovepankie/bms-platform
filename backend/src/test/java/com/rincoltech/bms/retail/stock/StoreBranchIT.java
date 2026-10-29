@@ -280,6 +280,23 @@ class StoreBranchIT extends IntegrationTest {
 
     // ---------------------------------------------------------------------------------------- marking a branch
 
+    /** A credit sale written off (#349, ADR-043) no longer owes, so it does not block marking the branch (#371). */
+    @Test
+    void aWrittenOffCreditSaleDoesNotBlockMarking() {
+        retail.stockUp(t.secondBranch(), product, "5");
+        UUID sale = RetailTestSupport.id(retail.sell(t.secondBranch(), "credit", product, "1"));
+        assertThat(code(patch(t.secondBranch(), Map.of("sells_goods", false))))
+                .isEqualTo("branch_has_open_credit_sales");
+        ResponseEntity<JsonNode> written = retail.postKeyed(
+                "/sales/" + sale + "/write-off",
+                Map.of("reason", "Test buyer left town"),
+                ADMIN + ",retail.credit.write_off,retail.credit.manage",
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(written.getStatusCode()).as("%s", written.getBody()).isEqualTo(HttpStatus.CREATED);
+        markStore(t.secondBranch());
+    }
+
     /** A credit sale still owing blocks marking the branch; once it is paid the branch can be marked. */
     @Test
     void markingIsRefusedWhileACreditSaleIsOwing() {

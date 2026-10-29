@@ -1113,21 +1113,16 @@ class RetailPriceListsIT extends IntegrationTest {
     /** The resolve route refuses a store as the sale does, and the reason column is bounded as the API is. */
     @Test
     void aStoreIsNotPricedAndTheReasonHasTheSameBoundAsTheApi() {
-        capability("branch_roles", true);
-        ResponseEntity<JsonNode> role = api.call(
-                HttpMethod.PUT,
-                "/branch-roles/" + t.secondBranch(),
-                Map.of("role", "store"),
-                ADMIN + ",retail.branch_role.manage",
-                "*",
-                Map.of());
-        assertThat(role.getStatusCode()).as("%s", role.getBody()).isEqualTo(HttpStatus.OK);
+        TestDatabase.owner()
+                .sql("UPDATE branches SET sells_goods = false WHERE id = ?")
+                .param(t.secondBranch())
+                .update();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("branch_id", t.secondBranch());
         body.put("lines", List.of(Map.of("product_id", pen, "qty", "1")));
         ResponseEntity<JsonNode> store = api.post("/prices/resolve", body, CLERK);
         assertThat(store.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(code(store)).isEqualTo("branch_role_forbids_sales");
+        assertThat(code(store)).isEqualTo("branch_does_not_sell");
         body.put("branch_id", t.headOffice());
         assertThat(api.post("/prices/resolve", body, CLERK).getStatusCode()).isEqualTo(HttpStatus.OK);
 

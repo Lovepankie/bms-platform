@@ -352,16 +352,17 @@ export const savingsPage: Tour = {
   ],
 };
 
+// Version 2: a store is shown, and marked on Branches, not picked here (issue #371, ADR-104).
 export const branchRolesPage: Tour = {
   id: 'page-branch-roles',
-  version: 1,
+  version: 2,
   title: 'This page: branch roles',
   audience: (me) => held(me, BRANCH_ROLE) && held(me, STOCK_READ) && capable(me, 'branch_roles'),
   autoStart: false,
   page: '/staff/retail/branch-roles',
   steps: [
     step({ id: 'help', target: 'branch-roles-help', title: 'Stores and shops', body: 'A store keeps stock and feeds the shop. Only a shop sells to customers. A branch can be both.' }),
-    step({ id: 'roles', target: 'retail-roles', title: 'Pick a role for each branch', body: 'Choose Store, Shop or Both under the branch name. It saves at once. Tap Stock to see what each branch holds.' }),
+    step({ id: 'roles', target: 'retail-roles', title: 'Pick a role for each branch', body: 'Choose Shop or Both under the branch name. It saves at once. A store is marked on Branches. Tap Stock to see what each branch holds.' }),
   ],
 };
 

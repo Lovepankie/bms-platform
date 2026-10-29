@@ -651,7 +651,7 @@ public class RlsIsolationIT {
                 .params(UUID.randomUUID(), t.tenantId(), transfer, t.tenantId())
                 .update();
         // Retail branch roles (ADR-033, #191).
-        owner.sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'store')")
+        owner.sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'shop')")
                 .params(t.tenantId(), t.secondBranch())
                 .update();
         // Retail optional documents (ADR-033, #197): a prefix, a counter, a quotation with a line and its document.

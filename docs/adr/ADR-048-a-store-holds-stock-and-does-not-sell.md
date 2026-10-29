@@ -3,7 +3,8 @@
 ## Status
 
 Proposed (2026-10-20, issue #366; the product owner decided the behaviour on 20 October 2026, the ADR is not yet accepted). Builds on ADR-041 and ADR-033. The migration is `V65` (merge order: #349 `V64`, this one `V65`, #359 `V66`, #361 `V67`). Amended by ADR-089 (a branch is
-added from the app as a shop, a store or a head office, with its code made from the name when none is typed).
+added from the app as a shop, a store or a head office, with its code made from the name when none is typed). Amended by ADR-104
+(the ADR-033 role `store` is folded into this flag, migration V115; the paragraph "Relationship to branch roles" is superseded).
 
 ## Context
 
@@ -47,7 +48,8 @@ sell)", that works for every business without switching a capability on.
   receipt, transfer and stock-take forms include it. A Store is still listed, and the user's last choice is honoured, so stock work is never blocked.
 - **Relationship to branch roles (ADR-033).** The role `store` is a retail setting behind a capability that is off by default; the flag is a property of
   the branch that applies to every tenant and is always enforced. Both refuse a sale, with different codes (`branch_role_forbids_sales`,
-  `branch_does_not_sell`). A later change may fold the role into the flag; this ADR leaves the role as it is.
+  `branch_does_not_sell`). A later change may fold the role into the flag; this ADR leaves the role as it is. *Superseded by
+  ADR-104: the role `store` is now this flag, and only `branch_does_not_sell` is answered.*
 - **Permission: the existing `core.branches.manage`.** No permission is added. The refusal applies to every caller, administrators included.
 
 ## Consequences

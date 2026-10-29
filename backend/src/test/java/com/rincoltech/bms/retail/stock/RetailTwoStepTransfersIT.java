@@ -646,7 +646,7 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         ResponseEntity<JsonNode> refused = api.call(
                 HttpMethod.PUT,
                 "/branch-roles/" + t.secondBranch(),
-                Map.of("role", "store"),
+                Map.of("role", "shop"),
                 ROLE_MANAGE,
                 "*",
                 Map.of());
@@ -657,7 +657,7 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         assertThat(api.call(
                                 HttpMethod.PUT,
                                 "/branch-roles/" + t.secondBranch(),
-                                Map.of("role", "store"),
+                                Map.of("role", "shop"),
                                 ROLE_MANAGE,
                                 "*",
                                 Map.of())
@@ -739,20 +739,18 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
 
     // ------------------------------------------------------------------- stock by store and shop
 
-    /** Stores first, then shops; a subtotal per role and a combined total; a scoped caller sees its own columns. */
+    /**
+     * Stores first, then shops; a subtotal per role and a combined total; a scoped caller sees its own columns. A store is the
+     * Store flag (ADR-104).
+     */
     @Test
     void stockByLocationGroupsByRoleWithSubtotalsAndACombinedTotal() {
         assertThat(putCapabilities(Map.of("branch_roles", true)).getStatusCode())
                 .isEqualTo(HttpStatus.OK);
-        assertThat(api.call(
-                                HttpMethod.PUT,
-                                "/branch-roles/" + t.headOffice(),
-                                Map.of("role", "store"),
-                                ROLE_MANAGE,
-                                "*",
-                                Map.of())
-                        .getStatusCode())
-                .isEqualTo(HttpStatus.OK);
+        TestDatabase.owner()
+                .sql("UPDATE branches SET sells_goods = false WHERE id = ?")
+                .param(t.headOffice())
+                .update();
         assertThat(api.call(
                                 HttpMethod.PUT,
                                 "/branch-roles/" + t.secondBranch(),

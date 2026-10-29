@@ -79,6 +79,12 @@ export function mockMe(role: string | undefined): Me & { modules: string[] } {
 
 let profitAccess = true;
 let transferReceipt = false;
+let storeBranches: string[] = [];
+
+/** Marks branches as stores (sells_goods false) for every mock instance: a store is the branch's flag, not a role (ADR-104). */
+export function setMockStores(branchIds: string[]): void {
+  storeBranches = branchIds;
+}
 
 /** Forces the two-step transfer on for every mock instance, besides the capability a mock instance's settings switch (ADR-033). */
 export function setMockTransferReceipt(on: boolean): void {
@@ -253,9 +259,10 @@ function checkedPrefix(rows: { id: string; code_prefix: string }[], self: string
 }
 
 export function createMockRetail(): RetailApi {
-  // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off.
-  const roles = new Map<string, 'store' | 'shop' | 'both'>();
-  const roleOf = (branch: string): 'store' | 'shop' | 'both' => roles.get(branch) ?? 'both';
+  // Branch roles and capabilities of this mock instance (ADR-033): every branch both, every capability off. A store is read
+  // from the branch's flag (setMockStores, ADR-104) and is never stored as a role.
+  const roles = new Map<string, 'shop' | 'both'>();
+  const roleOf = (branch: string): 'store' | 'shop' | 'both' => (storeBranches.includes(branch) ? 'store' : roles.get(branch) ?? 'both');
   let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shops', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 1 };
   const twoStep = () => transferReceipt || caps.value['transfer_receipt'] === true;
   const read = (): CapabilitiesRead => ({ capabilities: { ...caps.value, ...Object.fromEntries(MOCK_FLAGS.map((k) => [k, caps.value[k] === true])) }, version: caps.version });
@@ -1392,12 +1399,13 @@ export function createMockRetail(): RetailApi {
 
     stockedBranches: () => delay([BRANCH_A, BRANCH_B].filter((b) => [...products.values()].some((p) => bal(b, p.id) > 0))),
 
-    branchRoles: () => delay(MOCK_BRANCHES.map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: roles.get(b.id) ?? 'both', can_sell: (roles.get(b.id) ?? 'both') !== 'store' }))),
+    branchRoles: () => delay(MOCK_BRANCHES.map((b) => ({ branch_id: b.id, code: b.code, name: b.name, role: roleOf(b.id), can_sell: roleOf(b.id) !== 'store' }))),
 
     setBranchRole: (branchId, role) => {
       const b = MOCK_BRANCHES.find((x) => x.id === branchId);
+      if (storeBranches.includes(branchId)) refuse(422, 'branch_is_store', 'This branch is a store. Mark it as selling again on Branches first.');
       roles.set(branchId, role);
-      return delay({ branch_id: branchId, code: b?.code, name: b?.name, role, can_sell: role !== 'store' });
+      return delay({ branch_id: branchId, code: b?.code, name: b?.name, role, can_sell: true });
     },
 
     capabilities: () => delay(read()),

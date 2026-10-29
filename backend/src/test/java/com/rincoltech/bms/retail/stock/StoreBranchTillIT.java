@@ -143,6 +143,22 @@ class StoreBranchTillIT extends IntegrationTest {
         assertThat(quote(t.headOffice()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
     }
 
+    /**
+     * A branch that keeps no goods (ADR-041) does not quote, as it does not sell (#371, ADR-104): a head office with the old role
+     * store, which became both, never starts issuing quotations.
+     */
+    @Test
+    void aBranchThatKeepsNoGoodsDoesNotQuote() {
+        TestDatabase.owner()
+                .sql("UPDATE branches SET stocks_goods = false WHERE id = ?")
+                .param(t.secondBranch())
+                .update();
+        ResponseEntity<JsonNode> refused = quote(t.secondBranch());
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(code(refused)).isEqualTo("branch_not_stocking");
+        assertThat(quote(t.headOffice()).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
     /** A branch can be created as a store, and then refuses a sale. */
     @Test
     void aStoreCanBeCreatedAsOne() {

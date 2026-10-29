@@ -1188,29 +1188,18 @@ class RetailOfflineSalesIT extends IntegrationTest {
         return reported.getBody().get("id").asString();
     }
 
-    /** A refusal is reported only for a branch that may sell, as the sale path checks: never for a store (ADR-033). */
+    /** A refusal is reported only for a branch that may sell, as the sale path checks: never for a store (ADR-048, ADR-104). */
     @Test
     void aReportForAStoreIsRefusedAsTheSaleWouldBe() {
-        String settings = "core.settings.manage";
-        String etag = api.get("/settings/capabilities", settings).getHeaders().getETag();
-        assertThat(api.call(
-                                HttpMethod.PUT,
-                                "/settings/capabilities",
-                                Map.of("branch_roles", true),
-                                settings,
-                                "*",
-                                etag == null ? Map.of() : Map.of("If-Match", etag))
-                        .getStatusCode())
-                .isEqualTo(HttpStatus.OK);
         TestDatabase.owner()
-                .sql("INSERT INTO retail_branch_roles (tenant_id, branch_id, role) VALUES (?, ?, 'store')")
-                .params(t.tenantId(), t.headOffice())
+                .sql("UPDATE branches SET sells_goods = false WHERE id = ?")
+                .param(t.headOffice())
                 .update();
         UUID client = UUID.randomUUID();
         ResponseEntity<JsonNode> reported = api.post(
                 "/offline-failures", failureReport(client, offlineSale(client, Instant.now(), "1", 2_000)), SALES);
         assertThat(reported.getStatusCode()).as("%s", reported.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(reported.getBody().get("code").asString()).isEqualTo("branch_role_forbids_sales");
+        assertThat(reported.getBody().get("code").asString()).isEqualTo("branch_does_not_sell");
         assertThat(TestDatabase.owner()
                         .sql("SELECT count(*) FROM retail_offline_failures WHERE tenant_id = ?")
                         .param(t.tenantId())
@@ -1220,8 +1209,43 @@ class RetailOfflineSalesIT extends IntegrationTest {
         ResponseEntity<JsonNode> waiting =
                 api.post("/offline-waiting", Map.of("items", List.of(waitingAt(client))), SALES);
         assertThat(waiting.getStatusCode()).as("%s", waiting.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(waiting.getBody().get("code").asString()).isEqualTo("branch_role_forbids_sales");
+        assertThat(waiting.getBody().get("code").asString()).isEqualTo("branch_does_not_sell");
         assertThat(waitingRows()).isZero();
+    }
+
+    /** A branch that keeps no goods sells nothing (ADR-041), so no refusal or waiting sale is reported there (#371, ADR-104). */
+    @Test
+    void aReportForABranchThatKeepsNoGoodsIsRefused() {
+        TestDatabase.owner()
+                .sql("UPDATE branches SET stocks_goods = false WHERE id = ?")
+                .param(t.headOffice())
+                .update();
+        UUID client = UUID.randomUUID();
+        ResponseEntity<JsonNode> reported = api.post(
+                "/offline-failures", failureReport(client, offlineSale(client, Instant.now(), "1", 2_000)), SALES);
+        assertThat(reported.getStatusCode()).as("%s", reported.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(reported.getBody().get("code").asString()).isEqualTo("branch_not_stocking");
+        ResponseEntity<JsonNode> waiting =
+                api.post("/offline-waiting", Map.of("items", List.of(waitingAt(client))), SALES);
+        assertThat(waiting.getStatusCode()).as("%s", waiting.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(waiting.getBody().get("code").asString()).isEqualTo("branch_not_stocking");
+        assertThat(waitingRows()).isZero();
+    }
+
+    /** The stocking check of #371 does not refuse a closed branch: a refusal reported for a just-closed shop is still kept. */
+    @Test
+    void aReportForAClosedBranchIsStillTaken() {
+        TestDatabase.owner()
+                .sql("UPDATE branches SET status = 'inactive' WHERE id = ?")
+                .param(t.headOffice())
+                .update();
+        UUID client = UUID.randomUUID();
+        ResponseEntity<JsonNode> reported = api.post(
+                "/offline-failures", failureReport(client, offlineSale(client, Instant.now(), "1", 2_000)), SALES);
+        assertThat(reported.getStatusCode().is2xxSuccessful())
+                .as("%s", reported.getBody())
+                .isTrue();
+        assertThat(reported.getBody().get("status").asString()).isEqualTo("open");
     }
 
     /** A summary of a sale waiting on a phone is taken only for a branch the reporter sells at, as a report is. */

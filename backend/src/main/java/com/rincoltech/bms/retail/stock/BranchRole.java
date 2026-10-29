@@ -4,8 +4,9 @@ import java.util.Optional;
 
 /**
  * What a retail branch may do (ADR-033, docs/specs/trade-capabilities.md section 2): a
- * {@code store} never sells, a {@code shop} and a {@code both} branch do. A role only removes
- * what a branch cannot do; it never grants a permission or widens a user's branch scope.
+ * {@code store} never sells, a {@code shop} and a {@code both} branch do. Since ADR-104 a
+ * {@code store} is read from the Store flag ({@code branches.sells_goods} false) and is never
+ * stored as a role. A role never grants a permission or widens a user's branch scope.
  */
 public enum BranchRole {
     STORE("store", false),

@@ -34,7 +34,6 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleLineRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.SaleRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
 import com.rincoltech.bms.retail.sales.internal.SalesService.Priced;
-import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import com.rincoltech.bms.retail.stock.RetailCapabilities;
 import java.time.LocalDate;
@@ -69,7 +68,6 @@ class QuotationsService {
     private final DocumentsService docs;
     private final SalesService sales;
     private final SalesRepository salesRepo;
-    private final BranchRoles roles;
     private final RetailCapabilities capabilities;
     private final RetailBranchContext branches;
     private final Idempotency idempotency;
@@ -84,7 +82,6 @@ class QuotationsService {
             DocumentsService docs,
             SalesService sales,
             SalesRepository salesRepo,
-            BranchRoles roles,
             RetailCapabilities capabilities,
             RetailBranchContext branches,
             Idempotency idempotency,
@@ -96,7 +93,6 @@ class QuotationsService {
         this.docs = docs;
         this.sales = sales;
         this.salesRepo = salesRepo;
-        this.roles = roles;
         this.capabilities = capabilities;
         this.branches = branches;
         this.idempotency = idempotency;
@@ -126,9 +122,9 @@ class QuotationsService {
 
     private Made record(QuotationRequest r) {
         Principal principal = CurrentPrincipal.require();
-        UUID branch = branches.resolve(DocumentsService.ISSUE, r.branchId());
-        // A store never sells (ADR-033), so it does not quote either.
-        roles.requireMaySell(branch);
+        // A branch that keeps no goods has nothing to quote from (ADR-041, ADR-104), and a store never sells
+        // (ADR-048), so it does not quote either.
+        UUID branch = branches.resolveStocking(DocumentsService.ISSUE, r.branchId());
         branches.requireSells(branch, "branch_id");
         LocalDate today = docs.today();
         List<FieldProblem> problems = new ArrayList<>();

@@ -14,7 +14,6 @@ import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingAccepted;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingPage;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingRequest;
 import com.rincoltech.bms.retail.sales.internal.SalesApi.WaitingSale;
-import com.rincoltech.bms.retail.stock.BranchRoles;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,13 +42,11 @@ class OfflineSalesService {
     private final OfflineSalesRepository repo;
     private final AuditLog audit;
     private final RetailBranchContext branches;
-    private final BranchRoles roles;
 
-    OfflineSalesService(OfflineSalesRepository repo, AuditLog audit, RetailBranchContext branches, BranchRoles roles) {
+    OfflineSalesService(OfflineSalesRepository repo, AuditLog audit, RetailBranchContext branches) {
         this.repo = repo;
         this.audit = audit;
         this.branches = branches;
-        this.roles = roles;
     }
 
     @Transactional(readOnly = true)
@@ -120,9 +117,11 @@ class OfflineSalesService {
                     "Permission denied",
                     "You do not sell at this branch, so you cannot report a sale made there.");
         }
-        // The same may-sell-here checks as the sale path: a store never sells (ADR-033), so no sale is reported there.
-        roles.requireMaySell(r.branchId());
+        // The same may-sell-here checks as the sale path: a store never sells (ADR-048, ADR-104),
+        // and a branch that keeps no goods sells nothing (ADR-041), so no sale is reported there.
+        // A closed branch is not refused here, as before.
         branches.requireSells(r.branchId(), "branch_id");
+        branches.requireStocksReceiving(r.branchId(), "branch_id");
         repo.dropWaiting(r.clientSaleId());
         // A sale already recorded under this id (its answer was lost, then a later send was refused) is the sale: the
         // report is kept closed by it, never open for a manager to discard.
@@ -175,8 +174,8 @@ class OfflineSalesService {
                         "Permission denied",
                         "You do not sell at this branch, so you cannot report a sale waiting there.");
             }
-            roles.requireMaySell(branchId);
             branches.requireSells(branchId, "branch_id");
+            branches.requireStocksReceiving(branchId, "branch_id");
         }
         int accepted = 0;
         for (WaitingSale w : r.items()) {

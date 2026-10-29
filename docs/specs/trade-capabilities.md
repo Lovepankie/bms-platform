@@ -111,7 +111,12 @@ no tour yet: the slice that releases its pages adds the tour and marks it `ready
 ### 2.1 Roles
 
 A retail branch has a role, held in `retail_branch_roles` (a retail table, so the core `branches`
-table is untouched, as ADR-001 asks when only one vertical needs the concept):
+table is untouched, as ADR-001 asks when only one vertical needs the concept).
+
+> **Since ADR-104 (issue #371, migration V115)** a `store` is no longer stored here: it is the branch flag
+> `sells_goods = false` of ADR-048, set on the Branches screen, and reads as `store` while `branch_roles` is on. The table
+> holds only `shop` and `both`, a sale at a store is refused with 422 `branch_does_not_sell`, and the Store also takes no
+> payment, refund or cash in at its till (ADR-048). The rest of this section is the original design.
 
 | Role | Sells (sales screen, `POST /retail/sales`) | Restock (`POST /retail/purchases`, later goods received) | Transfer out | Transfer in | Usage, damage, stock-take |
 |---|---|---|---|---|---|

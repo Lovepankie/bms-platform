@@ -1463,9 +1463,10 @@ export const closePage: Tour = {
   ],
 };
 
+// Version 2: a store is marked on Branches, not picked here (issue #371, ADR-104).
 export const branchRolesCapability: Tour = {
   id: 'capability-branch-roles',
-  version: 1,
+  version: 2,
   title: 'New: branch roles',
   audience: (me) => held(me, 'retail.branch_role.manage'),
   autoStart: true,
@@ -1474,7 +1475,7 @@ export const branchRolesCapability: Tour = {
     {
       id: 'intro',
       title: 'Branch roles are on',
-      body: 'Each branch can now be a store, a shop or both. Stores keep stock and feed the shop. Only shops sell to customers.',
+      body: 'Each selling branch can now be a shop or both. A store is marked on Branches: it keeps stock, feeds the shop and does not sell.',
     },
     {
       id: 'tile',
@@ -1483,7 +1484,7 @@ export const branchRolesCapability: Tour = {
       module: 'retail',
       optional: true,
       title: 'Set the roles',
-      body: 'Open Branch roles to say which branches are stores and which are shops.',
+      body: 'Open Branch roles to see which branches are stores and say which are shops.',
     },
     {
       id: 'roles',
@@ -1491,7 +1492,7 @@ export const branchRolesCapability: Tour = {
       target: 'retail-roles',
       module: 'retail',
       title: 'Pick a role for each branch',
-      body: 'Until you pick, every branch works as before. A store cannot record a sale.',
+      body: 'Until you pick, every branch works as before. A store cannot record a sale; mark one on Branches.',
     },
   ],
 };

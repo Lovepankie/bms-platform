@@ -26,6 +26,7 @@ const BY_CODE: Record<string, string> = {
   module_not_enabled: 'Retail is not switched on for this business.',
   branch_required: 'Choose one branch in the Branch box at the top of the page first.',
   branch_role_forbids_sales: 'This branch is a store and does not sell. Choose a shop in the Branch box.',
+  branch_is_store: 'This branch is a store. Mark it as selling again on Branches before choosing shop or both.',
   branch_has_open_work: 'A stock move to or from this branch is not yet received. Finish it before changing the branch role.',
   capability_not_enabled: 'This is not switched on for this business.',
   // Price lists (ADR-033, issue #195).
