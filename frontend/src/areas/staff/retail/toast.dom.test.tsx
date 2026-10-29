@@ -30,14 +30,14 @@ describe('Toast', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('shows for four seconds, then goes', () => {
+  it('shows for six seconds, then goes', () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useToast());
     act(() => result.current.show('Saved.', 'info'));
     const { container, unmount } = render(<>{result.current.toast}</>);
     expect(container.querySelector('.toast-info')).not.toBeNull();
     unmount();
-    expect(TOAST_MS).toBe(4000);
+    expect(TOAST_MS).toBe(6000);
     act(() => vi.advanceTimersByTime(TOAST_MS));
     expect(result.current.toast).toBeNull();
   });

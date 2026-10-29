@@ -364,7 +364,7 @@ of the screens under it; the Catalogue home lists only those it may use (a sales
   as it stands now. A file with a problem row adds nothing. Adding again skips everything already there. The cost
   price column is accepted only with `retail.profit.read`.
 - **Messages.** Every save shows a green on-screen message (`Success`, `role="status"`) and a toast above the
-  bottom bar (`useToast` in `ui.tsx`, four seconds, hidden from assistive technology since the on-screen message
+  bottom bar (`useToast` in `ui.tsx`, six seconds, hidden from assistive technology since the on-screen message
   carries the same words). There was no toast helper in the app before this (only the `.toast` style), so
   `useToast` is the first and the other retail screens do not use it yet. Refusals use the existing `Problem` alert
   with the server's plain message.

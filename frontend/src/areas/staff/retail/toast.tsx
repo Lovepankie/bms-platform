@@ -6,12 +6,12 @@ import { announceToSheet } from '../../../app/ui/announce';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // A toast (the .toast class of app/ui/feedback.css, docs/ui-rules.md rule 15): a dark neutral pill at the bottom with a leading
-// icon for its kind, raised on top of the on-screen success message and gone after four seconds. A screen calls `useToast()`,
+// icon for its kind, raised on top of the on-screen success message and gone after six seconds (four was too short for slow readers, Hillary, 29 Oct 2026). A screen calls `useToast()`,
 // renders `toast` once and calls `show(message, 'success')` when a write succeeds, `show(message, 'error')` when it fails and
 // `show(message, 'info')` for anything else (a refusal, or a change that waits for approval). The tone has no default, so a
 // refusal can never draw the green check by omission (#508, docs/ui-rules.md rule 16).
 
-export const TOAST_MS = 4000;
+export const TOAST_MS = 6000;
 
 export type ToastTone = 'success' | 'error' | 'info';
 
