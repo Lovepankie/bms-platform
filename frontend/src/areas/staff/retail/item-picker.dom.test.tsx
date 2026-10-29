@@ -46,6 +46,8 @@ function open(node = <RecordSale />) {
 }
 
 const box = () => screen.getByRole('combobox', { name: PICKER_LABEL }) as HTMLInputElement;
+// The picker's matches, not the shop switcher's <option>s under the page title (issue #680).
+const matches = () => screen.queryAllByRole('option').filter((o) => o.tagName !== 'OPTION');
 
 function sold(extra: Partial<Sale> = {}): Sale {
   return { id: 's1', branch_id: branch, sale_no: 'S-1', sale_date: '2026-10-24', payment_method: 'cash', status: 'completed', total_minor: 6000, paid_minor: 6000, balance_minor: 0, lines: [{ product_id: 'p1', description: 'Test Bulb 9W', qty: '1.000', unit_price_minor: 6000, line_total_minor: 6000 }], ...extra };
@@ -66,7 +68,7 @@ describe('the item picker on the retail screens', () => {
     await screen.findByRole('combobox', { name: PICKER_LABEL });
     await new Promise((r) => setTimeout(r, 300));
     expect(listProducts).not.toHaveBeenCalled();
-    expect(screen.queryByRole('option')).toBeNull();
+    expect(matches()).toEqual([]);
     expect(screen.queryByText('Group by category')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Expand all' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Collapse all' })).toBeNull();
@@ -100,7 +102,7 @@ describe('the item picker on the retail screens', () => {
     await pickItem('Test Bulb 9W', { typed: 'bulb' });
     fireEvent.change(box(), { target: { value: 'lamp' } });
     await waitFor(() => expect(listProducts).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'lamp' })));
-    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(matches()).toHaveLength(0);
     fireEvent.keyDown(box(), { key: 'ArrowDown' });
     fireEvent.keyDown(box(), { key: 'Enter' });
     expect(document.getElementById('qty-1')).toBeNull();

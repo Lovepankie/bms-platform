@@ -5,7 +5,7 @@ import { useStaff } from '../context';
 import { RetailDashboard } from './dashboard';
 import { OwnSales } from './own-sales';
 import { ALL_SELLERS, WHOLESALE_SCREENS, canUse, holds, screensFor, showRetail } from './permissions';
-import { useCanSellAnywhere } from './ui';
+import { ShopHere, useCanSellAnywhere } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 
 // The Retail landing page: one big tile per screen the session may use. Nothing else is listed. The wholesale tools' pages
@@ -31,6 +31,7 @@ export function RetailHome() {
           <p>What would you like to do?</p>
         </div>
       </div>
+      <ShopHere />
       {dashboard && ownerFirst && <RetailDashboard />}
       {all.length === 0 && <NoAccess what="any retail pages" />}
       {screens.length > 0 && (

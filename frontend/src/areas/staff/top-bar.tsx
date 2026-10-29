@@ -10,7 +10,7 @@ import { Sheet } from '../../app/ui/Sheet';
 import { ALL_BRANCHES, branchLabel } from '../../auth/branch';
 import { icons } from '../../components/icons';
 import { useHelpSheet } from '../../tour/host';
-import { ShopLogo } from './branch-picker';
+import { BranchOptions, ShopLogo } from './branch-picker';
 
 // The parts of the staff top bar (issue #526): one 56px bar whose title is the business and the branch in use, tappable to
 // switch branch, and one menu at the right that holds who is signed in, Help, Light or dark and Sign out (Refresh is a button in
@@ -38,15 +38,8 @@ export function BranchTitle({ me, branch, onChoose }: { me: Me; branch: string |
         </span>
       </span>
       {choices > 1 && (
-        // empty: drawn only with two branches or more to switch between.
         <select className="top-title-select" aria-label="Branch" value={branch ?? ''} onChange={(e) => onChoose(e.target.value)}>
-          {me.all_branches && <option value={ALL_BRANCHES}>All branches</option>}
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {branchLabel(b)}
-              {b.stocks_goods === false ? ' (no stock)' : b.sells_goods === false ? ' (store)' : ''}
-            </option>
-          ))}
+          <BranchOptions me={me} />
         </select>
       )}
     </div>
