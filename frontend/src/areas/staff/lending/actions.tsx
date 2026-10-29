@@ -51,6 +51,12 @@ export function DateReset() {
   return <p className="field-hint" role="status">This draft was started on an earlier day, so its date is now today. Change it if the money moved on another day.</p>;
 }
 
+/**
+ * The latest date a money form's date field takes: today, but none on a draft whose key was sent (#672). That draft keeps the body it
+ * went with, so a date after today (a business in a zone ahead) must not stop the retry that posts it once.
+ */
+export const sentMax = (sent: boolean, today: string): string | undefined => (sent ? undefined : today);
+
 /** Said above a form whose draft went to the server on an earlier day without an answer (#670): its body is kept as sent. */
 export function SentBefore({ kind, on }: { kind: string; on: string | null }) {
   return on ? <p className="alert alert-info" role="status">This {kind} was sent on {showDate(on)} and may already be saved. Send it again to check.</p> : null;
@@ -104,7 +110,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   const loanId = loan.id ?? '';
   const refresh = useRefreshLoan(loanId);
   const today = businessToday();
-  const { key, draft, setDraft, finish, discard, sending, mended, sentBefore } = usePersistedDraft<RepayDraft>(`lending-repay:${me.user_id ?? ''}:${loanId}`, {
+  const { key, draft, setDraft, finish, discard, sending, mended, unmend, sent, sentBefore } = usePersistedDraft<RepayDraft>(`lending-repay:${me.user_id ?? ''}:${loanId}`, {
     amount: '',
     valueDate: today,
     method: 'cash',
@@ -140,7 +146,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
         {amountMinor !== null ? `Will record ${money(amountMinor, loan.currency)}` : 'Enter an amount above zero.'}
       </p>
       <label htmlFor="repay-date">Date paid</label>
-      <input id="repay-date" type="date" max={businessToday()} value={draft.valueDate} onChange={(e) => update({ valueDate: e.target.value })} />
+      <input id="repay-date" type="date" max={sentMax(sent, today)} value={draft.valueDate} onChange={(e) => { update({ valueDate: e.target.value }); unmend(); }} />
       {mended && <DateReset />}
       <MethodChoice name="repay-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="repay-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
@@ -162,7 +168,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
   const loanId = loan.id ?? '';
   const refresh = useRefreshLoan(loanId);
   const today = businessToday();
-  const { key, draft, setDraft, finish, sending, mended, sentBefore } = usePersistedDraft<DisburseDraft>(`lending-disburse:${me.user_id ?? ''}:${loanId}`, {
+  const { key, draft, setDraft, finish, sending, mended, unmend, sent, sentBefore } = usePersistedDraft<DisburseDraft>(`lending-disburse:${me.user_id ?? ''}:${loanId}`, {
     date: today,
     method: 'cash',
     reference: '',
@@ -193,7 +199,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
         Pays out {money(loan.approved_principal_minor, loan.currency)} to the member.
       </p>
       <label htmlFor="disburse-date">Disbursement date</label>
-      <input id="disburse-date" type="date" max={businessToday()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
+      <input id="disburse-date" type="date" max={sentMax(sent, today)} value={draft.date} onChange={(e) => { update({ date: e.target.value }); unmend(); }} />
       {mended && <DateReset />}
       <MethodChoice name="disburse-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="disburse-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />

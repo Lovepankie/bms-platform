@@ -72,14 +72,16 @@ export function dropDraft(store: DraftStore | null, name: string): void {
  * record) starts the next record: a fresh key, kept in the tab again and unsaved work again. `restore`, when given, mends a
  * draft read back from the tab before the form shows it (a date from an earlier day, #670), but only one whose key was never
  * sent: the form calls `sending` as it posts, and a retry of a sent key keeps the body it went with. `mended` says restore
- * changed the draft; `sentBefore` is the day a restored draft was sent, when that was an earlier business day.
+ * changed the draft, until the form calls `unmend` (the person changed what was mended, #672); `sent` says the key went to the
+ * server; `sentBefore` is the day a restored draft was sent, when that was an earlier business day.
  */
 export function usePersistedDraft<T>(
   name: string,
   initial: T,
   restore?: (saved: T) => T,
 ): {
-  key: string; draft: T; setDraft: Dispatch<SetStateAction<T>>; finish: () => void; discard: () => void; sending: () => void; mended: boolean; sentBefore: string | null;
+  key: string; draft: T; setDraft: Dispatch<SetStateAction<T>>; finish: () => void; discard: () => void; sending: () => void;
+  mended: boolean; unmend: () => void; sent: boolean; sentBefore: string | null;
 } {
   const store = useRef(tabStore()).current;
   const blank = useRef(initial).current;
@@ -89,6 +91,8 @@ export function usePersistedDraft<T>(
     return { saved: { ...s, draft }, mended: draft !== s.draft, sentBefore: s.sent && s.sent < businessToday() ? s.sent : null };
   });
   const [saved, setSaved] = useState<Saved<T>>(start.saved);
+  const [mended, setMended] = useState(start.mended);
+  const unmend = useCallback(() => setMended(false), []);
   const current = useRef(saved);
   current.current = saved;
   const done = useRef(false);
@@ -130,8 +134,11 @@ export function usePersistedDraft<T>(
   const discard = useCallback(() => {
     done.current = false;
     setFinished(false);
+    setMended(false);
     dropDraft(store, name);
     setSaved({ key: newIdempotencyKey(), draft: blank });
   }, [store, name, blank]);
-  return { key: saved.key, draft: saved.draft, setDraft, finish, discard, sending, mended: start.mended, sentBefore: start.sentBefore };
+  return {
+    key: saved.key, draft: saved.draft, setDraft, finish, discard, sending, mended, unmend, sent: saved.sent !== undefined, sentBefore: start.sentBefore,
+  };
 }

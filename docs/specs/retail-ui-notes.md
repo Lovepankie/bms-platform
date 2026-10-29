@@ -105,6 +105,10 @@ totals shown while typing are a preview; the server's response is the receipt.
   never changed, so a retry after a lost answer posts the same body under the same key once; restored on a later
   day, it says above the form "This repayment was sent on 28 Oct 2026 and may already be saved. Send it again to
   check." with its own kind and day.
+  Since #672 the line that the date is now today goes once the date is changed, and a sent draft's date field has
+  no latest date, so a date after today (sent from a business in a zone ahead) does not stop the retry that posts
+  it as it went. The shell sets the zone as it draws and again in an effect whose cleanup forgets it, so
+  StrictMode's mount, unmount and mount ends on the business's zone.
   The guard also counts `toLocaleString` on a name the file declares as a Date (`x = new Date(...)`, `x: Date`)
   and date-fns on `Date.now()` or `now`; it reads brackets, comments and reasons with strings blanked, so a
   bracket or URL in a string does not throw off a call's options and a reason counts only in a comment. Its known

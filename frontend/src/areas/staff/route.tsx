@@ -47,6 +47,19 @@ function useAccessToken() {
 // This device's notifications (ADR-050): registered again under whoever is signed in, and dropped on sign-out.
 const push = createPush();
 
+/**
+ * The signed-in business's zone for every default date (#667). Set as the shell draws, so the screens drawn in the same pass
+ * already take it, and again in an effect whose cleanup forgets it (#670), so StrictMode's mount, unmount and mount ends on the
+ * business's zone and leaving the shell goes back to Kampala (#672).
+ */
+export function useBusinessZone(zone: string | undefined | null): void {
+  setBusinessZone(zone);
+  useEffect(() => {
+    setBusinessZone(zone);
+    return () => setBusinessZone(undefined);
+  }, [zone]);
+}
+
 // A tenant admin who has not dismissed the set-up checklist lands on it once per page load.
 let setupShown = false;
 
@@ -78,13 +91,12 @@ function StaffLayout() {
       if (!ok && !saved) void navigate({ to: '/sign-in' });
     });
   }, [token, navigate, mock]);
-  // Leaving the staff shell forgets the business's zone, so the next screen or person starts from Kampala again (#670).
-  useEffect(() => () => setBusinessZone(undefined), []);
 
   const me = useQuery({ queryKey: ['me', token], queryFn: (): Promise<Me> => (mock ? loadRetailMock().then((m) => m.mockMe(import.meta.env.VITE_RETAIL_MOCK_ROLE)) : fetchMe()),
     enabled: token !== null || mock,
   });
   const profileNow = me.data ?? offlineMe ?? undefined;
+  useBusinessZone(profileNow?.tenant_timezone);
   const { branch, choose, ready } = useActiveBranch(profileNow);
   const signedIn = me.data !== undefined;
   const offline = useOfflineSupport(mock ? undefined : profileNow, signedIn);
@@ -120,7 +132,6 @@ function StaffLayout() {
   }
 
   const profile = profileNow;
-  setBusinessZone(profile.tenant_timezone);
   if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
   async function signOut(confirmed = false, everywhere = false) {
     // ADR-067 decision 9: sales still on this phone are never signed out of without asking (Sign out everywhere asks in its sheet).

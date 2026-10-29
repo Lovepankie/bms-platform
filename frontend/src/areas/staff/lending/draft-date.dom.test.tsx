@@ -13,7 +13,8 @@ import { FundForm } from './investment-actions';
 // Issue #670: a money form's draft kept in the tab is restored as it was, but its date was the day it was started. Read back on a
 // later business day, with its key never sent, the date starts again from today (a date after today becomes today) and the form
 // says so; the rest and the Idempotency-Key stay. A key that was sent keeps the body it went with, so a retry posts the same
-// thing once. Every name is invented.
+// thing once. Issue #672: the note goes once the date is changed, a sent draft's date after today does not stop its retry, and
+// every one of the three forms is caught if it stops marking its key as sent. Every name is invented.
 
 const ID = '00000000-0000-4000-8000-0000000000a1';
 const me = { user_id: '00000000-0000-4000-8000-0000000000f2', full_name: 'Test Officer 01', kind: 'staff', permissions: [] } as unknown as Me;
@@ -21,10 +22,17 @@ const loan: Loan = { id: ID, loan_no: 'LN-BR1-000001', status: 'approved', curre
 const inv = { id: ID, principal_minor: 1000000, currency: 'UGX' } as unknown as Investment;
 const NOTE = /started on an earlier day, so its date is now today/;
 
-const FORMS: { name: string; kind: string; draftName: string; field: string; label: string; form: ReactElement }[] = [
-  { name: 'repayment', kind: 'repayment', draftName: `lending-repay:${me.user_id}:${ID}`, field: 'valueDate', label: 'Date paid', form: <RepaymentForm loan={{ ...loan, status: 'active' }} onDone={() => undefined} /> },
-  { name: 'disbursement', kind: 'disbursement', draftName: `lending-disburse:${me.user_id}:${ID}`, field: 'date', label: 'Disbursement date', form: <DisburseForm loan={loan} /> },
-  { name: 'investment funding', kind: 'funding', draftName: `invest-fund:${me.user_id}:${ID}`, field: 'date', label: 'Date received', form: <FundForm inv={inv} /> },
+// The post of each form, answered never, so a test sees what went out with which key.
+const never = () => new Promise<never>(() => undefined);
+const FORMS: {
+  name: string; kind: string; draftName: string; field: string; label: string; formName: string; bodyDate: string; form: ReactElement; post: () => { mock: { calls: unknown[][] } };
+}[] = [
+  { name: 'repayment', kind: 'repayment', draftName: `lending-repay:${me.user_id}:${ID}`, field: 'valueDate', label: 'Date paid', formName: 'Record a repayment', bodyDate: 'value_date',
+    form: <RepaymentForm loan={{ ...loan, status: 'active' }} onDone={() => undefined} />, post: () => vi.spyOn(lending, 'repay').mockImplementation(never) },
+  { name: 'disbursement', kind: 'disbursement', draftName: `lending-disburse:${me.user_id}:${ID}`, field: 'date', label: 'Disbursement date', formName: 'Disburse the loan',
+    bodyDate: 'disbursement_date', form: <DisburseForm loan={loan} />, post: () => vi.spyOn(lending, 'disburse').mockImplementation(never) },
+  { name: 'investment funding', kind: 'funding', draftName: `invest-fund:${me.user_id}:${ID}`, field: 'date', label: 'Date received', formName: 'Record funding', bodyDate: 'value_date',
+    form: <FundForm inv={inv} />, post: () => vi.spyOn(investments, 'fund').mockImplementation(never) },
 ];
 
 function show(f: (typeof FORMS)[number], saved?: { draft: Record<string, string>; sent?: string }): HTMLInputElement {
@@ -68,6 +76,14 @@ describe.each(FORMS)('a $name draft restored from the tab', (f) => {
     expect(kept(f)).toEqual({ key: 'test-key-670', draft: draftOn(f, '2026-10-29', '2026-10-29') });
   });
 
+  it('drops the note once the date is changed (#672)', () => {
+    const date = show(f, { draft: draftOn(f, '2026-10-27', '2026-10-28') });
+    expect(screen.getByText(NOTE)).toBeTruthy();
+    fireEvent.change(date, { target: { value: '2026-10-27' } });
+    expect(date.value).toBe('2026-10-27');
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
   it('kept before #670, without startedOn, starts its date from today too', () => {
     expect(show(f, { draft: draftOn(f, '2026-10-20') }).value).toBe('2026-10-29');
   });
@@ -90,6 +106,22 @@ describe.each(FORMS)('a $name draft restored from the tab', (f) => {
     expect(kept(f)).toEqual({ key: 'test-key-670', draft: draftOn(f, '2026-10-28', '2026-10-28'), sent: '2026-10-28' });
   });
 
+  it('whose key was sent with a date after today, lets the retry post it as it went (#672)', async () => {
+    // Sent from a business in a zone ahead of this one: the date is after this today, and the max would stop the retry.
+    const post = f.post();
+    const sent = { draft: draftOn(f, '2026-10-30', '2026-10-30'), sent: '2026-10-30' };
+    const date = show(f, sent);
+    expect([date.value, date.max, date.checkValidity()]).toEqual(['2026-10-30', '', true]);
+    fireEvent.submit(screen.getByRole('form', { name: f.formName }));
+    await vi.waitFor(() => expect(post.mock.calls).toHaveLength(1));
+    expect(post.mock.calls[0]).toEqual([ID, expect.objectContaining({ [f.bodyDate]: '2026-10-30' }), 'test-key-670']);
+    expect(kept(f)).toEqual({ key: 'test-key-670', ...sent });
+  });
+
+  it('never sent, keeps today as the latest date', () => {
+    expect(show(f).max).toBe('2026-10-29');
+  });
+
   it('whose key was sent today, keeps its body with no line', () => {
     expect(show(f, { draft: draftOn(f, '2026-10-20', '2026-10-28'), sent: '2026-10-29' }).value).toBe('2026-10-20');
     expect(screen.queryByText(/may already be saved/)).toBeNull();
@@ -105,6 +137,17 @@ describe('sending a money form', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Record a repayment' }));
     return vi.waitFor(() => {
       expect(repay).toHaveBeenCalledWith(ID, expect.objectContaining({ value_date: '2026-10-29' }), 'test-key-670');
+      expect(kept(f).sent).toBe('2026-10-29');
+    });
+  });
+
+  it('does the same for a disbursement (#672)', () => {
+    const disburse = vi.spyOn(lending, 'disburse').mockImplementation(never);
+    const f = FORMS[1]!;
+    show(f, { draft: draftOn(f, '2026-10-29', '2026-10-29') });
+    fireEvent.submit(screen.getByRole('form', { name: 'Disburse the loan' }));
+    return vi.waitFor(() => {
+      expect(disburse).toHaveBeenCalledWith(ID, expect.objectContaining({ disbursement_date: '2026-10-29' }), 'test-key-670');
       expect(kept(f).sent).toBe('2026-10-29');
     });
   });
