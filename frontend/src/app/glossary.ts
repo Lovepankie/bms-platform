@@ -24,6 +24,8 @@ export const WORDS = {
   customerWhoOwes: 'customer who owes',
   /** The smallest unit an item is kept and counted in; was "Unit". */
   countedIn: 'Counted in',
+  /** Issue #689: the same unit on Add an item, said so a box is never taken for it. */
+  smallestUnit: 'Smallest unit you sell',
   /** The packs an item also comes in, each a number of the smallest unit; was "Pack sizes". */
   packs: 'Cartons, boxes and other packs',
   moveStock: 'Move stock',

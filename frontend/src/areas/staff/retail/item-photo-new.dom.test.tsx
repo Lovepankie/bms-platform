@@ -88,7 +88,7 @@ async function fillItem(how?: 'Take a picture' | 'Choose a photo', file: File = 
   await chooseCategory(screen.getByLabelText(/^Category/), 'Bulbs');
   fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Test bulb 12W' } });
   await screen.findByRole('option', { name: 'piece' });
-  fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
+  fireEvent.change(screen.getByLabelText(/^Smallest unit you sell/), { target: { value: 'u1' } });
   fireEvent.change(screen.getByLabelText(/^Selling price/), { target: { value: '9000' } });
   if (how) fireEvent.change(screen.getByLabelText(how), { target: { files: [file] } });
 }
@@ -120,7 +120,7 @@ describe('a photo while adding an item on Items', () => {
     expect(createProduct.mock.invocationCallOrder[0]!).toBeLessThan(setProductPhoto.mock.invocationCallOrder[0]!);
     expect(setProductPhoto.mock.calls[0]?.[0]).toBe('p9');
     expect((setProductPhoto.mock.calls[0]?.[1] as File).name).toBe('bulb.jpg');
-    expect((await screen.findAllByText('Added the item "Test bulb 12W" (BLB-0002).')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Test bulb 12W added.')).length).toBeGreaterThan(0);
     expect(await screen.findByRole('img', { name: 'Photo of Test bulb 12W' })).toBeTruthy();
   });
 
@@ -130,7 +130,7 @@ describe('a photo while adding an item on Items', () => {
     open(<ProductsPage />);
     await fillItem('Choose a photo');
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
-    const said = 'Added the item "Test bulb 12W" (BLB-0002). The photo was not saved. Add it from Edit on the item.';
+    const said = 'Test bulb 12W added. The photo was not saved. Add it from Edit on the item.';
     expect((await screen.findAllByText(said)).length).toBeGreaterThan(0);
     expect(createProduct).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole('button', { name: 'Edit Test bulb 12W' })).toBeTruthy();

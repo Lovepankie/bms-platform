@@ -38,7 +38,8 @@ vi.mock('../../../api/retail', async (original) => {
 
 const { RetailError } = await import('../../../api/retail');
 const { ProductForm } = await import('./catalogue-products');
-const { ASK_OWNER_PACKS, PACKS_ON_ADDING, PACKS_QUESTION, withPacksOn } = await import('./catalogue-packs');
+const { ASK_OWNER_PACKS, PACKS_QUESTION, withPacksOn } = await import('./catalogue-packs');
+const { PACKAGES_QUESTION } = await import('./new-item-packs');
 
 afterEach(() => {
   cleanup();
@@ -89,14 +90,16 @@ describe('the turn-on line on the item form', () => {
     expect(screen.queryByText(PACKS_QUESTION)).toBeNull();
   });
 
-  it('says on Add an item that the packs are added once the item is', async () => {
+  it('asks on Add an item about packages at once (issue #689)', async () => {
     capabilities.mockResolvedValue({ capabilities: { units: false }, version: 3 });
     changeCapabilities.mockResolvedValue({ capabilities: { units: true }, version: 4 });
     screenOf(owner);
+    expect(screen.queryByText(PACKAGES_QUESTION)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
 
-    expect((await screen.findByTestId('packs-on')).textContent).toBe(PACKS_ON_ADDING);
+    expect(await screen.findByText(PACKAGES_QUESTION)).toBeTruthy();
+    expect(screen.queryByText(PACKS_QUESTION)).toBeNull();
     expect(changeCapabilities).toHaveBeenCalledWith({ units: true }, 3);
   });
 

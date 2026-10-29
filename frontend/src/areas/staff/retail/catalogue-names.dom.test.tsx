@@ -62,7 +62,7 @@ async function fillIn(description: string) {
   fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: description } });
   await screen.findByRole('option', { name: 'piece' });
   await chooseCategory(screen.getByLabelText(/^Category/), 'Fittings');
-  fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
+  fireEvent.change(screen.getByLabelText(/^Smallest unit you sell/), { target: { value: 'u1' } });
   fireEvent.change(screen.getByLabelText(/Selling price/), { target: { value: '12000' } });
 }
 

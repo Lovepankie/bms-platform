@@ -103,14 +103,14 @@ describe('the category page', () => {
     expect(document.querySelector('input#item-code')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Test bulb 12W' } });
     await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1));
-    fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
+    fireEvent.change(screen.getByLabelText(/^Smallest unit you sell/), { target: { value: 'u1' } });
     fireEvent.change(screen.getByLabelText(/^Selling price/), { target: { value: '6000' } });
     fireEvent.click(screen.getByRole('button', { name: /^Add item/ }));
     await waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
     const body = createProduct.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(body).not.toHaveProperty('code');
     expect(body).toMatchObject({ category_id: 'c1', description: 'Test bulb 12W', unit_id: 'u1' });
-    expect((await screen.findAllByText('Added the item "Test bulb 12W" (BLB-0002).')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Test bulb 12W added.')).length).toBeGreaterThan(0);
   });
 
   it('changes the code start under If-Match, and says items made before keep their codes', async () => {
