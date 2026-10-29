@@ -206,7 +206,7 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   );
 }
 
-const HEADING: Record<string, string> = { voided: 'Cancelled', in_transit: 'Stock sent', received: 'Stock received', cancelled: 'Taken back' };
+const HEADING: Record<string, string> = { voided: 'Undone', in_transit: 'Stock sent', received: 'Stock received', cancelled: 'Taken back' };
 
 export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew?: () => void }) {
   const label = useBranchLabel();
@@ -230,7 +230,7 @@ export function TransferSummary({ transfer, onNew }: { transfer: Transfer; onNew
       {transfer.note && <p>Note: {transfer.note}</p>}
       {profit && transfer.cost_total_minor !== undefined && <p>Value at cost: {money(transfer.cost_total_minor)}</p>}
       {profit && transfer.shortage_cost_minor !== undefined && transfer.shortage_cost_minor > 0 && <p>Lost on the way, at cost: {money(transfer.shortage_cost_minor)}</p>}
-      {transfer.status === 'voided' && <p>Cancelled: {transfer.void_reason}</p>}
+      {transfer.status === 'voided' && <p>Undone: {transfer.void_reason}</p>}
       {transfer.status === 'cancelled' && <p>Taken back: {transfer.void_reason}</p>}
       {onNew && <button type="button" className="rt-primary" onClick={onNew}>Move more stock</button>}
     </section>

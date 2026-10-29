@@ -168,7 +168,8 @@ class StockRepository {
     /**
      * Products with their quantity summed over {@code branchIds} (the caller's scope; never empty),
      * ordered by code. An inactive product is left out unless {@code includeInactive} (issue #342); the stock-by-location
-     * report passes {@code keepHeldInactive} so it still shows an inactive product while it holds a quantity there.
+     * report passes {@code keepHeldInactive} so it still shows an inactive product while it holds a quantity there, or
+     * while some of it is on its way from or to one of those branches (issue #239).
      */
     List<Search.Ranked<ProductTotal>> allBranches(
             List<UUID> branchIds,
@@ -197,7 +198,10 @@ class StockRepository {
                                FROM retail_stock_balances WHERE branch_id IN (:branchIds)
                               GROUP BY product_id) t ON t.product_id = p.id
                 """ + STANDARD_PACK + """
-                 WHERE (p.active OR :includeInactive OR (:keepHeld AND coalesce(t.held, 0) > 0))
+                 WHERE (p.active OR :includeInactive OR (:keepHeld AND (coalesce(t.held, 0) > 0
+                        OR EXISTS (SELECT 1 FROM retail_transfer_lines tl JOIN retail_transfers tt ON tt.id = tl.transfer_id
+                                    WHERE tl.product_id = p.id AND tt.status = 'in_transit'
+                                      AND (tt.from_branch_id IN (:branchIds) OR tt.to_branch_id IN (:branchIds))))))
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("branchIds", branchIds);

@@ -109,14 +109,20 @@ class RetailTransferGuardIT extends IntegrationTest {
                 .single();
     }
 
-    /** The UPDATE that moves a transfer to a status, setting the columns that status needs. */
+    /**
+     * The UPDATE that moves a transfer to a status, setting the columns that status needs. A receipt first records what
+     * arrived on the lines, as the receipt does and V116 requires; that write is itself refused unless the transfer is in
+     * transit, and the move is tried either way.
+     */
     String moveTo(UUID id, String target) {
         return switch (target) {
-            case "received" ->
-                asApp(
+            case "received" -> {
+                asApp("UPDATE retail_transfer_lines SET received_qty = qty WHERE transfer_id = ?", id);
+                yield asApp(
                         "UPDATE retail_transfers SET status = 'received', received_at = now(), received_by = ? WHERE id = ?",
                         UUID.randomUUID(),
                         id);
+            }
             case "cancelled", "voided" ->
                 asApp(
                         "UPDATE retail_transfers SET status = '" + target

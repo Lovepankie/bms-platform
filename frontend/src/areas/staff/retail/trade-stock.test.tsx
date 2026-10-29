@@ -10,7 +10,7 @@ import { InTransitList } from './in-transit';
 import { canUse, screensFor } from './permissions';
 import { LocationList, LocationTable, LocationTotals, groupsOf } from './stock-by-location';
 import { TransferSummary } from './transfer';
-import { TransferList, statusBadge } from './transfers';
+import { ShortageWarning, TransferList, arrivedShort, statusBadge } from './transfers';
 import { Gate } from './ui';
 
 const renderToString = (node: ReactElement) => render(node).replaceAll('<!-- -->', '');
@@ -130,10 +130,32 @@ describe('transfer statuses', () => {
   it('says each status in words', () => {
     expect(statusBadge(sent)).toBe('on its way');
     expect(statusBadge({ ...sent, status: 'completed' })).toBeNull();
-    expect(statusBadge({ ...sent, status: 'voided' })).toBe('cancelled');
+    expect(statusBadge({ ...sent, status: 'voided' })).toBe('undone');
     expect(statusBadge({ ...sent, status: 'cancelled' })).toBe('taken back');
     expect(statusBadge({ ...sent, status: 'received' })).toBe('received');
     expect(statusBadge({ ...sent, status: 'received', lines: [{ ...(sent.lines?.[0] ?? {}), received_qty: '3.000' }] })).toBe('received, some short');
+  });
+
+  // JUSTIFICATION-A3: the two UI fixes #239 asks for (items 5 and 6); no existing case covers either.
+  it('never gives an undone move and a move taken back the same word (#239)', () => {
+    const undone = page(mockMe('admin'), <TransferSummary transfer={{ ...sent, status: 'voided', void_reason: 'Test wrong branch' }} />);
+    const takenBack = page(mockMe('admin'), <TransferSummary transfer={{ ...sent, status: 'cancelled', void_reason: 'Test sent by mistake' }} />);
+    expect(undone).toContain('<h2>Undone</h2>');
+    expect(undone).toContain('Undone: Test wrong branch');
+    expect(takenBack).toContain('<h2>Taken back</h2>');
+    expect(takenBack).toContain('Taken back: Test sent by mistake');
+    expect(`${undone}${takenBack}`).not.toMatch(/Cancelled/);
+  });
+
+  it('warns before undoing a received move that arrived short (#239)', () => {
+    const short: Transfer = { ...sent, status: 'received', lines: [{ ...(sent.lines?.[0] ?? {}), received_qty: '3.000' }] };
+    expect(arrivedShort(short)).toBe(true);
+    expect(arrivedShort({ ...short, lines: [{ ...(sent.lines?.[0] ?? {}), received_qty: '4.000' }] })).toBe(false);
+    expect(arrivedShort(sent)).toBe(false);
+    const html = page(mockMe('admin'), <ShortageWarning from="Test Branch A (BR1)" />);
+    expect(html).toContain('Some of this stock never arrived.');
+    expect(html).toContain('back into the stock of Test Branch A (BR1), the missing');
+    expect(html).not.toMatch(new RegExp(`[${String.fromCharCode(0x2013, 0x2014)}]`));
   });
 
   it('lists a transfer on its way, and shows the sent summary without cost for a seller', () => {

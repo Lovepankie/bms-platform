@@ -2,16 +2,22 @@ package com.rincoltech.bms.retail.stock;
 
 import static com.rincoltech.bms.retail.RetailTestSupport.ADMIN;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
+import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
 import com.rincoltech.bms.testsupport.Api;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +43,9 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
 
     @Autowired
     TestRestTemplate http;
+
+    @Autowired
+    BusinessClock clock;
 
     TestDatabase.Fixture t;
     RetailTestSupport api;
@@ -466,6 +475,44 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         assertThat(qty(t.secondBranch(), product)).isEqualTo("0.000");
     }
 
+    // JUSTIFICATION-A3: the V116 receipt rules #239 asks for; no existing test writes a receipt past the service.
+    /**
+     * V116 (issue #239): the database refuses a receipt that leaves a line without received_qty, or that brought stock
+     * of value without the destination entry; a receipt where nothing arrived needs no destination entry.
+     */
+    @Test
+    void theDatabaseRefusesAReceiptWithoutEveryLineOrWithoutTheDestinationEntry() {
+        switchOn();
+        api.stockUp(t.headOffice(), product, "10");
+        UUID id = dispatched("4");
+        String receipt =
+                "UPDATE retail_transfers SET status = 'received', received_at = now(), received_by = created_by"
+                        + " WHERE tenant_id = ? AND id = ?";
+
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql(receipt)
+                        .params(t.tenantId(), id)
+                        .update())
+                .hasMessageContaining("a receipt records what arrived on every line");
+        TestDatabase.owner()
+                .sql("UPDATE retail_transfer_lines SET received_qty = 3 WHERE tenant_id = ? AND transfer_id = ?")
+                .params(t.tenantId(), id)
+                .update();
+        assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql(receipt)
+                        .params(t.tenantId(), id)
+                        .update())
+                .hasMessageContaining("has the destination entry");
+        assertThat(api.get("/transfers/" + id, ADMIN).getBody().get("status").asString())
+                .isEqualTo("in_transit");
+
+        UUID lost = dispatched("2");
+        ResponseEntity<JsonNode> nothing = receive(lost, received(product, "0"), ADMIN, "*");
+        assertThat(nothing.getStatusCode()).as("%s", nothing.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(net(lost, t.secondBranch(), "inventory")).isZero();
+        assertThat(net(lost, t.secondBranch(), "stock_shrinkage")).isEqualTo(2_000);
+    }
+
     /** A replayed key returns the first receipt and moves nothing again; two racing receipts receive once. */
     @Test
     void aReceiptIsIdempotentAndTwoRacingReceiptsReceiveOnce() throws Exception {
@@ -592,6 +639,67 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         assertThat(qty(t.secondBranch(), product)).isEqualTo("1.000");
     }
 
+    // JUSTIFICATION-A3: the two tests #239 item 7 asks for; no existing test covers either.
+    /** Issue #239: a receipt and a sale of the same item at the destination at once both land, and the books agree. */
+    @Test
+    void aReceiptWhileTheDestinationSellsTheItemKeepsBothAndTheBooksAgree() throws Exception {
+        switchOn();
+        api.stockUp(t.headOffice(), product, "10");
+        api.stockUp(t.secondBranch(), product, "5");
+        UUID id = dispatched("4");
+
+        CompletableFuture<ResponseEntity<JsonNode>> receipt = CompletableFuture.supplyAsync(() -> receiveAll(id));
+        CompletableFuture<ResponseEntity<JsonNode>> sale =
+                CompletableFuture.supplyAsync(() -> api.sell(t.secondBranch(), "cash", product, "2"));
+
+        assertThat(receipt.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(sale.get(30, TimeUnit.SECONDS).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(qty(t.secondBranch(), product))
+                .as("5 held, 4 received, 2 sold")
+                .isEqualTo("7.000");
+        assertThat(qty(t.headOffice(), product)).isEqualTo("6.000");
+        assertThat(net(id, t.secondBranch(), "inventory")).isEqualTo(4_000);
+        assertThat(net(id, t.headOffice(), "interbranch_clearing") + net(id, t.secondBranch(), "interbranch_clearing"))
+                .isZero();
+        assertThat(inFlight(ADMIN).get("reconciled").asBoolean()).isTrue();
+    }
+
+    /**
+     * Issue #239: a one-step transfer from before V38 (completed, both entries, no receipt columns, no received_qty)
+     * voids through the API after the two-step move is switched on.
+     */
+    @Test
+    void aCompletedTransferFromBeforeTheTwoStepMoveVoidsThroughTheApi() {
+        api.stockUp(t.headOffice(), product, "10");
+        ResponseEntity<JsonNode> before = dispatch("4");
+        assertThat(before.getBody().get("status").asString()).isEqualTo("completed");
+        UUID id = RetailTestSupport.id(before);
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_transfer_lines WHERE tenant_id = ? AND transfer_id = ?"
+                                + " AND received_qty IS NULL")
+                        .params(t.tenantId(), id)
+                        .query(Long.class)
+                        .single())
+                .as("a one-step line, as every line before V38")
+                .isEqualTo(1);
+        switchOn();
+
+        ResponseEntity<JsonNode> voided =
+                api.post("/transfers/" + id + "/void", Map.of("reason", "Test wrong branch"), ADMIN);
+
+        assertThat(voided.getStatusCode()).as("%s", voided.getBody()).isEqualTo(HttpStatus.OK);
+        assertThat(voided.getBody().get("status").asString()).isEqualTo("voided");
+        assertThat(voided.getBody().get("received_at").isNull()).isTrue();
+        assertThat(qty(t.headOffice(), product)).isEqualTo("10.000");
+        assertThat(qty(t.secondBranch(), product)).isEqualTo("0.000");
+        assertThat(entryCount(id)).as("two entries and their two reversals").isEqualTo(4);
+        for (UUID branch : List.of(t.headOffice(), t.secondBranch())) {
+            for (String key : List.of("inventory", "interbranch_clearing")) {
+                assertThat(net(id, branch, key)).as("%s %s", branch, key).isZero();
+            }
+        }
+    }
+
     // ------------------------------------------------------------------------- switching it off
 
     /** Acceptance 6: switching the capability off is refused while any transfer is in transit. */
@@ -632,6 +740,68 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
                 .isEqualTo(HttpStatus.OK);
         ResponseEntity<JsonNode> after = dispatch("1");
         assertThat(after.getBody().get("status").asString()).isEqualTo("completed");
+    }
+
+    // JUSTIFICATION-A3: the switch-off race test #239 asks for; no existing test holds a dispatch still.
+    /**
+     * Issue #239: a switch-off sent while a dispatch is between reading the capability and committing waits for the
+     * dispatch, then sees the transfer on its way and is refused. The dispatch is held still on the source's balance row,
+     * after it has read the capability under the settings lock.
+     */
+    @Test
+    void aSwitchOffDuringADispatchWaitsForItAndIsRefused() throws Exception {
+        switchOn();
+        api.stockUp(t.headOffice(), product, "10");
+        try (Connection c = TestDatabase.ownerDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            try (Statement s = c.createStatement()) {
+                s.execute("SELECT 1 FROM retail_stock_balances WHERE tenant_id = '" + t.tenantId()
+                        + "' AND branch_id = '" + t.headOffice() + "' AND product_id = '" + product + "' FOR UPDATE");
+            }
+            CompletableFuture<ResponseEntity<JsonNode>> sending = CompletableFuture.supplyAsync(() -> dispatch("4"));
+            assertThat(waitersReach(1, sending))
+                    .as("the dispatch waits on the balance row")
+                    .isTrue();
+            CompletableFuture<ResponseEntity<JsonNode>> switching =
+                    CompletableFuture.supplyAsync(() -> putCapabilities(Map.of("transfer_receipt", false)));
+            assertThat(waitersReach(2, switching))
+                    .as("the switch-off waits for the dispatch's share lock on the settings")
+                    .isTrue();
+            c.commit();
+
+            ResponseEntity<JsonNode> sent = sending.get(30, TimeUnit.SECONDS);
+            ResponseEntity<JsonNode> refused = switching.get(30, TimeUnit.SECONDS);
+
+            assertThat(sent.getStatusCode()).as("%s", sent.getBody()).isEqualTo(HttpStatus.CREATED);
+            assertThat(sent.getBody().get("status").asString()).isEqualTo("in_transit");
+            assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(code(refused)).isEqualTo("transfers_in_transit");
+            assertThat(api.get("/settings/capabilities", SETTINGS)
+                            .getBody()
+                            .get("transfer_receipt")
+                            .asBoolean())
+                    .isTrue();
+            assertThat(receiveAll(RetailTestSupport.id(sent)).getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+    }
+
+    /**
+     * Waits (up to 30 seconds) until {@code n} database backends wait for a lock, then reports whether the call is still
+     * unfinished. The only lock waits in this test are the ones it arranges.
+     */
+    private boolean waitersReach(int n, CompletableFuture<?> call) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (System.nanoTime() < deadline && !call.isDone()) {
+            long waiting = TestDatabase.owner()
+                    .sql("SELECT count(DISTINCT pid) FROM pg_locks WHERE NOT granted")
+                    .query(Long.class)
+                    .single();
+            if (waiting >= n) {
+                return !call.isDone();
+            }
+            Thread.sleep(50);
+        }
+        return false;
     }
 
     /** A branch's role is pinned while a dispatched transfer touches it (spec 2.1), and free again once it is received. */
@@ -858,5 +1028,40 @@ class RetailTwoStepTransfersIT extends IntegrationTest {
         ResponseEntity<JsonNode> r = receiveAll(id);
         assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
         assertThat(qty(t.secondBranch(), product)).isEqualTo("4.000");
+    }
+
+    // JUSTIFICATION-A3: the two report fixes of #239 (items 3 and 4); no existing test covers either.
+    /** Issue #239: an inactive item whose stock is all on its way keeps its row, so the combined total does not lose it. */
+    @Test
+    void anInactiveItemWithAllItsStockOnTheWayStaysInStockByLocation() {
+        switchOn();
+        api.stockUp(t.headOffice(), product, "4");
+        dispatched("4");
+        switchOff(product);
+
+        JsonNode r = row(byLocation(ADMIN), product);
+
+        assertThat(r.get("in_transit_qty").asString()).isEqualTo("4.000");
+        assertThat(r.get("combined_qty").asString()).isEqualTo("4.000");
+        assertThat(r.get("combined_value_minor").asLong()).isEqualTo(4_000);
+    }
+
+    /** Issue #239: the age of a transfer on its way counts from when it was sent, not from a transfer date set in the past. */
+    @Test
+    void theAgeInFlightCountsFromWhenItWasSent() {
+        switchOn();
+        api.stockUp(t.headOffice(), product, "10");
+        Map<String, Object> backdated = body(t.headOffice(), t.secondBranch(), product, "4");
+        backdated.put(
+                "transfer_date",
+                clock.today(BusinessClock.DEFAULT_ZONE).minusDays(5).toString());
+        ResponseEntity<JsonNode> sent = api.postKeyed(
+                "/transfers", backdated, ADMIN, "*", UUID.randomUUID().toString());
+        assertThat(sent.getStatusCode()).as("%s", sent.getBody()).isEqualTo(HttpStatus.CREATED);
+
+        JsonNode item = inFlight(ADMIN).get("items").get(0);
+
+        assertThat(item.get("transfer_date").asString()).isEqualTo(backdated.get("transfer_date"));
+        assertThat(item.get("age_days").asInt()).isZero();
     }
 }

@@ -32,12 +32,10 @@ import org.springframework.web.bind.annotation.RestController;
 class CapabilitiesController {
 
     private final RetailCapabilities capabilities;
-    private final TransferService transfers;
     private final Approvals approvals;
 
-    CapabilitiesController(RetailCapabilities capabilities, TransferService transfers, Approvals approvals) {
+    CapabilitiesController(RetailCapabilities capabilities, Approvals approvals) {
         this.capabilities = capabilities;
-        this.transfers = transfers;
         this.approvals = approvals;
     }
 
@@ -153,7 +151,8 @@ class CapabilitiesController {
         put(proposed, RetailCapabilities.CREDIT_RECOGNITION, r.creditSaleRecognition());
         put(proposed, "slow_mover_months", r.slowMoverMonths());
         put(proposed, "slow_mover_min_sold", r.slowMoverMinSold());
-        transfers.guardSwitchOff(proposed);
+        // Switching transfer_receipt off while stock is on its way is refused inside the change
+        // (TransferService.check).
         CapabilitiesResponse saved = response(capabilities.change(proposed, expected));
         return ResponseEntity.ok().eTag(String.valueOf(capabilities.version())).body(saved);
     }

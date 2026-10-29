@@ -53,6 +53,11 @@ class SmsSettingsServiceRaceTest {
         }
 
         @Override
+        public Map<String, Object> groupHeld(String moduleKey) {
+            return group(moduleKey);
+        }
+
+        @Override
         public int version() {
             if (lands == CommitLands.BEFORE_THE_VERSION_READ) {
                 commitTheWinner();

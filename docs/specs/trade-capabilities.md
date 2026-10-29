@@ -668,9 +668,9 @@ All reports are read only, respect branch scope per row, and omit cost, value an
 
 | Report | Content |
 |---|---|
-| Stock by store and shop | `GET /retail/reports/stock-by-location`: per product, the balance in each branch the caller may read, grouped by role (stores, then shops), a subtotal per role and a **combined total**; stock **in transit** (section 9.3) as its own column so the combined total neither double counts nor loses it. Extends `/retail/stock/all-branches`, which stays |
+| Stock by store and shop | `GET /retail/reports/stock-by-location`: per product, the balance in each branch the caller may read, grouped by role (stores, then shops), a subtotal per role and a **combined total**; stock **in transit** (section 9.3) as its own column so the combined total neither double counts nor loses it. An inactive product is listed while it holds stock in a listed branch or has stock on its way from or to one (issue #239). Extends `/retail/stock/all-branches`, which stays |
 | Combined total | The sum across all readable branches, quantity and, with profit read, value at cost; the revaluation difference is shown as in valuation |
-| Transfers in flight | `GET /retail/reports/transfers-in-flight` (needs `transfer_receipt`): dispatched and not received, with age, source, destination, lines. Empty by construction when transfers are atomic |
+| Transfers in flight | `GET /retail/reports/transfers-in-flight` (needs `transfer_receipt`): dispatched and not received, with age (days since it was sent, not since its transfer date, which may be set in the past; issue #239), source, destination, lines. Empty by construction when transfers are atomic |
 | Supplier payables | `GET /retail/reports/supplier-payables` (no capability since issue #557, ADR-084; invoices only with `purchasing`): per supplier, open bills by days past due (same buckets as customer ageing; a landed cost invoice is a bill, and a credit note has already come off its invoice) and unbilled receipts (goods received not invoiced). Open credit notes are zero by construction (7.5 item 6). For tenants without `purchasing` the same report shows the credit restocks by supplier, and supplier payments pay them (built, issue #557, ADR-084) |
 | Customer ageing | Section 5.2 |
 
@@ -738,7 +738,10 @@ destination still holds what came in, applied to the received quantity.
 - Receive and cancel are money-moving (`Idempotency-Key`); a replayed key returns the first response and
   two racing receipts receive once (the transfer row is locked).
 - Switching `transfer_receipt` off, directly or by choosing the `shop` profile, is refused (422
-  `transfers_in_transit`) while any transfer is in transit.
+  `transfers_in_transit`) while any transfer is in transit. The check runs inside the settings write,
+  under the tenant settings row lock, and a transfer reads the capability under a shared lock on that
+  row, so a dispatch committing at the same moment is either seen by the check or made after the
+  change as a one-step move (issue #239).
 - `GET /retail/transfers` gains a `status` filter, which is how the in-transit list is read with its
   lines; `GET /retail/reports/transfers-in-flight` adds the age, the value and the reconciliation.
 - Not done here: the shortage is posted to the ledger but is not yet a line of the daily profit report.

@@ -49,9 +49,12 @@ branch list for a branch-scoped user yet). Items are added with the same product
 quantity is above that. The date starts on today in the business's timezone (#112) and the note is optional. The form keeps its draft and
 one `Idempotency-Key` in `sessionStorage` like the sale form, and a refusal for stock shows the plain
 `insufficient_stock` message. No cost is shown, except the value at cost on the saved summary for a user with
-`retail.profit.read`. Stock moves opens a transfer and offers "Cancel this move" with a reason to a user who may
+`retail.profit.read`. Stock moves opens a transfer and offers "Undo this move" (the void) with a reason to a user who may
 move stock; the server refuses with `transfer_stock_moved` once the destination has sold, used or moved part of
-it, and that message (naming the branch and the item codes) is shown as the server wrote it.
+it, and that message (naming the branch and the item codes) is shown as the server wrote it. A voided move reads
+"Undone" and a two-step move taken back before it arrived reads "Taken back", so the two never share a word (issue
+#239). Undoing a received move that arrived short sends all of what was sent back to the source, the lost part too;
+this is accepted, and the screen says so above the reason and asks for a count at the source afterwards.
 
 Behaviour worth knowing: the sale, restock and usage forms generate one `Idempotency-Key` per draft and keep it,
 with the draft, in the tab's `sessionStorage` (per user and, for sale and usage, per branch) for every re-render,

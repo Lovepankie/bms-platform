@@ -6,6 +6,7 @@ import com.rincoltech.bms.core.operations.Idempotency;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.core.tenancy.Branches;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
+import com.rincoltech.bms.core.tenancy.ModuleSettingsChangeGuard;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import com.rincoltech.bms.kernel.BusinessClock;
@@ -15,7 +16,6 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
-import com.rincoltech.bms.retail.manifest.BusinessTypes;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -73,7 +73,7 @@ import org.springframework.transaction.annotation.Transactional;
  * source cancels it (the stock goes back at the original cost and the source entry is reversed).
  */
 @Service
-class TransferService {
+class TransferService implements ModuleSettingsChangeGuard {
 
     static final String TRANSFER = "retail.transfer";
     static final String TRANSFER_VOID = "retail.transfer_void";
@@ -133,7 +133,9 @@ class TransferService {
     }
 
     private Transfer record(TransferRequest r) {
-        boolean dispatchOnly = capabilities.enabled(RetailCapabilities.TRANSFER_RECEIPT);
+        // Read under a shared lock on the settings row (issue #239): the capability cannot be switched off until this
+        // transfer, in transit or not, has committed, and the switch-off check then sees it.
+        boolean dispatchOnly = capabilities.enabledHeld(RetailCapabilities.TRANSFER_RECEIPT);
         // A branch that keeps no goods may still be the source, so stock stranded there can leave (ADR-041).
         UUID from = branchContext.resolve(PERMISSION, r.fromBranchId(), "from_branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
@@ -657,20 +659,17 @@ class TransferService {
     }
 
     /**
-     * Refuses switching the {@code transfer_receipt} capability off while any transfer is on its
-     * way, so no dispatched stock is left with a destination that can no longer receive it. Called
-     * before a capability change is saved: {@code proposed} is the partial change, in group keys.
+     * Refuses switching the {@code transfer_receipt} capability off, by the flag or by a kind of
+     * business without it, while any transfer is on its way, so no dispatched stock is left with a
+     * destination that can no longer receive it. Runs inside the capability change, under the
+     * settings row lock that {@link #record} holds shared, so a dispatch either committed before
+     * this reads the transfers or starts after the change and sees the capability off (issue #239).
      */
-    @Transactional(readOnly = true)
-    void guardSwitchOff(Map<String, Object> proposed) {
-        if (!capabilities.enabled(RetailCapabilities.TRANSFER_RECEIPT)) {
-            return;
-        }
-        Object flag = proposed.get(RetailCapabilities.TRANSFER_RECEIPT);
-        boolean off = Boolean.FALSE.equals(flag)
-                || (flag == null
-                        && proposed.get("profile") instanceof String type
-                        && BusinessTypes.switchesOff(type, RetailCapabilities.TRANSFER_RECEIPT));
+    @Override
+    public void check(String moduleKey, Map<String, Object> before, Map<String, Object> after) {
+        boolean off = RetailCapabilities.MODULE.equals(moduleKey)
+                && Boolean.TRUE.equals(before.get(RetailCapabilities.TRANSFER_RECEIPT))
+                && !Boolean.TRUE.equals(after.get(RetailCapabilities.TRANSFER_RECEIPT));
         if (off && repo.anyInTransit()) {
             throw ApiException.rule(
                     "transfers_in_transit",

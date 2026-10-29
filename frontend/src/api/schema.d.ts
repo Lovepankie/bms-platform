@@ -14230,7 +14230,7 @@ export interface components {
         RetailInFlightTransfer: {
             /**
              * Format: int32
-             * @description Days from the transfer date to today
+             * @description Days from the day it was sent (dispatched_at, in the tenant's time zone) to today
              */
             age_days?: number;
             /**

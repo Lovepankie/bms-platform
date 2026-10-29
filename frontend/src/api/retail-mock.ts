@@ -1575,7 +1575,7 @@ export function createMockRetail(): RetailApi {
         currency: 'UGX',
         items: open.map((t) => ({
           id: t.id, from_branch_id: t.from_branch_id, to_branch_id: t.to_branch_id, transfer_date: t.transfer_date, dispatched_at: t.created_at,
-          age_days: Math.max(0, Math.floor((Date.parse(today()) - Date.parse(t.transfer_date ?? today())) / day)), note: t.note, lines: visibleTransfer(t).lines,
+          age_days: Math.max(0, Math.floor((Date.parse(today()) - Date.parse((t.created_at ?? today()).slice(0, 10))) / day)), note: t.note, lines: visibleTransfer(t).lines,
           ...(profitAccess ? { cost_total_minor: t.cost_total_minor } : {}),
         })),
         ...(profitAccess ? { in_transit_value_minor: worth, clearing_minor: worth, reconciled: true } : {}),

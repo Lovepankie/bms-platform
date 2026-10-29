@@ -13,8 +13,8 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 
 // Stock moves (FR-RET-16): transfers from or to the branch chosen at the top of the page (every
 // branch the session may read with "All branches"), newest first. Tapping one shows its items, and
-// a user who may move stock from its source branch can cancel it while the destination still holds
-// what arrived; the server refuses otherwise, in plain words.
+// a user who may move stock from its source branch can undo it (a void) while the destination still
+// holds what arrived; the server refuses otherwise, in plain words.
 
 export { showDate };
 
@@ -27,23 +27,42 @@ export function whatMoved(t: Transfer): string {
 }
 
 /**
- * The status in words. A void is shown as "cancelled" (the screen's word for it since the first
- * transfers); a two-step transfer (ADR-033) is "on its way" until received, "taken back" when the
- * source cancelled it before that, and "received, some short" when less arrived than was sent.
+ * The status in words. A void is "undone" (#239: it was "cancelled", which read like the source
+ * taking back a two-step transfer); a two-step transfer (ADR-033) is "on its way" until received,
+ * "taken back" when the source cancelled it before that, and "received, some short" when less
+ * arrived than was sent.
  */
 export function statusBadge(t: Transfer): string | null {
   switch (t.status) {
     case 'voided':
-      return 'cancelled';
+      return 'undone';
     case 'in_transit':
       return 'on its way';
     case 'cancelled':
       return 'taken back';
     case 'received':
-      return (t.lines ?? []).some((l) => l.received_qty !== undefined && milliOf(l.received_qty) < milliOf(l.qty ?? '0')) ? 'received, some short' : 'received';
+      return arrivedShort(t) ? 'received, some short' : 'received';
     default:
       return null;
   }
+}
+
+/** Less arrived than was sent on at least one line of a received transfer. */
+export function arrivedShort(t: Transfer): boolean {
+  return t.status === 'received' && (t.lines ?? []).some((l) => l.received_qty !== undefined && milliOf(l.received_qty) < milliOf(l.qty ?? '0'));
+}
+
+/**
+ * Undoing a received move sends back all that was sent, the part that never arrived too, so the
+ * source's stock goes up by what was lost on the way (#239). Accepted, and said before the undo.
+ */
+export function ShortageWarning({ from }: { from: string }) {
+  return (
+    <p className="hint" role="note">
+      Some of this stock never arrived. Undoing this move puts all of what was sent back into the stock of {from}, the missing
+      items too. Count the stock there afterwards.
+    </p>
+  );
 }
 
 // The API gives a transfer no number of its own yet, so a row shows the date, the route, what moved
@@ -76,6 +95,7 @@ export function TransferList({ items, onOpen }: { items: Transfer[]; onOpen: (id
 function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
+  const label = useBranchLabel();
   const transfer = useQuery({ queryKey: ['retail', 'transfer', id], queryFn: () => retail.getTransfer(id) });
   const [reason, setReason] = useState('');
   const cancel = useMutation({
@@ -91,13 +111,14 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
       {transfer.isError && <Problem error={transfer.error} />}
       {t && <TransferSummary transfer={t} />}
       {t?.id && <TransferDocument transferId={t.id} branchId={t.from_branch_id} status={t.status} />}
-      {mayCancel && (
+      {mayCancel && t && (
         <form onSubmit={(e) => { e.preventDefault(); if (reason.trim() !== '' && !cancel.isPending) cancel.mutate(); }}>
-          <label htmlFor="transfer-void-reason">Reason to cancel this move</label>
+          {arrivedShort(t) && <ShortageWarning from={label(t.from_branch_id)} />}
+          <label htmlFor="transfer-void-reason">Reason to undo this move</label>
           <input id="transfer-void-reason" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
           <Problem error={cancel.error} />
           <BusyButton type="submit" busy={cancel.isPending} disabled={reason.trim() === ''}>
-            Cancel this move
+            Undo this move
           </BusyButton>
 
         </form>

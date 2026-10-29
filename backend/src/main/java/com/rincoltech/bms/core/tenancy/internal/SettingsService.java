@@ -7,6 +7,7 @@ import com.rincoltech.bms.core.tenancy.ApprovalRuleStore;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.GoLiveDate;
 import com.rincoltech.bms.core.tenancy.ModuleSettings;
+import com.rincoltech.bms.core.tenancy.ModuleSettingsChangeGuard;
 import com.rincoltech.bms.core.tenancy.ModuleSettingsGroup;
 import com.rincoltech.bms.core.tenancy.PolicyChangeGuard;
 import com.rincoltech.bms.core.tenancy.TenantModules;
@@ -36,6 +37,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -69,6 +71,7 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
     private final BusinessClock clock;
     private final PolicyChangeGuard guard;
     private final ApplicationEventPublisher events;
+    private final ObjectProvider<ModuleSettingsChangeGuard> changeGuards;
 
     SettingsService(
             JdbcClient jdbc,
@@ -80,8 +83,10 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
             TenantModules modules,
             BusinessClock clock,
             @Lazy PolicyChangeGuard guard,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events,
+            ObjectProvider<ModuleSettingsChangeGuard> changeGuards) {
         this.events = events;
+        this.changeGuards = changeGuards;
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.tenant = tenant;
@@ -580,6 +585,13 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
 
     @Override
     @Transactional
+    public Map<String, Object> groupHeld(String moduleKey) {
+        ModuleSettingsGroup group = groupOf(moduleKey);
+        return group.normalise(storedGroup(load(" FOR SHARE"), moduleKey), Map.of());
+    }
+
+    @Override
+    @Transactional
     public Map<String, Object> change(String moduleKey, Map<String, Object> proposed, int expectedVersion) {
         ModuleSettingsGroup group = groupOf(moduleKey);
         Stored stored = lock();
@@ -591,6 +603,8 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
         if (after.equals(before)) {
             return after;
         }
+        // Under the row lock: a write that read the group with groupHeld has committed, or waits for this one (#239).
+        changeGuards.orderedStream().forEach(g -> g.check(moduleKey, before, after));
         Map<String, Object> next = new TreeMap<>(stored.values());
         Map<String, Object> all = new TreeMap<>(allGroups(stored));
         all.put(moduleKey, after);
@@ -642,8 +656,11 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
     }
 
     private Stored load(boolean forUpdate) {
-        return jdbc.sql("SELECT settings::text AS settings, version FROM tenant_settings"
-                        + (forUpdate ? " FOR UPDATE" : ""))
+        return load(forUpdate ? " FOR UPDATE" : "");
+    }
+
+    private Stored load(String lockClause) {
+        return jdbc.sql("SELECT settings::text AS settings, version FROM tenant_settings" + lockClause)
                 .query((rs, n) -> new Stored(mapper.readValue(rs.getString("settings"), MAP), rs.getInt("version")))
                 .optional()
                 .orElse(new Stored(Map.of(), 1));

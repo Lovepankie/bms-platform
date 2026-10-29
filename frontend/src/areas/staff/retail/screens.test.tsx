@@ -339,7 +339,8 @@ describe('stock moves', () => {
   it('lists moves in words and shows the value at cost only with retail.profit.read', () => {
     const list = page('sales', <TransferList items={[moved, { ...moved, id: 'tr2', status: 'voided' }]} onOpen={() => undefined} />);
     expect(list).toContain('From Test Branch A (BR1) to Test Branch B (BR2)');
-    expect(list).toContain('cancelled');
+    expect(list).toContain('undone');
+    expect(list).not.toContain('cancelled');
     expect(page('sales', <TransferSummary transfer={moved} />)).not.toMatch(/cost/i);
     expect(page('admin', <TransferSummary transfer={moved} />)).toContain('Value at cost: UGX 7,000');
   });

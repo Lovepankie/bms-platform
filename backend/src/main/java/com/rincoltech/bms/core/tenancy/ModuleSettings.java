@@ -13,6 +13,14 @@ public interface ModuleSettings {
     /** The group, normalised with its defaults; the defaults alone when the tenant never saved it. */
     Map<String, Object> group(String moduleKey);
 
+    /**
+     * The group, read under a shared lock on the tenant settings row held to the end of the
+     * caller's transaction, so a {@link #change} waits for that transaction and its {@link
+     * ModuleSettingsChangeGuard}s see what it wrote (issue #239). Without a saved row the defaults
+     * apply and nothing is locked. Needs a read-write transaction.
+     */
+    Map<String, Object> groupHeld(String moduleKey);
+
     /** The version of the tenant settings row, the ETag of every settings write (1 when never saved). */
     int version();
 

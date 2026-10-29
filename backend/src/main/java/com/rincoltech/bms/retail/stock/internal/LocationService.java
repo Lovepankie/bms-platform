@@ -30,6 +30,7 @@ import com.rincoltech.bms.retail.stock.internal.StockRepository.ProductTotal;
 import com.rincoltech.bms.retail.stock.internal.TransferApi.Transfer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -258,7 +259,8 @@ class LocationService {
         capabilities.require(RetailCapabilities.TRANSFER_RECEIPT);
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter(READ, null);
-        LocalDate today = clock.today(tenant.profile().timezone());
+        ZoneId zone = tenant.profile().timezone();
+        LocalDate today = clock.today(zone);
         List<Transfer> open = transfers.inTransit(filter).stream()
                 .map(TransferService::visible)
                 .toList();
@@ -269,7 +271,11 @@ class LocationService {
                         t.toBranchId(),
                         t.transferDate(),
                         t.createdAt(),
-                        (int) Math.max(0, ChronoUnit.DAYS.between(t.transferDate(), today)),
+                        // From when it was sent, not the transfer date, which may be set in the past (issue #239).
+                        (int) Math.max(
+                                0,
+                                ChronoUnit.DAYS.between(
+                                        t.createdAt().atZone(zone).toLocalDate(), today)),
                         t.note(),
                         t.lines(),
                         t.costTotalMinor()))

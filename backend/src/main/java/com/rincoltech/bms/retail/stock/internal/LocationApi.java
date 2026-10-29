@@ -149,7 +149,7 @@ final class LocationApi {
             LocalDate transferDate,
             Instant dispatchedAt,
 
-            @Schema(description = "Days from the transfer date to today")
+            @Schema(description = "Days from the day it was sent (dispatched_at, in the tenant's time zone) to today")
             int ageDays,
 
             String note,

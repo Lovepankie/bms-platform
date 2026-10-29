@@ -2211,7 +2211,10 @@ trigger `retail_transfers_guard_update` lets an UPDATE make exactly four transit
 `in_transit` to `received` (sets `in_entry_id`, `shortage_entry_id`, `received_at`, `received_by`),
 `in_transit` to `cancelled` and `completed` or `received` to `voided` (both set the void columns).
 Every other change, including any change to the transfer itself, is refused; DELETE is rejected for
-every role (`reject_mutation`). V22 allowed the void only; V38 replaced the trigger function.
+every role (`reject_mutation`). V22 allowed the void only; V38 replaced the trigger function. Since
+V116 (issue #239) the receipt is also checked against its lines: every line must have
+`received_qty`, and `in_entry_id` may stay null only when the received quantities at the dispatch
+cost (rounded half up per line) sum to zero.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -2220,7 +2223,7 @@ every role (`reject_mutation`). V22 allowed the void only; V38 replaced the trig
 | `transfer_date` | date | The business date both entries and all four kinds of movement carry |
 | `note` | varchar(300) | Optional |
 | `currency`, `cost_total_minor` | | The lines at the source's cost (present in responses only with `retail.profit.read`) |
-| `out_entry_id`, `in_entry_id` | uuid | The source's and the destination's journal entries. `completed`: both or neither (neither only at zero cost). `in_transit`: the source's only (none at zero cost). `cancelled`: the source's only, now reversed. `received`: the source's, unless zero cost; the destination's is null only when nothing of value arrived. CHECK `retail_transfers_entries_chk` (V38) |
+| `out_entry_id`, `in_entry_id` | uuid | The source's and the destination's journal entries. `completed`: both or neither (neither only at zero cost). `in_transit`: the source's only (none at zero cost). `cancelled`: the source's only, now reversed. `received`: the source's, unless zero cost; the destination's is null only when nothing of value arrived. CHECK `retail_transfers_entries_chk` (V38); the destination rule needs the lines, so the update guard enforces it (V116) |
 | `shortage_entry_id` | uuid | V38. The destination's shrinkage entry for what did not arrive, valued at the source cost; null when everything arrived. Composite FK to `journal_entries` |
 | `status` | text | `completed` (one step), `in_transit`, `received`, `cancelled`, `voided`. CHECK `retail_transfers_status_chk` (V38, replaces the V22 check) |
 | `received_at`, `received_by` | | V38. Set together, once, by the receipt (CHECK `retail_transfers_received_chk`); kept when a received transfer is later voided |

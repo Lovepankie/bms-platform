@@ -12,9 +12,10 @@
  * {@link com.rincoltech.bms.core.tenancy.BranchDeactivationGuard},
  * {@link com.rincoltech.bms.core.tenancy.BranchProvisioning},
  * {@link com.rincoltech.bms.core.tenancy.ModuleManifest},
- * {@link com.rincoltech.bms.core.tenancy.ModuleSettingsGroup} and
- * {@link com.rincoltech.bms.core.tenancy.ModuleSettings} (a vertical's settings group, stored as
- * opaque jsonb and validated by the vertical, ADR-033), and
+ * {@link com.rincoltech.bms.core.tenancy.ModuleSettingsGroup},
+ * {@link com.rincoltech.bms.core.tenancy.ModuleSettings} and
+ * {@link com.rincoltech.bms.core.tenancy.ModuleSettingsChangeGuard} (a vertical's settings group, stored as
+ * opaque jsonb and validated by the vertical, ADR-033, and a vertical's veto on a change to it, issue #239), and
  * {@link com.rincoltech.bms.core.tenancy.ModuleSetUp} (a vertical's own set-up when its module is
  * switched on, ADR-098).
  */

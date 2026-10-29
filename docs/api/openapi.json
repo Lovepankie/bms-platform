@@ -13370,7 +13370,7 @@
         "description" : "Dispatched and not received or cancelled, the longest wait first",
         "properties" : {
           "age_days" : {
-            "description" : "Days from the transfer date to today",
+            "description" : "Days from the day it was sent (dispatched_at, in the tenant's time zone) to today",
             "format" : "int32",
             "type" : "integer"
           },
