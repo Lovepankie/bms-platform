@@ -1393,9 +1393,18 @@ form you were on. That is how AppSheet works."
 - **Who.** The option shows only with the permission of the full add screen (`retail.catalogue.manage` for a category or a
   unit); anyone else does not see it, and an empty list tells them who to ask (rule 25).
 - **An empty list.** The field is the EmptyChoice: "No units yet." and only + Add a unit, which opens the same sheet.
-- **Converted.** The category picker (its search list keeps its own look; its add row uses the hook) and Counted in
-  (`UnitPicker`, which held the first version of this inline). The guard in `design-guard.test.ts` lists the pickers not yet
-  converted, each with its reason, and fails a new one.
+- **Converted.** The category picker (its search list keeps its own look; its add row uses the hook), Counted in
+  (`UnitPicker`, which held the first version of this inline), Buy stock's Supplier (the typed "Or add a new supplier" field is
+  gone: + Add a supplier adds and chooses it at once), the purchasing `SupplierField` (purchase orders, goods received,
+  supplier invoices), the customer of Sell's price list, of an order and of a quotation (`CustomerPicker`, by name, for
+  whoever may use Customers), and the unit of an item's pack form (+ Add a unit, the size typed kept). There is no brand
+  record in the app yet, so there is no brand picker to convert.
+- **The guard.** `design-guard.test.ts` (rule 26) fails a hand-built `<select>` over a list of categories, units, suppliers,
+  customers, brands, packs or branches unless it is listed as exempt with its reason. Exempt today: the branch fields (a branch
+  is set up on the Branches screen with its own checks), the pack of a line (it needs a size, a use and a price, so it is
+  added on the item's page), the price list's unit (the item's own unit and packs), the expense category and Sell's credit
+  buyer (which already adds a buyer in place with a phone; both move onto `PickerWithAdd` next) and the offline sale's
+  customers (adding one needs the internet).
 - **Quick add (Part 1).** Category sits right under the Name and is needed: the red star, "Choose a group" in the box, and
   Add refuses with "Choose a group." and puts the focus on it. The group this person last chose at this shop is chosen for
   them (kept on the device per business, person and shop, `bms.quickAddGroup.*`). With no groups yet the field offers only +

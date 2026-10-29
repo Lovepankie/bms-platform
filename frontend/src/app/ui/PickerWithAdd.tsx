@@ -49,7 +49,7 @@ export function useAddInPlace({ thing, form, onAdded }: {
  * suppliers yet." and only "+ Add a supplier", or who to ask ("Ask the owner to add a supplier first."). A record added here is
  * named at once, before the screen's own list has read it again.
  */
-export function PickerWithAdd({ id, label, thing, options, value, onChange, placeholder, canAdd, form, required = false, error = null, showError = false, hint, loading = false, load, empty, ask }: {
+export function PickerWithAdd({ id, label, thing, options, value, onChange, placeholder, canAdd, form, required = false, error = null, showError = false, hint, disabled = false, loading = false, load, empty, ask }: {
   id: string;
   label: ReactNode;
   /** The record in a few plain words, such as "supplier": the option says "+ Add a supplier". */
@@ -65,6 +65,8 @@ export function PickerWithAdd({ id, label, thing, options, value, onChange, plac
   error?: string | null;
   showError?: boolean;
   hint?: ReactNode;
+  /** The choice is fixed (an order already sent): no change and no add. */
+  disabled?: boolean;
   /** The list is on its way: the select shows, never "No suppliers yet." */
   loading?: boolean;
   load?: { isError: boolean; refetch: () => unknown };
@@ -92,10 +94,10 @@ export function PickerWithAdd({ id, label, thing, options, value, onChange, plac
         hint={hint}
         control={(props) => (
           // empty: drawn only while the list has records or is on its way; with none, the EmptyChoice above stands in.
-          <select {...props} value={value} onChange={(e) => (e.target.value === ADD_CHOICE ? add.open() : onChange(e.target.value))}>
+          <select {...props} value={value} disabled={disabled} onChange={(e) => (e.target.value === ADD_CHOICE ? add.open() : onChange(e.target.value))}>
             <option value="">{placeholder}</option>
             {list.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            {canAdd && <option value={ADD_CHOICE}>{addChoice(thing)}</option>}
+            {canAdd && !disabled && <option value={ADD_CHOICE}>{addChoice(thing)}</option>}
           </select>
         )}
       />

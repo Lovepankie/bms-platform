@@ -2,9 +2,10 @@ import { QueryClientContext, keepPreviousData, useInfiniteQuery, useQuery } from
 import { Link } from '@tanstack/react-router';
 import { useContext, useRef, useState, type ReactNode } from 'react';
 import { retail, type Supplier } from '../../../api/retail';
-import { EmptyChoice } from '../../../app/ui/EmptyChoice';
+import { AddByName, EmptyChoice } from '../../../app/ui/EmptyChoice';
+import { PickerWithAdd } from '../../../app/ui/PickerWithAdd';
 import { useOptionalStaff } from '../context';
-import { holds } from './permissions';
+import { canUse } from './permissions';
 import { branchLabel } from '../../../auth/branch';
 import { MIN_REASON, reasonOf, reversalKeys } from './account-state';
 import { newIdempotencyKey } from './idempotency';
@@ -116,29 +117,35 @@ export function SupplierField({ id, label = 'Supplier', value, suppliers, disabl
   const queryClient = useContext(QueryClientContext);
   const read = queryClient?.getQueryState(['retail', 'suppliers']);
   const failed = read?.status === 'error';
-  if (failed || (read?.data !== undefined && suppliers.length === 0)) {
-    return (
-      <EmptyChoice id={id} label={label} required={required} load={{ isError: failed, refetch: () => queryClient?.refetchQueries({ queryKey: ['retail', 'suppliers'] }) }} text="No suppliers yet." ask="Ask the owner to add your suppliers first."
-        add={me && holds(me, 'retail.catalogue.manage') ? {
-          label: 'Add a supplier', name: 'Name of the supplier', send: 'Add supplier', maxLength: 120,
+  // Issue #688: the list ends with "+ Add a supplier", added in a sheet over the order or invoice and chosen.
+  return (
+    <PickerWithAdd
+      id={id}
+      label={label}
+      thing="supplier"
+      placeholder="Choose a supplier"
+      options={suppliers.map((s) => ({ value: s.id ?? '', label: s.active === false ? `${s.name ?? ''} (switched off)` : s.name ?? '' }))}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      canAdd={!disabled && !!me && canUse(me, 'suppliers')}
+      required={required}
+      loading={!failed && read?.data === undefined}
+      load={{ isError: failed, refetch: () => queryClient?.refetchQueries({ queryKey: ['retail', 'suppliers'] }) }}
+      empty="No suppliers yet."
+      ask="Ask the owner to add your suppliers first."
+      form={(done, cancel) => (
+        <AddByName id={`${id}-add`} onCancel={cancel} add={{
+          label: 'Add a supplier', name: 'Name of the new supplier', send: 'Add supplier', maxLength: 120,
           create: (name) => retail.createSupplier({ name }),
-          onAdded: (supplier) => {
+          onAdded: (supplier: Supplier) => {
             queryClient?.setQueryData<Supplier[]>(['retail', 'suppliers'], (was) => [...(was ?? []).filter((s) => s.id !== supplier.id), supplier]);
             void queryClient?.invalidateQueries({ queryKey: ['retail', 'suppliers'] });
-            onChange(supplier.id ?? '');
+            done({ value: supplier.id ?? '', label: supplier.name ?? '' });
           },
-        } : null} />
-    );
-  }
-  return (
-    <>
-      <label htmlFor={id}>{label}{required && <Star />}</label>
-      {/* empty: with no supplier the field is the EmptyChoice returned above. */}
-      <select id={id} value={value} disabled={disabled} aria-required={required || undefined} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Choose a supplier</option>
-        {suppliers.map((s) => <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>)}
-      </select>
-    </>
+        }} />
+      )}
+    />
   );
 }
 

@@ -516,6 +516,62 @@ describe('design guard, the cross-cutting fixes of the 70-screen audit', () => {
   });
 });
 
+// Rule 26 (issue #688): a picker that chooses a record (a category, a unit, a supplier, a customer, a brand, a pack, a branch)
+// is the shared PickerWithAdd (or its hook useAddInPlace), whose list ends with "+ Add a <thing>". A hand-built <select> over a
+// list of those records fails here, unless it is listed below with the reason it stays as it is. The list is read off the name
+// of the list the options map, so a select of records under another name is for review to catch.
+// JUSTIFICATION-A3: issue #688 asks for this guard; it reuses runtimeSelects of rule 25 below rather than a second parser.
+const RECORD_LIST = /categor|unit|supplier|customer|buyer|brand|pack|branch|places/i;
+// The exemptions, each with its reason (the issue asks for a list with reasons; JUSTIFICATION-A3: one entry per picker found).
+const BRANCH = 'a branch is set up on the Branches screen with its own checks, never in the middle of this form';
+const ITEM_PACK = "an item's pack needs its size, use and price, so it is added on the item's page, whose pack form adds a unit in place";
+const ADD_IN_PLACE_EXEMPT: Record<string, string> = {
+  'areas/staff/branch-picker.tsx branches': `switches the branch in use, not a form field; ${BRANCH}`,
+  'areas/staff/top-bar.tsx branches': `switches the branch in use, not a form field; ${BRANCH}`,
+  'areas/staff/retail/account.tsx branches': BRANCH,
+  'areas/staff/retail/purchasing-ui.tsx branches': BRANCH,
+  'areas/staff/retail/return-new.tsx branches.filter((b) => b.stocks_goods !== false)': BRANCH,
+  'areas/staff/retail/quick-add.tsx places': `Where holds only the branches this person may add stock at; ${BRANCH}`,
+  'areas/staff/retail/catalogue-barcodes.tsx packs': ITEM_PACK,
+  'areas/staff/retail/goods-receive.tsx line.packs': ITEM_PACK,
+  'areas/staff/retail/purchase-order-form.tsx line.packs': ITEM_PACK,
+  'areas/staff/retail/restock.tsx packs': ITEM_PACK,
+  'areas/staff/retail/sale.tsx packs': ITEM_PACK,
+  'areas/staff/retail/price-lists.tsx units': "the item's own unit and its packs, not the list of units; a pack is added on the item's page",
+  'areas/staff/retail/expenses.tsx activeCategories(list)': 'expense categories hold the items an expense is booked to; the empty list opens their screen and comes back (rule 25); moves onto PickerWithAdd next',
+  'areas/staff/retail/sale.tsx (customers.data ?? [])': 'the credit buyer already adds a buyer in place with a name and a phone, saved with the sale and kept in the draft; moves onto PickerWithAdd next',
+  'areas/staff/retail/sale.tsx (offline?.catalogue?.customers ?? [])': 'the offline sale reads the customers kept on the phone, and adding one needs the internet',
+};
+
+/** The hand-built record pickers of `source`, as `list` (the list the options map). */
+export function recordSelects(source: string): string[] {
+  return runtimeSelects(source).map(({ list }) => list).filter((list) => RECORD_LIST.test(list));
+}
+
+describe('design guard, a record picker adds what is missing in place (issue #688)', () => {
+  const sources = components.map((f) => relative(SRC, f)).filter((f) => f !== 'app/ui/PickerWithAdd.tsx');
+
+  it('finds a select of records and passes one of something else', () => {
+    expect(recordSelects('<select>{suppliers.map((s) => <option />)}</select>')).toEqual(['suppliers']);
+    expect(recordSelects('<select>{(customers.data ?? []).map((c) => <option />)}</select>')).toEqual(['(customers.data ?? [])']);
+    expect(recordSelects('<select>{periods.map((p) => <option />)}</select>')).toEqual([]);
+    expect(recordSelects('<select>{PACKS.map((p) => <option />)}</select>')).toEqual([]);
+  });
+
+  it.each(sources)('%s builds every record picker on PickerWithAdd, or is exempt with a reason', (file) => {
+    const found = recordSelects(readFileSync(join(SRC, file), 'utf8')).map((list) => `${file} ${list}`);
+    expect(found.filter((key) => !ADD_IN_PLACE_EXEMPT[key])).toEqual([]);
+  });
+
+  it('keeps every exemption in use and gives each a reason', () => {
+    const all = new Set(sources.flatMap((file) => recordSelects(readFileSync(join(SRC, file), 'utf8')).map((list) => `${file} ${list}`)));
+    for (const [key, why] of Object.entries(ADD_IN_PLACE_EXEMPT)) {
+      expect(all.has(key) ? key : null, `${key} is exempt but no longer found`).toBe(key);
+      expect(why.trim().length, key).toBeGreaterThan(20);
+    }
+  });
+});
+
 // Rule 25 (issue #619): a list a form needs is never a dead end. A <select> whose options are read at run time (a list mapped from
 // data or props, not a constant such as METHODS or Object.keys(WORDS)) shows the EmptyChoice when that list is empty, or says
 // with an `empty:` comment in the lines just above it why it never is (a filter with its "All", a list the server always fills).
