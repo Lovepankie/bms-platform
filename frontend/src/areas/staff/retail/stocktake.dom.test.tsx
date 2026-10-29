@@ -14,6 +14,7 @@ vi.setConfig({ testTimeout: 20000 });
 const listStock = vi.fn();
 const createStocktake = vi.fn();
 const commitStocktake = vi.fn();
+const discardStocktake = vi.fn();
 
 vi.mock('@tanstack/react-router', async (original) => {
   const real = await original<typeof import('@tanstack/react-router')>();
@@ -22,7 +23,7 @@ vi.mock('@tanstack/react-router', async (original) => {
 
 vi.mock('../../../api/retail', async (original) => {
   const real = await original<typeof import('../../../api/retail')>();
-  return { ...real, retail: { ...real.retail, listStock: (...a: unknown[]) => listStock(...a), createStocktake: (...a: unknown[]) => createStocktake(...a), commitStocktake: (...a: unknown[]) => commitStocktake(...a) } };
+  return { ...real, retail: { ...real.retail, listStock: (...a: unknown[]) => listStock(...a), createStocktake: (...a: unknown[]) => createStocktake(...a), commitStocktake: (...a: unknown[]) => commitStocktake(...a), discardStocktake: (...a: unknown[]) => discardStocktake(...a) } };
 });
 
 const { StocktakePage, StocktakeReview } = await import('./stocktake');
@@ -32,6 +33,9 @@ afterEach(() => {
   listStock.mockReset();
   createStocktake.mockReset();
   commitStocktake.mockReset();
+  discardStocktake.mockReset();
+  // Issue #681: the count is kept on the device, so each test starts with none.
+  localStorage.clear();
 });
 
 const row = (code: string, description: string, qty: string): StockRow => ({ product_id: code, code, description, category: 'Lamps', unit: 'piece', qty, negative: false, sell_minor: 1500 });
@@ -307,7 +311,7 @@ describe('a count that wipes or halves stock', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Four Way is right' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Yes, Test Plug Two Way is right' }));
     fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
-    await screen.findByRole('heading', { name: 'Stock count committed' });
+    await screen.findByRole('heading', { name: 'Stock updated for 4 items' });
     noFinish();
   });
 
