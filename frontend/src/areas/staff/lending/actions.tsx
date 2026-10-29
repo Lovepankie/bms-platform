@@ -4,7 +4,8 @@ import { PAYMENT_METHODS, lending, type Loan, type LoanTransaction, type Payment
 import { useStaff } from '../context';
 import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
-import { allocationSummary, isIsoDate, localDate, money, parseAmount, words } from './loan-state';
+import { businessToday } from '../../../api/retail';
+import { allocationSummary, isIsoDate, money, parseAmount, words } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The money-moving forms of the loan page: repayment, disbursement, reversal and write-off, plus
@@ -93,7 +94,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   const refresh = useRefreshLoan(loanId);
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<RepayDraft>(`lending-repay:${me.user_id ?? ''}:${loanId}`, {
     amount: '',
-    valueDate: localDate(),
+    valueDate: businessToday(),
     method: 'cash',
     reference: '',
   });
@@ -123,7 +124,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
         {amountMinor !== null ? `Will record ${money(amountMinor, loan.currency)}` : 'Enter an amount above zero.'}
       </p>
       <label htmlFor="repay-date">Date paid</label>
-      <input id="repay-date" type="date" max={localDate()} value={draft.valueDate} onChange={(e) => update({ valueDate: e.target.value })} />
+      <input id="repay-date" type="date" max={businessToday()} value={draft.valueDate} onChange={(e) => update({ valueDate: e.target.value })} />
       <MethodChoice name="repay-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="repay-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
@@ -144,7 +145,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
   const loanId = loan.id ?? '';
   const refresh = useRefreshLoan(loanId);
   const { key, draft, setDraft, finish } = usePersistedDraft<DisburseDraft>(`lending-disburse:${me.user_id ?? ''}:${loanId}`, {
-    date: localDate(),
+    date: businessToday(),
     method: 'cash',
     reference: '',
   });
@@ -170,7 +171,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
         Pays out {money(loan.approved_principal_minor, loan.currency)} to the member.
       </p>
       <label htmlFor="disburse-date">Disbursement date</label>
-      <input id="disburse-date" type="date" max={localDate()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
+      <input id="disburse-date" type="date" max={businessToday()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
       <MethodChoice name="disburse-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="disburse-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
@@ -183,7 +184,7 @@ export function DisburseForm({ loan }: { loan: Loan }) {
 
 export function PayoffQuotePanel({ loan }: { loan: Loan }) {
   const loanId = loan.id ?? '';
-  const [date, setDate] = useState(localDate());
+  const [date, setDate] = useState(businessToday());
   const quote = useQuery({
     queryKey: ['lending', 'loan', loanId, 'payoff', date],
     queryFn: () => lending.payoffQuote(loanId, date),

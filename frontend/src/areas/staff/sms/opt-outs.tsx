@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { businessZone } from '../../../api/retail';
 import { SmsError, sms, type SmsImportResult, type SmsOptOut } from '../../../api/sms';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Highlight, NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
@@ -74,7 +75,7 @@ export function OptOutRows({ items, term, canManage, busy, onRemove }: {
               </td>
               <td className="num">{i.recipient_masked ? <Highlight text={i.recipient_masked} term={term} /> : 'Any number'}</td>
               <td>{SCOPE_WORDS[i.scope] ?? i.scope}</td>
-              <td>{new Date(i.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</td>
+              <td>{new Date(i.created_at).toLocaleDateString(undefined, { dateStyle: 'medium', timeZone: businessZone() })}</td>
               {canManage && (
                 <td>
                   <button type="button" /* busy-exempt: opens the confirmation */ className="btn-ghost btn-sm" disabled={busy} onClick={() => onRemove(i)} aria-label={`Lift the opt-out for ${i.recipient_masked ?? 'this member'}`}>

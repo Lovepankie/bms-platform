@@ -29,7 +29,7 @@ describe('insights formatting', () => {
   });
 
   it('builds the quick ranges ending today', () => {
-    const today = new Date(2026, 9, 6);
+    const today = '2026-10-06';
     expect(presetRange('month', today)).toEqual({ from: '2026-10-01', to: '2026-10-06' });
     expect(presetRange('7d', today)).toEqual({ from: '2026-09-30', to: '2026-10-06' });
     expect(presetRange('year', today)).toEqual({ from: '2025-10-07', to: '2026-10-06' });

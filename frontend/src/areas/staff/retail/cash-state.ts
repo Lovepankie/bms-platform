@@ -1,4 +1,4 @@
-import { RETAIL_CURRENCY, RETAIL_ZONE } from '../../../api/retail';
+import { RETAIL_CURRENCY, businessZone } from '../../../api/retail';
 import { parseMinor } from '../../../components/money';
 
 // Plain logic shared by the cash book screens (ADR-022): grouping of records, amounts typed by people,
@@ -44,7 +44,7 @@ export function groupByShopMonth<T extends { branch_id?: string; business_date?:
 }
 
 /** The time of day of an instant in the business zone, "14:05"; empty for anything that is not an instant. */
-export function clockTime(instant: string | undefined, zone: string = RETAIL_ZONE): string {
+export function clockTime(instant: string | undefined, zone: string = businessZone()): string {
   const t = instant ? Date.parse(instant) : Number.NaN;
   if (Number.isNaN(t)) return '';
   return new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(t));

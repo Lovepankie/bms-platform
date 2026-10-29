@@ -1,4 +1,5 @@
 import type { Me } from '../../../api/client';
+import { businessZone } from '../../../api/retail';
 import type { InviteUserBody, RoleAssignmentRequest, StaffBranch, StaffRole, StaffUser } from '../../../api/users';
 import { foldText } from '../../../app/ui/fold';
 import { normaliseUganda, phoneProblem, showPhone } from '../lending/member-state';
@@ -309,7 +310,7 @@ export function resetProofProblem(mfaEnabled: boolean, typed: string): string | 
 /** The expiry in the reader's own words, for example "Fri 23 Oct 2026, 14:30". */
 export function expiryWords(iso: string | undefined): string {
   const d = iso ? new Date(iso) : null;
-  return d && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'soon';
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: businessZone() }) : 'soon';
 }
 
 /** The WhatsApp link with the message already typed. With a phone the chat opens on that person; without one, WhatsApp asks who. */

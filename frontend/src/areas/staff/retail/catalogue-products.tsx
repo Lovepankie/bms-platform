@@ -4,7 +4,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoResults, SearchBox, SearchResults } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
-import { RETAIL_CURRENCY, RETAIL_ZONE, retail, type Category, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
+import { RETAIL_CURRENCY, businessZone, retail, type Category, type PriceChange, type Product, type SimilarProduct } from '../../../api/retail';
 import { Field, FieldsNeededNote, focusFirstMissing } from '../../../app/ui/Field';
 import { formatMinor, parseMinor } from '../../../components/money';
 import { useCrumbTail } from '../../../components/breadcrumbs';
@@ -42,8 +42,8 @@ export function showWhen(iso: string | undefined): string {
   if (!iso) return '';
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return iso;
-  const d = new Intl.DateTimeFormat('en-GB', { timeZone: RETAIL_ZONE, day: 'numeric', month: 'short', year: 'numeric' }).format(when);
-  const t = new Intl.DateTimeFormat('en-GB', { timeZone: RETAIL_ZONE, hour: '2-digit', minute: '2-digit', hour12: false }).format(when);
+  const d = new Intl.DateTimeFormat('en-GB', { timeZone: businessZone(), day: 'numeric', month: 'short', year: 'numeric' }).format(when);
+  const t = new Intl.DateTimeFormat('en-GB', { timeZone: businessZone(), hour: '2-digit', minute: '2-digit', hour12: false }).format(when);
   return `${d}, ${t}`;
 }
 

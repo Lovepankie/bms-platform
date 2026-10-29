@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { retail, type RetailApi } from '../../../api/retail';
+import { businessToday, retail, type RetailApi } from '../../../api/retail';
 import { createMockRetail, mockEntryConfirmations, mockMe, setMockEntryNorms } from '../../../api/retail-mock';
 import { offendingWords } from '../../../app/glossary';
 import { pickItem } from '../../../test-utils/item-picker';
@@ -280,7 +280,7 @@ describe('a confirmation answers one save (review of #590)', () => {
       await waitFor(() => expect(saved).toHaveBeenCalledTimes(round));
       await waitFor(() => expect(mockEntryConfirmations).toHaveLength(round));
       // Stock for the second sale: the lamp's shelf of 10 was sold by the first.
-      if (round === 1) await retail.createPurchase({ purchased_on: new Date().toISOString().slice(0, 10), payment_method: 'cash', lines: [{ product_id: LAMP, cost_minor: 3500, sell_minor: 6000, qty_by_branch: [{ branch_id: BRANCH, qty: '10' }] }] }, 'k-restock-1');
+      if (round === 1) await retail.createPurchase({ purchased_on: businessToday(), payment_method: 'cash', lines: [{ product_id: LAMP, cost_minor: 3500, sell_minor: 6000, qty_by_branch: [{ branch_id: BRANCH, qty: '10' }] }] }, 'k-restock-1');
     }
     expect(mockEntryConfirmations.map((c) => `${c.screen} ${c.kind} ${c.entered_qty}`)).toEqual(['sell quantity 10', 'sell quantity 10']);
   });

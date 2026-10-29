@@ -82,7 +82,7 @@ export function searchCatalogue(catalogue: Catalogue | null, branchId: string, t
 export function pricesAsOfWords(pricesAsOf: string | undefined): string {
   if (!pricesAsOf) return 'No prices saved on this phone yet. Go online once to save them.';
   const at = new Date(pricesAsOf);
-  return `Prices as of ${at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+  return `Prices as of ${at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`; // business-day-ok: a moment shown on this phone's clock, never sent
 }
 
 /**

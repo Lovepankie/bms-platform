@@ -250,13 +250,33 @@ export type CashDailyRow = S['RetailCashDailyRow'];
 export const RETAIL_CURRENCY = 'UGX';
 
 /**
- * The tenant's timezone is not on /me or the tenant settings yet; the server dates retail events in
- * Africa/Kampala unless the tenant profile says otherwise (BusinessClock), so the forms do too.
+ * The server dates events in Africa/Kampala unless the tenant profile says otherwise (BusinessClock). The forms take the
+ * tenant's own zone from /me once it loads (setBusinessZone) and this one until then.
  */
 export const RETAIL_ZONE = 'Africa/Kampala';
 
-/** Today as yyyy-mm-dd in the business's timezone, not the browser's or UTC (#112 items 3 and 9). */
-export function businessToday(now: Date = new Date(), zone: string = RETAIL_ZONE): string {
+let zoneNow = RETAIL_ZONE;
+
+/**
+ * The signed-in business's own time zone, `tenant_timezone` on /me, set by the staff shell once the profile loads (#667). The
+ * server dates events in it (BusinessClock), so every default date does too; an empty or unknown zone keeps Africa/Kampala.
+ */
+export function setBusinessZone(zone: string | undefined | null): void {
+  zoneNow = RETAIL_ZONE;
+  if (!zone) return;
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+    zoneNow = zone;
+  } catch {
+    // An unknown zone name: Africa/Kampala stays.
+  }
+}
+
+/** The signed-in business's time zone (setBusinessZone), for showing its moments on its own clock. */
+export const businessZone = (): string => zoneNow;
+
+/** Today as yyyy-mm-dd in the business's timezone, not the browser's or UTC (#112 items 3 and 9, #667). */
+export function businessToday(now: Date = new Date(), zone: string = zoneNow): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
@@ -264,7 +284,7 @@ export function businessToday(now: Date = new Date(), zone: string = RETAIL_ZONE
 export function daysBefore(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
+  return d.toISOString().slice(0, 10); // business-day-ok: a calendar sum on a UTC midnight
 }
 
 /** Stock lists can show only items out of stock (zero or less) or low (at or below the server's threshold, 5). */

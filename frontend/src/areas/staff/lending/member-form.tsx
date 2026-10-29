@@ -10,7 +10,8 @@ import { newIdempotencyKey } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
 import { FieldsNeededNote } from '../../../app/ui/Field';
-import { currencyOf, localDate, tenantCurrency } from './loan-state';
+import { businessToday } from '../../../api/retail';
+import { currencyOf, tenantCurrency } from './loan-state';
 import { exponentOf } from '../../../components/money';
 import { MembersGate } from './member-ui';
 import { SaveGuardNotice, useSaveGuard } from './save-guard';
@@ -120,7 +121,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
   const original = useMemo(() => (member ? draftOf(member) : undefined), [member]);
   // Income is typed in the member's currency, or the business's for a new member (issue #289).
   const currency = member ? currencyOf(member.currency) : tenantCurrency(me);
-  const problems = memberProblems(draft, localDate(), editing, original, currency);
+  const problems = memberProblems(draft, businessToday(), editing, original, currency);
   const form = useFormErrors(problems, 'mf');
   const mayCheck = !editing || (me.permissions ?? []).includes('lending.members.create');
   const found = useDuplicates(draft, member?.id, mayCheck);
@@ -248,7 +249,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
       <DuplicateList candidates={candidates} phoneShared={phoneShared} hold={hold} confirmed={draft.confirmedNotDuplicate} onConfirm={(yes) => set('confirmedNotDuplicate', yes)} />
       {checking && candidates.length === 0 && <p className="field-hint" role="status">Checking whether this member is already registered</p>}
       <Group title="About the member">
-        <TextField name="date_of_birth" label="Date of birth" form={form} type="date" value={draft.dateOfBirth} onChange={(v) => set('dateOfBirth', v)} max={localDate()} />
+        <TextField name="date_of_birth" label="Date of birth" form={form} type="date" value={draft.dateOfBirth} onChange={(v) => set('dateOfBirth', v)} max={businessToday()} />
         <SelectField name="gender" label="Gender" form={form} value={draft.gender} onChange={(v) => set('gender', v)} options={GENDERS} />
         <SelectField name="marital_status" label="Marital status" form={form} value={draft.maritalStatus} onChange={(v) => set('maritalStatus', v)} options={MARITAL} />
         <TextField name="occupation" label="Work or business" form={form} value={draft.occupation} onChange={(v) => set('occupation', v)} maxLength={120} />

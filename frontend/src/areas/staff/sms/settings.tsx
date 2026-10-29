@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { businessZone } from '../../../api/retail';
 import { SmsError, sms, type SmsSettings, type SmsSettingsChange } from '../../../api/sms';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
@@ -38,7 +39,7 @@ export function Field({ id, label, hint, error, children }: { id: string; label:
 function When({ iso }: { iso: string | null }) {
   if (!iso) return null;
   const d = new Date(iso);
-  return <>{Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</>;
+  return <>{Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: businessZone() })}</>;
 }
 
 /** The message under a failed save: the server's words, with the field messages next to their boxes. */

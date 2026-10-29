@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Outlet, createLazyRoute, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { api, fetchMe, fetchSettings, type Me } from '../../api/client';
-import { loadRetailMock, retailMockEnabled } from '../../api/retail';
+import { loadRetailMock, retailMockEnabled, setBusinessZone } from '../../api/retail';
 import { endPendingLogout, getAccessToken, logoutPending, markLogoutPending, refreshFailedOffline, refreshSession, setAccessToken, subscribe } from '../../auth/session';
 import { OfflineProvider, lastProfile, useOfflineSupport, waitingNow } from '../../offline/offline-context';
 import { SignOutWarning } from '../../offline/sign-out-warning';
@@ -118,6 +118,7 @@ function StaffLayout() {
   }
 
   const profile = profileNow;
+  setBusinessZone(profile.tenant_timezone);
   if (mock) void loadRetailMock().then((m) => m.setMockProfitAccess(canSeeProfit(profile)));
   async function signOut(confirmed = false, everywhere = false) {
     // ADR-067 decision 9: sales still on this phone are never signed out of without asking (Sign out everywhere asks in its sheet).

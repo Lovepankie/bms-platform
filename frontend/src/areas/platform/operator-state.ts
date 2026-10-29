@@ -1,4 +1,5 @@
 import type { Business, Plan, PlanPrice, SavePlanRequest, SubscriptionStatus } from '../../api/operator';
+import { RETAIL_ZONE, businessToday } from '../../api/retail';
 import { formatMinor, parseMinor } from '../../components/money';
 import { PROFILE_NAMES, profileName, type Profile } from '../staff/retail/capabilities-state';
 
@@ -77,7 +78,7 @@ function parts(day: string): [number, number, number] {
 
 function iso(y: number, m: number, d: number): string {
   const date = new Date(Date.UTC(y, m - 1, d));
-  return date.toISOString().slice(0, 10);
+  return date.toISOString().slice(0, 10); // business-day-ok: a calendar sum on a UTC midnight
 }
 
 /** 21 Oct 2026. */
@@ -102,9 +103,9 @@ export function formatMoment(at: string | null | undefined): string {
   return local.replace(',', '');
 }
 
-/** Today in Kampala, as YYYY-MM-DD. */
+/** Today in Kampala, as YYYY-MM-DD: the one business date helper (issue #667). */
 export function todayInKampala(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kampala', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  return businessToday(now, RETAIL_ZONE);
 }
 
 export function addDays(day: string, days: number): string {

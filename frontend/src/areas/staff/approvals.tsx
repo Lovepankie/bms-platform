@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { businessZone } from '../../api/retail';
 import { type Approval, api, listPendingApprovals, problemOf } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { formatMinor } from '../../components/money';
@@ -108,7 +109,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
       </td>
       <td data-label="Amount" className="num">{item.amount_minor != null && item.currency ? formatMinor(item.amount_minor, item.currency) : ''}</td>
       <td data-label="Requested by">{item.requested_by_name ?? item.requested_by}</td>
-      <td data-label="Requested at">{item.requested_at ? new Date(item.requested_at).toLocaleString() : ''}</td>
+      <td data-label="Requested at">{item.requested_at ? new Date(item.requested_at).toLocaleString(undefined, { timeZone: businessZone() }) : ''}</td>
       <td data-label="Decision" className="cell-stack">
         <div className="decision">
           {item.can_decide && (

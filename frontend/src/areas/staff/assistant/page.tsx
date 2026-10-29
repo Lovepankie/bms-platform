@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
+import { businessZone } from '../../../api/retail';
 import { advisor, type AdvisorSettings } from '../../../api/advisor';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
@@ -14,7 +15,7 @@ import { NoAccess } from '../../../app/ui/EmptyState';
 function When({ iso }: { iso: string | null }) {
   if (!iso) return null;
   const d = new Date(iso);
-  return <>{Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</>;
+  return <>{Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: businessZone() })}</>;
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong.');

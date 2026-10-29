@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allocationSummary, localDate, money, parseAmount, statusBadge, txnWords, words } from './loan-state';
+import { allocationSummary, money, parseAmount, statusBadge, txnWords, words } from './loan-state';
 
 describe('amounts', () => {
   it('parses what a person typed into integer minor units above zero', () => {
@@ -55,10 +55,5 @@ describe('words and dates', () => {
     expect(txnWords('restructure_in')).toBe('Restructure in');
     expect(statusBadge('written_off')).toContain('badge-danger');
     expect(statusBadge('draft')).toBe('badge');
-  });
-
-  it('gives the local calendar date', () => {
-    expect(localDate(new Date(2026, 9, 6, 23, 30))).toBe('2026-10-06');
-    expect(localDate(new Date(2026, 0, 2, 0, 5))).toBe('2026-01-02');
   });
 });

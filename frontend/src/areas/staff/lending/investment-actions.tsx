@@ -6,7 +6,8 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { instructionWords, investmentTxnWords, percent } from './investment-state';
-import { isIsoDate, localDate, money, words } from './loan-state';
+import { businessToday } from '../../../api/retail';
+import { isIsoDate, money, words } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // The forms of the investment page: funding, return payout, maturity payout, rollover, early
@@ -52,7 +53,7 @@ export function FundForm({ inv }: { inv: Investment }) {
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const { key, draft, setDraft, finish } = usePersistedDraft<FundDraft>(`invest-fund:${me.user_id ?? ''}:${id}`, {
-    date: localDate(),
+    date: businessToday(),
     method: 'cash',
     reference: '',
   });
@@ -73,7 +74,7 @@ export function FundForm({ inv }: { inv: Investment }) {
         approves it first.
       </p>
       <label htmlFor="fund-date">Date received</label>
-      <input id="fund-date" type="date" max={localDate()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
+      <input id="fund-date" type="date" max={businessToday()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
       <MethodChoice name="fund-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <label htmlFor="fund-ref">Reference (optional)</label>
       <input id="fund-ref" maxLength={100} value={draft.reference} onChange={(e) => update({ reference: e.target.value })} autoComplete="off" />

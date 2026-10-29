@@ -83,6 +83,21 @@ totals shown while typing are a preview; the server's response is the receipt.
   (`BusinessClock`). Move stock's date and Restock's "Bought on" start on it, and Daily profit's range is the
   last seven days ending on it. Before #112 Restock and Daily profit used the UTC date, which is yesterday
   between midnight and 03:00 in Kampala. Usage, sale and stock-take send no date and take the server's.
+  Since #667 it is the one helper for today in the whole app: the lending forms, the insights quick ranges and
+  the operator screens (`todayInKampala`) take it too, so no screen mixes it with the device's date between
+  21:00 and 24:00 UTC. It takes the business's own zone, `tenant_timezone` on `/me`, which the staff shell
+  passes to `setBusinessZone` once the profile loads (Africa/Kampala until then, or for an unknown zone).
+  `src/api/business-today.test.ts` pins that boundary and guards the app against the device's calendar day: a
+  local date part (`getDate()` and the like), a UTC day cut from an instant (`toISOString().slice(0, 10)`,
+  `split('T')[0]`, also split across lines), `toDateString()`, a date or time formatted without a `timeZone`
+  (`toLocaleString` counts on a `new Date(...)` or with date options), and date-fns on now. A hit that means
+  it (a calendar sum on a UTC midnight, a moment of this phone's own) carries `business-day-ok: <reason>` at
+  the end of its own line or alone in a comment on the line above; an empty reason does not count. The staff
+  screens show the business's own moments (approvals, payments, reports, notifications, feedback, referrals,
+  SMS, price history, cash times) in `businessZone()`. The operator area keeps Africa/Kampala or the operator's
+  own clock, since it spans every business, and the mock server is not scanned (its today is `businessToday`).
+  `business-zone.dom.test.tsx` draws the real staff shell for a business in Africa/Lagos at 22:30 UTC and checks
+  that Insights' To is the 28th.
 - **Stock moves (#112 item 1).** A row reads the date ("6 Oct 2026", on one line), "From X to Y", the item
   count with the first two item names, and "by you" for the user's own moves; tapping it opens the move. The
   API gives a transfer no number of its own and `created_by` is an id, so no number or other name is shown.

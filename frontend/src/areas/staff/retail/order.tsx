@@ -2,7 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { Link, createLazyRoute, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
-import { businessToday, retail, type Product } from '../../../api/retail';
+import { businessToday, businessZone, retail, type Product } from '../../../api/retail';
 import { retailOrders, type Order } from '../../../api/retail-orders';
 import { useCrumbLabel } from '../../../components/breadcrumbs';
 import { useStaff } from '../context';
@@ -217,7 +217,7 @@ export function OrderPage({ orderId }: { orderId: string }) {
           <ol>
             {(o.history ?? []).map((e, i) => (
               <li key={`${e.at}-${i}`}>
-                <strong>{STEP_WORDS[e.step ?? ''] ?? e.step}</strong>, {new Date(e.at ?? '').toLocaleString()}{e.by_name ? `, by ${e.by_name}` : ''}
+                <strong>{STEP_WORDS[e.step ?? ''] ?? e.step}</strong>, {new Date(e.at ?? '').toLocaleString(undefined, { timeZone: businessZone() })}{e.by_name ? `, by ${e.by_name}` : ''}
                 {e.note ? <span className="hint">: {e.note}</span> : null}
               </li>
             ))}

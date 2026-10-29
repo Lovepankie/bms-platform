@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { businessToday, daysBefore } from '../../api/retail';
 import { PeriodPicker, customProblem, periodOf, presetRange, showDate, showRange } from './PeriodPicker';
 
 // The one period picker (issue #526): Today, This week, This month and Custom as one Segmented, the days in words under it,
 // and Custom in the kit's Sheet. Dates read "23 Oct 2026" through the one formatter.
 
+// Issue #667: the clock is pinned to 22:00 UTC on Wednesday 28 Oct 2026, when Kampala is already on Thursday 29 Oct, so a
+// test that read the device's date, or a day that happened to be a preset on some weekday, fails here every run.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-28T22:00:00Z'));
+});
+afterAll(() => vi.useRealTimers());
 afterEach(cleanup);
 
 function Harness({ start }: { start: { from: string; to: string } }) {
@@ -46,13 +53,15 @@ describe('the picker', () => {
 
   it('opens the days in a sheet on Custom and applies them on Show these days', () => {
     const today = businessToday();
+    expect(today).toBe('2026-10-29');
     render(<Harness start={{ from: today, to: today }} />);
     fireEvent.click(screen.getByRole('radio', { name: 'Custom' }));
     const from = screen.getByLabelText('From') as HTMLInputElement;
-    fireEvent.change(from, { target: { value: daysBefore(today, 3) } });
+    // Sunday 25 Oct: not the Monday of This week, so the days stay Custom.
+    fireEvent.change(from, { target: { value: daysBefore(today, 4) } });
     fireEvent.click(screen.getByRole('button', { name: 'Show these days' }));
     expect(screen.queryByLabelText('From')).toBeNull();
-    expect(screen.getByRole('button', { name: `${showRange(daysBefore(today, 3), today)}. Change the days` })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '25 Oct to 29 Oct 2026. Change the days' })).toBeTruthy();
   });
 
   // Review of #559: All sales starts with every day, and Show every day goes back to it after a preset.

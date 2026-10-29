@@ -1,7 +1,7 @@
 import type { LoanAllocation } from '../../../api/lending';
 import { exponentOf, formatMinor, parseMinor } from '../../../components/money';
 
-// Pure helpers of the loan screens: money in the loan's currency, today's date, words for codes,
+// Pure helpers of the loan screens: money in the loan's currency, words for codes,
 // and the allocation of a repayment summed by component. Amounts stay integer minor units
 // (ADR-004); the server computes every figure, these only present it.
 
@@ -39,12 +39,6 @@ export function parseAmount(text: string, currency: string | undefined): number 
     return null;
   }
   return minor !== null && minor > 0 ? minor : null;
-}
-
-/** The local calendar date as YYYY-MM-DD (not UTC, so late evening is still today). */
-export function localDate(now: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 export const isIsoDate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s);

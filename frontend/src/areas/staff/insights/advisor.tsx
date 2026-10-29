@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { advisor, type AdvisorBrief } from '../../../api/advisor';
+import { businessZone } from '../../../api/retail';
 
 // The AI assistant card of the Insights page (extras slice C3, issue #226; ADR-037; spec 5.2): the brief, the time it was made,
 // chips for the figures it rests on (each opens the rows behind that metric), and the advisory line. Every text on it carries
@@ -19,7 +20,7 @@ const WHY: Record<string, string | undefined> = {
 
 export function asOfText(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: businessZone() });
 }
 
 /** The brief as it is drawn; apart from the query so it can be rendered with a fixed brief. */

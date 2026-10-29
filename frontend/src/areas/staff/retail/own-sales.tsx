@@ -87,7 +87,7 @@ async function ownGroups(level: OwnLevel, from: string | undefined, to: string):
     while (end >= from) {
       const y = Number(end.slice(0, 4));
       const m = Number(end.slice(5, 7)) - (MONTHS_A_PAGE - 1);
-      const start = new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10);
+      const start = new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10); // business-day-ok: a calendar sum on a UTC midnight
       chunks.push({ from: start > from ? start : from, to: end });
       end = daysBefore(start, 1);
     }

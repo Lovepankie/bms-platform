@@ -32,7 +32,7 @@ export function dayWords(iso: string | null | undefined): string {
 export function dayBefore(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return d.toISOString().slice(0, 10); // business-day-ok: a calendar sum on a UTC midnight
 }
 
 /** What the server says about when a change asked for now takes effect, by the business's own date. */

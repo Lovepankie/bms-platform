@@ -16,7 +16,8 @@ import {
 import { typeWords } from './collateral-state';
 import { Group, SaveBar, SelectField, TextField, useFormErrors, type FormErrors } from './form-fields';
 import { LendingGate } from './loans';
-import { amountText, currencyOf, localDate, money, tenantCurrency } from './loan-state';
+import { businessToday } from '../../../api/retail';
+import { amountText, currencyOf, money, tenantCurrency } from './loan-state';
 import { mayManageCollateral } from './member-permissions';
 import { MemberPicker } from './member-picker';
 import { applicationSteps, mayApply } from './permissions';
@@ -51,7 +52,7 @@ export function ApplicationForm({ loan: loaded, memberId }: Props) {
   // The summary line shows once Send was pressed, never on a form nobody has tried to send yet.
   const [tried, setTried] = useState(false);
   const guard = useSaveGuard<LoanListItem>();
-  const today = localDate();
+  const today = businessToday();
   const editing = base !== undefined;
 
   const products = useQuery({ queryKey: ['lending', 'loan-products', 'active'], queryFn: () => api.products() });

@@ -1,3 +1,4 @@
+import { daysBefore } from '../../../api/retail';
 import { formatMinor } from '../../../components/money';
 
 // Formatting of insights values. Money comes as integer minor units and is formatted only by
@@ -42,35 +43,23 @@ function trim(n: number): string {
   return n.toFixed(1).replace(/\.0$/, '');
 }
 
-/** yyyy-mm-dd of a local date. */
-export function isoDate(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
-/** The quick ranges of the filter bar, ending today. */
-export function presetRange(preset: string, today: Date): { from: string; to: string } {
-  const to = isoDate(today);
-  const start = new Date(today);
+/** The quick ranges of the filter bar, ending `today`, the business date as yyyy-mm-dd (businessToday). */
+export function presetRange(preset: string, today: string): { from: string; to: string } {
+  const to = today;
   switch (preset) {
     case 'today':
       return { from: to, to };
     case '7d':
-      start.setDate(start.getDate() - 6);
-      return { from: isoDate(start), to };
+      return { from: daysBefore(to, 6), to };
     case '30d':
-      start.setDate(start.getDate() - 29);
-      return { from: isoDate(start), to };
+      return { from: daysBefore(to, 29), to };
     case 'quarter':
-      start.setDate(start.getDate() - 89);
-      return { from: isoDate(start), to };
+      return { from: daysBefore(to, 89), to };
     case 'year':
-      start.setDate(start.getDate() - 364);
-      return { from: isoDate(start), to };
+      return { from: daysBefore(to, 364), to };
     default:
       // This month to date.
-      return { from: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)), to };
+      return { from: `${to.slice(0, 8)}01`, to };
   }
 }
 

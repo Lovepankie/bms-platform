@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { businessZone } from '../../../api/retail';
 import {
   OPEN_STATUSES,
   ReportsError,
@@ -43,7 +44,7 @@ const STATUS_BADGE: Record<string, string> = {
 export function when(iso: string | null | undefined): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: businessZone() });
 }
 
 /** Rows and size in words: "3 rows, 1 KB". */

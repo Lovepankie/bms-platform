@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { type MyReferrals, fetchMyReferrals } from '../../../api/referrals';
+import { businessZone } from '../../../api/retail';
 import { useShellBrand } from '../../../app/branding';
 import { useStaff } from '../context';
 import { moneyWords, showReferrals, statusWords, whatsappShare } from './state';
@@ -15,7 +16,7 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : 'Your referr
 function When({ iso }: { iso?: string | null }) {
   if (!iso) return null;
   const d = new Date(iso);
-  return <>{Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</>;
+  return <>{Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: businessZone() })}</>;
 }
 
 export function ShareLink({ link, code, business }: { link: string; code: string; business: string }) {

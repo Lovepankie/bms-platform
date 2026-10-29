@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, configure, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Sale, SalesSummary, SalesSummaryQuery } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
@@ -24,12 +24,21 @@ vi.mock('../../../api/retail', async (original) => {
   };
 });
 
+// Issue #667: the clock is pinned to 22:00 UTC on 28 Oct 2026, when Kampala is already on 29 Oct, so a list that mixed the
+// device's date with the business date would ask for backwards days here every run. It is pinned at module scope, before the
+// imports below and the `today` they compute, so it must stay above them.
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(new Date('2026-10-28T22:00:00Z'));
+afterAll(() => vi.useRealTimers());
+
 const { businessToday } = await import('../../../api/retail');
 const { AllSales, CreditSales } = await import('./sales');
 
 const me = mockMe('admin');
 const branch = me.branches?.[0]?.id ?? '';
 const today = businessToday();
+// The month's real last day: a month that ended on the 28th cut off the 29th to the 31st.
+const monthEnd = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).toISOString().slice(0, 10);
 const none = { count: 0, total_minor: 0 };
 const group = (period: string, from: string, to: string) => ({
   key: period, label: period, period, from, to, sales_count: 3, total_minor: 9000, voided_count: 0,
@@ -37,7 +46,7 @@ const group = (period: string, from: string, to: string) => ({
 });
 const answer = (q: SalesSummaryQuery): SalesSummary => {
   const g = q.level === 'year' ? group(today.slice(0, 4), `${today.slice(0, 4)}-01-01`, `${today.slice(0, 4)}-12-31`)
-    : q.level === 'month' ? group(today.slice(0, 7), `${today.slice(0, 7)}-01`, `${today.slice(0, 7)}-28`)
+    : q.level === 'month' ? group(today.slice(0, 7), `${today.slice(0, 7)}-01`, monthEnd)
       : group(today, today, today);
   return { group_by: q.level, currency: 'UGX', has_more: false, items: [g] };
 };

@@ -13,7 +13,8 @@ import {
 } from './collateral-state';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
 import { FieldsNeededNote } from '../../../app/ui/Field';
-import { currencyOf, localDate, money } from './loan-state';
+import { businessToday } from '../../../api/retail';
+import { currencyOf, money } from './loan-state';
 import { exponentOf } from '../../../components/money';
 import { mayManageCollateral, mayReleaseCollateral } from './member-permissions';
 import { CollateralGate } from './member-ui';
@@ -92,7 +93,7 @@ function Photos({ id, canAdd }: { id: string; canAdd: boolean }) {
 function Valuations({ id, currency, valuations, canAdd }: { id: string; currency?: string; valuations: { id?: string; valued_on?: string; valuer_name?: string; market_value_minor?: number; forced_sale_value_minor?: number; note?: string }[]; canAdd: boolean }) {
   const api = useCollateralApi();
   const queryClient = useQueryClient();
-  const today = localDate();
+  const today = businessToday();
   const [open, setOpen] = useState(false);
   const [d, setD] = useState(blankValuation(today));
   const [failure, setFailure] = useState<string | null>(null);
