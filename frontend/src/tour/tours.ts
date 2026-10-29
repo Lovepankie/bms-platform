@@ -958,7 +958,8 @@ export const stocktakePage: Tour = {
   // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 5 says a count far from the records is asked about before the review (issue #353, ADR-093).
   // Version 6 says an empty box is not counted and a count that removes most of an item asks for a tick (issue #629).
-  version: 6,
+  // Version 7 says each count is saved as it is typed and comes back after a reload (issue #681).
+  version: 7,
   title: 'This page: count stock',
   audience: (me) => STOCKTAKE.every((p) => held(me, p)),
   autoStart: false,
@@ -968,7 +969,7 @@ export const stocktakePage: Tour = {
       id: 'count',
       target: 'count-search',
       title: 'Count each item',
-      body: 'Find an item by typing part of its name, or work down the list Not counted yet. Type how many you counted, or tap 0 for an item that is gone. Leave an item empty if you did not count it.',
+      body: 'Find an item by typing part of its name, or work down the list Not counted yet. Type how many you counted, or tap 0 for an item that is gone. Leave an item empty if you did not count it. Each count is saved as you type it, so a reload never loses it.',
     },
     {
       id: 'scan',

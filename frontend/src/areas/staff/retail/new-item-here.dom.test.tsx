@@ -56,6 +56,8 @@ const { StocktakePage } = await import('./stocktake');
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  // Count stock keeps a count on the device (issue #681), so each test starts with none.
+  localStorage.clear();
   createProduct.mockReset();
   createCategory.mockReset();
   cats = [bulbs];

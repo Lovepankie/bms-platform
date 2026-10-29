@@ -143,7 +143,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   const unitsOn = capabilityOn(me, 'retail', UNITS);
   const search = useLiveSearch();
   // Issue #681: a count in progress is kept on this device for this business, branch and person, and comes back on a reload.
-  const saveKey = countKey(window.location.host, branchId, me.user_id ?? 'staff');
+  const saveKey = countKey(typeof window === 'undefined' ? '' : window.location.host, branchId, me.user_id ?? 'staff');
   const [restored] = useState(() => readCount(saveKey));
   const [counts, setCounts] = useState<Record<string, string>>(restored?.counts ?? {});
   // Issue #650: the cartons typed for an item with a standard pack, with the pack they were typed in, so a pack changed or

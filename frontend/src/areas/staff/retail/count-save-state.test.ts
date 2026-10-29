@@ -46,8 +46,9 @@ describe('the words at the top of the count', () => {
   });
 
   it('uses no dashes', () => {
+    const dashes = [String.fromCharCode(0x2013), String.fromCharCode(0x2014), '-'];
     for (const s of ['sending', 'sent', 'offline', 'failed'] as const) {
-      for (const d of [true, false]) expect(saveWords(2, d, s)).not.toMatch(/[–—-]/);
+      for (const d of [true, false]) expect(dashes.some((x) => saveWords(2, d, s).includes(x))).toBe(false);
     }
   });
 
