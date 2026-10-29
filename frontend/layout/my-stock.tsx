@@ -25,7 +25,7 @@ if (query.get('theme') === 'dark') document.documentElement.dataset.theme = 'dar
 
 const me = { ...mockMe('admin'), tours: { 'tours-off': { status: 'dismissed', version: 1 } } } as unknown as Me;
 const rows: StockRow[] = [
-  { product_id: 'p1', code: 'EX-1', description: 'Test extension cable 4 way', category: 'Extensions', unit: 'piece', qty: '8.000', negative: false, sell_minor: 8000, cost_minor: 6000 },
+  { product_id: 'p1', code: 'EX-1', description: 'Test extension cable 4 way', category: 'Extensions', unit: 'pc', qty: '8.000', negative: false, sell_minor: 8000, cost_minor: 6000 },
   { product_id: 'p2', code: 'BL-1', description: 'Test LED bulb 9W screw, warm white', category: 'Bulbs', unit: 'piece', qty: '1127.000', negative: false, sell_minor: 4500, cost_minor: 3200, standard_pack: { unit: 'Box', factor: '10.000' } },
   { product_id: 'p3', code: 'BL-2', description: 'Test tube light 4 ft', category: 'Bulbs', unit: 'piece', qty: '-2.000', negative: true, sell_minor: 15000, cost_minor: 11000 },
 ];

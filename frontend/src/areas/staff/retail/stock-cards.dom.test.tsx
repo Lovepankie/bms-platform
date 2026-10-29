@@ -8,7 +8,7 @@ import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { StockTable } from './stock';
 
-// Issue #680: My stock on a phone is a card per item: the name, "In stock: 8 piece" large, the buying and selling price in small
+// Issue #680: My stock on a phone is a card per item: the name, "In stock: 8 pieces" (or "8 pc" for a short unit) large, the buying and selling price in small
 // words under it, and Correct as a secondary button. A wide screen keeps the table with the new headers. Every name is invented.
 
 const rows: StockRow[] = [
@@ -40,12 +40,19 @@ describe('My stock on a phone (issue #680)', () => {
     expect(screen.queryByRole('table')).toBeNull();
     const card = screen.getByRole('listitem');
     expect(within(card).getByText('Test extension cable 4 way')).toBeTruthy();
-    expect(card.querySelector('.stock-card-qty')?.textContent).toBe('In stock: 8 piece');
+    expect(card.querySelector('.stock-card-qty')?.textContent).toBe('In stock: 8 pieces');
     expect(card.textContent).toContain('Buying price UGX 6,000 · Selling price UGX 8,000');
     const correct = within(card).getByRole('button', { name: 'Correct Test extension cable 4 way' });
     expect(correct.className).toBe('btn-sm');
     fireEvent.click(correct);
     expect(correct.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps a short unit code as typed, and one of a unit in the singular', () => {
+    screenAt(true);
+    show(<StockTable rows={[{ ...rows[0], unit: 'pc' }, { ...rows[0], product_id: 'p2', description: 'Test plug', qty: '1.000' }]} showCost={false} />);
+    expect([...document.querySelectorAll('.stock-card-qty')].map((q) => q.textContent)).toEqual(['In stock: 8 pc', 'In stock: 1 piece']);
+    expect(screen.getByText('2 items, worth UGX 72,000 at selling price')).toBeTruthy();
   });
 
   it('shows only the selling price to a seller who may not see buying prices', () => {

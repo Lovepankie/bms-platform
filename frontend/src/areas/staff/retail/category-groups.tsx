@@ -1,5 +1,6 @@
 import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
-import { milliOf, qtyString, showQty } from './maths';
+import { milliOf, qtyString } from './maths';
+import { quantityIn } from './units-state';
 import { Hint } from '../../../app/ui/Hint';
 
 // Item lists grouped by category as expandable sections (the stock list and the catalogue items; the item pickers
@@ -45,7 +46,7 @@ export function sameUnitQty(rows: { qty?: string; unit?: string }[]): string | n
   const unit = rows[0]?.unit;
   if (!unit || rows.some((r) => r.unit !== unit)) return null;
   const total = rows.reduce((sum, r) => sum + milliOf(r.qty ?? '0'), 0);
-  return `${showQty(qtyString(total))} ${unit}`;
+  return quantityIn(qtyString(total), unit);
 }
 
 const storeKey = (screen: string) => `bms.groupByCategory.${screen}`;

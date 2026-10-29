@@ -112,6 +112,12 @@ describe('the help corpus', () => {
     }
   });
 
+  // Issue #680: Ask BMS answers only from these articles (ADR-096), so none may say the retired words for the two prices. Its
+  // `words:` search terms may hold them, since a person may still ask about the average cost; Ask BMS never sends them to a model.
+  it('never says average cost or cost price', () => {
+    for (const a of ARTICLES) expect(articleText(a), a.id).not.toMatch(/average cost|cost price/i);
+  });
+
   it('refuses an article without its front matter or with a job it does not know', () => {
     expect(() => parseArticle('x', 'Just text')).toThrow(/front matter/);
     expect(() => parseArticle('x', '---\ntitle: How do I fly?\njob: flying\n---\nText')).toThrow(/known job/);

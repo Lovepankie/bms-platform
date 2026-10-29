@@ -134,26 +134,35 @@ export function samePack(a: PackSize | undefined, b: PackSize | undefined): bool
 }
 
 /** "1 Carton", "3 Cartons", "2.5 Kgs": a count with its unit, singular only for exactly one. */
+/**
+ * Issue #680: a quantity with its unit as a person says it, "1 piece" and "8 pieces". A unit has no short code of its own, so a
+ * name with no vowel is taken as one ("pc", "kg", "pcs", "ltr") and stays as typed: "8 pc".
+ */
+export function quantityIn(qty: string, unit: string): string {
+  const shown = showQty(qty);
+  return `${shown} ${!/[aeiou]/i.test(unit) || shown.replace(/^-/, '') === '1' ? unit : plural(unit)}`;
+}
+
 function counted(milli: bigint, unit: string): string {
-  return `${showQty(qtyString(Number(milli)))} ${milli === 1000n ? unit : plural(unit)}`;
+  return quantityIn(qtyString(Number(milli)), unit);
 }
 
 /**
  * Issue #650 (units spec section 3, "Stock is shown both ways"): a stock quantity in the item's standard pack and its base unit,
  * and the total in the base unit when that says more: "5 Cartons and 7 Pieces" with "127 Pieces". Less than one pack reads in the
  * base unit only ("7 Pieces"); below zero says how far short ("1 Carton and 3 Pieces short" with "27 Pieces short"). An item with no
- * pack reads as it always did ("127 Piece").
+ * pack reads in its unit with a correct plural ("127 Pieces", "1 Piece", "8 pc"; issue #680).
  */
 export function packsAndPiecesParts(qty: string, unit: string | undefined, pack: PackSize | undefined): { inPacks: string; total?: string } {
   const f = factorMilli(pack?.factor);
-  if (!unit || !pack?.unit || f === null || f <= 1000n) return { inPacks: `${showQty(qty)}${unit ? ` ${unit}` : ''}` };
+  if (!unit || !pack?.unit || f === null || f <= 1000n) return { inPacks: unit ? quantityIn(qty, unit) : showQty(qty) };
   const milli = BigInt(milliOf(qty));
   const size = milli < 0n ? -milli : milli;
   const packs = size / f;
   const rest = size - packs * f;
   const parts = [packs > 0n ? counted(packs * 1000n, pack.unit) : '', rest > 0n || packs === 0n ? counted(rest, unit) : ''].filter(Boolean).join(' and ');
   const inPacks = milli < 0n ? `${parts} short` : parts;
-  return packs > 0n ? { inPacks, total: `${showQty(qtyString(Number(size)))} ${plural(unit)}${milli < 0n ? ' short' : ''}` } : { inPacks };
+  return packs > 0n ? { inPacks, total: `${quantityIn(qtyString(Number(size)), unit)}${milli < 0n ? ' short' : ''}` } : { inPacks };
 }
 
 /** Issue #650: the same in one line, the one every screen says: "5 Cartons and 7 Pieces (127 Pieces)". */

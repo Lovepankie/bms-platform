@@ -3,7 +3,7 @@ import type { Pack, Product, SaleLine } from '../../../api/retail';
 import { buildPurchase, restockLineProblem, restockTotal, withUnit as restockWithUnit, type RestockLine } from './restock';
 import { buildSaleRequest, defaultPrice, draftTotal, lineHint, newLine, withUnit, type Draft } from './sale-state';
 import { factorProblem } from './catalogue-packs';
-import { baseCostMinor, baseQtyMilli, enteredPriceMinor, enteredQty, packPriceMinor, packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, samePack, standardPack } from './units-state';
+import { baseCostMinor, baseQtyMilli, enteredPriceMinor, enteredQty, packPriceMinor, packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, quantityIn, samePack, standardPack } from './units-state';
 
 // Units of measure (ADR-033, issue #194): the forms convert with the same rules as the server
 // (Quantities.java) so a line is judged before it is sent. Names and amounts are fabricated.
@@ -158,13 +158,20 @@ describe('stock in packs and pieces (issue #650)', () => {
     expect(packsAndPieces('-27.000', 'Piece', carton)).toBe('1 Carton and 3 Pieces short (27 Pieces short)');
     expect(packsAndPieces('-3.000', 'Piece', carton)).toBe('3 Pieces short');
   });
-  it('shows an item with no pack as it always did', () => {
-    expect(packsAndPieces('127.000', 'Piece', undefined)).toBe('127 Piece');
-    expect(packsAndPieces('5.000', 'Piece', { unit: 'Pair', factor: '1.000' })).toBe('5 Piece');
+  it('shows an item with no pack in its unit with a correct plural, a short code as typed (issue #680)', () => {
+    expect(packsAndPieces('127.000', 'Piece', undefined)).toBe('127 Pieces');
+    expect(packsAndPieces('1.000', 'Piece', undefined)).toBe('1 Piece');
+    expect(packsAndPieces('-1.000', 'Piece', undefined)).toBe('-1 Piece');
+    expect(packsAndPieces('8.000', 'pc', undefined)).toBe('8 pc');
+    expect(packsAndPieces('5.000', 'Piece', { unit: 'Pair', factor: '1.000' })).toBe('5 Pieces');
     expect(packsAndPieces('5.000', undefined, carton)).toBe('5');
+    expect(quantityIn('2.500', 'metre')).toBe('2.5 metres');
+    expect(quantityIn('3.000', 'box')).toBe('3 boxes');
+    expect(quantityIn('12.000', 'pcs')).toBe('12 pcs');
+    expect(quantityIn('2.000', 'ltr')).toBe('2 ltr');
   });
-  it('works with a pack of a decimal size', () => {
-    expect(packsAndPieces('26.000', 'Kg', { unit: 'Sack', factor: '12.500' })).toBe('2 Sacks and 1 Kg (26 Kgs)');
+  it('works with a pack of a decimal size, a short code kept as typed', () => {
+    expect(packsAndPieces('26.000', 'Kg', { unit: 'Sack', factor: '12.500' })).toBe('2 Sacks and 1 Kg (26 Kg)');
   });
   it('reads packs and pieces as one quantity in pieces', () => {
     expect(packsAndPiecesMilli('5', '7', carton)).toBe(127_000);

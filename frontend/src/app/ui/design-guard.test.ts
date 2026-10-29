@@ -570,15 +570,15 @@ describe('design guard, an empty list is never a dead end (issue #619)', () => {
 });
 
 // Issue #680: a retail column or label says Selling price or Buying price, never a bare Price or Cost ("Average cost" is a retired
-// word of the glossary guard): a table header, a card row's span or a term, or a label prop (Stat, KeyFigureRow, Field).
-// JUSTIFICATION-A3: the issue asks for this design-guard test; it is one regex and its fixtures.
-const BARE_PRICE_LABEL = /<(th|span|dt)\b[^>]*>\s*(?:\{\s*['"`])?(?:Price|Cost)(?:['"`]\s*\})?\s*<\/\1>|\blabel=(?:\{\s*)?['"`](?:Price|Cost)['"`]/;
+// word of the glossary guard): a table header, a card row's span, a term, a form label, a card heading, or a label prop (Stat,
+// KeyFigureRow, Field). JUSTIFICATION-A3: the issue asks for this design-guard test; it is one regex and its fixtures.
+const BARE_PRICE_LABEL = /<(th|span|dt|label|h[2-4]|strong)\b[^>]*>\s*(?:\{\s*['"`])?(?:Price|Cost)(?:['"`]\s*\})?\s*<\/\1>|\blabel=(?:\{\s*)?['"`](?:Price|Cost)['"`]/;
 
 describe('design guard, no bare Price or Cost label on a retail screen (issue #680)', () => {
   it('finds a bare column, row label or label prop, and passes the plain words', () => {
-    const bare = ['<th className="num">Price</th>', "<th>{'Cost'}</th>", '<span>Cost</span>', '<dt>Price</dt>', '<Stat label="Price" />', "<KeyFigureRow label={'Cost'} />"];
+    const bare = ['<th className="num">Price</th>', "<th>{'Cost'}</th>", '<span>Cost</span>', '<dt>Price</dt>', '<label htmlFor="p">Price</label>', '<h3 className="cat-title">Cost</h3>', '<strong>Price</strong>', '<Stat label="Price" />', "<KeyFigureRow label={'Cost'} />"];
     expect(bare.filter((s) => !BARE_PRICE_LABEL.test(s))).toEqual([]);
-    const plain = ['<th className="num">Selling price</th>', '<th>Price list</th>', '<span>At buying price</span>', '<Stat label="Price lists" />'];
+    const plain = ['<th className="num">Selling price</th>', '<th>Price list</th>', '<span>At buying price</span>', '<h2>Price history</h2>', '<label htmlFor="p">Selling price</label>', '<Stat label="Price lists" />'];
     expect(plain.filter((s) => BARE_PRICE_LABEL.test(s))).toEqual([]);
   });
 
