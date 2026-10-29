@@ -120,7 +120,8 @@ class RetailNewItemPacksIT extends IntegrationTest {
                 "  box  ")) {
             assertThat(RetailCatalogue.isPackageWord(word)).as(word).isTrue();
         }
-        for (String word : List.of("Piece", "Bulb", "Metre", "Litre", "Set", "Boxer", "Kg", "Packing tape", "Bag of cement", "")) {
+        for (String word :
+                List.of("Piece", "Bulb", "Metre", "Litre", "Set", "Boxer", "Kg", "Packing tape", "Bag of cement", "")) {
             assertThat(RetailCatalogue.isPackageWord(word)).as(word).isFalse();
         }
         assertThat(RetailCatalogue.isPackageWord(null)).isFalse();
