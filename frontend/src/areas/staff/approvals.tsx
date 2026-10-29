@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessZone } from '../../api/retail';
-import { type Approval, api, listPendingApprovals, problemOf } from '../../api/client';
+import { type Approval, api, getApproval, listPendingApprovals, problemOf } from '../../api/client';
 import { branchFilter } from '../../auth/branch';
 import { formatMinor } from '../../components/money';
 import { EmptyState, SkeletonList } from '../../components/states';
-import { useStaff } from './context';
+import { useOptionalStaff, useStaff } from './context';
 import { BusyButton } from '../../app/ui/BusyButton';
-import { useCollateralApi } from '../../api/lending-context';
+import { useCollateralApi, useMembersApi } from '../../api/lending-context';
 import { custodyWords, typeWords } from './lending/collateral-state';
 import { money as lendingMoney } from './lending/loan-state';
 import { Hint } from '../../app/ui/Hint';
@@ -41,22 +41,35 @@ export const ACTION_WORDS: Record<string, string> = {
 
 /**
  * What a request is, in words a checker can decide on. A collateral release names the item, what it is worth and where it is now, read
- * from the item itself (the list carries no payload, so who collects it is not shown here); other types keep their identifier until their screen gives them words.
+ * from the item itself, and the member and who collects it (issue #289): the list carries no payload, so the row reads the request and
+ * the member too, and leaves out what it may not read. Other types keep their identifier until their screen gives them words.
  */
 export function What({ item }: { item: Approval }) {
   const api = useCollateralApi();
+  const members = useMembersApi();
+  const tenantCurrency = useOptionalStaff()?.me.tenant_currency;
   const release = item.action_type === 'collateral_release';
   const detail = useQuery({ queryKey: ['collateral', 'one', item.subject_id], queryFn: () => api.get(item.subject_id ?? ''), enabled: release && !!item.subject_id, retry: false });
+  const request = useQuery({ queryKey: ['approvals', 'one', item.id], queryFn: () => getApproval(item.id ?? ''), enabled: release && !!item.id, retry: false });
+  const memberId = detail.data?.item?.member_id;
+  const member = useQuery({ queryKey: ['members', 'one', memberId], queryFn: () => members.get(memberId ?? ''), enabled: release && !!memberId, retry: false });
   if (!release) return <>{ACTION_WORDS[item.action_type ?? ''] ?? item.action_type}</>;
   const c = detail.data?.item;
+  const payload: Record<string, unknown> = request.data?.payload ?? {};
+  const collectedBy = typeof payload.collected_by === 'string' ? payload.collected_by : undefined;
+  const note = typeof payload.note === 'string' ? payload.note : undefined;
   return (
     <>
       <strong>Give collateral back</strong>
       {c ? (
         <span className="hint">
-          {' '}{typeWords(c.collateral_type)}: {c.description}. Worth about {lendingMoney(c.collateral_value_minor ?? c.estimated_value_minor, c.currency)}. Now: {custodyWords(c.custody_status)}.
+          {' '}{typeWords(c.collateral_type)}: {c.description}. Worth about {lendingMoney(c.collateral_value_minor ?? c.estimated_value_minor, c.currency ?? tenantCurrency)}. Now: {custodyWords(c.custody_status)}.
         </span>
       ) : detail.isError ? <span className="hint"> The item could not be loaded here. Open the collateral register to see it before you decide.</span> : null}
+      {member.data?.full_name && <span className="hint"> Member: {member.data.full_name}.</span>}
+      {collectedBy && <span className="hint"> Collected by {collectedBy}.</span>}
+      {request.isError && <span className="hint"> Who collects it could not be loaded. Open the request before you decide.</span>}
+      {note && <span className="hint"> Note: {note}</span>}
     </>
   );
 }

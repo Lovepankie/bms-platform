@@ -120,7 +120,7 @@ function MemberLoans({ memberId, canApply }: { memberId: string; canApply: boole
   );
 }
 
-function MemberCollateral({ memberId, canAdd }: { memberId: string; canAdd: boolean }) {
+function MemberCollateral({ memberId, currency, canAdd }: { memberId: string; currency?: string; canAdd: boolean }) {
   const api = useCollateralApi();
   const items = useQuery({ queryKey: ['collateral', 'member', memberId], queryFn: () => api.list({ memberId }) });
   return (
@@ -134,7 +134,7 @@ function MemberCollateral({ memberId, canAdd }: { memberId: string; canAdd: bool
           <li key={c.id}>
             <Link className="ln-item" to="/staff/lending/collateral/$collateralId" params={{ collateralId: c.id ?? '' }}>
               <strong>{c.description}</strong>
-              <span>{words(c.collateral_type)}, worth about {money(c.collateral_value_minor ?? c.estimated_value_minor, c.currency)}</span>
+              <span>{words(c.collateral_type)}, worth about {money(c.collateral_value_minor ?? c.estimated_value_minor, c.currency ?? currency)}</span>
             </Link>
           </li>
         ))}
@@ -153,6 +153,8 @@ export function MemberView({ member }: { member: MemberRecord }) {
   const edit = mayEditMember(me, member.branch_id);
   const seesIds = holds(me, MEMBERS_VERIFY, member.branch_id);
   const branch = branchLabel((me.branches ?? []).find((b) => b.id === member.branch_id));
+  // The member's own currency, else the business's (issue #289), never UGX by default.
+  const currency = member.currency ?? me.tenant_currency;
   return (
     <>
       <section className="rt-card ln-head" aria-label="Member" data-tour="member-header">
@@ -168,7 +170,7 @@ export function MemberView({ member }: { member: MemberRecord }) {
           <Line label="ID" value={maskUnless(edit || mayVerifyKyc(me, member.branch_id), member.id_type === 'nin' ? member.national_id : member.other_id_number)} />
           <Line label="Date of birth" value={member.date_of_birth} />
           <Line label="Work" value={member.occupation} />
-          <Line label="Usual income a month" value={member.monthly_income_minor != null ? money(member.monthly_income_minor, member.currency) : undefined} />
+          <Line label="Usual income a month" value={member.monthly_income_minor != null ? money(member.monthly_income_minor, currency) : undefined} />
           <Line label="Lives in" value={[member.village, member.sub_county, member.district, member.location].filter(Boolean).join(', ')} />
           <Line label="Branch" value={branch} />
         </dl>
@@ -183,7 +185,7 @@ export function MemberView({ member }: { member: MemberRecord }) {
       <DocumentsSection memberId={id} canAdd={edit} seesIds={seesIds} />
       <Relationships memberId={id} />
       {(me.permissions ?? []).includes('lending.loans.read') && <MemberLoans memberId={id} canApply={member.status === 'active' && mayApply(me) && holds(me, LOANS_CREATE, member.branch_id)} />}
-      {showCollateral(me) && <MemberCollateral memberId={id} canAdd={holds(me, 'lending.collateral.manage', member.branch_id)} />}
+      {showCollateral(me) && <MemberCollateral memberId={id} currency={currency} canAdd={holds(me, 'lending.collateral.manage', member.branch_id)} />}
       <MemberSmsControl memberId={id} />
     </>
   );

@@ -7,7 +7,7 @@ import type { CollateralItem } from '../../../api/collateral';
 import { useCollateralApi } from '../../../api/lending-context';
 import { branchFilter } from '../../../auth/branch';
 import { EmptyState } from '../../../components/states';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { Problem } from '../retail/ui';
 import { custodyBadge, custodyWords, ownerWords, TYPES, typeWords } from './collateral-state';
 import { money } from './loan-state';
@@ -28,6 +28,7 @@ const CUSTODY_FILTER = [
 ];
 
 export function CollateralRows({ items }: { items: CollateralItem[] }) {
+  const tenantCurrency = useOptionalStaff()?.me.tenant_currency;
   if (items.length === 0) return <p className="empty-state">No items match.</p>;
   return (
     <ul className="ln-list" data-tour="collateral-list">
@@ -40,7 +41,7 @@ export function CollateralRows({ items }: { items: CollateralItem[] }) {
             </span>
             <span>{typeWords(c.collateral_type)}{c.reference_no ? `, ${c.reference_no}` : ''}</span>
             <span className="ln-item-facts">
-              <span>Worth about {money(c.collateral_value_minor ?? c.estimated_value_minor, c.currency)}</span>
+              <span>Worth about {money(c.collateral_value_minor ?? c.estimated_value_minor, c.currency ?? tenantCurrency)}</span>
               <span>Owner: {c.owner_name ?? ownerWords(c.owner_relationship)}</span>
             </span>
           </Link>

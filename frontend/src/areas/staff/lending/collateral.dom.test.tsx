@@ -186,9 +186,19 @@ describe('lists', () => {
     expect(document.body.textContent).toContain('We hold it');
     expect(document.body.textContent).toContain('UGX 1,000,000');
   });
+
+  it('show an item that carries no currency in the business currency, not UGX (issue #289)', () => {
+    mount(<CollateralRows items={[{ id: 'c1', description: 'Test plot', collateral_type: 'land_title', custody_status: 'in_custody', estimated_value_minor: 1_000_000 }]} />, { me: { ...officer(), tenant_currency: 'KES' } });
+    expect(document.body.textContent).toContain('KES 10,000.00');
+    expect(document.body.textContent).not.toContain('UGX');
+  });
 });
 
 describe('the member page', () => {
+  it('shows the income of a member who carries no currency in the business currency (issue #289)', async () => {
+    mount(<MemberView member={{ ...holder, monthly_income_minor: 50_000 }} />, { me: { ...officer(), tenant_currency: 'KES' } });
+    expect(await screen.findByText('KES 500.00')).toBeTruthy();
+  });
   it('lists what is missing before the details can be checked, in words', async () => {
     mount(<MemberView member={{ ...holder, national_id: undefined, id_type: 'nin' }} />);
     expect(await screen.findByText(/Still needed: .*the ID number.*where the member lives/)).toBeTruthy();

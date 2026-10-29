@@ -225,6 +225,13 @@ export async function listPendingApprovals(branchIds: string[] | undefined, acti
   return data;
 }
 
+/** One request with its payload snapshot, which the list leaves out (issue #289). */
+export async function getApproval(approvalId: string): Promise<Approval> {
+  const { data, error } = await api.GET('/api/v1/approvals/{approval_id}', { params: { path: { approval_id: approvalId } } });
+  if (error || !data) throw new Error(problemOf(error).detail ?? 'Could not load the request');
+  return data;
+}
+
 export async function fetchSettings(): Promise<TenantSettings> {
   const { data, error } = await api.GET('/api/v1/settings');
   if (error || !data) throw new Error(problemOf(error).detail ?? 'Could not load the settings');
