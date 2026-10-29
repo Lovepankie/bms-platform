@@ -44,10 +44,11 @@ export function bigDrop(l: { expected_qty?: string; counted_qty?: string }): boo
   return expected > 0 && milliOf(l.counted_qty ?? '0') * 2 < expected;
 }
 
-/** unit price times quantity in integer minor units, rounded half up, exact via BigInt. */
+/** unit price times quantity in integer minor units, rounded half up (away from zero, as the server's HALF_UP), exact via BigInt. */
 export function lineTotalMinor(unitPriceMinor: number, qtyMilli: number): number {
   const product = BigInt(unitPriceMinor) * BigInt(qtyMilli);
-  return Number((product + 500n) / 1000n);
+  // BigInt division truncates toward zero, so a negative quantity (stock below zero) rounds with the half taken off.
+  return Number((product + (product < 0n ? -500n : 500n)) / 1000n);
 }
 
 /** Basis points as a percentage for people: 4872 is "48.72%", 5000 is "50%"; "n/a" when there is none. */

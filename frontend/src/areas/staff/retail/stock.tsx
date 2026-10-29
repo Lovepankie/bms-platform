@@ -59,17 +59,38 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
   const grouping = g.active && !flat;
   if (rows.length === 0) return <EmptyState title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const showCategory = !grouping && phone;
+  const correct = (r: StockRow) => (
+    <button type="button" className="btn-sm" aria-expanded={corrected === r.product_id} aria-label={`Correct ${r.description}`} onClick={() => setCorrected(corrected === r.product_id ? null : (r.product_id ?? null))}>Correct</button>
+  );
+  // Issue #680: on a phone each item is a card, the quantity large and the two prices in plain words under it; the table stays wide.
+  // JUSTIFICATION-A3: the phone card list the issue asks for; no card of one shop's stock existed to reuse.
+  if (phone) {
+    const card = (r: StockRow) => (
+      <li key={r.product_id} className="rt-card stock-card">
+        <strong>{r.description}</strong>
+        {showCategory && r.category && <CategoryLabel category={r.category} />}
+        <p className="stock-card-qty">In stock: <span className={r.standard_pack ? 'num qty-packs' : 'num'}><InPacks qty={r.qty ?? '0'} unit={r.unit} pack={r.standard_pack} /></span></p>
+        {r.negative && <p className="rt-flag">Negative</p>}
+        {keptWords(r.qty, r.reserved_qty) && <p className="hint">{keptWords(r.qty, r.reserved_qty)}</p>}
+        {(r.sell_minor !== undefined || (showCost && r.cost_minor !== undefined)) && <p className="hint"><PriceLine cost={showCost ? r.cost_minor : undefined} sell={r.sell_minor} /></p>}
+        {correctable && correct(r)}
+        {correctable && corrected === r.product_id && <CorrectItem row={r} branchId={correctable.branchId} onClose={() => setCorrected(null)} />}
+      </li>
+    );
+    return (
+      <>
+        {!flat && <GroupControls state={g} />}
+        {grouping ? <GroupedCards state={g} renderItem={card} /> : <ul className="stock-cards">{rows.map(card)}</ul>}
+      </>
+    );
+  }
   const columns = 3 + (!phone && !grouping ? 1 : 0) + (showCost ? 1 : 0);
   const row = (r: StockRow) => (
     <Fragment key={r.product_id}>
       <tr>
         <td>
           {r.description}{showCategory && r.category && <><br /><CategoryLabel category={r.category} /></>}
-          {correctable && (
-            <div>
-              <button type="button" className="btn-sm" aria-expanded={corrected === r.product_id} aria-label={`Correct ${r.description}`} onClick={() => setCorrected(corrected === r.product_id ? null : (r.product_id ?? null))}>Correct</button>
-            </div>
-          )}
+          {correctable && <div>{correct(r)}</div>}
         </td>
         {!phone && !grouping && <td>{r.category}</td>}
         <td className={r.standard_pack ? 'num qty-packs' : 'num'}>

@@ -36,6 +36,9 @@ describe('retail quantity maths', () => {
     expect(lineTotalMinor(1001, 500)).toBe(501);
     expect(lineTotalMinor(3, 500)).toBe(2);
     expect(lineTotalMinor(9_000_000_000, 9_000_000)).toBe(81_000_000_000_000);
+    // Stock below zero (issue #680): exact, and a half rounds away from zero as the server does.
+    expect(lineTotalMinor(15000, -2000)).toBe(-30000);
+    expect(lineTotalMinor(3, -500)).toBe(-2);
   });
 });
 

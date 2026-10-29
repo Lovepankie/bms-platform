@@ -26,16 +26,23 @@ afterAll(async () => {
 const WIDTH = 360;
 
 describe.each([1, 2])('Stock in cartons and pieces at 360px, font scale %i', (font) => {
-  it('Stock fits the phone and the quantity wraps in its cell', async () => {
+  // Since issue #680 one shop's stock on a phone is a card per item, the quantity large on its own line.
+  it('Stock fits the phone and the quantity wraps in its card', async () => {
     const page = await browser.newPage({ viewport: { width: WIDTH, height: 900 }, hasTouch: true, isMobile: true });
     await page.goto(`${base}layout/stock-packs.html?screen=stock&font=${font}`);
     await page.getByText('46 Half cartons and 23 Pieces').waitFor();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(WIDTH);
-    const cells = await page.evaluate(() =>
-      [...document.querySelectorAll<HTMLElement>('td.num')].map((e) => ({ text: e.textContent ?? '', over: e.scrollWidth - e.clientWidth })),
+    const quantities = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.stock-card-qty')].map((e) => {
+        const card = e.closest('.stock-card')?.getBoundingClientRect();
+        return { text: e.textContent ?? '', over: e.scrollWidth - e.clientWidth, right: e.getBoundingClientRect().right, card: card?.right ?? 0 };
+      }),
     );
-    expect(cells.some((c) => c.text.includes('(1127 Pieces)'))).toBe(true);
-    for (const cell of cells) expect(cell.over, cell.text).toBeLessThanOrEqual(0);
+    expect(quantities.some((q) => q.text.includes('(1127 Pieces)'))).toBe(true);
+    for (const q of quantities) {
+      expect(q.over, q.text).toBeLessThanOrEqual(0);
+      expect(q.right, q.text).toBeLessThanOrEqual(q.card + 0.5);
+    }
     await page.close();
   });
 

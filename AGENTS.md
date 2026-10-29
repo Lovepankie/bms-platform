@@ -806,6 +806,15 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   `RetailSellingPacksIT.theImportAddsAPackByTheSameRulesAsAddingOne`,
   `RetailCatalogueManagementIT.aUsualPackIsChangedOrClearedAndIsOneLevelOnly`, `usual-pack.dom.test.tsx`,
   `shop-setup-state.test.ts`, the help corpus test.
+- **Built (clear for shop owners, issue #680):** PWA only, no migration; the data export's `cost_price` column is headed Buying
+  price. Buying price and selling price everywhere a shopkeeper reads them (Average buying price, Selling price, at buying price,
+  at selling price; profit reports keep Cost of goods sold), with "average cost", "cost price" and "unit cost" retired in the
+  glossary guard and a design-guard test that fails a bare Price or Cost column on a retail screen; tours `page-retail-home` v5,
+  `page-restock` v6, `page-valuation` v3. `ShopHere` names the shop under every retail page's title (through `Gate`) and on
+  Retail home, one tap switching it; every change of branch shows the info toast "You are now in <shop>." (`useBranchSwitch`).
+  My stock on a phone is a card per item. A negative quantity's line total now rounds away from zero (`lineTotalMinor`). Tests:
+  `shop-here.dom.test.tsx`, `stock-cards.dom.test.tsx`, `layout/my-stock.layout.test.ts`, `design-guard.test.ts`,
+  `glossary.test.ts`, `maths.test.ts`, `DataExportIT`.
 
 ## Reading order
 

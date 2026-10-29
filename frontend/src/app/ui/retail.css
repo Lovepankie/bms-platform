@@ -134,6 +134,36 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Issue #680: one shop's stock on a phone, a card per item with the quantity large and the prices small under it. */
+.stock-cards {
+  list-style: none;
+  padding: 0;
+}
+
+.stock-card p {
+  margin: var(--space-1) 0;
+}
+
+.stock-card-qty {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* The quantity reads from the left under the name, and the total in pieces wraps with a large font instead of widening the page. */
+.stock-card-qty .num {
+  text-align: start;
+}
+
+.stock-card-qty .qty-packs .qty-total {
+  white-space: normal;
+}
+
+.stock-card .hint .num {
+  font-variant-numeric: tabular-nums;
+}
+
 .rt-card > strong:first-child {
   display: block;
   font-size: var(--text-base);
