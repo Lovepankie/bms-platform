@@ -465,8 +465,10 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
   });
   const finding = page.isPlaceholderData || (page.isFetching && !page.isFetchingNextPage);
   const listed = (page.data?.pages ?? []).flatMap((p) => p.items ?? []);
-  // Issue #689: the item just added leads the unfiltered list, wherever it would fall in the pages.
-  const items = added && page.data && query === '' && categoryId === '' && activeFilter !== 'off' ? [added, ...listed.filter((p) => p.id !== added.id)] : listed;
+  // Issue #689: the item just added leads the unfiltered list, wherever it would fall in the pages, as the list last read it.
+  const items = added && page.data && query === '' && categoryId === '' && activeFilter !== 'off'
+    ? [listed.find((p) => p.id === added.id) ?? added, ...listed.filter((p) => p.id !== added.id)]
+    : listed;
   const canPrice = (me.permissions ?? []).includes(PRICE);
   const g = useCategoryGroups({ screen: 'items', items, categoryOf: (p) => p.category, resetKey: [query, categoryId, activeFilter].join('|'), searching: query !== '', pending: page.isPlaceholderData });
   const card = (p: Product) => <ProductCard key={p.id} product={p} showCost={profit} canPrice={canPrice} onEdit={() => onEdit(p.id ?? '')} onPrice={() => onPrice(p.id ?? '')} extra={<ScreenLink screen="stock" to="/staff/retail/stock" label={`See the stock of ${p.description}`}>Stock</ScreenLink>} />;

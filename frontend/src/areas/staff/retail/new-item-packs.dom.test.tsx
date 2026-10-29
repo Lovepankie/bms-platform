@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
-import type { Product } from '../../../api/retail';
+import type { Product, Unit } from '../../../api/retail';
 import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 import { chooseCategory } from '../../../test-utils/category-picker';
@@ -16,7 +16,7 @@ vi.setConfig({ testTimeout: 20000 });
 const createProduct = vi.fn();
 let items: Product[] = [];
 const lighting = { id: 'c1', name: 'Test lighting', active: true, product_count: 0, version: 1, code_prefix: 'TLG', next_code: 'TLG-0001' };
-const units = [
+const units: Unit[] = [
   { id: 'u1', name: 'Bulb', active: true, product_count: 0, version: 1, is_package: false },
   { id: 'u2', name: 'Carton', active: true, product_count: 0, version: 1, is_package: true },
   { id: 'u3', name: 'Box', active: true, product_count: 0, version: 1, is_package: true, usual_pack: { size: '100.000', of_unit_id: 'u1', of_unit: 'Bulb', purpose: 'buy' } },
