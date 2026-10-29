@@ -13,6 +13,7 @@ import { showDate } from './maths';
 import { UNITS, capabilityOn, holdsAt } from './permissions';
 import { draftTotal, newLine, withUnit } from './sale-state';
 import { SaleLineCard } from './sale';
+import { CustomerPicker } from './customer-picker';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Hint } from '../../../app/ui/Hint';
@@ -176,16 +177,8 @@ export function QuotationForm({ branchId, onSaved }: { branchId: string; onSaved
     >
       <fieldset data-tour="quotation-buyer">
         <legend>Who is it for?</legend>
-        {(customers.data ?? []).length > 0 && (
-          <>
-            <label htmlFor="quote-customer">Customer from the list</label>
-            {/* empty: drawn only when there are customers; otherwise the buyer's name is typed below. */}
-            <select id="quote-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value, buyerName: '', buyerContact: '' })}>
-          <option value="">Not on the list: type their name</option>
-          {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </>
-        )}
+        <CustomerPicker id="quote-customer" label="Customer from the list" placeholder="Not on the list: type their name" customers={customers}
+          value={draft.customerId} onChange={(customerId) => update({ customerId, buyerName: '', buyerContact: '' })} />
         {draft.customerId === '' && (
           <>
             <label htmlFor="quote-name">Buyer name</label>

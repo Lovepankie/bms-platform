@@ -17,6 +17,7 @@ import {
 import { UNITS, capabilityOn, holdsAt } from './permissions';
 import { newLine, withUnit } from './sale-state';
 import { SaleLineCard } from './sale';
+import { CustomerPicker } from './customer-picker';
 import { ScreenLink } from './screen-link';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { Hint } from '../../../app/ui/Hint';
@@ -246,16 +247,8 @@ export function OrderForm({ branchId, onSaved }: { branchId: string; onSaved: (o
         )}
         <label htmlFor="order-name">Name</label>
         <input id="order-name" value={draft.name} maxLength={200} onChange={(e) => update({ name: e.target.value })} />
-        {(customers.data ?? []).length > 0 && (
-          <>
-            <label htmlFor="order-buyer">Customer from the list (optional, needed to sell to them on credit when customer accounts are on)</label>
-            {/* empty: drawn only when there are customers; otherwise the name above is all that is needed. */}
-            <select id="order-buyer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
-              <option value="">Not on the list</option>
-              {(customers.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </>
-        )}
+        <CustomerPicker id="order-buyer" label="Customer from the list (optional, needed to sell to them on credit when customer accounts are on)"
+          placeholder="Not on the list" customers={customers} value={draft.customerId} onChange={(customerId) => update({ customerId })} />
         <p id="order-source-label">Where did the order come from?</p>
         <div className="rt-row" role="radiogroup" aria-labelledby="order-source-label" data-tour="order-source">
           {SOURCES.map((s) => (

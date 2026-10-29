@@ -22,6 +22,7 @@ const dozen: Unit = { id: 'u-dz', name: 'Dozen', active: true, version: 1 };
 let units: Unit[] = [];
 const updateUnit = vi.fn();
 const addPack = vi.fn();
+const createUnit = vi.fn();
 
 vi.mock('@tanstack/react-router', async (original) => {
   const real = await original<typeof import('@tanstack/react-router')>();
@@ -37,12 +38,14 @@ vi.mock('../../../api/retail', async (original) => {
       listPacks: () => Promise.resolve([]),
       updateUnit: (...a: unknown[]) => updateUnit(...a),
       addPack: (...a: unknown[]) => addPack(...a),
+      createUnit: (...a: unknown[]) => createUnit(...a),
     },
   };
 });
 
 const { UnitsPage } = await import('./catalogue-lists');
 const { PackEditor } = await import('./catalogue-packs');
+const { ADD_CHOICE } = await import('../../../app/ui/PickerWithAdd');
 const owner = { ...mockMe('admin'), module_capabilities: { retail: ['units'] } };
 const branch = owner.branches?.[0]?.id ?? '';
 
@@ -195,5 +198,25 @@ describe('the pack form of an item fills in a unit only where the app filled it 
     fireEvent.click(screen.getByRole('button', { name: 'Add pack' }));
     await waitFor(() => expect(addPack).toHaveBeenCalledTimes(1));
     expect(addPack).toHaveBeenCalledWith('p1', { unit_id: 'u-ctn', factor: '24', purpose: 'buy' });
+  });
+
+  // JUSTIFICATION-A3: issue #688 asks for one test per converted picker; this is the pack form's unit.
+  it('adds the pack\'s unit in place (issue #688): chosen at once, and the size typed is kept', async () => {
+    units = [piece, dozen];
+    createUnit.mockResolvedValue({ id: 'u-tray', name: 'Tray', active: true, version: 1 });
+    addPack.mockResolvedValue({});
+    draw(<PackEditor product={pen} />);
+    const unit = await screen.findByLabelText('Add a pack');
+    await screen.findByRole('option', { name: 'Dozen' });
+    fireEvent.change(screen.getByLabelText('Items in one pack'), { target: { value: '30' } });
+    fireEvent.change(unit, { target: { value: ADD_CHOICE } });
+    const sheet = await screen.findByRole('dialog', { name: 'Add a unit' });
+    fireEvent.change(within(sheet).getByLabelText(/^Name of the new unit/), { target: { value: 'Tray' } });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Add unit' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((screen.getByLabelText('Add a pack') as HTMLSelectElement).selectedOptions[0]?.text).toBe('Tray');
+    expect(size()).toBe('30');
+    fireEvent.click(screen.getByRole('button', { name: 'Add pack' }));
+    await waitFor(() => expect(addPack).toHaveBeenCalledWith('p1', expect.objectContaining({ unit_id: 'u-tray', factor: '30' })));
   });
 });

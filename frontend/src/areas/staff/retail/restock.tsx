@@ -12,7 +12,7 @@ import { Gate, Money, Note, Problem, ProductPicker, money, useProfitAccess } fro
 import { ScanBar } from './scan';
 import { PACK_UNUSABLE, plusOne, scanInto, touchedLine } from './barcode-state';
 import { ScreenToast, useItemAdded } from './toast';
-import { UNITS, capabilityOn } from './permissions';
+import { UNITS, canUse, capabilityOn } from './permissions';
 import { OWN_PRICE_KEEPS_SIZE, baseCostMinor, baseQtyMilli, buyingPacks, chosenPack, deliveredFactor, mayKeepSize, packPriceMinor, sameFactor } from './units-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Field, FieldsNeededNote } from '../../../app/ui/Field';
@@ -21,7 +21,8 @@ import { NewItemHere, type AddedItem } from './new-item-here';
 import { RowChevron } from '../../../app/ui/ListRow';
 import { entryWarnings, type EntryWarning } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
-import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { AddByName } from '../../../app/ui/EmptyChoice';
+import { PickerWithAdd } from '../../../app/ui/PickerWithAdd';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -127,7 +128,7 @@ export const METHODS: { value: PurchasePayment; label: string }[] = [
 
 /** On credit is owed to someone, so it needs a supplier: one chosen or a new one typed. */
 export function creditNeedsSupplier(method: PurchasePayment, supplierId: string, newSupplier: string): string | null {
-  return method === 'credit' && supplierId === '' && newSupplier.trim() === '' ? 'On credit needs a supplier. Choose one above, or add a new one.' : null;
+  return method === 'credit' && supplierId === '' && newSupplier.trim() === '' ? 'On credit needs a supplier. Choose one above, or + Add a supplier.' : null;
 }
 
 /** What the restock form keeps with its key in this tab until saved or cleared (#77). */
@@ -243,7 +244,6 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
 
   const problems = lines.map(restockLineProblem);
   const supplierProblem = creditNeedsSupplier(method, supplierId, newSupplier);
-  const noSuppliers = showsEmptyChoice(suppliers, suppliers.data && supplierOptions(suppliers.data, supplierId));
   const blocked = lines.length === 0 || problems.some((p) => p !== null) || supplierProblem !== null;
   // Issue #353: each line against the item's own purchases, said before saving, never blocking.
   const norms = useEntryNorms(lines.map((l) => l.product.id));
@@ -265,27 +265,41 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
       <FieldsNeededNote />
 
       <div data-tour="restock-supplier">
-      {noSuppliers ? (
-        // The supplier is added right here, by the name typed below, when the purchase is saved.
-        <EmptyChoice id="supplier" label="Supplier" load={suppliers} text="No suppliers yet. Type a new one below." />
-      ) : (
-      <>
-      <label htmlFor="supplier">Supplier{method === 'credit' && <span className="field-star" aria-hidden="true"> *</span>}</label>
-      <select id="supplier" value={supplierId} aria-required={method === 'credit' || undefined} onChange={(e) => setSupplierId(e.target.value)}>
-        <option value="">No supplier</option>
-        {supplierOptions(suppliers.data ?? [], supplierId).map((s) => (
-          <option key={s.id} value={s.id}>{s.active === false ? `${s.name} (switched off)` : s.name}</option>
-        ))}
-      </select>
-      </>
-      )}
+      {/* Issue #688: a supplier who is not in the list is added in a sheet over the form and chosen; the lines stay. */}
+      <PickerWithAdd
+        id="supplier"
+        label="Supplier"
+        thing="supplier"
+        placeholder="No supplier"
+        options={supplierOptions(suppliers.data ?? [], supplierId).map((s) => ({ value: s.id ?? '', label: s.active === false ? `${s.name ?? ''} (switched off)` : s.name ?? '' }))}
+        value={supplierId}
+        onChange={(id) => { setSupplierId(id); setNewSupplier(''); }}
+        canAdd={canUse(me, 'suppliers')}
+        required={method === 'credit'}
+        loading={suppliers.data === undefined}
+        load={suppliers}
+        empty="No suppliers yet."
+        ask="Ask the owner to add a supplier first."
+        form={(done, cancel) => (
+          <AddByName
+            id="supplier-add"
+            onCancel={cancel}
+            add={{
+              label: 'Add a supplier',
+              name: 'Name of the new supplier',
+              send: 'Add supplier',
+              create: (name) => retail.createSupplier({ name }),
+              onAdded: (s: Supplier) => {
+                queryClient.setQueryData<Supplier[]>(['retail', 'suppliers'], (was) => was && [...was.filter((x) => x.id !== s.id), s]);
+                void queryClient.invalidateQueries({ queryKey: ['retail', 'suppliers'] });
+                show(`Added the supplier ${s.name ?? ''}.`, 'success');
+                done({ value: s.id ?? '', label: s.name ?? '' });
+              },
+            }}
+          />
+        )}
+      />
       </div>
-      {supplierId === '' && (
-        <>
-          <label htmlFor="new-supplier">{noSuppliers ? 'Add a new supplier' : 'Or add a new supplier'}</label>
-          <input id="new-supplier" value={newSupplier} aria-required={supplierProblem !== null || undefined} data-needed={supplierProblem !== null ? '' : undefined} onChange={(e) => setNewSupplier(e.target.value)} />
-        </>
-      )}
       <label htmlFor="bought-on">Bought on</label>
       <input id="bought-on" type="date" max={businessToday()} value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
       {again && purchasedOn < businessToday() && (

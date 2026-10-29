@@ -40,6 +40,7 @@ import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { FirstItemsCard, useNoItemsYet } from './first-items';
 import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
 import { ScreenLink, addOn } from './screen-link';
+import { CustomerPicker } from './customer-picker';
 import { dropWords } from './stocktake';
 import { useBranchHold } from '../branch-picker';
 import { icons } from '../../../components/icons';
@@ -697,20 +698,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       {pricesOn && draft.method !== 'credit' && (
         <fieldset data-tour="sale-customer">
           <legend>Customer</legend>
-          {showsEmptyChoice(customers) ? (
-            <EmptyChoice id="price-customer" label="Customer (optional): sets the price list" load={customers} text="No customers yet." ask="Ask the owner to add your customers first."
-              add={addOn(me, 'buyers', 'Add a customer', '/staff/retail/catalogue/buyers')} />
-          ) : (
-          <>
-          <label htmlFor="price-customer">Customer (optional): sets the price list</label>
-          <select id="price-customer" value={draft.customerId} onChange={(e) => update({ customerId: e.target.value })}>
-            <option value="">No customer: retail prices</option>
-            {(customers.data ?? []).map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          </>
-          )}
+          <CustomerPicker id="price-customer" label="Customer (optional): sets the price list" placeholder="No customer: retail prices"
+            customers={customers} value={draft.customerId} onChange={(customerId) => update({ customerId })} />
         </fieldset>
       )}
       {canChooseList && (

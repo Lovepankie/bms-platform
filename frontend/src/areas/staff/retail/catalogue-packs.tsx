@@ -10,7 +10,8 @@ import { Money, Problem, money } from './ui';
 import { SETTINGS_MANAGE, UNITS, capabilityOn, holds } from './permissions';
 import { factorMilli, hasOwnPrice, packPriceMinor } from './units-state';
 import { WORDS } from '../../../app/glossary';
-import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { AddByName } from '../../../app/ui/EmptyChoice';
+import { PickerWithAdd } from '../../../app/ui/PickerWithAdd';
 import { Hint } from '../../../app/ui/Hint';
 import { RowChevron } from '../../../app/ui/ListRow';
 import { MoneyInput } from '../../../app/ui/MoneyInput';
@@ -293,25 +294,31 @@ export function PackEditor({ product }: { product: Product }) {
         </div>
       )}
       {open && <PackSheet key={`${open.unit_id}-${open.version}`} product={product} pack={open} mayPrice={mayPrice} onClose={() => setEditing(null)} />}
-      {showsEmptyChoice(units, units.data && choices) ? (
-        <EmptyChoice id="pack-unit" label="Add a pack" load={units} text="No other unit to make a pack of yet." add={{
-          label: 'Add a new unit', name: 'Name of the new unit, such as carton', send: 'Add unit', maxLength: 50,
-          create: (name) => retail.createUnit(name),
-          onAdded: (unit) => {
-            queryClient.setQueryData<Unit[]>(['retail', 'catalogue', 'units'], (was) => [...(was ?? []).filter((u) => u.id !== unit.id), unit]);
-            void queryClient.invalidateQueries({ queryKey: ['retail', 'catalogue', 'units'] });
-            setUnitId(unit.id ?? '');
-          },
-        }} />
-      ) : (
-      <>
-      <label htmlFor="pack-unit">Add a pack</label>
-      <select id="pack-unit" value={unitId} onChange={(e) => chooseUnit(choices.find((u) => u.id === e.target.value))}>
-        <option value="">Choose a unit</option>
-        {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-      </select>
-      </>
-      )}
+      {/* The pack's unit, with "+ Add a unit" in a sheet over the pack form (issue #688). */}
+      <PickerWithAdd
+        id="pack-unit"
+        label="Add a pack"
+        thing="unit"
+        placeholder="Choose a unit"
+        options={choices.map((u) => ({ value: u.id ?? '', label: u.name ?? '' }))}
+        value={unitId}
+        onChange={(next) => chooseUnit(choices.find((u) => u.id === next) ?? (next ? { id: next } : undefined))}
+        canAdd
+        loading={units.data === undefined}
+        load={units}
+        empty="No other unit to make a pack of yet."
+        form={(done, cancel) => (
+          <AddByName id="pack-unit-add" onCancel={cancel} add={{
+            label: 'Add a unit', name: 'Name of the new unit, such as carton', send: 'Add unit', maxLength: 50,
+            create: (name) => retail.createUnit(name),
+            onAdded: (unit: Unit) => {
+              queryClient.setQueryData<Unit[]>(['retail', 'catalogue', 'units'], (was) => [...(was ?? []).filter((u) => u.id !== unit.id), unit]);
+              void queryClient.invalidateQueries({ queryKey: ['retail', 'catalogue', 'units'] });
+              done({ value: unit.id ?? '', label: unit.name ?? '' });
+            },
+          }} />
+        )}
+      />
       <label htmlFor="pack-factor">Items in one pack</label>
       <input
         id="pack-factor"
