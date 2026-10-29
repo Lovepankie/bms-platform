@@ -7,6 +7,7 @@ import type { Me, TenantSettings } from '../../../api/client';
 import { mockMe } from '../../../api/retail-mock';
 import { router as appRouter } from '../../../app/router';
 import { StaffContext } from '../context';
+import { DoneToast } from '../retail/toast';
 
 /** A button that may be pressed: not disabled, and not a primary button whose form is still not ready (issue #526). */
 const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLElement).getAttribute('data-not-ready') !== 'true';
@@ -52,6 +53,7 @@ function shell(permissions: string[] = ['core.settings.manage', 'core.settings.r
         <StaffContext.Provider value={{ me, branch: null }}>
           <TwoStepPolicyScreen />
         </StaffContext.Provider>
+        <DoneToast />
       </QueryClientProvider>
     </RouterContextProvider>,
   );
@@ -104,7 +106,7 @@ describe('the policy screen', () => {
     expect(twoStepApi.save.mock.calls[0]?.[0]).toBe(4);
     expect(twoStepApi.save.mock.calls[0]?.[1]).toEqual({ policy: 'everyone', roles: [], graceDays: 14 });
     expect(twoStepApi.save.mock.calls[0]?.[2]).toEqual({ policy: 'off', roles: [], graceDays: 14 });
-    expect(await screen.findByText('Saved. People who have not set it up have until the end of 3 Nov 2026.')).toBeTruthy();
+    expect(await screen.findByText('Saved, due by 3 Nov 2026')).toBeTruthy();
   });
 
   it('lets the grace period be none, and says so', async () => {
@@ -118,7 +120,7 @@ describe('the policy screen', () => {
     fireEvent.click(button('Yes, save this'));
     await waitFor(() => expect(twoStepApi.save).toHaveBeenCalledTimes(1));
     expect(twoStepApi.save.mock.calls[0]?.[1]).toMatchObject({ graceDays: 0 });
-    expect(await screen.findByText('Saved. People who have not set it up are asked at their next sign-in.')).toBeTruthy();
+    expect(await screen.findByText('Saved, asked at sign in')).toBeTruthy();
   });
 
   it('needs at least one role when roles are chosen, and sends the ones ticked', async () => {
@@ -168,7 +170,7 @@ describe('the policy screen', () => {
     await waitFor(() => expect(twoStepApi.save).toHaveBeenCalledTimes(1));
     expect(twoStepApi.save.mock.calls[0]?.[1]).toMatchObject({ policy: 'off' });
     expect(twoStepApi.save.mock.calls[0]?.[3]).toEqual({ password: 'Test-Password-1' });
-    expect(await screen.findByText('Saved. Two-step sign-in is optional again.')).toBeTruthy();
+    expect(await screen.findByText('Saved, now optional')).toBeTruthy();
   });
 
   it('narrowing keeps the deadline: the review says the date does not change, and no grace period is sent', async () => {

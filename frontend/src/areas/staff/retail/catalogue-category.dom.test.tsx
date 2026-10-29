@@ -110,7 +110,7 @@ describe('the category page', () => {
     const body = createProduct.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(body).not.toHaveProperty('code');
     expect(body).toMatchObject({ category_id: 'c1', description: 'Test bulb 12W', unit_id: 'u1' });
-    expect((await screen.findAllByText('Added the item "Test bulb 12W" (BLB-0002).')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Added the item "Test bulb 12W" (BLB-0002).')).toBeTruthy();
   });
 
   it('changes the code start under If-Match, and says items made before keep their codes', async () => {
@@ -122,7 +122,8 @@ describe('the category page', () => {
     fireEvent.change(screen.getByLabelText(/^Code start/), { target: { value: 'bul' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save the code start' }));
     await waitFor(() => expect(updateCategory).toHaveBeenCalledWith('c1', 3, { code_prefix: 'BUL' }));
-    expect((await screen.findAllByText('Item codes in Bulbs now start with BUL. Items made before keep their codes.')).length).toBeGreaterThan(0);
+    // One success signal: the screen's toast, with no note beside it.
+    expect(await screen.findByText('Item codes in Bulbs now start with BUL. Items made before keep their codes.')).toBeTruthy();
   });
 
   it('refuses a code start that is not 2 to 4 letters, without sending it', async () => {
@@ -215,7 +216,7 @@ describe('the categories list', () => {
     expect(screen.queryByLabelText(/Code start/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
     await waitFor(() => expect(createCategory).toHaveBeenCalledWith('TVs'));
-    expect((await screen.findAllByText('Added the category "TVs". Its item codes start with TV.')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Added the category "TVs". Its item codes start with TV.')).toBeTruthy();
   });
 });
 

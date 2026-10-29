@@ -222,6 +222,7 @@ function CountSheet({ branchId }: { branchId: string }) {
   };
   const entered = Object.entries(totals).filter(([, v]) => v.trim() !== '');
   const bad = entered.some(([, v]) => parseCount(v) === null);
+  // toast-exempt: success screen, the review of the count replaces the form
   const review = useMutation({
     mutationFn: () => retail.createStocktake({ branch_id: branchId, lines: entered.map(([productId, countedQty]) => ({ product_id: productId, counted_qty: qtyString(parseCount(countedQty) ?? 0) })) }),
     onSuccess: setDraft,
@@ -241,6 +242,7 @@ function CountSheet({ branchId }: { branchId: string }) {
     return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
   });
   const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), totals);
+  // toast-exempt: success screen, the review turns into the Stock count committed screen
   const commit = useMutation({
     mutationFn: (acknowledged: string[]) => retail.commitStocktake(draft?.id ?? '', acknowledged),
     onSuccess: (st) => {

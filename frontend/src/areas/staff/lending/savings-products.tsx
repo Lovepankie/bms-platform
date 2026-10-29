@@ -152,6 +152,7 @@ export function ProductForm({ product, currency, onDone }: { product?: SavingsPr
       // Opened from an empty product list (issue #619): a new product takes the person back to the form that needed it.
       if (!product) back?.();
     },
+    meta: { success: product ? 'Product saved' : 'Product added' },
   });
   return (
     <form aria-label={product ? `Edit ${product.code}` : 'New savings product'} onSubmit={(e) => { e.preventDefault(); if (codeOk && typeof terms !== 'string') save.mutate(); }}>

@@ -12,7 +12,7 @@ import { methodWords } from './payables-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
 import { WORDS } from '../../../app/glossary';
-import { Gate, Problem, Success, Money, useBranchName, useToast } from './ui';
+import { Gate, Problem, Money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -132,7 +132,6 @@ export function SupplierPaymentPage() {
   const { show, toast } = useToast();
   const nameOf = useBranchName();
   const keys = useActionKeys();
-  const [message, setMessage] = useState<string | null>(null);
   const allowed = canUse(me, 'supplierPayments');
   const payment = useQuery({ queryKey: ['retail', 'supplier-payment', paymentId], queryFn: () => retail.getSupplierPayment(paymentId), enabled: allowed });
   useCrumbLabel(payment.data?.payment_no);
@@ -140,9 +139,7 @@ export function SupplierPaymentPage() {
     mutationFn: (reason: string) => retail.reverseSupplierPayment(paymentId, reason, keys.keyFor(paymentId, reason)),
     onSuccess: (p) => {
       keys.done(paymentId);
-      const text = `Reversed ${p.payment_no ?? 'the payment'}. What it paid is owed again.`;
-      setMessage(text);
-      show(text, 'success');
+      show(`Reversed ${p.payment_no ?? 'the payment'}. What it paid is owed again.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -160,7 +157,6 @@ export function SupplierPaymentPage() {
       <h1>{p?.payment_no ?? 'Supplier payment'}</h1>
       {payment.isPending && <SkeletonList label="Loading the payment" />}
       <Problem error={payment.error} />
-      {message && <Success>{message}</Success>}
       {p && <SupplierPaymentView payment={p} nameOf={nameOf} payable />}
       {p && p.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, p.branch_id) && (
         <div data-tour="payment-reverse">

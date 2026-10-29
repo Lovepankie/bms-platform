@@ -61,6 +61,7 @@ export function FundForm({ inv }: { inv: Investment }) {
     startedOn: today,
   }, (d) => onToday(d, 'date', today));
   const update = (patch: Partial<FundDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  // toast-exempt: success screen, the Funded screen replaces the form
   const save = useMutation({
     mutationFn: () => {
       sending();
@@ -106,6 +107,7 @@ export function PayForm({ inv, kind }: { inv: Investment; kind: 'pay_return' | '
     kind === 'pay_return'
       ? inv.return_available_minor ?? 0
       : (inv.principal_held_minor ?? 0) + (inv.return_accrued_minor ?? 0) - (inv.return_paid_minor ?? 0);
+  // toast-exempt: success screen, the Paid screen with the voucher replaces the form
   const save = useMutation<TransactionResult>({
     mutationFn: () => {
       const body = { payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined };
@@ -156,6 +158,7 @@ export function RolloverForm({ inv, onDone }: { inv: Investment; onDone: (nextId
       refresh();
       if (r.next?.id) onDone(r.next.id);
     },
+    meta: { success: 'Investment rolled over' },
   });
   return (
     <form aria-label="Roll over" onSubmit={(e) => { e.preventDefault(); if (!save.isPending) save.mutate(); }}>
@@ -187,6 +190,7 @@ export function EarlyWithdrawalForm({ inv }: { inv: Investment }) {
   const refresh = useRefresh(id);
   const quote = useQuery({ queryKey: ['lending', 'investment', id, 'early-quote'], queryFn: () => investments.earlyQuote(id) });
   const { key, draft, setDraft, finish } = usePersistedDraft<EarlyDraft>(`invest-early:${me.user_id ?? ''}:${id}`, { method: 'cash', reason: '' });
+  // toast-exempt: success screen, the Withdrawn screen replaces the form
   const save = useMutation({
     mutationFn: () => investments.earlyWithdraw(id, { payment_method_key: draft.method, reason: draft.reason.trim() }, key),
     onSuccess: () => {
@@ -235,7 +239,7 @@ export function InstructionForm({ inv }: { inv: Investment }) {
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const [choice, setChoice] = useState<string>(inv.maturity_instruction ?? 'payout');
-  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh });
+  const save = useMutation({ mutationFn: () => investments.instruct(id, choice), onSuccess: refresh, meta: { success: 'Choice saved' } });
   return (
     <form aria-label="Maturity instruction" onSubmit={(e) => { e.preventDefault(); if (!save.isPending) save.mutate(); }}>
       <fieldset>
@@ -249,7 +253,6 @@ export function InstructionForm({ inv }: { inv: Investment }) {
       </fieldset>
       {inv.product_type === 'recurring' && <p className="field-hint">A recurring deposit renews with its return when no choice is given.</p>}
       <Problem error={save.error} />
-      {save.isSuccess && <p role="status" className="alert alert-success">Saved.</p>}
       <BusyButton busy={save.isPending} type="submit" className="rt-primary">
         Save the choice
       </BusyButton>
@@ -262,6 +265,7 @@ export function ReverseForm({ inv, txn }: { inv: Investment; txn: InvestmentTran
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`invest-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
+  // toast-exempt: success screen, the Reversed screen replaces the form
   const save = useMutation({
     mutationFn: () => investments.reverse(id, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {

@@ -37,6 +37,7 @@ export function DocumentsPage() {
   const save = useMutation({
     mutationFn: ({ kind, prefix }: { kind: DocumentType; prefix: string }) => retail.setDocumentPrefix(kind, prefix),
     onSuccess: (rows) => queryClient.setQueryData(['retail', 'document-series'], rows),
+    meta: { success: 'Prefix saved' },
   });
   return (
     <Gate screen="documents" title="Documents" wide>

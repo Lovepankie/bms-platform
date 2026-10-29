@@ -38,12 +38,10 @@ export function FeedbackForm({ send = sendFeedback, from = pageBeforeFeedback, a
   const [message, setMessage] = useState(ask ?? '');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [tried, setTried] = useState(false);
-  const [sent, setSent] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const submit = useMutation({
     mutationFn: send,
     onSuccess: () => {
-      setSent(true);
       setTried(false);
       setKind(null);
       setMessage('');
@@ -51,6 +49,7 @@ export function FeedbackForm({ send = sendFeedback, from = pageBeforeFeedback, a
       if (fileInput.current) fileInput.current.value = '';
       void queryClient.invalidateQueries({ queryKey: ['feedback', 'mine'] });
     },
+    meta: { success: 'Feedback sent' },
   });
   const kindProblem = kind === null ? 'Choose what it is: an idea, a problem or a question.' : null;
   const textProblem = messageProblem(message);
@@ -59,7 +58,6 @@ export function FeedbackForm({ send = sendFeedback, from = pageBeforeFeedback, a
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     setTried(true);
-    setSent(false);
     if (kindProblem || textProblem || fileProblem || kind === null) return;
     submit.mutate({ kind, message: message.trim(), pagePath: from(), screenshot });
   }
@@ -67,11 +65,6 @@ export function FeedbackForm({ send = sendFeedback, from = pageBeforeFeedback, a
   return (
     <form className="rt-card stack" onSubmit={onSubmit} noValidate aria-labelledby="feedback-form-title">
       <h2 id="feedback-form-title">Tell us</h2>
-      {sent && (
-        <p role="status" className="alert alert-success">
-          Thank you. Your feedback was sent to the BMS team. You can see it below, and you will see here when they read it or reply.
-        </p>
-      )}
       <fieldset className="stack" data-tour="feedback-kind">
         <legend>What is it?</legend>
         {KINDS.map((k) => (

@@ -189,6 +189,7 @@ export function SupplierBillNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/supplier-bills/$billId', params: { billId: bill.id ?? '' } });
     },
+    meta: { success: 'Invoice saved' },
   });
   return (
     <Gate screen="supplierBills" title="New supplier invoice">

@@ -48,6 +48,7 @@ export function BranchRoles() {
   const set = useMutation({
     mutationFn: (v: { branchId: string; role: Role }) => retail.setBranchRole(v.branchId, v.role),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'branch-roles'] }),
+    meta: { success: 'Role saved' },
   });
   return (
     <Gate screen="branchRoles" title="Branch roles">

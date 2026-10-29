@@ -8,6 +8,7 @@ import { useStaff } from '../context';
 import { STATUS_WORDS, canChangePaymentAccount, codeProblem, credentialProblem, failureWords, nextStep, showReceivePayments } from './state';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
+import { sayDone } from '../retail/toast';
 
 // "Receive payments" (extras slice A7, issue #233; ADR-035 amendment of 2026-10-18): money owed to the business lands only in
 // the business's own Pesapal account. A business administrator enters the consumer key and secret (the secret is write-only: it
@@ -174,12 +175,14 @@ export function ReceivePaymentsPage() {
     mutationFn: payments.test,
     onSuccess: keep,
     onError: () => void queryClient.invalidateQueries({ queryKey: ['payments', 'account'] }),
+    meta: { success: (r: MerchantAccount) => (r.status === 'verified' ? 'Connection works' : null) },
   });
   async function save(key: string, secret: string, code: string) {
     setSaving(true);
     setSaveError(null);
     try {
       keep(await payments.save(key, secret, code));
+      sayDone('Key and secret saved');
     } catch (e) {
       setSaveError(messageOf(e));
     } finally {
@@ -191,6 +194,7 @@ export function ReceivePaymentsPage() {
     setRemoveError(null);
     try {
       keep(await payments.remove(code));
+      sayDone('Key and secret removed');
     } catch (e) {
       setRemoveError(messageOf(e));
     } finally {

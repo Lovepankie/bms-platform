@@ -126,15 +126,22 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
 
   const save = useMutation({
     mutationFn: (c: SmsSettingsChange) => sms.changeSettings(saved.version, c),
-    onSuccess: (next, c) => {
+    onSuccess: (next) => {
       queryClient.setQueryData(['sms', 'settings'], next);
       void queryClient.invalidateQueries({ queryKey: ['sms', 'templates'] });
-      setNotice({ kind: 'success', text: c.enabled === true ? 'SMS is on.' : c.enabled === false ? 'SMS is off.' : 'Saved.' });
+      setNotice(null);
     },
     // Someone else's change (or a rule the screen could not see): read it again so the next try carries the right version.
     onError: (error) => {
       if (error instanceof SmsError && error.code === 'version_conflict') setNotice({ kind: 'warning', text: error.message });
       void queryClient.invalidateQueries({ queryKey: ['sms', 'settings'] });
+    },
+    meta: {
+      success: (_: unknown, c: SmsSettingsChange) => (c.enabled === true ? 'SMS turned on' : c.enabled === false ? 'SMS turned off' : 'Settings saved'),
+      // Turning SMS on can be taken back from the toast (#682), on the version the change made. Turning it off cannot: on again
+      // needs the notice read and acknowledged on this screen, so the toast offers no Undo for it.
+      undo: (next: { version?: number }, c: SmsSettingsChange) =>
+        c.enabled === true && typeof next.version === 'number' ? () => sms.changeSettings(next.version ?? 0, { enabled: false }) : null,
     },
   });
   const failure = failureOf(save.error);

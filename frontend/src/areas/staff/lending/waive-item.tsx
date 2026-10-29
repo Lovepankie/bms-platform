@@ -41,6 +41,7 @@ export function WaiveItemSheet({ loan, row, memberName, onClose }: {
     reason: '',
   });
   const step = waiveStep(draft, row, c);
+  // toast-exempt: success screen, the Waived screen replaces the form in the sheet
   const save = useMutation({
     mutationFn: (sent: { component: WaiveComponent; amount_minor: number; reason: string }) => lending.waiveItem(loanId, row.no ?? 0, sent, key),
     onSuccess: () => {

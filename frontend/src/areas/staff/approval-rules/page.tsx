@@ -6,6 +6,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 import { MoneyInput } from '../../../app/ui/MoneyInput';
+import { sayDone } from '../retail/toast';
 import { useStaff } from '../context';
 import { type Draft, GENERIC_WAIT, MODULE_TITLES, WHILE_IT_WAITS, changesOf, draftOf, loosens, reviewLines, zeroWords } from './state';
 
@@ -61,7 +62,6 @@ export function ApprovalRulesScreen() {
   const [reviewing, setReviewing] = useState(false);
   const [proof, setProof] = useState('');
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // One save at a time: a second tap before the first answer must not send a second request.
   const working = useRef(false);
@@ -93,7 +93,6 @@ export function ApprovalRulesScreen() {
   function edit(type: string, on: boolean, amount: number | null) {
     if (!draft) return;
     setReviewing(false);
-    setNotice(null);
     setDraft({ ...draft, [type]: { on, amount } });
   }
 
@@ -109,7 +108,7 @@ export function ApprovalRulesScreen() {
       setReviewing(false);
       setDraft(draftOf(after.rules ?? []));
       queryClient.setQueryData(['approval-rules'], after);
-      setNotice(told ? 'Saved. The other administrators were told, because fewer actions now need a second person.' : 'Saved. It applies from the next action.');
+      sayDone(told ? 'Rules saved, administrators told' : 'Approval rules saved');
       // Retail settings and the purchasing settings show the returns and order amounts.
       await queryClient.invalidateQueries({ queryKey: ['retail'] });
     } catch (e) {
@@ -128,11 +127,6 @@ export function ApprovalRulesScreen() {
         While an action waits, nothing changes. The person who asked sees it on Approvals and can cancel it. The administrators are told on
         their phones and decide on Approvals. Every change here is recorded with your name.
       </Hint>
-      {notice && (
-        <p role="status" className="alert alert-success">
-          {notice}
-        </p>
-      )}
       {read.isPending && <p className="loading">Loading the rules</p>}
       {read.isError && (
         <p role="alert" className="alert alert-danger">

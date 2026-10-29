@@ -8,6 +8,7 @@ import { branchLabel } from '../../../auth/branch';
 import { useStaff } from '../context';
 import { newIdempotencyKey } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
+import { sayDone } from '../retail/toast';
 import { Group, SaveBar, SelectField, TextField, useFormErrors } from './form-fields';
 import { FieldsNeededNote } from '../../../app/ui/Field';
 import { businessToday } from '../../../api/retail';
@@ -115,7 +116,9 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
   const [stale, setStale] = useState(false);
   const guard = useSaveGuard<DuplicateCandidate>();
   const [serverPhone, setServerPhone] = useState(false);
-  const [saved, setSaved] = useState<MemberRecord | null>(null);
+  // The new member whose ID photos still need sending: its retry screen shows only when a photo failed, and then `finish` (the
+  // toast) has not run, so success is said once.
+  const [photosFor, setPhotosFor] = useState<MemberRecord | null>(null);
   const idFront = usePhotoQueue();
   const idBack = usePhotoQueue();
   const original = useMemo(() => (member ? draftOf(member) : undefined), [member]);
@@ -144,6 +147,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
 
   const back = useComeBack();
   const finish = (m: MemberRecord) => {
+    sayDone(editing ? 'Member saved' : 'Member added');
     void queryClient.invalidateQueries({ queryKey: ['members'] });
     if (onSaved) onSaved(m);
     // Opened from a member search that found nobody (issue #619): the new member takes the person back to the form that needed one.
@@ -178,7 +182,7 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
         return;
       }
       const created = await api.create(createBody(draft, currency), idempotencyKey);
-      setSaved(created);
+      setPhotosFor(created);
       if (idFront.waiting + idBack.waiting === 0 || (await sendPhotos(created.id ?? ''))) finish(created);
     } catch (raw) {
       const error = asFormError(raw);
@@ -196,16 +200,16 @@ export function MemberForm({ member: loaded, onSaved }: { member?: MemberRecord;
 
   const branchName = branchLabel((me.branches ?? []).find((b) => b.id === draft.branchId));
   const blocked = hold === 'nin' ? 'This national ID is already registered.' : hold === 'phone' ? 'Tick the box above to say this is a different person.' : guard.blocked ? 'Wait for the check above before saving again.' : photosBusy ? 'Wait for the photo to be ready.' : undefined;
-  const photoSender = (kind: 'id_front' | 'id_back'): Sender<unknown> | undefined => (saved ? (p, o) => api.uploadDocument(saved.id ?? '', kind, p.blob, p.fileName, o) : undefined);
+  const photoSender = (kind: 'id_front' | 'id_back'): Sender<unknown> | undefined => (photosFor ? (p, o) => api.uploadDocument(photosFor.id ?? '', kind, p.blob, p.fileName, o) : undefined);
 
-  if (saved) {
+  if (photosFor) {
     return (
       <section className="rt-card stack" aria-live="polite">
-        <h2>{saved.full_name} is saved</h2>
-        <p>Member number {saved.member_no}. A photo did not go through. Send it again, or open the member and add it later.</p>
+        <h2>{photosFor.full_name} is saved</h2>
+        <p>Member number {photosFor.member_no}. A photo did not go through. Send it again, or open the member and add it later.</p>
         <PhotoQueueControl id="mf-front-retry" label="Photo of the front of the ID" queue={idFront} sender={photoSender('id_front')} />
         <PhotoQueueControl id="mf-back-retry" label="Photo of the back of the ID" queue={idBack} sender={photoSender('id_back')} />
-        <Link to="/staff/lending/members/$memberId" params={{ memberId: saved.id ?? '' }} className="btn btn-block rt-primary">Open the member</Link>
+        <Link to="/staff/lending/members/$memberId" params={{ memberId: photosFor.id ?? '' }} className="btn btn-block rt-primary">Open the member</Link>
       </section>
     );
   }

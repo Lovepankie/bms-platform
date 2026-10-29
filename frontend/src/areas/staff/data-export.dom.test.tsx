@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DoneToast, doneToasts } from './retail/toast';
 
 // "Download my data" in Business set-up (issue #334 step 1, ADR-074): the card shows when the business's data was last
 // exported and emailed, asks for a workbook with an Idempotency-Key, offers the ready file through its signed address, and
@@ -36,10 +37,11 @@ vi.mock('../../api/client', async (original) => ({
 const { DataExportCard, exportWording, when } = await import('./data-export');
 
 function show() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({ mutationCache: doneToasts(), defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
       <DataExportCard />
+      <DoneToast />
     </QueryClientProvider>,
   );
 }
@@ -97,7 +99,8 @@ describe('the Download my data card', () => {
     expect(box.checked).toBe(true);
     fireEvent.click(box);
     await waitFor(() => expect(client.PUT).toHaveBeenCalledWith('/api/v1/data-export/settings', { body: { weekly_email: false } }));
-    expect(await screen.findByText('The weekly email is off.')).toBeTruthy();
+    expect(await screen.findByText('Weekly email off')).toBeTruthy();
+    expect(screen.queryByText('The weekly email is off.')).toBeNull();
   });
 });
 

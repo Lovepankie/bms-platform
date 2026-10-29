@@ -51,6 +51,7 @@ export function AdvanceForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const { key, draft, setDraft, finish } = usePersistedDraft<AdvanceDraft>(`advance:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), partyId: '', takenById: '', principal: '', purpose: '' });
   const parties = useCashParties();
   const minor = amountOrNull(draft.principal);
+  // toast-exempt: success screen, the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () =>
       retail.createAdvance({
@@ -101,6 +102,7 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
   const open = useQuery({ queryKey: ['retail', 'advances', 'open'], queryFn: () => retail.listAdvances({ openOnly: true }), enabled: canList });
   const advance = (open.data ?? []).find((a) => a.id === draft.advanceId);
   const problem = repaymentProblem(advance, draft.amount);
+  // toast-exempt: success screen, the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => retail.createRepayment(draft.advanceId, { branch_id: branchId, amount_minor: amountOrNull(draft.amount) ?? 0, method: draft.method, paid_on: draft.date }, key),
     onSuccess: (saved) => {
@@ -309,7 +311,7 @@ export function AdvancesScreen() {
         </Saved>
       ) : (
         <>
-          <AdvanceForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(a) => { setSavedAdvance(a); show('Advance recorded.', 'success'); }} />
+          <AdvanceForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSavedAdvance} />
         </>
       ))}
 
@@ -323,7 +325,7 @@ export function AdvancesScreen() {
       ) : (
         <>
           <p className="branch-line">Receiving branch: <strong>{branchName}</strong></p>
-          <RepaymentForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(repayment, advance) => { setSavedRepayment({ repayment, advance }); show('Repayment recorded.', 'success'); }} />
+          <RepaymentForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(repayment, advance) => setSavedRepayment({ repayment, advance })} />
         </>
       ))}
       </div>

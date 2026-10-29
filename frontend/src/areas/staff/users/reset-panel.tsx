@@ -28,6 +28,7 @@ export function ResetPanel({ user, mfaEnabled, openLinkFor = null, onSend, onCan
   async function send() {
     if (!ready || sending.current) return;
     sending.current = true;
+    // toast-exempt: success screen, the link box with the new link replaces this panel
     setBusy(true);
     setError(null);
     const credential: AdminCredential = mfaEnabled ? { totpCode: typed.trim() } : { password: typed };

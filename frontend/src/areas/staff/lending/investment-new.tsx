@@ -86,6 +86,7 @@ export function SubscribeForm({ member, products }: { member: { id: string; labe
         maturity_instruction: instruction || undefined,
       }),
     onSuccess: (inv) => void navigate({ to: '/staff/lending/investments/$investmentId', params: { investmentId: inv.id ?? '' } }),
+    meta: { success: 'Investment opened' },
   });
   if (active.length === 0) {
     return (

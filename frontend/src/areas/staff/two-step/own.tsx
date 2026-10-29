@@ -28,6 +28,7 @@ export function OwnTwoStep({ blocking = false }: { blocking?: boolean }) {
 
   async function run(action: () => Promise<void>) {
     if (busy) return;
+    // toast-exempt: success screen, each step opens the next (the code, then the recovery codes that say it is on)
     setBusy(true);
     setMessage(null);
     try {

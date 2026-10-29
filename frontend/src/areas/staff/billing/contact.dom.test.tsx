@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BillingContactRequest, BillingView } from '../../../api/billing';
+import { DoneToast, doneToasts } from '../retail/toast';
 
 // Who gets the bills (issue #571, ADR-090, FR-SUB-13): the Owner sends reminders and receipts to someone else and back again; an
 // administrator only reads who it is; the form checks the fields before sending. Fabricated people and numbers.
@@ -28,8 +29,9 @@ const { BillingContactCard, goesToSentence, phoneProblem } = await import('./con
 
 function show(view: BillingView) {
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={new QueryClient({ mutationCache: doneToasts() })}>
       <BillingContactCard view={view} />
+      <DoneToast />
     </QueryClientProvider>,
   );
 }
@@ -57,7 +59,8 @@ describe('who gets the bills', () => {
     fireEvent.change(screen.getByLabelText(/Mobile number/), { target: { value: '0700 000 009' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(saved).toEqual([{ full_name: 'Test Accountant 01', email: 'accountant01@example.test', phone: '0700 000 009' }]));
-    expect(await screen.findByText('Saved. The next reminder and receipt go to this person.')).toBeTruthy();
+    expect(await screen.findByText('Billing contact saved')).toBeTruthy();
+    expect(screen.queryByText('Saved. The next reminder and receipt go to this person.')).toBeNull();
   });
 
   it('lets the Owner send them back to themselves', async () => {

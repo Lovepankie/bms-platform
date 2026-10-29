@@ -13,7 +13,7 @@ import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { varianceWords } from './payables-state';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
-import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { Gate, Problem, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -152,7 +152,6 @@ export function SupplierBillPage() {
   const { show, toast } = useToast();
   const nameOf = useBranchName();
   const keys = useActionKeys();
-  const [message, setMessage] = useState<string | null>(null);
   const allowed = canUse(me, 'supplierBills');
   const bill = useQuery({ queryKey: ['retail', 'supplier-bill', billId], queryFn: () => retail.getSupplierBill(billId), enabled: allowed });
   useCrumbLabel(bill.data?.bill_no);
@@ -167,9 +166,7 @@ export function SupplierBillPage() {
     mutationFn: (reason: string) => retail.voidSupplierBill(billId, reason, keys.keyFor(billId, reason)),
     onSuccess: (b) => {
       keys.done(billId);
-      const text = `Voided ${b.bill_no ?? 'the invoice'}. The goods can be put on another invoice.`;
-      setMessage(text);
-      show(text, 'success');
+      show(`Voided ${b.bill_no ?? 'the invoice'}. The goods can be put on another invoice.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -187,7 +184,6 @@ export function SupplierBillPage() {
       <h1>{b?.bill_no ?? 'Supplier invoice'}</h1>
       {bill.isPending && <SkeletonList label="Loading the invoice" />}
       <Problem error={bill.error} />
-      {message && <Success>{message}</Success>}
       {b && <SupplierBillView bill={b} nameOf={nameOf} landedCostId={landed.data?.id} payable={canUse(me, 'supplierPayments')} />}
       {b && b.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, b.branch_id) && (
         <div className="stack">

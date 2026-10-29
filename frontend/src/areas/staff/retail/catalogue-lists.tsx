@@ -5,7 +5,7 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { retail, type Category, type Unit } from '../../../api/retail';
 import { AddPanel } from './catalogue';
 import { ScreenLink } from './screen-link';
-import { Gate, Problem, Success, changeFailureText, requireVersion, useToast } from './ui';
+import { Gate, Problem, changeFailureText, requireVersion, useToast } from './ui';
 import { useComeBack } from '../../../app/ui/EmptyChoice';
 import { packText } from './shop-setup-state';
 import { UsualPackSheet, mayHaveUsualPack } from './unit-usual-pack';
@@ -82,7 +82,6 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
 }) {
   const queryClient = useQueryClient();
   const { show, toast } = useToast();
-  const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [suggested, setSuggested] = useState('');
@@ -92,13 +91,11 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   const rows = useQuery({ queryKey: ['retail', 'catalogue', plural], queryFn: list });
   const back = useComeBack();
   const done = (text: string) => {
-    setMessage(text);
     show(text, 'success');
     void queryClient.invalidateQueries({ queryKey: ['retail'] });
   };
   const add = useMutation({
     mutationFn: () => create(name.trim()),
-    onMutate: () => setMessage(null),
     onSuccess: (row) => {
       setName(''); setSuggested(''); setAdding(false);
       const codes = withPrefix && 'code_prefix' in row && row.code_prefix ? ` Its item codes start with ${row.code_prefix}.` : '';
@@ -109,7 +106,7 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
   });
   const change = useMutation({
     mutationFn: (v: { id: string; version: number | undefined; body: { name?: string; active?: boolean }; text: (row: Named) => string }) => update(v.id, requireVersion(v.version), v.body).then((row) => ({ row, text: v.text })),
-    onMutate: () => { setMessage(null); setFailure(null); },
+    onMutate: () => setFailure(null),
     onSuccess: ({ row, text }) => done(text(row)),
     onError: (error) => setFailure(changeFailureText(error, queryClient)),
   });
@@ -139,7 +136,6 @@ function NamedList({ noun, plural, list, create, update, withPrefix = false }: {
           <Problem error={add.error} />
         </AddPanel>
       </div>
-      {message && <Success>{message}</Success>}
       <Problem error={failure && new Error(failure)} />
       {rows.isPending && <p className="loading">Loading</p>}
       <Problem error={rows.error} />

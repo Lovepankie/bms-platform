@@ -183,6 +183,7 @@ function RunForm({ entry, branchIds, onQueued }: { entry: ReportCatalogueEntry; 
       return reports.request(entry.key, params, format);
     },
     onSuccess: onQueued,
+    meta: { success: 'Report requested' },
   });
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -258,7 +259,7 @@ export function RunsTable({
   onChange: () => void;
 }) {
   const [problem, setProblem] = useState<unknown>(null);
-  const cancel = useMutation({ mutationFn: (id: string) => reports.cancel(id), onSuccess: onChange, onError: setProblem });
+  const cancel = useMutation({ mutationFn: (id: string) => reports.cancel(id), onSuccess: onChange, onError: setProblem, meta: { success: 'Report cancelled' } });
   async function download(run: ReportRun) {
     setProblem(null);
     try {

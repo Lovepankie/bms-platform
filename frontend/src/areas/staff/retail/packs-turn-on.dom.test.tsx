@@ -38,7 +38,8 @@ vi.mock('../../../api/retail', async (original) => {
 
 const { RetailError } = await import('../../../api/retail');
 const { ProductForm } = await import('./catalogue-products');
-const { ASK_OWNER_PACKS, PACKS_ON_ADDING, PACKS_QUESTION, withPacksOn } = await import('./catalogue-packs');
+const { ASK_OWNER_PACKS, PACKS_QUESTION, withPacksOn } = await import('./catalogue-packs');
+const { DoneToast, doneToasts } = await import('./toast');
 
 afterEach(() => {
   cleanup();
@@ -89,14 +90,23 @@ describe('the turn-on line on the item form', () => {
     expect(screen.queryByText(PACKS_QUESTION)).toBeNull();
   });
 
-  it('says on Add an item that the packs are added once the item is', async () => {
+  it('says on Add an item that the packs are on in one toast, with no note beside it', async () => {
     capabilities.mockResolvedValue({ capabilities: { units: false }, version: 3 });
     changeCapabilities.mockResolvedValue({ capabilities: { units: true }, version: 4 });
-    screenOf(owner);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } }, mutationCache: doneToasts() });
+    client.setQueryData(['me', 't'], owner);
+    render(
+      <QueryClientProvider client={client}>
+        <Staffed><ProductForm onSaved={() => undefined} onCancel={() => undefined} /></Staffed>
+        <DoneToast />
+      </QueryClientProvider>,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Turn on cartons' }));
 
-    expect((await screen.findByTestId('packs-on')).textContent).toBe(PACKS_ON_ADDING);
+    await waitFor(() => expect(document.querySelectorAll('.toast')).toHaveLength(1));
+    expect(document.querySelector('.toast')?.textContent).toContain('Packs switched on');
+    expect(screen.queryByTestId('packs-on')).toBeNull();
     expect(changeCapabilities).toHaveBeenCalledWith({ units: true }, 3);
   });
 

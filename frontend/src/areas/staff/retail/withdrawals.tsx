@@ -24,6 +24,7 @@ export function WithdrawalForm({ branchId, onSaved }: { branchId: string; onSave
   const { me } = useStaff();
   const { key, draft, setDraft, finish } = usePersistedDraft<WithdrawalDraft>(`withdrawal:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: '', purpose: '' });
   const minor = amountOrNull(draft.amount);
+  // toast-exempt: success screen, the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => retail.createWithdrawal({ branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.purpose.trim() ? { purpose: draft.purpose.trim() } : {}) }, key),
     onSuccess: (saved) => {
@@ -103,7 +104,7 @@ export function WithdrawalsScreen() {
         </Saved>
       ) : (
         <>
-          <WithdrawalForm key={`${branchId}-${round}`} branchId={branchId} onSaved={(w) => { setSaved(w); show('Withdrawal recorded.', 'success'); }} />
+          <WithdrawalForm key={`${branchId}-${round}`} branchId={branchId} onSaved={setSaved} />
         </>
       )}
       </div>

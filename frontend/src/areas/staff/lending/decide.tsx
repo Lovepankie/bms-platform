@@ -11,6 +11,7 @@ import { FieldsNeededNote } from '../../../app/ui/Field';
 import { exponentOf } from '../../../components/money';
 import { useStaff } from '../context';
 import { Problem } from '../retail/ui';
+import { sayDone } from '../retail/toast';
 import { blankDecision, DECISION_ORDER, decisionBody, decisionProblems, selfApproval, termWords, type DecisionDraft } from './application-state';
 import { AppraisalCard, ApplicationFacts } from './application-view';
 import { Group, SaveBar, TextField, useFormErrors } from './form-fields';
@@ -46,6 +47,7 @@ export function DecisionForm({ loan, appraisal }: { loan: Loan; appraisal?: Loan
     setFailure(null);
     try {
       await api.decide(loan.id ?? '', loan.version ?? 0, decisionBody(draft, loan));
+      sayDone(draft.decision === 'reject' ? 'Application declined' : 'Application approved');
       void queryClient.invalidateQueries({ queryKey: ['lending'] });
       void navigate({ to: '/staff/lending/loans/$loanId', params: { loanId: loan.id ?? '' } });
     } catch (raw) {

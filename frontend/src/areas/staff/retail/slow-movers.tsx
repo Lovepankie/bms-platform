@@ -109,6 +109,7 @@ export function SlowMoverSetting({ read, onSaved }: { read: CapabilitiesRead; on
   const problem = !Number.isInteger(m) || m < 1 || m > 24 ? 'Months: a whole number from 1 to 24.'
     : !Number.isInteger(n) || n < 0 || n > 1_000_000 || minSold.trim() === '' ? 'Sold in 90 days: a whole number, 0 for none.' : null;
   const changed = m !== read.capabilities.slow_mover_months || n !== read.capabilities.slow_mover_min_sold;
+  // toast-exempt: the Settings screen shows the success toast through onSaved
   const save = useMutation({
     mutationFn: () => retail.changeCapabilities({ slow_mover_months: m, slow_mover_min_sold: n }, read.version),
     onSuccess: (next) => {

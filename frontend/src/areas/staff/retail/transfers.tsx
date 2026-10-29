@@ -101,6 +101,7 @@ function TransferDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const cancel = useMutation({
     mutationFn: () => retail.voidTransfer(id, reason.trim()),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
+    meta: { success: 'Move undone' },
   });
   const t = transfer.data;
   useCrumbTail(t ? `Move of ${showDate(t.transfer_date)}` : undefined, onClose);

@@ -7,6 +7,7 @@ import type { TenantSettings } from '../../api/client';
 import { mockMe } from '../../api/retail-mock';
 import { icons } from '../../components/icons';
 import { StaffContext } from './context';
+import { DoneToast } from './retail/toast';
 
 // After a logo or colour is saved on the set-up screen, the admin is told the app has a new icon and how it reaches a phone (issue
 // #453, ADR-066), with the iPhone steps one tap away; this device stores the new icon version. Fabricated business and logo.
@@ -80,6 +81,7 @@ function show({ card = false, modules, permissions = ['core.settings.manage'], e
         <Setup />
         {extra}
       </StaffContext.Provider>
+      <DoneToast />
     </QueryClientProvider>,
   );
 }
@@ -112,7 +114,7 @@ describe('the set-up note on the new icon', () => {
     await uploadLogo();
     await screen.findByTestId('new-icon-note');
     fireEvent.click(screen.getByRole('button', { name: 'Remove the logo' }));
-    await screen.findByText('Logo removed.');
+    await screen.findByText('Logo removed');
     await waitFor(() => expect(screen.queryByTestId('new-icon-note')).toBeNull());
   });
 
@@ -121,7 +123,7 @@ describe('the set-up note on the new icon', () => {
     show();
     fireEvent.change(await screen.findByLabelText('Hex'), { target: { value: '#0D5C75' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await screen.findByText('Saved.');
+    await screen.findByText('Settings saved');
     expect(await screen.findByTestId('new-icon-note')).toBeTruthy();
   });
 
@@ -151,7 +153,8 @@ describe('the end of the financial year (ADR-090)', () => {
     expect(select.disabled).toBe(false);
     fireEvent.change(select, { target: { value: '12' } });
     await waitFor(() => expect(settings.financial_year_end_month).toBe(12));
-    expect(await screen.findByText('The financial year ends on the last day of December.')).toBeTruthy();
+    expect(await screen.findByText('Year end set to December')).toBeTruthy();
+    expect(screen.queryByText('The financial year ends on the last day of December.')).toBeNull();
   });
 
   it('is shown to another administrator, who cannot change it', async () => {
@@ -168,7 +171,7 @@ describe('the go-live date', () => {
     const input = (await screen.findByLabelText(/The day the app became your register/)) as HTMLInputElement;
     fireEvent.change(input, { target: { value: '2026-03-01' } });
     fireEvent.blur(input);
-    await screen.findByText(/The go-live date is 2026-03-01/);
+    await screen.findByText('Go live date saved');
     expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { go_live_date: '2026-03-01' } }));
   });
 

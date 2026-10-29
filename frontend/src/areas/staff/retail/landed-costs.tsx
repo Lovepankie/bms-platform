@@ -11,7 +11,7 @@ import { LANDED_STATUS, costEffectWords, hasProfitFigures, kindWords, lineQtyWor
 import { PAYABLE_MANAGE, canUse, holdsAt } from './permissions';
 import { Facts, MoreButton, ReasonPanel, StatusBadge, SupplierOwed, useActionKeys, useCursorList } from './purchasing-ui';
 import { showDate } from './transfers';
-import { Gate, Problem, Success, money, useBranchName, useToast } from './ui';
+import { Gate, Problem, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
 
@@ -189,7 +189,6 @@ export function LandedCostPage() {
   const { show, toast } = useToast();
   const nameOf = useBranchName();
   const keys = useActionKeys();
-  const [message, setMessage] = useState<string | null>(null);
   const allowed = canUse(me, 'landedCosts');
   const cost = useQuery({ queryKey: ['retail', 'landed-cost', landedCostId], queryFn: () => retail.getLandedCost(landedCostId), enabled: allowed });
   useCrumbLabel(cost.data?.landed_no);
@@ -197,9 +196,7 @@ export function LandedCostPage() {
     mutationFn: (reason: string) => retail.voidLandedCost(landedCostId, reason, keys.keyFor(landedCostId, reason)),
     onSuccess: (c) => {
       keys.done(landedCostId);
-      const text = `Voided ${c.landed_no ?? 'the landed cost'}. The charges no longer count towards the cost of the goods.`;
-      setMessage(text);
-      show(text, 'success');
+      show(`Voided ${c.landed_no ?? 'the landed cost'}. The charges no longer count towards the cost of the goods.`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
   });
@@ -217,7 +214,6 @@ export function LandedCostPage() {
       <h1>{c?.landed_no ?? 'Landed cost'}</h1>
       {cost.isPending && <SkeletonList label="Loading the landed cost" />}
       <Problem error={cost.error} />
-      {message && <Success>{message}</Success>}
       {c && <LandedCostView cost={c} nameOf={nameOf} payable={canUse(me, 'supplierPayments')} />}
       {c && c.status === 'posted' && holdsAt(me, PAYABLE_MANAGE, c.branch_id) && (
         <div data-tour="landed-void">

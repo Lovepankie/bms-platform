@@ -89,6 +89,7 @@ export function MoneyForm({ account, kind, onDone }: { account: SavingsAccount; 
   const tooMuch = kind === 'withdraw' && amountMinor !== null && amountMinor > available;
   const valid = amountMinor !== null && !tooMuch;
   const body = () => ({ amount_minor: amountMinor ?? 0, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined });
+  // toast-exempt: success screen, the receipt with the new balance replaces the form
   const save = useMutation({
     mutationFn: async () => {
       if (kind === 'deposit') {
@@ -176,6 +177,7 @@ export function CloseForm({ account }: { account: SavingsAccount }) {
   const refresh = useRefreshAccount(accountId);
   const { key, draft, setDraft, finish } = usePersistedDraft<CloseDraft>(`savings-close:${me.user_id ?? ''}:${accountId}`, { method: 'cash', reason: '' });
   const [confirming, setConfirming] = useState(false);
+  // toast-exempt: success screen, the Account closed screen with the voucher replaces the form
   const save = useMutation({
     mutationFn: () => savings.close(accountId, { payment_method_key: draft.method, reason: draft.reason.trim() || undefined }, key),
     onSuccess: () => {
@@ -226,9 +228,9 @@ export function CloseForm({ account }: { account: SavingsAccount }) {
 }
 
 const STATUS_WORDS = {
-  freeze: { label: 'Why freeze this account?', submit: 'Freeze', done: 'Account frozen. Nothing can be taken out until it is unfrozen.' },
-  unfreeze: { label: 'Why unfreeze this account?', submit: 'Unfreeze', done: 'Account unfrozen.' },
-  reactivate: { label: 'How was the member identified?', submit: 'Reactivate', done: 'Account reactivated.' },
+  freeze: { label: 'Why freeze this account?', submit: 'Freeze' },
+  unfreeze: { label: 'Why unfreeze this account?', submit: 'Unfreeze' },
+  reactivate: { label: 'How was the member identified?', submit: 'Reactivate' },
 } as const;
 
 export function StatusForm({ account, change }: { account: SavingsAccount; change: 'freeze' | 'unfreeze' | 'reactivate' }) {
@@ -236,8 +238,12 @@ export function StatusForm({ account, change }: { account: SavingsAccount; chang
   const refresh = useRefreshAccount(accountId);
   const [reason, setReason] = useState('');
   const words = STATUS_WORDS[change];
-  const save = useMutation({ mutationFn: () => savings.setStatus(accountId, change, reason.trim()), onSuccess: refresh });
-  if (save.data) return <p role="status" className="alert alert-success">{words.done}</p>;
+  const save = useMutation({
+    mutationFn: () => savings.setStatus(accountId, change, reason.trim()),
+    onSuccess: refresh,
+    meta: { success: { freeze: 'Account frozen', unfreeze: 'Account unfrozen', reactivate: 'Account reactivated' }[change] },
+  });
+  if (save.data) return null;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (reason.trim() !== '' && !save.isPending) save.mutate(); }}>
       <label htmlFor={`sv-${change}-reason`}>{words.label}</label>
@@ -255,6 +261,7 @@ export function ReverseSavingsForm({ account, txn }: { account: SavingsAccount; 
   const accountId = account.id ?? '';
   const refresh = useRefreshAccount(accountId);
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`savings-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
+  // toast-exempt: a reversal waits for a checker, and this form then says it is sent for approval
   const save = useMutation({
     mutationFn: () => savings.reverse(accountId, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {

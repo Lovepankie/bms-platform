@@ -149,6 +149,7 @@ export function SupplierPaymentNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/supplier-payments/$paymentId', params: { paymentId: payment.id ?? '' } });
     },
+    meta: { success: 'Payment recorded' },
   });
   return (
     <Gate screen="supplierPayments" title={WORDS.payASupplier}>

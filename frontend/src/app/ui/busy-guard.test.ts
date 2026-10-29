@@ -77,17 +77,17 @@ function mutationHooks(text: string): string[] {
   return hooks;
 }
 
-type Mutation = { name: string; line: number; sends: string[]; pending: string | null; exempt: boolean };
+type Mutation = { name: string; line: number; index: number; sends: string[]; pending: string | null; exempt: boolean };
 
 const EXEMPT = /^\/\/\s*busy-exempt:\s*\S/;
 
-/** True when the `//` comment lines directly above the line at `index` hold a `busy-exempt:` with a reason. */
-function exempted(text: string, index: number): boolean {
+/** True when the `//` comment lines directly above the line at `index` hold an `exempt` comment (busy or toast) with a reason. */
+function exempted(text: string, index: number, exempt: RegExp = EXEMPT): boolean {
   const above = text.slice(0, index).split('\n').slice(0, -1).reverse();
   for (const line of above) {
     const trimmed = line.trim();
     if (!trimmed.startsWith('//')) return false;
-    if (EXEMPT.test(trimmed)) return true;
+    if (exempt.test(trimmed)) return true;
   }
   return false;
 }
@@ -99,7 +99,7 @@ function mutations(text: string, hooks: string[]): Mutation[] {
   const at = (index: number) => text.slice(0, index).split('\n').length;
   for (const m of text.matchAll(new RegExp(`const\\s+(\\w+)\\s*=\\s*(?:${callee})\\s*[<(]`, 'g'))) {
     const name = m[1] ?? '';
-    found.push({ name, line: at(m.index), sends: [`${name}.mutate`, `${name}.mutateAsync`], pending: `${name}.isPending`, exempt: exempted(text, m.index) });
+    found.push({ name, line: at(m.index), index: m.index, sends: [`${name}.mutate`, `${name}.mutateAsync`], pending: `${name}.isPending`, exempt: exempted(text, m.index) });
   }
   for (const m of text.matchAll(new RegExp(`const\\s*\\{([^}]*)\\}\\s*=\\s*(?:${callee})\\s*[<(]`, 'g'))) {
     const fields = new Map<string, string>();
@@ -108,7 +108,7 @@ function mutations(text: string, hooks: string[]): Mutation[] {
       if (key) fields.set(key, alias || key);
     }
     const sends = ['mutate', 'mutateAsync'].flatMap((k) => (fields.has(k) ? [fields.get(k) ?? k] : []));
-    found.push({ name: sends[0] ?? 'mutation', line: at(m.index), sends, pending: fields.get('isPending') ?? null, exempt: exempted(text, m.index) });
+    found.push({ name: sends[0] ?? 'mutation', line: at(m.index), index: m.index, sends, pending: fields.get('isPending') ?? null, exempt: exempted(text, m.index) });
   }
   return found;
 }
@@ -122,13 +122,23 @@ function pressCode(text: string): string {
     if (DOM_INPUT.test(m[1] ?? '')) continue;
     parts.push(balanced(text, m.index + m[0].length - 1));
   }
-  // Follow local functions three calls deep: `onSubmit={submit}` and `function submit() { save.mutate() }`.
+  return follow(text, parts);
+}
+
+/**
+ * `parts` with the local functions they call, three calls deep: `onSubmit={submit}` and `function submit() { save.mutate() }`.
+ * With `props`, a name that is a callback prop (`onSaved(x)`) also brings the expressions handed to it in the same file.
+ */
+function follow(text: string, parts: string[], props = false): string {
   const seen = new Set<string>();
   for (let depth = 0; depth < 3; depth += 1) {
     const joined = parts.join('\n');
     for (const [, name] of joined.matchAll(/\b([a-z]\w*)\b/g)) {
       if (!name || seen.has(name)) continue;
       seen.add(name);
+      if (props && /^on[A-Z]/.test(name)) {
+        for (const m of text.matchAll(new RegExp(`\\s${name}=\\{`, 'g'))) parts.push(balanced(text, m.index + m[0].length - 1));
+      }
       const decl = new RegExp(`(?:function\\s+${name}\\s*\\(|const\\s+${name}\\s*=\\s*(?:async\\s*)?(?:\\([^)]*\\)|\\w+)\\s*=>)`).exec(text);
       if (!decl) continue;
       const rest = text.slice(decl.index + decl[0].length);
@@ -252,5 +262,226 @@ describe('busy guard on fixtures', () => {
 
   it('leaves a mutation no press sends alone', () => {
     expect(unguarded(`${save}\n<input onChange={(e) => save.mutate(e.target.value)} />`)).toEqual([]);
+  });
+});
+
+// The success toast guard (#682): every write in the staff area answers back in plain words. A staff mutation passes when its
+// options name `meta: { success }` (the app's DoneToast says it), or its own success path shows a success toast: the
+// useMutation options (or those of the local hook it comes from), each send with the rest of its block, and the local functions
+// and same-file callback props (`onSaved={...}`) these call, three deep, hold a toast call with the 'success' tone or an
+// `added(` of useItemAdded. Anything else carries `// toast-exempt: <reason>` in the `//` lines directly above it. Like the
+// busy guard it reads text, not data flow, so it proves a success toast is on the path, not what it says.
+// JUSTIFICATION-A3: #682 asks for this guard; it reuses the busy guard's mutation parser rather than a second copy.
+
+const TOAST_EXEMPT = /^\/\/\s*toast-exempt:\s*\S/;
+// meta.success that is not a bare `() => null`; a toast call whose own parentheses (one level of nesting) hold the 'success'
+// tone; sayDone(; or useItemAdded's added(.
+const SAYS_DONE =
+  /\bmeta:\s*\{[^}]*\bsuccess\s*:(?!\s*\(\s*\)\s*=>\s*null\b)|\b(?:show|\w*[Tt]oast\w*)\??\.?\((?:[^()]|\([^()]*\))*?['"]success['"](?:[^()]|\([^()]*\))*\)|\bsayDone\(|\badded\(/;
+
+// A write by hand: a function that turns a busy flag on (`setBusy(true)`, `setSaving(true)`) and then sends. From that line to the
+// end of its block, with what it calls, it must say done like a mutation, or carry `// toast-exempt: <reason>` directly above it.
+const BUSY_ON = /\bset(?:Busy|Saving|Removing|Sending|Submitting|Posting|Deleting)\(true\)/g;
+
+/** The hand-rolled writes of one file that say nothing when they work and carry no toast-exempt reason. */
+function silentByHand(text: string): string[] {
+  return [...text.matchAll(BUSY_ON)]
+    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT) && !SAYS_DONE.test(follow(text, [restOfBlock(text, m.index)], true)))
+    .map((m) => `${text.slice(0, m.index).split('\n').length} ${m[0]}`);
+}
+
+/** The options of each local hook that returns a mutation, by the hook's name. */
+function hookOptions(text: string): [string, string][] {
+  return [...text.matchAll(/(?:return|=>)\s*useMutation\s*[<(]/g)].flatMap((m) => {
+    const name = [...text.slice(0, m.index).matchAll(/(?:function\s+(use\w+)|const\s+(use\w+)\s*=)/g)].at(-1);
+    const hook = name?.[1] ?? name?.[2];
+    return hook ? [[hook, balanced(text, text.indexOf('(', m.index + m[0].length - 1))] as [string, string]] : [];
+  });
+}
+
+/** The text from `from` to the end of the block it sits in: a send with what runs after it. */
+function restOfBlock(text: string, from: number): string {
+  let depth = 0;
+  for (let i = from; i < text.length; i += 1) {
+    if (text[i] === '{') depth += 1;
+    else if (text[i] === '}' && (depth -= 1) < 0) return text.slice(from, i);
+  }
+  return text.slice(from);
+}
+
+/** The code that runs when a mutation works: its options, its hook's, each send to the end of its block, and what they call. */
+function successCode(text: string, m: Mutation, hookOpts: Map<string, string>, successOnly = false): string {
+  const callee = /=\s*(\w+)/.exec(text.slice(m.index))?.[1] ?? '';
+  const parts = [balanced(text, text.indexOf('(', m.index)), hookOpts.get(callee) ?? ''];
+  for (const send of m.sends) {
+    for (const call of text.matchAll(new RegExp(`(^|[^\\w.])${send.replace('.', '\\.')}\\s*\\(`, 'g'))) parts.push(restOfBlock(text, call.index + call[0].length - 1));
+  }
+  if (!successOnly) return follow(text, parts, true);
+  // Stripped after following too: following a name can bring back a function whose failure path sets a message.
+  return withoutCatch(withoutOnError(follow(text, parts.map(withoutOnError), true)));
+}
+
+/** The mutations of one file that say nothing when they work and carry no toast-exempt reason. */
+function silent(text: string, hooks: string[] = mutationHooks(text), hookOpts = new Map(hookOptions(text))): string[] {
+  return mutations(text, hooks)
+    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT) && !SAYS_DONE.test(successCode(text, m, hookOpts)))
+    .map((m) => `${m.line} ${m.name}`);
+}
+
+// One success signal per action (review of #685): a success path that shows a toast and also sets a success note
+// (`setDone('Saved.')`, `setMessage(...)`, `setSaved(true)`) says it twice. A full success screen that replaces the form keeps
+// its screen, sets no toast and is marked `// toast-exempt: success screen`, so it never reaches this check. Clearing a note
+// (`setMessage(null)`) is not a note, and an onError handler or a catch block is not the success path. The check reads state
+// names, so a state that holds what a write returned is named for what it holds (`setVoided`, `setReport`); renaming a
+// success note to slip past this list is the same defect, and review must refuse it.
+const SUCCESS_NOTE = /\bset(?:Done|Saved|Message|Notice|Success)\((?!\s*(?:null|false|undefined|''|"")\s*\))/;
+
+/** `code` without its `onError:` handlers (a name, or an arrow function with a balanced body), so a failure path is not read. */
+function withoutOnError(code: string): string {
+  let out = code;
+  for (let at = out.search(/\bonError:/); at >= 0; at = out.search(/\bonError:/)) {
+    let end = at + 'onError:'.length;
+    while (/\s/.test(out[end] ?? '')) end += 1;
+    if (out[end] === '(') {
+      end += balanced(out, end).length;
+      end = out.indexOf('=>', end) + 2;
+      while (/\s/.test(out[end] ?? '')) end += 1;
+    }
+    if (out[end] === '{' || out[end] === '(') end += balanced(out, end).length;
+    else end += /^[^,}\n]*/.exec(out.slice(end))?.[0].length ?? 0;
+    out = out.slice(0, at) + out.slice(end);
+  }
+  return out;
+}
+
+/**
+ * True when the mutation's own component draws a success note straight off its result (`save.isSuccess && <Success>`,
+ * `if (save.data) return <p className="alert alert-success">`), with no state set: its `isSuccess` or `data`, then a note close by.
+ */
+function notesItself(text: string, m: Mutation): boolean {
+  const rest = text.slice(m.index);
+  const own = rest.slice(0, rest.search(/\n(?:export )?function |$/));
+  return [...own.matchAll(new RegExp(`\\b${m.name}\\.(?:isSuccess|data)\\b`, 'g'))].some((use) => /alert-success|<Success\b/.test(own.slice(use.index, use.index + 300)));
+}
+
+// JUSTIFICATION-A3: round 3 of the #685 review asks the success-twice check to cover writes by hand too.
+/** `code` without its `catch (...) { ... }` blocks, which say a failure. */
+function withoutCatch(code: string): string {
+  let out = code;
+  for (let at = out.search(/\bcatch\s*(?:\([^()]*\))?\s*\{/); at >= 0; at = out.search(/\bcatch\s*(?:\([^()]*\))?\s*\{/)) {
+    const open = out.indexOf('{', at);
+    out = out.slice(0, at) + out.slice(open + balanced(out, open).length);
+  }
+  return out;
+}
+
+/** The writes by hand of one file whose success path both shows a toast and sets a success note. */
+function doubledByHand(text: string): string[] {
+  return [...text.matchAll(BUSY_ON)]
+    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT))
+    .filter((m) => {
+      // Stripped after following too: following a name can bring back the whole function the write sits in.
+      const code = withoutCatch(withoutOnError(follow(text, [withoutCatch(restOfBlock(text, m.index))], true)));
+      return SAYS_DONE.test(code) && SUCCESS_NOTE.test(code);
+    })
+    .map((m) => `${text.slice(0, m.index).split('\n').length} ${m[0]}`);
+}
+
+/** The mutations of one file whose success path both shows a toast and sets, or draws, a success note. */
+function doubled(text: string, hooks: string[] = mutationHooks(text), hookOpts = new Map(hookOptions(text))): string[] {
+  return mutations(text, hooks)
+    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT))
+    .filter((m) => {
+      const code = successCode(text, m, hookOpts, true);
+      return SAYS_DONE.test(code) && (SUCCESS_NOTE.test(code) || notesItself(text, m));
+    })
+    .map((m) => `${m.line} ${m.name}`);
+}
+
+const hookOpts = new Map(sources.flatMap(({ text }) => hookOptions(text)));
+const staff = sources.filter((s) => s.file.startsWith('areas/staff/'));
+
+describe('success toast guard', () => {
+  it('finds the staff mutations it guards', () => {
+    expect(staff.flatMap(({ text }) => mutations(text, hooks)).length).toBeGreaterThan(150);
+  });
+
+  it('every staff mutation says in a toast when it worked, or says why not', () => {
+    expect(staff.flatMap(({ file, text }) => silent(text, hooks, hookOpts).map((m) => `${file}:${m}`))).toEqual([]);
+  });
+
+  it('no staff mutation says its success twice, in a toast and a success note', () => {
+    expect(staff.flatMap(({ file, text }) => doubled(text, hooks, hookOpts).map((m) => `${file}:${m}`))).toEqual([]);
+  });
+
+  it('no staff write by hand says its success twice, in a toast and a success note', () => {
+    expect(staff.flatMap(({ file, text }) => doubledByHand(text).map((m) => `${file}:${m}`))).toEqual([]);
+  });
+
+  it('every staff write by hand says in a toast when it worked, or says why not', () => {
+    expect(staff.flatMap(({ text }) => [...text.matchAll(BUSY_ON)]).length).toBeGreaterThan(20);
+    expect(staff.flatMap(({ file, text }) => silentByHand(text).map((m) => `${file}:${m}`))).toEqual([]);
+  });
+});
+
+describe('success toast guard on fixtures', () => {
+  const press = `\n<BusyButton busy={save.isPending} onClick={() => save.mutate()}>Save</BusyButton>`;
+
+  it('fails a mutation that says nothing when it works', () => {
+    expect(silent(`const save = useMutation({ mutationFn: send, onSuccess: () => close() });${press}`)).toEqual(['1 save']);
+  });
+
+  it('passes meta.success, a success toast in its options, at its send or after an awaited send', () => {
+    expect(silent(`const save = useMutation({ mutationFn: send, meta: { success: 'Item saved' } });${press}`)).toEqual([]);
+    expect(silent(`const save = useMutation({ mutationFn: send, onSuccess: () => show('Item saved', 'success') });${press}`)).toEqual([]);
+    expect(silent(`const save = useMutation({ mutationFn: send });\n<button onClick={() => save.mutate(x, { onSuccess: () => show('Saved', 'success') })} />`)).toEqual([]);
+    expect(silent(`const save = useMutation({ mutationFn: send });\nasync function go() { await save.mutateAsync(x); show('Saved', 'success'); }`)).toEqual([]);
+  });
+
+  it('never passes an info or error toast as a success, a success tone outside the call, or words that are always null', () => {
+    expect(silent(`const save = useMutation({ mutationFn: send, onSuccess: () => show('Sent for approval', 'info') });${press}`)).toEqual(['1 save']);
+    expect(silent(`const save = useMutation({ mutationFn: send, onSuccess: () => show(x, 'info') });\nconst tone = ok ? 'success' : 'info'`)).toEqual(['1 save']);
+    expect(silent(`const save = useMutation({ mutationFn: send, meta: { success: () => null } });${press}`)).toEqual(['1 save']);
+    expect(silent(`const save = useMutation({ mutationFn: send, onSuccess: (r) => show(savedWords(r), r.ok ? 'success' : 'info') });`)).toEqual([]);
+  });
+
+  it('fails a success said twice, and passes a toast alone, a cleared note, an error note and a success screen', () => {
+    expect(doubled(`const save = useMutation({ mutationFn: send, onSuccess: () => setDone('Saved.'), meta: { success: 'Saved' } });`)).toEqual(['1 save']);
+    expect(doubled(`const save = useMutation({ mutationFn: send, onSuccess: () => { setMessage(t); show(t, 'success'); } });`)).toEqual(['1 save']);
+    expect(doubled(`const save = useMutation({ mutationFn: send, onSuccess: () => setMessage(null), meta: { success: 'Saved' } });`)).toEqual([]);
+    expect(doubled(`const save = useMutation({ mutationFn: send, onError: (e) => setMessage(e.message), meta: { success: 'Saved' } });`)).toEqual([]);
+    expect(doubled(`// toast-exempt: success screen, the receipt replaces the form\nconst save = useMutation({ mutationFn: send, onSuccess: () => setDone(r) });`)).toEqual([]);
+    expect(doubled(`const save = useMutation({ mutationFn: send, meta: { success: 'Saved' } });\nreturn save.isSuccess && <Success>Saved.</Success>;`)).toEqual(['1 save']);
+  });
+
+  it('fails a write by hand that toasts and sets a success note, and passes a note set only on failure', () => {
+    const write = (after: string) => `async function save() {\n  setBusy(true);\n  try {\n    await api.save();\n    sayDone('Saved');${after}\n  } catch (e) {\n    setMessage(e.message);\n  } finally {\n    setBusy(false);\n  }\n}`;
+    expect(doubledByHand(write("\n    setMessage('Saved.');"))).toEqual(['2 setBusy(true)']);
+    expect(doubledByHand(write(''))).toEqual([]);
+  });
+
+  it('fails a write by hand that says nothing, and passes sayDone or a toast-exempt reason above it', () => {
+    const write = (after: string) => `async function save() {\n  setBusy(true);\n  try {\n    await api.save();${after}\n  } finally {\n    setBusy(false);\n  }\n}`;
+    expect(silentByHand(write(''))).toEqual(['2 setBusy(true)']);
+    expect(silentByHand(write("\n    sayDone('Member saved');"))).toEqual([]);
+    expect(silentByHand(write('').replace('  setBusy(true);', '  // toast-exempt: the welcome screen that opens says it\n  setBusy(true);'))).toEqual([]);
+  });
+
+  it('follows a local function and a callback prop of the same file', () => {
+    const form = `const save = useMutation({ mutationFn: send, onSuccess: (r) => done(r) });\nfunction done(r) { onSaved(r); }`;
+    expect(silent(form)).toEqual(['1 save']);
+    expect(silent(`${form}\n<Form onSaved={(r) => show('Expense recorded', 'success')} />`)).toEqual([]);
+  });
+
+  it('follows a hook that returns a mutation to its options', () => {
+    const hook = `function useSave() {\n  return useMutation({ mutationFn: send, meta: { success: 'Saved' } });\n}`;
+    expect(silent(`${hook}\nconst save = useSave();`, ['useSave'])).toEqual([]);
+  });
+
+  it('honours a toast-exempt comment with a reason directly above the mutation, and nothing else', () => {
+    const save = `const save = useMutation({ mutationFn: send });`;
+    expect(silent(`// toast-exempt: the receipt screen that opens says it\n${save}`)).toEqual([]);
+    expect(silent(`// toast-exempt:\n${save}`)).toEqual(['2 save']);
+    expect(silent(`// busy-exempt: the switch says Working itself\n${save}`)).toEqual(['2 save']);
   });
 });

@@ -180,6 +180,29 @@
   height: 20px;
 }
 
+/* The toast's one action, Undo (#682): words on the pill, a 48px target that does not make the pill taller. */
+.toast-action,
+.toast-action:hover:not(:disabled) {
+  min-height: var(--tap);
+  margin-block: calc(-1 * var(--space-3));
+  margin-inline-start: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-on-toast);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+}
+
+/* Undo while its request runs: still words on the pill, dimmed, with the busy spinner in its end padding. */
+.toast .toast-action[aria-busy='true'],
+.toast .toast-action[aria-busy='true']:is(:hover, :active) {
+  background: transparent;
+  color: var(--color-on-toast);
+  opacity: var(--press-opacity);
+}
+
 /* The icon alone carries the kind, in a colour that reads on the dark pill. */
 .toast-success .toast-icon {
   color: var(--color-toast-success);

@@ -54,6 +54,7 @@ export function PartyPicker({ id, label, parties, loading = false, load, kinds, 
       setAdding(false);
       setName('');
     },
+    meta: { success: (party: { name?: string }) => (party.name ? `${party.name} added` : 'Added to the list') },
   });
   const choices = parties.filter((p) => p.active !== false && (!listed || listed.includes(p.kind as CashPartyKind)));
   return (
