@@ -186,7 +186,7 @@ function Items({ list, showCost }: { list: PriceList; showCost: boolean }) {
         <div className="table-wrap" tabIndex={0}>
           <table>
             <thead>
-              <tr><th>Item</th><th>Unit</th><th>Quantity</th><th className="num">Price</th><th>First day</th><th>Last day</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr>
+              <tr><th>Item</th><th>Unit</th><th>Quantity</th><th className="num">Selling price</th><th>First day</th><th>Last day</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr>
             </thead>
             <tbody>
               {items.map((i) => <ItemRow key={i.id} item={i} showCost={showCost} busy={end.isPending} ending={end.isPending && end.variables?.id === i.id} onEnd={(x) => end.mutate(x)} />)}

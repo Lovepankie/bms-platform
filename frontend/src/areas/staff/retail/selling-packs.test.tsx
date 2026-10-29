@@ -127,7 +127,7 @@ describe('the pack table on Edit item', () => {
   });
 
   it('marks a pack below cost and names each Change button', () => {
-    expect(html).toContain('Below cost');
+    expect(html).toContain('Below buying price');
     expect(html).toContain('aria-label="Change the carton pack"');
   });
 

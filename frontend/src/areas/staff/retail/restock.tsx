@@ -351,8 +351,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
               </div>
             )}
             <div className="rt-row">
-              <Field id={`cost-${i}`} required inputMode="numeric" label={`Cost each${pack ? ` (per ${pack.unit})` : ''}`} value={l.cost} onChange={(e) => patch(i, { cost: e.target.value })} />
-              <Field id={`sell-${i}`} required={canPrice} inputMode="numeric" label={`Sell price each${pack ? ` (per ${l.product.unit})` : ''}`} value={l.sell} disabled={!canPrice}
+              <Field id={`cost-${i}`} required inputMode="numeric" label={`${WORDS.buyingPrice} each${pack ? ` (per ${pack.unit})` : ''}`} value={l.cost} onChange={(e) => patch(i, { cost: e.target.value })} />
+              <Field id={`sell-${i}`} required={canPrice} inputMode="numeric" label={`${WORDS.sellingPrice} each${pack ? ` (per ${l.product.unit})` : ''}`} value={l.sell} disabled={!canPrice}
                 hint={canPrice ? undefined : 'Only the owner changes selling prices.'} onChange={(e) => patch(i, { sell: e.target.value })} />
             </div>
             <fieldset>

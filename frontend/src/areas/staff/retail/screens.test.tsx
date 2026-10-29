@@ -97,24 +97,25 @@ describe('stock screen', () => {
     expect(admin).toContain('UGX 3,500');
   });
 
-  it('says Price and puts Cost before it (issue #330), and says only Price without the permission', () => {
+  it('says Selling price and puts the average buying price before it (issues #330, #680), and only Selling price without the permission', () => {
     const admin = renderToString(<StockTable rows={rows} showCost />);
     // ADR-079: the cost of stock is the shop's average buying price.
-    expect(admin.indexOf('>Average cost<')).toBeGreaterThan(-1);
-    expect(admin.indexOf('>Average cost<')).toBeLessThan(admin.indexOf('>Price<'));
+    expect(admin.indexOf('>Average buying price<')).toBeGreaterThan(-1);
+    expect(admin.indexOf('>Average buying price<')).toBeLessThan(admin.indexOf('>Selling price<'));
     expect(admin.indexOf('UGX 3,500')).toBeLessThan(admin.indexOf('UGX 6,000'));
-    expect(admin).not.toContain('Selling price');
     const sales = renderToString(<StockTable rows={rows} showCost={false} />);
-    expect(sales).toContain('>Price<');
-    expect(sales).not.toContain('Selling');
+    expect(sales).toContain('>Selling price<');
+    expect(sales).not.toContain('Buying');
   });
 
   it('shows cost then price on the all-branches table and the phone cards', () => {
     const data = { branches: [{ id: 'b1', code: 'BR1', name: 'Test Branch A' }], items: [{ product_id: 'p1', description: 'Test Item 01', unit: 'piece', total_qty: '3.000', sell_minor: 6000, cost_minor: 3500, balances: [{ branch_id: 'b1', qty: '3.000' }] }] } as AllBranchesStock;
     const table = renderToString(<AllBranchesTable data={data} showCost />);
-    expect(table.indexOf('>Average cost<')).toBeLessThan(table.indexOf('>Price<'));
-    expect(renderToString(<AllBranchesList data={data} showCost />)).toContain('Average cost UGX 3,500, price UGX 6,000 each');
-    expect(renderToString(<AllBranchesList data={data} showCost={false} />)).toContain('Price UGX 6,000 each');
+    expect(table.indexOf('>Average buying price<')).toBeLessThan(table.indexOf('>Selling price<'));
+    expect(renderToString(<AllBranchesList data={data} showCost />)).toContain('Buying price <span class="num">UGX 3,500</span> · Selling price <span class="num">UGX 6,000</span>');
+    const sales = renderToString(<AllBranchesList data={data} showCost={false} />);
+    expect(sales).toContain('Selling price <span class="num">UGX 6,000</span>');
+    expect(sales).not.toContain('Buying');
   });
 
   it('shows the category of each item in a Category column when the list is not grouped', () => {
@@ -244,13 +245,13 @@ describe('valuation and profit', () => {
     const html = renderToString(<ValuationTable valuation={v} />);
     expect(html).toContain('UGX 7,000');
     expect(html).toContain('UGX 12,000');
-    expect(html).toContain('At cost');
+    expect(html).toContain('At buying price');
   });
 
   it('shows expected profit and its percent over cost in the total, per item and by category', () => {
     const html = renderToString(<ValuationTable valuation={v} />);
     expect(html).toContain('<dt>Expected profit</dt><dd>UGX 5,000</dd>');
-    expect(html).toContain('<dt>Expected profit % (over cost)</dt><dd>71.43%</dd>');
+    expect(html).toContain('<dt>Expected profit % (over buying price)</dt><dd>71.43%</dd>');
     expect(html).toContain('<h2>By category</h2>');
     expect(html).toContain('<td>Lighting</td>');
     expect((html.match(/71\.43%/g) ?? []).length).toBe(3);
@@ -559,7 +560,7 @@ describe('All branches (#144)', () => {
     expect(html).toContain('Test Branch A');
     expect(html).toContain('UGX 12,000');
     expect(html).toContain('UGX 6,000');
-    expect(html).toContain('<span class="key-figure-label">Stock at price</span><strong class="key-figure-value">UGX 18,000</strong>');
+    expect(html).toContain('<span class="key-figure-label">Stock at selling price</span><strong class="key-figure-value">UGX 18,000</strong>');
   });
 
   it('Daily profit shows each branch and the total of every branch per day', () => {

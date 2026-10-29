@@ -94,6 +94,7 @@ The unit list is seeded with names Ugandans use: piece, kilo, litre, metre, pair
 | Restock | Buy stock | The owner: "restocking is buying". Restock is a rare word here |
 | Cost price / cost | Buying price | Done in #495 |
 | Sell price | Selling price | Done in #495 |
+| Average cost, a bare Price or Cost column, at cost, at price | Average buying price, Selling price, Buying price, at buying price, at selling price | Done in #680; the glossary guard retires "average cost", "cost price" and "unit cost", and the design guard fails a bare Price or Cost column on a retail screen. Profit reports keep "Cost of goods sold" |
 | Unit (of an item) | Counted in (smallest unit) | "Unit" is unclear |
 | Pack sizes | Cartons, boxes and other packs | Concrete |
 | Stock-take | Count stock | Plain verb |

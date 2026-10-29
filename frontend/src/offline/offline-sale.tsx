@@ -81,7 +81,7 @@ export function ProvisionalReceipt({ item, onNew }: { item: OutboxItem; onNew: (
             <tr>
               <th>Item</th>
               <th className="num">Qty</th>
-              <th className="num">Price</th>
+              <th className="num">Selling price</th>
               <th className="num">Total</th>
             </tr>
           </thead>

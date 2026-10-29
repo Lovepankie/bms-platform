@@ -276,7 +276,7 @@ export function PackEditor({ product }: { product: Product }) {
                         <>
                           <Money minor={price.minor} />
                           {!price.own && <span className="hint"> suggested</span>}
-                          {k.below_cost === true && <> <span className="badge badge-warning">Below cost</span></>}
+                          {k.below_cost === true && <> <span className="badge badge-warning">Below buying price</span></>}
                         </>
                       )}
                     </td>

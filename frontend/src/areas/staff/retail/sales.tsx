@@ -125,7 +125,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
           <tr>
             <th>Item</th>
             {!phone && <th className="num">Qty</th>}
-            {!phone && <th className="num">Price</th>}
+            {!phone && <th className="num">Selling price</th>}
             <th className="num">Total</th>
           </tr>
         </thead>

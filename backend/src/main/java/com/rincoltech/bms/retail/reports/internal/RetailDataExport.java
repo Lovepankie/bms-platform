@@ -146,7 +146,7 @@ class RetailDataExport implements DataExportSection {
                         new Column("unit", "Unit", Kind.TEXT),
                         new Column("size", "Size", Kind.TEXT),
                         new Column("colour", "Colour", Kind.TEXT),
-                        new Column("cost_price", "Cost price", Kind.MONEY),
+                        new Column("cost_price", "Buying price", Kind.MONEY),
                         new Column("selling_price", "Selling price", Kind.MONEY),
                         new Column("active", "Active", Kind.TEXT),
                         new Column("added_on", "Added on", Kind.DATE)));
@@ -437,7 +437,7 @@ class RetailDataExport implements DataExportSection {
                         CODE,
                         PRODUCT,
                         QUANTITY,
-                        new Column("cost_price", "Cost price", Kind.MONEY),
+                        new Column("cost_price", "Buying price", Kind.MONEY),
                         new Column("selling_price", "Selling price", Kind.MONEY),
                         new Column("line_total", "Line total", Kind.MONEY)),
                 count("SELECT count(*) FROM retail_purchase_lines"));
@@ -472,7 +472,7 @@ class RetailDataExport implements DataExportSection {
                         CODE,
                         PRODUCT,
                         QUANTITY,
-                        new Column("cost_price", "Cost price", Kind.MONEY),
+                        new Column("cost_price", "Buying price", Kind.MONEY),
                         new Column("line_total", "Line total", Kind.MONEY),
                         new Column("status", "Status", Kind.TEXT)),
                 count("SELECT count(*) FROM retail_goods_receipt_lines"));

@@ -13,7 +13,7 @@ export type Draft = Record<string, Entry>;
  */
 export const WHILE_IT_WAITS: Record<string, string> = {
   retail_sale_void: 'The sale stays as it is until an administrator approves the void.',
-  retail_stock_correction: 'The quantity stays as it is until an administrator approves. Counted at the average cost.',
+  retail_stock_correction: 'The quantity stays as it is until an administrator approves. Counted at the average buying price.',
   retail_expense: 'The expense is not in the cash book until an administrator approves it.',
   retail_sale_return: 'No money or goods move until a second administrator approves. Voiding such a return asks too.',
   retail_sale_write_off: 'With one administrator, a write-off goes through alone and the administrator is told.',

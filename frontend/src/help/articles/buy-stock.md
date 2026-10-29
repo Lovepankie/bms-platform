@@ -11,8 +11,8 @@ When goods arrive from a supplier, record them on Buy stock. The stock goes up a
 
 1. Open **Buy stock** under Stock in the menu. Pick the supplier, or leave it as no supplier.
    ![Pick the supplier on Buy stock](buy-stock-1.webp)
-2. Find each item you bought and tap it. For each one, type the cost, the selling price and how many you bought for each branch.
-   ![Type the cost and the quantity for each branch](buy-stock-2.webp)
+2. Find each item you bought and tap it. For each one, type the buying price, the selling price and how many you bought for each branch.
+   ![Type the buying price and the quantity for each branch](buy-stock-2.webp)
 3. Choose **Paid how**: cash, mobile money, bank, or on credit when you will pay the supplier later. Then tap **Save the purchase**.
    ![Choose Paid how, then save](buy-stock-3.webp)
 

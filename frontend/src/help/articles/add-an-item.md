@@ -12,7 +12,7 @@ Add an item inside its category. The app gives it the next code of the category,
 1. Open **Items and categories**, then **Categories**, and tap **Open** on the item's category.
    ![Open the category](add-an-item-1.webp)
 2. Tap **Add an item**. The category is already chosen and the form shows the item code the app will give it. Type the description, what it is counted in and the selling price. You can add a photo too, with **Take a picture** or **Choose a photo**.
-   ![Type the description, unit and price](add-an-item-2.webp)
+   ![Type the description, unit and selling price](add-an-item-2.webp)
 3. Tap **Add item**. The item is in the category's list with its code. The code never changes, even if you move the item to another category.
    ![The new item in its category](add-an-item-3.webp)
 

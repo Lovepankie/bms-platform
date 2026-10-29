@@ -45,7 +45,7 @@ export function DayCard({ row, shop, links = {} }: { row: CashDailyRow; shop: st
       {voided('Savings voided', row.savings_voids_minor)}
       {voided('Banking voided', row.banking_voids_minor)}
       {voided('Withdrawals voided', row.withdrawal_voids_minor)}
-      <Line label="Stock bought with cash, at cost" minor={row.cash_purchases_minor} />
+      <Line label="Stock bought with cash, at buying price" minor={row.cash_purchases_minor} />
       <Line label="Savings set aside" minor={row.savings_minor} to={links.savings} />
       <Line label="Expenses" minor={row.expenses_minor} to={links.expenses} />
       <Line label="Advances paid out" minor={row.advances_out_minor} to={links.advances} />

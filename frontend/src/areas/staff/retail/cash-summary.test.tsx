@@ -36,7 +36,7 @@ describe('cash summary', () => {
 
   it('shows the extra lines only when present', () => {
     const out = page('admin', <DaysList rows={[adminRow]} />);
-    for (const shown of ['Opening cash', 'Closing cash', 'Other movements', 'Stock bought with cash, at cost', 'Savings set aside', 'Expected to bank', 'Unbanked so far', 'Profit for the day', 'Savings voided']) {
+    for (const shown of ['Opening cash', 'Closing cash', 'Other movements', 'Stock bought with cash, at buying price', 'Savings set aside', 'Expected to bank', 'Unbanked so far', 'Profit for the day', 'Savings voided']) {
       expect(out).toContain(shown);
     }
     expect(out).toContain('UGX 120,000');

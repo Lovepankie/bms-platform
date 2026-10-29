@@ -67,6 +67,10 @@ export const RETIRED_WORDS: Record<string, string> = {
   stocktake: WORDS.countStock,
   'credit buyer': WORDS.customersWhoOwe,
   'pack size': WORDS.packs,
+  // Issue #680: the two prices of an item are always the buying price and the selling price.
+  'average cost': `Average ${WORDS.buyingPrice.toLowerCase()}`,
+  'cost price': WORDS.buyingPrice,
+  'unit cost': WORDS.buyingPrice,
 };
 
 /** The banned and retired words a piece of copy contains, lower case; empty when it is clean. */

@@ -196,7 +196,7 @@ class JdbcStockLedger implements StockLedger {
         }
         if (a.averageMinor() > RetailCatalogue.MAX_AMOUNT_MINOR) {
             throw ApiException.rule(
-                    "amount_out_of_range", itemName(productId) + ": the average cost is too large to compute.");
+                    "amount_out_of_range", itemName(productId) + ": the average buying price is too large to compute.");
         }
         return a;
     }

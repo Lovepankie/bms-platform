@@ -22,7 +22,8 @@ const rangeStep = (target: string, what: string): TourStep =>
 export const retailHomePage: Tour = {
   id: 'page-retail-home',
   // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 4,
+  // Version 5 says buying price for cost (issue #680).
+  version: 5,
   title: 'This page: Retail',
   audience: (me) => (me.permissions ?? []).some((p) => p.startsWith('retail.')),
   autoStart: false,
@@ -30,7 +31,7 @@ export const retailHomePage: Tour = {
   steps: [
     retail({ id: 'tiles', target: 'retail-tiles', title: 'One button for each job', body: 'Tap a button to open that page. You only see the pages you may use.' }),
     retail({ id: 'sale', target: 'retail-sale', needs: [SELL], optional: true, title: 'Record a sale', body: 'Tap here when a customer pays. Pick the items, then save the sale.' }),
-    retail({ id: 'restock', target: 'retail-restock', needs: [RESTOCK], optional: true, title: 'Buy stock', body: 'Tap here when new goods arrive. Stock goes up and the cost is saved.' }),
+    retail({ id: 'restock', target: 'retail-restock', needs: [RESTOCK], optional: true, title: 'Buy stock', body: 'Tap here when new goods arrive. Stock goes up and the buying price is saved.' }),
     retail({ id: 'stock', target: 'retail-stock', needs: [STOCK_READ], optional: true, title: 'Check your stock', body: 'Tap here to see how much of each item you hold, shop by shop.' }),
     // ADR-055: a seller sees their own figures; everybody's sales, profit and the value of the stock are the owner's.
     // Issue #428: every figure on the page follows the days picked here, set against the days before.
@@ -45,14 +46,15 @@ export const restockPage: Tour = {
   // Version 3 words the Add the items step for the picker that lists items only while you type (issue #534).
   // Version 4 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
   // Version 5 says a line unusual for the item is asked about before saving (issue #353, ADR-093).
-  version: 5,
+  // Version 6 says buying price and selling price (issue #680).
+  version: 6,
   title: 'This page: buy stock',
   audience: (me) => held(me, RESTOCK),
   autoStart: false,
   page: '/staff/retail/restock',
   steps: [
     retail({ id: 'supplier', target: 'restock-supplier', title: 'Who supplied it', body: 'Pick the supplier, or type a new one. You can also leave it as No supplier.' }),
-    retail({ id: 'search', target: 'restock-search', title: 'Add the items', body: 'Type part of the name or code, and tap each item you bought in the list under the box. Then fill in the cost, the sell price and how many went to each branch.' }),
+    retail({ id: 'search', target: 'restock-search', title: 'Add the items', body: 'Type part of the name or code, and tap each item you bought in the list under the box. Then fill in the buying price, the selling price and how many went to each branch.' }),
     retail({ id: 'scan', target: 'scan-bar', title: 'Scan here', body: 'Or scan each item in the Scan box. It is added for the branch at the top, and a second scan adds one more.' }),
     retail({ id: 'paid', target: 'restock-paid', title: 'How you paid', body: 'Choose Cash, Bank or Credit. Credit means you pay the supplier later.' }),
     retail({ id: 'save', target: 'restock-save', title: 'Save the purchase', body: 'Tap Save the purchase. Stock goes up, and the buying and selling price of each item change to what you typed. If a quantity or unit is unusual for an item, a note beside it asks you to Confirm or Change it first.' }),
@@ -110,14 +112,15 @@ export const transfersPage: Tour = {
 export const valuationPage: Tour = {
   id: 'page-valuation',
   // Version 2 trades the Which branch step, now the title of the top bar, for the stock at price in large figures (issue #526).
-  version: 2,
+  // Version 3 says buying price and selling price (issue #680).
+  version: 3,
   title: 'This page: stock value',
   audience: (me) => held(me, STOCK_READ),
   autoStart: false,
   page: '/staff/retail/valuation',
   steps: [
     retail({ id: 'total', target: 'valuation-total', title: 'What your stock is worth', body: 'The large figure is your stock at the price you sell it, for the branch at the top of the page.' }),
-    retail({ id: 'figures', target: 'valuation-figures', title: 'By category and item', body: 'See the value at price, by category and by item. If you may see costs, you also see the cost and the profit you expect. Tap an item to open it in Stock.' }),
+    retail({ id: 'figures', target: 'valuation-figures', title: 'By category and item', body: 'See the value at selling price, by category and by item. If you may see buying prices, you also see the value at buying price and the profit you expect. Tap an item to open it in Stock.' }),
   ],
 };
 

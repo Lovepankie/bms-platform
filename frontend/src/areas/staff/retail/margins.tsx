@@ -25,7 +25,7 @@ function MarginTable({ title, rows, flag }: { title: string; rows: MarginRow[]; 
         <tr>
           <th>{title}</th>
           {!phone && <th className="num">Sales</th>}
-          {!phone && <th className="num">Cost</th>}
+          {!phone && <th className="num">Cost of goods sold</th>}
           <th className="num">Profit</th>
           <th className="num">Margin</th>
         </tr>
@@ -116,7 +116,7 @@ export function MarginsView({ data }: { data: Margins }) {
         <MarginTable title="Item" rows={below.items ?? []} flag={data.target_bp} />
         {(below.total ?? 0) > (below.items ?? []).length && <p className="hint">Showing {(below.items ?? []).length} of {below.total}. Raise the Top number to see more.</p>}
       </Section>
-      <Section title="Price changes" hint="Items whose selling price changed in the range, split at the day of the last change. Margins use the cost and price each sale had.">
+      <Section title="Price changes" hint="Items whose selling price changed in the range, split at the day of the last change. Margins use the buying price and selling price each sale had.">
         <PriceChanges items={changes.items ?? []} />
         {(changes.total ?? 0) > (changes.items ?? []).length && <p className="hint">Showing {(changes.items ?? []).length} of {changes.total}.</p>}
       </Section>

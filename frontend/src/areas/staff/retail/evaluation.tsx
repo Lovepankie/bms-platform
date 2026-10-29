@@ -65,7 +65,7 @@ export function EvaluationView({ data, nameOf }: { data: Evaluation; nameOf: (id
                     {!phone && <th className="num">Profit</th>}
                     {!phone && <th className="num">In stock</th>}
                     <th className="num">Expected profit</th>
-                    {!phone && <th className="num">Over cost</th>}
+                    {!phone && <th className="num">Over buying price</th>}
                   </tr>
                 </thead>
                 <tbody>

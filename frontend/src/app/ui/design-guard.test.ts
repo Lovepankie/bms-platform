@@ -568,3 +568,18 @@ describe('design guard, an empty list is never a dead end (issue #619)', () => {
     expect(missing).toEqual([]);
   });
 });
+
+// Issue #680: a retail column says Selling price or Buying price, never a bare Price or Cost ("Average cost" is a retired word of
+// the glossary guard). JUSTIFICATION-A3: the issue asks for this design-guard test; it is one regex and its fixtures.
+const BARE_COLUMN = /<th\b[^>]*>\s*(?:\{\s*['"`])?(?:Price|Cost)(?:['"`]\s*\})?\s*<\/th>/;
+
+describe('design guard, no bare Price or Cost column on a retail screen (issue #680)', () => {
+  it('finds a bare column and passes the plain words', () => {
+    expect(['<th className="num">Price</th>', "<th>{'Cost'}</th>"].every((s) => BARE_COLUMN.test(s))).toBe(true);
+    expect(['<th className="num">Selling price</th>', '<th>Price list</th>', '<th>Average buying price</th>'].some((s) => BARE_COLUMN.test(s))).toBe(false);
+  });
+
+  it.each([...files(join(SRC, 'areas/staff/retail'), /\.tsx$/), ...files(join(SRC, 'offline'), /\.tsx$/)].map((f) => relative(SRC, f)))('%s has no bare Price or Cost column', (file) => {
+    expect(code(file).match(BARE_COLUMN)?.[0] ?? null).toBeNull();
+  });
+});

@@ -58,7 +58,7 @@ function Stocked({ items, total, empty }: { items: StockedItem[]; total: number;
   return (
     <>
       <div className="table-wrap" tabIndex={0}><table>
-        <thead><tr><th>Item</th><th className="num">In stock</th><th className="num">At price</th></tr></thead>
+        <thead><tr><th>Item</th><th className="num">In stock</th><th className="num">At selling price</th></tr></thead>
         <tbody>
           {items.map((i) => (
             <tr key={i.product_id}>

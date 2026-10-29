@@ -98,7 +98,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
         {(dead?.branches ?? []).length === 0 ? <Empty>Everything in stock has sold lately.</Empty> : (
           <>
             <div className="table-wrap" tabIndex={0}><table>
-              <thead><tr><th>Branch</th><th className="num">Items</th><th className="num">At price</th>{withCost && !phone && <th className="num">At cost</th>}</tr></thead>
+              <thead><tr><th>Branch</th><th className="num">Items</th><th className="num">At selling price</th>{withCost && !phone && <th className="num">At buying price</th>}</tr></thead>
               <tbody>
                 {(dead?.branches ?? []).map((b) => (
                   <tr key={b.branch_id}>
@@ -122,9 +122,9 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                 </tr>
               </tbody>
             </table></div>
-            <p className="hint">The biggest by value at price:</p>
+            <p className="hint">The biggest by value at selling price:</p>
             <div className="table-wrap" tabIndex={0}><table>
-              <thead><tr><th>Item</th>{!phone && <th className="num">In stock</th>}<th className="num">At price</th>{withCost && !phone && <th className="num">At cost</th>}</tr></thead>
+              <thead><tr><th>Item</th>{!phone && <th className="num">In stock</th>}<th className="num">At selling price</th>{withCost && !phone && <th className="num">At buying price</th>}</tr></thead>
               <tbody>
                 {(dead?.items ?? []).map((i) => (
                   <tr key={`${i.branch_id}-${i.product_id}`}>
@@ -154,7 +154,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                 <div className="rt-row"><span>Used</span><span className="num">{plural(x.used_reports, 'report')}</span></div>
                 <div className="rt-row"><span>Damaged</span><span className="num">{plural(x.damaged_reports, 'report')}</span></div>
                 <div className="rt-row"><span>Found missing</span><span className="num">{plural(x.short_lines, 'line')}</span></div>
-                {x.net_cost_minor !== undefined && <div className="rt-row"><span>Cost</span><span className="num">{money(x.net_cost_minor)}</span></div>}
+                {x.net_cost_minor !== undefined && <div className="rt-row"><span>At buying price</span><span className="num">{money(x.net_cost_minor)}</span></div>}
               </li>
             ))}
           </ul>
@@ -166,7 +166,7 @@ export function StockHealthView({ data, nameOf }: { data: StockHealth; nameOf: N
                 <th className="num">Used</th>
                 <th className="num">Damaged</th>
                 <th className="num">Found missing</th>
-                {shrinkCost && <th className="num">Cost</th>}
+                {shrinkCost && <th className="num">At buying price</th>}
               </tr>
             </thead>
             <tbody>

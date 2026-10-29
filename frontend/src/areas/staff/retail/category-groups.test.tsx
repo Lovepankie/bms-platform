@@ -121,7 +121,7 @@ describe('the stock list in groups', () => {
     expect(out).toContain('Collapse all');
     expect(out.indexOf('Bulbs')).toBeLessThan(out.indexOf('Pipes'));
     expect(out.indexOf('Pipes')).toBeLessThan(out.indexOf(UNCATEGORISED));
-    expect(out).toContain('2 items, 5 piece, UGX 5,000 at price');
+    expect(out).toContain('2 items, 5 piece, worth UGX 5,000 at selling price');
     expect(out).toContain('Test item 1');
     expect(out).not.toContain('<th>Category</th>');
   });
@@ -155,7 +155,7 @@ describe('the stock list in groups', () => {
 
   it('shows the cost column in grouped mode too', () => {
     const out = page(<StockTable showCost rows={[{ ...row(1, 'Pipes'), cost_minor: 700 }]} />);
-    expect(out).toContain('<th class="num">Average cost</th>');
+    expect(out).toContain('<th class="num">Average buying price</th>');
     expect(out).toContain('UGX 700');
   });
 });
@@ -172,7 +172,7 @@ describe('the all-branches stock in groups', () => {
   it('groups the table and the phone cards by category', () => {
     for (const out of [page(<AllBranchesTable data={data} showCost={false} />), page(<AllBranchesList data={data} showCost={false} />)]) {
       expect(out.indexOf('Bulbs')).toBeLessThan(out.indexOf('Pipes'));
-      expect(out).toContain('1 item, 4 piece, UGX 4,000 at price');
+      expect(out).toContain('1 item, 4 piece, worth UGX 4,000 at selling price');
       expect(out).toContain('Test item 2');
     }
   });

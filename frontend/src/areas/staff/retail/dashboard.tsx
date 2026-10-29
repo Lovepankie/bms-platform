@@ -242,8 +242,8 @@ export function DashboardView({ data, nameOf, choice = DEFAULT_RANGE, onChoice, 
         <>
           <h3>Stock now</h3>
           <ul className="an-stats">
-            {stock.value_at_cost_minor !== undefined && <Stat label="Stock at cost" value={money(stock.value_at_cost_minor)} />}
-            {stock.value_at_price_minor !== undefined && <Stat label="Stock at price" value={money(stock.value_at_price_minor)} />}
+            {stock.value_at_cost_minor !== undefined && <Stat label="Stock at buying price" value={money(stock.value_at_cost_minor)} />}
+            {stock.value_at_price_minor !== undefined && <Stat label="Stock at selling price" value={money(stock.value_at_price_minor)} />}
             <Stat label="Out of stock" value={stock.out_of_stock ?? 0} hint="items at zero or less" />
             <Stat label="Low stock" value={stock.low_stock ?? 0} hint={`at their minimum, or ${showQty(stock.low_stock_threshold ?? '5')} or fewer without one`} />
           </ul>

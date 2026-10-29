@@ -25,12 +25,12 @@ type Sums = { sales?: number; cost?: number; profit?: number; bp?: number };
 function Headline({ sums }: { sums: Sums }) {
   const withCost = sums.cost !== undefined;
   return (
-    <KeyFigure label="Stock at price" value={money(sums.sales ?? 0)} tour="valuation-total">
+    <KeyFigure label="Stock at selling price" value={money(sums.sales ?? 0)} tour="valuation-total">
       {withCost && (
         <>
-          <KeyFigureRow label="At cost" value={money(sums.cost ?? 0)} />
+          <KeyFigureRow label="At buying price" value={money(sums.cost ?? 0)} />
           <KeyFigureRow label="Expected profit" value={money(sums.profit ?? 0)} />
-          <KeyFigureRow label="Expected profit % (over cost)" value={showPercent(sums.bp)} />
+          <KeyFigureRow label="Expected profit % (over buying price)" value={showPercent(sums.bp)} />
         </>
       )}
     </KeyFigure>
@@ -49,10 +49,10 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
         {rows.map(({ key, name, sums }) => (
           <li key={key} className="rt-card">
             <strong>{label === 'Branch' ? <ToStock>{name}</ToStock> : name}</strong>
-            <div className="rt-row"><span>At price</span><span className="num">{money(sums.sales ?? 0)}</span></div>
-            {withCost && sums.cost !== undefined && <div className="rt-row"><span>At cost</span><span className="num">{money(sums.cost)}</span></div>}
+            <div className="rt-row"><span>At selling price</span><span className="num">{money(sums.sales ?? 0)}</span></div>
+            {withCost && sums.cost !== undefined && <div className="rt-row"><span>At buying price</span><span className="num">{money(sums.cost)}</span></div>}
             {withCost && sums.profit !== undefined && <div className="rt-row"><span>Expected profit</span><span className="num">{money(sums.profit)}</span></div>}
-            {withCost && sums.profit !== undefined && <div className="rt-row"><span>Profit % (over cost)</span><span className="num">{showPercent(sums.bp)}</span></div>}
+            {withCost && sums.profit !== undefined && <div className="rt-row"><span>Profit % (over buying price)</span><span className="num">{showPercent(sums.bp)}</span></div>}
           </li>
         ))}
       </ul>
@@ -63,8 +63,8 @@ function SummaryRows({ label, rows, withCost }: { label: string; rows: { key: st
       <thead>
         <tr>
           <th>{label}</th>
-          {withCost && <th className="num">At cost</th>}
-          <th className="num">At price</th>
+          {withCost && <th className="num">At buying price</th>}
+          <th className="num">At selling price</th>
           {withCost && <th className="num">Expected profit</th>}
           {withCost && <th className="num">Profit %</th>}
         </tr>
@@ -109,8 +109,8 @@ export function ValuationTable({ valuation, nameOf }: { valuation: Valuation; na
           <tr>
             <th>Item</th>
             {!phone && <th className="num">Qty</th>}
-            {withCost && !phone && <th className="num">At cost</th>}
-            <th className="num">At price</th>
+            {withCost && !phone && <th className="num">At buying price</th>}
+            <th className="num">At selling price</th>
             {withCost && <th className="num">{phone ? 'Profit' : 'Expected profit'}</th>}
             {withCost && !phone && <th className="num">Profit %</th>}
           </tr>
@@ -205,7 +205,7 @@ function FiguresTable({ label, rows, onPayment }: { label: string; rows: { key: 
           {onPayment && !phone && <th className="num">Sold</th>}
           {onPayment && <th className="num">Received</th>}
           <th className="num">{onPayment ? 'Counted for profit' : 'Sales'}</th>
-          {!phone && <th className="num">Cost</th>}
+          {!phone && <th className="num">Cost of goods sold</th>}
           {!phone && <th className="num">Usage</th>}
           {withBad && !phone && <th className="num">Debts<br />written off</th>}
           {!phone && <th className="num">Stock count<br />difference</th>}

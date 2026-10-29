@@ -354,8 +354,8 @@ describe('owner dashboard', () => {
     expect(html).toContain('Same as the 7 days before');
     expect(html).toContain('Top salesperson');
     expect(html).toContain('Profit');
-    expect(html).toContain('Stock at cost');
-    expect(html.indexOf('Stock at cost')).toBeLessThan(html.indexOf('Stock at price'));
+    expect(html).toContain('Stock at buying price');
+    expect(html.indexOf('Stock at buying price')).toBeLessThan(html.indexOf('Stock at selling price'));
     expect(html.match(/<svg/g)?.length).toBe(1);
     expect(html).toContain('class="rc-prev"');
     expect(html).toContain('Wed 7 Oct');
@@ -391,7 +391,7 @@ describe('owner dashboard', () => {
     const html = renderToString(<DashboardView data={seller()} nameOf={nameOf} choice={{ period: '7d' }} />);
     expect(html).toContain('UGX 6,600');
     expect(html).toContain('Best seller');
-    expect(html).not.toMatch(/profit|cost|Stock at price|Top salesperson/i);
+    expect(html).not.toMatch(/profit|cost|buying price|Stock at selling price|Top salesperson/i);
     expect(html).not.toContain('2,200');
     expect(html).not.toContain('31,100');
   });
