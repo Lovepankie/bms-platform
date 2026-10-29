@@ -8,7 +8,7 @@ import { ALL_BRANCHES } from '../../../auth/branch';
 import { switchedTo, useBranchSwitch } from '../branch-picker';
 import { StaffContext } from '../context';
 import { ShopHere } from './ui';
-import { TOAST_MS } from './toast';
+import { TOAST_MS, type ToastTone, useToast } from './toast';
 
 // Issue #680: every retail page names the shop it works in under its title, and one tap there switches shop; every switch says
 // "You are now in <shop>." in the house toast. Every name below is invented.
@@ -87,6 +87,30 @@ describe('the toast on a change of shop (issue #680)', () => {
     expect(toast.className).toBe('toast toast-info');
     act(() => void vi.advanceTimersByTime(TOAST_MS));
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  // JUSTIFICATION-A3: a new test case for the one-toast rule of round 3, not a wrapper around a small change.
+  it('shows one toast at a time: a switch replaces the screen toast, and the next screen toast replaces the switch', () => {
+    let screenSays: ((message: string, tone: ToastTone) => void) | undefined;
+    function ScreenWithToast() {
+      const { show, toast } = useToast();
+      screenSays = show;
+      return toast;
+    }
+    render(
+      <>
+        <ScreenWithToast />
+        <Harness choose={() => true} />
+      </>,
+    );
+    act(() => screenSays?.('Could not save the count.', 'error'));
+    expect(screen.getByRole('alert').textContent).toBe('Could not save the count.');
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'b-two' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.querySelectorAll('.toast')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('You are now in Test Shop Two (SHOP2).');
+    act(() => screenSays?.('Stock corrected.', 'success'));
+    expect([...document.querySelectorAll('.toast')].map((t) => t.textContent)).toEqual(['Stock corrected.']);
   });
 
   it('says nothing when a screen holds the branch, or the same shop is chosen again', () => {

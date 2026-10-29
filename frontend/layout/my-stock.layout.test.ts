@@ -123,13 +123,14 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
   });
 });
 
-it('shows one toast at a time: the switch gives way to a toast of the screen', async () => {
+it('shows one toast at a time: the switch replaces a toast of the screen', async () => {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
   await page.goto(`${base}layout/my-stock.html?screenToast=1`);
   await page.locator('.stock-card').first().waitFor();
+  expect(await page.locator('.toast:visible').allTextContents()).toEqual(['Stock corrected.']);
   await page.getByRole('combobox', { name: /Switch shop/ }).selectOption({ label: 'Test Branch B (BR2)' });
   await page.locator('.shop-here-name', { hasText: 'Test Branch B (BR2)' }).waitFor();
-  expect(await page.locator('.toast:visible').allTextContents()).toEqual(['Stock corrected.']);
+  expect(await page.locator('.toast:visible').allTextContents()).toEqual(['You are now in Test Branch B (BR2).']);
   await page.close();
 });
 

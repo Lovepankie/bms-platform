@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Me } from '../src/api/client';
 import type { StockRow } from '../src/api/retail';
@@ -9,7 +9,7 @@ import { router as appRouter } from '../src/app/router';
 import { useBranchSwitch } from '../src/areas/staff/branch-picker';
 import { StaffContext } from '../src/areas/staff/context';
 import { StockTable } from '../src/areas/staff/retail/stock';
-import { Toast } from '../src/areas/staff/retail/toast';
+import { useToast } from '../src/areas/staff/retail/toast';
 import { Gate } from '../src/areas/staff/retail/ui';
 import { StaffTabBar } from '../src/areas/staff/tabs';
 import '../src/app/theme.css';
@@ -32,6 +32,13 @@ const rows: StockRow[] = [
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 const router = createRouter({ routeTree: appRouter.routeTree, history: createMemoryHistory({ initialEntries: ['/staff/retail/stock'] }) });
 
+/** The screen's own toast, shown as the page opens, as a save just before a switch would leave it. */
+function CorrectedToast() {
+  const { show, toast } = useToast();
+  useEffect(() => show('Stock corrected.', 'success'), [show]);
+  return toast;
+}
+
 function Page() {
   const [branch, setBranch] = useState(me.branches?.[0]?.id ?? '');
   const { choose, toast } = useBranchSwitch(me, branch, (selection) => {
@@ -44,7 +51,7 @@ function Page() {
         <div className="nav-layout-main">
           <Gate screen="stock" title="My stock">
             <StockTable rows={rows} showCost correctable={{ branchId: branch }} />
-            {query.get('screenToast') === '1' && <Toast message="Stock corrected." tone="success" />}
+            {query.get('screenToast') === '1' && <CorrectedToast />}
           </Gate>
           {toast}
         </div>

@@ -41,6 +41,10 @@ export function Toast({ message, tone, silent = false }: { message: string; tone
   );
 }
 
+// Issue #680: one toast at a time on the whole page. Each mounted toast registers how to hide it, and a toast that shows hides
+// every other, so "You are now in <shop>." from the layout replaces a screen's toast, and a screen's next toast replaces it.
+const mounted = new Set<() => void>();
+
 export function useToast(ms: number = TOAST_MS, silent = false): { show: (message: string, tone: ToastTone) => void; toast: ReactNode } {
   // `error` is the error a later info was said after, so a second info replaces the first instead of piling up.
   const [shown, setShown] = useState<{ message: string; tone: ToastTone; error?: string } | null>(null);
@@ -49,9 +53,20 @@ export function useToast(ms: number = TOAST_MS, silent = false): { show: (messag
     if (timer.current !== null) clearTimeout(timer.current);
     timer.current = null;
   };
-  useEffect(() => clear, []);
+  const hide = useCallback(() => {
+    clear();
+    setShown(null);
+  }, []);
+  useEffect(() => {
+    mounted.add(hide);
+    return () => {
+      mounted.delete(hide);
+      clear();
+    };
+  }, [hide]);
   const show = useCallback(
     (message: string, tone: ToastTone) => {
+      for (const other of mounted) if (other !== hide) other();
       clear();
       // An info never hides an error still showing (review of #616: a photo not saved after a count not saved): it is said after
       // the error, in the error's toast, so the one toast a screen shows keeps what went wrong.
@@ -62,7 +77,7 @@ export function useToast(ms: number = TOAST_MS, silent = false): { show: (messag
       });
       timer.current = setTimeout(() => setShown(null), ms);
     },
-    [ms],
+    [ms, hide],
   );
   return { show, toast: shown ? <Toast message={shown.message} tone={shown.tone} silent={silent} /> : null };
 }
