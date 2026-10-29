@@ -16,9 +16,11 @@ export interface SavedCount {
   done: string[];
   /** When each item's count last changed, so two tabs merge item by item, the newest count of each item winning. */
   at: Record<string, number>;
+  /** When a tab of this count last committed it, so another tab can say its counts went in. */
+  committed?: number;
 }
 
-export type CountState = Omit<SavedCount, 'at'>;
+export type CountState = Omit<SavedCount, 'at' | 'committed'>;
 
 export const countKey = (host: string, branchId: string, userId: string) => `bms.count.${host}.${branchId}.${userId}`;
 
@@ -39,6 +41,7 @@ export function parseSaved(raw: string | null): SavedCount | null {
       listed: v.listed,
       done: v.done,
       at: numberMap(v.at) ? v.at : {},
+      ...(typeof v.committed === 'number' ? { committed: v.committed } : {}),
     };
   } catch {
     return null;
@@ -93,10 +96,25 @@ export function mergeCounts(mine: SavedCount, theirs: SavedCount): SavedCount {
     const at = pick.at[id];
     if (at !== undefined) out.at[id] = at;
   }
-  out.listed = [...mine.listed, ...theirs.listed.filter((id) => !mine.listed.includes(id))];
+  // An item whose newer side no longer lists it (committed or emptied there) leaves the list of found items too.
+  const newer = (id: string) => ((theirs.at[id] ?? 0) > (mine.at[id] ?? 0) ? theirs : mine);
+  const stays = (id: string) => (mine.at[id] === undefined && theirs.at[id] === undefined) || newer(id).listed.includes(id) || filled(out, id);
+  out.listed = [...mine.listed, ...theirs.listed.filter((id) => !mine.listed.includes(id))].filter(stays);
   out.done = [...mine.done, ...theirs.done.filter((id) => !mine.done.includes(id))].filter((id) => filled(out, id));
+  const committed = Math.max(mine.committed ?? 0, theirs.committed ?? 0);
+  if (committed > 0) out.committed = committed;
   return out;
 }
+
+/** The time the oldest kept count was saved, or null when nothing is counted: what a count restored on opening dates from. */
+export function savedSince(saved: SavedCount | null): number | null {
+  if (!saved) return null;
+  const times = idsOf(saved).filter((id) => filled(saved, id)).map((id) => saved.at[id] ?? 0).filter((t) => t > 0);
+  return times.length === 0 ? null : Math.min(...times);
+}
+
+/** Counts kept longer than this are old enough that the shelf may have moved: the page asks to check them or start again. */
+export const OLD_COUNT_MS = 12 * 60 * 60 * 1000;
 
 /** The line at the top of the count (owner, round 2 of #681): plain words for where the counts are kept. Empty before a count. */
 export function saveWords(items: number, onDevice: boolean): string {
@@ -104,14 +122,21 @@ export function saveWords(items: number, onDevice: boolean): string {
   return onDevice ? `Saved on this phone, ${items} ${items === 1 ? 'item' : 'items'}` : 'Not saved on this phone. Keep this page open.';
 }
 
-/** What another tab of the same count did: it is open there too, or it committed the count. */
-export type OtherTab = 'open' | 'committed' | null;
+/** What another tab of the same count did: it is open there too, it committed every count, or only some of them. */
+export type OtherTab = 'open' | 'committed' | 'partly' | null;
+
+/** How long "This count is also open in another tab" stays after the last change heard from it. */
+export const OTHER_TAB_MS = 60_000;
 
 /**
  * Keeps the count on this device on every change, written before the screen is drawn so Saved never shows for a count not
  * stored (issue #681), and stamps each item when its count changes. A change from another tab of the same count arrives as a
- * storage event and is merged item by item into this one (`apply`); the key removed there means that tab committed the count,
- * and this one starts empty (`apply(null)`). `committed` removes the key once this tab commits.
+ * storage event and is merged item by item into this one (`apply`), the newer count of each item winning.
+ *
+ * A commit never clears counts it did not send (review of #686): `committed` marks the time, the page then drops only the
+ * items whose count went in, and that drop is stamped like any change, so another tab drops exactly those items, keeps any
+ * newer count of its own, and hears from the mark whether all or some of its counts went in. The stored count removed
+ * outright (storage cleared) empties this tab too.
  */
 export function useCountSave({ saveKey, restored, saved, apply }: {
   saveKey: string;
@@ -120,9 +145,11 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
   apply: (next: CountState | null) => void;
 }) {
   const at = useRef<Record<string, number>>(restored?.at ?? {});
+  const commitAt = useRef<number | undefined>(restored?.committed);
   const before = useRef<CountState>(saved);
   const latest = useRef(saved);
   latest.current = saved;
+  const quiet = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [onDevice, setOnDevice] = useState(true);
   const [stored, setStored] = useState<string | null>(null);
   const [other, setOther] = useState<OtherTab>(null);
@@ -138,17 +165,20 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
       }
     }
     before.current = saved;
-    if (typed) setOther((o) => (o === 'committed' ? null : o));
-    // An empty count is written only over a count already kept, so a commit that removed the key leaves it removed.
-    if (idsOf(saved).every((id) => !filled(saved, id)) && readCount(saveKey) === null) {
+    if (typed) setOther((o) => (o === 'committed' || o === 'partly' ? null : o));
+    // Nothing found or counted, and nothing kept before: there is nothing to write.
+    if (listed.length === 0 && idsOf(saved).every((id) => !filled(saved, id)) && readCount(saveKey) === null) {
       setOnDevice(true);
       return setStored(here);
     }
-    const ok = writeCount(saveKey, { counts, packCounts, listed, done, at: at.current });
+    const ok = writeCount(saveKey, { counts, packCounts, listed, done, at: at.current, ...(commitAt.current ? { committed: commitAt.current } : {}) });
     setOnDevice(ok);
     setStored(ok ? here : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [counts, packCounts, listed, done, saveKey, here]);
+  useEffect(() => () => {
+    if (quiet.current !== null) clearTimeout(quiet.current);
+  }, []);
   useEffect(() => {
     const seen = (e: StorageEvent) => {
       if (e.key !== saveKey) return;
@@ -160,10 +190,19 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
       }
       const theirs = parseSaved(e.newValue);
       if (!theirs) return;
-      setOther('open');
-      const merged = mergeCounts({ ...latest.current, at: at.current }, theirs);
+      const merged = mergeCounts({ ...latest.current, at: at.current, ...(commitAt.current ? { committed: commitAt.current } : {}) }, theirs);
+      const fresh = (theirs.committed ?? 0) > (commitAt.current ?? 0);
       at.current = merged.at;
-      const { at: _, ...next } = merged;
+      commitAt.current = merged.committed;
+      const { at: _at, committed: _committed, ...next } = merged;
+      if (fresh) {
+        setOther(idsOf(next).some((id) => filled(next, id)) ? 'partly' : 'committed');
+      } else {
+        // Open there too, said until that tab has been quiet for a minute.
+        setOther('open');
+        if (quiet.current !== null) clearTimeout(quiet.current);
+        quiet.current = setTimeout(() => setOther((o) => (o === 'open' ? null : o)), OTHER_TAB_MS);
+      }
       if (sameCount(next, latest.current)) return;
       // Taken as it is, so it is not stamped as typed here.
       before.current = next;
@@ -177,10 +216,9 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
     /** Every count on the page is the one stored on this device. */
     savedHere: stored === here,
     other,
-    /** The count is committed: the device keeps nothing more of it, and another tab of it hears so. */
+    /** This tab committed: the page then drops the items that went in, and another tab hears which. */
     committed: () => {
-      clearCount(saveKey);
-      at.current = {};
+      commitAt.current = Date.now();
     },
   };
 }

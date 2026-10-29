@@ -1433,9 +1433,15 @@ the items show only while you search, and go away once one is picked. Every item
   is stored, and a polite status line at the top says **Saved on this phone, N items**, or **Not saved on this phone. Keep
   this page open.** when the device cannot store it. Two tabs of the same count hear each other through the `storage`
   event and merge item by item, the newer count of each item winning; the page then says "This count is also open in
-  another tab". A commit removes the stored count, and another tab of it starts empty and says "Counted and saved in
-  another tab". The page is keyed by branch, so a branch switch opens that branch's own saved count. A restored count of
-  an item no longer on the sheet is dropped once the sheet is read. After Commit the count a success screen (the kit's
+  another tab" until that tab has been quiet for a minute. A commit takes away only the counts that went in (an item
+  whose count still equals the committed line); a count changed or added since the review, here or in another tab, stays.
+  The removal is stamped like any change and the stored count carries the commit time, so another tab drops exactly those
+  items and says "Counted and saved in another tab", or "Some counts were saved in another tab. The others are still
+  here." when some of its counts did not go in. The page is keyed by branch, so a branch switch opens that branch's own
+  saved count. An item found but not typed yet is kept too. A restored count of an item no longer on the sheet is dropped
+  once the sheet is read. A count brought back on opening says when it was saved ("These counts were saved on 26 Oct
+  2026, 14:05."), as a warning that asks to check them or start again once it is more than 12 hours old, with **Start
+  again**, which asks "Clear all N counts? Your stock does not change." with **Clear the counts** and **Keep them**. After Commit the count a success screen (the kit's
   `SuccessScreen`) says **Stock updated for N items** with how many went up, went down and matched and the first five
   changes in words ("Test Lamp: 2 pieces more"), with **Start another count** and **Back to My stock**, and a success toast.
 - **Count stock: the server checks big drops too (issue #636).** **Commit the count** sends the product ids of the ticked lines,

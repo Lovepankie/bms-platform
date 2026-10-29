@@ -21,7 +21,15 @@ import { ScreenToast, useItemAdded } from './toast';
 import { entryWarnings } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { SuccessScreen } from '../../../app/ui/SuccessScreen';
-import { changeWords, countKey, readCount, saveWords, useCountSave, type CountState } from './count-save-state';
+import { OLD_COUNT_MS, changeWords, countKey, readCount, savedSince, saveWords, useCountSave, type CountState, type OtherTab } from './count-save-state';
+import { showWhen } from './catalogue-products';
+
+/** What the page says when the same count is open in another tab (issue #681). */
+const OTHER_TAB_WORDS: Record<Exclude<OtherTab, null>, string> = {
+  open: 'This count is also open in another tab',
+  committed: 'Counted and saved in another tab',
+  partly: 'Some counts were saved in another tab. The others are still here.',
+};
 
 // Stock-take (FR-RET-08): count the products of a branch, review the variance the server works
 // out, then commit to write the adjustments. Only counted rows are sent.
@@ -146,6 +154,9 @@ function CountSheet({ branchId }: { branchId: string }) {
   const search = useLiveSearch();
   // Issue #681: a count in progress is kept on this device for this business, branch and person, and comes back on a reload.
   const [restored] = useState(() => readCount(saveKey));
+  // When the counts brought back on opening were saved, said until they are committed or cleared (review of #686).
+  const [keptSince, setKeptSince] = useState(() => savedSince(restored));
+  const [clearing, setClearing] = useState(false);
   const [counts, setCounts] = useState<Record<string, string>>(restored?.counts ?? {});
   // Issue #650: the cartons typed for an item with a standard pack, with the pack they were typed in, so a pack changed or
   // removed while counting never reads the same number in another size; its pieces stay in counts, the total is what is sent.
@@ -273,8 +284,13 @@ function CountSheet({ branchId }: { branchId: string }) {
       entry.saved();
       setDraft(st);
       // Issue #681: the count is done, so this device keeps nothing more of it, another tab of it hears so, and the screen says so.
+      // Only the counts that went in leave the page; one changed or added since the review, here or in another tab, stays.
       saving.committed();
-      setCounts({}); setPackCounts({}); setListed([]); setDone([]); setConfirming(false);
+      const sent = new Map((st.lines ?? []).map((l) => [l.product_id ?? '', milliOf(l.counted_qty ?? '0')]));
+      const left = (id: string) => !sent.has(id) || parseCount(totals[id] ?? '') !== sent.get(id);
+      const keep = <T,>(m: Record<string, T>) => Object.fromEntries(Object.entries(m).filter(([id]) => left(id)));
+      setCounts(keep(counts)); setPackCounts(keep(packCounts)); setListed(listed.filter(left)); setDone(done.filter(left)); setConfirming(false);
+      setKeptSince(null);
       const n = st.lines?.length ?? 0;
       show(`Stock updated for ${n} ${n === 1 ? 'item' : 'items'}`, 'success');
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
@@ -387,7 +403,23 @@ function CountSheet({ branchId }: { branchId: string }) {
       <Note>Find or scan each item you count, or work down the list Not counted yet. Type how many you counted, or 0 for an item that is gone. An item kept in cartons takes cartons and pieces, or pieces alone. Leave an item empty if you did not count it.</Note>
       {/* Issue #681: the person counting always sees that their work is kept, and where. */}
       <p className="hint count-saved-all" role="status" data-testid="count-saved-all">{savedWords}</p>
-      {saving.other && <p className="hint" data-testid="count-other-tab">{saving.other === 'committed' ? 'Counted and saved in another tab' : 'This count is also open in another tab'}</p>}
+      {saving.other && <p className="hint" data-testid="count-other-tab">{OTHER_TAB_WORDS[saving.other]}</p>}
+      {keptSince !== null && valid.length > 0 && (
+        <div className={Date.now() - keptSince > OLD_COUNT_MS ? 'alert alert-warning' : 'alert alert-info'} data-testid="count-kept">
+          <p>{Date.now() - keptSince > OLD_COUNT_MS
+            ? `These counts were saved on ${showWhen(new Date(keptSince).toISOString())}. Stock may have changed since, so check them or start again.`
+            : `These counts were saved on ${showWhen(new Date(keptSince).toISOString())}.`}</p>
+          {clearing ? (
+            <p className="cluster">
+              <span>{`Clear all ${valid.length} ${valid.length === 1 ? 'count' : 'counts'}? Your stock does not change.`}</span>
+              <button type="button" className="btn-sm" onClick={() => { current.current = {}; setCounts({}); setPackCounts({}); setListed([]); setDone([]); setConfirming(false); setKeptSince(null); setClearing(false); }}>Clear the counts</button>
+              <button type="button" className="btn-sm" onClick={() => setClearing(false)}>Keep them</button>
+            </p>
+          ) : (
+            <button type="button" className="btn-sm" onClick={() => setClearing(true)}>Start again</button>
+          )}
+        </div>
+      )}
       <div data-tour="count-search">
         <ItemCombobox
           id="count-search"

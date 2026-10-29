@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { changeWords, countKey, mergeCounts, readCount, saveWords, writeCount, type SavedCount } from './count-save-state';
+import { changeWords, countKey, mergeCounts, readCount, savedSince, saveWords, writeCount, type SavedCount } from './count-save-state';
 
 // Issue #681: the rules of a count kept on the device as it is typed, the merge of two tabs, the words that say where it is
 // kept, and the words of the success screen. Fabricated names and amounts.
@@ -16,9 +16,11 @@ describe('the count kept on the device', () => {
     expect(countKey('shop.example.test', 'b1', 'u1')).not.toBe(countKey('other.example.test', 'b1', 'u1'));
   });
 
-  it('reads back what it wrote', () => {
+  it('reads back what it wrote, the commit time included', () => {
     expect(writeCount('k', saved)).toBe(true);
     expect(readCount('k')).toEqual(saved);
+    writeCount('k', { ...saved, committed: 500 });
+    expect(readCount('k')?.committed).toBe(500);
   });
 
   it('reads nothing when nothing, or something that is not a count, is stored', () => {
@@ -27,6 +29,13 @@ describe('the count kept on the device', () => {
     expect(readCount('k')).toBeNull();
     localStorage.setItem('k', JSON.stringify({ counts: { 'A-1': 4 }, listed: [], done: [] }));
     expect(readCount('k')).toBeNull();
+  });
+
+  it('dates a kept count from its oldest count, and has no date while nothing is counted', () => {
+    const kept = (counts: Record<string, string>, at: Record<string, number>): SavedCount => ({ counts, packCounts: {}, listed: [], done: [], at });
+    expect(savedSince(kept({ 'A-1': '4', 'A-2': '6', 'A-3': '' }, { 'A-1': 300, 'A-2': 200, 'A-3': 50 }))).toBe(200);
+    expect(savedSince(kept({ 'A-1': '' }, { 'A-1': 50 }))).toBeNull();
+    expect(savedSince(null)).toBeNull();
   });
 });
 
@@ -53,6 +62,22 @@ describe('two tabs of one count', () => {
     const a = tab({ 'A-1': '4', 'A-2': '6' }, { 'A-1': 300, 'A-2': 100 });
     const b = tab({ 'A-1': '5', 'A-2': '7' }, { 'A-1': 200, 'A-2': 400 });
     expect(mergeCounts(a, b).counts).toEqual(mergeCounts(b, a).counts);
+  });
+
+  // Review of #686, round 3: a commit in one tab drops only the items it committed from the other.
+  it('drops an item the newer tab committed from the found items too, keeps a newer count of this tab, and keeps the commit time', () => {
+    const mine = tab({ 'A-1': '4', 'A-2': '6' }, { 'A-1': 100, 'A-2': 500 });
+    const theirs: SavedCount = { counts: {}, packCounts: {}, listed: [], done: [], at: { 'A-1': 300, 'A-2': 300 }, committed: 300 };
+    const merged = mergeCounts(mine, theirs);
+    expect(merged.counts).toEqual({ 'A-2': '6' });
+    expect(merged.listed).toEqual(['A-2']);
+    expect(merged.done).toEqual(['A-2']);
+    expect(merged.committed).toBe(300);
+  });
+
+  it('keeps an item found and not typed in either tab', () => {
+    const merged = mergeCounts({ ...tab({}, {}), listed: ['A-9'] }, tab({ 'A-1': '4' }, { 'A-1': 100 }));
+    expect(merged.listed).toEqual(['A-9', 'A-1']);
   });
 });
 
