@@ -24,21 +24,22 @@ switches on. Lending is the first vertical; retail was brought forward (ADR-020)
 - `backend/src/main/resources/db/migration/`: V1 to V14, V20 to V23, V26, V28, V29 and V31 (the first-run preferences, #19). The numbers in between stay unused; Flyway only needs them to increase.
 - `docs/sdd/` chapters 1 to 15, `docs/adr/`, `docs/runbooks/`, `docs/workspace.dsl`.
 
-## Current status (2026-10-19)
+## Current status (2026-10-29)
 
-- Lending increments 1 to 5 are on `main`, with savings, investments, insights and the loan
-  documents (ADR-034).
-- Lending increment 6 (#109, arrears and collections) is in three stacked PRs, merged in order:
-  T1 #270 (nightly arrears job, R-PEN penalties, PAR bucket, migration V63 with every increment 6
-  table), T2 #271 (penalty waivers, `charge_waiver`), T3 #272 (collections: officer reassignment, due,
-  arrears and promise lists, collection actions, promises settled nightly). Open question on #265:
-  a route for fee and interest waivers.
+- Lending increments 1 to 6 are on `main`, with savings, investments, insights, the loan
+  documents (ADR-034), arrears and collections (#109) and due and arrears SMS reminders (#227).
+  Fee and interest waivers left the MVP (#265 closed).
+- Customer data onboarding (#125, ADR-027) is being built in the spec's section 9 order, as the
+  path to the pilot import (#110, which lands with #136): 1/16 #127 (import runs, run states,
+  one committing run per business, advisory lock per batch, kill switch and halt, trading tenant
+  guard; module `core.imports`, migration V114) is on branch `feat/127-import-runs`. Next: #128
+  (quarantined upload), then #129 to #134.
 - Retail R1 to R5, transfers, catalogue management, the parity pass, the optional trade
   capabilities and landed cost (V48) are on `main`, as are report runs (V49), the SMS channel
   core (V50), the AI gateway (V51), SMS settings (V52), event SMS (V53), and mobile money: the Pesapal
   gateway core (V54), payments into the lender's own account (V56, V57), loan repayment (V59) and savings
   deposit (V60) by mobile money.
-- Next lending work: the pilot import (#110) and reports (#111).
+- Next lending work: the pilot import (#110, after the framework above) and extras reports (#222).
 
 ## Working rules that are easy to miss
 

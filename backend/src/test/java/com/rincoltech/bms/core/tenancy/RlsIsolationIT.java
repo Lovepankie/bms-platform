@@ -1116,6 +1116,14 @@ public class RlsIsolationIT {
                                                        model, rows_drafted, cost_currency)
                         VALUES (?, ?, ?, now(), 'retail', 'text', 'drafted', 'gemini', 'test-model', 3, 'USD')
                         """).params(UUID.randomUUID(), t.tenantId(), user).update();
+        // Customer data onboarding (migration V114, #127): a run and its first batch.
+        UUID run = UUID.randomUUID();
+        owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
+                .params(run, t.tenantId(), user)
+                .update();
+        owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq) VALUES (?, ?, ?, 1)")
+                .params(UUID.randomUUID(), t.tenantId(), run)
+                .update();
     }
 
     /**

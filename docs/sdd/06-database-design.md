@@ -476,6 +476,14 @@ so it goes once. FR-SUB-08.
 One row (`id = 1`): `grace_days integer NOT NULL DEFAULT 7` (0 to 60), `how_to_pay varchar(1000)` (the operator's words, empty at
 first), `updated_at`, `updated_by_platform_user_id`. Changed only through `platform_set_billing_settings`. FR-SUB-09.
 
+### `platform_import_settings` (platform, no RLS, `bms_app` SELECT only; `V114`, ADR-027)
+
+One row (`id = 1`): `commit_enabled boolean NOT NULL DEFAULT true`, the kill switch `imports.commit_enabled` of customer data
+onboarding (spec section 5.4), `updated_at`, `updated_by_platform_user_id`. Changed only through
+`platform_set_import_commit_enabled(enabled, platform_user)`, which returns the previous value; the service writes
+`platform.imports.commit_enabled_changed` with the operator's reason. The commit reads it before each batch and every 1,000
+rows.
+
 `platform_mark_subscription_overdue(tenant, due_on, today)` (`V92`, definer): moves a subscription in its free month or paid, not a
 pilot, of an active tenant, with no status change scheduled (`next_status_change_on` is null, and is left as it is) and no
 cancellation the Owner scheduled (`subscription_scheduled_changes`, kind `cancel`, status `scheduled`, checked under the
@@ -1155,6 +1163,22 @@ one repayment (spec 3.4.1).
 
 Specified in full in chapter 13 section 13.4; listed here for completeness:
 `import_batches`, `import_rows`, `import_issues`, `import_issue_resolutions`.
+
+As built so far (migration `V114__import_runs.sql`, issue #127, ADR-027; chapter 13 section 13.14):
+
+- **`import_runs`** (RLS, `SELECT, INSERT, UPDATE`): one onboarding attempt. (std with `version`), `created_by uuid NOT NULL`,
+  `status` [`draft`, `uploaded`, `in_review`, `ready`, `committing`, `committed`, `signed_off`, `purged`, `cancelled`] (the
+  service enforces the diagram of the spec's section 3.11), `cutover_at`, `policy jsonb` (an object of the customer's policy
+  decisions), `pre_import_dump_file`, `pre_import_dump_at`, `pre_import_dump_sha256` (all three or none; no dump, no commit),
+  `halt_requested`, `allow_trading_tenant` with `allow_trading_reason`, `allow_trading_set_by` and `allow_trading_approved_by`
+  (both FK to `platform_users`; a reason when set; the approver is never the setter, a CHECK), and one stamp per stage
+  (`uploaded_at` to `cancelled_at`). A partial unique index `import_runs_one_committing (tenant_id) WHERE status =
+  'committing'` keeps one committing run per business.
+- **`import_batches`** (RLS, `SELECT, INSERT, UPDATE`), in its first form: `run_id` (FK `(tenant_id, run_id)`), `seq` (commit
+  order, `UNIQUE (run_id, seq)`), `status` [`pending`, `committed`], `counts jsonb`, `committed_at` (set exactly when
+  committed). The upload columns of chapter 13 section 13.4 and their statuses arrive with #128.
+
+Both are removed with a closed business by the generic purge (ADR-090); neither holds personal data.
 
 ## 6.6 General ledger (RLS)
 
@@ -2027,7 +2051,9 @@ reversal that reopens a closed loan can restore that loan's own pledges (section
 changes. `V88__referrals_and_commissions.sql` (#464, ADR-069) is expand only: `referral_codes` (with the trigger on `tenants` and
 the backfill), `tenant_referrals`, `referral_commission_lines`, `referral_commission_rules`, `referral_settings`, two columns on
 `onboarding_applications`, their definer functions and the permission `core.referrals.read`; `V85` is shop logos and `V86` and `V87`
-are the ordered claims before it (offline sales, barcodes); it is renamed at merge if that order changes. The next migration takes the number above the highest on `main`
+are the ordered claims before it (offline sales, barcodes); it is renamed at merge if that order changes. `V114__import_runs.sql`
+(#127, ADR-027) is expand only: `platform_import_settings` with `platform_set_import_commit_enabled`, `import_runs` and the first
+form of `import_batches` (section 6.5, Import tables). The next migration takes the number above the highest on `main`
 (`MigrationOrderIT`, chapter 15 section 15.4.3).
 
 ## 6.10 Open items

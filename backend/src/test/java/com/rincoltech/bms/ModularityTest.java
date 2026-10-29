@@ -46,6 +46,7 @@ class ModularityTest {
                         "core.reporting",
                         "core.feedback",
                         "core.help",
+                        "core.imports",
                         "core.referrals",
                         "lending.advisor",
                         "lending.collateral",
