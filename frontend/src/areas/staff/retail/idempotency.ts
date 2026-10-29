@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { businessToday } from '../../../api/retail';
 import { useUnsavedWork } from '../../../app/unsaved-work';
 
 /** A fresh key for one attempt at a money-moving write (chapter 7 section 7.8). */
@@ -26,7 +27,8 @@ function tabStore(): DraftStore | null {
   }
 }
 
-interface Saved<T> { key: string; draft: T }
+/** `sent`: the business day the key first went to the server; from then on its body must not change under it (#670). */
+interface Saved<T> { key: string; draft: T; sent?: string }
 
 /** The saved draft and key under `name`, or a fresh key and `initial` when none is readable. */
 export function loadDraft<T>(store: DraftStore | null, name: string, initial: T): Saved<T> {
@@ -34,7 +36,9 @@ export function loadDraft<T>(store: DraftStore | null, name: string, initial: T)
     const raw = store?.getItem(`retail-draft:${name}`);
     if (raw) {
       const saved = JSON.parse(raw) as Partial<Saved<T>>;
-      if (typeof saved.key === 'string' && saved.key !== '' && saved.draft !== undefined) return { key: saved.key, draft: saved.draft };
+      if (typeof saved.key === 'string' && saved.key !== '' && saved.draft !== undefined) {
+        return { key: saved.key, draft: saved.draft, ...(typeof saved.sent === 'string' && saved.sent !== '' ? { sent: saved.sent } : {}) };
+      }
     }
   } catch {
     // Unreadable or blocked storage: start a fresh form.
@@ -65,15 +69,28 @@ export function dropDraft(store: DraftStore | null, name: string): void {
  * same entry posts once. `discard` drops the draft and starts a fresh one with a fresh key. Mount a
  * new form (a new `key` prop) for the next record. A draft other than `initial` is unsaved work (#576): the app does not update
  * itself under it until it is finished, discarded or the form closes. A change after `finish` (a form kept on screen for the next
- * record) starts the next record: a fresh key, kept in the tab again and unsaved work again.
+ * record) starts the next record: a fresh key, kept in the tab again and unsaved work again. `restore`, when given, mends a
+ * draft read back from the tab before the form shows it (a date from an earlier day, #670), but only one whose key was never
+ * sent: the form calls `sending` as it posts, and a retry of a sent key keeps the body it went with. `mended` says restore
+ * changed the draft; `sentBefore` is the day a restored draft was sent, when that was an earlier business day.
  */
 export function usePersistedDraft<T>(
   name: string,
   initial: T,
-): { key: string; draft: T; setDraft: Dispatch<SetStateAction<T>>; finish: () => void; discard: () => void } {
+  restore?: (saved: T) => T,
+): {
+  key: string; draft: T; setDraft: Dispatch<SetStateAction<T>>; finish: () => void; discard: () => void; sending: () => void; mended: boolean; sentBefore: string | null;
+} {
   const store = useRef(tabStore()).current;
   const blank = useRef(initial).current;
-  const [saved, setSaved] = useState(() => loadDraft(store, name, blank));
+  const [start] = useState(() => {
+    const s = loadDraft(store, name, blank);
+    const draft = restore && !s.sent ? restore(s.draft) : s.draft;
+    return { saved: { ...s, draft }, mended: draft !== s.draft, sentBefore: s.sent && s.sent < businessToday() ? s.sent : null };
+  });
+  const [saved, setSaved] = useState<Saved<T>>(start.saved);
+  const current = useRef(saved);
+  current.current = saved;
   const done = useRef(false);
   const [finished, setFinished] = useState(false);
   const changed = useMemo(() => JSON.stringify(saved.draft) !== JSON.stringify(blank), [saved.draft, blank]);
@@ -95,8 +112,15 @@ export function usePersistedDraft<T>(
       setSaved({ key: newIdempotencyKey(), draft: value });
       return;
     }
-    setSaved((s) => ({ key: s.key, draft: typeof next === 'function' ? (next as (d: T) => T)(s.draft) : next }));
+    setSaved((s) => ({ ...s, draft: typeof next === 'function' ? (next as (d: T) => T)(s.draft) : next }));
   }, []);
+  const sending = useCallback(() => {
+    if (done.current || current.current.sent) return;
+    const sent = { ...current.current, sent: businessToday() };
+    // Kept now, not on the next effect: the request goes out before React renders again.
+    saveDraft(store, name, sent);
+    setSaved(sent);
+  }, [store, name]);
   const finish = useCallback(() => {
     done.current = true;
     finishedAs.current = JSON.stringify(latest.current);
@@ -109,5 +133,5 @@ export function usePersistedDraft<T>(
     dropDraft(store, name);
     setSaved({ key: newIdempotencyKey(), draft: blank });
   }, [store, name, blank]);
-  return { key: saved.key, draft: saved.draft, setDraft, finish, discard };
+  return { key: saved.key, draft: saved.draft, setDraft, finish, discard, sending, mended: start.mended, sentBefore: start.sentBefore };
 }

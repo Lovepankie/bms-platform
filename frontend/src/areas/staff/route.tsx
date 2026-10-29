@@ -78,6 +78,8 @@ function StaffLayout() {
       if (!ok && !saved) void navigate({ to: '/sign-in' });
     });
   }, [token, navigate, mock]);
+  // Leaving the staff shell forgets the business's zone, so the next screen or person starts from Kampala again (#670).
+  useEffect(() => () => setBusinessZone(undefined), []);
 
   const me = useQuery({ queryKey: ['me', token], queryFn: (): Promise<Me> => (mock ? loadRetailMock().then((m) => m.mockMe(import.meta.env.VITE_RETAIL_MOCK_ROLE)) : fetchMe()),
     enabled: token !== null || mock,
@@ -156,6 +158,7 @@ function StaffLayout() {
       offline?.engine.stop();
       setAskEverywhere(false);
       setOfflineMe(null);
+      setBusinessZone(undefined);
       setAccessToken(null);
       queryClient.clear();
       await navigate({ to: '/sign-in' });

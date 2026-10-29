@@ -43,6 +43,16 @@ export function parseAmount(text: string, currency: string | undefined): number 
 
 export const isIsoDate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
+/**
+ * A money form's draft read back from the tab (#670). Its date was that day's today, so a draft started on an earlier business
+ * day, or kept from before #670 without `startedOn`, starts its date again from today; a date after today becomes today.
+ */
+export function onToday<T extends { startedOn?: string }>(draft: T, field: keyof T, today: string): T {
+  const date = draft[field];
+  if (draft.startedOn === today && !(typeof date === 'string' && date > today)) return draft;
+  return { ...draft, [field]: today, startedOn: today };
+}
+
 /** "written_off" becomes "Written off". */
 export function words(code: string | undefined): string {
   if (!code) return '';

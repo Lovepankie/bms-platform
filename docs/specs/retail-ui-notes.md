@@ -97,7 +97,18 @@ totals shown while typing are a preview; the server's response is the receipt.
   SMS, price history, cash times) in `businessZone()`. The operator area keeps Africa/Kampala or the operator's
   own clock, since it spans every business, and the mock server is not scanned (its today is `businessToday`).
   `business-zone.dom.test.tsx` draws the real staff shell for a business in Africa/Lagos at 22:30 UTC and checks
-  that Insights' To is the 28th.
+  that Insights' To and a savings statement's last day are the 28th.
+  Since #670 the zone goes back to Africa/Kampala on sign out and when the staff shell unmounts. A repayment,
+  disbursement or investment funding draft notes the business day it was started; read back from the tab on a
+  later day its date starts again from today (a date after today becomes today), keeping the amount and the key,
+  and the form says the date is now today. A draft whose key was already sent (the form marks it as it posts) is
+  never changed, so a retry after a lost answer posts the same body under the same key once; restored on a later
+  day, it says above the form "This repayment was sent on 28 Oct 2026 and may already be saved. Send it again to
+  check." with its own kind and day.
+  The guard also counts `toLocaleString` on a name the file declares as a Date (`x = new Date(...)`, `x: Date`)
+  and date-fns on `Date.now()` or `now`; it reads brackets, comments and reasons with strings blanked, so a
+  bracket or URL in a string does not throw off a call's options and a reason counts only in a comment. Its known
+  limits (a Date it cannot see by name, a template literal with `${...}`) are listed at the top of the guard.
 - **Stock moves (#112 item 1).** A row reads the date ("6 Oct 2026", on one line), "From X to Y", the item
   count with the first two item names, and "by you" for the user's own moves; tapping it opens the move. The
   API gives a transfer no number of its own and `created_by` is an id, so no number or other name is shown.

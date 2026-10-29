@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { allocationSummary, money, parseAmount, statusBadge, txnWords, words } from './loan-state';
+import { allocationSummary, money, onToday, parseAmount, statusBadge, txnWords, words } from './loan-state';
+
+// Issue #670: a money form's draft read back on a later day does not keep that day's date.
+describe('a restored draft date', () => {
+  const draft = { amount: '50000', valueDate: '2026-10-28', startedOn: '2026-10-28' };
+
+  it('keeps a draft started today, with a date it chose on or before today', () => {
+    expect(onToday(draft, 'valueDate', '2026-10-28')).toBe(draft);
+    expect(onToday({ ...draft, valueDate: '2026-10-20' }, 'valueDate', '2026-10-28').valueDate).toBe('2026-10-20');
+  });
+
+  it('starts the date again from today for a draft from an earlier day, keeping the rest', () => {
+    expect(onToday(draft, 'valueDate', '2026-10-29')).toEqual({ amount: '50000', valueDate: '2026-10-29', startedOn: '2026-10-29' });
+    expect(onToday({ ...draft, valueDate: '2026-10-20' }, 'valueDate', '2026-10-29').valueDate).toBe('2026-10-29');
+  });
+
+  it('treats a draft kept without startedOn as from an earlier day, and clamps a date after today', () => {
+    const old: { amount: string; valueDate: string; startedOn?: string } = { amount: '1', valueDate: '2026-10-01' };
+    expect(onToday(old, 'valueDate', '2026-10-29')).toEqual({ amount: '1', valueDate: '2026-10-29', startedOn: '2026-10-29' });
+    expect(onToday({ ...draft, valueDate: '2026-10-29' }, 'valueDate', '2026-10-28').valueDate).toBe('2026-10-28');
+  });
+});
 
 describe('amounts', () => {
   it('parses what a person typed into integer minor units above zero', () => {

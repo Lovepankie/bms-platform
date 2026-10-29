@@ -7,8 +7,9 @@ import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { instructionWords, investmentTxnWords, percent } from './investment-state';
 import { businessToday } from '../../../api/retail';
-import { isIsoDate, money, words } from './loan-state';
+import { isIsoDate, money, onToday, words } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { DateReset, SentBefore } from './actions';
 
 // The forms of the investment page: funding, return payout, maturity payout, rollover, early
 // withdrawal (with its quote), the maturity instruction and a reversal. Each write keeps its draft
@@ -46,21 +47,25 @@ function Waiting({ executed, done }: { executed: boolean; done: string }) {
   );
 }
 
-interface FundDraft { date: string; method: PaymentMethod; reference: string }
+interface FundDraft { date: string; method: PaymentMethod; reference: string; startedOn: string }
 
 export function FundForm({ inv }: { inv: Investment }) {
   const { me } = useStaff();
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
-  const { key, draft, setDraft, finish } = usePersistedDraft<FundDraft>(`invest-fund:${me.user_id ?? ''}:${id}`, {
-    date: businessToday(),
+  const today = businessToday();
+  const { key, draft, setDraft, finish, sending, mended, sentBefore } = usePersistedDraft<FundDraft>(`invest-fund:${me.user_id ?? ''}:${id}`, {
+    date: today,
     method: 'cash',
     reference: '',
-  });
+    startedOn: today,
+  }, (d) => onToday(d, 'date', today));
   const update = (patch: Partial<FundDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const save = useMutation({
-    mutationFn: () =>
-      investments.fund(id, { value_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key),
+    mutationFn: () => {
+      sending();
+      return investments.fund(id, { value_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key);
+    },
     onSuccess: () => {
       finish();
       refresh();
@@ -69,12 +74,14 @@ export function FundForm({ inv }: { inv: Investment }) {
   if (save.data) return <Waiting executed={save.data.executed} done="Funded. The investment is active and its schedule is below." />;
   return (
     <form aria-label="Record funding" onSubmit={(e) => { e.preventDefault(); if (isIsoDate(draft.date) && !save.isPending) save.mutate(); }}>
+      <SentBefore kind="funding" on={sentBefore} />
       <p>
         Receives {money(inv.principal_minor, inv.currency)} from the member. Above the business's approval limit a checker
         approves it first.
       </p>
       <label htmlFor="fund-date">Date received</label>
       <input id="fund-date" type="date" max={businessToday()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
+      {mended && <DateReset />}
       <MethodChoice name="fund-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <label htmlFor="fund-ref">Reference (optional)</label>
       <input id="fund-ref" maxLength={100} value={draft.reference} onChange={(e) => update({ reference: e.target.value })} autoComplete="off" />

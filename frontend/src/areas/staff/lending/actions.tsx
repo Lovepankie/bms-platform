@@ -5,8 +5,9 @@ import { useStaff } from '../context';
 import { usePersistedDraft } from '../retail/idempotency';
 import { Problem } from '../retail/ui';
 import { businessToday } from '../../../api/retail';
-import { allocationSummary, isIsoDate, money, parseAmount, words } from './loan-state';
+import { allocationSummary, isIsoDate, money, onToday, parseAmount, words } from './loan-state';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { showDate } from '../../../app/ui/PeriodPicker';
 
 // The money-moving forms of the loan page: repayment, disbursement, reversal and write-off, plus
 // the payoff quote. Each write keeps its draft and one Idempotency-Key in this tab until the
@@ -45,7 +46,17 @@ function ReferenceInput({ id, value, onChange }: { id: string; value: string; on
   );
 }
 
-interface RepayDraft { amount: string; valueDate: string; method: PaymentMethod; reference: string }
+/** Said under a date that a draft from an earlier day had set back to today (#670), so a back date is not lost unseen. */
+export function DateReset() {
+  return <p className="field-hint" role="status">This draft was started on an earlier day, so its date is now today. Change it if the money moved on another day.</p>;
+}
+
+/** Said above a form whose draft went to the server on an earlier day without an answer (#670): its body is kept as sent. */
+export function SentBefore({ kind, on }: { kind: string; on: string | null }) {
+  return on ? <p className="alert alert-info" role="status">This {kind} was sent on {showDate(on)} and may already be saved. Send it again to check.</p> : null;
+}
+
+interface RepayDraft { amount: string; valueDate: string; method: PaymentMethod; reference: string; startedOn: string }
 
 /** What the server answered for a repayment: the receipt and where the money went. */
 export function RepaymentReceipt({ result, currency, onNew }: { result: RepaymentResult; currency: string | undefined; onNew?: () => void }) {
@@ -92,22 +103,26 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   const { me } = useStaff();
   const loanId = loan.id ?? '';
   const refresh = useRefreshLoan(loanId);
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<RepayDraft>(`lending-repay:${me.user_id ?? ''}:${loanId}`, {
+  const today = businessToday();
+  const { key, draft, setDraft, finish, discard, sending, mended, sentBefore } = usePersistedDraft<RepayDraft>(`lending-repay:${me.user_id ?? ''}:${loanId}`, {
     amount: '',
-    valueDate: businessToday(),
+    valueDate: today,
     method: 'cash',
     reference: '',
-  });
+    startedOn: today,
+  }, (d) => onToday(d, 'valueDate', today));
   const update = (patch: Partial<RepayDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const amountMinor = parseAmount(draft.amount, loan.currency);
   const valid = amountMinor !== null && isIsoDate(draft.valueDate);
   const save = useMutation({
-    mutationFn: () =>
-      lending.repay(
+    mutationFn: () => {
+      sending();
+      return lending.repay(
         loanId,
         { amount_minor: amountMinor ?? 0, value_date: draft.valueDate, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined },
         key,
-      ),
+      );
+    },
     onSuccess: (r) => {
       finish();
       refresh();
@@ -116,6 +131,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   });
   return (
     <form aria-label="Record a repayment" onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
+      <SentBefore kind="repayment" on={sentBefore} />
       {loan.status === 'written_off' && <p className="alert alert-info">This loan is written off: the payment is recorded as a recovery.</p>}
       <label htmlFor="repay-amount">Amount ({loan.currency ?? 'UGX'})</label>
       <input id="repay-amount" inputMode="decimal" value={draft.amount} onChange={(e) => update({ amount: e.target.value })}
@@ -125,6 +141,7 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
       </p>
       <label htmlFor="repay-date">Date paid</label>
       <input id="repay-date" type="date" max={businessToday()} value={draft.valueDate} onChange={(e) => update({ valueDate: e.target.value })} />
+      {mended && <DateReset />}
       <MethodChoice name="repay-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="repay-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
@@ -138,21 +155,25 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   );
 }
 
-interface DisburseDraft { date: string; method: PaymentMethod; reference: string }
+interface DisburseDraft { date: string; method: PaymentMethod; reference: string; startedOn: string }
 
 export function DisburseForm({ loan }: { loan: Loan }) {
   const { me } = useStaff();
   const loanId = loan.id ?? '';
   const refresh = useRefreshLoan(loanId);
-  const { key, draft, setDraft, finish } = usePersistedDraft<DisburseDraft>(`lending-disburse:${me.user_id ?? ''}:${loanId}`, {
-    date: businessToday(),
+  const today = businessToday();
+  const { key, draft, setDraft, finish, sending, mended, sentBefore } = usePersistedDraft<DisburseDraft>(`lending-disburse:${me.user_id ?? ''}:${loanId}`, {
+    date: today,
     method: 'cash',
     reference: '',
-  });
+    startedOn: today,
+  }, (d) => onToday(d, 'date', today));
   const update = (patch: Partial<DisburseDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const save = useMutation({
-    mutationFn: () =>
-      lending.disburse(loanId, { disbursement_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key),
+    mutationFn: () => {
+      sending();
+      return lending.disburse(loanId, { disbursement_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key);
+    },
     onSuccess: () => {
       finish();
       refresh();
@@ -167,11 +188,13 @@ export function DisburseForm({ loan }: { loan: Loan }) {
   }
   return (
     <form aria-label="Disburse the loan" onSubmit={(e) => { e.preventDefault(); if (isIsoDate(draft.date) && !save.isPending) save.mutate(); }}>
+      <SentBefore kind="disbursement" on={sentBefore} />
       <p>
         Pays out {money(loan.approved_principal_minor, loan.currency)} to the member.
       </p>
       <label htmlFor="disburse-date">Disbursement date</label>
       <input id="disburse-date" type="date" max={businessToday()} value={draft.date} onChange={(e) => update({ date: e.target.value })} />
+      {mended && <DateReset />}
       <MethodChoice name="disburse-method" value={draft.method} onChange={(m) => update({ method: m })} />
       <ReferenceInput id="disburse-ref" value={draft.reference} onChange={(v) => update({ reference: v })} />
       <Problem error={save.error} />
