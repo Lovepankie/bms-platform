@@ -118,7 +118,7 @@ export function AddPriceForm({ today, busy, error, onSubmit, onCancel }: {
           <input id="price-from" type="date" value={form.validFrom} min={today} onChange={(e) => setForm({ ...form, validFrom: e.target.value })} />
           <label htmlFor="price-to">Last day (leave empty for no end)</label>
           <input id="price-to" type="date" value={form.validTo} onChange={(e) => setForm({ ...form, validTo: e.target.value })} />
-          {warn && <p role="alert" className="rt-flag">This price is not above what the item costs. It can be saved, but a seller needs permission to sell below cost.</p>}
+          {warn && <p role="alert" className="rt-flag">This price is not above the item's buying price. It can be saved, but a seller needs permission to sell below the buying price.</p>}
           {problem && form.price !== '' && <Note>{problem}</Note>}
           <Problem error={error} />
           <p className="cluster">

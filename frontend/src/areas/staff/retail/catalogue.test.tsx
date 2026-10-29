@@ -142,7 +142,7 @@ describe('items and prices', () => {
   });
 
   it('hints, without blocking, when the price is not above a known cost', () => {
-    expect(belowCostHint(3500, 3500)).toContain('not above the cost, UGX 3,500');
+    expect(belowCostHint(3500, 3500)).toContain('not above the buying price, UGX 3,500');
     expect(belowCostHint(3501, 3500)).toBeNull();
     expect(belowCostHint(100, null)).toBeNull();
     expect(belowCostHint(100, 0)).toBeNull();

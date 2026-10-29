@@ -189,6 +189,12 @@
   color: var(--color-toast-error);
 }
 
+/* Issue #680: one toast at a time. The layout's "You are now in <shop>." gives way to the screen's own toast, which may be an
+   error; the shop label under the title already shows the change. */
+.nav-layout-main:has(main .toast) > .toast {
+  display: none;
+}
+
 @keyframes rt-toast-in {
   from {
     opacity: 0;

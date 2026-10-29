@@ -355,7 +355,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
  */
 export function belowCostHint(sellMinor: number | null, costMinor: number | null): string | null {
   if (sellMinor === null || costMinor === null || costMinor <= 0 || sellMinor > costMinor) return null;
-  return `This price is not above the cost, ${formatMinor(costMinor, RETAIL_CURRENCY)}. A sale at this price is refused unless the seller may sell below cost.`;
+  return `This price is not above the buying price, ${formatMinor(costMinor, RETAIL_CURRENCY)}. A sale at this price is refused unless the seller may sell below the buying price.`;
 }
 
 export function PriceForm({ product, onSaved, onCancel }: { product: Product; onSaved: (text: string) => void; onCancel: () => void }) {

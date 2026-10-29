@@ -327,7 +327,7 @@ class RetailDataExport implements DataExportSection {
                         PRODUCT,
                         QUANTITY,
                         new Column("unit", "Unit", Kind.TEXT),
-                        new Column("unit_price", "Unit price", Kind.MONEY),
+                        new Column("unit_price", "Selling price", Kind.MONEY),
                         new Column("line_total", "Line total", Kind.MONEY),
                         new Column("sale_status", "Sale status", Kind.TEXT)),
                 count("SELECT count(*) FROM retail_sale_lines"));

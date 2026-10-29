@@ -123,6 +123,16 @@ describe.each([1, 2])('My stock at 412px, font scale %i', (font) => {
   });
 });
 
+it('shows one toast at a time: the switch gives way to a toast of the screen', async () => {
+  const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
+  await page.goto(`${base}layout/my-stock.html?screenToast=1`);
+  await page.locator('.stock-card').first().waitFor();
+  await page.getByRole('combobox', { name: /Switch shop/ }).selectOption({ label: 'Test Branch B (BR2)' });
+  await page.locator('.shop-here-name', { hasText: 'Test Branch B (BR2)' }).waitFor();
+  expect(await page.locator('.toast:visible').allTextContents()).toEqual(['Stock corrected.']);
+  await page.close();
+});
+
 it('draws My stock and the shop label in the dark theme too', async () => {
   const page = await open(1, 'dark');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(WIDTH);

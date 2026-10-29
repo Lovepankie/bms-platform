@@ -47,7 +47,7 @@ class AskService {
     private static final Logger log = LoggerFactory.getLogger(AskService.class);
 
     /** Changed whenever the prompt or the answer rules change, so old answers are never served for new rules. */
-    static final String PROMPT_VERSION = "ask-v1";
+    static final String PROMPT_VERSION = "ask-v2";
 
     /** How many articles the model reads. */
     static final int GROUNDING = 3;
@@ -57,7 +57,9 @@ class AskService {
     static final String SYSTEM_PROMPT = """
             You answer questions about how to use the BMS app. Use ONLY the help articles you are given: never add a \
             screen, a button, a step or a rule they do not state, and never use other knowledge. Answer in plain English, \
-            in at most five short sentences or numbered steps, using the articles' own words for screens and buttons. If \
+            in at most five short sentences or numbered steps, using the articles' own words for screens and buttons. \
+            Call what the shop paid for an item the buying price and what it sells for the selling price, even when the \
+            question says cost or price. If \
             the articles do not answer the question, give an empty answer. Never ask for or repeat a name, a phone number \
             or any other personal detail. Reply with one JSON object only: \
             {"answer": "<the answer, or empty>", "article": "<the id of the one article the answer comes from>"}""";
@@ -65,6 +67,10 @@ class AskService {
     /** What no article holds, so an answer carrying it was not taken from them: a link, an email, a run of six digits. */
     private static final java.util.regex.Pattern NOT_FROM_ARTICLES =
             java.util.regex.Pattern.compile("(?i)https?://|www\\.|@|\\d(?:[\\s.\\-]?\\d){5,}");
+
+    /** Issue #680: words the screens and articles retired for buying price and selling price, so an answer with one is not theirs. */
+    private static final java.util.regex.Pattern RETIRED_PRICE_WORDS =
+            java.util.regex.Pattern.compile("(?i)average cost|cost price|unit cost");
 
     private static final java.util.regex.Pattern PLACEHOLDER =
             java.util.regex.Pattern.compile("\\[(?:name|phone|id|email|number)\\]");
@@ -357,8 +363,11 @@ class AskService {
                 return Optional.of(new Parsed("", null));
             }
             if (answer.length() > MAX_ANSWER_CHARS
-                    || NOT_FROM_ARTICLES.matcher(answer).find()) {
-                // Longer than any article, or a link, an email or a long number, none of which the articles hold.
+                    || NOT_FROM_ARTICLES.matcher(answer).find()
+                    || RETIRED_PRICE_WORDS.matcher(answer).find()) {
+                // Longer than any article, or a link, an email, a long number or a retired price word, none of which
+                // the
+                // articles hold.
                 return Optional.empty();
             }
             return grounding.stream().filter(a -> a.id().equals(id)).findFirst().map(a -> new Parsed(answer, a));

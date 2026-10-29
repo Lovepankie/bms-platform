@@ -569,17 +569,20 @@ describe('design guard, an empty list is never a dead end (issue #619)', () => {
   });
 });
 
-// Issue #680: a retail column says Selling price or Buying price, never a bare Price or Cost ("Average cost" is a retired word of
-// the glossary guard). JUSTIFICATION-A3: the issue asks for this design-guard test; it is one regex and its fixtures.
-const BARE_COLUMN = /<th\b[^>]*>\s*(?:\{\s*['"`])?(?:Price|Cost)(?:['"`]\s*\})?\s*<\/th>/;
+// Issue #680: a retail column or label says Selling price or Buying price, never a bare Price or Cost ("Average cost" is a retired
+// word of the glossary guard): a table header, a card row's span or a term, or a label prop (Stat, KeyFigureRow, Field).
+// JUSTIFICATION-A3: the issue asks for this design-guard test; it is one regex and its fixtures.
+const BARE_PRICE_LABEL = /<(th|span|dt)\b[^>]*>\s*(?:\{\s*['"`])?(?:Price|Cost)(?:['"`]\s*\})?\s*<\/\1>|\blabel=(?:\{\s*)?['"`](?:Price|Cost)['"`]/;
 
-describe('design guard, no bare Price or Cost column on a retail screen (issue #680)', () => {
-  it('finds a bare column and passes the plain words', () => {
-    expect(['<th className="num">Price</th>', "<th>{'Cost'}</th>"].every((s) => BARE_COLUMN.test(s))).toBe(true);
-    expect(['<th className="num">Selling price</th>', '<th>Price list</th>', '<th>Average buying price</th>'].some((s) => BARE_COLUMN.test(s))).toBe(false);
+describe('design guard, no bare Price or Cost label on a retail screen (issue #680)', () => {
+  it('finds a bare column, row label or label prop, and passes the plain words', () => {
+    const bare = ['<th className="num">Price</th>', "<th>{'Cost'}</th>", '<span>Cost</span>', '<dt>Price</dt>', '<Stat label="Price" />', "<KeyFigureRow label={'Cost'} />"];
+    expect(bare.filter((s) => !BARE_PRICE_LABEL.test(s))).toEqual([]);
+    const plain = ['<th className="num">Selling price</th>', '<th>Price list</th>', '<span>At buying price</span>', '<Stat label="Price lists" />'];
+    expect(plain.filter((s) => BARE_PRICE_LABEL.test(s))).toEqual([]);
   });
 
-  it.each([...files(join(SRC, 'areas/staff/retail'), /\.tsx$/), ...files(join(SRC, 'offline'), /\.tsx$/)].map((f) => relative(SRC, f)))('%s has no bare Price or Cost column', (file) => {
-    expect(code(file).match(BARE_COLUMN)?.[0] ?? null).toBeNull();
+  it.each([...files(join(SRC, 'areas/staff/retail'), /\.tsx$/), ...files(join(SRC, 'offline'), /\.tsx$/)].map((f) => relative(SRC, f)))('%s has no bare Price or Cost label', (file) => {
+    expect(code(file).match(BARE_PRICE_LABEL)?.[0] ?? null).toBeNull();
   });
 });

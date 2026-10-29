@@ -183,7 +183,7 @@ export function SaleLineCard({ line, index, unitsOn, price, offlinePrice, fresh,
       <div className="rt-row">
         <Stepper id={`qty-${i}`} label={`Quantity (${pack?.unit ?? line.product.unit})`} name={line.product.description} value={line.qty} onChange={onQty} min={1} inputMode="decimal" invalid={f === null || hint !== null} />
         <div>
-          <label htmlFor={`price-${i}`}>{pack ? `Price per ${pack.unit}` : 'Unit price'}</label>
+          <label htmlFor={`price-${i}`}>{pack ? `${WORDS.sellingPrice} per ${pack.unit}` : WORDS.sellingPrice}</label>
           <input id={`price-${i}`} inputMode="numeric" value={line.price} onChange={(e) => onPrice(e.target.value)} aria-invalid={f === null} readOnly={price ? !price.canOverride : offlinePrice ? !offlinePrice.canType : false} />
         </div>
       </div>

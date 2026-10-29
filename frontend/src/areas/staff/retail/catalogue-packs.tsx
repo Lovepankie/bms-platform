@@ -72,7 +72,7 @@ export function packBelowCostHint(product: Product, factor: string, priceMinor: 
   const packCost = packPriceMinor(cost, factor);
   const price = priceMinor ?? packPriceMinor(product.sell_minor ?? 0, factor);
   if (price > packCost) return null;
-  return `This price is not above what ${showQty(factor)} ${product.unit ?? ''} cost at the last price paid, ${money(packCost)}. A sale at it is refused unless the seller may sell below cost.`;
+  return `This price is not above the buying price of ${showQty(factor)} ${product.unit ?? ''} at the last price paid, ${money(packCost)}. A sale at it is refused unless the seller may sell below the buying price.`;
 }
 
 /**
@@ -153,7 +153,7 @@ function PackSheet({ product, pack, mayPrice, onClose }: { product: Product; pac
       {low !== null && <p className="rt-flag">{low}</p>}
       {pack.below_cost === true && purpose !== 'buy' && (
         <p role="note" className="alert alert-warning">
-          {`This price is not above what ${showQty(pack.factor ?? '')} ${product.unit ?? ''} cost you on average. A sale at it needs permission to sell below cost.`}
+          {`This price is not above the average buying price of ${showQty(pack.factor ?? '')} ${product.unit ?? ''}. A sale at it needs permission to sell below the buying price.`}
         </p>
       )}
       <Problem error={change.error} />

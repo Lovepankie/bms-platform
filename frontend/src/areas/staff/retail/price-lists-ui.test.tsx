@@ -199,7 +199,7 @@ describe('a sale line with price lists', () => {
     expect(html).not.toContain('Price list');
     expect(html).not.toContain('readonly');
     expect(html).not.toContain('Why is the price changed?');
-    expect(html).toContain('Unit price');
+    expect(html).toContain('>Selling price</label>');
   });
 });
 

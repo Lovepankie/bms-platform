@@ -252,6 +252,19 @@ class AskBmsIT extends IntegrationTest {
     }
 
     @Test
+    void anAnswerInTheRetiredPriceWordsIsRefusedForTheNextProvider() {
+        // Issue #680: the articles say buying price and selling price, so an answer saying average cost is not theirs.
+        String seller = signIn(t, api, "ask-seller-words", new Api.Role("retail_sales", t.headOffice()));
+        GEMINI.thenAnswer(answer(
+                "Open Sell and check the average cost of the item before you tap Record sale.", "record-a-sale"));
+        GROQ.thenAnswer(answer("Open Sell, find the item and tap Record sale.", "record-a-sale"));
+        JsonNode a = okAsk(seller, "How do I record a sale?");
+        assertThat(a.get("answer").asString()).isEqualTo("Open Sell, find the item and tap Record sale.");
+        assertThat(lastLog().get("failures")).isEqualTo("gemini:bad_answer");
+        assertThat(AskService.SYSTEM_PROMPT).contains("the buying price").contains("the selling price");
+    }
+
+    @Test
     void aRepeatedQuestionIsServedFromTheCacheAndAnyChangeOfWhatProducedItIsANewKey() {
         GEMINI.thenAnswer(answer(INVITE, "invite-someone"));
         assertThat(okAsk(admin, "How do I invite a cashier?").get("source").asString())

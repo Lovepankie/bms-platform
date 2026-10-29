@@ -100,7 +100,7 @@ describe('a sale line', () => {
   it('prices and counts in the pack once it is chosen', () => {
     const html = card(withPacks, true, 'u1');
     expect(html).toContain('Quantity (carton)');
-    expect(html).toContain('Price per carton');
+    expect(html).toContain('Selling price per carton');
   });
 
   it('is exactly the old line when the capability is off, packs or not', () => {
@@ -109,14 +109,14 @@ describe('a sale line', () => {
       expect(html).not.toContain('Sell by');
       expect(html).not.toContain('carton');
       expect(html).toContain('Quantity (piece)');
-      expect(html).toContain('Unit price');
+      expect(html).toContain('>Selling price</label>');
     }
   });
 
   it('is the old line for an item without packs even when the capability is on', () => {
     const html = card(pen, true);
     expect(html).not.toContain('Sell by');
-    expect(html).toContain('Unit price');
+    expect(html).toContain('>Selling price</label>');
   });
 });
 

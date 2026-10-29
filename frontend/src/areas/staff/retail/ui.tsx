@@ -127,7 +127,7 @@ export function Gate({ screen, title, children, wide }: { screen: RetailScreen; 
 }
 
 /**
- * The shop the page works in, under its title (issue #680): "Bulb Store", or "All branches". With more than one to choose, a
+ * The shop the page works in, under its title (issue #680): "Test Shop One", or "All branches". With more than one to choose, a
  * native select laid over it opens the phone's own picker in one tap, as the top bar's title does. JUSTIFICATION-A3: a new
  * component the issue asks for, its options shared with the bar and the menu through BranchOptions.
  */

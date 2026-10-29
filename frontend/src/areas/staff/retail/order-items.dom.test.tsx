@@ -84,10 +84,10 @@ describe('Change the items on the order page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change the items' }));
     const qty = (await screen.findByLabelText(/Quantity/)) as HTMLInputElement;
     expect(qty.value).toBe('2');
-    expect((screen.getByLabelText(/Unit price/) as HTMLInputElement).value).toBe('9000');
+    expect((screen.getByLabelText(/^Selling price/) as HTMLInputElement).value).toBe('9000');
     fireEvent.change(qty, { target: { value: '3' } });
     // A new quantity is priced again as on a new order: today's price shows, and no price is sent.
-    expect((screen.getByLabelText(/Unit price/) as HTMLInputElement).value).toBe('10000');
+    expect((screen.getByLabelText(/^Selling price/) as HTMLInputElement).value).toBe('10000');
     fireEvent.change(screen.getByLabelText(/Why the items changed/), { target: { value: 'Test bigger basket' } });
     fireEvent.click(save());
     await waitFor(() => expect(changeItems).toHaveBeenCalledTimes(1));
@@ -108,7 +108,7 @@ describe('Change the items on the order page', () => {
     const qty = (await screen.findByLabelText(/Quantity/)) as HTMLInputElement;
     fireEvent.change(qty, { target: { value: '3' } });
     fireEvent.change(qty, { target: { value: '2' } });
-    expect((screen.getByLabelText(/Unit price/) as HTMLInputElement).value).toBe('9000');
+    expect((screen.getByLabelText(/^Selling price/) as HTMLInputElement).value).toBe('9000');
     fireEvent.click(save());
     await waitFor(() => expect(changeItems).toHaveBeenCalledTimes(1));
     const body = changeItems.mock.calls[0]?.[2] as { lines: unknown[] };

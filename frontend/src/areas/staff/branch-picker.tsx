@@ -45,7 +45,7 @@ export function useBranchHold(holds: () => boolean): void {
   });
 }
 
-/** What the toast says once the branch in use changes (issue #680): "You are now in Bulb Store." */
+/** What the toast says once the branch in use changes (issue #680): "You are now in Test Shop One." */
 export function switchedTo(me: Me, selection: string): string {
   if (selection === ALL_BRANCHES) return 'You now see all branches.';
   return `You are now in ${branchLabel((me.branches ?? []).find((b) => b.id === selection)) || 'that branch'}.`;

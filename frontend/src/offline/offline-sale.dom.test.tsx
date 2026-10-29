@@ -142,7 +142,7 @@ describe('Record a sale offline', () => {
     );
     fireEvent.change(await screen.findByRole('combobox', { name: 'Find an item by name, code or category' }), { target: { value: 'bulb' } });
     fireEvent.click(await screen.findByRole('option', { name: /^Test Bulb 9W/ }));
-    const price = screen.getByLabelText('Unit price') as HTMLInputElement;
+    const price = screen.getByLabelText('Selling price') as HTMLInputElement;
     expect(price.readOnly).toBe(true);
     expect(screen.getByText('Offline, the price saved on this phone is used. You do not have permission to change it.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save on this phone' }));

@@ -5,7 +5,7 @@ order: 10
 module: retail
 needs: retail.purchase.create
 screens: /staff/retail/restock
-words: buy, bought, purchase, supplier, delivery, new stock, goods arrived, credit, owe supplier
+words: buy, bought, purchase, supplier, delivery, new stock, goods arrived, credit, owe supplier, buying price, cost, cost price, average cost, what I paid
 ---
 When goods arrive from a supplier, record them on Buy stock. The stock goes up and what you paid is kept.
 

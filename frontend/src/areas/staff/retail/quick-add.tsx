@@ -51,7 +51,7 @@ export function pieceUnit(units: Unit[]): Unit | undefined {
   return PIECE_NAMES.map((n) => active.find((u) => (u.name ?? '').trim().toLowerCase() === n)).find((u) => u !== undefined);
 }
 
-/** The line said once Add has worked: "Test bulb added: 600 pc at Bulb Store", or for an item already in the list what was added and what it has now. */
+/** The line said once Add has worked: "Test bulb added: 600 pc at Test Shop One", or for an item already in the list what was added and what it has now. */
 export function addedLine(done: QuickAdd, where: string): string {
   const name = done.description ?? 'The item';
   if (done.qty === undefined) return `${name} added.`;

@@ -4,7 +4,7 @@ import { retailMessage } from './retail-errors';
 describe('retail problem details in plain words', () => {
   it.each([
     ['insufficient_stock', 422, /not enough stock/i],
-    ['price_below_cost', 422, /not above what the item cost/i],
+    ['price_below_cost', 422, /not above the item's buying price/i],
     ['idempotency_key_reused', 422, /different entry/i],
     ['idempotency_in_progress', 409, /still being saved/i],
     ['idempotency_key_missing', 422, /reload/i],
