@@ -1436,12 +1436,15 @@ the items show only while you search, and go away once one is picked. Every item
   another tab" until that tab has been quiet for a minute. A commit takes away only the counts that went in (an item
   whose count still equals the committed line); a count changed or added since the review, here or in another tab, stays.
   The removal is stamped like any change and the stored count carries the commit time, so another tab drops exactly those
-  items and says "Counted and saved in another tab", or "Some counts were saved in another tab. The others are still
-  here." when some of its counts did not go in. The page is keyed by branch, so a branch switch opens that branch's own
-  saved count. An item found but not typed yet is kept too. A restored count of an item no longer on the sheet is dropped
-  once the sheet is read. A count brought back on opening says when it was saved ("These counts were saved on 26 Oct
-  2026, 14:05."), as a warning that asks to check them or start again once it is more than 12 hours old, with **Start
-  again**, which asks "Clear all N counts? Your stock does not change." with **Clear the counts** and **Keep them**. After Commit the count a success screen (the kit's
+  items and says "Counted and saved in another tab" when nothing is left, or "2 counts were saved from another tab; your
+  other counts are still here" when some of its counts did not go in. The page is keyed by branch, so a branch switch
+  opens that branch's own saved count. An item found but not typed yet is kept too. A restored count of an item no longer
+  on the sheet is dropped once the sheet is read. A count saved earlier the same business day (the business's time zone)
+  is filled in with the line "Counts from Monday 14:05 are filled in." and **Start again**, which asks "Clear all N
+  counts? Your stock does not change." with **Clear the counts** and **Keep them**, and then removes the saved count (the
+  other tab says "This count was cleared in another tab"). A count from an earlier business day is not filled in
+  silently: the page asks "You have counts from Monday. Use them or start again?" with **Use them** and **Start again**,
+  and keeps the saved count as it is until then. After Commit the count a success screen (the kit's
   `SuccessScreen`) says **Stock updated for N items** with how many went up, went down and matched and the first five
   changes in words ("Test Lamp: 2 pieces more"), with **Start another count** and **Back to My stock**, and a success toast.
 - **Count stock: the server checks big drops too (issue #636).** **Commit the count** sends the product ids of the ticked lines,

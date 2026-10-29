@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { changeWords, countKey, mergeCounts, readCount, savedSince, saveWords, writeCount, type SavedCount } from './count-save-state';
+import { changeWords, countKey, mergeCounts, otherTabWords, readCount, savedAt, saveWords, whenSaved, writeCount, type SavedCount } from './count-save-state';
 
 // Issue #681: the rules of a count kept on the device as it is typed, the merge of two tabs, the words that say where it is
 // kept, and the words of the success screen. Fabricated names and amounts.
@@ -31,11 +31,27 @@ describe('the count kept on the device', () => {
     expect(readCount('k')).toBeNull();
   });
 
-  it('dates a kept count from its oldest count, and has no date while nothing is counted', () => {
+  it('dates a kept count from its last saved count, and has no date while nothing is counted', () => {
     const kept = (counts: Record<string, string>, at: Record<string, number>): SavedCount => ({ counts, packCounts: {}, listed: [], done: [], at });
-    expect(savedSince(kept({ 'A-1': '4', 'A-2': '6', 'A-3': '' }, { 'A-1': 300, 'A-2': 200, 'A-3': 50 }))).toBe(200);
-    expect(savedSince(kept({ 'A-1': '' }, { 'A-1': 50 }))).toBeNull();
-    expect(savedSince(null)).toBeNull();
+    expect(savedAt(kept({ 'A-1': '4', 'A-2': '6', 'A-3': '' }, { 'A-1': 300, 'A-2': 200, 'A-3': 900 }))).toBe(300);
+    expect(savedAt(kept({ 'A-1': '' }, { 'A-1': 50 }))).toBeNull();
+    expect(savedAt(null)).toBeNull();
+  });
+
+  // Owner, round 3 of the review of #686: the day in the business's zone, so a count saved late last night is an earlier day.
+  it('says the day and time a count was saved, and whether it is from an earlier business day', () => {
+    const now = Date.parse('2026-10-29T10:00:00Z'); // Thursday 13:00 in Kampala.
+    expect(whenSaved(Date.parse('2026-10-29T06:05:00Z'), 'Africa/Kampala', now)).toEqual({ day: 'Thursday', time: '09:05', earlier: false });
+    expect(whenSaved(Date.parse('2026-10-26T11:05:00Z'), 'Africa/Kampala', now)).toEqual({ day: 'Monday', time: '14:05', earlier: true });
+    // 23:30 on Wednesday in UTC is already Thursday in Kampala.
+    expect(whenSaved(Date.parse('2026-10-28T23:30:00Z'), 'Africa/Kampala', now).earlier).toBe(false);
+    expect(whenSaved(Date.parse('2026-10-10T11:05:00Z'), 'Africa/Kampala', now)).toEqual({ day: '10 Oct', time: '14:05', earlier: true });
+  });
+
+  it('words what another tab did', () => {
+    expect(otherTabWords({ kind: 'partly', n: 2 })).toBe('2 counts were saved from another tab; your other counts are still here');
+    expect(otherTabWords({ kind: 'partly', n: 1 })).toBe('1 count was saved from another tab; your other counts are still here');
+    expect(otherTabWords({ kind: 'committed' })).toBe('Counted and saved in another tab');
   });
 });
 

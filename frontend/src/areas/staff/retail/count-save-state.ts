@@ -106,15 +106,25 @@ export function mergeCounts(mine: SavedCount, theirs: SavedCount): SavedCount {
   return out;
 }
 
-/** The time the oldest kept count was saved, or null when nothing is counted: what a count restored on opening dates from. */
-export function savedSince(saved: SavedCount | null): number | null {
+/** When the kept count was last saved, or null when nothing is counted: what a count restored on opening dates from. */
+export function savedAt(saved: SavedCount | null): number | null {
   if (!saved) return null;
   const times = idsOf(saved).filter((id) => filled(saved, id)).map((id) => saved.at[id] ?? 0).filter((t) => t > 0);
-  return times.length === 0 ? null : Math.min(...times);
+  return times.length === 0 ? null : Math.max(...times);
 }
 
-/** Counts kept longer than this are old enough that the shelf may have moved: the page asks to check them or start again. */
-export const OLD_COUNT_MS = 12 * 60 * 60 * 1000;
+const dayOf = (t: number, zone: string) => new Date(t).toLocaleDateString('en-CA', { timeZone: zone });
+
+/**
+ * When a kept count was saved, in the business's time zone (owner, round 3 of #686): "Monday" within the last week, else
+ * "26 Oct"; the time as "14:05"; and whether it is from an earlier business day than `now`, which the page asks about.
+ */
+export function whenSaved(t: number, zone: string, now: number = Date.now()): { day: string; time: string; earlier: boolean } {
+  const recent = now - t < 6 * 24 * 60 * 60 * 1000;
+  const day = new Intl.DateTimeFormat('en-GB', recent ? { timeZone: zone, weekday: 'long' } : { timeZone: zone, day: 'numeric', month: 'short' }).format(t);
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(t);
+  return { day, time, earlier: dayOf(t, zone) < dayOf(now, zone) };
+}
 
 /** The line at the top of the count (owner, round 2 of #681): plain words for where the counts are kept. Empty before a count. */
 export function saveWords(items: number, onDevice: boolean): string {
@@ -122,8 +132,18 @@ export function saveWords(items: number, onDevice: boolean): string {
   return onDevice ? `Saved on this phone, ${items} ${items === 1 ? 'item' : 'items'}` : 'Not saved on this phone. Keep this page open.';
 }
 
-/** What another tab of the same count did: it is open there too, it committed every count, or only some of them. */
-export type OtherTab = 'open' | 'committed' | 'partly' | null;
+/**
+ * What another tab of the same count did: it is open there too, it committed every count, it committed `n` of this tab's counts
+ * and left the others, or it cleared the count with Start again.
+ */
+export type OtherTab = { kind: 'open' | 'committed' | 'cleared' } | { kind: 'partly'; n: number } | null;
+
+/** The words for what another tab did. */
+export function otherTabWords(other: Exclude<OtherTab, null>): string {
+  if (other.kind === 'partly') return `${other.n} ${other.n === 1 ? 'count was' : 'counts were'} saved from another tab; your other counts are still here`;
+  if (other.kind === 'open') return 'This count is also open in another tab';
+  return other.kind === 'committed' ? 'Counted and saved in another tab' : 'This count was cleared in another tab';
+}
 
 /** How long "This count is also open in another tab" stays after the last change heard from it. */
 export const OTHER_TAB_MS = 60_000;
@@ -136,19 +156,26 @@ export const OTHER_TAB_MS = 60_000;
  * A commit never clears counts it did not send (review of #686): `committed` marks the time, the page then drops only the
  * items whose count went in, and that drop is stamped like any change, so another tab drops exactly those items, keeps any
  * newer count of its own, and hears from the mark whether all or some of its counts went in. The stored count removed
- * outright (storage cleared) empties this tab too.
+ * outright (Start again in another tab, or storage cleared) empties this tab too.
+ *
+ * `hold` keeps the stored count as it is, unwritten and unmerged, while the page asks whether to use a count from an
+ * earlier day.
  */
-export function useCountSave({ saveKey, restored, saved, apply }: {
+export function useCountSave({ saveKey, restored, saved, apply, hold }: {
   saveKey: string;
   restored: SavedCount | null;
   saved: CountState;
   apply: (next: CountState | null) => void;
+  hold: boolean;
 }) {
   const at = useRef<Record<string, number>>(restored?.at ?? {});
   const commitAt = useRef<number | undefined>(restored?.committed);
-  const before = useRef<CountState>(saved);
+  // A restored count taken in later is not stamped as typed now.
+  const before = useRef<CountState>(restored ?? saved);
   const latest = useRef(saved);
   latest.current = saved;
+  const holding = useRef(hold);
+  holding.current = hold;
   const quiet = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [onDevice, setOnDevice] = useState(true);
   const [stored, setStored] = useState<string | null>(null);
@@ -156,6 +183,7 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
   const here = JSON.stringify([saved.counts, saved.packCounts]);
   const { counts, packCounts, listed, done } = saved;
   useLayoutEffect(() => {
+    if (hold) return;
     const now = Date.now();
     let typed = false;
     for (const id of idsOf(before.current, saved)) {
@@ -165,7 +193,7 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
       }
     }
     before.current = saved;
-    if (typed) setOther((o) => (o === 'committed' || o === 'partly' ? null : o));
+    if (typed) setOther((o) => (o && o.kind !== 'open' ? null : o));
     // Nothing found or counted, and nothing kept before: there is nothing to write.
     if (listed.length === 0 && idsOf(saved).every((id) => !filled(saved, id)) && readCount(saveKey) === null) {
       setOnDevice(true);
@@ -175,17 +203,17 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
     setOnDevice(ok);
     setStored(ok ? here : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counts, packCounts, listed, done, saveKey, here]);
+  }, [counts, packCounts, listed, done, saveKey, here, hold]);
   useEffect(() => () => {
     if (quiet.current !== null) clearTimeout(quiet.current);
   }, []);
   useEffect(() => {
     const seen = (e: StorageEvent) => {
-      if (e.key !== saveKey) return;
+      if (e.key !== saveKey || holding.current) return;
       if (e.newValue === null) {
         at.current = {};
         before.current = { counts: {}, packCounts: {}, listed: [], done: [] };
-        setOther('committed');
+        setOther({ kind: 'cleared' });
         return apply(null);
       }
       const theirs = parseSaved(e.newValue);
@@ -196,12 +224,14 @@ export function useCountSave({ saveKey, restored, saved, apply }: {
       commitAt.current = merged.committed;
       const { at: _at, committed: _committed, ...next } = merged;
       if (fresh) {
-        setOther(idsOf(next).some((id) => filled(next, id)) ? 'partly' : 'committed');
+        // How many of this tab's counts went in there; the rest stay.
+        const gone = idsOf(latest.current).filter((id) => filled(latest.current, id) && !filled(next, id)).length;
+        setOther(idsOf(next).some((id) => filled(next, id)) ? { kind: 'partly', n: gone } : { kind: 'committed' });
       } else {
         // Open there too, said until that tab has been quiet for a minute.
-        setOther('open');
+        setOther({ kind: 'open' });
         if (quiet.current !== null) clearTimeout(quiet.current);
-        quiet.current = setTimeout(() => setOther((o) => (o === 'open' ? null : o)), OTHER_TAB_MS);
+        quiet.current = setTimeout(() => setOther((o) => (o?.kind === 'open' ? null : o)), OTHER_TAB_MS);
       }
       if (sameCount(next, latest.current)) return;
       // Taken as it is, so it is not stamped as typed here.

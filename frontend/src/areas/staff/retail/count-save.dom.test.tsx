@@ -164,19 +164,19 @@ describe('two tabs and two branches', () => {
     expect(readStored(branchA).counts).toEqual({ 'A-1': '4', 'A-2': '6' });
   });
 
-  it('starts empty and says so when the count is committed in another tab', async () => {
+  it('starts empty and says so when the count is cleared with Start again in another tab', async () => {
     await ready();
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
-    // The other tab's commit removes the key, which this tab hears.
+    // Start again in the other tab removes the key, which this tab hears.
     localStorage.removeItem(keyOf(branchA));
     otherTab(keyOf(branchA), null);
     expect(countBox('A-1').value).toBe('');
-    expect(screen.getByTestId('count-other-tab').textContent).toBe('Counted and saved in another tab');
+    expect(screen.getByTestId('count-other-tab').textContent).toBe('This count was cleared in another tab');
     expect(localStorage.getItem(keyOf(branchA))).toBeNull();
   });
 
   it('keeps each branch its own count when the branch is switched, and back', async () => {
-    localStorage.setItem(keyOf(branchB), JSON.stringify({ counts: { 'A-2': '3' }, packCounts: {}, listed: ['A-2'], done: ['A-2'], at: { 'A-2': 1 } }));
+    localStorage.setItem(keyOf(branchB), JSON.stringify({ counts: { 'A-2': '3' }, packCounts: {}, listed: ['A-2'], done: ['A-2'], at: { 'A-2': Date.now() - 60_000 } }));
     listStock.mockResolvedValue(sheet);
     const view = render(page(branchA));
     await screen.findByText(/^Not counted yet/);
@@ -267,25 +267,29 @@ describe('a commit and an old count', () => {
   const line = (id: string, description: string, expected: string, counted: string) =>
     ({ product_id: id, description, expected_qty: expected, counted_qty: counted, variance_qty: (Number(counted) - Number(expected)).toFixed(3) });
 
-  it('keeps a count changed in another tab after the review, and commits only what was reviewed', async () => {
+  // The review's exact case: tab A reviews Test Lamp 4 and Test Plug 6; tab B then types Test Tape 7 and changes Test Lamp to 5.
+  it('keeps the counts typed or changed in another tab after the review, and commits only what was reviewed', async () => {
     const lines = [line('A-1', 'Test Lamp', '5.000', '4.000'), line('A-2', 'Test Plug', '8.000', '6.000')];
     createStocktake.mockResolvedValue({ id: 'st-r', status: 'draft', lines });
     commitStocktake.mockResolvedValue({ id: 'st-r', status: 'committed', lines });
-    await ready();
+    listStock.mockResolvedValue([...sheet, row('A-3', 'Test Tape', '9.000')]);
+    render(page());
+    await screen.findByText(/^Not counted yet/);
     fireEvent.change(countBox('A-1'), { target: { value: '4' } });
     fireEvent.change(countBox('A-2'), { target: { value: '6' } });
     await reviewIt(2);
-    // While this tab shows the review, the other tab changes Test Lamp to 5.
     const mine = readStored(branchA);
-    otherTab(keyOf(branchA), { ...mine, counts: { 'A-1': '5', 'A-2': '6' }, at: { ...mine.at, 'A-1': (mine.at['A-1'] ?? 0) + 1000 } });
+    const later = (mine.at['A-1'] ?? 0) + 1000;
+    otherTab(keyOf(branchA), { ...mine, counts: { 'A-1': '5', 'A-2': '6', 'A-3': '7' }, listed: ['A-1', 'A-2', 'A-3'], done: ['A-1', 'A-2', 'A-3'], at: { ...mine.at, 'A-1': later, 'A-3': later } });
     fireEvent.click(screen.getByRole('button', { name: 'Commit the count' }));
     await screen.findByRole('heading', { name: 'Stock updated for 2 items' });
     expect(commitStocktake).toHaveBeenCalledWith('st-r', []);
-    // Test Plug went in as counted and leaves; Test Lamp's newer 5 never went in, so it stays, on the page and on the device.
-    expect(readStored(branchA).counts).toEqual({ 'A-1': '5' });
+    // Test Plug went in as counted and leaves; Test Lamp's newer 5 and Test Tape's 7 never went in, so they stay.
+    expect(readStored(branchA).counts).toEqual({ 'A-1': '5', 'A-3': '7' });
     fireEvent.click(screen.getByRole('button', { name: 'Start another count' }));
     expect(countBox('A-1').value).toBe('5');
     expect(countBox('A-2').value).toBe('');
+    expect(countBox('A-3').value).toBe('7');
   });
 
   it('in the other tab, drops only the counts that went in and says some were saved, then all', async () => {
@@ -298,20 +302,22 @@ describe('a commit and an old count', () => {
     otherTab(keyOf(branchA), { counts: { 'A-2': '6' }, packCounts: {}, listed: ['A-2'], done: ['A-2'], at: { ...mine.at, 'A-1': later }, committed: later });
     expect(countBox('A-1').value).toBe('');
     expect(countBox('A-2').value).toBe('6');
-    expect(screen.getByTestId('count-other-tab').textContent).toBe('Some counts were saved in another tab. The others are still here.');
+    expect(screen.getByTestId('count-other-tab').textContent).toBe('1 count was saved from another tab; your other counts are still here');
     // Then the rest.
     otherTab(keyOf(branchA), { counts: {}, packCounts: {}, listed: [], done: [], at: { 'A-1': later, 'A-2': later + 1000 }, committed: later + 1000 });
     expect(countBox('A-2').value).toBe('');
     expect(screen.getByTestId('count-other-tab').textContent).toBe('Counted and saved in another tab');
   });
 
-  it('says when a count kept from before was saved, warns when it is old, and starts again on request', async () => {
-    const monday = Date.now() - 4 * 24 * 60 * 60 * 1000;
-    localStorage.setItem(keyOf(branchA), JSON.stringify({ counts: { 'A-1': '10', 'A-2': '3' }, packCounts: {}, listed: ['A-1', 'A-2'], done: ['A-1', 'A-2'], at: { 'A-1': monday, 'A-2': monday + 60_000 } }));
+  const keep = (counts: Record<string, string>, t: number) =>
+    localStorage.setItem(keyOf(branchA), JSON.stringify({ counts, packCounts: {}, listed: Object.keys(counts), done: Object.keys(counts), at: Object.fromEntries(Object.keys(counts).map((id) => [id, t])) }));
+
+  it('fills in a count of the same day with a line saying when, and Start again clears it after a confirm', async () => {
+    keep({ 'A-1': '10', 'A-2': '3' }, Date.now() - 60_000);
     await ready();
-    const kept = screen.getByTestId('count-kept');
-    expect(kept.className).toContain('alert-warning');
-    expect(kept.textContent).toMatch(/^These counts were saved on \d{1,2} \w{3} \d{4}, \d{2}:\d{2}\. Stock may have changed since, so check them or start again\./);
+    expect(countBox('A-1').value).toBe('10');
+    expect(screen.queryByTestId('count-earlier')).toBeNull();
+    expect(screen.getByTestId('count-kept').textContent).toMatch(/^Counts from \w+day \d{2}:\d{2} are filled in\.Start again$/);
     fireEvent.click(screen.getByRole('button', { name: 'Start again' }));
     expect(screen.getByText('Clear all 2 counts? Your stock does not change.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep them' }));
@@ -321,16 +327,30 @@ describe('a commit and an old count', () => {
     expect(countBox('A-1').value).toBe('');
     expect(countBox('A-2').value).toBe('');
     expect(screen.queryByTestId('count-kept')).toBeNull();
-    expect(readStored(branchA).counts).toEqual({});
+    expect(localStorage.getItem(keyOf(branchA))).toBeNull();
     expect(createStocktake).not.toHaveBeenCalled();
   });
 
-  it('says a recent count kept from before was saved, without the warning', async () => {
-    localStorage.setItem(keyOf(branchA), JSON.stringify({ counts: { 'A-1': '10' }, packCounts: {}, listed: ['A-1'], done: ['A-1'], at: { 'A-1': Date.now() - 60_000 } }));
+  it('asks before using a count of an earlier day, and fills it in on Use them', async () => {
+    keep({ 'A-1': '10' }, Date.now() - 4 * 24 * 60 * 60 * 1000);
     await ready();
-    const kept = screen.getByTestId('count-kept');
-    expect(kept.className).toContain('alert-info');
-    expect(kept.textContent).not.toContain('Stock may have changed');
+    expect(screen.getByTestId('count-earlier').textContent).toMatch(/^You have counts from \w+day\. Use them or start again\?/);
+    expect(countBox('A-1').value).toBe('');
+    // Asking keeps the saved count as it is.
+    expect(readStored(branchA).counts).toEqual({ 'A-1': '10' });
+    fireEvent.click(screen.getByRole('button', { name: 'Use them' }));
+    expect(countBox('A-1').value).toBe('10');
+    expect(screen.queryByTestId('count-earlier')).toBeNull();
+    expect(screen.getByTestId('count-kept').textContent).toMatch(/^Counts from \w+day \d{2}:\d{2} are filled in\./);
+  });
+
+  it('starts again from the question about an earlier day, clearing the saved count', async () => {
+    keep({ 'A-1': '10' }, Date.now() - 4 * 24 * 60 * 60 * 1000);
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Start again' }));
+    expect(countBox('A-1').value).toBe('');
+    expect(screen.queryByTestId('count-earlier')).toBeNull();
+    expect(localStorage.getItem(keyOf(branchA))).toBeNull();
   });
 
   it('keeps an item found but not counted yet', async () => {
