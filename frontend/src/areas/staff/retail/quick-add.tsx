@@ -23,9 +23,10 @@ import { UnitPicker } from './unit-picker';
 import { Gate, Problem, money, useProfitAccess, useStockingBranch } from './ui';
 
 // Quick add (issue #632): a shop owner needed nine steps on four screens to add one item and its stock, and said AppSheet was
-// still easier. One form and one tap: the name, the selling price, the buying price (optional), how many there are here now,
-// where (the branch in use, or a store), the category (left out, the item goes under General) and the unit (the shop's piece
-// unit), and a photo if wanted. Add makes the item and adds the quantity to its stock at that branch as opening stock, in one
+// still easier. One form and one tap: the name, the category right under it, the selling price, the buying price (optional),
+// how many there are here now, where (the branch in use, or a store), the unit (the shop's piece unit), and a photo if wanted.
+// The category is needed (issue #688): an item is never filed under General unasked. The last one this person chose at this
+// shop is chosen for them next time, and "+ Add a group" adds one in a sheet over the form, which keeps what was typed. Add makes the item and adds the quantity to its stock at that branch as opening stock, in one
 // request (POST /retail/quick-add, ADR-101), so no other item's stock is touched and it is never profit. A name already in the
 // list offers to use that item and just add the quantity to its stock. Nothing is kept for later: offline, the form says it needs the internet, as Add it here does.
 // Goods just bought with shop money (issue #646): a tick, off by default, books them as a purchase paid from the branch's cash or
@@ -57,6 +58,20 @@ export function addedLine(done: QuickAdd, where: string): string {
   if (done.qty === undefined) return `${name} added.`;
   const of = (qty: string | undefined) => `${qty ?? ''} ${done.unit ?? ''}`.trim();
   return done.item_made ? `${name} added: ${of(done.qty)} at ${where}` : `${name}: ${of(done.qty)} added at ${where}, ${of(done.total_qty)} now`;
+}
+
+// The last group chosen on Quick add, per business (the host, or the dev server's tenant), person and shop (issue #688), kept
+// the way range-state.ts keeps the Home range; blocked storage only means the group is asked for again.
+// JUSTIFICATION-A3: the issue asks to remember the last group per person and shop; no existing store carries it.
+const groupKey = (userId: string, branchId: string) =>
+  `bms.quickAddGroup.${import.meta.env.DEV && import.meta.env.VITE_DEV_TENANT ? import.meta.env.VITE_DEV_TENANT : window.location.hostname}.${userId}.${branchId}`;
+
+export function readLastGroup(userId: string, branchId: string): string | null {
+  try { return window.localStorage.getItem(groupKey(userId, branchId)); } catch { return null; }
+}
+
+export function writeLastGroup(userId: string, branchId: string, categoryId: string): void {
+  try { window.localStorage.setItem(groupKey(userId, branchId), categoryId); } catch { /* asked for again next time */ }
 }
 
 /** The fetch never reached the server: no status and no problem body. */
@@ -100,7 +115,8 @@ export function QuickAddForm({ initialName = '', onSell }: {
   const [sell, setSell] = useState('');
   const [cost, setCost] = useState('');
   const [qty, setQty] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  // The group last chosen here, from the first render on; checked against the list once it is read (below).
+  const [categoryId, setCategoryId] = useState(() => readLastGroup(me.user_id ?? '', where || here.branchId || '') ?? '');
   const [unitId, setUnitId] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [paid, setPaid] = useState(false);
@@ -125,7 +141,19 @@ export function QuickAddForm({ initialName = '', onSell }: {
   const piece = pieceUnit(units.data ?? []);
   // A Piece or a General the owner switched off is never switched back on by the server: the person chooses one instead.
   const pieceOff = piece === undefined && (units.data ?? []).some((u) => u.active === false && (u.name ?? '').trim().toLowerCase() === 'piece');
-  const generalOff = (categories.data ?? []).some((c) => c.active === false && (c.name ?? '').trim().toLowerCase() === 'general');
+  // The group: the one this person last chose at this shop, until they choose one in this form (issue #688).
+  const shop = where || here.branchId || '';
+  const [groupChosen, setGroupChosen] = useState(false);
+  useEffect(() => {
+    if (groupChosen || categories.data === undefined) return;
+    const last = readLastGroup(me.user_id ?? '', shop);
+    setCategoryId(categories.data.find((c) => c.id === last && c.active !== false)?.id ?? '');
+  }, [categories.data, groupChosen, me.user_id, shop]);
+  const chooseGroup = (next: string) => {
+    setCategoryId(next);
+    setGroupChosen(true);
+    writeLastGroup(me.user_id ?? '', shop, next);
+  };
   // What was said when the person kept an item already in the list instead of a duplicate (someone who may not add stock).
   const [kept, setKept] = useState<string | null>(null);
   // The piece unit is chosen once the units are read, unless the person has chosen another.
@@ -147,7 +175,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
   const whereName = branchLabel(places.find((b) => b.id === where)) || 'this place';
   const paidMinor = paying && counted !== null && costMinor !== null ? Math.round((counted * costMinor) / 1000) : null;
   const complete = name.trim() !== '' && sellMinor !== null && costMinor !== null && (!mayCount || (counted !== null && where !== ''))
-    && (!pieceOff || unitId !== '') && (!generalOff || categoryId !== '')
+    && (!pieceOff || unitId !== '') && categoryId !== ''
     && (!paying || (costMinor > 0 && counted !== null && counted > 0)) && !cannotPayHere;
   const canAddAnyway = (me.permissions ?? []).includes('core.settings.manage');
   const openLabel = mayCount ? 'Use the existing one and just add stock' : 'Keep the existing one';
@@ -229,7 +257,7 @@ export function QuickAddForm({ initialName = '', onSell }: {
     setSell('');
     setCost('');
     setQty('');
-    setCategoryId('');
+    setGroupChosen(false);
     setUnitId(piece?.id ?? '');
     setWhere(null);
     setPhoto(null);
@@ -295,6 +323,18 @@ export function QuickAddForm({ initialName = '', onSell }: {
         maxLength={300}
         onChange={(e) => { setName(e.target.value); setExists(null); }}
         autoComplete="off"
+      />
+      <CategoryPicker
+        id="qa-category"
+        label="Category"
+        thing="group"
+        placeholder="Choose a group"
+        categories={(categories.data ?? []).filter((c) => c.active !== false)}
+        value={categoryId}
+        onChange={chooseGroup}
+        required
+        error={categoryId === '' ? 'Choose a group.' : null}
+        showError={showErrors}
       />
       <Field
         id="qa-sell"
@@ -386,16 +426,6 @@ export function QuickAddForm({ initialName = '', onSell }: {
       )}
       </div>
       <div className="stack" data-tour="quick-add-more">
-      <CategoryPicker
-        id="qa-category"
-        label={generalOff ? 'Category' : <>Category <span className="field-optional">(optional)</span></>}
-        categories={(categories.data ?? []).filter((c) => c.active !== false)}
-        value={categoryId}
-        onChange={setCategoryId}
-        {...(generalOff
-          ? { required: true, error: categoryId === '' ? 'The General category is switched off. Choose a category.' : null, showError: showErrors }
-          : { noneLabel: 'General', hint: 'Leave it to put the item under General.' })}
-      />
       <UnitPicker
         id="qa-unit"
         units={(units.data ?? []).filter((u) => u.active !== false)}

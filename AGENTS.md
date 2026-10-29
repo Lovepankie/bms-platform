@@ -784,6 +784,16 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   transaction; with `product_id` only the quantity is added. The Quick add screen (`/staff/retail/quick-add`): the Stock menu
   row and More, the first-run card's first action, the catalogue home, the Items page and Sell's not-found line; Add another and Sell it
   (`/staff/retail/sale?item=`). Help: How do I add an item quickly?. Tests: `RetailQuickAddIT`, `quick-add.dom.test.tsx`.
+- **Built (add it in place, issue #688, owner decision D75, FR-UXN-12, ADR-101 amendment of 29 Oct 2026):** PWA only, no
+  migration, no API change. `PickerWithAdd` and `useAddInPlace` (`frontend/src/app/ui/PickerWithAdd.tsx`): a record picker ends
+  its list with "+ Add a <thing>" for whoever holds the full add screen's permission, which opens the kit's Sheet over the form
+  with only that record's fields; saved, the record is chosen and the form is as it was, cancelled, nothing is lost. The
+  category picker's add row (now at the foot of its list) and Counted in (`UnitPicker`) use it; `AddByName` draws no heading
+  without a `title`. Quick add's Category is needed and right under the Name ("Choose a group", Add refuses with "Choose a
+  group." and focuses it, "+ Add a group"), starts with the group this person last chose at that shop (`readLastGroup`,
+  `bms.quickAddGroup.*`), and is never left out, so nothing goes under General unasked; tour `page-quick-add` version 2. Rule 26
+  of `docs/ui-rules.md`; notes in `docs/specs/retail-ui-notes.md` (Add it in place). Tests: `quick-add.dom.test.tsx`,
+  `category-picker.dom.test.tsx`, `unit-picker.dom.test.tsx`.
 - **Built (Set up your shop, issue #625, ADR-100, FR-RET-01, units spec section 9 step 5):** migration `V111` (directly after
   `V110`, #624, PR #627): `retail_units` gains `pack_size`, `pack_of_unit_id` and `pack_purpose`, the usual size of a
   unit that is a pack in a smaller unit and what it is for (`buy`, `sell` or `both`, the values and Used for words of a pack's

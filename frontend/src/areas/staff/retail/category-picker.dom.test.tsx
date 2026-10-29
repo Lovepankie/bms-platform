@@ -9,9 +9,9 @@ import { mockMe } from '../../../api/retail-mock';
 import { StaffContext } from '../context';
 
 // Issue #578: one category picker wherever a category is chosen. A search that matches any part of the name whatever the
-// case, "Add a new category" for whoever manages the catalogue with the code start the app makes, the new one chosen at once
-// with a dark toast, the arrow keys, Enter and Escape, and "No category called X. Add it?". On a phone it is a full height
-// sheet with Done. Fabricated categories.
+// case, "+ Add a category" at the foot of the list for whoever manages the catalogue, in the shared add sheet (issue #688) with
+// the code start the app makes, the new one chosen at once with a dark toast, the arrow keys, Enter and Escape, and "No category
+// called X. Add it?". On a phone it is a full height sheet with Done. Fabricated categories.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -166,7 +166,7 @@ describe('the category picker on a laptop', () => {
     createCategory.mockResolvedValue({ id: 'c9', name: 'solar panels', active: true, version: 1, code_prefix: 'SLR', next_code: 'SLR-0001' });
     open(<Harness />);
     fireEvent.click(field());
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new category' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a category' }));
     const name = screen.getByLabelText(/^Name of the new category/) as HTMLInputElement;
     await waitFor(() => expect(document.activeElement).toBe(name));
     expect(screen.queryByLabelText(/code/i)).toBeNull();
@@ -214,7 +214,7 @@ describe('the category picker on a laptop', () => {
     createCategory.mockImplementation(async () => unwrap({ error: { code: 'duplicate_category', status: 409, detail: 'A category with this name exists.' }, response: new Response(null, { status: 409 }) }));
     open(<Harness />);
     fireEvent.click(field());
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new category' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a category' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
     expect(screen.getByText('Type the name of the category.')).toBeTruthy();
     expect(createCategory).not.toHaveBeenCalled();
@@ -225,7 +225,9 @@ describe('the category picker on a laptop', () => {
     expect(await screen.findByText('A category with this name already exists.')).toBeTruthy();
     expect(screen.getByTestId('value').textContent).toBe('c1');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(options()).toEqual(['Bulbs', 'Cables and wires', 'LED strips']);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add a category' })).toBeNull());
+    expect(screen.getByTestId('value').textContent).toBe('c1');
+    await waitFor(() => expect(document.activeElement).toBe(field()));
   });
 
   it('says plainly that a name is taken, whatever the case, and offers that category instead of sending', async () => {
@@ -234,7 +236,7 @@ describe('the category picker on a laptop', () => {
     open(<Harness />);
     fireEvent.click(field());
     fireEvent.change(search(), { target: { value: 'LED' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new category' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a category' }));
     const name = screen.getByLabelText(/^Name of the new category/);
     fireEvent.change(name, { target: { value: 'bulbs' } });
     expect(await screen.findByText('There is already a category called Bulbs.')).toBeTruthy();
@@ -251,7 +253,7 @@ describe('the category picker on a laptop', () => {
     open(<Harness />);
     fireEvent.click(field());
     expect(options()).not.toContain('Torches');
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new category' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a category' }));
     fireEvent.change(screen.getByLabelText(/^Name of the new category/), { target: { value: 'torches' } });
     expect(await screen.findByText('There is already a category called Torches (switched off).')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Switch Torches on and choose it' }));
@@ -266,13 +268,13 @@ describe('the category picker on a laptop', () => {
     open(<Harness />, withoutManage());
     fireEvent.click(field());
     fireEvent.change(search(), { target: { value: 'Rice' } });
-    expect(screen.queryByRole('button', { name: 'Add a new category' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ Add a category' })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Add/ })).toBeNull();
     expect(screen.getByText('No category called "Rice".')).toBeTruthy();
     cleanup();
     open(<Harness noneLabel="All categories" allowAdd={false} />);
     fireEvent.click(field());
-    expect(screen.queryByRole('button', { name: 'Add a new category' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ Add a category' })).toBeNull();
     expect(options()).toEqual(['All categories', 'Bulbs', 'Cables and wires', 'LED strips']);
     fireEvent.click(screen.getByRole('option', { name: 'All categories' }));
     expect(screen.getByTestId('value').textContent).toBe('');
@@ -288,7 +290,7 @@ describe('the category picker on a phone', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Choose a category' });
     expect(sheet.classList.contains('sheet-tall')).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(search()));
-    const order = [search(), within(sheet).getByRole('button', { name: 'Add a new category' }), within(sheet).getByRole('listbox', { name: 'Categories' }), within(sheet).getByRole('button', { name: 'Done' })];
+    const order = [search(), within(sheet).getByRole('listbox', { name: 'Categories' }), within(sheet).getByRole('button', { name: '+ Add a category' }), within(sheet).getByRole('button', { name: 'Done' })];
     order.slice(1).forEach((el, i) => expect((order[i]?.compareDocumentPosition(el) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
     fireEvent.click(within(sheet).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -316,13 +318,15 @@ describe('with no category to choose (issue #619)', () => {
   it('says so and adds the first one in place for whoever manages the catalogue', async () => {
     open(<CategoryPicker id="c" categories={[]} value="" onChange={() => undefined} />);
     expect(await screen.findByText('No categories yet.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add a category' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a category' }));
+    expect(await screen.findByRole('dialog', { name: 'Add a category' })).toBeTruthy();
+    expect(screen.getByLabelText(/^Name of the new category/)).toBeTruthy();
   });
 
   it('tells anyone else to ask the owner', async () => {
     open(<CategoryPicker id="c" categories={[]} value="" onChange={() => undefined} />, mockMe('sales'));
     expect(await screen.findByText('No categories yet. Ask the owner to add a category first.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add a category' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ Add a category' })).toBeNull();
   });
 });
 

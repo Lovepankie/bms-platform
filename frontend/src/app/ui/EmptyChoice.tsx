@@ -53,8 +53,11 @@ export function useComeBack(): (() => void) | null {
   };
 }
 
-/** A short form that adds a row by its name. It sits inside other forms: its Enter adds, and goes no further. */
-export function AddByName<T>({ id, title, add, onCancel }: { id: string; title: string; add: AddInline<T>; onCancel: () => void }) {
+/**
+ * A short form that adds a row by its name. It sits inside other forms: its Enter adds, and goes no further. Without `title` it
+ * draws no heading, as in the add sheet of a picker (PickerWithAdd), whose title says it.
+ */
+export function AddByName<T>({ id, title, add, onCancel }: { id: string; title?: string; add: AddInline<T>; onCancel: () => void }) {
   const [name, setName] = useState('');
   const [showErrors, setShowErrors] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -80,7 +83,7 @@ export function AddByName<T>({ id, title, add, onCancel }: { id: string; title: 
   return (
     <div
       role="group"
-      aria-labelledby={`${id}-title`}
+      {...(title === undefined ? { 'aria-label': add.label } : { 'aria-labelledby': `${id}-title` })}
       className="cp-add"
       onKeyDown={(e) => {
         if (e.key !== 'Enter' || (e.target as HTMLElement).tagName === 'BUTTON') return;
@@ -89,7 +92,7 @@ export function AddByName<T>({ id, title, add, onCancel }: { id: string; title: 
         void submit();
       }}
     >
-      <h3 id={`${id}-title`}>{title}</h3>
+      {title !== undefined && <h3 id={`${id}-title`}>{title}</h3>}
       <Field
         id={`${id}-name`}
         label={add.name}

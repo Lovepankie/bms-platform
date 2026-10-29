@@ -102,7 +102,7 @@ describe('the category page', () => {
     expect(screen.queryByLabelText(/Item code/)).toBeNull();
     expect(document.querySelector('input#item-code')).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Description/), { target: { value: 'Test bulb 12W' } });
-    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(1));
+    await screen.findByRole('option', { name: 'piece' });
     fireEvent.change(screen.getByLabelText(/^Counted in/), { target: { value: 'u1' } });
     fireEvent.change(screen.getByLabelText(/^Selling price/), { target: { value: '6000' } });
     fireEvent.click(screen.getByRole('button', { name: /^Add item/ }));

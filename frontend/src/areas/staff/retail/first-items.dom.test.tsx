@@ -180,8 +180,8 @@ describe('a Sell search that finds nothing', () => {
 
     // A first shop has no category: the field says so (issue #619), makes one right there and chooses it.
     expect(await within(form()).findByText('No categories yet.')).toBeTruthy();
-    fireEvent.click(within(form()).getByRole('button', { name: 'Add a category' }));
-    fireEvent.change(screen.getByLabelText(/^Name of the new category/), { target: { value: 'Duvets' } });
+    fireEvent.click(within(form()).getByRole('button', { name: '+ Add a category' }));
+    fireEvent.change(await screen.findByLabelText(/^Name of the new category/), { target: { value: 'Duvets' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
     await waitFor(() => expect(within(form()).getByLabelText(/^Category/).textContent).toBe('Duvets'));
     expect(createCategory).toHaveBeenCalledWith('Duvets');

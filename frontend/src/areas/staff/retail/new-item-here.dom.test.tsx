@@ -98,7 +98,7 @@ describe('Buy stock: add an item that is not in the list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Not in the list? Add it here' }));
     await within(form()).findByRole('option', { name: 'piece' });
     fireEvent.click(field(/^Category/));
-    fireEvent.click(await screen.findByRole('button', { name: 'Add a new category' }));
+    fireEvent.click(await screen.findByRole('button', { name: '+ Add a category' }));
     fireEvent.change(screen.getByLabelText(/^Name of the new category/), { target: { value: 'Rice' } });
     expect(await screen.findByText('RCE', { selector: 'strong' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add category' }));

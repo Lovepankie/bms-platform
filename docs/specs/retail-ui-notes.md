@@ -18,7 +18,7 @@ draft: names are snake_case and the client is typed by the generated `src/api/sc
 | `/staff/retail/sales` | All sales, grouped by a chain of levels the user chooses (issues #328, #341): filters by dates, buyer, paid by and item; open a sale | `retail.sale.read` |
 | `/staff/retail/stock` | Stock per branch or All branches, search, category filter, Out of stock and Low stock tabs, negative flag | `retail.stock.read` |
 | `/staff/retail/stocktake` | Count stock: count, review the difference, commit; the same Add it here as Buy stock, for a first count, with How many you counted (the buying price only with `retail.profit.read`) (issue #505) | `retail.stocktake.commit` and `retail.stock.read` (Add it here: `retail.catalogue.manage`) |
-| `/staff/retail/quick-add` | Quick add (issue #632, ADR-101): Name, Selling price, Buying price (optional, with `retail.profit.read`), How many do you have here now?, Where (the branch in use first, stores too; the kit's EmptyChoice when there is no branch to add stock at), Category (optional, left out it is General; needed while General is switched off), the unit (the shop's piece unit; needed while Piece is switched off) and Photo, one Add; it opens with no field focused, so a tour over it never shows an error before the person types (issue #642); then the line "Test bulb added: 600 pc at Test Store" with Add another (category and where kept) and Sell it (the sale opens at the branch the stock was added at; when another branch is in use it says so, with Switch to that branch and Sell here without it; an item the branch's list does not return says "Search for it to add it", never dropped in silence, issue #641); while an Add is not confirmed every field is locked and Add sends exactly the same again (the line names the button that sends again: Add, or the name panel's button while the panel shows, issue #641), and Start again shows only after a certain refusal; a repeated name offers Use the existing one and just add stock, which adds the number typed ("8 pc added at Test Store, 58 pc now"), or Keep the existing one for someone who may not add stock; offline it says it needs the internet. I just bought these, take the money from cash (off by default, for whoever holds `retail.purchase.create` at Where and may see the buying price; issue #646): the Buying price is then needed, Cash or Mobile money is the kit's Segmented (rule 11), a one line note shows the total that comes out and of which account ("UGX 30,000 comes out of Cash at Test Shop") before Add (rule 8, `money()`), and the answer names the purchase; moved to a place where they may not buy, the tick stays with a line saying so and Add sends nothing. Reached from the Stock menu and More, the first-run card (Quick add an item, its first action), the catalogue home, the Items page and Sell's not-found line (with what was typed) | `retail.catalogue.manage` and `retail.stock.read` (the stock: `retail.stocktake.commit` at the branch, without which the item is added with no stock; paid from cash: also `retail.purchase.create` there) |
+| `/staff/retail/quick-add` | Quick add (issue #632, ADR-101): Name, Selling price, Buying price (optional, with `retail.profit.read`), How many do you have here now?, Where (the branch in use first, stores too; the kit's EmptyChoice when there is no branch to add stock at), Category (needed, right under the Name, the last group chosen at this shop chosen again, + Add a group in a sheet; issue #688), the unit (the shop's piece unit; needed while Piece is switched off) and Photo, one Add; it opens with no field focused, so a tour over it never shows an error before the person types (issue #642); then the line "Test bulb added: 600 pc at Test Store" with Add another (category and where kept) and Sell it (the sale opens at the branch the stock was added at; when another branch is in use it says so, with Switch to that branch and Sell here without it; an item the branch's list does not return says "Search for it to add it", never dropped in silence, issue #641); while an Add is not confirmed every field is locked and Add sends exactly the same again (the line names the button that sends again: Add, or the name panel's button while the panel shows, issue #641), and Start again shows only after a certain refusal; a repeated name offers Use the existing one and just add stock, which adds the number typed ("8 pc added at Test Store, 58 pc now"), or Keep the existing one for someone who may not add stock; offline it says it needs the internet. I just bought these, take the money from cash (off by default, for whoever holds `retail.purchase.create` at Where and may see the buying price; issue #646): the Buying price is then needed, Cash or Mobile money is the kit's Segmented (rule 11), a one line note shows the total that comes out and of which account ("UGX 30,000 comes out of Cash at Test Shop") before Add (rule 8, `money()`), and the answer names the purchase; moved to a place where they may not buy, the tick stays with a line saying so and Add sends nothing. Reached from the Stock menu and More, the first-run card (Quick add an item, its first action), the catalogue home, the Items page and Sell's not-found line (with what was typed) | `retail.catalogue.manage` and `retail.stock.read` (the stock: `retail.stocktake.commit` at the branch, without which the item is added with no stock; paid from cash: also `retail.purchase.create` there) |
 | `/staff/retail/transfer` | Move stock: to which branch, items with the source's stock, date and note | `retail.stock.transfer` and `retail.stock.read` |
 | `/staff/retail/transfers` | Stock moves from or to the branch; open one; cancel it | `retail.stock.read` (cancel: `retail.stock.transfer`) |
 | `/staff/retail/stock-by-location` | Stores and shops: every product in each branch, stores first, a subtotal per role, stock on the way, the combined total (#193); only while `branch_roles` is on | `retail.stock.transfer` and `retail.stock.read` (the API needs only the read; value: `retail.profit.read`) |
@@ -1357,16 +1357,16 @@ and showed the sheet of their old AppSheet app: Search, New, the list and Done. 
   categories first and no Add). Expense categories are a different list and keep their select.
 - **The field.** Looks like a select and names the chosen category, or "Choose a category". It is required where the
   category is, with the red asterisk; a Save with no category goes to it.
-- **Phone (below 720px).** The kit's Sheet at full height, "Choose a category": the search box with the cursor in it, Add a
-  new category, the list in rows of at least 48px with the chosen one tinted and ticked (no stripe), and Done. A tap on a
-  row chooses it and closes the sheet; Done or a swipe down closes it as it was.
-- **Laptop.** The same search, Add row and list open under the field in a card (Radix Popover), as wide as the field or at
+- **Phone (below 720px).** The kit's Sheet at full height, "Choose a category": the search box with the cursor in it, the
+  list in rows of at least 48px with the chosen one tinted and ticked (no stripe), + Add a category at its foot (issue
+  #688), and Done. A tap on a row chooses it and closes the sheet; Done or a swipe down closes it as it was.
+- **Laptop.** The same search, list and Add row open under the field in a card (Radix Popover), as wide as the field or at
   least 280px.
 - **Search.** Any part of the name, whatever the case, on the categories already loaded (no request per key). Names show as
   the owner typed them. Nothing matching says `No category called "Rice". Add it?` with an Add Rice button, or without the
   question and the button for someone who cannot add.
-- **Add a new category.** Only for `retail.catalogue.manage`. A short form in place: Name of the new category (the search
-  text filled in), and the line "Item codes here will start with RCE, like RCE-0001, made by the app." from the code start
+- **+ Add a category.** Only for `retail.catalogue.manage`. The list closes and the shared add sheet "Add a category" opens
+  over the form (issue #688, below): Name of the new category (the search text filled in), and the line "Item codes here will start with RCE, like RCE-0001, made by the app." from the code start
   suggestion as the name is typed. No code is typed (#562). Add category creates it (`POST /retail/categories`), chooses it,
   closes the picker and shows the dark toast "Added the category Rice. Its item codes start with RCE." It is the screen's own
   toast (`ScreenToast` in `retail/toast.tsx`), so a screen never shows two; the picker says the same in a live region by the
@@ -1380,6 +1380,26 @@ and showed the sheet of their old AppSheet app: Search, New, the list and Done. 
 - **Keyboard and screen reader.** The field is a combobox that opens with a press, Enter, Space or the down arrow. The search
   is a combobox over the listbox "Categories": Up, Down, Home and End move the highlight (aria-activedescendant), Enter
   chooses it (or the only match), Escape closes, and the focus goes back to the field. The number found is announced.
+
+## Add it in place (issue #688, FR-UXN-12)
+
+The owner, 29 Oct 2026 (D75): "if something is not there you have the option to add it in place and then continue with the
+form you were on. That is how AppSheet works."
+
+- **One component.** `PickerWithAdd` and its hook `useAddInPlace` (`frontend/src/app/ui/PickerWithAdd.tsx`). A picker of
+  records ends its list with "+ Add a <thing>". It opens the kit's Sheet "Add a <thing>" over the form with only the fields
+  that record needs. Saved, the record is chosen and named in the field at once and the sheet closes; cancelled, it closes.
+  The form stays mounted under the sheet, so everything typed is still there either way, and nothing navigates.
+- **Who.** The option shows only with the permission of the full add screen (`retail.catalogue.manage` for a category or a
+  unit); anyone else does not see it, and an empty list tells them who to ask (rule 25).
+- **An empty list.** The field is the EmptyChoice: "No units yet." and only + Add a unit, which opens the same sheet.
+- **Converted.** The category picker (its search list keeps its own look; its add row uses the hook) and Counted in
+  (`UnitPicker`, which held the first version of this inline). The guard in `design-guard.test.ts` lists the pickers not yet
+  converted, each with its reason, and fails a new one.
+- **Quick add (Part 1).** Category sits right under the Name and is needed: the red star, "Choose a group" in the box, and
+  Add refuses with "Choose a group." and puts the focus on it. The group this person last chose at this shop is chosen for
+  them (kept on the device per business, person and shop, `bms.quickAddGroup.*`). With no groups yet the field offers only +
+  Add a group. The screen never leaves it out, so an item is never filed under General unasked; items already in General stay.
 
 ## Item pickers (issue #534, FR-UXN-07)
 

@@ -88,3 +88,15 @@ with shop money then saw too much cash in the cash book and the books.
 
 **Watch for:** a supplier is never named here, so goods bought on credit or from a supplier the owner tracks still go through
 Buy stock.
+
+## Amendment of 29 Oct 2026: the category is needed on the screen (issue #688, owner decision D75)
+
+A shop owner was confused to find items filed under General that they never chose. The Quick add screen now asks for the
+category: the field sits right under the Name, is marked needed, and Add refuses without it ("Choose a group."), so the
+screen always sends `category_id`. It starts with the group this person last chose at the shop (kept on the device), and "+ Add
+a group" adds one in a sheet over the form without losing what was typed (FR-UXN-12). The route is unchanged: `category_id`
+stays optional on `POST /retail/quick-add`, and General is still made for a caller that leaves it out, so the API and its
+tests keep their contract and no migration is needed. Items already in General stay there.
+
+**Watch for:** another caller of the route that leaves the category out still files under General; a screen that adds an item
+should ask for the category as Quick add does.

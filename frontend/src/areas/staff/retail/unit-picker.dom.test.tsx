@@ -20,6 +20,7 @@ vi.mock('../../../api/retail', async (original) => {
 });
 
 const { UnitPicker } = await import('./unit-picker');
+const { ADD_CHOICE } = await import('../../../app/ui/PickerWithAdd');
 
 afterEach(() => {
   cleanup();
@@ -52,14 +53,15 @@ describe('Counted in (issue #619)', () => {
     open([]);
     expect(screen.getByText('No units yet.')).toBeTruthy();
     expect(screen.queryByText(/Choose a unit/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new unit' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a unit' }));
+    expect(await screen.findByRole('dialog', { name: 'Add a unit' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/^Name of the new unit/), { target: { value: ' tray ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add unit' }));
     await waitFor(() => expect(screen.getByTestId('chosen').textContent).toBe('u7'));
     expect(createUnit).toHaveBeenCalledWith('tray');
   });
 
-  it('adds a new unit beside the list too, and Enter there adds it without sending the item form', async () => {
+  it('ends the list with + Add a unit, and Enter in its sheet adds it without sending the item form (issue #688)', async () => {
     createUnit.mockResolvedValue({ id: 'u8', name: 'dozen', active: true, version: 1 });
     const submitted = vi.fn((e: Event) => e.preventDefault());
     render(
@@ -69,22 +71,28 @@ describe('Counted in (issue #619)', () => {
         </StaffContext.Provider>
       </QueryClientProvider>,
     );
-    expect(screen.getByRole('option', { name: 'piece' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new unit' }));
+    const select = screen.getByLabelText(/^Counted in/) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual(['Choose a unit', 'piece', '+ Add a unit']);
+    fireEvent.change(select, { target: { value: ADD_CHOICE } });
+    expect(await screen.findByRole('dialog', { name: 'Add a unit' })).toBeTruthy();
     const name = screen.getByLabelText(/^Name of the new unit/);
     fireEvent.change(name, { target: { value: 'dozen' } });
     fireEvent.keyDown(name, { key: 'Enter' });
     await waitFor(() => expect(screen.getByTestId('chosen').textContent).toBe('u8'));
     expect(submitted).not.toHaveBeenCalled();
+    // Back on the form, with the new unit chosen and named at once.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect((screen.getByLabelText(/^Counted in/) as HTMLSelectElement).selectedOptions[0]?.text).toBe('dozen');
   });
 
   it('keeps the form open with the server words when the unit cannot be added', async () => {
     createUnit.mockRejectedValue(new Error('A unit with this name already exists.'));
     open([]);
-    fireEvent.click(screen.getByRole('button', { name: 'Add a new unit' }));
-    fireEvent.change(screen.getByLabelText(/^Name of the new unit/), { target: { value: 'piece' } });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a unit' }));
+    fireEvent.change(await screen.findByLabelText(/^Name of the new unit/), { target: { value: 'piece' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add unit' }));
-    expect((await screen.findByRole('alert')).textContent).toBe('A unit with this name already exists.');
+    expect((await screen.findByText('A unit with this name already exists.')).getAttribute('role')).toBe('alert');
+    expect(screen.getByRole('dialog', { name: 'Add a unit' })).toBeTruthy();
     expect(screen.getByTestId('chosen').textContent).toBe('');
   });
 
@@ -102,6 +110,6 @@ describe('Counted in (issue #619)', () => {
   it('tells someone who may not add units to ask the owner', () => {
     open([], mockMe('sales'));
     expect(screen.getByText('No units yet. Ask the owner to add a unit first.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add a new unit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ Add a unit' })).toBeNull();
   });
 });
