@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * The catalogue's public API for the other retail modules: a product's current prices, read in the
@@ -29,6 +30,20 @@ public interface RetailCatalogue {
 
     /** The key of the units-of-measure capability in the tenant's retail.capabilities settings group (ADR-033). */
     String UNITS_CAPABILITY = "units";
+
+    /**
+     * Issue #689 (ADR-106): the names that are a package, never an item's smallest unit, in any case, one or many, with or
+     * without a size ("Box", "cartons", "Pack of 6", "Set of 4"). The one list: every unit carries {@code is_package} from
+     * it, which the PWA reads, so the screens and the server cannot disagree.
+     */
+    Pattern PACKAGE_WORDS = Pattern.compile(
+            "(box|carton|dozen|pack|packet|bag|sack|crate|case|tray|bundle|bale)(e?s)?( of \\d+.*)?|sets? of \\d+.*",
+            Pattern.CASE_INSENSITIVE);
+
+    /** True when the unit's name is a package word of {@link #PACKAGE_WORDS}. */
+    static boolean isPackageWord(String unitName) {
+        return unitName != null && PACKAGE_WORDS.matcher(unitName.trim()).matches();
+    }
 
     /**
      * Issue #650 (ADR-103): the standard pack of the product aliased {@code product}, the one its stock is shown and counted

@@ -2436,6 +2436,15 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "packs" : {
+            "description" : "Issue #689 (ADR-106): packages made with the item in its transaction, checked as POST /products/{id}/units checks them; all are saved with the item or none is",
+            "items" : {
+              "$ref" : "#/components/schemas/RetailPackRequest"
+            },
+            "maxItems" : 10,
+            "minItems" : 0,
+            "type" : "array"
+          },
           "sell_minor" : {
             "format" : "int64",
             "maximum" : 10000000000000,
@@ -21296,6 +21305,10 @@
           "id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "is_package" : {
+            "description" : "Issue #689 (ADR-106): the name is a package word, such as Box or Carton, so it can be a pack but never the smallest unit of a new item",
+            "type" : "boolean"
           },
           "name" : {
             "type" : "string"

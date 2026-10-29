@@ -120,7 +120,13 @@ final class CatalogueApi {
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Issue #625: present only when this unit is a pack with a usual size")
-            UsualPack usualPack) {}
+            UsualPack usualPack,
+
+            @Schema(
+                    description =
+                            "Issue #689 (ADR-106): the name is a package word, such as Box or Carton, so it can be"
+                                    + " a pack but never the smallest unit of a new item")
+            boolean isPackage) {}
 
     @Schema(name = "RetailUsualPack", description = "The usual size of a pack in a smaller unit, and what it is for")
     record UsualPack(
@@ -162,7 +168,13 @@ final class CatalogueApi {
             Long sellMinor,
 
             @Size(max = 300) @Schema(description = DUPLICATE_REASON)
-            String duplicateReason) {}
+            String duplicateReason,
+
+            @Size(max = 10)
+            @Schema(
+                    description = "Issue #689 (ADR-106): packages made with the item in its transaction, checked as"
+                            + " POST /products/{id}/units checks them; all are saved with the item or none is")
+            List<@Valid @NotNull PackRequest> packs) {}
 
     @Schema(
             name = "UpdateRetailProductRequest",

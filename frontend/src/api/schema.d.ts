@@ -8930,6 +8930,8 @@ export interface components {
             description: string;
             /** @description Issue #352: only an administrator (core.settings.manage) may add or rename a product to a name another product of the same unit has, and then with a reason of at least 5 characters, stored on the product. Without it that is refused with 422 duplicate_product_name. */
             duplicate_reason?: string;
+            /** @description Issue #689 (ADR-106): packages made with the item in its transaction, checked as POST /products/{id}/units checks them; all are saved with the item or none is */
+            packs?: components["schemas"]["RetailPackRequest"][];
             /** Format: int64 */
             sell_minor: number;
             /** Format: uuid */
@@ -18329,6 +18331,8 @@ export interface components {
             active?: boolean;
             /** Format: uuid */
             id?: string;
+            /** @description Issue #689 (ADR-106): the name is a package word, such as Box or Carton, so it can be a pack but never the smallest unit of a new item */
+            is_package?: boolean;
             name?: string;
             /**
              * Format: int32

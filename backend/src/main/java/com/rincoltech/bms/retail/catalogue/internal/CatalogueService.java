@@ -364,10 +364,28 @@ class CatalogueService {
 
     // ---- Products ------------------------------------------------------------------------
 
-    /** FR-RET-01, FR-RET-02: the product and its first history row, source {@code initial}. */
+    /**
+     * FR-RET-01, FR-RET-02: the product and its first history row, source {@code initial}. Issue #689 (ADR-106): it is never
+     * counted in a package, and its packs are made in the same transaction, so a refused pack saves nothing.
+     */
     @Transactional
     Product create(CreateProductRequest r) {
         requireCategoryAndUnit(r.categoryId(), r.unitId(), null, null);
+        Unit smallest = repo.unit(r.unitId()).orElseThrow();
+        if (smallest.isPackage()) {
+            String word = smallest.name().trim().toLowerCase(Locale.ROOT);
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "unit_id",
+                    "unit_is_package",
+                    "A " + word + " is a package. Choose the smallest unit, like piece, then add the " + word
+                            + " below.")));
+        }
+        List<PackRequest> packs = r.packs() == null ? List.of() : r.packs();
+        if (!packs.isEmpty()) {
+            requireUnits();
+        }
+        List<String> purposes =
+                packs.stream().map(CatalogueService::packPurpose).toList();
         String duplicateReason = acceptName(r.description().trim(), r.unitId(), null, r.duplicateReason());
         UUID by = CurrentPrincipal.require().userId();
         // Issue #562, ADR-081 as amended: the category always gives the code, such as BLB-0001; a typed one is refused.
@@ -421,6 +439,10 @@ class CatalogueService {
             after.put("duplicate_reason", duplicateReason);
         }
         audit.record(AuditLog.Entry.created("retail.product.created", PRODUCT, p.id(), null, after));
+        for (int i = 0; i < packs.size(); i++) {
+            PackRequest k = packs.get(i);
+            createPack(p, k.unitId(), k.factor(), purposes.get(i), k.sellMinor(), by, null);
+        }
         return withPacks(visible(repo.find(p.id()).orElseThrow()));
     }
 
@@ -473,8 +495,8 @@ class CatalogueService {
             unitMade = madeForQuickAdd("retail_units", "retail.unit", unit, PIECE, by);
             unit = unitMade ? unit : repo.unitIdsByName().get(PIECE.toLowerCase(Locale.ROOT));
         }
-        Product p = create(
-                new CreateProductRequest(null, description, category, unit, costMinor, sellMinor, duplicateReason));
+        Product p = create(new CreateProductRequest(
+                null, description, category, unit, costMinor, sellMinor, duplicateReason, null));
         // Read again: the answer of create leaves out the cost for someone who may not read it.
         return new RetailCatalogue.NewItem(
                 CatalogueLookup.snapshot(repo.find(p.id()).orElseThrow()), categoryMade, unitMade);
@@ -904,8 +926,23 @@ class CatalogueService {
     Pack addPack(UUID productId, PackRequest r) {
         requireUnits();
         Product product = repo.lock(productId).orElseThrow(ApiException::notFound);
-        // ADR-099: with no purpose sent, a pack is for both, whatever its unit's usual purpose (#637); the screens fill
-        // in the unit's usual purpose themselves (ADR-100).
+        createPack(
+                product,
+                r.unitId(),
+                r.factor(),
+                packPurpose(r),
+                r.sellMinor(),
+                CurrentPrincipal.require().userId(),
+                null);
+        return forCaller(repo.pack(productId, r.unitId()).orElseThrow());
+    }
+
+    /**
+     * The purpose of a pack to add, after its price checks, for POST /products/{id}/units and a new item's packs (#689).
+     * ADR-099: with no purpose sent, a pack is for both, whatever its unit's usual purpose (#637); the screens fill in the
+     * unit's usual purpose themselves (ADR-100).
+     */
+    private static String packPurpose(PackRequest r) {
         String purpose = r.purpose() == null ? RetailCatalogue.PACK_BOTH : r.purpose();
         if (r.sellMinor() != null) {
             requirePriceEdit(
@@ -914,15 +951,7 @@ class CatalogueService {
                 throw buyOnlyPriced();
             }
         }
-        createPack(
-                product,
-                r.unitId(),
-                r.factor(),
-                purpose,
-                r.sellMinor(),
-                CurrentPrincipal.require().userId(),
-                null);
-        return forCaller(repo.pack(productId, r.unitId()).orElseThrow());
+        return purpose;
     }
 
     /**

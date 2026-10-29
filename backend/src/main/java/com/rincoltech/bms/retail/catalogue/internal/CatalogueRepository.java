@@ -92,7 +92,8 @@ class CatalogueRepository {
                                                 .toPlainString(),
                                         rs.getObject("pack_of_unit_id", UUID.class),
                                         rs.getString("pack_of"),
-                                        rs.getString("pack_purpose"))))
+                                        rs.getString("pack_purpose")),
+                        RetailCatalogue.isPackageWord(rs.getString("name"))))
                 .list();
     }
 
