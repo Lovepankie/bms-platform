@@ -204,6 +204,12 @@ class SmsEventsService implements SmsEvents {
         }
         String key = key(message.templateKey(), profile.id(), message.eventRef(), message.memberId());
         boolean receipt = Outbox.TRANSACTIONAL.equals(message.category());
+        // A transactional text lives an hour, or less when its subject ends sooner (a payment link dies with its
+        // intent).
+        Instant receiptExpiry = clock.now().plus(RECEIPT_LIFETIME);
+        if (message.expiresAt() != null && message.expiresAt().isBefore(receiptExpiry)) {
+            receiptExpiry = message.expiresAt();
+        }
         boolean queued = outbox.enqueue(new Outbox.Message(
                 Outbox.SMS,
                 to.get(),
@@ -211,7 +217,7 @@ class SmsEventsService implements SmsEvents {
                 params,
                 key,
                 null,
-                receipt ? clock.now().plus(RECEIPT_LIFETIME) : message.expiresAt(),
+                receipt ? receiptExpiry : message.expiresAt(),
                 message.category(),
                 Outbox.Subject.member(message.memberId()),
                 null));

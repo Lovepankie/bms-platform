@@ -156,6 +156,25 @@ number, the running balance and the receipt text.
    money receipt by hand it is a second deposit; the reconciliation report flags it (the next slice of #224).
 5. **Five technical failures in a row** end the intent `needs_attention`: as 4d step 4.
 
+## 4f. Sending the payment link by text message (issue #231)
+
+On the loan and savings collection panels, "Send the link by text message" texts an open payment link to the payer's number
+(`POST /payments/intents/{id}/sms`, template `payment.link`, category transactional). It needs nothing switched on of its own:
+it works only where collections are on (4d step 1) **and** both SMS switches are on (the operator's and the business's own,
+`docs/specs/client-extras.md` section 4.16). Nothing is switched on for any tenant by this change; the SMS add-on stays off by
+default, and on staging the SMS mode is `sink` against the provider's sandbox.
+
+1. **Once per payment.** A second press, or a second person, sends nothing and the screen says it went before. To send again,
+   make a new payment link.
+2. **Only while open.** A link that expired, or a payment that was paid or cancelled, is refused (`intent_not_open`); the text
+   itself expires with the payment, so the outbox never sends a lapsed link.
+3. **Refusals in plain words, nothing written:** `collections_disabled`, `sms_off`, `member_opted_out` (the member asked for no
+   SMS at all; a reminders-only opt-out does not block it), `too_many_link_texts` above 3 link texts to one member in an hour,
+   `link_text_daily_limit` above 200 link texts for the business in 24 hours, and `link_text_not_queued` when the SMS channel
+   would not take it (never shown as sent).
+4. **Where to look.** The audit log (`core.payments.intent.link_texted`, with the member id and never the number), the outbox
+   row (`template_key = 'payment.link'`) and its `sms_deliveries` row, as for any SMS.
+
 ## 4a. Rotating the data key
 
 The lenders' stored credentials and every user's second-factor seed (and the platform operators') are sealed with `BMS_DATA_KEY`; each box carries

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { type Loan, type LoanSchedule } from '../../../api/lending';
-import { payments, type PaymentIntent } from '../../../api/payments';
+import { payments, type PaymentIntent, type PaymentLinkText } from '../../../api/payments';
 import { lending } from '../../../api/lending';
 import { savings, type SavingsAccount } from '../../../api/savings';
 import { QrCode, useCopy } from '../../auth/steps';
@@ -196,6 +196,13 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
     onSuccess: (view) => queryClient.setQueryData(['payments', 'intent', id], view),
     meta: { success: 'Payment cancelled' },
   });
+  // Sending the link to the payer's number by text message (issue #231): once per payment; the server refuses in plain words when
+  // the business has text messages or mobile money switched off, and a repeat sends nothing.
+  const text = useMutation({
+    mutationFn: () => payments.textLink(id),
+    // The toast only when the server queued a new text; a repeat is said in the sentence under the link, a refusal in the problem.
+    meta: { success: (sent: PaymentLinkText) => (sent.already_sent ? null : 'Link sent by text message') },
+  });
   const link = intent.redirect_url;
   const open = status === 'pending' || status === 'created';
   const flags = flagWords(intent.flags);
@@ -218,6 +225,19 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
           <button type="button" onClick={() => copy('link', link)}>
             {copied === 'link' ? 'Copied' : 'Copy the link'}
           </button>
+          {status === 'pending' && !text.data && (
+            <BusyButton busy={text.isPending} type="button" onClick={() => text.mutate()}>
+              Send the link by text message
+            </BusyButton>
+          )}
+          {text.data && (
+            <p role="status">
+              {text.data.already_sent
+                ? 'The link was already sent by text message to this number.'
+                : `The link was sent by text message to ${intent.payer_phone ?? 'the payer'}.`}
+            </p>
+          )}
+          <Problem error={text.error} />
         </div>
       )}
       {intent.confirmation_code && (
