@@ -194,6 +194,18 @@ class CashbookSupport {
         return setting("retail.cashbook.tolerance_minor", 0);
     }
 
+    /**
+     * Issue #768, ADR-115: {@code salespeople_see_savings_amount}, set in Business set-up; false when unset. When true a caller
+     * without {@code retail.profit.read} sees and may change the savings amount, never the profit or the expenses.
+     */
+    boolean salespeopleSeeSavingsAmount() {
+        return "true"
+                .equals(jdbc.sql("SELECT settings ->> 'salespeople_see_savings_amount' FROM tenant_settings")
+                        .query(String.class)
+                        .optional()
+                        .orElse(null));
+    }
+
     private long setting(String key, long fallback) {
         String value = jdbc.sql("SELECT settings ->> ? FROM tenant_settings")
                 .param(key)

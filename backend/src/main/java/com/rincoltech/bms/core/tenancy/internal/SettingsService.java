@@ -754,6 +754,8 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
                 s.get("financial_year_end_month") == null
                         ? null
                         : ((Number) s.get("financial_year_end_month")).intValue(),
+                // Issue #768: read by the retail cash book from the same key; off unless the owner turned it on.
+                Boolean.TRUE.equals(s.get("salespeople_see_savings_amount")),
                 version);
     }
 }

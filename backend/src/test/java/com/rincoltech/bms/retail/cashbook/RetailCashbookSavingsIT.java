@@ -490,6 +490,112 @@ class RetailCashbookSavingsIT extends IntegrationTest {
                 .isEqualTo(2_500);
     }
 
+    // JUSTIFICATION-A3: new on and off tests for issue #768; a test per case, no new mechanism.
+    /** Business set-up's switch "Salespeople can see and change the savings amount" (issue #768, ADR-115), through the API. */
+    JsonNode salespeopleSeeSavingsAmount(boolean on) {
+        org.springframework.http.HttpHeaders h =
+                cb.api.headers("core.settings.manage,core.settings.read", "*", Map.of());
+        int version = http.exchange(
+                        "/api/v1/settings",
+                        org.springframework.http.HttpMethod.GET,
+                        new org.springframework.http.HttpEntity<>(h),
+                        JsonNode.class)
+                .getBody()
+                .get("version")
+                .asInt();
+        h.add("If-Match", "\"" + version + "\"");
+        ResponseEntity<JsonNode> r = http.exchange(
+                "/api/v1/settings",
+                org.springframework.http.HttpMethod.PATCH,
+                new org.springframework.http.HttpEntity<>(Map.of("salespeople_see_savings_amount", on), h),
+                JsonNode.class);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return r.getBody();
+    }
+
+    @Test
+    void frRet18TheSalespeopleSettingIsOffByDefaultAndOffKeepsTheAmountHidden() {
+        org.springframework.http.HttpHeaders h = cb.api.headers("core.settings.read", "*", Map.of());
+        JsonNode settings = http.exchange(
+                        "/api/v1/settings",
+                        org.springframework.http.HttpMethod.GET,
+                        new org.springframework.http.HttpEntity<>(h),
+                        JsonNode.class)
+                .getBody();
+        assertThat(settings.get("salespeople_see_savings_amount").asBoolean()).isFalse();
+
+        // Turned on and off again: as if it had never been on.
+        salespeopleSeeSavingsAmount(true);
+        assertThat(salespeopleSeeSavingsAmount(false)
+                        .get("salespeople_see_savings_amount")
+                        .asBoolean())
+                .isFalse();
+        JsonNode s = suggestion(CASHIER);
+        assertThat(s.has("suggested_minor")).isFalse();
+        assertThat(s.has("available_minor")).isFalse();
+        ResponseEntity<JsonNode> typed = cb.post("/savings", body(s, 1_000, null), CASHIER);
+        assertThat(typed.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(typed.getBody().get("code").asString()).isEqualTo("amount_requires_profit_access");
+        assertThat(cb.post("/savings", body(s, null, null), CASHIER).getBody().has("amount_minor"))
+                .isFalse();
+        assertThat(cb.get("/savings", CASHIER).getBody().get("items").get(0).has("amount_minor"))
+                .isFalse();
+    }
+
+    @Test
+    void frRet19WithTheSettingOnASalespersonSeesAndChangesTheAmountButNeverTheProfitOrExpenses() {
+        assertThat(salespeopleSeeSavingsAmount(true)
+                        .get("salespeople_see_savings_amount")
+                        .asBoolean())
+                .isTrue();
+        assertThat(cb.auditPayloads("core.settings.updated"))
+                .anySatisfy(p -> assertThat(p).contains("salespeople_see_savings_amount"));
+        expense(1_000);
+
+        JsonNode s = suggestion(CASHIER);
+        assertThat(s.get("suggested_minor").asLong()).isEqualTo(2_000);
+        assertThat(s.get("available_minor").asLong()).isEqualTo(4_000);
+        assertThat(s.has("daily_profit_minor")).isFalse();
+        assertThat(s.has("day_expenses_minor")).isFalse();
+
+        // The cap holds, in words that leave the profit and the expenses out.
+        ResponseEntity<JsonNode> above = cb.post("/savings", body(s, 4_001, null), CASHIER);
+        assertThat(above.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(above.getBody().get("code").asString()).isEqualTo("savings_above_available");
+        assertThat(above.getBody().get("detail").asString())
+                .isEqualTo("You can save at most UGX 4,000 for " + words(day) + ".");
+        assertThat(above.getBody().has("daily_profit_minor")).isFalse();
+        assertThat(above.getBody().has("day_expenses_minor")).isFalse();
+
+        // A changed amount needs no overwrite permission under the setting, and is echoed, listed and audited.
+        ResponseEntity<JsonNode> changed = cb.post("/savings", body(s, 1_500, "Slow day"), CASHIER);
+        assertThat(changed.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(changed.getBody().get("amount_minor").asLong()).isEqualTo(1_500);
+        assertThat(changed.getBody().get("overwritten").asBoolean()).isTrue();
+        assertThat(changed.getBody().has("suggested_minor")).isFalse();
+        assertThat(cb.accountMovement("savings_reserve", hq)).isEqualTo(1_500);
+        JsonNode row = cb.get("/savings", CASHIER).getBody().get("items").get(0);
+        assertThat(row.get("amount_minor").asLong()).isEqualTo(1_500);
+        assertThat(row.has("suggested_minor")).isFalse();
+        assertThat(suggestion(CASHIER).get("existing_amount_minor").asLong()).isEqualTo(1_500);
+
+        String payload = cb.auditPayloads("retail.savings.created").getFirst();
+        assertThat(payload)
+                .contains("\"overwritten\": true")
+                .contains("\"salespeople_setting\": true")
+                .contains("Slow day");
+        assertThat(payload).doesNotContain("1500").doesNotContain("2000").doesNotContain("4000");
+    }
+
+    @Test
+    void withTheSettingOnASalespersonMaySaveTheSuggestionAndItIsNotAnOverwrite() {
+        salespeopleSeeSavingsAmount(true);
+        ResponseEntity<JsonNode> r = cb.post("/savings", body(suggestion(CASHIER), null, null), CASHIER);
+        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(r.getBody().get("amount_minor").asLong()).isEqualTo(2_500);
+        assertThat(r.getBody().get("overwritten").asBoolean()).isFalse();
+    }
+
     @Test
     void aTypedAmountWithoutProfitReadIsTheSameRefusalForEveryValueSoNothingCanBeProbed() {
         JsonNode s = suggestion(CASHIER);
