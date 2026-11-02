@@ -20071,6 +20071,8 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description Staff role keys whose holders must use two-step sign-in (ADR-046); empty when none is chosen */
             require_mfa_roles?: string[];
+            /** @description Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115) */
+            salespeople_see_savings_amount?: boolean;
             /** @description True once the business set-up checklist has been dismissed */
             setup_dismissed?: boolean;
             /** @description Brand colour #RRGGBB, or null for the platform look (FR-TEN-08) */
@@ -20442,6 +20444,8 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description Staff role keys whose holders must use two-step sign-in; an empty list clears the choice (ADR-046) */
             require_mfa_roles?: string[];
+            /** @description Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115) */
+            salespeople_see_savings_amount?: boolean;
             setup_dismissed?: boolean;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */
             theme_primary?: string;

@@ -24566,6 +24566,10 @@
             },
             "type" : "array"
           },
+          "salespeople_see_savings_amount" : {
+            "description" : "Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115)",
+            "type" : "boolean"
+          },
           "setup_dismissed" : {
             "description" : "True once the business set-up checklist has been dismissed",
             "type" : "boolean"
@@ -25416,6 +25420,10 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "salespeople_see_savings_amount" : {
+            "description" : "Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115)",
+            "type" : "boolean"
           },
           "setup_dismissed" : {
             "type" : "boolean"

@@ -6,10 +6,10 @@ import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
 import { usePersistedDraft } from './idempotency';
 import { CASHBOOK_READ, SAVINGS_OVERWRITE, SAVINGS_RECORD, holds } from './permissions';
-import { SAVINGS_REASONS, afterSavingsConflict, nowAboveWords, planSavings, reasonText, seesAmounts } from './savings-state';
+import { SAVINGS_REASONS, afterSavingsConflict, nowAboveWords, planSavings, reasonText, salespersonMayChange, seesAmounts } from './savings-state';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
-import { BranchRequired, Gate, Note, Problem, money, useSingleBranch } from './ui';
+import { BranchRequired, Gate, Money, Note, Problem, money, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
@@ -17,7 +17,9 @@ import { KeyFigure } from '../../../app/ui/KeyFigure';
 
 // Daily savings (FR-RET-18 to FR-RET-20): per shop per day. The server suggests half the day's profit; a
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
-// the standard amount is recorded for them. Every save echoes the suggestion token the form was shown; if
+// the standard amount is recorded for them. When the owner turns on "Salespeople can see and change the savings amount"
+// (issue #768, ADR-115) that caller sees the suggestion and the most the day allows, may change the amount, and sees what was
+// saved; never the profit or the expenses. Every save echoes the suggestion token the form was shown; if
 // sales changed since, the server answers 409 suggestion_changed with the new token and writes nothing.
 // The day may save at most its profit less its expenses (ADR-080): the screen shows the three figures and
 // says so under the amount before anything is sent. The reason for a changed amount is optional (#538).
@@ -50,7 +52,6 @@ export function showInRecords(client: QueryClient, saved: Savings) {
 export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Savings) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const canOverwrite = holds(me, SAVINGS_OVERWRITE);
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
   // A draft restored with an amount shows its problem at once; a fresh form waits for blur (rule 10).
   const [touched, setTouched] = useState(() => draft.amount.trim() !== '');
@@ -59,6 +60,8 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const suggestion = useQuery({ queryKey: suggestionKey, queryFn: () => retail.savingsSuggestion({ branchId, date: draft.date }) });
   const s = suggestion.data;
   const profitView = seesAmounts(s);
+  // ADR-115: under the owner's setting a salesperson may change the amount without the overwrite permission.
+  const canOverwrite = holds(me, SAVINGS_OVERWRITE) || salespersonMayChange(s);
   const reason = reasonText(draft.reason, draft.other ?? '');
   const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
@@ -104,14 +107,16 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
           {nowAboveWords(s) && <Note>{nowAboveWords(s)}</Note>}
           {profitView ? (
             <>
-              {s.available_minor !== undefined ? (
+              {s.daily_profit_minor === undefined ? (
+                s.available_minor !== undefined && <p>The most you can save on this day: <strong><Money minor={s.available_minor} /></strong></p>
+              ) : s.available_minor !== undefined ? (
                 <dl className="rt-figures" aria-label="The day's figures">
                   <div><dt>Profit for the day</dt><dd>{money(s.daily_profit_minor ?? 0)}</dd></div>
                   <div><dt>Expenses for the day</dt><dd>{money(s.day_expenses_minor ?? 0)}</dd></div>
                   <div><dt>Available to save</dt><dd><strong>{money(s.available_minor)}</strong></dd></div>
                 </dl>
               ) : (
-                s.daily_profit_minor !== undefined && <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>
+                <p>Profit for the day: <strong>{money(s.daily_profit_minor)}</strong></p>
               )}
               <div aria-live="polite"><KeyFigure label="Suggested savings" value={money(s.suggested_minor ?? 0)} /></div>
               <label htmlFor="savings-amount">Amount to save (optional, leave blank to save the suggestion)</label>

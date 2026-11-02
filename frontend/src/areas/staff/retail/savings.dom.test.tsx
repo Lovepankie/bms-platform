@@ -59,10 +59,10 @@ const saved: Savings = {
   total_sold_minor: 50000, by_name: 'Test User 01', at: new Date().toISOString(), voided: false, historical: false,
 };
 
-function open() {
+function open(me = admin) {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <StaffContext.Provider value={{ me: admin, branch }}>
+      <StaffContext.Provider value={{ me, branch }}>
         <SavingsScreen />
       </StaffContext.Provider>
     </QueryClientProvider>,
@@ -152,5 +152,55 @@ describe('the savings screen', () => {
     await waitFor(() => expect(records.textContent).toContain('Saved UGX 4,000'));
     expect(records.textContent).not.toContain('No savings recorded in this period.');
     release([saved]);
+  });
+});
+
+// JUSTIFICATION-A3: the on and off DOM tests issue #768 asks for, one test per case.
+// Issue #768, ADR-115: the owner's setting "Salespeople can see and change the savings amount". The server leaves the profit and
+// the expenses out of the suggestion for a salesperson either way; with the setting on it sends the suggestion and the cap.
+describe('the savings screen for a salesperson', () => {
+  const seller = mockMe('cashier');
+  const hidden: SavingsSuggestion = { branch_id: branch, business_date: today, total_sold_minor: 50000, suggestion_token: 'tok-1' };
+  const shown: SavingsSuggestion = { ...hidden, available_minor: 8000, suggested_minor: 4000 };
+
+  it('with the setting off shows no amount and sends none, as before', async () => {
+    savingsSuggestion.mockResolvedValue(hidden);
+    listSavings.mockResolvedValue([]);
+    createSavings.mockResolvedValue({ ...saved, amount_minor: undefined, suggested_minor: undefined, overwritten: undefined });
+    open(seller);
+    await screen.findByText('Savings will be recorded using the standard amount.');
+    expect(screen.queryByLabelText(/Amount to save/)).toBeNull();
+    expect(document.body.textContent).not.toContain('UGX 4,000');
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(1));
+    expect('amount_minor' in (createSavings.mock.calls[0]?.[0] as Record<string, unknown>)).toBe(false);
+    const panel = await screen.findByRole('region', { name: 'Savings recorded' });
+    expect(panel.textContent).toContain('The savings were recorded using the standard amount.');
+  });
+
+  it('with the setting on shows the suggestion and the cap but never the profit or expenses, and saves a changed amount', async () => {
+    savingsSuggestion.mockResolvedValue(shown);
+    const row: Savings = { ...saved, amount_minor: 3000, suggested_minor: undefined, overwritten: true };
+    listSavings.mockResolvedValueOnce([]).mockResolvedValue([row]);
+    createSavings.mockResolvedValue(row);
+    open(seller);
+    await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
+    expect(screen.getByText(/The most you can save on this day/).textContent).toContain('UGX 8,000');
+    expect(screen.queryByLabelText("The day's figures")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day/);
+
+    fireEvent.change(amount(), { target: { value: '9000' } });
+    fireEvent.blur(amount());
+    expect(screen.getByRole('alert').textContent).toBe('You can save at most UGX 8,000 today.');
+
+    fireEvent.change(amount(), { target: { value: '3000' } });
+    expect(screen.queryByText(/Only an administrator can change the amount/)).toBeNull();
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(1));
+    expect(createSavings.mock.calls[0]?.[0]).toMatchObject({ amount_minor: 3000, suggestion_token: 'tok-1' });
+    const panel = await screen.findByRole('region', { name: 'Savings recorded' });
+    expect(panel.textContent).toContain('Amount saved: UGX 3,000');
+    const records = screen.getByRole('region', { name: 'Savings records' });
+    await waitFor(() => expect(records.textContent).toContain('Saved UGX 3,000'));
   });
 });

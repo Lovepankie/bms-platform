@@ -218,6 +218,19 @@ export function Setup() {
     });
   }
 
+  // Issue #768, ADR-115: off by default; when on, salespeople see and may change the daily savings amount.
+  function setSalespeopleSavings(on: boolean) {
+    void run(async () => {
+      const { error } = await api.PATCH('/api/v1/settings', {
+        params: { header: { 'If-Match': `"${current.version}"` } },
+        body: { salespeople_see_savings_amount: on },
+      });
+      if (error) throw new Error(problemOf(error).detail ?? 'Could not change the savings setting.');
+      await refresh();
+      return on ? 'Salespeople can now see and change the savings amount' : 'Salespeople no longer see the savings amount';
+    });
+  }
+
   // ADR-071: the day the app became the register; only the Owner moves it (the server answers owner_only for anyone else).
   function setGoLive(date: string) {
     void run(async () => {
@@ -392,6 +405,20 @@ export function Setup() {
             Let staff run reports ({reportsWording(me.modules)}), prepared in the background and kept for 30 days
           </label>
         </fieldset>
+
+        {hasRetail(me.modules) && (
+          <fieldset>
+            <legend>Daily savings</legend>
+            <label>
+              <input type="checkbox" checked={current.salespeople_see_savings_amount === true} disabled={busy}
+                aria-describedby="salespeople-savings-hint" onChange={(e) => setSalespeopleSavings(e.target.checked)} />{' '}
+              Salespeople can see and change the savings amount
+            </label>
+            <p id="salespeople-savings-hint" className="hint">
+              The suggested amount is half of the day&apos;s profit, so salespeople will be able to work out the profit.
+            </p>
+          </fieldset>
+        )}
 
         {permissions.includes('core.data_export.run') && <DataExportCard modules={me.modules} zone={me.tenant_timezone} />}
 

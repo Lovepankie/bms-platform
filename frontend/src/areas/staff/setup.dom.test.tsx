@@ -337,3 +337,27 @@ describe('the set-up menu icons', () => {
     }
   });
 });
+
+// JUSTIFICATION-A3: the Business set-up test issue #768 asks for.
+// Issue #768, ADR-115: off by default, with one plain line saying what turning it on gives away.
+describe('the salespeople savings setting', () => {
+  it('is off until the owner turns it on, and says salespeople can then work out the profit', async () => {
+    delete settings.salespeople_see_savings_amount;
+    client.PATCH.mockClear();
+    show({ modules: ['retail'] });
+    const box = (await screen.findByLabelText('Salespeople can see and change the savings amount')) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent).toContain(
+      "The suggested amount is half of the day's profit, so salespeople will be able to work out the profit.",
+    );
+    fireEvent.click(box);
+    await screen.findByText('Salespeople can now see and change the savings amount');
+    expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { salespeople_see_savings_amount: true } }));
+  });
+
+  it('is not shown to a business without retail', async () => {
+    show({ modules: ['lending'] });
+    await screen.findByLabelText(/The day the app became your register/);
+    expect(screen.queryByLabelText('Salespeople can see and change the savings amount')).toBeNull();
+  });
+});

@@ -1333,6 +1333,10 @@ Accepted (this list is the ADR index):
 - ADR-111 Sizes, colours and types in Add an item, picked from ready lists shipped with the app: the same one form asks
   about sizes, `POST /retail/product-families` takes `packs` made on every size in its transaction, and `GET
   /retail/product-families/options` offers the sizes and colours a shop used before (#697, D81, D98; no migration)
+- ADR-115 Salespeople may see and change the savings amount when the owner allows it (Proposed, #768): the setting
+  `salespeople_see_savings_amount` in the settings document, off by default; when on, a caller without `retail.profit.read`
+  sees the suggestion, the cap and the saved amount and may change it within the cap; the profit and expenses stay hidden;
+  the audit flags `salespeople_setting` (no migration)
 
 Pending (cite only as "pending ADR-NNN"):
 

@@ -6,7 +6,8 @@ import { formatMinor } from '../../../components/money';
 
 // The savings form's rules (FR-RET-18, FR-RET-19, ADR-022 decisions 11 to 13, ADR-080), apart from the screen so
 // they can be tested. A caller without retail.profit.read gets a suggestion with no `suggested_minor`:
-// that caller sends no amount and no reason at all and the server records the standard amount. The day's
+// that caller sends no amount and no reason at all and the server records the standard amount, unless the owner
+// turned on "Salespeople can see and change the savings amount" (ADR-115): then the amount comes without the profit. The day's
 // available amount is its profit less its expenses, never below 0; nothing above it is sent, and the server
 // refuses it too. The reason for changing the amount is optional (#538).
 
@@ -22,11 +23,22 @@ export function reasonText(pick: string, other: string): string {
   return (SAVINGS_REASONS as readonly string[]).includes(pick) ? pick : '';
 }
 
-/** "You can save at most UGX X today (profit UGX P minus expenses UGX E)." The server says the same. */
+/**
+ * "You can save at most UGX X today (profit UGX P minus expenses UGX E)." The server says the same. A salesperson under the
+ * owner's setting (ADR-115) is not told the profit or the expenses, so the words stop at the amount.
+ */
 export function capWords(s: SavingsSuggestion, date: string, today: string): string {
   const when = date === today ? 'today' : `for ${showDate(date)}`;
-  return `You can save at most ${money(s.available_minor ?? 0)} ${when} (profit ${money(s.daily_profit_minor ?? 0)} minus expenses ${money(s.day_expenses_minor ?? 0)}).`;
+  const why = s.daily_profit_minor !== undefined ? ` (profit ${money(s.daily_profit_minor)} minus expenses ${money(s.day_expenses_minor ?? 0)})` : '';
+  return `You can save at most ${money(s.available_minor ?? 0)} ${when}${why}.`;
 }
+
+/**
+ * Issue #768, ADR-115: the suggestion carries the amount but not the profit only when the owner let salespeople see and change
+ * the savings amount and the caller has no profit read; such a caller may change the amount within the cap.
+ */
+export const salespersonMayChange = (s: SavingsSuggestion | undefined): boolean =>
+  s?.suggested_minor !== undefined && s.daily_profit_minor === undefined;
 
 /**
  * "Saved UGX X; profit less expenses is now UGX Y." for a day whose savings are above what it has now, after an expense
@@ -59,7 +71,7 @@ export interface SavingsInput {
   today?: string;
 }
 
-/** True when the suggestion carries an amount, which only a caller with retail.profit.read gets. */
+/** True when the suggestion carries an amount: a caller with retail.profit.read, or any caller under the setting of ADR-115. */
 export const seesAmounts = (s: SavingsSuggestion | undefined): boolean => s?.suggested_minor !== undefined;
 
 export interface SavingsPlan {
