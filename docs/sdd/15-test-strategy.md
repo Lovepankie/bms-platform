@@ -491,7 +491,7 @@ output changed.
   against the independent recomputation of the insights golden model) and `ReportMemoryIT`, which runs the reports on a
   seeded book, and files of 7.4 MB (the staging cap is 8 MiB) in both formats, in a child JVM capped at the staging heap of 224 MB,
   with a storage double that fails the test if a file is read in blocks larger than 64 KiB and an assertion on the old generation's peak;
-  a 2,600 loan book proving the port's checkpoint fires mid-stream and a throw stops the read;
+  a 2,001 loan book, its statistics fresh before the read (#719, #720; the #696 timeout cause is still unconfirmed and tracked in #748), proving the port's checkpoint fires mid-stream and a throw stops the read;
   `SpoolTest` (bytes, not characters, row cap per table, a guard check on every row); and, in `ReportRunnerIT`, the heartbeat, a
   a replacement process failing runs that stopped beating, a clean stop, two reads of one run seeing one snapshot while a write lands between them,
   the upload from disk with no transaction and no connection held, and the expiry in batches; in `LendingParReportIT`, a run queued at
