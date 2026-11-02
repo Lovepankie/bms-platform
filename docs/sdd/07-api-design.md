@@ -532,7 +532,7 @@ carries it in the URL fragment, which no server receives.
 The branding routes are public by design: they take no token, the tenant is resolved from the
 host like every tenant route (the manifest and icons of `/branding/app/` answer on any host with the BMS
 ones where there is no tenant, ADR-066; the rest as follows) (an unknown host is 404 `unknown_tenant`; the platform host has no
-tenant, so they answer 404 there and the PWA shows the Rincoltech brand without calling them), and
+tenant, so they answer 404 there and the PWA shows the Rincol Tech brand without calling them), and
 they work for a suspended tenant (reads). They expose only the display name, a colour and one
 re-encoded image of that tenant, and the keys of its enabled modules (no counts, plans or settings).
 | GET | `/branches` | `core.branches.read` | |

@@ -310,8 +310,8 @@ retail.
   The card never shows on Android, a desktop or a browser tab. The
   same logo is the browser tab and address bar icon.
   Everything else keeps the platform look. The platform
-  host shows the Rincoltech brand.
-- **Footer.** "Powered by" and the Rincoltech logo, linked to the Rincoltech site, with an
+  host shows the Rincol Tech brand.
+- **Footer.** "Powered by" and the Rincol Tech logo, linked to the Rincol Tech site, with an
   accessible link name, on every screen of every host (sign-in, accept-invitation, staff, member
   portal, platform console). A tenant cannot remove it in this release.
 - **Public by design.** `GET /api/v1/branding` and `GET /api/v1/branding/logo` need no sign-in so

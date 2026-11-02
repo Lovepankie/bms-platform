@@ -1,7 +1,7 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { icons } from '../components/icons';
 import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from './theme-mode';
-import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_SITE, type ShellBrand, THEME_PROPERTIES, appTitle, themeVars } from './branding';
+import { PLATFORM_BRAND, RINCOLTECH_LOGO, RINCOLTECH_LOGO_ON_DARK, RINCOLTECH_SITE, type ShellBrand, THEME_PROPERTIES, appTitle, themeVars } from './branding';
 import { BusyAnnouncer } from './ui/BusyButton';
 
 // The shared shell (FR-TEN-08): the brand bar, the theme colour and the Powered-by footer are
@@ -111,11 +111,25 @@ export function ThemeMenu() {
   );
 }
 
+/**
+ * A logo image. The Rincol Tech logo is drawn twice, the black lettering and the light lettering (#115), and theme.css shows the
+ * one that suits the theme; any other logo is one image on its plate.
+ */
+export function LogoImg({ src, alt, className, width, height }: { src: string; alt: string; className?: string; width?: number; height?: number }) {
+  if (src !== RINCOLTECH_LOGO) return <img className={className} src={src} alt={alt} width={width} height={height} />;
+  return (
+    <>
+      <img className={`${className ?? ''} logo-on-light`.trim()} src={RINCOLTECH_LOGO} alt={alt} width={width} height={height} />
+      <img className={`${className ?? ''} logo-on-dark`.trim()} src={RINCOLTECH_LOGO_ON_DARK} alt={alt} width={width} height={height} />
+    </>
+  );
+}
+
 export function BrandBar({ brand, actions }: { brand: ShellBrand; actions?: ReactNode }) {
   return (
     <div className="brand-bar">
       {brand.logoSrc ? (
-        <img src={brand.logoSrc} alt={brand.name} />
+        <LogoImg src={brand.logoSrc} alt={brand.name} />
       ) : (
         <span className="brand-name">{brand.name}</span>
       )}
@@ -127,13 +141,13 @@ export function BrandBar({ brand, actions }: { brand: ShellBrand; actions?: Reac
   );
 }
 
-/** "Powered by" and the Rincoltech logo, linked to the Rincoltech site. Not removable by a tenant. */
+/** "Powered by" and the Rincol Tech logo, linked to the Rincol Tech site. Not removable by a tenant. */
 export function Footer() {
   return (
     <footer className="app-footer">
       <span>Powered by</span>
-      <a href={RINCOLTECH_SITE} target="_blank" rel="noopener noreferrer" aria-label="Rincoltech (opens the Rincoltech website)">
-        <img src={RINCOLTECH_LOGO} alt="" width={84} height={24} />
+      <a href={RINCOLTECH_SITE} target="_blank" rel="noopener noreferrer" aria-label="Rincol Tech (opens the Rincol Tech website)">
+        <LogoImg src={RINCOLTECH_LOGO} alt="" width={84} height={24} />
       </a>
     </footer>
   );

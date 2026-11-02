@@ -50,10 +50,18 @@ body {
   font-size: 1.1rem;
 }
 
-.brand-bar img,
-.app-footer img {
+/* The plate is never put behind the light-lettering Rincol Tech logo (#115), which is clear around its mark. */
+.brand-bar img:not(.logo-on-dark),
+.app-footer img:not(.logo-on-dark) {
   background: var(--color-logo-plate);
   border-radius: var(--radius-sm);
+}
+
+/* The Rincol Tech logo in both themes (#115, LogoImg of shell.tsx): the black lettering on the light theme, the light lettering
+   on the dark one. */
+:root:not([data-theme='dark']) .logo-on-dark,
+:root[data-theme='dark'] .logo-on-light {
+  display: none;
 }
 
 /*

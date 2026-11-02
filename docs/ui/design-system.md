@@ -299,7 +299,10 @@ the step "Light or dark"). The same three choices are the **Appearance** radio g
 - **Blocked storage.** If the browser blocks `localStorage`, the choice is held in memory for the visit, so the button, the
   page and the system-follow listener stay in step until the app is closed.
 - **Logos.** A logo may be dark on transparent, so in the dark theme the brand bar and footer logos sit on a white plate
-  (`--color-logo-plate`).
+  (`--color-logo-plate`). The Rincol Tech logo (two words, as on the logo, #409) has its own light-text version for dark surfaces
+  (`public/brand/rincoltech-logo-on-dark.png`, issue #115): `LogoImg` of `shell.tsx` draws both, theme.css shows the one
+  that suits the theme, and the light-text one has no plate. The style page (`/style`) has a Theme switch at the top, so
+  every section can be checked in both themes.
 
 Token pairs (light, dark). Every text role is 4.5:1 or more on its surface in both themes; edges, the focus colour and the tenant accent 3:1.
 `src/app/ui/tokens.test.ts` proves each pair.

@@ -189,7 +189,7 @@ describe('the shop in use at the top of the sidebar (issues #461, #564)', () => 
     expect(top.querySelector('.menu-shop-blank')?.textContent).toBe('');
     expect(top.querySelector('.menu-shop-initials')).toBeNull();
     expect(within(top).queryByRole('img')).toBeNull();
-    expect(top.textContent).not.toMatch(/Rincoltech|BMS/);
+    expect(top.textContent).not.toMatch(/Rincol ?[Tt]ech|BMS/);
     expect(top.querySelector('.menu-shop-role')?.textContent).toBe('Cashier');
     expect(top.querySelector('.menu-shop-branch-name')?.textContent).toBe('Test Shop One (HQ)');
   }

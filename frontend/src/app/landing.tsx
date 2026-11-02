@@ -6,6 +6,7 @@ import { illustrations } from '../components/illustrations';
 import { BrandLoader } from '../components/states';
 import { BRANDING_QUERY, useShellBrand } from './branding';
 import { classifyHost, loadHostConfig } from './hosts';
+import { LogoImg } from './shell';
 
 // The public landing page (#99, #106). On a tenant host its copy, module cards and buttons follow
 // the modules the tenant has switched on, read from the public GET /api/v1/branding: a retail only
@@ -52,7 +53,7 @@ export function landingCopy(modules: readonly string[]): LandingCopy {
 // The brand on the landing page: the host's logo when it has one, else a wordmark of its name.
 function BrandMark() {
   const brand = useShellBrand();
-  if (brand.logoSrc) return <img className="brand-logo" src={brand.logoSrc} alt={brand.name} />;
+  if (brand.logoSrc) return <LogoImg className="brand-logo" src={brand.logoSrc} alt={brand.name} />;
   return (
     <div className="wordmark">
       <span className="wordmark-mark" aria-hidden="true">
@@ -145,7 +146,7 @@ export function Landing() {
     return (
       <main className="landing">
         <Hero>
-          <h1>BMS by Rincoltech</h1>
+          <h1>BMS by Rincol Tech</h1>
           <p className="lead">Run your shop or lending business from your phone: sales, stock, members and loans.</p>
           <ul className="landing-actions">
             <li>

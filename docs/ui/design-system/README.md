@@ -14,7 +14,7 @@ scrolled to the bottom when the page is longer than one screen.
 
 | File prefix | Screen |
 |---|---|
-| `00-landing-platform-host` | The platform host (`localhost`): Rincoltech logo, console placeholder |
+| `00-landing-platform-host` | The platform host (`localhost`): Rincol Tech logo, console placeholder |
 | `01-landing` | The root route on a tenant host: brand mark, Staff sign-in and Member portal |
 | `02-accept-invitation`, `02b-...-incomplete-link`, `02c-...-error`, `02d-...-done` | Accept an invitation: the form, a link without its token, a refused password, success |
 | `03-sign-in`, `03b-sign-in-error` | Staff sign-in and a wrong password |
@@ -92,3 +92,9 @@ session, no backend) in headless Chromium with reduced motion and touch, the Hom
 fabricated figures (3 items low on stock, so My stock shows its badge) and every other API read refused, so Home says the API
 is down. The same walk checked that no page scrolls sideways, that every tab is at least 48px each way, and that the sale's
 sticky Record sale bar ends where the tab bar begins. The older captures above predate #539 and show the phone drawer.
+
+The `29` captures (2026-11-02, issue #115) show the Rincol Tech logo on the dark theme, with light lettering and no white plate:
+`29-logo-dark-landing` (the landing hero of the platform host), `29b-logo-dark-sign-in` (the brand bar and the Powered-by
+footer) and `29c-logo-dark-style` (the style page with its Theme switch on Dark), each `-phone` (360x740) and `-desktop`
+(1280x800). They were taken from `npm run dev` (no backend) in headless Chromium with the theme choice saved as Dark.
+`frontend/layout/logo.layout.test.ts` checks the same on the computed style in both themes.

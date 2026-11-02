@@ -5,9 +5,11 @@ import { classifyHost, loadHostConfig } from './hosts';
 
 // What the shell shows as the brand (FR-TEN-08): a tenant host shows that tenant's logo, name and
 // theme colour, read from the public GET /api/v1/branding (no sign-in, resolved from the host);
-// the platform host and any other host show the Rincoltech brand.
+// the platform host and any other host show the Rincol Tech brand (two words, as on the logo, #409).
 
 export const RINCOLTECH_LOGO = '/brand/rincoltech-logo.png';
+/** The same logo with light lettering on a clear background, shown on the dark theme in its place (#115). */
+export const RINCOLTECH_LOGO_ON_DARK = '/brand/rincoltech-logo-on-dark.png';
 export const RINCOLTECH_SITE = 'https://rincoltech.com';
 
 export interface ShellBrand {
@@ -21,7 +23,7 @@ export interface ShellBrand {
 }
 
 export const PLATFORM_BRAND: ShellBrand = {
-  name: 'Rincoltech',
+  name: 'Rincol Tech',
   logoSrc: RINCOLTECH_LOGO,
   themePrimary: null,
   themeText: null,
