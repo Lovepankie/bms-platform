@@ -494,6 +494,11 @@ Notes:
   The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
   and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
   sign-in (ADR-074 decision 6).
+  Built (extras slice D3, issue #222): `lending.disbursements` runs under `lending.reports.portfolio`, and
+  `lending.expected_vs_collected`, `lending.arrears_list` and `lending.officer_performance` under `lending.reports.collections`; each also
+  needs `lending.insights.read`, and without `lending.insights.all_officers` covers only the caller's own loans. The arrears list prints a
+  borrower's name only in the branches where the requester holds `lending.members.read` and the phone in full only where they hold
+  `lending.members.contact`, both frozen with the run and checked again at download. No permission and no seeded row are added.
   Built (extras slice D2, issue #217): the PDF and Excel renderers and `lending.portfolio_outstanding` add no permission and no seeded
   row either (both lending reports run under `lending.reports.portfolio`); `PermissionMatrixIT` still passes and this matrix equals the
   seeds. A spreadsheet cell is never a formula: text is written as a string cell and text that begins with `=`, `+`, `-`, `@`, a tab or a

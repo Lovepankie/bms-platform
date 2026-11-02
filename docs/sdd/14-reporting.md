@@ -152,6 +152,8 @@ Parameters: date range, branches, group by. Loans with a `disbursement` transact
 `value_date` is in the range and which is not reversed: count, total principal
 disbursed, fees deducted at disbursement, average and median loan size.
 
+**Built (extras slice D3, issue #222):** see section 14.10; it also lists each loan.
+
 ### `lending.loans_by_status`
 
 Parameters: `as_at`, branches. Count and requested or approved principal per status, and
@@ -216,6 +218,9 @@ allocations from transactions not reversed:
 Parameters: date range, branches. Per officer: active loans and `PO` at range end,
 disbursements in range, expected and collected on due (as above), collection rate, PAR30
 at range end, collection actions logged, promises kept and broken.
+
+**Built (extras slice D3, issue #222):** `lending.arrears_list`, `lending.expected_vs_collected` and `lending.officer_performance`, with
+the differences from the text above listed in section 14.10.
 
 ### `lending.promises_to_pay`
 
@@ -450,6 +455,60 @@ migration (the `format` check of `report_runs` already allowed `pdf` and `xlsx`)
 - **Render places.** A report PDF takes at most one of the document renderer's two places and builds its model only once it holds it, so
   a receipt or a statement asked for while two reports are made still finds a place (a test holds a report in its layout and renders a
   document beside it).
+
+**Built (extras slice D3, issue #222).** Four more reports, each offered as `pdf`, `xlsx`, `csv` and `json`. No migration and no
+permission. Each needs `lending.insights.read` as well as its own permission, because its branch and officer scope is the insights
+page's, resolved at request time and frozen with the run; a caller without `lending.insights.all_officers` gets only the loans they are
+the responsible officer for, in every report and every format.
+
+- **Figures.** The public port `InsightsFigures` gains `collections`, `disbursements`, `arrears` and `officers`. Their range figures are
+  read by `FlowFigures`, grouped twins of the insights queries that keep each query's predicates and add only the grouping, so a report's
+  total is the insights page's figure for the same range and caller (`portfolio.expected`, `portfolio.collected_on_due`,
+  `portfolio.collection_rate`, `portfolio.collected`, `portfolio.disbursed`, `portfolio.disbursed_count`,
+  `portfolio.average_loan_size`; a test asserts each). Their position figures (active loans, principal outstanding, days late, arrears,
+  PAR 30) are the positions `lending.par` reads, live for today and the nightly snapshot for a past date.
+- **`lending.expected_vs_collected`** (`lending.reports.collections`). Parameters `from` (the first of the month of `to` by default),
+  `to` (today by default), `branch_id` and `group_by` (`none`, `branch`, `product`, `officer`). Table `collections`, per group and a
+  total row: expected, collected on due, collection rate, then the parts of the total collected and the total. Table `equation` prints
+  the collections equation of section 14.4 for the selection, a line per part and "Equals total collected". The parts are the
+  allocations of the range's repayments, not reversed, by where they went: to items due in the range (paid in the range), before it
+  (arrears recovered), after it (prepayments), penalties and overpayments; a recovery on a written-off loan settles no item and is its own
+  part. Collected on due differs from the first part by what was paid before the range toward items due in it, which is why both are
+  shown. A line "Not explained by the parts" is printed only if the parts and the total ever differ; the golden test asserts they do not.
+- **`lending.arrears_list`** (`lending.reports.collections`). Parameters `as_at`, `branch_id` and `bucket` (`1_30`, `31_60`, `61_90`,
+  `over_90`). One table, `arrears`: every active loan more than 0 days late on the date, the buckets in age order and the most overdue
+  first, with the member number, the name (only in the branches where the requester holds `lending.members.read`), the phone (in full
+  only in the branches where the requester holds `lending.members.contact`, masked `+256*****0001` elsewhere, as the collection lists),
+  the officer, days late, arrears, penalties outstanding, principal outstanding, the last repayment on or before the date (one reversed
+  by then excluded; a reversal after the date does not change what stood on it), the last collection action logged by then, and the
+  earliest promise to pay made by then and not settled by then; a total row. The branch a line is judged by is the position's (the
+  snapshot's on a past date). Both branch lists are frozen with the run, and a download by someone who has since lost either permission
+  in any of those branches is refused. Penalties are blank on a line read from the snapshot, and then the total is blank too. A
+  position whose loan row cannot be read is still printed, without its member and extras. Not here: an officer parameter (the
+requester's scope decides whose loans are listed, and `group_by` is not offered either), the arrears split into principal,
+  interest and fees, which the positions do not hold, and penalties outstanding for a past date (the snapshot does not hold them; the
+  report says so). Only the late loans are kept in memory, to sort them; the rest of the book passes through.
+- **`lending.disbursements`** (`lending.reports.portfolio`). Parameters `from`, `to`, `branch_id`, `group_by`. Table `loans`: each loan
+  disbursed in the range, not reversed, by date then loan number (loan, date, member number, branch, product, officer, principal, the
+  upfront fee taken at disbursement) and a total row, written as the loans are read. Both tables count a loan once: its principal is
+  every disbursement of it in the range that is not reversed, summed, dated by the first, and its upfront fee is the `fee_upfront`
+  entries dated on that first disbursement (a reversed one excluded), so a fee belongs to exactly one disbursement. Today V29's index
+  `lending_loan_transactions_one_disbursement` allows one disbursement row per loan, reversed or not (a test proves a second tranche and
+  a payout entered again are refused), and the insights page's `portfolio.disbursed_count` counts distinct loans too. Table `summary`,
+  per group and a total row: loans, principal disbursed, upfront fees, the average loan (half up) and the
+  median loan (the middle loan, or the mean of the two middle ones rounded half up). A responsible officer with no user row is labelled
+  "Staff" and the last four characters of the id, in this and the officer reports.
+- **`lending.officer_performance`** (`lending.reports.collections`, FR-CLN-06). Parameters `from`, `to`, `branch_id`. Table `officers`,
+  a row per responsible officer and a total row: active loans, principal outstanding and PAR 30 at the end of the range; loans disbursed
+  and their principal, expected, collected on due and the collection rate over the range; the collection actions logged on the officer's
+  loans in the range (by the business date in Kampala) and the promises to pay settled kept and broken in it. A loan counts for the
+  officer responsible for it now (the snapshot's officer for a past date's positions); the report says so.
+- **Tests.** `LendingCollectionsReportsIT`: a fabricated book with every figure computed by hand (a repayment split over arrears, the
+  range, a later item and a penalty; an overpayment; a repayment reversed; a recovery; a reversed disbursement; promises kept and
+  broken), the equation, the cross check against the insights page in every grouping, the officer and branch scope (including a
+  branch-limited caller asking for another branch), names and phones by the branches of their own permissions, a download refused after
+  either is lost, golden snapshot cases for the arrears list and officer performance (a repayment reversed after the date still shows on
+  it), the catalogue, and the PDF and workbook figures.
 
 ## 14.8 Test datasets
 

@@ -40,13 +40,19 @@ class InsightsFiguresService implements InsightsFigures {
     private final InsightsQueries queries;
     private final Positions positions;
     private final CurrentTenant tenant;
+    private final FlowFigures flows;
 
     InsightsFiguresService(
-            InsightsService service, InsightsQueries queries, Positions positions, CurrentTenant tenant) {
+            InsightsService service,
+            InsightsQueries queries,
+            Positions positions,
+            CurrentTenant tenant,
+            FlowFigures flows) {
         this.service = service;
         this.queries = queries;
         this.positions = positions;
         this.tenant = tenant;
+        this.flows = flows;
     }
 
     @Override
@@ -290,5 +296,254 @@ class InsightsFiguresService implements InsightsFigures {
                 yield queries.userNames(known);
             }
         };
+    }
+
+    // JUSTIFICATION-A3: slice D3 (issue #222): the collections, disbursements, arrears and officer figures of the port,
+    // over FlowFigures (grouped twins of the insights queries) and the positions par() reads.
+
+    /** The group's name, or the staff label of an id the names do not hold, worked out only when it is needed. */
+    private static String label(Map<UUID, String> names, UUID id) {
+        String name = names.get(id);
+        return name != null ? name : InsightsService.staffLabel(id);
+    }
+
+    /** A range figure cannot end after the business date the scope was resolved on. */
+    private static void requireNotFuture(PortfolioScope p) {
+        if (p.to().isAfter(p.today())) {
+            throw ApiException.rule("range_in_future", "The range ends today or earlier.");
+        }
+    }
+
+    private <K> List<K> sortedGroups(
+            ParGroupBy by,
+            Map<UUID, long[]> parts,
+            java.util.function.BiFunction<UUID, String, K> make,
+            Function<K, String> label) {
+        List<K> out = new ArrayList<>();
+        if (by == ParGroupBy.NONE) {
+            return out;
+        }
+        Map<UUID, String> names = names(by, parts.keySet());
+        for (Map.Entry<UUID, long[]> e : parts.entrySet()) {
+            out.add(make.apply(e.getKey(), label(names, e.getKey())));
+        }
+        out.sort(Comparator.comparing(label).thenComparing(Object::toString));
+        return out;
+    }
+
+    private static CollectionGroup collectionGroup(UUID key, String label, long[] a) {
+        long parts = a[FlowFigures.ON_DUE_IN_RANGE]
+                + a[FlowFigures.ARREARS_RECOVERED]
+                + a[FlowFigures.PREPAID]
+                + a[FlowFigures.PENALTIES]
+                + a[FlowFigures.OVERPAID]
+                + a[FlowFigures.RECOVERIES];
+        return new CollectionGroup(
+                String.valueOf(key),
+                label,
+                a[FlowFigures.EXPECTED],
+                a[FlowFigures.ON_DUE],
+                Metrics.bp(a[FlowFigures.ON_DUE], a[FlowFigures.EXPECTED]),
+                a[FlowFigures.ON_DUE_IN_RANGE],
+                a[FlowFigures.ARREARS_RECOVERED],
+                a[FlowFigures.PREPAID],
+                a[FlowFigures.PENALTIES],
+                a[FlowFigures.OVERPAID],
+                a[FlowFigures.RECOVERIES],
+                a[FlowFigures.TOTAL],
+                a[FlowFigures.TOTAL] - parts);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CollectionFigures collections(PortfolioScope p, ParGroupBy groupBy, Runnable checkpoint) {
+        requireNotFuture(p);
+        checkpoint.run();
+        Map<UUID, long[]> parts = flows.collections(scopeOf(p), groupBy);
+        checkpoint.run();
+        long[] total = new long[FlowFigures.PARTS];
+        for (long[] a : parts.values()) {
+            for (int i = 0; i < total.length; i++) {
+                total[i] += a[i];
+            }
+        }
+        List<CollectionGroup> groups = sortedGroups(
+                groupBy, parts, (k, label) -> collectionGroup(k, label, parts.get(k)), CollectionGroup::label);
+        return new CollectionFigures(
+                p.from(), p.to(), tenant.profile().currency(), collectionGroup(null, "All loans", total), groups);
+    }
+
+    private static DisbursementGroup disbursementGroup(UUID key, String label, long[] a) {
+        long loans = a[FlowFigures.LOANS];
+        return new DisbursementGroup(
+                String.valueOf(key),
+                label,
+                loans,
+                a[FlowFigures.PRINCIPAL],
+                a[FlowFigures.FEES],
+                loans == 0 ? null : InsightsService.divideHalfUp(a[FlowFigures.PRINCIPAL], loans),
+                a[FlowFigures.MEDIAN] < 0 ? null : a[FlowFigures.MEDIAN]);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DisbursementFigures disbursements(
+            PortfolioScope p,
+            ParGroupBy groupBy,
+            Runnable checkpoint,
+            java.util.function.Consumer<DisbursementLine> lines) {
+        requireNotFuture(p);
+        checkpoint.run();
+        Scope s = scopeOf(p);
+        Map<UUID, long[]> parts = flows.disbursements(s, groupBy);
+        long[] total = parts.remove(FlowFigures.TOTAL_KEY);
+        List<DisbursementGroup> groups = sortedGroups(
+                groupBy, parts, (k, label) -> disbursementGroup(k, label, parts.get(k)), DisbursementGroup::label);
+        long[] seen = {0};
+        flows.disbursementLines(s, l -> {
+            if ((++seen[0] % CHECKPOINT_EVERY) == 0) {
+                checkpoint.run();
+            }
+            lines.accept(l);
+        });
+        checkpoint.run();
+        return new DisbursementFigures(
+                p.from(), p.to(), tenant.profile().currency(), disbursementGroup(null, "All loans", total), groups);
+    }
+
+    /** The loans an arrears list reads its extras for at a time. */
+    static final int ARREARS_BLOCK = 500;
+
+    @Override
+    @Transactional(readOnly = true)
+    public void arrears(
+            PortfolioScope p,
+            String bucket,
+            List<UUID> nameBranchIds,
+            List<UUID> contactBranchIds,
+            Runnable checkpoint,
+            java.util.function.Consumer<ArrearsLine> lines) {
+        requireNotFuture(p);
+        // Only the loans in arrears are kept, to sort them; the book's other loans pass through.
+        List<Position> late = new ArrayList<>();
+        boolean live = read(p, checkpoint, l -> {
+            if (l.daysPastDue() > 0 && (bucket == null || bucket.equals(l.bucket()))) {
+                late.add(l);
+            }
+        });
+        late.sort(Comparator.comparing((Position l) -> BUCKETS.indexOf(l.bucket()))
+                .thenComparing(Comparator.comparingInt(Position::daysPastDue).reversed())
+                .thenComparing(Position::loanNo));
+        // A loan always has a responsible officer: officer_user_id is NOT NULL on lending_loans (V8) and on
+        // lending_loan_daily_snapshots (V33); one who is no user is labelled by the end of their id.
+        Set<UUID> officerIds = new HashSet<>();
+        late.forEach(l -> officerIds.add(l.officerUserId()));
+        Map<UUID, String> officers = queries.userNames(officerIds);
+        java.time.ZoneId zone = tenant.profile().timezone();
+        for (int from = 0; from < late.size(); from += ARREARS_BLOCK) {
+            checkpoint.run();
+            List<Position> block = late.subList(from, Math.min(late.size(), from + ARREARS_BLOCK));
+            Map<UUID, FlowFigures.ArrearsExtras> extras =
+                    flows.arrearsExtras(block.stream().map(Position::loanId).toList(), p.to(), zone);
+            for (Position l : block) {
+                // A loan whose row cannot be read keeps its position line, without the member and the extras.
+                FlowFigures.ArrearsExtras x = extras.getOrDefault(l.loanId(), FlowFigures.ArrearsExtras.NONE);
+                // The position's branch: the snapshot's on a past date, the loan's today.
+                boolean name = nameBranchIds == null || nameBranchIds.contains(l.branchId());
+                boolean contact = contactBranchIds == null || contactBranchIds.contains(l.branchId());
+                lines.accept(new ArrearsLine(
+                        l.bucket(),
+                        l.loanNo(),
+                        x.memberNo(),
+                        name ? x.memberName() : null,
+                        contact ? x.phone() : masked(x.phone()),
+                        label(officers, l.officerUserId()),
+                        l.daysPastDue(),
+                        l.arrearsMinor(),
+                        live ? x.penaltiesOutstandingMinor() : null,
+                        l.principalOutstandingMinor(),
+                        x.lastRepaymentOn(),
+                        x.lastAction(),
+                        x.lastActionOn(),
+                        x.promisedDate(),
+                        x.promisedAmountMinor()));
+            }
+        }
+    }
+
+    /** A phone outside the caller's contact branches: the first four and last four characters, as the collection lists. */
+    static String masked(String e164) {
+        if (e164 == null) {
+            return null;
+        }
+        return e164.length() <= 8
+                ? "*".repeat(e164.length())
+                : e164.substring(0, 4) + "*".repeat(e164.length() - 8) + e164.substring(e164.length() - 4);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OfficerFigures officers(PortfolioScope p, Runnable checkpoint) {
+        requireNotFuture(p);
+        Totals all = new Totals("all", "All officers");
+        Map<UUID, Totals> stock = new LinkedHashMap<>();
+        boolean live = read(p, checkpoint, l -> {
+            all.add(l);
+            stock.computeIfAbsent(l.officerUserId(), k -> new Totals(String.valueOf(k), null))
+                    .add(l);
+        });
+        Scope s = scopeOf(p);
+        Map<UUID, long[]> money = flows.collections(s, ParGroupBy.OFFICER);
+        checkpoint.run();
+        Map<UUID, long[]> paidOut = flows.disbursements(s, ParGroupBy.OFFICER);
+        long[] paidOutTotal = paidOut.remove(FlowFigures.TOTAL_KEY);
+        Map<UUID, long[]> activity = flows.officerActivity(s, tenant.profile().timezone());
+        checkpoint.run();
+        Set<UUID> ids = new java.util.LinkedHashSet<>(stock.keySet());
+        ids.addAll(money.keySet());
+        ids.addAll(paidOut.keySet());
+        ids.addAll(activity.keySet());
+        Map<UUID, String> labels = names(ParGroupBy.OFFICER, ids);
+        long[] moneyTotal = new long[FlowFigures.PARTS];
+        long[] activityTotal = new long[3];
+        List<OfficerGroup> groups = new ArrayList<>();
+        for (UUID id : ids) {
+            Totals t = stock.getOrDefault(id, new Totals(String.valueOf(id), null));
+            long[] m = money.getOrDefault(id, new long[FlowFigures.PARTS]);
+            long[] d = paidOut.getOrDefault(id, new long[] {0, 0, 0, -1});
+            long[] a = activity.getOrDefault(id, new long[3]);
+            for (int i = 0; i < moneyTotal.length; i++) {
+                moneyTotal[i] += m[i];
+            }
+            for (int i = 0; i < activityTotal.length; i++) {
+                activityTotal[i] += a[i];
+            }
+            groups.add(officerGroup(String.valueOf(id), label(labels, id), t, d, m, a));
+        }
+        groups.sort(Comparator.comparing(OfficerGroup::label).thenComparing(OfficerGroup::key));
+        return new OfficerFigures(
+                p.from(),
+                p.to(),
+                live ? "live" : "snapshot",
+                tenant.profile().currency(),
+                officerGroup("all", "All officers", all, paidOutTotal, moneyTotal, activityTotal),
+                groups);
+    }
+
+    private static OfficerGroup officerGroup(String key, String label, Totals t, long[] d, long[] m, long[] a) {
+        return new OfficerGroup(
+                key,
+                label,
+                t.loans,
+                t.po,
+                Metrics.bp(t.atRisk[1], t.po),
+                d[FlowFigures.LOANS],
+                d[FlowFigures.PRINCIPAL],
+                m[FlowFigures.EXPECTED],
+                m[FlowFigures.ON_DUE],
+                Metrics.bp(m[FlowFigures.ON_DUE], m[FlowFigures.EXPECTED]),
+                a[0],
+                a[1],
+                a[2]);
     }
 }

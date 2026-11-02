@@ -658,7 +658,8 @@ class LendingPortfolioReportsIT extends LendingBookSupport {
                 assertThat(r.get("permission").asString()).isEqualTo(PORTFOLIO);
             }
         }
-        assertThat(keys).containsExactlyInAnyOrder(PAR, PORT);
+        // The disbursements (issue #222) run under the same permission.
+        assertThat(keys).containsExactlyInAnyOrder(PAR, PORT, "lending.disbursements");
         for (String key : List.of(PAR, PORT)) {
             for (String format : List.of("pdf", "xlsx")) {
                 ResponseEntity<JsonNode> refused = post(book.t(), user, PORTFOLIO, key, Map.of(), format);

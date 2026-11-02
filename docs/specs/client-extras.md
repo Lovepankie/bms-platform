@@ -1348,6 +1348,13 @@ finishes on that heap but fills the old generation, so it stays a setting for ho
 Chapter 14 sections 14.3 and 14.4. The collections equation (total collected equals collected on due plus
 arrears recovered plus prepayments plus penalties plus overpayments) is printed and asserted.
 
+**As built in slice D3 (issue #222).** `lending.expected_vs_collected`, `lending.arrears_list`, `lending.disbursements` and
+`lending.officer_performance` as PDF, Excel, CSV and JSON, through four new methods of `InsightsFigures` over `FlowFigures` (grouped twins
+of the insights queries) and the positions of `lending.par`; no migration and no permission. The equation prints recoveries on written-off
+loans as a part of its own, and its first part is what was paid in the range on items due in it (collected on due also counts earlier
+payments toward those items). Chapter 14 section 14.10 lists the columns and the differences; the ADR-038 amendment for #222 what building
+settled.
+
 ### 6.10 Collateral register and regulator summary
 
 Chapter 14 sections 14.5 and 14.7. The regulator summary carries the cover note "Data summary. Not a

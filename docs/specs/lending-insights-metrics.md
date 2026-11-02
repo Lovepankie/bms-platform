@@ -69,7 +69,7 @@ Each card has one plain sentence; disbursed and collected compare with the same 
 | `portfolio.par60` | The same with DPD above 60. | same |
 | `portfolio.par90` | The same with DPD above 90. | same |
 | `portfolio.disbursed` | Sum of `disbursement` amounts with `value_date` in the range. | `lending_loan_transactions` |
-| `portfolio.disbursed_count` | Count of those. | same |
+| `portfolio.disbursed_count` | The distinct loans behind those (a loan counts once; V29 allows one disbursement row per loan, so it is also the rows). `lending.disbursements` uses the same definition (issue #222). | same |
 | `portfolio.collected` | Sum of `repayment` and `recovery` amounts in the range, a reversed one excluded. | same |
 | `portfolio.expected` | Sum of `principal_due + interest_due + fees_due` of items due in the range, of loans active at some point in it (disbursed, not written off before `from`, not closed before `from`). Penalties are not scheduled and are left out. | `lending_schedule_items`, `lending_loans` |
 | `portfolio.collected_on_due` | Sum of principal, interest and fee allocations to those items, from repayments with `value_date <= to`. | `lending_repayment_allocations`, `lending_loan_transactions` |

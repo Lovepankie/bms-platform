@@ -235,3 +235,28 @@ more than a few hundred rows holds its whole layout in memory while it is made.
 **Watch for:** a report that lists a column the PDF cannot print in its width (a long heading is wrapped, a long figure is not: widen the
 column weights in `PdfReport`); a new column kind (add it to the spool, the PDF text, the workbook cell and the CSV together); the PDF cap raised
 on a small host without running `ReportMemoryIT` first.
+
+## Amendment (issue #222, slice D3: collections, disbursements and officer performance)
+
+Building `lending.expected_vs_collected`, `lending.arrears_list`, `lending.disbursements` and `lending.officer_performance` settled five
+things. None reverses a decision; no migration and no permission were needed.
+
+1. **Range figures are grouped twins of the insights queries.** The port gains `collections`, `disbursements`, `arrears` and `officers`.
+   The page computes its expected, collected on due, collected and disbursed by day, not by branch, product or officer, so
+   `lending.insights` gains `FlowFigures`: each query keeps the predicates of the insights query it must equal and adds a `GROUP BY`. A
+   test asserts every report total equals the page for the same range and caller, in every grouping, so a second definition cannot
+   drift unseen.
+2. **The collections equation is measured, not forced.** The total collected and each of its parts (paid in the range on items due in
+   it, arrears recovered, prepayments, penalties, overpayments, recoveries on written-off loans) are summed by separate queries; the
+   report prints the parts and the total and prints "Not explained by the parts" only if they differ, so a broken allocation shows up on
+   paper instead of being absorbed into a balancing line. Recoveries are a part of their own because a recovery settles no item.
+3. **What a borrower's line shows is frozen with the run, branch by branch.** The arrears list prints a name only in the branches of
+   `lending.members.read` and a full phone only in the branches of `lending.members.contact` (masked elsewhere, as the collection lists);
+   both branch lists are decided at request time, stored in the run's scope, and a download by someone whose access to either has
+   narrowed is refused.
+4. **An officer is the loan's responsible officer now.** Flows, actions and promises count for the officer the loan has today, the
+   positions of a past date for the snapshot's officer; the report says so. Counting actions by who logged them would split one loan's
+   follow up across officers and leave the collection rate and the actions in different rows.
+5. **The scope stays the insights page's.** As for `lending.par`, a run also needs `lending.insights.read`, and a caller without
+   `lending.insights.all_officers` sees only their own loans; a cashier who holds `lending.reports.collections` without insights access
+   is refused, as the D1 amendment decided for the portfolio reports.
