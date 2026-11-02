@@ -80,6 +80,16 @@ class SavingsDepositPurpose implements PurposeHandler {
     }
 
     @Override
+    public Optional<String> label(UUID subjectId) {
+        return repo.account(subjectId).map(a -> "savings account " + a.accountNo());
+    }
+
+    @Override
+    public Optional<UUID> memberOf(UUID subjectId) {
+        return repo.account(subjectId).map(AccountRow::memberId);
+    }
+
+    @Override
     public Subject describe(UUID subjectId, long amountMinor, String currency) throws PurposeRefusal {
         AccountRow a = repo.account(subjectId).orElseThrow(() -> new PurposeRefusal("subject_not_payable"));
         if (!depositable(a) || !a.currency().equals(currency)) {

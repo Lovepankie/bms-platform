@@ -89,7 +89,9 @@ public interface SmsEvents {
      *     event that is about today by nature (the maturity reminder)
      * @param expiresAt for a reminder or an arrears notice, when it stops being true (a "due today" text at the end of
      *     the due date); it then expires at the earlier of this and the end of the window day, so a text deferred by the
-     *     daily cap or a run resumed after the window is never sent late. Null: the end of the window day.
+     *     daily cap or a run resumed after the window is never sent late. Null: the end of the window day. For a
+     *     transactional text, an expiry sooner than its hour shortens it (a payment link expires with its intent, issue
+     *     #231); null or later keeps the hour.
      */
     record MemberSms(
             String templateKey,

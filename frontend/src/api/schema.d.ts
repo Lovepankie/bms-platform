@@ -2793,6 +2793,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/intents/{intent_id}/sms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send the payment link to the payer's number by SMS, once per intent, while it is open; refused when SMS or collections are off */
+        post: operations["textPaymentLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments/merchant-account": {
         parameters: {
             query?: never;
@@ -11308,6 +11325,13 @@ export interface components {
             /** Format: uuid */
             subject_id?: string;
             subject_type?: string;
+        };
+        PaymentLinkText: {
+            already_sent?: boolean;
+            /** Format: date-time */
+            expires_at?: string;
+            /** Format: uuid */
+            intent_id?: string;
         };
         PaymentMethodMapping: {
             account_code?: string;
@@ -25513,6 +25537,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReversalRequestOutcome"];
+                };
+            };
+        };
+    };
+    textPaymentLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentLinkText"];
                 };
             };
         };
