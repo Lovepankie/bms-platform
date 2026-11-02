@@ -55,15 +55,21 @@ left, the branch, the period, the person's roles.
    number for the receipt. Any other 4xx is a refusal: the item is kept, marked failed with the server's words, reported to
    the server (decision 7) and skipped, so the next one goes. Sync starts on the `online` event, on a successful health ping
    (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now. A ping with no answer
-   within 3 s counts as offline (issue #769): on a weak mobile connection a slow answer means a sale would hang. For the
-   same reason a cash, mobile money or bank sale sent online with no answer within 8 s, or lost on the network, goes to
-   the outbox at once exactly as it was sent, under the same `Idempotency-Key`, and the seller gets the provisional
-   receipt. The answer that comes later is ignored on the phone; the server answers the outbox's send from the key row
-   (or, while the first request still holds the key, 409 `idempotency_in_progress`, which is tried again), so the sale
-   is recorded once (decision 5).
+   within 3 s is pinged again at once, and two in a row count as offline (issue #769): on a weak mobile connection a slow
+   answer means a sale would hang, and one slow ping on a cold link does not flip the state. For the same reason a cash,
+   mobile money or bank sale sent online with no answer within 8 s, or lost on the network (fetch's `TypeError`; a 401 or
+   any refusal is not), goes to the outbox at once under the same `Idempotency-Key` and client sale id, with
+   `occurred_at` (when Save was pressed), `recorded_offline` and `prices_as_of` added, and the seller gets the
+   provisional receipt. So when the first request never arrived, the outbox's send hours later is a sale recorded
+   offline, dated when it was taken. The answer that comes later is ignored on the phone. The server finds the sale by
+   its client sale id, or, while the first request still holds the key, answers 409 `idempotency_in_progress` (tried
+   again, never a refusal, `classify` in `outbox.ts`) and then replays from the key, whose hash leaves the delivery
+   fields out (decision 5), so the sale is recorded once.
 5. **Sent once.** The request carries `Idempotency-Key` (replays within 7 days answer from the key row) and
    `client_sale_id`, stored on `retail_sales` with a unique index per tenant. The server looks for the client sale id
-   before any other check: a sale already recorded with it is answered as a replay (`Idempotent-Replayed: true`) when the
+   before any other check, the key's included (issue #769), and for a request with a client sale id the key's request
+   hash leaves out `occurred_at`, `recorded_offline` and `prices_as_of`, so an online request and the same sale sent
+   from the outbox under its key are one request: a sale already recorded with it is answered as a replay (`Idempotent-Replayed: true`) when the
    same person made it, and refused with 422 `client_sale_id_reused` otherwise. A replay after the key expired, or with a
    new key after a lost answer, is therefore still the same sale. Two concurrent sends that both miss the lookup are settled
    by the unique index: the loser answers 409 `client_sale_in_progress` and its retry finds the sale. The online sale screen

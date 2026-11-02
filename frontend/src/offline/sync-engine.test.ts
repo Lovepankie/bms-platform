@@ -113,6 +113,21 @@ describe('the sync engine', () => {
     expect(engine.snapshot().items[0]?.state).toBe('sent');
   });
 
+  it('tries again a sale whose key the first online request still holds, never failing it (issue #769)', async () => {
+    let held = true;
+    const { engine, sent, deps } = setup(async (i) =>
+      held ? { status: 409, body: { code: 'idempotency_in_progress', detail: 'A request with this Idempotency-Key is still being processed; retry shortly.' } } : ok(i),
+    );
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    expect(engine.snapshot().items[0]?.state).toBe('queued');
+    held = false;
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a', 'a:key-a']);
+    expect(engine.snapshot().items[0]).toMatchObject({ state: 'sent', sale: { saleNo: 'RS-a' } });
+    expect(deps.report).not.toHaveBeenCalled();
+  });
+
   it('keeps a refused sale with its reason, reports it, and goes on with the next', async () => {
     const { engine, sent, deps } = setup(async (i) =>
       i.id === 'a' ? { status: 422, body: { code: 'period_closed', detail: 'The period 2026-9 is closed.' } } : ok(i),

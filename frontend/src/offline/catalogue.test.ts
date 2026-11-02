@@ -159,18 +159,29 @@ describe('the connection', () => {
   });
 
   // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
-  it('counts a ping with no answer within 3 seconds as offline (issue #769)', async () => {
+  it('counts two pings in a row with no answer within 3 seconds as offline, and one as a cold link (issue #769)', async () => {
     vi.useFakeTimers();
     try {
       let answer: (ok: boolean) => void = () => {};
+      const pings = vi.fn(() => new Promise<boolean>((resolve) => (answer = resolve)));
       const c = createConnectivity({
-        ping: () => new Promise<boolean>((resolve) => (answer = resolve)),
+        ping: pings,
         navigatorOnline: () => true,
         addListener: () => () => {},
         every: () => () => {},
       });
       expect(c.online()).toBe(true);
+      // One slow ping is pinged again at once, and an answer in time keeps the app online.
+      const cold = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+      expect(pings).toHaveBeenCalledTimes(2);
+      answer(true);
+      expect(await cold).toBe(true);
+      expect(c.online()).toBe(true);
+      // Two slow in a row: offline.
       const checked = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+      expect(c.online()).toBe(true);
       await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS - 1);
       expect(c.online()).toBe(true);
       await vi.advanceTimersByTimeAsync(1);
@@ -198,13 +209,5 @@ describe('a sale whose answer was lost', () => {
     expect(() =>
       offlineSale({ draft, clientSaleId: 'k1', key: 'k2', scope: 's', branchName: 'Test Branch A', sent: { body: { payment_method: 'credit' } as never, at: '2026-10-22T09:00:00Z' }, now: new Date() }),
     ).toThrow(/credit sale/);
-  });
-
-  it('goes as it was sent, under the same key, when the online request got no answer in time (issue #769)', () => {
-    const draft = { branchId: 'b1', method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [{ product: cable, qty: '1', price: '2000' }] } as unknown as Draft;
-    const body = { branch_id: 'b1', payment_method: 'cash', lines: [{ product_id: 'p1', qty: '1.000', unit_price_minor: 2000 }], client_sale_id: 'k1' } as never;
-    const item = offlineSale({ draft, clientSaleId: 'k1', key: 'k1', scope: 's', branchName: 'Test Branch A', pricesAsOf: '2026-10-22T08:00:00Z', sent: { body, at: '2026-10-22T09:00:00Z' }, asSent: true, now: new Date() });
-    expect(item.request).toEqual(body);
-    expect(item).toMatchObject({ id: 'k1', key: 'k1', occurredAt: '2026-10-22T09:00:00Z', totalMinor: 2000, state: 'queued' });
   });
 });

@@ -6,7 +6,7 @@ import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch'
 import { Stepper } from '../../../app/ui/Stepper';
 import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
 import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
-import { SALE_ANSWER_MS, answerWithin } from '../../../offline/connectivity';
+import { NoAnswer, SALE_ANSWER_MS, answerWithin } from '../../../offline/connectivity';
 import { useOffline, useOnline } from '../../../offline/offline-context';
 import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../offline/offline-sale';
 import type { OutboxItem } from '../../../offline/outbox';
@@ -275,8 +275,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   // The request is kept with the draft once sent: until the server answers, the same request is all that can go again.
   // toast-exempt: success screen, the sale complete screen headed Sale saved through onSaved
   // Issue #769: on a weak connection a cash, mobile money or bank sale with no answer within SALE_ANSWER_MS, or lost on the
-  // network, goes to the outbox exactly as sent under the same key, and the provisional receipt shows at once. The answer
-  // that comes later is ignored here, and the server answers the outbox's send from the key, so the sale is recorded once.
+  // network, goes to the outbox at once under the same key, with when it was taken (recorded offline), and the provisional
+  // receipt shows. The answer that comes later is ignored here; the server finds the sale by its client sale id, or answers
+  // from the key, whose hash leaves the delivery fields out, so the sale is recorded once (ADR-067 decision 5).
   const save = useMutation({
     mutationFn: async ({ body, at }: { body: SaleRequest; at: string }): Promise<{ sale: Sale } | { kept: OutboxItem }> => {
       const asked = retail.createSale(body, key);
@@ -284,8 +285,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       try {
         return { sale: await answerWithin(asked, SALE_ANSWER_MS) };
       } catch (e) {
-        if (e instanceof RetailError) throw e;
-        const item = offlineSale({ draft: shown, clientSaleId: key, sent: { body, at }, asSent: true, key, scope: offline.scope, branchName, pricesAsOf: offline.catalogue?.pricesAsOf, now: new Date() });
+        // Only no answer in time or a network failure (fetch's TypeError); a 401 or any refusal is a RetailError and stays here.
+        if (!(e instanceof NoAnswer || e instanceof TypeError)) throw e;
+        const item = offlineSale({ draft: shown, clientSaleId: key, sent: { body, at }, key, scope: offline.scope, branchName, pricesAsOf: offline.catalogue?.pricesAsOf, now: new Date() });
         await offline.engine.queue(item);
         return { kept: item };
       }

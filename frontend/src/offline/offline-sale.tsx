@@ -14,7 +14,7 @@ import type { OutboxItem } from './outbox';
 /** The banner at the top of the sale form while offline; says plainly when the branch's items are not on the phone yet (issue #769). */
 export function OfflineNote({ branchId }: { branchId: string }) {
   const offline = useOffline();
-  const noItems = (offline?.catalogue?.products[branchId] ?? []).length === 0;
+  const noItems = !offline?.catalogueLoading && (offline?.catalogue?.products[branchId] ?? []).length === 0;
   return (
     <div role="status" className="alert alert-warning" data-testid="offline-note">
       <p>

@@ -12,7 +12,7 @@ const ready = (b: unknown) => !(b as HTMLButtonElement).disabled && (b as HTMLEl
 // Record a sale with the network off (issue #458, ADR-067; NFR-OFF-07): the items come from the phone's copy, a credit sale
 // is not offered, the sale goes to the outbox with every price as charged, the provisional receipt shows, and once the
 // phone is online the server's number replaces it. Issue #769: online, a sale lost on the network or with no answer within
-// 8 seconds goes to the outbox at once, as sent and under the same key, and the late answer makes no second sale. A sale whose
+// 8 seconds goes to the outbox at once under the same key, recorded offline, and the late answer makes no second sale. A sale whose
 // answer was lost before a reload locks the form and is kept with the same client sale id and a new key, so it is recorded
 // once. Every request fails as with no network unless a test says otherwise. Fabricated people, items and amounts.
 
@@ -183,7 +183,19 @@ describe('Record a sale offline', () => {
     expect(screen.queryByTestId('no-items-on-phone')).toBeNull();
   });
 
-  it('puts a sale lost on the network in the outbox at once, as it was sent and under the same key (issue #769)', async () => {
+  it('waits for the copy on the phone before saying the items are not on it, and sells offline only in retail (issue #769)', async () => {
+    const loading = testOffline(seller, { online: false, catalogue: null });
+    if (!loading) throw new Error('a seller sells offline');
+    screenWith({ ...loading, catalogueLoading: true });
+    expect(await screen.findByTestId('offline-note')).toBeTruthy();
+    expect(screen.queryByTestId('no-items-on-phone')).toBeNull();
+    // A profile without its modules counts as retail, as the menus count it; a business without retail never sells offline.
+    expect(testOffline({ ...seller, modules: undefined })).not.toBeNull();
+    expect(testOffline({ ...seller, modules: [] })).toBeNull();
+    expect(testOffline({ ...seller, modules: ['lending'] })).toBeNull();
+  });
+
+  it('puts a sale lost on the network in the outbox at once under the same key, recorded offline (issue #769)', async () => {
     createSale.mockRejectedValue(new TypeError('Failed to fetch'));
     listProducts.mockResolvedValue([bulb]);
     const offline = testOffline(seller, { online: true, catalogue });
@@ -199,27 +211,42 @@ describe('Record a sale offline', () => {
     expect(body.client_sale_id).toBe(key);
     const [item] = offline.engine.snapshot().items;
     expect(item).toMatchObject({ id: key, key, state: 'queued' });
-    expect(item?.request).toEqual(body);
+    expect(item?.request).toEqual({ ...body, occurred_at: item?.occurredAt, recorded_offline: true, prices_as_of: catalogue.pricesAsOf });
   });
 
   it('keeps a sale with no answer within 8 seconds on the phone, and the late answer makes no second sale (issue #769)', async () => {
-    // A fake server holding one sale per Idempotency-Key: a second arrival under the key is answered with the same sale.
+    // A fake server as the real one behaves: one sale per Idempotency-Key, whose hash leaves the delivery fields out; while
+    // the first request still holds the key a second is 409 idempotency_in_progress; once it is done, the same sale again.
+    const delivery = ['occurred_at', 'recorded_offline', 'prices_as_of'];
+    const sale = (body: unknown) => Object.fromEntries(Object.entries(body as object).filter(([k]) => !delivery.includes(k)));
     const recorded = new Map<string, { body: unknown; sale: { id: string; sale_no: string } }>();
+    const inFlight = new Set<string>();
     const arrive = (body: unknown, key: string) => {
       const before = recorded.get(key);
       if (before) {
-        expect(before.body).toEqual(body);
+        expect(before.body).toEqual(sale(body));
         return before.sale;
       }
-      const sale = { id: `sale-${recorded.size + 1}`, sale_no: `RS0000007${recorded.size + 1}` };
-      recorded.set(key, { body, sale });
-      return sale;
+      const done = { id: `sale-${recorded.size + 1}`, sale_no: `RS0000007${recorded.size + 1}` };
+      recorded.set(key, { body: sale(body), sale: done });
+      return done;
     };
     let answerLate = () => {};
-    createSale.mockImplementation((body: unknown, key: string) => new Promise((resolve) => (answerLate = () => resolve(arrive(body, key)))));
+    createSale.mockImplementation((body: unknown, key: string) => {
+      inFlight.add(key);
+      return new Promise((resolve) => {
+        answerLate = () => {
+          inFlight.delete(key);
+          resolve(arrive(body, key));
+        };
+      });
+    });
     listProducts.mockResolvedValue([bulb]);
-    const send = vi.fn(async (item: OutboxItem) => ({ status: 201, body: arrive(item.request, item.key) }));
-    const offline = testOffline(seller, { online: true, catalogue, deps: { send } });
+    const send = vi.fn(async (item: OutboxItem) =>
+      inFlight.has(item.key) ? { status: 409, body: { code: 'idempotency_in_progress' } } : { status: 201, body: arrive(item.request, item.key) },
+    );
+    const report = vi.fn();
+    const offline = testOffline(seller, { online: true, catalogue, deps: { send, report } });
     if (!offline) throw new Error('a seller sells offline');
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -228,19 +255,26 @@ describe('Record a sale offline', () => {
       await act(() => vi.advanceTimersByTimeAsync(SALE_ANSWER_MS - 100));
       expect(screen.queryByText('Sale saved on this phone')).toBeNull();
       await act(() => vi.advanceTimersByTimeAsync(100));
-      expect(await screen.findByRole('heading', { name: /^Sale (saved on this phone|sent)$/ })).toBeTruthy();
+      // The provisional receipt shows while the first request still holds the key: the outbox's send is told to wait.
+      expect(await screen.findByRole('heading', { name: 'Sale saved on this phone' })).toBeTruthy();
+      expect(screen.getByText('Saved on this phone, it will send when the connection is better.')).toBeTruthy();
+      await waitFor(() => expect(send).toHaveBeenCalled());
+      expect(offline.engine.snapshot().items[0]).toMatchObject({ state: 'queued' });
+      expect(screen.getByRole('heading', { name: 'Sale saved on this phone' })).toBeTruthy();
 
-      const [body, key] = createSale.mock.calls[0] as [unknown, string];
+      const [body, key] = createSale.mock.calls[0] as [{ client_sale_id?: string }, string];
       expect(offline.engine.snapshot().items[0]).toMatchObject({ id: key, key });
-      expect(offline.engine.snapshot().items[0]?.request).toEqual(body);
+      expect(offline.engine.snapshot().items[0]?.request).toMatchObject({ ...body, recorded_offline: true });
 
       // The server's answer to the first request comes at last: the screen keeps the receipt it shows, and the sale is one.
       await act(async () => answerLate());
+      expect(screen.getByRole('heading', { name: 'Sale saved on this phone' })).toBeTruthy();
       await act(() => offline.engine.syncNow());
       expect(await screen.findByText('Sale sent')).toBeTruthy();
       expect(screen.getByTestId('receipt-number').textContent).toBe('Receipt RS00000071');
       expect(recorded.size).toBe(1);
       expect(createSale).toHaveBeenCalledTimes(1);
+      expect(report).not.toHaveBeenCalled();
       expect(send.mock.calls.every(([i]) => i.key === key)).toBe(true);
     } finally {
       vi.useRealTimers();

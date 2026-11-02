@@ -126,11 +126,6 @@ export function offlineSale(args: {
   buyerName?: string;
   /** An online request whose answer was lost: it goes as it was sent, dated when it was sent (ADR-067 decision 5). */
   sent?: { body: SaleRequest; at: string };
-  /**
-   * Issue #769: the online request got no answer in time and goes again exactly as sent, under the same key, so the
-   * server answers a late or a second arrival from that key and records the sale once.
-   */
-  asSent?: boolean;
   now: Date;
 }): OutboxItem {
   const { draft, clientSaleId, key, scope, branchName, pricesAsOf, now, sent } = args;
@@ -154,7 +149,7 @@ export function offlineSale(args: {
   });
   const buyer = args.buyerName?.trim();
   const delivery = { occurred_at: occurredAt, recorded_offline: true, ...(pricesAsOf ? { prices_as_of: pricesAsOf } : {}) };
-  const request: SaleRequest = sent ? (args.asSent ? sent.body : { ...sent.body, client_sale_id: clientSaleId, ...delivery }) : {
+  const request: SaleRequest = sent ? { ...sent.body, client_sale_id: clientSaleId, ...delivery } : {
     branch_id: draft.branchId,
     payment_method: draft.method,
     ...(draft.customerId ? { customer_id: draft.customerId } : {}),

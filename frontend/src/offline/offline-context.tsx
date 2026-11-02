@@ -45,6 +45,8 @@ export interface Offline {
   engine: SyncEngine;
   connectivity: Connectivity;
   catalogue: Catalogue | null;
+  /** True while the copy on the phone is still being read, so no copy yet is not said to be none (issue #769). */
+  catalogueLoading?: boolean;
   /** The person holds retail.offline.resolve somewhere: the sheet shows other people's refused sales and the clashes. */
   manager: boolean;
   /** The person is an administrator (tenant_admin, the Owner included): they may discard their own refused sale with a second reason. */
@@ -188,6 +190,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
   const scope = svc && userId ? scopeOf(svc.host, userId) : null;
   const engine = useMemo(() => (svc && scope ? new SyncEngine(svc.engineDeps(svc.store, scope)) : null), [svc, scope]);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
+  const [catalogueLoading, setCatalogueLoading] = useState(true);
   const [others, setOthers] = useState(0);
   // The latest profile, read when a refresh runs, so a new copy of the same profile does not restart the watch.
   const profile = useRef(me);
@@ -229,7 +232,10 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
     // Sales kept on this phone must survive the browser clearing storage under pressure (ADR-067 decision 3).
     requestPersistence();
     let live = true;
-    void svc.store.catalogue(scope).then((c) => live && setCatalogue((now) => now ?? c));
+    void svc.store
+      .catalogue(scope)
+      .then((c) => live && setCatalogue((now) => now ?? c), () => undefined)
+      .finally(() => live && setCatalogueLoading(false));
     void lookAtOthers(false);
     void engine.load().then(() => {
       if (svc.connectivity.online()) void engine.sync();
@@ -279,6 +285,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       engine,
       connectivity: svc.connectivity,
       catalogue,
+      catalogueLoading,
       refresh,
       forget: async () => {
         await svc.store.deleteCatalogue(scope);
@@ -286,7 +293,7 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
         await svc.store.setLastPerson(svc.host, null);
       },
     };
-  }, [svc, scope, engine, catalogue, refresh, manager, admin, userId, others]);
+  }, [svc, scope, engine, catalogue, catalogueLoading, refresh, manager, admin, userId, others]);
 }
 
 /** Asks the browser to keep this site's storage (the outbox) when space runs low; a refusal or no support changes nothing. */

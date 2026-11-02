@@ -172,9 +172,20 @@ class SalesService {
     @Transactional
     Outcome<Sale> create(String idempotencyKey, SaleRequest r) {
         // ADR-067: a sale already recorded with this client sale id is the same sale, whatever key it comes with, so a
-        // send after the key expired, or with a new key after a lost answer, answers it again and does nothing.
+        // send after the key expired, or with a new key after a lost answer, answers it again and does nothing. Issue
+        // #769:
+        // it is looked up before the key, and the key's hash leaves out how the sale was delivered, so an online
+        // request
+        // that got no answer in time and is sent again from the outbox under the same key with occurred_at,
+        // recorded_offline and prices_as_of added is the same request, also while the first still holds the key.
+        if (r.clientSaleId() != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Sale> found = recordedAs(r);
+            if (found.isPresent()) {
+                return new Outcome<>(found.get(), true);
+            }
+        }
         boolean[] earlier = {false};
-        Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, r, Sale.class, () -> {
+        Outcome<Sale> outcome = idempotency.once(idempotencyKey, "POST", PATH, keyed(r), Sale.class, () -> {
             if (r.clientSaleId() != null) {
                 Optional<Sale> found = recordedAs(r);
                 if (found.isPresent()) {
@@ -185,6 +196,28 @@ class SalesService {
             return record(r);
         });
         return earlier[0] ? new Outcome<>(outcome.body(), true) : outcome;
+    }
+
+    /** What the Idempotency-Key covers: a request with a client sale id without its delivery fields (issue #769). */
+    static SaleRequest keyed(SaleRequest r) {
+        if (r.clientSaleId() == null) {
+            return r;
+        }
+        return new SaleRequest(
+                r.branchId(),
+                r.saleDate(),
+                r.paymentMethod(),
+                r.customerId(),
+                r.buyerName(),
+                r.buyerContact(),
+                r.dueDate(),
+                r.priceListId(),
+                r.creditOverrideReason(),
+                r.lines(),
+                r.clientSaleId(),
+                null,
+                null,
+                null);
     }
 
     /**
