@@ -17,7 +17,8 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 export const DOWNLOADED = 'This browser cannot share files, so the receipt PDF was downloaded. Send it from your downloads.';
 export const SHARE_AGAIN = 'The receipt is ready. Tap Share receipt again to send it.';
 export const SHARE_REFUSED = 'Your phone would not open its share options, so the receipt PDF was downloaded. Send it from your downloads.';
-export const WHATSAPP_HINT = 'WhatsApp opens with the receipt details. To send the PDF itself, use Share receipt and pick WhatsApp.';
+export const WHATSAPP_HINT = 'WhatsApp opens with the receipt details and a link to the receipt PDF. The link works for 90 days.';
+export const NO_LINK = 'The link to the receipt could not be made, so the message has the receipt details only.';
 export const WHATSAPP_FAILED = 'WhatsApp could not be opened with these details. Check the number and try again.';
 
 export const NOT_DRAWN = 'The receipt could not be shown on the screen. Download the PDF to see it.';
@@ -185,6 +186,11 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     enabled: allowed && shownFor === key,
     retry: false,
   });
+  // The link to the receipt PDF for a typed number (issue #760), which a wa.me message cannot attach: made once a number
+  // is there, so the tap opens WhatsApp at once. One per sale on this screen; it opens the receipt as it stands then.
+  const linkQuery = { queryKey: ['retail', 'sale-receipt-link', sale.id], queryFn: () => retail.saleReceiptLink(sale.id ?? ''), staleTime: Infinity, retry: false };
+  const link = useQuery({ ...linkQuery, enabled: allowed && facts.data !== undefined && (typed ?? facts.data.buyer_contact ?? '').trim() !== '' });
+  const [linking, setLinking] = useState(false);
   // The PDF once fetched, for this state of the sale only: a second tap shares it at once, inside the tap, which a phone that
   // let the first tap's wait run out needs. `refused` counts the phone's refusals of the share sheet for this file. `pending`
   // is the fetch under way, which Share and Download the PDF both wait on rather than fetching it twice.
@@ -271,18 +277,28 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     }
   }
 
-  function whatsApp() {
+  async function whatsApp() {
     if (!f) return;
     const check = normalisePhone(phone);
     if (!check.ok) return setPhoneProblem(check.problem);
-    let link: string;
+    setPhoneProblem(null);
+    setNote(null);
+    // Usually made already; otherwise made now (joining a request already under way), and a message without it still goes,
+    // with a note saying so.
+    let url = link.data?.url;
+    if (!url) {
+      setLinking(true);
+      url = await queryClient.fetchQuery(linkQuery).then((l) => l.url, () => undefined);
+      setLinking(false);
+      if (!url) setNote(NO_LINK);
+    }
+    let chat: string;
     try {
-      link = whatsAppLink(check.digits, receiptCaption(f));
+      chat = whatsAppLink(check.digits, receiptCaption(f, url));
     } catch {
       return setPhoneProblem(WHATSAPP_FAILED);
     }
-    setPhoneProblem(null);
-    window.open(link, '_blank', 'noopener,noreferrer');
+    window.open(chat, '_blank', 'noopener,noreferrer');
     if (mayKeep && keep) save.mutate(shownPhone(check.digits));
   }
 
@@ -330,7 +346,7 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
             </label>
           )}
           <p className="cluster">
-            <BusyButton type="button" className="btn" busy={save.isPending} onClick={whatsApp}>WhatsApp customer</BusyButton>
+            <BusyButton type="button" className="btn" busy={save.isPending || linking} onClick={() => void whatsApp()}>WhatsApp customer</BusyButton>
 
           </p>
           <p className="field-hint">{WHATSAPP_HINT}</p>

@@ -17612,6 +17612,23 @@
         },
         "required" : [ "lines", "valid_until" ]
       },
+      "RetailReceiptLink" : {
+        "properties" : {
+          "expires_at" : {
+            "description" : "When the link stops working, 90 days on",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "link" : {
+            "description" : "As a person reads it, for example rincoltech.com/<token>",
+            "type" : "string"
+          },
+          "url" : {
+            "description" : "The link with https://, for the WhatsApp message",
+            "type" : "string"
+          }
+        }
+      },
       "RetailReceiptPreview" : {
         "properties" : {
           "printed" : {
@@ -34770,7 +34787,17 @@
         } ],
         "responses" : {
           "302" : {
-            "description" : "Location is the shop's address or the not found page"
+            "description" : "Location is the shop's address, a module's page or the not found page"
+          },
+          "404" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "A module's link that is wrong or has expired, such as a receipt link (issue #760)"
           }
         },
         "summary" : "Follow a short link: 302 to the shop, to its new address while an old name forwards, or to the page 'No shop uses this link' (ADR-108)",
@@ -34790,7 +34817,17 @@
         } ],
         "responses" : {
           "302" : {
-            "description" : "Location is the shop's address or the not found page"
+            "description" : "Location is the shop's address, a module's page or the not found page"
+          },
+          "404" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "A module's link that is wrong or has expired, such as a receipt link (issue #760)"
           }
         },
         "summary" : "Follow a short link: 302 to the shop, to its new address while an old name forwards, or to the page 'No shop uses this link' (ADR-108)",
@@ -42021,6 +42058,44 @@
         "tags" : [ "retail-documents" ]
       }
     },
+    "/api/v1/retail/receipt-links/{token}" : {
+      "get" : {
+        "operationId" : "openRetailReceiptLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/pdf" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The PDF"
+          },
+          "404" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "This receipt link has expired: a plain page"
+          }
+        },
+        "summary" : "The receipt PDF a receipt link opens, with no sign-in; a wrong or expired link is a plain page (issue #760)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
     "/api/v1/retail/reports/business-evaluation" : {
       "get" : {
         "operationId" : "getRetailBusinessEvaluation",
@@ -43678,6 +43753,34 @@
           }
         },
         "summary" : "The facts of a sale's receipt to share, as its PDF prints them: number, business name, buyer and number, paid, balance, returns and net; own sales only without retail.sale.all_sellers (issue #439)",
+        "tags" : [ "retail-documents" ]
+      }
+    },
+    "/api/v1/retail/sales/{sale_id}/receipt/link" : {
+      "post" : {
+        "operationId" : "createRetailSaleReceiptLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "sale_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailReceiptLink"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "A short link to the sale's receipt PDF for a message to a typed WhatsApp number: read only, no sign-in, valid for 90 days; the same check as the receipt PDF (issue #760)",
         "tags" : [ "retail-documents" ]
       }
     },

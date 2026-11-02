@@ -17,6 +17,8 @@ const saleReceiptPdf = vi.fn();
 const saleReceipt = vi.fn();
 const saleReceiptPrinted = vi.fn();
 const updateCustomer = vi.fn();
+const saleReceiptLink = vi.fn();
+const LINK = { url: 'https://example.test/abcdefghijklmnopqrstuvwxyz', link: 'example.test/abcdefghijklmnopqrstuvwxyz', expires_at: '2027-01-20T09:00:00Z' };
 
 vi.mock('../../../api/retail', async (original) => {
   const real = await original<typeof import('../../../api/retail')>();
@@ -27,11 +29,12 @@ vi.mock('../../../api/retail', async (original) => {
       saleReceipt: (...a: unknown[]) => saleReceipt(...a),
       saleReceiptPrinted: (...a: unknown[]) => saleReceiptPrinted(...a),
       updateCustomer: (...a: unknown[]) => updateCustomer(...a),
+      saleReceiptLink: (...a: unknown[]) => saleReceiptLink(...a),
     },
   };
 });
 
-const { ShareReceipt, NOT_DRAWN, DOWNLOADED, SHARE_AGAIN, SHARE_REFUSED, WHATSAPP_HINT } = await import('./receipt-share');
+const { ShareReceipt, NOT_DRAWN, DOWNLOADED, SHARE_AGAIN, SHARE_REFUSED, WHATSAPP_HINT, NO_LINK } = await import('./receipt-share');
 
 const seller = mockMe('sales');
 const admin = mockMe('admin');
@@ -66,6 +69,7 @@ beforeEach(() => {
   saleReceiptPdf.mockResolvedValue(new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }));
   saleReceipt.mockResolvedValue(facts);
   saleReceiptPrinted.mockResolvedValue(preview);
+  saleReceiptLink.mockResolvedValue(LINK);
   open = vi.fn();
   vi.stubGlobal('open', open);
   URL.createObjectURL = vi.fn(() => 'blob:receipt');
@@ -81,6 +85,7 @@ afterEach(() => {
   saleReceipt.mockReset();
   saleReceiptPrinted.mockReset();
   updateCustomer.mockReset();
+  saleReceiptLink.mockReset();
   delete (navigator as { share?: unknown }).share;
   delete (navigator as { canShare?: unknown }).canShare;
 });
@@ -268,15 +273,46 @@ describe('Share receipt', () => {
 });
 
 describe('WhatsApp customer', () => {
-  it('opens wa.me with the buyer number from the receipt facts and the caption, and says the PDF goes through Share receipt', async () => {
+  it('opens wa.me with the buyer number from the receipt facts, the caption and the link to the receipt PDF', async () => {
     screenOf(seller, sale);
     expect((await phoneBox()).value).toBe('0700 000 031');
     expect(screen.getByText(WHATSAPP_HINT)).toBeTruthy();
+    // Made once a number is there, before the tap, so the tap opens WhatsApp at once.
+    await waitFor(() => expect(saleReceiptLink).toHaveBeenCalledWith('s1'));
     fireEvent.click(await whatsAppButton());
-    expect(open).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
     const url = String(open.mock.calls[0]?.[0]);
     expect(url.startsWith('https://wa.me/256700000031?text=')).toBe(true);
-    expect(decodeURIComponent(url.split('?text=')[1] ?? '')).toContain('Customer: Test Buyer 01');
+    const text = decodeURIComponent(url.split('?text=')[1] ?? '');
+    expect(text).toContain('Customer: Test Buyer 01');
+    expect(text).toContain(`See your receipt: ${LINK.url}`);
+    expect(saleReceiptLink).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes the link for a typed number to a cash buyer with no number, and makes it only once', async () => {
+    saleReceipt.mockResolvedValue({ ...facts, buyer_name: undefined, buyer_contact: undefined });
+    screenOf(seller, { ...sale, buyer_name: undefined, buyer_contact: undefined });
+    await phoneBox();
+    expect(saleReceiptLink).not.toHaveBeenCalled();
+    fireEvent.change(await phoneBox(), { target: { value: '0700000035' } });
+    fireEvent.click(await whatsAppButton());
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    const text = decodeURIComponent(String(open.mock.calls[0]?.[0]).split('?text=')[1] ?? '');
+    expect(String(open.mock.calls[0]?.[0]).startsWith('https://wa.me/256700000035?text=')).toBe(true);
+    expect(text).not.toContain('Customer:');
+    expect(text).toContain(`See your receipt: ${LINK.url}`);
+    fireEvent.click(await whatsAppButton());
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(saleReceiptLink).toHaveBeenCalledTimes(1);
+  });
+
+  it('still opens WhatsApp with the details when the link cannot be made, and says so', async () => {
+    saleReceiptLink.mockRejectedValue(new Error('offline'));
+    screenOf(seller, sale);
+    fireEvent.click(await whatsAppButton());
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).not.toContain('See your receipt');
+    expect((await screen.findByRole('status')).textContent).toBe(NO_LINK);
   });
 
   it('refuses an ambiguous number in plain words and opens nothing', async () => {
@@ -291,7 +327,7 @@ describe('WhatsApp customer', () => {
     saleReceipt.mockResolvedValue({ ...facts, buyer_name: 'Test Buyer \uD83D' });
     screenOf(seller, sale);
     fireEvent.click(await whatsAppButton());
-    expect(open).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
   });
 
   it('offers to save a typed number on a buyer with no number, unticked, and saves it only when ticked', async () => {
@@ -304,6 +340,7 @@ describe('WhatsApp customer', () => {
     expect(keep.checked).toBe(false);
     fireEvent.click(keep);
     fireEvent.click(await whatsAppButton());
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
     expect(String(open.mock.calls[0]?.[0])).toContain('Balance%20outstanding%3A%20UGX%2025%2C000');
     await waitFor(() => expect(updateCustomer).toHaveBeenCalledWith('c1', 3, { contact: '+256700000032' }));
   });
@@ -314,7 +351,7 @@ describe('WhatsApp customer', () => {
     fireEvent.change(await phoneBox(), { target: { value: '0700000033' } });
     await screen.findByLabelText(/Save this number for/);
     fireEvent.click(await whatsAppButton());
-    expect(open).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
     expect(updateCustomer).not.toHaveBeenCalled();
   });
 

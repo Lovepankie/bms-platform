@@ -78,9 +78,10 @@ export type CaptionFacts = Pick<SaleReceipt, 'receipt_no' | 'business_name' | 'b
 /**
  * The words that go with the receipt, in the share sheet and in WhatsApp: the BUSINESS's own name (never the platform's),
  * the receipt number, the buyer when there is one, what was paid and how, the goods taken back and the net when there were
- * returns, and what is still owed.
+ * returns, and what is still owed. `link`: the short link to the receipt PDF, for a message to a typed WhatsApp number,
+ * which cannot carry the file itself (issue #760).
  */
-export function receiptCaption(f: CaptionFacts): string {
+export function receiptCaption(f: CaptionFacts, link?: string): string {
   const name = plainName(f.business_name);
   const who = plainName(f.buyer_name);
   const owed = f.balance_minor ?? 0;
@@ -95,6 +96,7 @@ export function receiptCaption(f: CaptionFacts): string {
     f.payment_method === 'credit' && (f.paid_minor ?? 0) === 0 ? 'Sold on credit, nothing paid yet' : `Amount paid: ${money(f.paid_minor ?? 0)}${method ? ` (${method})` : ''}`,
     ...(returned > 0 ? [`Goods returned: ${money(returned)}${notes ? ` (credit note ${notes})` : ''}`, `Net after returns: ${money(f.net_minor ?? 0)}`] : []),
     owed > 0 ? `Balance outstanding: ${money(owed)}` : 'Fully settled, thank you!',
+    ...(link ? [`See your receipt: ${link}`] : []),
     'Thank you for your business.',
   ].join('\n');
 }

@@ -66,7 +66,8 @@ class ShortLinkRedirectController {
             operationId = "followShortLink")
     @ApiResponse(
             responseCode = "302",
-            description = "Location is the shop's address, a module's page or the not found page")
+            description = "Location is the shop's address, a module's page or the not found page",
+            content = @Content)
     @ApiResponse(
             responseCode = "404",
             description = "A module's link that is wrong or has expired, such as a receipt link (issue #760)",

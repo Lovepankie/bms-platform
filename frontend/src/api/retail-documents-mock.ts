@@ -27,7 +27,7 @@ export type DocumentsMock = Pick<
   RetailApi,
   | 'listSaleDocuments' | 'issueSaleDocument' | 'issueTransferDocument' | 'listDocuments' | 'renderDocument' | 'documentUrl' | 'documentSeries'
   | 'setDocumentPrefix' | 'renderCreditNote' | 'listQuotations' | 'getQuotation' | 'createQuotation' | 'cancelQuotation' | 'convertQuotation' | 'customerStatementPdf'
-  | 'saleReceiptPdf' | 'saleReceipt' | 'saleReceiptPrinted'
+  | 'saleReceiptPdf' | 'saleReceipt' | 'saleReceiptPrinted' | 'saleReceiptLink'
 >;
 
 const DEFAULT_PREFIX: Record<DocumentType, string> = { quotation: 'QT', invoice: 'INV', delivery_note: 'DN' };
@@ -306,6 +306,17 @@ export function createDocumentsMock(env: DocumentsEnv): DocumentsMock {
         if (sale.status !== 'completed') return env.refuse(422, 'sale_voided', 'A cancelled sale has no receipt to share.');
         if (sale.write_off) return env.refuse(422, 'sale_written_off', WRITTEN_OFF);
         return new Blob([`%PDF-1.4 mock receipt ${sale.sale_no ?? ''}`], { type: 'application/pdf' });
+      }),
+
+    // The receipt link (issue #760): a fabricated token on the example host, never a working link.
+    saleReceiptLink: (saleId) =>
+      env.run(() => {
+        const sale = env.sales().find((x) => x.id === saleId);
+        if (!sale) return env.refuse(404, 'not_found', 'Not found.');
+        if (sale.status !== 'completed') return env.refuse(422, 'sale_voided', 'A cancelled sale has no receipt to share.');
+        if (sale.write_off) return env.refuse(422, 'sale_written_off', WRITTEN_OFF);
+        const link = 'example.test/receiptlinkmockdemoabcdefghij';
+        return { url: `https://${link}`, link, expires_at: new Date(Date.parse(`${env.today()}T00:00:00Z`) + 90 * 86_400_000).toISOString() };
       }),
   };
 }
