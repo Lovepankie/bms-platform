@@ -496,7 +496,10 @@ requester's scope decides whose loans are listed, and `group_by` is not offered 
   `lending_loan_transactions_one_disbursement` allows one disbursement row per loan, reversed or not (a test proves a second tranche and
   a payout entered again are refused), and the insights page's `portfolio.disbursed_count` counts distinct loans too. Table `summary`,
   per group and a total row: loans, principal disbursed, upfront fees, the average loan (half up) and the
-  median loan (the middle loan, or the mean of the two middle ones rounded half up). A responsible officer with no user row is labelled
+  median loan (the middle loan, or the mean of the two middle ones rounded half up). Every loan has a responsible officer: the reports
+  rely on `officer_user_id` being NOT NULL on `lending_loans` (V8) and on `lending_loan_daily_snapshots` (V33), carry no handling for a
+  missing one, and a test proves the database refuses it on both tables; loosening either constraint needs these reports changed with
+  it. A responsible officer with no user row is labelled
   "Staff" and the last four characters of the id, in this and the officer reports.
 - **`lending.officer_performance`** (`lending.reports.collections`, FR-CLN-06). Parameters `from`, `to`, `branch_id`. Table `officers`,
   a row per responsible officer and a total row: active loans, principal outstanding and PAR 30 at the end of the range; loans disbursed

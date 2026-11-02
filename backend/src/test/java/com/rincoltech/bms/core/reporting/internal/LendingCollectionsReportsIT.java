@@ -496,7 +496,8 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
     void anOfficerWhoIsNoLongerAUserIsLabelledAndCounted() throws Exception {
         Flows f = flows();
         // A loan whose responsible officer has no user row (removed, or brought in by an import): 50,000 paid out on 3
-        // Oct and due on 4 Oct, nothing paid back, so 4 days late.
+        // Oct and due on 4 Oct, nothing paid back, so 4 days late. V8 gives lending_loans.officer_user_id no foreign
+        // key to users (the golden book of the other report tests relies on that too), so such a loan can exist.
         UUID gone = UUID.randomUUID();
         UUID loan = loanRow(
                 f.t(), product(f.t()), f.t().headOffice(), gone, "UO01", "active", 50_000, LocalDate.of(2026, 10, 3));
@@ -528,7 +529,8 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
                         .sql("UPDATE lending_loans SET officer_user_id = NULL WHERE tenant_id = ? AND loan_no = 'LT01'")
                         .param(f.t().tenantId())
                         .update())
-                .hasMessageContaining("officer_user_id");
+                .hasMessageContaining("officer_user_id")
+                .hasMessageContaining("violates not-null constraint");
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->
                         TestDatabase.owner().sql("""
                                 INSERT INTO lending_loan_daily_snapshots (tenant_id, business_date, loan_id, branch_id,
@@ -538,7 +540,8 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
                                   FROM lending_loans l JOIN lending_loan_product_versions v ON v.id = l.product_version_id
                                  WHERE l.tenant_id = ? AND l.loan_no = 'LT01'
                                 """).param(f.t().tenantId()).update())
-                .hasMessageContaining("officer_user_id");
+                .hasMessageContaining("officer_user_id")
+                .hasMessageContaining("violates not-null constraint");
     }
 
     @Test

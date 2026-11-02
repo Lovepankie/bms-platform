@@ -255,7 +255,9 @@ things. None reverses a decision; no migration and no permission were needed.
    both branch lists are decided at request time, stored in the run's scope, and a download by someone whose access to either has
    narrowed is refused.
 4. **An officer is the loan's responsible officer now.** Flows, actions and promises count for the officer the loan has today, the
-   positions of a past date for the snapshot's officer; the report says so. Counting actions by who logged them would split one loan's
+   positions of a past date for the snapshot's officer; the report says so. Every loan has one: the reports rely on `officer_user_id`
+   being NOT NULL on `lending_loans` (V8) and on `lending_loan_daily_snapshots` (V33), have no null handling, and a test proves both
+   constraints; an officer with no user row is labelled "Staff" and the end of the id. Counting actions by who logged them would split one loan's
    follow up across officers and leave the collection rate and the actions in different rows.
 5. **The scope stays the insights page's.** As for `lending.par`, a run also needs `lending.insights.read`, and a caller without
    `lending.insights.all_officers` sees only their own loans; a cashier who holds `lending.reports.collections` without insights access
