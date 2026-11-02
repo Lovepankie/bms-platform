@@ -19482,13 +19482,17 @@
             "type" : "integer"
           },
           "existing_amount_minor" : {
-            "description" : "Present only with retail.profit.read in the record's branch; the amount of the active record for the day, if any",
+            "description" : "Present only with retail.profit.read in the record's branch, or for a record made while salespeople_see_savings_amount is on (ADR-115); the amount of the active record for the day, if any",
             "format" : "int64",
             "type" : "integer"
           },
           "existing_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "may_change_amount" : {
+            "description" : "True when this caller may save an amount different from the suggestion: with retail.savings.overwrite, or with salespeople_see_savings_amount on when no saved record of the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115)",
+            "type" : "boolean"
           },
           "suggested_minor" : {
             "description" : "Present only with retail.profit.read in the record's branch",
@@ -24847,6 +24851,10 @@
             },
             "type" : "array"
           },
+          "salespeople_see_savings_amount" : {
+            "description" : "Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115)",
+            "type" : "boolean"
+          },
           "setup_dismissed" : {
             "description" : "True once the business set-up checklist has been dismissed",
             "type" : "boolean"
@@ -25697,6 +25705,10 @@
               "type" : "string"
             },
             "type" : "array"
+          },
+          "salespeople_see_savings_amount" : {
+            "description" : "Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115)",
+            "type" : "boolean"
           },
           "setup_dismissed" : {
             "type" : "boolean"

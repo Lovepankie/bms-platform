@@ -108,8 +108,17 @@ final class CashbookApi {
             @JsonInclude(JsonInclude.Include.NON_NULL) UUID existingId,
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
-            @Schema(description = PROFIT_ONLY + "; the amount of the active record for the day, if any")
-            Long existingAmountMinor) {}
+            @Schema(
+                    description =
+                            PROFIT_ONLY + ", or for a record made while salespeople_see_savings_amount is on (ADR-115)"
+                                    + "; the amount of the active record for the day, if any")
+            Long existingAmountMinor,
+
+            @Schema(
+                    description = "True when this caller may save an amount different from the suggestion: with"
+                            + " retail.savings.overwrite, or with salespeople_see_savings_amount on when no saved record of"
+                            + " the day was voided (replacing a saved amount needs retail.savings.overwrite; ADR-115)")
+            boolean mayChangeAmount) {}
 
     @Schema(name = "RetailSavingsRequest")
     record SavingsRequest(

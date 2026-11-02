@@ -551,6 +551,8 @@ write. Keys and defaults:
 | `go_live_source` | `set` or `first_admin_sign_in`, with `go_live_date` | `set` when the Owner or the operator set the date; `first_admin_sign_in` when it was stored at that sign-in (issue #466, ADR-071) | FR-EXL-03 |
 | `financial_year_end_month` | 1 to 12, or absent | the month the business's financial year ends in; absent means June, the end of the Uganda tax year; set only by the Owner (`PATCH /settings`, 403 `owner_only` otherwise); the retention of a closed business's money records counts from the end of that financial year (issue #571, ADR-090, owner decision D46) | FR-TEN-09 |
 | `reports_enabled` | boolean | false; the tenant switch of the report runs (ADR-038, issue #214): off, nothing is queued, run or listed | FR-RPT-04 |
+| `salespeople_see_savings_amount` | boolean | false; set by the Owner only; "Salespeople can see and change the savings amount" in Business set-up: on, a caller without `retail.profit.read` sees the savings suggestion and may change it before the day is saved, and sees the saved amount of records made while it is on when holding `retail.savings.record`; never the cap, the profit or the expenses (issue #768, ADR-115) | FR-RET-18, FR-RET-19 |
+| `salespeople_see_savings_amount_since` | string (instant) | absent; written by the server when the Owner turns `salespeople_see_savings_amount` on (the database clock) and removed when it is turned off; a savings record made before it keeps its amount hidden from a caller without `retail.profit.read` (ADR-115) | FR-RET-18 |
 
 `logo_document_id` is set only by the logo upload route, never by a settings patch: it names a
 `documents` row of this tenant whose subject type is `core.tenant` and subject id is the tenant id

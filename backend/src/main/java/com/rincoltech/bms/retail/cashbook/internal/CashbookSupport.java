@@ -194,6 +194,32 @@ class CashbookSupport {
         return setting("retail.cashbook.tolerance_minor", 0);
     }
 
+    /**
+     * Issue #768, ADR-115: {@code salespeople_see_savings_amount}, set by the Owner in Business set-up, and since when it is on.
+     * When on, a caller without {@code retail.profit.read} sees the suggested savings amount and may change it, never the
+     * profit, the expenses or the cap; a record shows its amount to such a caller only when it was made while the setting was on.
+     */
+    record SalespeopleSavings(boolean on, Instant since) {
+        static final SalespeopleSavings OFF = new SalespeopleSavings(false, null);
+
+        /** True for a record made after the setting was last turned on, while it is still on. */
+        boolean shows(Instant createdAt) {
+            return on && since != null && !createdAt.isBefore(since);
+        }
+    }
+
+    /** Read once per request, so one answer never mixes two states of the setting. */
+    SalespeopleSavings salespeopleSavings() {
+        return jdbc.sql(
+                        "SELECT settings ->> 'salespeople_see_savings_amount', settings ->> 'salespeople_see_savings_amount_since'"
+                                + " FROM tenant_settings")
+                .query((rs, n) -> "true".equals(rs.getString(1))
+                        ? new SalespeopleSavings(true, rs.getString(2) == null ? null : Instant.parse(rs.getString(2)))
+                        : SalespeopleSavings.OFF)
+                .optional()
+                .orElse(SalespeopleSavings.OFF);
+    }
+
     private long setting(String key, long fallback) {
         String value = jdbc.sql("SELECT settings ->> ? FROM tenant_settings")
                 .param(key)

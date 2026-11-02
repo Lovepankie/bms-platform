@@ -337,3 +337,33 @@ describe('the set-up menu icons', () => {
     }
   });
 });
+
+// JUSTIFICATION-A3: the Business set-up test issue #768 asks for.
+// Issue #768, ADR-115: off by default, only for the Owner, with one plain line saying what turning it on gives away.
+describe('the salespeople savings setting', () => {
+  it('is off until the owner turns it on, and says a salesperson can then work out the profit', async () => {
+    delete settings.salespeople_see_savings_amount;
+    client.PATCH.mockClear();
+    show({ modules: ['retail'], owner: true });
+    const box = (await screen.findByLabelText('Salespeople can see and change the savings amount')) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent).toContain(
+      "A salesperson who sees the savings amount can work out the day's profit from it.",
+    );
+    fireEvent.click(box);
+    await screen.findByText('Salespeople can now see and change the savings amount');
+    expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { salespeople_see_savings_amount: true } }));
+  });
+
+  it('is not shown to an administrator who is not the owner', async () => {
+    show({ modules: ['retail'] });
+    await screen.findByLabelText('The month your financial year ends in');
+    expect(screen.queryByLabelText('Salespeople can see and change the savings amount')).toBeNull();
+  });
+
+  it('is not shown to a business without retail', async () => {
+    show({ modules: ['lending'], owner: true });
+    await screen.findByLabelText(/The day the app became your register/);
+    expect(screen.queryByLabelText('Salespeople can see and change the savings amount')).toBeNull();
+  });
+});

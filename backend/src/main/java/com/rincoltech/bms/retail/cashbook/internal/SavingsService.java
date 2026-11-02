@@ -17,6 +17,7 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsSuggestion;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.SavingsRow;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.SalespeopleSavings;
 import com.rincoltech.bms.retail.reports.DailyProfits;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
@@ -40,7 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
  * its profit less its recorded expenses, never below zero, and no record may save more (ADR-080). The
  * suggestion is that amount times the tenant rate; a savings amount is half the profit, so every figure
  * that carries it is absent without {@code retail.profit.read}, the audit row carries flags only, and a
- * caller without that permission cannot send an amount at all (no equality oracle).
+ * caller without that permission cannot send an amount at all (no equality oracle). ADR-115 (issue #768): when the owner turns
+ * on {@code salespeople_see_savings_amount}, such a caller sees the suggestion and the saved amount and may change the amount
+ * within the cap; the profit, the expenses and the cap itself stay hidden, and an amount above the cap is refused in words that
+ * do not state it. The profit can still be worked out from the suggestion (ADR-115, Worse).
  */
 @Service("retailSavingsService")
 class SavingsService {
@@ -112,22 +116,40 @@ class SavingsService {
         LocalDate on = support.businessDate(date, "date");
         Day d = day(branch, on);
         boolean gate = mayProfit(branch);
+        // ADR-115: with the owner's setting on, the suggestion shows without profit read; the profit, the expenses and
+        // the
+        // cap never do, and the day's saved amount only when it was saved while the setting was on.
+        SalespeopleSavings setting = support.salespeopleSavings();
+        boolean sees = gate || setting.on();
         UUID existing = repo.activeSavings(branch, on).orElse(null);
+        Long existingAmount = existing == null
+                ? null
+                : repo.savings(existing, false)
+                        .filter(x -> gate || setting.shows(x.createdAt()))
+                        .map(SavingsRow::amountMinor)
+                        .orElse(null);
         return new SavingsSuggestion(
                 branch,
                 on,
                 figures.day(branch, on).totalSold(),
                 support.suggestionToken(branch, on, d.suggested()),
-                gate ? d.suggested() : null,
+                sees ? d.suggested() : null,
                 gate ? d.profit() : null,
                 gate ? d.expenses() : null,
                 gate ? d.available() : null,
                 existing,
-                gate && existing != null
-                        ? repo.savings(existing, false)
-                                .map(SavingsRow::amountMinor)
-                                .orElse(null)
-                        : null);
+                existingAmount,
+                sees && mayChangeAmount(branch, on, setting));
+    }
+
+    /**
+     * ADR-115: the same rule for every caller, so no one gets more by holding less. Changing the suggestion before the day is
+     * saved needs only {@code retail.savings.record} while the owner's setting is on; replacing a saved amount (the day has a
+     * voided record) and any change while the setting is off need {@code retail.savings.overwrite}.
+     */
+    private boolean mayChangeAmount(UUID branch, LocalDate date, SalespeopleSavings setting) {
+        return CurrentPrincipal.require().may(CashbookSupport.SAVINGS_OVERWRITE, branch)
+                || (setting.on() && !repo.voidedSavingsExist(branch, date));
     }
 
     @Transactional
@@ -140,11 +162,14 @@ class SavingsService {
         branchContext.requireSells(branch, "branch_id");
         LocalDate date = support.businessDate(r.businessDate(), "business_date");
         boolean profit = mayProfit(branch);
+        // ADR-115: the owner let salespeople see and change the amount; they still never see the profit or expenses.
+        SalespeopleSavings setting = support.salespeopleSavings();
+        boolean salesperson = !profit && setting.on();
         if (r.suggestionToken() == null || r.suggestionToken().isBlank()) {
             throw ApiException.rule(
                     "suggestion_token_required", "Read the suggestion first and send its token back with the record.");
         }
-        if (!profit && (r.amountMinor() != null || r.overwriteReason() != null)) {
+        if (!profit && !salesperson && (r.amountMinor() != null || r.overwriteReason() != null)) {
             // The same answer for every value: an accepted-or-refused amount would be an equality
             // oracle for half the day's profit.
             throw new ApiException(
@@ -163,7 +188,7 @@ class SavingsService {
         if (!support.tokenMatches(branch, date, suggested, r.suggestionToken())) {
             Map<String, Object> extra = new LinkedHashMap<>();
             extra.put("suggestion_token", support.suggestionToken(branch, date, suggested));
-            if (profit) {
+            if (profit || salesperson) {
                 extra.put("suggested_minor", suggested);
             }
             throw new ApiException(
@@ -176,14 +201,11 @@ class SavingsService {
         }
         boolean typed = r.amountMinor() != null;
         long amount = typed ? r.amountMinor() : suggested;
-        if (amount > d.available()) {
-            throw aboveAvailable(d, date);
-        }
         boolean overwritten = typed && amount != suggested;
         String reason = null;
         Principal principal = CurrentPrincipal.require();
         if (overwritten) {
-            if (!principal.may(CashbookSupport.SAVINGS_OVERWRITE, branch)) {
+            if (!mayChangeAmount(branch, date, setting)) {
                 throw new ApiException(
                         HttpStatus.FORBIDDEN,
                         "permission_denied",
@@ -195,6 +217,11 @@ class SavingsService {
         }
         if (repo.activeSavings(branch, date).isPresent()) {
             throw savingsExist();
+        }
+        // ADR-115: the cap is judged last, after the permission and existing-record checks, so a request refused for
+        // another reason never says whether its amount was above the cap.
+        if (amount > d.available()) {
+            throw aboveAvailable(d, date, profit);
         }
         UUID id = UUID.randomUUID();
         UUID by = principal.userId();
@@ -228,22 +255,32 @@ class SavingsService {
         if (reason != null) {
             after.put("reason", reason);
         }
+        if (setting.on()) {
+            // ADR-115: the record was made under the owner's setting; the actor is on the audit row itself.
+            after.put("salespeople_setting", true);
+        }
         audit.record(AuditLog.Entry.created("retail.savings.created", "retail.savings", id, branch, after));
-        return view(repo.savings(id, false).orElseThrow());
+        return view(repo.savings(id, false).orElseThrow(), setting);
     }
 
     /**
-     * A typed amount above the day's available amount (ADR-080). Only a caller with profit read can type one,
-     * so the profit and expenses in the words reveal nothing new.
+     * A typed amount above the day's available amount (ADR-080). A caller with profit read is told the cap, the profit
+     * and the expenses; a salesperson typing under the owner's setting (ADR-115) is told none of them, only that the amount
+     * is too large, so the words never state the cap.
      */
-    private ApiException aboveAvailable(Day d, LocalDate date) {
-        String when = date.equals(support.today()) ? "today" : "for " + date.format(DAY);
-        String detail = "You can save at most " + money(d.available()) + " " + when + " (profit " + money(d.profit())
-                + " minus expenses " + money(d.expenses()) + ").";
+    private ApiException aboveAvailable(Day d, LocalDate date, boolean profit) {
+        boolean today = date.equals(support.today());
+        String detail = profit
+                ? "You can save at most " + money(d.available()) + " " + (today ? "today" : "for " + date.format(DAY))
+                        + " (profit " + money(d.profit()) + " minus expenses " + money(d.expenses()) + ")."
+                : "That amount is more than this shop can save " + (today ? "today" : "on " + date.format(DAY))
+                        + ". Enter a smaller amount.";
         Map<String, Object> extra = new LinkedHashMap<>();
-        extra.put("available_minor", d.available());
-        extra.put("daily_profit_minor", d.profit());
-        extra.put("day_expenses_minor", d.expenses());
+        if (profit) {
+            extra.put("available_minor", d.available());
+            extra.put("daily_profit_minor", d.profit());
+            extra.put("day_expenses_minor", d.expenses());
+        }
         return new ApiException(
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "savings_above_available",
@@ -292,20 +329,28 @@ class SavingsService {
                 ? Cursor.encode(
                         items.getLast().createdAt() + "|" + items.getLast().id())
                 : null;
-        return new SavingsPage(items.stream().map(SavingsService::view).toList(), next);
+        SalespeopleSavings setting = support.salespeopleSavings();
+        return new SavingsPage(items.stream().map(x -> view(x, setting)).toList(), next);
     }
 
-    /** A savings row as the caller may see it: the amount, suggestion and overwrite flag need profit read. */
-    static Savings view(SavingsRow r) {
+    /**
+     * A savings row as the caller may see it: the suggestion needs profit read; the amount and the overwrite flag need profit
+     * read, or, under the owner's setting (ADR-115), {@code retail.savings.record} for the row's branch and a record made while
+     * the setting was on. Older records and a reader of the cash book only keep the amount hidden.
+     */
+    static Savings view(SavingsRow r, SalespeopleSavings setting) {
         boolean profit = mayProfit(r.branchId());
+        boolean amount = profit
+                || (setting.shows(r.createdAt())
+                        && CurrentPrincipal.require().may(CashbookSupport.SAVINGS_RECORD, r.branchId()));
         return new Savings(
                 r.id(),
                 r.branchId(),
                 r.businessDate(),
                 r.currency(),
-                profit ? r.amountMinor() : null,
+                amount ? r.amountMinor() : null,
                 profit ? r.suggestedMinor() : null,
-                profit ? r.overwritten() : null,
+                amount ? r.overwritten() : null,
                 r.totalSoldMinor(),
                 r.by(),
                 r.byName(),
@@ -350,6 +395,6 @@ class SavingsService {
                 row.branchId(),
                 Map.of("business_date", row.businessDate().toString()),
                 Map.of("reason", reason)));
-        return view(repo.savings(id, false).orElseThrow());
+        return view(repo.savings(id, false).orElseThrow(), support.salespeopleSavings());
     }
 }
