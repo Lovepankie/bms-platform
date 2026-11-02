@@ -212,8 +212,10 @@ class FlowFigures {
      * the range ({@code first_on}), its principal disbursed in the range ({@code amount}, every disbursement that is not
      * reversed, summed) and its upfront fee ({@code fee}: the {@code fee_upfront} entries of that loan dated on
      * {@code first_on}, a reversed one excluded), so a fee belongs to exactly one disbursement, the loan's first. The
-     * index {@code lending_loan_transactions_one_disbursement} (V29) allows one disbursement row per loan, reversed or
-     * not, so today a loan has one; this keeps the figures right if tranches ever come.
+     * disbursement service posts the upfront fee with the disbursement's own value date ({@code LoanServicer}), so the
+     * fee is found on that date. The index {@code lending_loan_transactions_one_disbursement} (V29) allows one
+     * disbursement row per loan, reversed or not, so a loan has exactly one; if tranches were ever allowed, the fees of
+     * later tranches and the page's per-day loan count would both need revisiting, and this does not claim otherwise.
      */
     private static String perLoan(Scope s, Map<String, Object> p) {
         return """

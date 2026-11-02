@@ -301,6 +301,12 @@ class InsightsFiguresService implements InsightsFigures {
     // JUSTIFICATION-A3: slice D3 (issue #222): the collections, disbursements, arrears and officer figures of the port,
     // over FlowFigures (grouped twins of the insights queries) and the positions par() reads.
 
+    /** The group's name, or the staff label of an id the names do not hold, worked out only when it is needed. */
+    private static String label(Map<UUID, String> names, UUID id) {
+        String name = names.get(id);
+        return name != null ? name : InsightsService.staffLabel(id);
+    }
+
     /** A range figure cannot end after the business date the scope was resolved on. */
     private static void requireNotFuture(PortfolioScope p) {
         if (p.to().isAfter(p.today())) {
@@ -319,7 +325,7 @@ class InsightsFiguresService implements InsightsFigures {
         }
         Map<UUID, String> names = names(by, parts.keySet());
         for (Map.Entry<UUID, long[]> e : parts.entrySet()) {
-            out.add(make.apply(e.getKey(), names.getOrDefault(e.getKey(), InsightsService.staffLabel(e.getKey()))));
+            out.add(make.apply(e.getKey(), label(names, e.getKey())));
         }
         out.sort(Comparator.comparing(label).thenComparing(Object::toString));
         return out;
@@ -428,9 +434,10 @@ class InsightsFiguresService implements InsightsFigures {
         late.sort(Comparator.comparing((Position l) -> BUCKETS.indexOf(l.bucket()))
                 .thenComparing(Comparator.comparingInt(Position::daysPastDue).reversed())
                 .thenComparing(Position::loanNo));
+        // A loan always has a responsible officer: officer_user_id is NOT NULL on lending_loans (V8) and on
+        // lending_loan_daily_snapshots (V33); one who is no user is labelled by the end of their id.
         Set<UUID> officerIds = new HashSet<>();
         late.forEach(l -> officerIds.add(l.officerUserId()));
-        officerIds.remove(null);
         Map<UUID, String> officers = queries.userNames(officerIds);
         java.time.ZoneId zone = tenant.profile().timezone();
         for (int from = 0; from < late.size(); from += ARREARS_BLOCK) {
@@ -450,7 +457,7 @@ class InsightsFiguresService implements InsightsFigures {
                         x.memberNo(),
                         name ? x.memberName() : null,
                         contact ? x.phone() : masked(x.phone()),
-                        officers.getOrDefault(l.officerUserId(), InsightsService.staffLabel(l.officerUserId())),
+                        label(officers, l.officerUserId()),
                         l.daysPastDue(),
                         l.arrearsMinor(),
                         live ? x.penaltiesOutstandingMinor() : null,
@@ -511,8 +518,7 @@ class InsightsFiguresService implements InsightsFigures {
             for (int i = 0; i < activityTotal.length; i++) {
                 activityTotal[i] += a[i];
             }
-            groups.add(officerGroup(
-                    String.valueOf(id), labels.getOrDefault(id, InsightsService.staffLabel(id)), t, d, m, a));
+            groups.add(officerGroup(String.valueOf(id), label(labels, id), t, d, m, a));
         }
         groups.sort(Comparator.comparing(OfficerGroup::label).thenComparing(OfficerGroup::key));
         return new OfficerFigures(

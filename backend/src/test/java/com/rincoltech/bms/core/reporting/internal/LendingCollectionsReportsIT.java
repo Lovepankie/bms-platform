@@ -495,20 +495,64 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
     @Test
     void anOfficerWhoIsNoLongerAUserIsLabelledAndCounted() throws Exception {
         Flows f = flows();
-        // A loan whose responsible officer has no user row (removed, or brought in by an import): 50,000 due on 4 Oct,
-        // nothing paid.
+        // A loan whose responsible officer has no user row (removed, or brought in by an import): 50,000 paid out on 3
+        // Oct and due on 4 Oct, nothing paid back, so 4 days late.
         UUID gone = UUID.randomUUID();
         UUID loan = loanRow(
-                f.t(), product(f.t()), f.t().headOffice(), gone, "UO01", "active", 50_000, LocalDate.of(2026, 1, 5));
+                f.t(), product(f.t()), f.t().headOffice(), gone, "UO01", "active", 50_000, LocalDate.of(2026, 10, 3));
         item(f.t(), loan, 1, LocalDate.of(2026, 10, 4), 50_000, 0, 0, 0, 0, 0, 0, 0);
+        txn(f.t(), loan, f.t().headOffice(), "disbursement", 50_000, LocalDate.of(2026, 10, 3), null);
         UUID user = UUID.randomUUID();
         String label = "Staff " + gone.toString().substring(32);
         JsonNode officers = file(f, user, ALL, run(f, user, ALL, OFFICERS, RANGE, "json"));
         assertThat(rows(table(officers, "officers")))
-                .contains("[\"" + label + "\",1,50000,0,0,0,50000,0,0,0,0,0]")
-                .contains("[\"Total\",7,2410000,1245,3,2000000,385000,315000,8182,3,1,1]");
+                .contains("[\"" + label + "\",1,50000,0,1,50000,50000,0,0,0,0,0]")
+                .contains("[\"Total\",7,2410000,1245,4,2050000,385000,315000,8182,3,1,1]");
         JsonNode byOfficer = file(f, user, ALL, run(f, user, ALL, EVC, with(RANGE, "group_by", "officer"), "json"));
         assertThat(rows(table(byOfficer, "collections"))).contains("[\"" + label + "\",50000,0,0,0,0,0,0,0,0,0]");
+        JsonNode arrears = file(f, user, ALL, run(f, user, ALL, ARREARS, Map.of(), "json"));
+        assertThat(rows(table(arrears, "arrears")).get(0))
+                .isEqualTo("[\"1 to 30 days late\",\"UO01\",\"MUO01\",\"Test Borrower UO01\",\"+256700000001\",\""
+                        + label + "\",4,50000,0,50000,null,null,null,null,null]");
+        JsonNode paidOut = file(f, user, ALL, run(f, user, ALL, DISBURSEMENTS, RANGE, "json"));
+        assertThat(rows(table(paidOut, "loans")))
+                .contains("[\"UO01\",\"2026-10-03\",\"MUO01\",\"Head Office\",\"Test Product\",\"" + label
+                        + "\",50000,0]");
+    }
+
+    @Test
+    void aLoanAlwaysHasAResponsibleOfficerSoNoReportMeetsAMissingOne() {
+        Flows f = flows();
+        // officer_user_id is NOT NULL on lending_loans (V8) and on lending_loan_daily_snapshots (V33).
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TestDatabase.owner()
+                        .sql("UPDATE lending_loans SET officer_user_id = NULL WHERE tenant_id = ? AND loan_no = 'LT01'")
+                        .param(f.t().tenantId())
+                        .update())
+                .hasMessageContaining("officer_user_id");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        TestDatabase.owner().sql("""
+                                INSERT INTO lending_loan_daily_snapshots (tenant_id, business_date, loan_id, branch_id,
+                                    officer_user_id, product_id, principal_outstanding_minor, interest_outstanding_minor,
+                                    arrears_minor, days_past_due, par_bucket)
+                                SELECT l.tenant_id, DATE '2026-10-06', l.id, l.branch_id, NULL, v.product_id, 1, 0, 0, 0, 'current'
+                                  FROM lending_loans l JOIN lending_loan_product_versions v ON v.id = l.product_version_id
+                                 WHERE l.tenant_id = ? AND l.loan_no = 'LT01'
+                                """).param(f.t().tenantId()).update())
+                .hasMessageContaining("officer_user_id");
+    }
+
+    @Test
+    void aRangeOrDateAfterTodayIsRefusedForTheOfficerAndArrearsReports() {
+        Flows f = flows();
+        UUID user = UUID.randomUUID();
+        assertThat(post(f.t(), user, ALL, OFFICERS, Map.of("from", "2026-10-01", "to", "2026-10-09"), "json")
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(422);
+        assertThat(post(f.t(), user, ALL, ARREARS, Map.of("as_at", "2026-10-09"), "json")
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(422);
     }
 
     /** The product of the fabricated book. */

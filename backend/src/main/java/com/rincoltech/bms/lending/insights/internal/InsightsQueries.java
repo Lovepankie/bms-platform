@@ -53,8 +53,9 @@ class InsightsQueries {
     }
 
     /**
-     * Disbursements by value date in the range: the amount and the distinct loans (a loan is counted once, the
-     * definition {@code lending.disbursements} uses; V29 allows one disbursement row per loan, so it is also the rows).
+     * Disbursements by value date in the range: the amount and the distinct loans of each day. V29 allows one
+     * disbursement row per loan, so a loan is disbursed on one day only and the days' counts add up to the distinct
+     * loans of the range, the definition {@code lending.disbursements} uses.
      */
     List<DayTotal> disbursedByDay(Scope s) {
         if (s.empty()) {
