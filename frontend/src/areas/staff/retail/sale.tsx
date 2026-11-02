@@ -5,6 +5,8 @@ import { BusyButton } from '../../../app/ui/BusyButton';
 import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch';
 import { Stepper } from '../../../app/ui/Stepper';
 import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
+import { retailMessage } from '../../../api/retail-errors';
+import { getAccessToken } from '../../../auth/session';
 import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
 import { SALE_ANSWER_MS, answerWithin } from '../../../offline/connectivity';
 import { useOffline, useOnline } from '../../../offline/offline-context';
@@ -284,7 +286,10 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       try {
         return { sale: await answerWithin(asked, SALE_ANSWER_MS) };
       } catch (e) {
+        // A clear answer, a 401 included, is shown as it is. With no session left (a refresh was refused, or the person
+        // signed out) the sale is never kept as saved: the person is told to sign in, and the form opens again.
         if (e instanceof RetailError) throw e;
+        if (!getAccessToken()) throw new RetailError(retailMessage({ code: 'unauthenticated' }, 401), 401, 'unauthenticated');
         const item = offlineSale({ draft: shown, clientSaleId: key, sent: { body, at }, asSent: true, key, scope: offline.scope, branchName, pricesAsOf: offline.catalogue?.pricesAsOf, now: new Date() });
         await offline.engine.queue(item);
         return { kept: item };
@@ -592,9 +597,13 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
     });
   });
   /** Sends the sale as the screen shows it now (or the request already sent, which is all that can go again). */
+  // Issue #769: a sale the outbox may keep carries its occurred_at from the first request, so the request the outbox sends
+  // later is this same request, and the server dates it when it happened and takes a late arrival as an offline sale.
   const send = () => {
-    const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) };
     const at = draft.sent?.at ?? new Date().toISOString();
+    const fresh = (built: SaleRequest): SaleRequest =>
+      offline ? { ...built, client_sale_id: key, ...(mayKeepOnPhone({ body: built }) ? { occurred_at: at } : {}) } : built;
+    const body = draft.sent?.body ?? fresh(buildSaleRequest(shown, pricing, accounts));
     if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at } }));
     save.mutate({ body, at });
   };

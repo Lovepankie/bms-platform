@@ -64,7 +64,12 @@ left, the branch, the period, the person's roles.
    the outbox at once exactly as it was sent, under the same `Idempotency-Key`, and the seller gets the provisional
    receipt. The answer that comes later is ignored on the phone; the server answers the outbox's send from the key row
    (or, while the first request still holds the key, 409 `idempotency_in_progress`, which is tried again), so the sale
-   is recorded once (decision 5).
+   is recorded once (decision 5). The first online request of such a sale already carries `client_sale_id` and
+   `occurred_at`, so the request the outbox keeps is the same request with the same idempotency hash. The server dates
+   it at `occurred_at` (decision 6), and a request that arrives more than 5 minutes after `occurred_at` (the first held
+   up, or the outbox's send hours later) takes the acceptance path of a sale recorded offline, its prices as of
+   `occurred_at`, with the same rules and clashes (decisions 7 and 11). A 401, or no session left after a refused
+   refresh, is shown as signed out and the sale is never kept as saved.
 5. **Sent once.** The request carries `Idempotency-Key` (replays within 7 days answer from the key row) and
    `client_sale_id`, stored on `retail_sales` with a unique index per tenant. The server looks for the client sale id
    before any other check: a sale already recorded with it is answered as a replay (`Idempotent-Replayed: true`) when the

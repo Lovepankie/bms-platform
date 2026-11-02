@@ -37,6 +37,8 @@ vi.mock('../api/retail', async (original) => {
   };
 });
 
+const { RetailError } = await import('../api/retail');
+const { setAccessToken } = await import('../auth/session');
 const { mockMe } = await import('../api/retail-mock');
 const { StaffContext } = await import('../areas/staff/context');
 const { RecordSale } = await import('../areas/staff/retail/sale');
@@ -70,10 +72,14 @@ async function addBulbAndRecord() {
   fireEvent.click(save);
 }
 
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+  sessionStorage.clear();
+  setAccessToken('test-access-token');
+});
 
 afterEach(() => {
   cleanup();
+  setAccessToken(null);
   createSale.mockReset();
   listProducts.mockReset();
 });
@@ -195,11 +201,40 @@ describe('Record a sale offline', () => {
     expect(screen.getByText('Saved on this phone, it will send when the connection is better.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Keep it on this phone' })).toBeNull();
     expect(createSale).toHaveBeenCalledTimes(1);
-    const [body, key] = createSale.mock.calls[0] as [{ client_sale_id?: string }, string];
+    // The first request already carries the client sale id and the time of the sale, so the outbox sends this same request.
+    const [body, key] = createSale.mock.calls[0] as [{ client_sale_id?: string; occurred_at?: string; recorded_offline?: boolean }, string];
     expect(body.client_sale_id).toBe(key);
+    expect(body.occurred_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(body.recorded_offline).toBeUndefined();
     const [item] = offline.engine.snapshot().items;
-    expect(item).toMatchObject({ id: key, key, state: 'queued' });
+    expect(item).toMatchObject({ id: key, key, state: 'queued', occurredAt: body.occurred_at });
     expect(item?.request).toEqual(body);
+  });
+
+  // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+  it('shows a 401 or a refused refresh as signed out, never keeps the sale as saved (issue #769)', async () => {
+    listProducts.mockResolvedValue([bulb]);
+    createSale.mockRejectedValue(new RetailError('Your session has ended. Sign in again.', 401, 'unauthenticated'));
+    const answered = testOffline(seller, { online: true, catalogue });
+    if (!answered) throw new Error('a seller sells offline');
+    screenWith(answered);
+    await addBulbAndRecord();
+    expect(await screen.findByText('Your session has ended. Sign in again.')).toBeTruthy();
+    expect(screen.queryByText('Sale saved on this phone')).toBeNull();
+    expect(answered.engine.snapshot().items).toHaveLength(0);
+    cleanup();
+
+    // The refresh was refused, so no session is left; the request then fails on the network: still signed out, not saved.
+    setAccessToken(null);
+    createSale.mockReset();
+    createSale.mockRejectedValue(new TypeError('Failed to fetch'));
+    const refused = testOffline(seller, { online: true, catalogue });
+    if (!refused) throw new Error('a seller sells offline');
+    screenWith(refused);
+    await addBulbAndRecord();
+    expect(await screen.findByText('Your session has ended. Sign in again.')).toBeTruthy();
+    expect(screen.queryByText('Sale saved on this phone')).toBeNull();
+    expect(refused.engine.snapshot().items).toHaveLength(0);
   });
 
   it('keeps a sale with no answer within 8 seconds on the phone, and the late answer makes no second sale (issue #769)', async () => {
@@ -218,7 +253,13 @@ describe('Record a sale offline', () => {
     let answerLate = () => {};
     createSale.mockImplementation((body: unknown, key: string) => new Promise((resolve) => (answerLate = () => resolve(arrive(body, key)))));
     listProducts.mockResolvedValue([bulb]);
-    const send = vi.fn(async (item: OutboxItem) => ({ status: 201, body: arrive(item.request, item.key) }));
+    // The outbox's send is held on the weak connection too, until the test lets it through.
+    let letThrough = () => {};
+    const through = new Promise<void>((resolve) => (letThrough = resolve));
+    const send = vi.fn(async (item: OutboxItem) => {
+      await through;
+      return { status: 201, body: arrive(item.request, item.key) };
+    });
     const offline = testOffline(seller, { online: true, catalogue, deps: { send } });
     if (!offline) throw new Error('a seller sells offline');
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -228,14 +269,22 @@ describe('Record a sale offline', () => {
       await act(() => vi.advanceTimersByTimeAsync(SALE_ANSWER_MS - 100));
       expect(screen.queryByText('Sale saved on this phone')).toBeNull();
       await act(() => vi.advanceTimersByTimeAsync(100));
-      expect(await screen.findByRole('heading', { name: /^Sale (saved on this phone|sent)$/ })).toBeTruthy();
 
+      // At 8 seconds, before any answer: the provisional receipt, and nothing recorded yet.
+      expect(await screen.findByRole('heading', { name: 'Sale saved on this phone' })).toBeTruthy();
+      expect(screen.queryByText('Sale sent')).toBeNull();
+      expect(screen.getByTestId('receipt-number').textContent).toMatch(/^Receipt OFF-[0-9A-F]{8} \(provisional\)$/);
+      expect(recorded.size).toBe(0);
       const [body, key] = createSale.mock.calls[0] as [unknown, string];
       expect(offline.engine.snapshot().items[0]).toMatchObject({ id: key, key });
       expect(offline.engine.snapshot().items[0]?.request).toEqual(body);
 
-      // The server's answer to the first request comes at last: the screen keeps the receipt it shows, and the sale is one.
+      // The server's answer to the first request comes at last: the screen keeps the provisional receipt it shows.
       await act(async () => answerLate());
+      expect(recorded.size).toBe(1);
+      expect(screen.getByRole('heading', { name: 'Sale saved on this phone' })).toBeTruthy();
+      // Then the outbox's send gets through and is answered from the key: the server's number, and the sale is one.
+      letThrough();
       await act(() => offline.engine.syncNow());
       expect(await screen.findByText('Sale sent')).toBeTruthy();
       expect(screen.getByTestId('receipt-number').textContent).toBe('Receipt RS00000071');
