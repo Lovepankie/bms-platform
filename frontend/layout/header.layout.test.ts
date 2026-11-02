@@ -156,3 +156,26 @@ describe.each([360, 390, 412])('the top bar at %ipx wide', (width) => {
     });
   });
 });
+
+// JUSTIFICATION-A3: a new layout case for issue #763 (the offline banner at 360 and 412px) after the top bar cases it extends.
+// Issue #763: offline, the banner under the bar is the page's one offline notice, with the time of the figures, wrapped inside
+// the screen at the default and a large font size, and the bar's Refresh does not repeat it.
+describe.each([360, 412])('the offline banner at %ipx wide', (width) => {
+  it.each([1, 2])('fits at font scale %i as the only offline notice', async (font) => {
+    const page = await browser.newPage({ viewport: { width, height: 700 }, hasTouch: true, isMobile: true });
+    const banner = page.locator('.offline-banner');
+    await openLayout(page, `layout/header.html?font=${font}&sync=offline`, banner);
+    expect(await banner.count()).toBe(1);
+    expect(await banner.textContent()).toMatch(/^You are offline\. You can still sell; your sales will send when you are back online\. Figures are from \d{1,2} [A-Z][a-z]{2} at \d\d:\d\d\.$/);
+    const box = (await banner.boundingBox()) as Box;
+    expect(box.x).toBeGreaterThanOrEqual(-0.5);
+    expect(box.x + box.width).toBeLessThanOrEqual(width + 0.5);
+    expect(await banner.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    // The time of the figures is said once on the page: not again beside Refresh or anywhere else.
+    expect(await page.getByText(/Figures are from|Showing the figures/).count()).toBe(1);
+    // One notice: the dot's own word Offline (ADR-067) is a status, not a second notice.
+    expect(await page.getByText(/You are offline/).count()).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.close();
+  });
+});

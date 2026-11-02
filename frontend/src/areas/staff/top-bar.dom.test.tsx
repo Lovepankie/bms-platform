@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { OfflineProvider } from '../../offline/offline-context';
+import { figuresTime } from '../../offline/read-cache';
+import { testOffline } from '../../offline/test-kit';
 import { RouterContextProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -181,7 +184,30 @@ describe('the offline banner', () => {
     online.mockReturnValue(false);
     window.dispatchEvent(new Event('offline'));
     rerender(<OfflineBanner />);
-    expect(screen.getByRole('status').textContent).toContain('You are offline.');
+    expect(screen.getByRole('status').textContent).toBe('You are offline. You see what was loaded before.');
     online.mockRestore();
+  });
+
+  // JUSTIFICATION-A3: a new test case for issue #763 (the seller's banner with the time of the figures) beside the banner test it extends.
+  it('tells a seller, once, that selling still works and how old the figures are (issue #763)', async () => {
+    // The browser says online, but the server cannot be reached: the offline support's ping decides.
+    const seller = testOffline(mockMe('sales'), { online: false });
+    const client = new QueryClient();
+    const loaded = Date.now() - 5 * 60_000;
+    client.setQueryData(['retail', 'home', 'all'], { sales: 1 }, { updatedAt: loaded });
+    function Page() {
+      useQuery({ queryKey: ['retail', 'home', 'all'], queryFn: () => new Promise(() => undefined), staleTime: Infinity });
+      return <OfflineBanner me={mockMe('sales')} />;
+    }
+    render(
+      <QueryClientProvider client={client}>
+        <OfflineProvider value={seller}>
+          <Page />
+        </OfflineProvider>
+      </QueryClientProvider>,
+    );
+    const banner = await screen.findByRole('status');
+    expect(banner.textContent).toBe(`You are offline. You can still sell; your sales will send when you are back online. Figures are from ${figuresTime(loaded, Date.now())}.`);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 });

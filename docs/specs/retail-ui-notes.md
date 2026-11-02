@@ -1667,11 +1667,21 @@ profile, refreshed when the app comes online, at sign-in and every 15 minutes (`
 - **Sign out** with sales waiting asks first: "3 sales are waiting to sync." with Sync now, Keep them and sign out, and Cancel.
   Kept sales go when the same person signs in on that phone again.
 - **Opened with no network**, the app shows the last person signed in on this phone, with Record a sale and the outbox working;
-  other screens say they cannot load. Back online, the session is restored or the sign-in page shows.
+  the screens a shop reads every day show the figures last loaded (below). Back online, the session is restored or the sign-in
+  page shows.
+- **Reading offline** (issue #763, ADR-116, NFR-OFF-09): Home and the Retail summary, All sales and Credit sales (the last 30
+  days, and older credit sales still owing), Stock, Customers who owe, Customer accounts and ageing, Past usage and damage, and
+  Download my data show what was last loaded on this phone for this person, read only. The one notice is the banner under the
+  bar: "You are offline. You can still sell; your sales will send when you are back online. Figures are from today at 14:05."
+  (neutral grey, the info icon; "You are offline. You see what was loaded before." for a person who does not sell). No red
+  error under it for a read the network dropped, and the Refresh button says only **Offline**. The copy is per business and
+  person, only as the server answered, capped, never lending, thrown away when the person's rights or branches change, and goes
+  at sign-out.
+- **Home** says on the Shop card, to whoever may sell: "Sell works offline too: your sales send when you are back online."
 - The tour `retail-sales` (version 13) and `page-sale` (version 2) gain the step **Online or offline** on the dot.
 
-Tests: `outbox.test.ts`, `sync-engine.test.ts`, `catalogue.test.ts`, `offline-sale.dom.test.tsx`, `sync-status.dom.test.tsx`; backend
-`RetailOfflineSalesIT` and `PushPublishersIT`.
+Tests: `outbox.test.ts`, `sync-engine.test.ts`, `catalogue.test.ts`, `offline-sale.dom.test.tsx`, `sync-status.dom.test.tsx`,
+`read-cache.test.ts`, `offline-reading.dom.test.tsx`; backend `RetailOfflineSalesIT` and `PushPublishersIT`.
 
 ## Barcodes, scanning and labels (issue #345)
 

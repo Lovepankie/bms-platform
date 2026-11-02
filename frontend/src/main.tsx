@@ -10,7 +10,9 @@ import { reloadOnce } from './app/stale-app';
 import './app/theme.css';
 import './app/ui/index.css';
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } }, mutationCache: doneToasts() });
+// A change is never held back to be sent later when the app is offline (NFR-OFF-04): it is sent at once and fails plainly. Reads
+// pause offline and show the figures kept on the phone (issue #763, ADR-116).
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 }, mutations: { networkMode: 'always' } }, mutationCache: doneToasts() });
 
 // A new worker that has taken over replaces the old app at a safe moment, never by an immediate reload (#576, ADR-088): the
 // plugin's own answer to a new worker is location.reload(), which could land in the middle of a sale.

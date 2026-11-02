@@ -1,6 +1,7 @@
 import type { Me } from '../../../api/client';
 import type { BranchRole } from '../../../api/retail';
 import { WORDS } from '../../../app/glossary';
+import { sellsOffline } from '../../../offline/offline-context';
 
 // Which retail screens a session may use. The API is the authority; this only decides what the
 // menu and the routes offer, from the same /me permissions the rest of the app reads. Cost,
@@ -221,6 +222,11 @@ export function branchesWhere<B extends { id?: string }>(
 
 export function canSeeProfit(me: Pick<Me, 'permissions'>): boolean {
   return permissionsOf(me).includes(PROFIT);
+}
+
+/** The person may record a sale with no network (ADR-067): the one check of the offline banner and the Home line (issue #763). */
+export function recordsSalesOffline(me: Pick<Me, 'permissions' | 'module_capabilities' | 'modules'>): boolean {
+  return sellsOffline(me) && canUse(me, 'sale');
 }
 
 export function canUse(me: Pick<Me, 'permissions' | 'module_capabilities'>, screen: RetailScreen): boolean {

@@ -23,7 +23,7 @@ const fetchImpl = vi.hoisted(() => {
   return state;
 });
 
-import { APP_UPDATING, APP_UPDATING_CHECK, APP_UPDATING_MAYBE_SAVED, api, problemOf, updatingRetry } from './client';
+import { APP_UPDATING, APP_UPDATING_CHECK, APP_UPDATING_MAYBE_SAVED, api, droppedConnection, problemOf, updatingRetry } from './client';
 import { FormError, asFormError, unknownOutcome } from './lending-forms';
 import { realMembers } from './members';
 import { retailMessage } from './retail-errors';
@@ -240,6 +240,9 @@ describe('a dropped connection (#496)', () => {
     expect(failure).toBeInstanceOf(TypeError);
     expect((failure as Error).message).toBe('Failed to fetch');
     expect(asFormError(failure).message).toContain('The connection dropped');
+    // Marked as a dropped connection for reading offline (issue #763), unlike a TypeError of the app's own code.
+    expect(droppedConnection(failure)).toBe(true);
+    expect(droppedConnection(new TypeError('Failed to fetch'))).toBe(false);
     expect(fetchImpl.seen).toHaveLength(1);
   });
 });

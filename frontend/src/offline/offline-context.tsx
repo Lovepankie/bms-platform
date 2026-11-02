@@ -1,3 +1,4 @@
+import type { QueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { api, type Me } from '../api/client';
 import { retail } from '../api/retail';
@@ -5,6 +6,7 @@ import { getAccessToken, refreshFailedOffline, refreshSession, subscribe as onTo
 import { REFRESH_EVERY_MS, refreshCatalogue, type CatalogueSource } from './catalogue';
 import { browserConnectivity, type Connectivity } from './connectivity';
 import { waiting, type OutboxItem } from './outbox';
+import { accessOf, followConnectivity, forgetInMemory, keepReads, restore, usable, type ReadKeeper } from './read-cache';
 import { deviceStore, scopeOf, type Catalogue, type OfflineStore } from './store';
 import { SyncEngine, browserTabLock, type SyncDeps, type SyncSnapshot } from './sync-engine';
 
@@ -53,7 +55,7 @@ export interface Offline {
   othersWaiting: number;
   /** Fetches the catalogue copy again (when online). */
   refresh(): Promise<void>;
-  /** At sign-out: the catalogue copy, the saved profile and its pointer go; the outbox stays for their next sign-in here. */
+  /** At sign-out: the figures kept for reading, the catalogue copy, the saved profile and its pointer go; the outbox stays for their next sign-in here. */
   forget(): Promise<void>;
 }
 
@@ -178,7 +180,7 @@ export function browserServices(): OfflineServices {
  * The offline support of the signed-in person, or null when they do not sell. Loads their outbox, watches the connection,
  * refreshes the catalogue when online (at once, then every 15 minutes) and sends the outbox whenever the app comes online.
  */
-export function useOfflineSupport(me: Me | undefined, signedIn: boolean, services: () => OfflineServices = browserServices): Offline | null {
+export function useOfflineSupport(me: Me | undefined, signedIn: boolean, services: () => OfflineServices = browserServices, client?: QueryClient): Offline | null {
   const userId = me?.user_id;
   const sells = me !== undefined && sellsOffline(me);
   const svc = useMemo(() => (sells && userId ? services() : null), [sells, userId, services]);
@@ -246,6 +248,59 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
     };
   }, [svc, scope, engine, refresh, lookAtOthers]);
 
+  // Reading offline (issue #763, ADR-116): the figures last loaded come back from this person's copy on this business, made
+  // under the rights they hold now (a copy made under other rights is thrown away), new ones are written to it, and reads
+  // pause while offline instead of failing.
+  const access = me ? accessOf(me) : '';
+  const reads = useRef<ReadKeeper | null>(null);
+  // The rights the kept reads in memory were loaded under, to drop them when the rights change in the session.
+  const accessBefore = useRef<string | null>(null);
+  // A manager made a seller, a branch taken away, selling taken away, signed out: what was read under the old rights leaves
+  // memory, never shown offline. Whether or not the person still has offline support, so before anything else.
+  useEffect(() => {
+    if (!client) return;
+    if (accessBefore.current !== null && accessBefore.current !== access) forgetInMemory(client);
+    accessBefore.current = access;
+  }, [client, access]);
+  useEffect(() => {
+    if (!svc || !scope || !client) return;
+    let live = true;
+    const now = () => svc.now().getTime();
+    // The keeper of the old rights may still be writing: its copy is read (and thrown away) only once it has finished.
+    const before = reads.current;
+    const keeper = keepReads(client, svc.store, scope, access, now);
+    reads.current = keeper;
+    void (before?.settled() ?? Promise.resolve())
+      .then(() => svc.store.readCache(scope))
+      .then(
+        async (c) => {
+          if (!live) return;
+          if (c && !usable(c, access)) {
+            // Online the rights are the server's own, so a copy made under others goes, once a ping confirms the server
+            // answers (Wi-Fi with no internet says online). Opened offline they come from the profile saved on the phone,
+            // which may lag the copy: it is not shown, and not destroyed either.
+            if (await svc.connectivity.check().catch(() => false)) await svc.store.deleteReadCache(scope);
+            return;
+          }
+          keeper.adopt(restore(client, c, now(), access));
+        },
+        () => undefined,
+      );
+    return () => {
+      live = false;
+      keeper.stop();
+    };
+  }, [svc, scope, client, access]);
+  useEffect(() => (svc && client ? followConnectivity(client, svc.connectivity) : undefined), [svc, client]);
+  // A person who does not sell has no offline support: a copy left from when they did goes (it holds customers' names). Once
+  // per sign-in (not at each refresh of the profile); building the services starts nothing (connectivity starts on start()).
+  const known = me !== undefined;
+  useEffect(() => {
+    if (!userId || sells || !known) return;
+    const s = services();
+    void s.store.deleteReadCache(scopeOf(s.host, userId)).catch(() => undefined);
+  }, [userId, sells, known, services]);
+
   // Whenever a new access token arrives (a sign-in, a refresh by any screen), a stopped engine goes on sending.
   useEffect(() => {
     if (!engine) return;
@@ -278,12 +333,16 @@ export function useOfflineSupport(me: Me | undefined, signedIn: boolean, service
       catalogue,
       refresh,
       forget: async () => {
+        // The kept reads leave memory first; a device store that fails here never stops the rest of the sign-out.
+        if (client) forgetInMemory(client);
+        await reads.current?.forget().catch(() => undefined);
+        await svc.store.deleteReadCache(scope).catch(() => undefined);
         await svc.store.deleteCatalogue(scope);
         await svc.store.deleteProfile(scope);
         await svc.store.setLastPerson(svc.host, null);
       },
     };
-  }, [svc, scope, engine, catalogue, refresh, manager, admin, userId, others]);
+  }, [svc, scope, engine, catalogue, refresh, manager, admin, userId, others, client]);
 }
 
 /** Asks the browser to keep this site's storage (the outbox) when space runs low; a refusal or no support changes nothing. */
@@ -299,6 +358,20 @@ export function requestPersistence(): void {
 /** The number of sales waiting on this device for the signed-in person (queued and failed). */
 export function waitingNow(offline: Offline | null): number {
   return offline ? waiting(offline.engine.snapshot().items).length : 0;
+}
+
+/**
+ * At sign-out of a person with no offline support now (their selling was taken away): their kept figures go all the same,
+ * from the device and from memory (issue #763).
+ */
+export async function forgetReads(userId: string | undefined, client?: QueryClient, store: OfflineStore = deviceStore(), host: string = window.location.host): Promise<void> {
+  if (client) forgetInMemory(client);
+  if (!userId) return;
+  try {
+    await store.deleteReadCache(scopeOf(host, userId));
+  } catch {
+    // Nothing kept, or no store on this browser.
+  }
 }
 
 /** The profile of the last person signed in on this business, for opening the app with no network; null when none. */

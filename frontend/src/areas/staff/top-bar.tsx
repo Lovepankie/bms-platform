@@ -1,7 +1,11 @@
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { QueryClientContext } from '@tanstack/react-query';
+import { type ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
 import type { Me } from '../../api/client';
 import { useShellBrand } from '../../app/branding';
-import { useDeviceOnline } from '../../app/refresh-button';
+import { useDeviceOnline, useLoadedAt } from '../../app/refresh-button';
+import { useOffline, useOnline } from '../../offline/offline-context';
+import { figuresTime } from '../../offline/read-cache';
+import { recordsSalesOffline } from './retail/permissions';
 import { THEME_LABELS } from '../../app/shell';
 import { THEME_CHOICES, type ThemeChoice, useThemeChoice } from '../../app/theme-mode';
 import { BusyButton } from '../../app/ui/BusyButton';
@@ -172,14 +176,33 @@ export function SignOutEverywhere({ open, waiting, busy, onConfirm, onClose }: {
   );
 }
 
-/** Under the bar while the device has no network: what still works, in one line. Nothing at all while online. */
-export function OfflineBanner() {
-  const online = useDeviceOnline();
-  if (online) return null;
+/**
+ * Under the bar while the device has no network or cannot reach the server: what still works and how old the figures are,
+ * in one line, the page's only offline notice (issue #763). Nothing at all while online.
+ */
+export function OfflineBanner({ me }: { me?: Me }) {
+  const deviceOnline = useDeviceOnline();
+  const reachable = useOnline();
+  const offline = useOffline();
+  const loadedAt = useLoadedAt(useContext(QueryClientContext)?.getQueryCache());
+  const shown = !(deviceOnline && reachable);
+  // "today at" stays true across midnight: the time is read again each minute while the banner shows.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!shown) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [shown]);
+  if (!shown) return null;
+  // Only a person who may sell has the sale screen offline (ADR-067); the same check as the Home hint (home-cards.tsx).
+  const sells = offline !== null && me !== undefined && recordsSalesOffline(me);
+  const sell = sells ? ' You can still sell; your sales will send when you are back online.' : ' You see what was loaded before.';
+  const figures = loadedAt > 0 ? ` Figures are from ${figuresTime(loadedAt, Math.max(now, loadedAt))}.` : '';
   return (
     <p role="status" className="offline-banner">
       {icons.info}
-      <span>You are offline. You see what was loaded before, and the figures update once you are back online.</span>
+      <span>{`You are offline.${sell}${figures}`}</span>
     </p>
   );
 }

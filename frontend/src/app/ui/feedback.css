@@ -289,10 +289,6 @@
   font-weight: var(--weight-semibold);
 }
 
-.refresh-more {
-  display: none;
-}
-
 /* A failed refresh shows at every width: the old figures stay up, so the page must say they may be old. */
 .refresh-problem {
   color: var(--color-danger);
@@ -327,7 +323,6 @@
     display: inline;
   }
 
-  .refresh-more,
   .refresh-label {
     display: inline;
   }
