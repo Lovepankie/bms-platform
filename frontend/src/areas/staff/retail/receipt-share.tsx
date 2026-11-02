@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { retail, type ReceiptPreview, type Sale } from '../../../api/retail';
+import { retail, type ReceiptLink, type ReceiptPreview, type Sale } from '../../../api/retail';
 import { useStaff } from '../context';
 import { ALL_SELLERS, holdsAt } from './permissions';
 import { normalisePhone, receiptCaption, shownPhone, whatsAppLink } from './receipt-share-state';
@@ -186,10 +186,9 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     enabled: allowed && shownFor === key,
     retry: false,
   });
-  // The link to the receipt PDF for a typed number (issue #760), which a wa.me message cannot attach: made once a number
-  // is there, so the tap opens WhatsApp at once. One per sale on this screen; it opens the receipt as it stands then.
+  // The link to the receipt PDF (issue #760), which a wa.me message cannot attach: made only when WhatsApp customer is
+  // tapped, never by viewing the screen, and once per sale on this screen (review of #762).
   const linkQuery = { queryKey: ['retail', 'sale-receipt-link', sale.id], queryFn: () => retail.saleReceiptLink(sale.id ?? ''), staleTime: Infinity, retry: false };
-  const link = useQuery({ ...linkQuery, enabled: allowed && facts.data !== undefined && (typed ?? facts.data.buyer_contact ?? '').trim() !== '' });
   const [linking, setLinking] = useState(false);
   // The PDF once fetched, for this state of the sale only: a second tap shares it at once, inside the tap, which a phone that
   // let the first tap's wait run out needs. `refused` counts the phone's refusals of the share sheet for this file. `pending`
@@ -277,29 +276,37 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     }
   }
 
-  async function whatsApp() {
+  function whatsApp() {
     if (!f) return;
     const check = normalisePhone(phone);
     if (!check.ok) return setPhoneProblem(check.problem);
-    setPhoneProblem(null);
-    setNote(null);
-    // Usually made already; otherwise made now (joining a request already under way), and a message without it still goes,
-    // with a note saying so.
-    let url = link.data?.url;
-    if (!url) {
-      setLinking(true);
-      url = await queryClient.fetchQuery(linkQuery).then((l) => l.url, () => undefined);
-      setLinking(false);
-      if (!url) setNote(NO_LINK);
-    }
-    let chat: string;
+    const chatWith = (url?: string) => whatsAppLink(check.digits, receiptCaption(f, url));
+    const made = queryClient.getQueryData<ReceiptLink>(linkQuery.queryKey)?.url;
+    let address: string;
     try {
-      chat = whatsAppLink(check.digits, receiptCaption(f, url));
+      address = chatWith(made);
     } catch {
       return setPhoneProblem(WHATSAPP_FAILED);
     }
-    window.open(chat, '_blank', 'noopener,noreferrer');
+    setPhoneProblem(null);
+    setNote(null);
     if (mayKeep && keep) save.mutate(shownPhone(check.digits));
+    if (made) {
+      window.open(address, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // The window is opened inside the tap, so a phone never blocks it as a pop-up, and is sent to WhatsApp once the link is
+    // made; when it cannot be made the message goes without it, with a note saying so (review of #762).
+    const chat = window.open('', '_blank');
+    if (chat) chat.opener = null;
+    setLinking(true);
+    void queryClient.fetchQuery(linkQuery).then((l) => l.url, () => undefined).then((url) => {
+      setLinking(false);
+      if (!url) setNote(NO_LINK);
+      const to = url ? chatWith(url) : address;
+      if (chat) chat.location.href = to;
+      else window.open(to, '_blank', 'noopener,noreferrer');
+    });
   }
 
   return (
@@ -346,7 +353,7 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
             </label>
           )}
           <p className="cluster">
-            <BusyButton type="button" className="btn" busy={save.isPending || linking} onClick={() => void whatsApp()}>WhatsApp customer</BusyButton>
+            <BusyButton type="button" className="btn" busy={save.isPending || linking} onClick={whatsApp}>WhatsApp customer</BusyButton>
 
           </p>
           <p className="field-hint">{WHATSAPP_HINT}</p>

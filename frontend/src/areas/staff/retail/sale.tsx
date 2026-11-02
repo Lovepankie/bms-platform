@@ -591,7 +591,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         branchName,
         pricesAsOf: offline.catalogue?.pricesAsOf,
         // A name typed for the receipt while online goes with a sale the network then made wait (issue #760).
-        buyerName: draft.newBuyerName.trim() || (draft.cashName ?? ''),
+        buyerName: draft.newBuyerName.trim() || (draft.cashName ?? '').trim(),
+        buyerContact: draft.newBuyerName.trim() ? undefined : draft.cashPhone,
         now: new Date(),
       });
       await offline.engine.queue(item);

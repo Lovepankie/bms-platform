@@ -36,7 +36,8 @@ const facts: SaleReceipt = {
 const link: ReceiptLink = { url: 'https://example.test/abcdefghijklmnopqrstuvwxyz', link: 'example.test/abcdefghijklmnopqrstuvwxyz', expires_at: '2027-01-31T09:00:00Z' };
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 client.setQueryData(['retail', 'sale-receipt', receiptKey(sale)], facts);
-client.setQueryData(['retail', 'sale-receipt-link', sale.id], link);
+// ?nolink=1 leaves the link out, so the tap makes it (and, with no server here, fails to): the path a phone takes.
+if (query.get('nolink') !== '1') client.setQueryData(['retail', 'sale-receipt-link', sale.id], link);
 const router = layoutRouter('/staff/retail/sell');
 
 function Page() {
