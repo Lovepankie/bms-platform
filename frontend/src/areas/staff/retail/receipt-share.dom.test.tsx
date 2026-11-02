@@ -34,7 +34,7 @@ vi.mock('../../../api/retail', async (original) => {
   };
 });
 
-const { ShareReceipt, NOT_DRAWN, DOWNLOADED, SHARE_AGAIN, SHARE_REFUSED, WHATSAPP_HINT, NO_LINK } = await import('./receipt-share');
+const { ShareReceipt, NOT_DRAWN, DOWNLOADED, SHARE_AGAIN, SHARE_REFUSED, WHATSAPP_HINT, NO_LINK, WHATSAPP_AGAIN } = await import('./receipt-share');
 
 const seller = mockMe('sales');
 const admin = mockMe('admin');
@@ -64,13 +64,22 @@ const preview: ReceiptPreview = {
 
 let open: ReturnType<typeof vi.fn>;
 let click: ReturnType<typeof vi.spyOn>;
+// The window a tap opens before the link is ready: its address is set once the link comes back (issue #760).
+let win: { opener: unknown; closed: boolean; location: { href: string } } | null;
+/** Where the last tap took WhatsApp: the window opened inside the tap, sent on, or the address it was opened at. */
+const chat = () => {
+  const at = String(open.mock.calls.at(-1)?.[0] ?? '');
+  return at === '' ? (win?.location.href ?? '') : at;
+};
+const text = () => decodeURIComponent(chat().split('?text=')[1] ?? '');
 
 beforeEach(() => {
   saleReceiptPdf.mockResolvedValue(new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }));
   saleReceipt.mockResolvedValue(facts);
   saleReceiptPrinted.mockResolvedValue(preview);
   saleReceiptLink.mockResolvedValue(LINK);
-  open = vi.fn();
+  win = { opener: {}, closed: false, location: { href: '' } };
+  open = vi.fn(() => win);
   vi.stubGlobal('open', open);
   URL.createObjectURL = vi.fn(() => 'blob:receipt');
   URL.revokeObjectURL = vi.fn();
@@ -273,46 +282,71 @@ describe('Share receipt', () => {
 });
 
 describe('WhatsApp customer', () => {
-  it('opens wa.me with the buyer number from the receipt facts, the caption and the link to the receipt PDF', async () => {
+  it('makes no link when the screen opens, even for a buyer with a saved number', async () => {
     screenOf(seller, sale);
     expect((await phoneBox()).value).toBe('0700 000 031');
     expect(screen.getByText(WHATSAPP_HINT)).toBeTruthy();
-    // Made once a number is there, before the tap, so the tap opens WhatsApp at once.
-    await waitFor(() => expect(saleReceiptLink).toHaveBeenCalledWith('s1'));
-    fireEvent.click(await whatsAppButton());
-    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
-    const url = String(open.mock.calls[0]?.[0]);
-    expect(url.startsWith('https://wa.me/256700000031?text=')).toBe(true);
-    const text = decodeURIComponent(url.split('?text=')[1] ?? '');
-    expect(text).toContain('Customer: Test Buyer 01');
-    expect(text).toContain(`See your receipt: ${LINK.url}`);
-    expect(saleReceiptLink).toHaveBeenCalledTimes(1);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(saleReceiptLink).not.toHaveBeenCalled();
   });
 
-  it('makes the link for a typed number to a cash buyer with no number, and makes it only once', async () => {
+  it('opens the window inside the tap, before the link is asked for, and sends it to the chat with the link', async () => {
+    let made: (l: typeof LINK) => void = () => {};
+    saleReceiptLink.mockImplementation(() => new Promise((r) => { made = r; }));
+    screenOf(seller, sale);
+    fireEvent.click(await whatsAppButton());
+    // Nothing awaited before the window opens: the phone sees it as the tap's own.
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0]?.[0]).toBe('');
+    expect(win?.opener).toBeNull();
+    expect(saleReceiptLink).toHaveBeenCalledWith('s1');
+    expect(win?.location.href).toBe('');
+    made(LINK);
+    await waitFor(() => expect(win?.location.href.startsWith('https://wa.me/256700000031?text=')).toBe(true));
+    expect(text()).toContain('Customer: Test Buyer 01');
+    expect(text()).toContain(`See your receipt: ${LINK.url}`);
+  });
+
+  it('gives the link of the first tap to the next one, opening the chat at once', async () => {
     saleReceipt.mockResolvedValue({ ...facts, buyer_name: undefined, buyer_contact: undefined });
     screenOf(seller, { ...sale, buyer_name: undefined, buyer_contact: undefined });
-    await phoneBox();
-    expect(saleReceiptLink).not.toHaveBeenCalled();
     fireEvent.change(await phoneBox(), { target: { value: '0700000035' } });
     fireEvent.click(await whatsAppButton());
-    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
-    const text = decodeURIComponent(String(open.mock.calls[0]?.[0]).split('?text=')[1] ?? '');
-    expect(String(open.mock.calls[0]?.[0]).startsWith('https://wa.me/256700000035?text=')).toBe(true);
-    expect(text).not.toContain('Customer:');
-    expect(text).toContain(`See your receipt: ${LINK.url}`);
+    await waitFor(() => expect(text()).toContain(`See your receipt: ${LINK.url}`));
+    expect(text()).not.toContain('Customer:');
+    await waitFor(() => expect((screen.getByRole('button', { name: 'WhatsApp customer' }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(await whatsAppButton());
-    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(String(open.mock.calls[1]?.[0]).startsWith('https://wa.me/256700000035?text=')).toBe(true);
+    expect(text()).toContain(`See your receipt: ${LINK.url}`);
     expect(saleReceiptLink).toHaveBeenCalledTimes(1);
   });
 
-  it('still opens WhatsApp with the details when the link cannot be made, and says so', async () => {
+  it('still sends the details when the link cannot be made, with no wait before the window opens, and says so', async () => {
     saleReceiptLink.mockRejectedValue(new Error('offline'));
     screenOf(seller, sale);
     fireEvent.click(await whatsAppButton());
-    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
-    expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).not.toContain('See your receipt');
+    expect(open).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(win?.location.href.startsWith('https://wa.me/256700000031?text=')).toBe(true));
+    expect(text()).toContain('Customer: Test Buyer 01');
+    expect(text()).not.toContain('See your receipt');
     expect((await screen.findByRole('status')).textContent).toBe(NO_LINK);
+    // A later tap asks again, and again opens its window first.
+    await waitFor(() => expect((screen.getByRole('button', { name: 'WhatsApp customer' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(await whatsAppButton());
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(open.mock.calls[1]?.[0]).toBe('');
+  });
+
+  it('asks for a second tap when the phone blocked the window, which then opens the chat with the link', async () => {
+    open.mockReturnValueOnce(null);
+    screenOf(seller, sale);
+    fireEvent.click(await whatsAppButton());
+    expect((await screen.findByRole('status')).textContent).toBe(WHATSAPP_AGAIN);
+    fireEvent.click(await whatsAppButton());
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(text()).toContain(`See your receipt: ${LINK.url}`);
+    expect(saleReceiptLink).toHaveBeenCalledTimes(1);
   });
 
   it('refuses an ambiguous number in plain words and opens nothing', async () => {
@@ -340,8 +374,7 @@ describe('WhatsApp customer', () => {
     expect(keep.checked).toBe(false);
     fireEvent.click(keep);
     fireEvent.click(await whatsAppButton());
-    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
-    expect(String(open.mock.calls[0]?.[0])).toContain('Balance%20outstanding%3A%20UGX%2025%2C000');
+    await waitFor(() => expect(chat()).toContain('Balance%20outstanding%3A%20UGX%2025%2C000'));
     await waitFor(() => expect(updateCustomer).toHaveBeenCalledWith('c1', 3, { contact: '+256700000032' }));
   });
 

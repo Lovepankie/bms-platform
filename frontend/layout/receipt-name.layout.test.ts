@@ -83,22 +83,34 @@ describe.each([
     await page.close();
   });
 
-  it('opens WhatsApp with the receipt link for a typed number', async () => {
+  it('opens the window inside the tap, before the link is made, and sends it to WhatsApp with the link', async () => {
     const page = await open(font, theme);
+    // The link is not in the page's cache: the tap asks for it. The window is opened in the click itself and its address
+    // is set once the link comes back.
     await page.evaluate(() => {
-      (window as unknown as { opened: string[] }).opened = [];
+      const w = window as unknown as { opened: string[]; chat: { opener: unknown; closed: boolean; location: { href: string } } };
+      w.opened = [];
+      w.chat = { opener: {}, closed: false, location: { href: '' } };
       window.open = (url?: string | URL) => {
-        (window as unknown as { opened: string[] }).opened.push(String(url));
-        return null;
+        w.opened.push(String(url ?? ''));
+        return w.chat as unknown as Window;
       };
     });
     await page.getByLabel("Customer's WhatsApp number").fill('0700 000 072');
-    await page.getByRole('button', { name: 'WhatsApp customer' }).click();
-    const opened = await page.evaluate(() => (window as unknown as { opened: string[] }).opened);
-    expect(opened).toHaveLength(1);
-    expect(opened[0]?.startsWith('https://wa.me/256700000072?text=')).toBe(true);
-    expect(decodeURIComponent(opened[0]?.split('?text=')[1] ?? '')).toContain('See your receipt: https://example.test/abcdefghijklmnopqrstuvwxyz');
-    expect(decodeURIComponent(opened[0] ?? '')).toContain('Customer: Test Customer 71');
+    const button = page.getByRole('button', { name: 'WhatsApp customer' });
+    await button.evaluate((b: HTMLElement) => {
+      b.click();
+      const w = window as unknown as { opened: string[]; inTap: string[] };
+      w.inTap = [...w.opened];
+    });
+    expect(await page.evaluate(() => (window as unknown as { inTap: string[] }).inTap), 'opened within the tap').toEqual(['']);
+    await page.waitForFunction(() => (window as unknown as { chat: { location: { href: string } } }).chat.location.href !== '');
+    const chat = await page.evaluate(() => (window as unknown as { chat: { opener: unknown; location: { href: string } } }).chat);
+    expect(chat.opener).toBeNull();
+    expect(chat.location.href.startsWith('https://wa.me/256700000072?text=')).toBe(true);
+    expect(decodeURIComponent(chat.location.href.split('?text=')[1] ?? '')).toContain('See your receipt: https://example.test/abcdefghijklmnopqrstuvwxyz');
+    expect(decodeURIComponent(chat.location.href)).toContain('Customer: Test Customer 71');
+    expect(await page.evaluate(() => (window as unknown as { opened: string[] }).opened)).toEqual(['']);
     await page.close();
   });
 });

@@ -3,7 +3,7 @@ import { RouterContextProvider } from '@tanstack/react-router';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Me } from '../src/api/client';
-import type { ReceiptLink, Sale, SaleReceipt } from '../src/api/retail';
+import { retail, type ReceiptLink, type Sale, type SaleReceipt } from '../src/api/retail';
 import { mockMe } from '../src/api/retail-mock';
 import { StaffContext } from '../src/areas/staff/context';
 import { CashCustomerName } from '../src/areas/staff/retail/cash-customer';
@@ -14,7 +14,8 @@ import { layoutRouter } from './router';
 
 // The page receipt-name.layout.test.ts lays out in a real browser (issue #760): on the sale form, Add customer name and, once
 // tapped, the name and phone for the receipt; then Send the receipt with a typed number, whose WhatsApp message carries the
-// link to the receipt PDF. The facts and the link are put in the query cache, so nothing is asked of a server. ?open=1 opens
+// link to the receipt PDF. The facts are put in the query cache, and the link is not: it is asked for on the tap, as on a phone,
+// from a stand-in that answers after a short wait, so nothing is asked of a server. ?open=1 opens
 // the name, ?font= scales the root font size as a phone's large text setting does, ?theme=dark draws the dark theme. Every
 // name, number and link is invented.
 
@@ -36,7 +37,7 @@ const facts: SaleReceipt = {
 const link: ReceiptLink = { url: 'https://example.test/abcdefghijklmnopqrstuvwxyz', link: 'example.test/abcdefghijklmnopqrstuvwxyz', expires_at: '2027-01-31T09:00:00Z' };
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 client.setQueryData(['retail', 'sale-receipt', receiptKey(sale)], facts);
-client.setQueryData(['retail', 'sale-receipt-link', sale.id], link);
+retail.saleReceiptLink = () => new Promise((made) => setTimeout(() => made(link), 150));
 const router = layoutRouter('/staff/retail/sell');
 
 function Page() {
