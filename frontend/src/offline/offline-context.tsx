@@ -83,9 +83,12 @@ export function useOutbox(): SyncSnapshot {
   return useSyncExternalStore(e.subscribe, e.snapshot, e.snapshot);
 }
 
-/** The person may sell in retail: the only staff work that runs offline. */
+/**
+ * The person may sell in retail: the only staff work that runs offline. A profile without its modules counts as retail, as
+ * the menus count it (issue #769), so everyone the Sell screen lets sell can sell offline.
+ */
 export function sellsOffline(me: Pick<Me, 'permissions' | 'modules'>): boolean {
-  return (me.modules ?? []).includes('retail') && (me.permissions ?? []).includes('retail.sale.create');
+  return (!me.modules || me.modules.includes('retail')) && (me.permissions ?? []).includes('retail.sale.create');
 }
 
 /** An administrator (tenant_admin, the Owner included), who may discard their own refused sale with a second reason (ADR-067 decision 11 d). */

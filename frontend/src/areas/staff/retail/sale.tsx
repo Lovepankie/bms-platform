@@ -6,6 +6,7 @@ import { SEARCH_DELAY_MS, createDebouncer } from '../../../app/ui/useLiveSearch'
 import { Stepper } from '../../../app/ui/Stepper';
 import { RetailError, retail, type Product, type ResolvedLine, type Sale, type SalePayment, type SaleRequest } from '../../../api/retail';
 import { mayKeepOnPhone, offlineProblem, offlineSale } from '../../../offline/catalogue';
+import { SALE_ANSWER_MS, answerWithin } from '../../../offline/connectivity';
 import { useOffline, useOnline } from '../../../offline/offline-context';
 import { OfflineNote, OfflineProductPicker, ProvisionalReceipt } from '../../../offline/offline-sale';
 import type { OutboxItem } from '../../../offline/outbox';
@@ -273,13 +274,35 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   // The client sale id is the draft's key, so a sale whose answer was lost and that is kept to send later is never twice.
   // The request is kept with the draft once sent: until the server answers, the same request is all that can go again.
   // toast-exempt: success screen, the sale complete screen headed Sale saved through onSaved
+  // Issue #769: on a weak connection a cash, mobile money or bank sale with no answer within SALE_ANSWER_MS, or lost on the
+  // network, goes to the outbox exactly as sent under the same key, and the provisional receipt shows at once. The answer
+  // that comes later is ignored here, and the server answers the outbox's send from the key, so the sale is recorded once.
   const save = useMutation({
-    mutationFn: (body: SaleRequest) => retail.createSale(body, key),
+    mutationFn: async ({ body, at }: { body: SaleRequest; at: string }): Promise<{ sale: Sale } | { kept: OutboxItem }> => {
+      const asked = retail.createSale(body, key);
+      if (!offline || !mayKeepOnPhone({ body })) return { sale: await asked };
+      try {
+        return { sale: await answerWithin(asked, SALE_ANSWER_MS) };
+      } catch (e) {
+        if (e instanceof RetailError) throw e;
+        const item = offlineSale({ draft: shown, clientSaleId: key, sent: { body, at }, asSent: true, key, scope: offline.scope, branchName, pricesAsOf: offline.catalogue?.pricesAsOf, now: new Date() });
+        await offline.engine.queue(item);
+        return { kept: item };
+      }
+    },
     onError: (e) => {
       // A clear answer means the sale was not recorded, so the form opens again.
       if (e instanceof RetailError) setDraft((d) => ({ ...d, sent: undefined }));
     },
-    onSuccess: (sale) => {
+    onSuccess: (done) => {
+      if ('kept' in done) {
+        finish();
+        // The connection is weak: the check says so at once, and the outbox sends as soon as it answers.
+        if (offline) void offline.connectivity.check().then((ok) => (ok ? offline.engine.sync() : undefined));
+        onQueued?.(done.kept);
+        return;
+      }
+      const { sale } = done;
       entry.saved();
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail', 'products'] });
@@ -571,8 +594,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   /** Sends the sale as the screen shows it now (or the request already sent, which is all that can go again). */
   const send = () => {
     const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) };
-    if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at: new Date().toISOString() } }));
-    save.mutate(body);
+    const at = draft.sent?.at ?? new Date().toISOString();
+    if (offline) setDraft((d) => ({ ...d, sent: d.sent ?? { body, at } }));
+    save.mutate({ body, at });
   };
   const entry = useEntryChecks('sell', branchId, warnings, send, draft.lines);
   const lost = locked && !save.isPending && !(save.error instanceof RetailError);
@@ -636,7 +660,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         entry.check();
       }}
     >
-      {offlineMode && <OfflineNote />}
+      {offlineMode && <OfflineNote branchId={branchId} />}
       <fieldset disabled={locked} className="sale-lock" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div data-tour="sale-search">
         {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={add} /> : (

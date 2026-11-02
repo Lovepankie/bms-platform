@@ -3,7 +3,7 @@ import type { Me } from '../api/client';
 import type { Product } from '../api/retail';
 import type { Draft } from '../areas/staff/retail/sale-state';
 import { mayKeepOnPhone, offlineProblem, offlineSale, refreshCatalogue, searchCatalogue, sellingBranchesOf, serverIso } from './catalogue';
-import { createConnectivity } from './connectivity';
+import { PING_TIMEOUT_MS, createConnectivity } from './connectivity';
 import { memoryStore, scopeOf } from './store';
 
 // The catalogue copy, the offline sale request and the connection watch (issue #458, ADR-067 decisions 2, 3 and 4;
@@ -157,6 +157,36 @@ describe('the connection', () => {
     await vi.waitFor(() => expect(c.online()).toBe(true));
     expect(seen).toEqual([false, true, false, true]);
   });
+
+  // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+  it('counts a ping with no answer within 3 seconds as offline (issue #769)', async () => {
+    vi.useFakeTimers();
+    try {
+      let answer: (ok: boolean) => void = () => {};
+      const c = createConnectivity({
+        ping: () => new Promise<boolean>((resolve) => (answer = resolve)),
+        navigatorOnline: () => true,
+        addListener: () => () => {},
+        every: () => () => {},
+      });
+      expect(c.online()).toBe(true);
+      const checked = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS - 1);
+      expect(c.online()).toBe(true);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await checked).toBe(false);
+      expect(c.online()).toBe(false);
+      // The slow answer that comes later changes nothing; the next ping that answers in time does.
+      answer(true);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(c.online()).toBe(false);
+      const again = c.check();
+      answer(true);
+      expect(await again).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('a sale whose answer was lost', () => {
@@ -168,5 +198,13 @@ describe('a sale whose answer was lost', () => {
     expect(() =>
       offlineSale({ draft, clientSaleId: 'k1', key: 'k2', scope: 's', branchName: 'Test Branch A', sent: { body: { payment_method: 'credit' } as never, at: '2026-10-22T09:00:00Z' }, now: new Date() }),
     ).toThrow(/credit sale/);
+  });
+
+  it('goes as it was sent, under the same key, when the online request got no answer in time (issue #769)', () => {
+    const draft = { branchId: 'b1', method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [{ product: cable, qty: '1', price: '2000' }] } as unknown as Draft;
+    const body = { branch_id: 'b1', payment_method: 'cash', lines: [{ product_id: 'p1', qty: '1.000', unit_price_minor: 2000 }], client_sale_id: 'k1' } as never;
+    const item = offlineSale({ draft, clientSaleId: 'k1', key: 'k1', scope: 's', branchName: 'Test Branch A', pricesAsOf: '2026-10-22T08:00:00Z', sent: { body, at: '2026-10-22T09:00:00Z' }, asSent: true, now: new Date() });
+    expect(item.request).toEqual(body);
+    expect(item).toMatchObject({ id: 'k1', key: 'k1', occurredAt: '2026-10-22T09:00:00Z', totalMinor: 2000, state: 'queued' });
   });
 });
