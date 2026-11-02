@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import com.rincoltech.bms.testsupport.Api;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -98,11 +99,13 @@ class ReceiptLinkIT extends IntegrationTest {
 
     /** The platform's short link endpoint, where the one Cloudflare rule sends rincoltech.com/<token> (ADR-108). */
     ResponseEntity<String> follow(String name) {
-        return http.exchange(
-                "/api/v1/platform/short-links/" + name,
-                HttpMethod.GET,
-                new HttpEntity<>(new HttpHeaders()),
-                String.class);
+        // Redirects stay off, so the test reads the 302 itself.
+        return Api.withoutRetries(http)
+                .exchange(
+                        "/api/v1/platform/short-links/" + name,
+                        HttpMethod.GET,
+                        new HttpEntity<>(new HttpHeaders()),
+                        String.class);
     }
 
     static void gonePage(ResponseEntity<?> r) {
@@ -162,7 +165,7 @@ class ReceiptLinkIT extends IntegrationTest {
 
         // rincoltech.com/<token> reaches the platform, which sends the phone on to the shop's own host.
         ResponseEntity<String> followed = follow(token);
-        assertThat(followed.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(followed.getStatusCode()).as("%s", followed.getBody()).isEqualTo(HttpStatus.FOUND);
         assertThat(followed.getHeaders().getLocation().toString())
                 .contains(t.slug())
                 .endsWith("/api/v1/retail/receipt-links/" + token);
@@ -174,7 +177,8 @@ class ReceiptLinkIT extends IntegrationTest {
         assertThat(pdf.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PDF);
         assertThat(pdf.getHeaders().getCacheControl()).isEqualTo("no-store");
         assertThat(pdf.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).startsWith("inline");
-        String text = SaleReceiptPdfIT.text(pdf);
+        // Numbers kept, so the receipt is seen to be this sale's.
+        String text = SaleReceiptPdfIT.printedText(pdf);
         assertThat(text)
                 .contains(saleNo)
                 .contains("Received by Test Customer 42")
