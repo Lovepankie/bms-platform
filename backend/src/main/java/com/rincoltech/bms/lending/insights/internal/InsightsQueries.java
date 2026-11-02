@@ -197,7 +197,7 @@ class InsightsQueries {
     }
 
     /** The loans whose schedule items count as expected in the range: active at some point in it. */
-    private static final String ACTIVE_IN_RANGE = " " + """
+    static final String ACTIVE_IN_RANGE = " " + """
              AND l.disbursed_on IS NOT NULL
              AND (l.written_off_on IS NULL OR l.written_off_on >= :from)
              AND (l.closed_on IS NULL OR l.closed_on >= :from)""";
