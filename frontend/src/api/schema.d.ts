@@ -17092,7 +17092,7 @@ export interface components {
             lines: components["schemas"]["RetailSaleLineRequest"][];
             /**
              * Format: date-time
-             * @description ADR-067: when the sale happened on the device; the sale is dated that day in the business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422 occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash
+             * @description ADR-067: when the sale happened on the device; the sale is dated that day in the business's time zone. Up to five minutes ahead is recorded as now; further ahead is 422 occurred_at_in_future, or for a sale recorded offline now with a clock_ahead clash. A cash, mobile money or bank sale with a client_sale_id that arrives more than five minutes after occurred_at is taken as recorded offline, its prices as of occurred_at (issue #769)
              */
             occurred_at?: string;
             payment_method: string;

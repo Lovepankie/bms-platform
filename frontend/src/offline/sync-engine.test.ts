@@ -157,6 +157,42 @@ describe('the sync engine', () => {
     expect(deps.report).toHaveBeenCalledTimes(1);
   });
 
+  // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+  it('tries a 409 in progress again later with backoff, never as a refusal, and then takes the replay (issue #769)', async () => {
+    const replay = { status: 201, body: { id: 'sale-a', sale_no: 'RS-a' } };
+    let busy = MAX_SERVER_TRIES + 2;
+    const { engine, sent, deps, tick } = setup(async (i) => {
+      if (i.id === 'a' && busy > 0) {
+        busy -= 1;
+        return { status: 409, body: { code: busy % 2 ? 'idempotency_in_progress' : 'client_sale_in_progress', detail: 'Still being processed.' } };
+      }
+      return i.id === 'a' ? replay : ok(i);
+    });
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.syncNow();
+    // The first answer is 409: a try again later, with backoff, and the order is kept.
+    expect(sent).toEqual(['a:key-a']);
+    expect(engine.snapshot().items.map((i) => i.state)).toEqual(['queued', 'queued']);
+    expect(engine.snapshot().items[0]).toMatchObject({ attempts: 1, error: { code: 'idempotency_in_progress' } });
+    expect(engine.snapshot().items[0]?.serverTries ?? 0).toBe(0);
+    await engine.sync();
+    expect(sent).toHaveLength(1);
+    // More 409s than the tries that fail a sale, and longer than a day: never failed, reported or offered to discard.
+    for (let n = 0; n < MAX_SERVER_TRIES + 2; n++) {
+      tick(GIVE_UP_AFTER_MS);
+      await engine.sync();
+      expect(engine.snapshot().items[0]?.state).not.toBe('failed');
+    }
+    expect(deps.report).not.toHaveBeenCalled();
+    expect(deps.decisions).not.toHaveBeenCalled();
+    expect(engine.snapshot().items.map((i) => [i.id, i.state, i.sale?.saleNo])).toEqual([
+      ['a', 'sent', 'RS-a'],
+      ['b', 'sent', 'RS-b'],
+    ]);
+    expect(sent.filter((s) => s === 'a:key-a')).toHaveLength(MAX_SERVER_TRIES + 3);
+  });
+
   it('fails a sale the server has not taken for 24 hours, but never for a phone with no network', async () => {
     let network = false;
     const { engine, sent, tick } = setup(async () => {
