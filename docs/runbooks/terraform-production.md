@@ -51,6 +51,12 @@ recorded decisions the plan cannot check.
     it by buying a separate validation domain (this item). The fix, when he chooses it: buy a separate validation domain,
     point `_acme-challenge.rincoltech.com` (and the per-host names) at it with a CNAME, give Caddy a token for that domain only
     and set Caddy's `override_domain`, which removes the risk.
+11. **The Hetzner server's own disk is not encrypted at rest** (Hetzner root only; ADR-063 decision 1). Hetzner does not
+    encrypt a cloud server's local disk, and the Terraform adds no disk encryption of its own, so the live database and
+    `/opt/bms/.env` sit on that disk in plain form in Hetzner's location, whether or not item 7 is `true`. The AWS root does
+    not have this gap (its disk is encrypted). The owner accepts it under the same data protection decision as items 2 and 7,
+    or chooses AWS, or asks for disk encryption on the host in a new ADR. That need not mean a key typed at every boot: a network unlock
+    (for example LUKS with clevis and a tang server) lets an unattended host unlock its disk at boot; it is out of scope today. Record the answer here before the first Hetzner apply.
 
 ## 2. Secrets: where each one comes from
 
@@ -269,39 +275,52 @@ Open the `bms` user's crontab with `sudo crontab -u bms -e` and add this one lin
 sudo -u bms /opt/bms/backup.sh && sudo tail -5 /opt/bms/state/backup.log
 ```
 
-The log must end with the upload to `production/daily/` and no `rclone delete` (retention is the bucket's). Look for the object
+The log must end with the upload to `${BMS_ENVIRONMENT}/daily/` (`production/daily/` on the production host) and no `rclone delete` (retention is the bucket's). Look for the object
 in the dashboard, R2, the backup bucket.
 
 ## 10. Prove the lock refuses a delete (a throwaway object, never a real backup)
 
-On the host, in a shell as `bms` (`sudo -u bms bash`, since `bms` has no login shell), with the host's own credentials, exactly as `restore-from-backup.md` section 7 step 5:
+On the host, in a shell as `bms` (`sudo -u bms bash`, since `bms` has no login shell), with the host's own credentials, exactly as `restore-from-backup.md` section 7 step 5.
+`BMS_ENVIRONMENT` is the line `BMS_ENVIRONMENT=production` that step 7.1 writes into `/opt/bms/.env` by hand (`host_env` does
+not carry it); `backup.sh` writes under that prefix. Paste the whole block: it runs in `( set -eu; ... )`, so a missing or
+empty `BMS_ENVIRONMENT`, or any step that fails, stops all of it. The delete and the overwrite are expected to fail, so they
+are tested with `if` and a success stops the block with LOCK NOT ON; the last line prints LOCK HOLDS only if every check passed:
 
 ```sh
+( set -eu
 set -a; . /opt/bms/.env; set +a
+: "${BMS_ENVIRONMENT:?missing from /opt/bms/.env, see step 7.1}"
 rc() { docker run --rm -v /tmp:/tmp -e RCLONE_CONFIG_R2_TYPE=s3 -e RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
   -e RCLONE_CONFIG_R2_ENDPOINT="$R2_ENDPOINT" -e RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
   -e RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" -e RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true "$RCLONE_IMAGE" "$@"; }
-echo lock-test > /tmp/lock-test.txt
+P="r2:${R2_BACKUP_BUCKET}/${BMS_ENVIRONMENT}/daily"
 N="0-lock-test-$(date -u +%Y%m%dT%H%M%SZ).txt"
-rc copyto /tmp/lock-test.txt "r2:${R2_BACKUP_BUCKET}/production/daily/$N"
-rc deletefile "r2:${R2_BACKUP_BUCKET}/production/daily/$N"      # must FAIL (access denied or object locked)
+echo lock-test > /tmp/lock-test.txt
+rc copyto /tmp/lock-test.txt "$P/$N"
+if rc deletefile "$P/$N"; then echo "LOCK NOT ON: the delete succeeded"; exit 1; fi
 echo lock-test-changed > /tmp/lock-test.txt                     # different content, so rclone really uploads
-rc copyto --ignore-times /tmp/lock-test.txt "r2:${R2_BACKUP_BUCKET}/production/daily/$N"   # an overwrite must FAIL too
-rc lsf "r2:${R2_BACKUP_BUCKET}/production/daily/" | grep "$N"   # still listed
+if rc copyto --ignore-times /tmp/lock-test.txt "$P/$N"; then echo "LOCK NOT ON: the overwrite succeeded"; exit 1; fi
+rc lsf "$P/" | grep -q "$N"                                     # still listed
 rm /tmp/lock-test.txt
+echo "LOCK HOLDS: $P/$N kept" )
 ```
 
-If the delete succeeds, the lock is not on: stop, only the throwaway was lost; check `terraform state show
+If it prints LOCK NOT ON, the lock is not on: stop, only the throwaway was lost; check `terraform state show
 module.cloudflare.cloudflare_r2_bucket_lock.backups` and the dashboard before anything else. The throwaway stays for its 30 days
 and the lifecycle removes it on day 31. Record the date and who ran the test in `restore-from-backup.md` section 7's table.
 
 Also check the token address condition from the Mac (no Docker there; the AWS CLI is enough), with the host's keys read from
-Terraform inside a subshell so they stay out of the shell history and environment:
+Terraform inside a subshell so they stay out of the shell history and environment. The prefix comes from `terraform output
+-raw environment` (the root's `environment`, the same value step 7.1 writes as `BMS_ENVIRONMENT`), never a hard-coded name,
+and the block stops if it is empty:
 
 ```sh
-( eval "$(terraform output -raw host_env | grep -E '^R2_(ENDPOINT|ACCESS_KEY_ID|SECRET_ACCESS_KEY|BACKUP_BUCKET)=')"
+( set -u
+  BMS_ENVIRONMENT="$(terraform output -raw environment)"
+  : "${BMS_ENVIRONMENT:?no environment output, run terraform apply first}"
+  eval "$(terraform output -raw host_env | grep -E '^R2_(ENDPOINT|ACCESS_KEY_ID|SECRET_ACCESS_KEY|BACKUP_BUCKET)=')"
   AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_PROFILE= \
-    aws s3 ls "s3://$R2_BACKUP_BUCKET/production/daily/" --endpoint-url "$R2_ENDPOINT" --region auto )
+    aws s3 ls "s3://$R2_BACKUP_BUCKET/${BMS_ENVIRONMENT}/daily/" --endpoint-url "$R2_ENDPOINT" --region auto )
 ```
 
 It should be refused if Cloudflare enforces the address condition on R2's S3 requests. If it is accepted, Cloudflare does not

@@ -34,6 +34,10 @@ person to remember.
 1. **Terraform in `infra/production/`, applied once on production day.** Two roots create the same host, and the owner applies
    only the one chosen: `hetzner/` (a server with delete and rebuild protection, Hetzner backups only if the owner chooses them, a Hetzner firewall) and
    `aws/` (an EC2 instance with termination protection, IMDSv2 only, an encrypted disk and an Elastic IP, a security group).
+   The Hetzner server's own disk is not encrypted at rest (Hetzner does not encrypt a cloud server's local disk and this
+   Terraform adds nothing), so on that root the live database and `/opt/bms/.env` sit in plain form in Hetzner's location.
+   This is an owner decision, not a default: the owner accepts it under the data protection decision of the location, chooses
+   AWS, or asks for host disk encryption in a new ADR (runbook, "Decide first", item 11).
    The firewall is the same on both: 22 from an admin address list only (the whole internet is refused by validation), 80 and
    443 TCP and 443 UDP from anywhere, nothing else in. The location or region, the server size and the R2 location have no
    default, so a plan cannot run until the owner has decided them.
@@ -92,7 +96,8 @@ lock, so an erasure request that must reach backups waits up to a year (ADR-058;
 token reaches the whole company zone (accepted risk, decision 4).
 
 To watch: the Hetzner backups switch, which has no default because those images hold the whole disk unencrypted outside the
-locked backups; whether Cloudflare enforces the token address condition on R2's S3 requests (the runbook checks it and records the answer
-here; the lock holds either way); the IPv6 address a Hetzner host uses for outgoing requests, which must fall in the token's allowed network; the
+locked backups; the owner's answer on the Hetzner server's unencrypted disk (decision 1, runbook item 11); whether
+Cloudflare enforces the token address condition on R2's S3 requests (the runbook checks it and records the answer here; the
+lock holds either way); the IPv6 address a Hetzner host uses for outgoing requests, which must fall in the token's allowed network; the
 puller's downgrade guard against a deliberate rollback; the cutover rehearsal (apply, deploy a release, back up, run the restore
 drill, test the lock) before any tenant's real data moves.
