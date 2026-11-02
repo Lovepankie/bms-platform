@@ -49,14 +49,15 @@ const push = createPush();
 
 /**
  * The signed-in business's zone for every default date (#667). Set as the shell draws, so the screens drawn in the same pass
- * already take it, and again in an effect whose cleanup forgets it (#670), so StrictMode's mount, unmount and mount ends on the
- * business's zone and leaving the shell goes back to Kampala (#672).
+ * already take it, and again in an effect (#670). Only leaving the shell forgets it, so StrictMode's mount, unmount and mount ends
+ * on the business's zone and leaving goes back to Kampala (#672) whatever a discarded draw set. A zone that only changes is never
+ * forgotten in between, so there is no moment on Kampala (#674).
  */
 export function useBusinessZone(zone: string | undefined | null): void {
   setBusinessZone(zone);
+  useEffect(() => () => setBusinessZone(undefined), []);
   useEffect(() => {
     setBusinessZone(zone);
-    return () => setBusinessZone(undefined);
   }, [zone]);
 }
 

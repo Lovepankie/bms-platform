@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../../../api/client';
 import { investments, type Investment } from '../../../api/investments';
 import { lending, type Loan } from '../../../api/lending';
 import { StaffContext } from '../context';
+import { usePersistedDraft } from '../retail/idempotency';
 import { DisburseForm, RepaymentForm } from './actions';
 import { FundForm } from './investment-actions';
 
@@ -111,11 +112,22 @@ describe.each(FORMS)('a $name draft restored from the tab', (f) => {
     const post = f.post();
     const sent = { draft: draftOn(f, '2026-10-30', '2026-10-30'), sent: '2026-10-30' };
     const date = show(f, sent);
-    expect([date.value, date.max, date.checkValidity()]).toEqual(['2026-10-30', '', true]);
+    // The latest date is the draft's own (#674), so the retry is valid.
+    expect([date.value, date.max, date.checkValidity()]).toEqual(['2026-10-30', '2026-10-30', true]);
     fireEvent.submit(screen.getByRole('form', { name: f.formName }));
     await vi.waitFor(() => expect(post.mock.calls).toHaveLength(1));
     expect(post.mock.calls[0]).toEqual([ID, expect.objectContaining({ [f.bodyDate]: '2026-10-30' }), 'test-key-670']);
     expect(kept(f)).toEqual({ key: 'test-key-670', ...sent });
+  });
+
+  it('whose key was sent with a date after today, cannot be moved to a later date (#674)', () => {
+    const date = show(f, { draft: draftOn(f, '2026-10-30', '2026-10-30'), sent: '2026-10-30' });
+    fireEvent.change(date, { target: { value: '2026-10-31' } });
+    expect([date.value, date.max, date.checkValidity()]).toEqual(['2026-10-31', '2026-10-30', false]);
+  });
+
+  it('whose key was sent with a date before today, keeps today as the latest date (#674)', () => {
+    expect(show(f, { draft: draftOn(f, '2026-10-28', '2026-10-28'), sent: '2026-10-28' }).max).toBe('2026-10-29');
   });
 
   it('never sent, keeps today as the latest date', () => {
@@ -126,6 +138,69 @@ describe.each(FORMS)('a $name draft restored from the tab', (f) => {
     expect(show(f, { draft: draftOn(f, '2026-10-20', '2026-10-28'), sent: '2026-10-29' }).value).toBe('2026-10-20');
     expect(screen.queryByText(/may already be saved/)).toBeNull();
     expect(screen.queryByText(NOTE)).toBeNull();
+  });
+});
+
+// JUSTIFICATION-A3: new tests for the #674 behaviour; the existing cases cover no successful post or cleared form.
+describe('the date hints after the draft is done (#674)', () => {
+  it('are cleared by a successful post, and the next record on the same form starts with none', () => {
+    // Sent on an earlier day (the "may already be saved" line) and mended to today (the date note).
+    sessionStorage.setItem('retail-draft:test-hints', JSON.stringify({ key: 'test-key-674', draft: { date: '2026-10-27' }, sent: '2026-10-28' }));
+    const sent = renderHook(() => usePersistedDraft('test-hints', { date: '' }));
+    expect(sent.result.current.sentBefore).toBe('2026-10-28');
+    act(() => sent.result.current.finish());
+    expect(sent.result.current.sentBefore).toBeNull();
+
+    sessionStorage.setItem('retail-draft:test-mended', JSON.stringify({ key: 'test-key-675', draft: { date: '2026-10-27' } }));
+    const mended = renderHook(() => usePersistedDraft('test-mended', { date: '' }, () => ({ date: '2026-10-29' })));
+    expect(mended.result.current.mended).toBe(true);
+    act(() => mended.result.current.finish());
+    expect(mended.result.current.mended).toBe(false);
+    act(() => mended.result.current.setDraft({ date: '2026-10-25' }));
+    expect([mended.result.current.mended, mended.result.current.sentBefore]).toEqual([false, null]);
+  });
+
+  it('are cleared when the person clears the form', () => {
+    const f = FORMS[0]!;
+    show(f, { draft: draftOn(f, '2026-10-28', '2026-10-28'), sent: '2026-10-28' });
+    expect(screen.getByText(/may already be saved/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear this form' }));
+    expect(screen.queryByText(/may already be saved/)).toBeNull();
+    expect((screen.getByLabelText(f.label) as HTMLInputElement).max).toBe('2026-10-29');
+  });
+
+  // JUSTIFICATION-A3: the three cases the #740 review asks for (Clear then an unanswered send, a form level success, an unsent draft ahead).
+  it('do not come back when the next record after Clear this form is sent and gets no answer', async () => {
+    const f = FORMS[0]!;
+    const post = f.post();
+    const date = show(f, { draft: draftOn(f, '2026-10-30', '2026-10-30'), sent: '2026-10-30' });
+    expect(date.max).toBe('2026-10-30');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear this form' }));
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: '20000' } });
+    fireEvent.submit(screen.getByRole('form', { name: f.formName }));
+    await vi.waitFor(() => expect(post.mock.calls).toHaveLength(1));
+    expect(kept(f).sent).toBe('2026-10-29');
+    expect((screen.getByLabelText(f.label) as HTMLInputElement).max).toBe('2026-10-29');
+  });
+
+  it('are gone after a successful post, and the next record on the same form starts with none', async () => {
+    const f = FORMS[0]!;
+    const repay = vi.spyOn(lending, 'repay').mockResolvedValue({} as Awaited<ReturnType<typeof lending.repay>>);
+    show(f, { draft: draftOn(f, '2026-10-30', '2026-10-30'), sent: '2026-10-30' });
+    fireEvent.submit(screen.getByRole('form', { name: f.formName }));
+    await vi.waitFor(() => expect(repay).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(sessionStorage.getItem(`retail-draft:${f.draftName}`)).toBeNull());
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: '20000' } });
+    expect((screen.getByLabelText(f.label) as HTMLInputElement).max).toBe('2026-10-29');
+    expect(screen.queryByText(/may already be saved/)).toBeNull();
+    expect(screen.queryByText(NOTE)).toBeNull();
+  });
+
+  it('give a draft restored unsent with a date after today no later latest date once it is sent', () => {
+    sessionStorage.setItem('retail-draft:test-ahead', JSON.stringify({ key: 'test-key-676', draft: { date: '2026-10-30' } }));
+    const ahead = renderHook(() => usePersistedDraft('test-ahead', { date: '' }));
+    act(() => ahead.result.current.sending());
+    expect([ahead.result.current.sent, ahead.result.current.sentDraft]).toEqual([true, null]);
   });
 });
 

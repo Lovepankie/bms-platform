@@ -112,6 +112,11 @@ totals shown while typing are a preview; the server's response is the receipt.
   no latest date, so a date after today (sent from a business in a zone ahead) does not stop the retry that posts
   it as it went. The shell sets the zone as it draws and again in an effect whose cleanup forgets it, so
   StrictMode's mount, unmount and mount ends on the business's zone.
+  Since #674 a draft restored with its key already sent and dated after today takes that date as its latest, so the
+  retry goes but the date cannot be moved later; any other draft's latest is today, also once it is sent from the
+  form. A successful post, or Clear this form, takes both lines and that later latest date away, so a fresh form
+  shows neither. A zone that only changes goes straight to the new one, with no moment on Kampala; only leaving the
+  shell goes back to Kampala.
   The guard also counts `toLocaleString` on a name the file declares as a Date (`x = new Date(...)`, `x: Date`)
   and date-fns on `Date.now()` or `now`; it reads brackets, comments and reasons with strings blanked, so a
   bracket or URL in a string does not throw off a call's options and a reason counts only in a comment. Its known
