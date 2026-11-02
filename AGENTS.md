@@ -1318,6 +1318,8 @@ Pending (cite only as "pending ADR-NNN"):
 - ADR-012 Credit scoring model beyond the rules-based default
 - ADR-013 USSD aggregator (the SMS half is settled by ADR-036)
 - ADR-022 The cash book: expenses, banking and advances, likely partly core (ADR-020)
+- ADR-113 Shop words (written as Proposed, plan only, #683; not settled until the owner accepts it): one list of keys, one
+  label function, a `tenant_words` table of the changes only and a Words page; plan in `docs/specs/shop-words-plan.md`
 - ADR-114 Custom Home cards (written as Proposed, plan only, #684; not settled until the owner accepts it): stable card keys,
   a `home_layouts` table per person with one business default, and Arrange home with buttons; plan in
   `docs/specs/home-cards-plan.md`
