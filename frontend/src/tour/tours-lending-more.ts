@@ -23,6 +23,7 @@ const APPROVALS_READ = 'core.approvals.read';
 const SETTINGS_READ = 'core.settings.read';
 const SETTINGS_MANAGE = 'core.settings.manage';
 const PAYMENT_ACCOUNT = 'core.payment_account.manage';
+const PAYMENTS_READ = 'core.payments.read';
 const USERS_MANAGE = 'core.users.manage';
 const NOTIFICATIONS_READ = 'core.notifications.read';
 const TEMPLATES_MANAGE = 'core.notification_templates.manage';
@@ -665,6 +666,36 @@ export const paymentsPage: Tour = {
   ],
 };
 
+// JUSTIFICATION-A3: ADR-049 asks one page tour per staff route; this is the tour of the new Unallocated payments route (#224).
+export const unallocatedPage: Tour = {
+  id: 'page-unallocated',
+  version: 1,
+  title: 'This page: unallocated payments',
+  audience: (me) => held(me, PAYMENTS_READ),
+  autoStart: false,
+  page: '/staff/payments/unallocated',
+  steps: [
+    {
+      id: 'intro',
+      target: 'unallocated-intro',
+      title: 'Money that did not land',
+      body: 'A member paid by mobile money or card, but the loan or account would not take it. The money is safe in your own payment account.',
+    },
+    {
+      id: 'filter',
+      target: 'unallocated-filter',
+      title: 'What to show',
+      body: 'Choose to see what is still waiting, or what was put on a loan or account, sent back or reversed.',
+    },
+    {
+      id: 'ask',
+      target: 'unallocated-list',
+      title: 'Put it where it belongs',
+      body: 'Ask to put a payment on a loan or savings account, or record that it was sent back. A second person approves it before anything changes.',
+    },
+  ],
+};
+
 export const inviteUserPage: Tour = {
   id: 'page-invite-user',
   version: 3,
@@ -941,6 +972,6 @@ export const existingLoansImportPage: Tour = {
 export const LENDING_MORE_TOURS: readonly Tour[] = [
   savingsPage, savingsProductsPage, savingsAccountPage, savingsStatementPage, memberSavingsPage, memberEditPage, collateralEditPage,
   investmentsPage, investmentNewPage, investmentNewForMemberPage, maturitiesPage, investmentProductsPage, memberInvestmentsPage,
-  investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, inviteUserPage, reportsPage,
+  investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, unallocatedPage, inviteUserPage, reportsPage,
   smsSettingsPage, smsWordingPage, smsOptOutsPage, ownTwoStepPage, existingLoansPage, existingLoansImportPage,
 ];

@@ -25,6 +25,7 @@ import { Products as SavingsProducts } from '../areas/staff/lending/savings-prod
 import { StatementBody } from '../areas/staff/lending/savings-statement';
 import { Accounts, SavingsGate } from '../areas/staff/lending/savings';
 import { ReceivePaymentsPage } from '../areas/staff/payments/page';
+import { UnallocatedPage } from '../areas/staff/payments/unallocated';
 import { Reports } from '../areas/staff/reports/page';
 import { OptOutsScreen } from '../areas/staff/sms/opt-outs';
 import { SmsSettingsScreen } from '../areas/staff/sms/settings';
@@ -58,6 +59,7 @@ const OWNER = person('Test Owner 01', ALL);
 // A clerk who can only look: no buttons, but every page still explains itself.
 const SAVER_READER = person('Test Reader 01', ['lending.savings.read', 'lending.members.read']);
 const INVESTMENT_READER = person('Test Reader 02', ['lending.investments.read']);
+const PAYMENTS_READER = person('Test Reader 03', ['core.payments.read', 'core.payments.allocate']);
 const ASKER = person('Test Asker 01', ['core.approvals.read', 'core.settings.read', 'core.notifications.read']);
 // The owner of a shop (issue #485): Home shows the shop's summary cards.
 const SHOP_OWNER = { ...mockMe('admin'), full_name: 'Test Shop Owner 01', modules: ['retail'], permission_scopes: undefined, branches } as Me;
@@ -106,6 +108,7 @@ function seed(client: QueryClient, me: Me): void {
   client.setQueryData(['approvals', branch], {
     items: [{ id: 'ap1', action_type: 'refund', amount_minor: 50000, currency: 'UGX', requested_by: 'u9', requested_by_name: 'Test Clerk 09', requested_at: '2026-10-01T08:00:00Z', can_decide: true, can_cancel: false }],
   });
+  client.setQueryData(['payments', 'unallocated', 'open'], { items: [] });
   client.setQueryData(['payments', 'account'], { status: 'failed', credentials_saved: true, key_hint: 'ab12', last_checked_at: null, failure_reason: 'invalid_credentials', host_ready: true });
   client.setQueryData(['reports', 'catalogue'], [{ key: 'portfolio', title: 'Portfolio report', description: 'The loan book', permission: 'lending.reports.portfolio', formats: ['pdf', 'xlsx'], params: [] }]);
   client.setQueryData(['reports', 'runs'], []);
@@ -163,6 +166,8 @@ function screen(path: string): ReactElement {
       return <Insights />;
     case '/staff/payments':
       return <ReceivePaymentsPage />;
+    case '/staff/payments/unallocated':
+      return <UnallocatedPage />;
     case '/staff/users/new':
       return <InviteScreen />;
     case '/staff/reports':
@@ -204,6 +209,7 @@ const AUDIENCE: Record<string, Me[]> = {
   'page-approvals': [OWNER, ASKER],
   'page-insights': [OWNER],
   'page-payments': [OWNER, ASKER],
+  'page-unallocated': [PAYMENTS_READER],
   'page-invite-user': [OWNER],
   'page-reports': [OWNER],
   'page-sms-settings': [OWNER, ASKER],

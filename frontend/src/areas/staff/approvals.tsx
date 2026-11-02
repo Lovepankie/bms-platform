@@ -106,6 +106,7 @@ function Row({ item, id }: { item: Approval; id: string }) {
     <tr>
       <td data-label="Action">
         <What item={item} />
+        {item.checker_notice && <p className="hint" role="note"><strong>{item.checker_notice}</strong></p>}
         {['loan_bring_in', 'loan_bring_in_reversal', 'charge_waiver'].includes(item.action_type ?? '') && item.subject_id && (
           <>
             {' '}

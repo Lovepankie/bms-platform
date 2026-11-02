@@ -12,6 +12,31 @@ import java.util.UUID;
  */
 public interface ApprovalAction {
 
+    /**
+     * The payload key of a sentence the checker must read before deciding (for example "This creates a credit balance of UGX
+     * 450,000 on loan LN-0001."). The approval list and detail return it as {@code checker_notice}.
+     */
+    String CHECKER_NOTICE = "checker_notice";
+
+    /**
+     * The sentence the checker reads for a pending request, worked out now: by default the one stored at request time. An action
+     * whose facts can move between the request and the decision (an allocation's credit balance, when the payoff changed)
+     * overrides it so the checker sees the current figure.
+     */
+    default Optional<String> checkerNotice(UUID subjectId, Map<String, Object> payload) {
+        return payload != null && payload.get(CHECKER_NOTICE) instanceof String notice
+                ? Optional.of(notice)
+                : Optional.empty();
+    }
+
+    /**
+     * Payload keys only a principal who may decide the request reads (they can name what lies in another branch); anyone
+     * else who sees the request gets the payload without them, and no notice. By default the notice alone.
+     */
+    default Set<String> deciderOnlyPayloadKeys() {
+        return Set.of(CHECKER_NOTICE);
+    }
+
     /** Lower snake case, for example {@code loan_disbursement}; stored in {@code approval_requests}. */
     String actionType();
 
@@ -89,6 +114,32 @@ public interface ApprovalAction {
     default Optional<String> extraCheckerPermission(Map<String, Object> payload) {
         return Optional.empty();
     }
+
+    /**
+     * Every permission the checker needs besides {@link #checkerPermission} for a request with this payload, in the request's
+     * branch: by default the one of {@link #extraCheckerPermission}. An action whose request can need more than one overrides
+     * this. Applied to a rejection as well as to an approval: whoever may not approve may not reject either.
+     */
+    default Set<String> extraCheckerPermissions(Map<String, Object> payload) {
+        return extraCheckerPermission(payload).map(Set::of).orElse(Set.of());
+    }
+
+    /**
+     * Whether this principal may decide (approve or reject) a request of this action in this branch with this payload: the checker
+     * permission and every extra permission of the payload in the request's branch, by default. An action whose request also
+     * binds another branch overrides this. The one hook approval, rejection and the queue's "you may decide" all use, so a person
+     * who cannot approve can neither reject nor be offered the decision.
+     */
+    default boolean mayDecide(com.rincoltech.bms.kernel.Principal checker, UUID branchId, Map<String, Object> payload) {
+        return checker.may(checkerPermission(), branchId)
+                && extraCheckerPermissions(payload).stream().allMatch(p -> checker.may(p, branchId));
+    }
+
+    /**
+     * Called in the rejection's transaction after the request is marked rejected, so the owning module can record what the
+     * rejection means for its subject. Nothing by default.
+     */
+    default void rejected(Execution request, String note) {}
 
     /**
      * Performs the action with exactly the stored payload, inside the approval transaction. A

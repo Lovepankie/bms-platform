@@ -11,7 +11,7 @@ import { showInvestments } from './lending/investment-state';
 import { showCollateral, showMembers } from './lending/member-permissions';
 import { showLending } from './lending/permissions';
 import { showSavings } from './lending/savings-permissions';
-import { showReceivePayments } from './payments/state';
+import { showReceivePayments, showUnallocated } from './payments/state';
 import { showReports } from './reports/permissions';
 import { CATALOGUE_LINKS, SCREENS, UNITS, canUse, capabilityOn, showRetail, type RetailScreen } from './retail/permissions';
 import { showSms } from './sms/state';
@@ -143,7 +143,8 @@ export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: 
         // The Controls page (issue #357, ADR-047, ADR-087): what deserves a second look, for holders of retail.controls.read.
         shopRow(me, 'Controls', 'controls', ['controls']),
         showUsers(me) && { to: '/staff/users', label: 'Staff', icon: icons.user, tour: 'nav-users' },
-        showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.receivePayments },
+        showReceivePayments(me) && { to: '/staff/payments', label: 'Receive payments', icon: icons.receivePayments, exact: true },
+        showUnallocated(me) && { to: '/staff/payments/unallocated', label: 'Unallocated payments', icon: icons.unallocatedPayments },
         showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },
         canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.assistant },
         permissions.includes('core.settings.manage') && { to: '/staff/setup', label: 'Business set-up', icon: icons.settings },

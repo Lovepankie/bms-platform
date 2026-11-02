@@ -245,6 +245,11 @@ const staffAssistantRoute = createRoute({ getParentRoute: () => staffRoute, path
 const staffPaymentsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments', staticData: { crumb: 'Receive payments' } }).lazy(() =>
   import('../areas/staff/payments/page').then((m) => m.Route),
 );
+// Unallocated payments: money the provider confirmed that a loan or account would not take (extras slice A5, issue #224).
+const staffUnallocatedRoute = createRoute({ getParentRoute: () => staffRoute, path: '/payments/unallocated', staticData: { crumb: 'Unallocated payments' } }).lazy(() =>
+  import('../areas/staff/payments/unallocated').then((m) => m.Route),
+);
+
 // Notifications and app: install BMS and turn notifications on for this device (ADR-050).
 const staffNotificationsRoute = createRoute({ getParentRoute: () => staffRoute, path: '/notifications', staticData: { crumb: 'Notifications and app' } }).lazy(() =>
   import('../areas/staff/notifications/page').then((m) => m.Route),
@@ -526,7 +531,7 @@ export const router = createRouter({
         memberInvestmentNewRoute,
         investmentRoute,
         investmentCertificateRoute,
-      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffHelpRoute, staffHelpArticleRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
+      ]), staffInsightsRoute, staffAssistantRoute, staffPaymentsRoute, staffUnallocatedRoute, staffUsersRoute, staffUserInviteRoute, staffNotificationsRoute, staffFeedbackRoute, staffHelpRoute, staffHelpArticleRoute, staffReportsRoute, staffSmsRoute.addChildren([smsSettingsRoute, smsWordingRoute, smsOptOutsRoute])]),
     memberRoute,
     styleRoute,
     signUpRoute,

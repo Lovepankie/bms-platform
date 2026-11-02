@@ -59,6 +59,13 @@ const MESSAGES: Record<string, string | undefined> = {
   unknown_purpose: 'This kind of payment is not available.',
   not_cancellable: 'This payment can no longer be cancelled. It may have been paid: check its status.',
   cancel_failed: 'The payment could not be cancelled. It may have been paid: check its status.',
+  receipt_not_open: 'This payment was already dealt with by someone else. Reload the list.',
+  payment_not_held: 'The payment provider has changed this payment, so it can no longer be allocated or refunded here. Reload the list.',
+  subject_not_found: 'That loan or account was not found. Check the identifier.',
+  approval_already_pending: 'Someone has already asked for this payment. It is waiting for a second person.',
+  payment_method_unmapped: 'That way of paying has no account set up. Choose another, or ask your accountant to set it up under payment methods.',
+  invalid_status_transition: 'That loan cannot take a payment now.',
+  period_closed: 'Today\'s accounting period is closed.',
 };
 
 function fail(error: unknown, status: number, fallback: string): never {
@@ -85,6 +92,44 @@ export const LOAN_REPAYMENT_PURPOSE = 'lending.loan_repayment';
 
 /** The purpose of a savings deposit collected through the gateway (issue #219); the subject is the savings account. */
 export const SAVINGS_DEPOSIT_PURPOSE = 'lending.savings_deposit';
+
+// The unallocated receipts queue (extras slice A5, issue #224; chapter 7 section 7.11.10, FR-PAY-04): money the provider confirmed and the
+// loan or account would not take. Asking to put it somewhere or to send it back never moves money; a second person decides.
+export type UnallocatedReceipt = components['schemas']['UnallocatedReceipt'];
+export type UnallocatedReceiptPage = components['schemas']['UnallocatedReceiptPage'];
+export type ReceiptStatusFilter = 'open' | 'allocated' | 'refunded' | 'reversed' | 'all';
+export type ReceiptOutcome = components['schemas']['ReceiptActionOutcome'];
+
+export const receipts = {
+  async list(status: ReceiptStatusFilter, cursor?: string): Promise<UnallocatedReceiptPage> {
+    return unwrap(
+      await api.GET('/api/v1/payments/unallocated', { params: { query: { status, ...(cursor ? { cursor } : {}) } } }),
+      'Could not load the unallocated payments.',
+    );
+  },
+
+  /** Asks for the receipt's money to be put on a loan or a savings account; a checker decides. The same key never asks twice. */
+  async allocate(id: string, purpose: string, subjectId: string, reason: string, idempotencyKey: string): Promise<ReceiptOutcome> {
+    return unwrap(
+      await api.POST('/api/v1/payments/unallocated/{receipt_id}/allocate', {
+        params: { path: { receipt_id: id }, header: { 'Idempotency-Key': idempotencyKey } },
+        body: { purpose, subject_id: subjectId, reason },
+      }),
+      'Could not ask for the payment to be put there.',
+    );
+  },
+
+  /** Records that the money was (or will be) sent back; a checker approves the record. */
+  async refund(id: string, methodKey: string, reference: string, reason: string, idempotencyKey: string): Promise<ReceiptOutcome> {
+    return unwrap(
+      await api.POST('/api/v1/payments/unallocated/{receipt_id}/refund', {
+        params: { path: { receipt_id: id }, header: { 'Idempotency-Key': idempotencyKey } },
+        body: { method_key: methodKey, reference, reason },
+      }),
+      'Could not record the refund.',
+    );
+  },
+};
 
 export const payments = {
   /** Starts a collection for a loan. The same key returns the same intent, so a retry never makes a second link. */

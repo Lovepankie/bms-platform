@@ -338,6 +338,29 @@
           }
         }
       },
+      "AllocateReceiptRequest" : {
+        "properties" : {
+          "purpose" : {
+            "description" : "What the money is put on: lending.loan_repayment or lending.savings_deposit",
+            "example" : "lending.loan_repayment",
+            "maxLength" : 60,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why this loan or account, for the checker",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "subject_id" : {
+            "description" : "The loan or the savings account",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        },
+        "required" : [ "purpose", "reason", "subject_id" ]
+      },
       "AppManifest" : {
         "description" : "A W3C web app manifest",
         "properties" : {
@@ -658,6 +681,10 @@
           },
           "can_decide" : {
             "type" : "boolean"
+          },
+          "checker_notice" : {
+            "description" : "A sentence the checker must read before deciding, when the request carries one (for example the credit balance an allocation creates); in the list and the detail",
+            "type" : "string"
           },
           "currency" : {
             "type" : "string"
@@ -8487,6 +8514,74 @@
         },
         "required" : [ "endpoint" ]
       },
+      "ReceiptActionOutcome" : {
+        "description" : "The request waits for a checker as approval_request_id",
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "receipt_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptAllocation" : {
+        "properties" : {
+          "purpose" : {
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
+            "type" : "string"
+          },
+          "transaction_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptIntendedSubject" : {
+        "description" : "What the payer meant to pay, as the order recorded it",
+        "properties" : {
+          "purpose" : {
+            "type" : "string"
+          },
+          "subject_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subject_type" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptPendingRequest" : {
+        "description" : "Requests waiting for a checker (an open receipt)",
+        "properties" : {
+          "action_type" : {
+            "type" : "string"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
+      "ReceiptRefund" : {
+        "properties" : {
+          "method_key" : {
+            "type" : "string"
+          },
+          "reference" : {
+            "type" : "string"
+          }
+        }
+      },
       "RecordExistingLoanRequest" : {
         "properties" : {
           "agreed_total_minor" : {
@@ -8856,6 +8951,30 @@
             "type" : "integer"
           }
         }
+      },
+      "RefundReceiptRequest" : {
+        "properties" : {
+          "method_key" : {
+            "description" : "How the money went or goes back: gateway (through the provider), cash, bank, mtn_momo or airtel_money",
+            "example" : "bank",
+            "maxLength" : 20,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "description" : "Why it is returned, for the checker",
+            "maxLength" : 300,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reference" : {
+            "description" : "The lender's own reference for the refund (a bank or wallet reference), printable characters",
+            "maxLength" : 100,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "method_key", "reason", "reference" ]
       },
       "RelatedMember" : {
         "properties" : {
@@ -22186,6 +22305,18 @@
         },
         "required" : [ "reason" ]
       },
+      "ReversalRequestOutcome" : {
+        "properties" : {
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "intent_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "Role" : {
         "properties" : {
           "key" : {
@@ -24548,6 +24679,113 @@
             "description" : "The current 6 digit code from the Owner's own authenticator app",
             "maxLength" : 20,
             "minLength" : 0,
+            "type" : "string"
+          }
+        }
+      },
+      "UnallocatedReceipt" : {
+        "properties" : {
+          "allocation" : {
+            "$ref" : "#/components/schemas/ReceiptAllocation"
+          },
+          "amount_minor" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "approval_request_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "confirmation_code" : {
+            "description" : "The provider's payment code, as shown on the provider's statement",
+            "type" : "string"
+          },
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "decided_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "decided_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "intended_subject" : {
+            "$ref" : "#/components/schemas/ReceiptIntendedSubject"
+          },
+          "note" : {
+            "description" : "Why it was allocated or refunded, as the maker wrote it",
+            "type" : "string"
+          },
+          "order_reference" : {
+            "description" : "Our reference for the order (BMS-...)",
+            "type" : "string"
+          },
+          "order_tracking_id" : {
+            "description" : "The provider's order tracking id",
+            "type" : "string"
+          },
+          "paid_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "pending_requests" : {
+            "description" : "Requests waiting for a checker (an open receipt)",
+            "items" : {
+              "$ref" : "#/components/schemas/ReceiptPendingRequest"
+            },
+            "type" : "array"
+          },
+          "refund" : {
+            "$ref" : "#/components/schemas/ReceiptRefund"
+          },
+          "refusal_code" : {
+            "description" : "Why the loan or account did not take it, a closed word such as invalid_status_transition",
+            "type" : "string"
+          },
+          "reported_method" : {
+            "type" : "string"
+          },
+          "requested_by" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "open", "allocated", "refunded", "reversed" ],
+            "type" : "string"
+          },
+          "value_date" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "version" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }
+      },
+      "UnallocatedReceiptPage" : {
+        "properties" : {
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/UnallocatedReceipt"
+            },
+            "type" : "array"
+          },
+          "next_cursor" : {
             "type" : "string"
           }
         }
@@ -32592,6 +32830,54 @@
         "tags" : [ "payments" ]
       }
     },
+    "/api/v1/payments/intents/{intent_id}/reversal-request" : {
+      "post" : {
+        "operationId" : "requestPaymentReversalAgain",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "intent_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReversalRequestOutcome"
+                }
+              }
+            },
+            "description" : "The request, new or already waiting"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReversalRequestOutcome"
+                }
+              }
+            },
+            "description" : "try_again, completed_again, provider_disagrees or not_in_review: nothing was raised"
+          },
+          "422" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReversalRequestOutcome"
+                }
+              }
+            },
+            "description" : "nothing_to_reverse"
+          }
+        },
+        "summary" : "Put the reversal of a payment the provider reversed to a checker again (a person asking; 202 with the request)",
+        "tags" : [ "payments" ]
+      }
+    },
     "/api/v1/payments/merchant-account" : {
       "delete" : {
         "operationId" : "removeMerchantAccount",
@@ -32735,6 +33021,177 @@
           }
         },
         "summary" : "Change the tenant's payments settings, audited with before and after (ADR-035)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated" : {
+      "get" : {
+        "operationId" : "listUnallocatedReceipts",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnallocatedReceiptPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The queue of unallocated receipts, oldest first (open by default; status open, allocated, refunded, reversed or all)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated/{receipt_id}" : {
+      "get" : {
+        "operationId" : "getUnallocatedReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnallocatedReceipt"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One unallocated receipt with its requests",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated/{receipt_id}/allocate" : {
+      "post" : {
+        "operationId" : "allocateUnallocatedReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AllocateReceiptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask to put a receipt's money on a loan or a savings account (maker-checker, 202)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/unallocated/{receipt_id}/refund" : {
+      "post" : {
+        "operationId" : "refundUnallocatedReceipt",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "receipt_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefundReceiptRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReceiptActionOutcome"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Ask to record that a receipt's money was sent back to the payer (maker-checker, 202)",
         "tags" : [ "payments" ]
       }
     },

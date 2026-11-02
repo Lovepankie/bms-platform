@@ -143,7 +143,8 @@ class PushNotices {
     }
 
     private List<UUID> holders(PushNotice.Holders h, boolean closedBranchOk) {
-        return jdbc.sql("""
+        return jdbc
+                .sql("""
                         SELECT DISTINCT u.id
                           FROM users u
                           JOIN user_role_assignments a
@@ -159,7 +160,24 @@ class PushNotices {
                         """)
                 .params(h.permission(), h.branchId(), h.branchId(), closedBranchOk, h.exceptUserId(), h.exceptUserId())
                 .query(UUID.class)
-                .list();
+                .list()
+                .stream()
+                .filter(id -> h.alsoHeld().stream().allMatch(p -> holds(id, p, h.branchId())))
+                .toList();
+    }
+
+    /** The user holds the permission through a live role in the branch, or with no branch (everywhere). */
+    private boolean holds(UUID userId, String permission, UUID branchId) {
+        return jdbc.sql("""
+                                SELECT count(*) FROM user_role_assignments a
+                                  JOIN role_permissions rp ON rp.role_key = a.role_key AND rp.permission_key = ?
+                                 WHERE a.user_id = ? AND a.revoked_at IS NULL
+                                   AND (a.branch_id IS NULL OR a.branch_id = CAST(? AS uuid))
+                                """)
+                        .params(permission, userId, branchId)
+                        .query(Long.class)
+                        .single()
+                > 0;
     }
 
     /** Holders of the permission through a role given for this branch itself, at an active branch (issue #412). */

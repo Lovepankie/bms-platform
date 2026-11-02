@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.flywaydb.core.Flyway;
@@ -1425,6 +1426,223 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * The unallocated receipts queue (#224, V123) on a database a server already migrated to the version before it and that holds a staff user, a
+     * payment intent and an open receipt: the receipt keeps its row and stays {@code open} and bare, the new columns take their
+     * defaults, the swap of {@code users_kind_check} keeps the staff user and lets the new {@code system} kind in (and nothing
+     * else), the swap of the receipts' status check lets {@code reversed} in, a second system user is refused, the guard trigger
+     * refuses a status the queue does not know, and the new permission lands on the three roles that decide it.
+     * JUSTIFICATION-A3: a new test case; no existing case migrates a populated receipts or users table across V123.
+     */
+    @Test
+    void unallocatedReceiptsQueueMigrationKeepsPopulatedRowsAndSwapsTheChecks() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            verifyUnallocatedReceiptsMigration(postgres.getJdbcUrl());
+        }
+    }
+
+    /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
+    static void verifyUnallocatedReceiptsMigration(String url) {
+        // The version just before V123 (V122, the onboarding link fix).
+        String before = VERSIONS.get(VERSIONS.indexOf("123") - 1);
+        assertThat(flyway(url, before).migrate().targetSchemaVersion).isEqualTo(before);
+        JdbcClient owner =
+                JdbcClient.create(new DriverManagerDataSource(url, "bms_owner", TestDatabase.OWNER_PASSWORD));
+        UUID tenant = UUID.randomUUID();
+        UUID branch = UUID.randomUUID();
+        UUID staff = UUID.randomUUID();
+        UUID intent = UUID.randomUUID();
+        UUID receipt = UUID.randomUUID();
+        UUID period = UUID.randomUUID();
+        UUID entry = UUID.randomUUID();
+        owner.sql(
+                        "INSERT INTO tenants (id, slug, name, plan_id) VALUES (?, 'test-v123', 'Test Tenant V123', '00000000-0000-4000-8000-000000000001')")
+                .param(tenant)
+                .update();
+        owner.sql(
+                        "INSERT INTO branches (id, tenant_id, code, name, is_head_office) VALUES (?, ?, 'HQ', 'Head Office', true)")
+                .params(branch, tenant)
+                .update();
+        owner.sql("SELECT platform_set_tenant_modules(?, ?::text[], NULL)")
+                .params(tenant, "{lending}")
+                .query((rs, n) -> 1)
+                .single();
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'staff', 'Test Staff V123', 'staff-v123@example.test', 'active')")
+                .params(staff, tenant)
+                .update();
+        owner.sql("INSERT INTO gl_periods (id, tenant_id, year, month, status) VALUES (?, ?, 2026, 1, 'open')")
+                .params(period, tenant)
+                .update();
+        UUID account = owner.sql("SELECT id FROM gl_accounts WHERE tenant_id = ? AND is_postable ORDER BY code LIMIT 1")
+                .param(tenant)
+                .query(UUID.class)
+                .single();
+        owner.sql(
+                        "WITH e AS (INSERT INTO journal_entries (id, tenant_id, branch_id, entry_no, entry_date, period_id,"
+                                + " reference, source_module, source_type) VALUES (?, ?, ?, 'JE99999999', DATE '2026-01-15', ?,"
+                                + " 'V123-FIXTURE', 'test', 'fixture') RETURNING id)"
+                                + " INSERT INTO journal_lines (id, tenant_id, entry_id, line_no, account_id, debit, credit, currency)"
+                                + " SELECT ?, ?, e.id, 1, ?, 1000, 0, 'UGX' FROM e UNION ALL SELECT ?, ?, e.id, 2, ?, 0, 1000, 'UGX' FROM e")
+                .params(
+                        entry,
+                        tenant,
+                        branch,
+                        period,
+                        UUID.randomUUID(),
+                        tenant,
+                        account,
+                        UUID.randomUUID(),
+                        tenant,
+                        account)
+                .update();
+        owner.sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                                     amount_minor, currency, merchant_reference, status, initiated_by,
+                                                     idempotency_key, expires_at)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'created', ?,
+                                'v123-key-0001', now() + interval '30 minutes')
+                        """)
+                .params(
+                        intent,
+                        tenant,
+                        branch,
+                        UUID.randomUUID(),
+                        "BMS-DV-" + intent.toString().replace("-", ""),
+                        staff)
+                .update();
+        owner.sql("""
+                        INSERT INTO unallocated_receipts (id, tenant_id, branch_id, intent_id, purpose, subject_type, subject_id,
+                                                          amount_minor, currency, value_date, confirmation_code, refusal_code,
+                                                          journal_entry_id)
+                        VALUES (?, ?, ?, ?, 'test.payment', 'test_subject', ?, 1500, 'UGX', DATE '2026-01-15', 'V123-CONF-1',
+                                'loan_closed', ?)
+                        """)
+                .params(receipt, tenant, branch, intent, UUID.randomUUID(), entry)
+                .update();
+        long permissions =
+                owner.sql("SELECT count(*) FROM permissions").query(Long.class).single();
+
+        assertThat(flyway(url, "123").migrate().targetSchemaVersion).isEqualTo("123");
+
+        Map<String, Object> row = owner.sql("SELECT * FROM unallocated_receipts WHERE id = ?")
+                .param(receipt)
+                .query()
+                .singleRow();
+        assertThat(row.get("status")).as("the existing receipt stays open").isEqualTo("open");
+        assertThat(row.get("version")).isEqualTo(0);
+        assertThat(row.get("approval_id")).isNull();
+        assertThat(row.get("allocated_txn_id")).isNull();
+        assertThat(row.get("amount_minor")).isEqualTo(1500L);
+        assertThat(owner.sql("SELECT kind FROM users WHERE id = ?")
+                        .param(staff)
+                        .query(String.class)
+                        .single())
+                .isEqualTo("staff");
+        // The users check now lets the system kind in, once per tenant, and still refuses a kind it does not know.
+        owner.sql(
+                        "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'system', 'Payments system', 'payments-system@system.invalid', 'active')")
+                .params(UUID.randomUUID(), tenant)
+                .update();
+        assertThatThrownBy(() -> owner.sql(
+                                "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'system', 'Another', 'PAYMENTS-SYSTEM@system.invalid', 'active')")
+                        .params(UUID.randomUUID(), tenant)
+                        .update())
+                .hasMessageContaining("users_system_email");
+        assertThatThrownBy(() -> owner.sql(
+                                "INSERT INTO users (id, tenant_id, kind, full_name, email, status) VALUES (?, ?, 'robot', 'Robot', 'robot@example.test', 'active')")
+                        .params(UUID.randomUUID(), tenant)
+                        .update())
+                .hasMessageContaining("users_kind_check");
+        // The receipt can end only as the queue allows, and only with the fields of its ending.
+        assertThatThrownBy(() -> owner.sql("UPDATE unallocated_receipts SET status = 'lost', version = 1 WHERE id = ?")
+                        .param(receipt)
+                        .update())
+                .hasMessageContaining("an open receipt ends as allocated, refunded or reversed");
+        assertThatThrownBy(
+                        () -> owner.sql("UPDATE unallocated_receipts SET status = 'reversed', version = 1 WHERE id = ?")
+                                .param(receipt)
+                                .update())
+                .hasMessageContaining("unallocated_receipts_reversed_complete");
+        // The replaced guard of payment_intents: the moves V123 added are allowed, the ones it narrows or never had are
+        // refused.
+        UUID other = UUID.randomUUID();
+        owner.sql("""
+                        INSERT INTO payment_intents (id, tenant_id, branch_id, purpose, subject_type, subject_id, payer_phone_e164,
+                                                     amount_minor, currency, merchant_reference, status, initiated_by,
+                                                     idempotency_key, expires_at)
+                        VALUES (?, ?, ?, 'test.payment', 'test_subject', ?, '+256700000001', 1500, 'UGX', ?, 'created', ?,
+                                'v123-key-0002', now() + interval '30 minutes')
+                        """)
+                .params(
+                        other,
+                        tenant,
+                        branch,
+                        UUID.randomUUID(),
+                        "BMS-DV-" + other.toString().replace("-", ""),
+                        staff)
+                .update();
+        for (UUID id : List.of(intent, other)) {
+            owner.sql(
+                            "UPDATE payment_intents SET status = 'pending', provider_reference = ?, redirect_url = 'https://pay.example.test/x' WHERE id = ?")
+                    .params(UUID.randomUUID().toString(), id)
+                    .update();
+            owner.sql("""
+                            UPDATE payment_intents SET status = 'paid', paid_amount_minor = 1500, paid_currency = 'UGX',
+                                   confirmation_code = 'V123-CONF', paid_at = now(), verified_at = now() WHERE id = ?
+                            """).param(id).update();
+        }
+        owner.sql(
+                        "UPDATE payment_intents SET status = 'booked', booked_subject_txn_id = ?, booked_at = now() WHERE id = ?")
+                .params(UUID.randomUUID(), intent)
+                .update();
+        owner.sql("UPDATE payment_intents SET status = 'reversed_pending_review' WHERE id = ?")
+                .param(intent)
+                .update();
+        // V123: a payment reported reversed and then completed again goes back to booked.
+        owner.sql("UPDATE payment_intents SET status = 'booked' WHERE id = ?")
+                .param(intent)
+                .update();
+        owner.sql("UPDATE payment_intents SET status = 'reversed_pending_review' WHERE id = ?")
+                .param(intent)
+                .update();
+        owner.sql("UPDATE payment_intents SET status = 'reversed' WHERE id = ?")
+                .param(intent)
+                .update();
+        // A move it never had stays refused.
+        assertThatThrownBy(() -> owner.sql("UPDATE payment_intents SET status = 'needs_attention' WHERE id = ?")
+                        .param(intent)
+                        .update())
+                .hasMessageContaining("is not an allowed transition");
+        assertThatThrownBy(() -> owner.sql("UPDATE payment_intents SET status = 'booked' WHERE id = ?")
+                        .param(intent)
+                        .update())
+                .hasMessageContaining("is not an allowed transition");
+        // V123 narrows needs_attention to reversed: refused for an order that carries a booked transaction.
+        owner.sql(
+                        "UPDATE payment_intents SET status = 'needs_attention', booked_subject_txn_id = ?, booked_at = now() WHERE id = ?")
+                .params(UUID.randomUUID(), other)
+                .update();
+        assertThatThrownBy(() -> owner.sql("UPDATE payment_intents SET status = 'reversed' WHERE id = ?")
+                        .param(other)
+                        .update())
+                .hasMessageContaining("refused for an order with a booked transaction");
+        assertThat(owner.sql("SELECT count(*) FROM permissions")
+                        .query(Long.class)
+                        .single())
+                .as("exactly one permission is added")
+                .isEqualTo(permissions + 1);
+        assertThat(owner.sql("""
+                                SELECT string_agg(role_key, ',' ORDER BY role_key) FROM role_permissions
+                                 WHERE permission_key = 'core.payments.allocate_approve'
+                                """).query(String.class).single()).isEqualTo("accountant,branch_manager,tenant_admin");
+        assertThat(owner.sql("SELECT has_column_privilege('bms_app', 'unallocated_receipts', 'amount_minor', 'UPDATE')")
+                        .query(Boolean.class)
+                        .single())
+                .isFalse();
+    }
+
     /** The body of the case above, on any empty database that has the roles of {@code 01-roles.sh}. */
     static void verifyLandedCostMigration(String url) {
         assertThat(flyway(url, "47").migrate().targetSchemaVersion).isEqualTo("47");
@@ -1492,8 +1710,9 @@ class MigrationOrderIT {
         // V48 adds no permission; V55 (the AI assistant, #226) adds the two advisor ones, V57 (#233) the payment
         // account one, V83 (collections, #266) the two collection list ones, V86 (offline sales, #458)
         // retail.offline.resolve, V88 (referrals, #464) core.referrals.read, V89 (existing loans, #466)
-        // lending.loans.bring_in, V91 (download my data, #334) its own, V92 (billing, #480) core.billing.read and V107
-        // (fee and interest waivers, #265) lending.charges.waive_fee_interest, which are not V48's to answer for.
+        // lending.loans.bring_in, V91 (download my data, #334) its own, V92 (billing, #480) core.billing.read, V107
+        // (fee and interest waivers, #265) lending.charges.waive_fee_interest and V123 (the unallocated receipts queue,
+        // #224) core.payments.allocate_approve, which are not V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
@@ -1501,7 +1720,7 @@ class MigrationOrderIT {
                                         + " 'retail.offline.resolve', 'lending.members.contact',"
                                         + " 'lending.collections.all_officers', 'core.referrals.read',"
                                         + " 'lending.loans.bring_in', 'core.data_export.run', 'core.billing.read',"
-                                        + " 'lending.charges.waive_fee_interest')")
+                                        + " 'lending.charges.waive_fee_interest', 'core.payments.allocate_approve')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
