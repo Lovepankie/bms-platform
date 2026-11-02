@@ -464,6 +464,12 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   by branch, product or officer) are offered in all four formats, from `InsightsFigures.par` and `.portfolio`, with tests that every group
   equals the insights endpoints for the same filter and caller. `ReportMemoryIT` runs both reports as PDF and Excel on the 224 MB
   heap. The Reports screen offers the PDF first. Visual check: `make document-samples` and `docs/ui/report-samples/`.
+- **Built (extras slice D3, issue #222, ADR-038 amendment):** no migration and no permission. `lending.expected_vs_collected` (expected,
+  collected on due, rate and the printed collections equation), `lending.arrears_list` (late loans by bucket with the last payment,
+  follow up and open promise; name and phone as the collection lists decide, frozen with the run), `lending.disbursements` (each loan,
+  upfront fees, average and median) and `lending.officer_performance`, in all four formats, through `InsightsFigures.collections`,
+  `.disbursements`, `.arrears` and `.officers` over `FlowFigures` (grouped twins of the insights queries); `LendingCollectionsReportsIT`
+  proves the hand-computed figures, the equation, the officer scope and that every total equals the insights page.
 - **Built (Download my data, issue #334 step 1, ADR-074, FR-RPT-09 to FR-RPT-11):** migration `V91` (`data_export_settings`,
   `data_export_weekly`, the permission `core.data_export.run` for `tenant_admin`, and `app_data_export_weekly_tenants`; the runner's definer functions stay as V90
   left them, so a business the operator suspended gets no run). The report `core.data_export` (`ReportDefinition.everyBusiness`: offered whatever `reports_enabled` says) writes

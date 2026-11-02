@@ -243,8 +243,13 @@ export function paramLabel(name: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function words(value: string): string {
-  return value === 'none' ? 'No grouping' : paramLabel(value);
+/** A choice in words: "none" reads "No grouping", an arrears bucket such as "31_60" reads "31 to 60 days late". */
+export function words(value: string): string {
+  if (value === 'none') return 'No grouping';
+  if (value === 'over_90') return 'Over 90 days late';
+  const bucket = /^(\d+)_(\d+)$/.exec(value);
+  if (bucket) return `${bucket[1]} to ${bucket[2]} days late`;
+  return paramLabel(value);
 }
 
 export function RunsTable({

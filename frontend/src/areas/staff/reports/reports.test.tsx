@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { runErrorText, type ReportCatalogueEntry, type ReportRun } from '../../../api/reports';
-import { CatalogueList, RunsTable, defaultFormat, formatName, paramLabel, sizeText } from './page';
+import { CatalogueList, RunsTable, defaultFormat, formatName, paramLabel, sizeText, words } from './page';
 import { showReports } from './permissions';
 
 const renderToString = (node: ReactElement) =>
@@ -176,6 +176,14 @@ describe('words and sizes', () => {
   it('reads a parameter name as a label', () => {
     expect(paramLabel('as_at')).toBe('As at');
     expect(paramLabel('group_by')).toBe('Group by');
+  });
+
+  it('reads a choice in words, the arrears buckets as how late (issue #222)', () => {
+    expect(words('none')).toBe('No grouping');
+    expect(words('branch')).toBe('Branch');
+    expect(words('1_30')).toBe('1 to 30 days late');
+    expect(words('61_90')).toBe('61 to 90 days late');
+    expect(words('over_90')).toBe('Over 90 days late');
   });
 
   it('writes rows and size in words', () => {

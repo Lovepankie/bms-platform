@@ -21,8 +21,8 @@ import java.util.UUID;
  *       scope alone. It never reads the principal, so a job cannot widen what the requester could see.
  * </ol>
  *
- * Built by extras slice D1 (issue #214) with the figures the first report needs; slice D2 (issue #217) adds
- * the rest of the portfolio, collections, disbursements and officer figures to this port.
+ * Built by extras slice D1 (issue #214) with the figures the first report needs; slice D2 (issue #217) added
+ * the portfolio figures and slice D3 (issue #222) the collections, disbursements, arrears and officer figures.
  */
 public interface InsightsFigures {
 

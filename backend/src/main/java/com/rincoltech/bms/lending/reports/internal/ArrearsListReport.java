@@ -134,7 +134,8 @@ class ArrearsListReport extends PortfolioReport {
 
     @Override
     public boolean stillAllowed(Prepared run) {
-        if (!super.stillAllowed(run)) {
+        // The portfolio scope is nested in this report's frozen scope, beside the name and phone choices.
+        if (!figures.covers(scope(run))) {
             return false;
         }
         Principal principal = CurrentPrincipal.require();
