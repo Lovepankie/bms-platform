@@ -159,7 +159,7 @@ describe('the connection', () => {
   });
 
   // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
-  it('counts a ping with no answer within 3 seconds as offline (issue #769)', async () => {
+  it('counts two pings in a row with no answer within 3 seconds as offline, never one alone (issue #769)', async () => {
     vi.useFakeTimers();
     try {
       let answer: (ok: boolean) => void = () => {};
@@ -169,13 +169,28 @@ describe('the connection', () => {
         addListener: () => () => {},
         every: () => () => {},
       });
+      const seen: boolean[] = [];
+      c.subscribe(() => seen.push(c.online()));
       expect(c.online()).toBe(true);
+      // Slow, quick, slow: never two slow in a row, so the app stays online and never flaps.
+      const slowOnce = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+      expect(await slowOnce).toBe(true);
+      const quick = c.check();
+      answer(true);
+      expect(await quick).toBe(true);
+      const slowAgain = c.check();
+      await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS);
+      expect(await slowAgain).toBe(true);
+      expect(seen).toEqual([]);
+      // A second slow ping in a row: offline.
       const checked = c.check();
       await vi.advanceTimersByTimeAsync(PING_TIMEOUT_MS - 1);
       expect(c.online()).toBe(true);
       await vi.advanceTimersByTimeAsync(1);
       expect(await checked).toBe(false);
       expect(c.online()).toBe(false);
+      expect(seen).toEqual([false]);
       // The slow answer that comes later changes nothing; the next ping that answers in time does.
       answer(true);
       await vi.advanceTimersByTimeAsync(0);

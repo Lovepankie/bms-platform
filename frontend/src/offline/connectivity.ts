@@ -1,7 +1,8 @@
 // Whether the app can reach the server (issue #458, ADR-067 decision 4): the browser's online and offline events, confirmed
 // by a cheap ping of GET /healthz every 30 seconds while the page is open. The browser saying offline is believed at once;
-// the browser saying online is believed once a ping answers. Issue #769: a ping with no answer within PING_TIMEOUT_MS counts as
-// offline, since on a weak mobile connection a slow answer means a sale would hang.
+// the browser saying online is believed once a ping answers. Issue #769: SLOW_PINGS_OFFLINE pings in a row with no answer
+// within PING_TIMEOUT_MS count as offline, since on a weak mobile connection a slow answer means a sale would hang; one slow
+// ping alone changes nothing, so the app does not flap on 2G.
 
 export interface Connectivity {
   online(): boolean;
@@ -14,8 +15,11 @@ export interface Connectivity {
 
 export const PING_EVERY_MS = 30_000;
 
-/** A ping slower than this counts as offline (issue #769). */
+/** A ping slower than this is slow (issue #769). */
 export const PING_TIMEOUT_MS = 3_000;
+
+/** This many slow pings in a row count as offline, so one slow answer on 2G never flips the app offline (issue #769). */
+export const SLOW_PINGS_OFFLINE = 2;
 
 /** A sale sent online with no answer within this goes to the outbox (issue #769). */
 export const SALE_ANSWER_MS = 8_000;
@@ -40,6 +44,7 @@ export interface ConnectivityDeps {
 
 export function createConnectivity(deps: ConnectivityDeps): Connectivity {
   let state = deps.navigatorOnline();
+  let slow = 0;
   const listeners = new Set<() => void>();
   const stops: (() => void)[] = [];
   const set = (next: boolean) => {
@@ -55,7 +60,11 @@ export function createConnectivity(deps: ConnectivityDeps): Connectivity {
     let ok = false;
     try {
       ok = await answerWithin(deps.ping(), PING_TIMEOUT_MS);
-    } catch {
+      slow = 0;
+    } catch (e) {
+      // One slow answer on a weak connection changes nothing; SLOW_PINGS_OFFLINE in a row count as offline.
+      if (e instanceof NoAnswer && ++slow < SLOW_PINGS_OFFLINE) return state;
+      if (!(e instanceof NoAnswer)) slow = 0;
       ok = false;
     }
     set(ok);
@@ -83,9 +92,16 @@ export function createConnectivity(deps: ConnectivityDeps): Connectivity {
 export function browserConnectivity(): Connectivity {
   return createConnectivity({
     ping: async () => {
-      const signal = typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(PING_TIMEOUT_MS) : undefined;
-      const response = await fetch('/healthz', { cache: 'no-store', signal });
-      return response.ok;
+      // An old WebView may have no AbortSignal at all; the ping is then cut off by answerWithin alone.
+      const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(PING_TIMEOUT_MS) : undefined;
+      try {
+        const response = await fetch('/healthz', { cache: 'no-store', signal });
+        return response.ok;
+      } catch (e) {
+        // Cut off for being slow is a slow ping, not a lost network.
+        if (signal?.aborted) throw new NoAnswer('The server did not answer in time.');
+        throw e;
+      }
     },
     navigatorOnline: () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false),
     addListener: (type, fn) => {
