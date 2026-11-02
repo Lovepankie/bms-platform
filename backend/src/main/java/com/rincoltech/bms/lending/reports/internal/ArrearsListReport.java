@@ -24,10 +24,10 @@ import tools.jackson.databind.ObjectMapper;
  * {@link InsightsFigures#arrears}, so its loans, days and arrears are those of {@code lending.par}. One table,
  * {@code arrears}, with a total row.
  *
- * <p>What a member's line shows is decided at request time and frozen with the run, as the collection lists decide it:
- * the member's name for a holder of {@code lending.members.read}, and the phone in full only in the branches where the
- * requester holds {@code lending.members.contact} (masked elsewhere). A download by someone whose access has narrowed
- * since is refused.
+ * <p>What a member's line shows is decided at request time and frozen with the run, branch by branch: the member's
+ * name only in the branches where the requester holds {@code lending.members.read}, and the phone in full only in the
+ * branches where they hold {@code lending.members.contact} (masked elsewhere, as the collection lists). A download by
+ * someone whose access has narrowed since is refused.
  */
 @Component
 class ArrearsListReport extends PortfolioReport {
@@ -103,12 +103,16 @@ class ArrearsListReport extends PortfolioReport {
         }
         Map<String, Object> frozen = new LinkedHashMap<>();
         frozen.put("portfolio", mapper.convertValue(scope, Map.class));
-        frozen.put("names", principal.hasPermission(MEMBERS_READ));
-        List<UUID> contact = principal.branchFilter(CONTACT, scope.branchIds());
-        frozen.put(
-                "contact_branch_ids",
-                contact == null ? null : contact.stream().map(UUID::toString).toList());
+        frozen.put(NAME_BRANCHES, ids(principal.branchFilter(MEMBERS_READ, scope.branchIds())));
+        frozen.put(CONTACT_BRANCHES, ids(principal.branchFilter(CONTACT, scope.branchIds())));
         return new Prepared(normalised, frozen, asAt);
+    }
+
+    static final String NAME_BRANCHES = "name_branch_ids";
+    static final String CONTACT_BRANCHES = "contact_branch_ids";
+
+    private static List<String> ids(List<UUID> branches) {
+        return branches == null ? null : branches.stream().map(UUID::toString).toList();
     }
 
     @Override
@@ -116,12 +120,9 @@ class ArrearsListReport extends PortfolioReport {
         return mapper.convertValue(prepared.scope().get("portfolio"), PortfolioScope.class);
     }
 
-    private static boolean names(Prepared prepared) {
-        return Boolean.TRUE.equals(prepared.scope().get("names"));
-    }
-
-    private static List<UUID> contactBranches(Prepared prepared) {
-        Object value = prepared.scope().get("contact_branch_ids");
+    /** The frozen branches of {@code key}: null for every branch, empty for none. */
+    private static List<UUID> branches(Prepared prepared, String key) {
+        Object value = prepared.scope().get(key);
         if (value == null) {
             return null;
         }
@@ -139,25 +140,30 @@ class ArrearsListReport extends PortfolioReport {
             return false;
         }
         Principal principal = CurrentPrincipal.require();
-        if (names(run) && !principal.hasPermission(MEMBERS_READ)) {
-            return false;
+        return stillCovers(principal, MEMBERS_READ, branches(run, NAME_BRANCHES))
+                && stillCovers(principal, CONTACT, branches(run, CONTACT_BRANCHES));
+    }
+
+    /** True when the caller still holds {@code permission} in every branch the run was made with it in. */
+    private static boolean stillCovers(Principal principal, String permission, List<UUID> frozen) {
+        if (frozen != null && frozen.isEmpty()) {
+            return true;
         }
-        List<UUID> frozen = contactBranches(run);
-        List<UUID> now = principal.branchFilter(CONTACT, frozen);
+        List<UUID> now = principal.branchFilter(permission, frozen);
         return frozen == null ? now == null : now == null || new HashSet<>(now).containsAll(frozen);
     }
 
     @Override
     public void query(Prepared prepared, ReportOutput out) {
-        boolean names = names(prepared);
+        List<UUID> nameBranches = branches(prepared, NAME_BRANCHES);
+        boolean names = nameBranches == null || !nameBranches.isEmpty();
         String bucket = (String) prepared.params().get("bucket");
         PortfolioScope scope = scope(prepared);
-        out.note("Only active loans more than 0 days late are listed; written-off loans are not.");
+        boolean pastDate = !scope.to().equals(scope.today());
+        out.note("Only active loans more than 0 days late are listed; loans written off are not.");
         out.note("Arrears is the principal, interest and fees due and not paid; penalties are shown on their own.");
-        if (!scope.to().equals(scope.today())) {
-            out.note("Penalties outstanding are not shown for a past date: the nightly snapshot does not hold them.");
-        }
-        out.note("Phone numbers are shown in full only in the branches where you may contact borrowers.");
+        out.note("Names are shown only in the branches where you may see members, and phone numbers in full only where"
+                + " you may contact borrowers.");
 
         List<Column> columns = new ArrayList<>();
         columns.add(new Column("bucket", "How late", Kind.TEXT));
@@ -180,13 +186,15 @@ class ArrearsListReport extends PortfolioReport {
         ReportOutput.Table table = out.table("arrears", "Loans in arrears", columns);
 
         long[] totals = new long[4];
-        boolean[] anyPenalty = {false};
-        figures.arrears(scope, bucket, names, contactBranches(prepared), out::checkpoint, l -> {
+        // Penalties are blank on a line whose figures came from the snapshot (a past date, or a run that outlived its
+        // date) or whose loan could not be read; the total is then blank too, never a sum of blanks.
+        boolean[] blankPenalty = {pastDate};
+        figures.arrears(scope, bucket, nameBranches, branches(prepared, CONTACT_BRANCHES), out::checkpoint, l -> {
             totals[0]++;
             totals[1] += l.arrearsMinor();
             totals[2] += l.penaltiesOutstandingMinor() == null ? 0 : l.penaltiesOutstandingMinor();
             totals[3] += l.principalOutstandingMinor();
-            anyPenalty[0] |= l.penaltiesOutstandingMinor() != null;
+            blankPenalty[0] |= l.penaltiesOutstandingMinor() == null;
             List<Object> cells = new ArrayList<>();
             cells.add(BUCKET_LABELS.get(l.bucket()));
             cells.add(l.loanNo());
@@ -218,7 +226,7 @@ class ArrearsListReport extends PortfolioReport {
         total.add(null);
         total.add(null);
         total.add(totals[1]);
-        total.add(anyPenalty[0] || scope.to().equals(scope.today()) ? totals[2] : null);
+        total.add(blankPenalty[0] ? null : totals[2]);
         total.add(totals[3]);
         total.add(null);
         total.add(null);
@@ -226,6 +234,11 @@ class ArrearsListReport extends PortfolioReport {
         total.add(null);
         total.add(null);
         table.total(total.toArray());
+        if (blankPenalty[0]) {
+            out.note(
+                    "Penalties outstanding are not shown: the nightly snapshot the figures were read from does not hold"
+                            + " them.");
+        }
     }
 
     /** A collection action type in words. */

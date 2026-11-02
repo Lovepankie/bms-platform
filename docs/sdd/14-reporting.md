@@ -477,18 +477,22 @@ the responsible officer for, in every report and every format.
   shown. A line "Not explained by the parts" is printed only if the parts and the total ever differ; the golden test asserts they do not.
 - **`lending.arrears_list`** (`lending.reports.collections`). Parameters `as_at`, `branch_id` and `bucket` (`1_30`, `31_60`, `61_90`,
   `over_90`). One table, `arrears`: every active loan more than 0 days late on the date, the buckets in age order and the most overdue
-  first, with the member number, the name (only for a holder of `lending.members.read`), the phone (in full only in the branches where
-  the requester holds `lending.members.contact`, masked `+256*****0001` elsewhere, as the collection lists), the officer, days late,
-  arrears, penalties outstanding, principal outstanding, the last repayment on or before the date (a reversed one excluded), the last
-  collection action logged by then, and the earliest promise to pay made by then and not settled by then; a total row. Both choices are
-  frozen with the run, and a download by someone whose access has narrowed since is refused. Not here: an officer parameter (the
+  first, with the member number, the name (only in the branches where the requester holds `lending.members.read`), the phone (in full
+  only in the branches where the requester holds `lending.members.contact`, masked `+256*****0001` elsewhere, as the collection lists),
+  the officer, days late, arrears, penalties outstanding, principal outstanding, the last repayment on or before the date (one reversed
+  by then excluded; a reversal after the date does not change what stood on it), the last collection action logged by then, and the
+  earliest promise to pay made by then and not settled by then; a total row. The branch a line is judged by is the position's (the
+  snapshot's on a past date). Both branch lists are frozen with the run, and a download by someone who has since lost either permission
+  in any of those branches is refused. Penalties are blank on a line read from the snapshot, and then the total is blank too. A
+  position whose loan row cannot be read is still printed, without its member and extras. Not here: an officer parameter (the
 requester's scope decides whose loans are listed, and `group_by` is not offered either), the arrears split into principal,
   interest and fees, which the positions do not hold, and penalties outstanding for a past date (the snapshot does not hold them; the
   report says so). Only the late loans are kept in memory, to sort them; the rest of the book passes through.
 - **`lending.disbursements`** (`lending.reports.portfolio`). Parameters `from`, `to`, `branch_id`, `group_by`. Table `loans`: each loan
   disbursed in the range, not reversed, by date then loan number (loan, date, member number, branch, product, officer, principal, the
-  upfront fee taken at disbursement) and a total row, written as the loans are read. Table `summary`, per group and a total row: loans,
-  principal disbursed, upfront fees (the loans' `fee_upfront` entries, a reversed one excluded), the average loan (half up) and the
+  upfront fee taken at disbursement) and a total row, written as the loans are read. Table `summary`, per group and a total row: loans
+  (distinct), principal disbursed, upfront fees (the `fee_upfront` entries of the same loan and value date as the disbursement, a
+  reversed one excluded, so a fee is never counted twice), the average loan (half up) and the
   median loan (the middle one, or the mean of the two middle ones rounded half up).
 - **`lending.officer_performance`** (`lending.reports.collections`, FR-CLN-06). Parameters `from`, `to`, `branch_id`. Table `officers`,
   a row per responsible officer and a total row: active loans, principal outstanding and PAR 30 at the end of the range; loans disbursed
@@ -497,8 +501,10 @@ requester's scope decides whose loans are listed, and `group_by` is not offered 
   officer responsible for it now (the snapshot's officer for a past date's positions); the report says so.
 - **Tests.** `LendingCollectionsReportsIT`: a fabricated book with every figure computed by hand (a repayment split over arrears, the
   range, a later item and a penalty; an overpayment; a repayment reversed; a recovery; a reversed disbursement; promises kept and
-  broken), the equation, the cross check against the insights page in every grouping, the officer and branch scope, the masked phone
-  and the hidden name, the catalogue, and the PDF and workbook figures.
+  broken), the equation, the cross check against the insights page in every grouping, the officer and branch scope (including a
+  branch-limited caller asking for another branch), names and phones by the branches of their own permissions, a download refused after
+  either is lost, golden snapshot cases for the arrears list and officer performance (a repayment reversed after the date still shows on
+  it), the catalogue, and the PDF and workbook figures.
 
 ## 14.8 Test datasets
 

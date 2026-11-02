@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -72,9 +73,10 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
      *   <li>CL02: one item due 6 Oct (200,000 principal, 20,000 interest). 50,000 paid on 28 Sep (before the range);
      *       230,000 on 7 Oct: 150,000 to the item, 80,000 overpaid; 40,000 on 4 Oct, reversed on 5 Oct. 20,000 principal
      *       is still owed: 2 days late.
-     *   <li>LT01: 300,000 due 1 Aug, nothing paid: 68 days late. A call on 1 Oct, a promise made on 2 Oct to pay 100,000 on
-     *       10 Oct (open), and an earlier promise broken on 1 Oct.
-     *   <li>DS02: 400,000 on 6 Oct; DS04: 500,000 on 4 Oct, reversed.
+     *   <li>LT01: 300,000 due 1 Aug, nothing paid that stands: 68 days late. 10,000 paid on 3 Oct was reversed on 7 Oct.
+     *       A call on 1 Oct, a promise made on 2 Oct to pay 100,000 on 10 Oct (open), and an earlier promise broken on 1
+     *       Oct.
+     *   <li>DS02: 400,000 on 6 Oct; DS04: 500,000 on 4 Oct, reversed, so the loan is cancelled and was never paid out.
      * </ul>
      *
      * Amber also visited CL01 on 2 Oct, and CL01's promise of 25 Sep was kept on 3 Oct.
@@ -126,7 +128,12 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
         alloc(t, r4r, r4, c2i1, "principal", -40_000);
 
         UUID lt01 = loanRow(t, product, two, birch, "LT01", "active", 300_000, LocalDate.of(2026, 1, 5));
-        item(t, lt01, 1, LocalDate.of(2026, 8, 1), 300_000, 0, 0, 0, 0, 0, 0, 0);
+        UUID l1i1 = item(t, lt01, 1, LocalDate.of(2026, 8, 1), 300_000, 0, 0, 0, 0, 0, 0, 0);
+        // 10,000 paid on 3 Oct and reversed on 7 Oct: on the 6th it stood, today it does not.
+        UUID r5 = txn(t, lt01, two, "repayment", 10_000, LocalDate.of(2026, 10, 3), null);
+        alloc(t, r5, r5, l1i1, "principal", 10_000);
+        UUID r5r = txn(t, lt01, two, "reversal", 10_000, LocalDate.of(2026, 10, 7), r5);
+        alloc(t, r5r, r5, l1i1, "principal", -10_000);
         action(t, lt01, birch, "call", "2026-10-01T10:00:00+03:00", null, null, null, null);
         action(t, lt01, birch, "promise_to_pay", "2026-10-02T10:00:00+03:00", "2026-10-10", 100_000L, "pending", null);
         action(
@@ -185,7 +192,7 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
                         "[\"Plus prepayments (items due after the range)\",70000]",
                         "[\"Plus penalties collected\",5000]",
                         "[\"Plus overpayments\",80000]",
-                        "[\"Plus recoveries on written-off loans\",30000]",
+                        "[\"Plus recoveries on loans written off\",30000]",
                         "[\"Equals total collected\",560000]");
         assertThat(265_000 + 110_000 + 70_000 + 5_000 + 80_000 + 30_000).isEqualTo(560_000);
     }
@@ -327,6 +334,179 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
                 download(f.t(), user, ALL, run.get("document_id").asString()));
         assertThat(rows(table(file, "collections")))
                 .containsExactly("[\"All loans\",115000,115000,10000,115000,110000,70000,5000,0,30000,330000]");
+    }
+
+    // JUSTIFICATION-A3: the review of #750 asked for the refusal, per-branch name and snapshot paths to be proven.
+
+    @Test
+    void aBranchLimitedCallerAskingForAnotherBranchGetsNothingFromIt() throws Exception {
+        Flows f = flows();
+        UUID user = UUID.randomUUID();
+        String ho = f.t().headOffice().toString();
+        Map<String, Object> other =
+                with(RANGE, "branch_id", List.of(f.t().secondBranch().toString()));
+        JsonNode evc = fileOf(f, user, ALL, ho, null, ready(f, user, ALL, ho, null, EVC, other));
+        assertThat(rows(table(evc, "collections"))).containsExactly("[\"All loans\",0,0,null,0,0,0,0,0,0,0]");
+        JsonNode arrears = fileOf(
+                f,
+                user,
+                ALL,
+                ho,
+                null,
+                ready(
+                        f,
+                        user,
+                        ALL,
+                        ho,
+                        null,
+                        ARREARS,
+                        Map.of("branch_id", List.of(f.t().secondBranch().toString()))));
+        assertThat(rows(table(arrears, "arrears")))
+                .containsExactly("[\"Total, 0 loans\",null,null,null,null,null,null,0,0,0,null,null,null,null,null]");
+        JsonNode officers = fileOf(f, user, ALL, ho, null, ready(f, user, ALL, ho, null, OFFICERS, other));
+        assertThat(rows(table(officers, "officers"))).containsExactly("[\"Total\",0,0,null,0,0,0,0,null,0,0,0]");
+    }
+
+    @Test
+    void namesAndPhonesFollowTheBranchesOfTheirOwnPermissions() throws Exception {
+        Flows f = flows();
+        UUID user = UUID.randomUUID();
+        // Insights and the report everywhere; members only at the head office; contact only at Test Branch Two. Both
+        // late loans are Test Branch Two's: no name, a full phone.
+        String scopes =
+                "lending.members.read=" + f.t().headOffice() + ";lending.members.contact=" + f.t().secondBranch();
+        JsonNode file = fileOf(f, user, ALL, "*", scopes, ready(f, user, ALL, "*", scopes, ARREARS, Map.of()));
+        JsonNode table = table(file, "arrears");
+        assertThat(table.get("columns").toString()).contains("member_name");
+        assertThat(rows(table).get(0))
+                .startsWith("[\"1 to 30 days late\",\"CL02\",\"MCL02\",null,\"+256700000001\"")
+                .doesNotContain("Test Borrower");
+        assertThat(rows(table).get(1)).startsWith("[\"61 to 90 days late\",\"LT01\",\"MLT01\",null,\"+256700000001\"");
+
+        // Contact at the head office only: Test Branch Two's phones are masked.
+        String headOnly = "lending.members.contact=" + f.t().headOffice();
+        JsonNode masked = fileOf(f, user, ALL, "*", headOnly, ready(f, user, ALL, "*", headOnly, ARREARS, Map.of()));
+        assertThat(rows(table(masked, "arrears")).get(0)).contains("\"+256*****0001\"");
+    }
+
+    @Test
+    void aFileIsRefusedToARequesterWhoHasSinceLostTheNameOrThePhoneAccessItWasMadeWith() throws Exception {
+        Flows f = flows();
+        UUID user = UUID.randomUUID();
+        String doc = ready(f, user, ALL, "*", null, ARREARS, Map.of())
+                .get("document_id")
+                .asString();
+        assertThat(downloadUrl(f, user, ALL, "*", null, doc).getStatusCode().value())
+                .isEqualTo(200);
+        String noNames = COLLECTIONS + ",lending.insights.read,lending.insights.all_officers,lending.members.contact";
+        assertThat(downloadUrl(f, user, noNames, "*", null, doc).getStatusCode().value())
+                .isEqualTo(404);
+        String noContact = COLLECTIONS + ",lending.insights.read,lending.insights.all_officers,lending.members.read";
+        assertThat(downloadUrl(f, user, noContact, "*", null, doc)
+                        .getStatusCode()
+                        .value())
+                .isEqualTo(404);
+        // Names now in one branch only, where the file was made with every branch: refused too.
+        String narrowed = "lending.members.read=" + f.t().headOffice();
+        assertThat(downloadUrl(f, user, ALL, "*", narrowed, doc).getStatusCode().value())
+                .isEqualTo(404);
+    }
+
+    /** The nightly snapshot of 6 Oct, written as the job does. */
+    void snapshotOf6October(Flows f) {
+        tenantJobs.callAs(
+                f.t().tenantId(),
+                () -> new TransactionTemplate(transactions)
+                        .execute(x -> snapshots.backfill(LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 6))));
+    }
+
+    @Test
+    void onAPastDateTheArrearsListReadsTheSnapshotLeavesPenaltiesBlankAndKeepsALaterReversedRepayment()
+            throws Exception {
+        Flows f = flows();
+        snapshotOf6October(f);
+        UUID user = UUID.randomUUID();
+        JsonNode file = file(f, user, ALL, run(f, user, ALL, ARREARS, Map.of("as_at", "2026-10-06"), "json"));
+        // On 6 Oct CL02 was not yet late (its item fell due that day), and LT01 owed 290,000: the 10,000 of 3 Oct was
+        // reversed only on the 7th, so it is that date's last repayment. Penalties are blank, and so is their total.
+        assertThat(rows(table(file, "arrears")))
+                .containsExactly(
+                        "[\"61 to 90 days late\",\"LT01\",\"MLT01\",\"Test Borrower LT01\",\"+256700000001\",\"Test Officer Birch\",66,290000,null,290000,\"2026-10-03\",\"Promise to pay\",\"2026-10-02\",\"2026-10-10\",100000]",
+                        "[\"Total, 1 loan\",null,null,null,null,null,null,290000,null,290000,null,null,null,null,null]");
+        assertThat(file.get("notes").toString())
+                .contains(
+                        "Penalties outstanding are not shown: the nightly snapshot the figures were read from does not"
+                                + " hold them.");
+        // Today the reversal stands, so LT01 has no last repayment.
+        JsonNode today = file(f, user, ALL, run(f, user, ALL, ARREARS, Map.of(), "json"));
+        assertThat(rows(table(today, "arrears")).get(1)).contains("\"Test Officer Birch\",68,300000,0,300000,null,");
+    }
+
+    @Test
+    void onAPastRangeEndOfficerPerformanceReadsThePositionsFromTheSnapshot() throws Exception {
+        Flows f = flows();
+        snapshotOf6October(f);
+        UUID user = UUID.randomUUID();
+        JsonNode file = file(
+                f, user, ALL, run(f, user, ALL, OFFICERS, Map.of("from", "2026-10-01", "to", "2026-10-06"), "json"));
+        // On 6 Oct: Amber CL01 40,000 and DS01 1,000,000 (DS03 came on the 7th); Birch CL02 150,000 (due that day, not
+        // late), DS02 400,000 and LT01 290,000, 66 days late: PAR 30 = 290,000 / 840,000 = 34.52 percent; in total
+        // 290,000 / 1,880,000 = 15.43 percent. Birch's 220,000 due had 50,000 paid by the 6th: 22.73 percent.
+        assertThat(rows(table(file, "officers")))
+                .containsExactly(
+                        "[\"Test Officer Amber\",2,1040000,0,1,1000000,115000,115000,10000,1,1,0]",
+                        "[\"Test Officer Birch\",3,840000,3452,1,400000,220000,50000,2273,2,0,1]",
+                        "[\"Total\",5,1880000,1543,2,1400000,335000,165000,4925,3,1,1]");
+        assertThat(file.get("notes").toString()).contains("nightly snapshot of 2026-10-06");
+    }
+
+    /** Queues a report with these branches and per-permission scopes, drains the queue, and returns the ready run. */
+    JsonNode ready(
+            Flows f, UUID user, String perms, String branches, String scopes, String key, Map<String, Object> params)
+            throws Exception {
+        var posted = http.exchange(
+                "/api/v1/report-runs",
+                HttpMethod.POST,
+                new HttpEntity<>(body(key, params, "json"), headersOf(f, user, perms, branches, scopes)),
+                JsonNode.class);
+        assertThat(posted.getStatusCode().value()).as("%s", posted.getBody()).isEqualTo(202);
+        drain();
+        JsonNode run = run(f.t(), user, perms, posted.getBody().get("id").asString());
+        assertThat(run.get("status").asString()).as("%s", run).isEqualTo("ready");
+        return run;
+    }
+
+    JsonNode fileOf(Flows f, UUID user, String perms, String branches, String scopes, JsonNode run) throws Exception {
+        var url = downloadUrl(
+                f, user, perms, branches, scopes, run.get("document_id").asString());
+        assertThat(url.getStatusCode().value()).as("%s", url.getBody()).isEqualTo(200);
+        var h = new org.springframework.http.HttpHeaders();
+        h.add("X-Tenant", f.t().slug());
+        return mapper.readTree(http.exchange(
+                        java.net.URI.create(
+                                http.getRootUri() + url.getBody().get("url").asString()),
+                        HttpMethod.GET,
+                        new HttpEntity<>(h),
+                        String.class)
+                .getBody());
+    }
+
+    org.springframework.http.ResponseEntity<JsonNode> downloadUrl(
+            Flows f, UUID user, String perms, String branches, String scopes, String documentId) {
+        return http.exchange(
+                "/api/v1/documents/" + documentId + "/download-url",
+                HttpMethod.POST,
+                new HttpEntity<>(headersOf(f, user, perms, branches, scopes)),
+                JsonNode.class);
+    }
+
+    org.springframework.http.HttpHeaders headersOf(Flows f, UUID user, String perms, String branches, String scopes) {
+        var h = headers(f.t(), user, perms);
+        h.set("X-Dev-Branch-Ids", branches);
+        if (scopes != null) {
+            h.set("X-Dev-Scopes", scopes);
+        }
+        return h;
     }
 
     @Test
@@ -590,6 +770,11 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
         }
         if (reversed) {
             txn(t, loan, branch, "reversal", principal, on, d);
+            // A cancelled loan whose disbursement was reversed was never paid out: no disbursement date.
+            TestDatabase.owner()
+                    .sql("UPDATE lending_loans SET disbursed_on = NULL WHERE id = ?")
+                    .param(loan)
+                    .update();
         }
     }
 

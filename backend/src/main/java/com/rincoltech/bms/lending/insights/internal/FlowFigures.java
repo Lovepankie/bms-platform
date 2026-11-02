@@ -165,9 +165,10 @@ class FlowFigures {
 
     /**
      * The loans disbursed in the range per group, each indexed by {@link #LOANS} to {@link #MEDIAN} (a median of -1
-     * when there are no loans). The loans and principal are {@code disbursedByDay} summed; the
-     * upfront fees are the loans' {@code fee_upfront} entries, a reversed one excluded; the median is the middle loan,
-     * or the mean of the two middle loans rounded half up.
+     * when there are no loans). The principal is {@code disbursedByDay} summed and the loans are the distinct loans
+     * behind it; the upfront fees are the {@code fee_upfront} entries taken with each disbursement (same loan, same value
+     * date; a reversed one excluded), so a fee is never counted twice; the median is the middle disbursement, or the mean
+     * of the two middle ones rounded half up.
      *
      * @return the groups, and under the key {@link #TOTAL_KEY} the whole range
      */
@@ -183,13 +184,14 @@ class FlowFigures {
                 ? "SELECT NULL::uuid AS g, 1 AS whole,"
                 : "SELECT " + g + " AS g, GROUPING(" + g + ") AS whole,";
         String sql = grouping + """
-                 count(*) AS n, coalesce(sum(t.amount_minor), 0) AS amount, coalesce(sum(f.fee), 0) AS fees,
+                 count(DISTINCT t.loan_id) AS n, coalesce(sum(t.amount_minor), 0) AS amount, coalesce(sum(f.fee), 0) AS fees,
                  round((percentile_cont(0.5) WITHIN GROUP (ORDER BY t.amount_minor))::numeric) AS median
                   FROM lending_loan_transactions t
                   JOIN lending_loans l ON l.id = t.loan_id""" + PRODUCT_JOIN + """
 
                   LEFT JOIN LATERAL (SELECT sum(u.amount_minor) AS fee FROM lending_loan_transactions u
                                       WHERE u.loan_id = t.loan_id AND u.txn_type = 'fee_upfront'
+                                        AND u.value_date = t.value_date
                                         AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r
                                                          WHERE r.reverses_txn_id = u.id)) f ON true
                  WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + NOT_REVERSED
@@ -230,6 +232,7 @@ class FlowFigures {
                   LEFT JOIN users u ON u.id = l.officer_user_id
                   LEFT JOIN LATERAL (SELECT sum(x.amount_minor) AS fee FROM lending_loan_transactions x
                                       WHERE x.loan_id = t.loan_id AND x.txn_type = 'fee_upfront'
+                                        AND x.value_date = t.value_date
                                         AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r
                                                          WHERE r.reverses_txn_id = x.id)) f ON true
                  WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + NOT_REVERSED + s.loanFilter("l", p) + " ORDER BY t.value_date, l.loan_no";
@@ -286,17 +289,21 @@ class FlowFigures {
             String memberNo,
             String memberName,
             String phone,
-            UUID branchId,
-            long penaltiesOutstandingMinor,
+            Long penaltiesOutstandingMinor,
             LocalDate lastRepaymentOn,
             String lastAction,
             LocalDate lastActionOn,
             LocalDate promisedDate,
-            Long promisedAmountMinor) {}
+            Long promisedAmountMinor) {
+
+        /** For a position whose loan row cannot be read: every extra blank, so the line is still printed. */
+        static final ArrearsExtras NONE = new ArrearsExtras(null, null, null, null, null, null, null, null, null);
+    }
 
     /**
-     * For each loan: the member, the penalties outstanding today, the last repayment on or before {@code date} (a
-     * reversed one excluded), the last collection action logged on or before it (by the business date in
+     * For each loan: the member, the penalties outstanding today, the last repayment on or before {@code date} (one
+     * reversed by then excluded; a reversal after the date does not change what stood on it), the last collection action
+     * logged on or before it (by the business date in
      * {@code zone}), and the earliest promise to pay made by then and not settled by then.
      */
     Map<UUID, ArrearsExtras> arrearsExtras(Collection<UUID> loanIds, LocalDate date, ZoneId zone) {
@@ -305,9 +312,11 @@ class FlowFigures {
             return out;
         }
         String sql = """
-                SELECT l.id, m.member_no, m.full_name, m.phone_e164, l.branch_id, l.penalties_outstanding_minor,
+                SELECT l.id, m.member_no, m.full_name, m.phone_e164, l.penalties_outstanding_minor,
                        (SELECT max(t.value_date) FROM lending_loan_transactions t
-                         WHERE t.loan_id = l.id AND t.txn_type = 'repayment' AND t.value_date <= :d""" + NOT_REVERSED + """
+                         WHERE t.loan_id = l.id AND t.txn_type = 'repayment' AND t.value_date <= :d
+                           AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r
+                                            WHERE r.reverses_txn_id = t.id AND r.value_date <= :d)
                        ) AS last_repayment_on,
                        la.action_type, la.performed_on, op.promised_date, op.promised_amount_minor
                   FROM lending_loans l
@@ -333,7 +342,6 @@ class FlowFigures {
                                 rs.getString("member_no"),
                                 rs.getString("full_name"),
                                 rs.getString("phone_e164"),
-                                rs.getObject("branch_id", UUID.class),
                                 rs.getLong("penalties_outstanding_minor"),
                                 rs.getObject("last_repayment_on", LocalDate.class),
                                 rs.getString("action_type"),

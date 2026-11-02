@@ -250,9 +250,10 @@ things. None reverses a decision; no migration and no permission were needed.
    it, arrears recovered, prepayments, penalties, overpayments, recoveries on written-off loans) are summed by separate queries; the
    report prints the parts and the total and prints "Not explained by the parts" only if they differ, so a broken allocation shows up on
    paper instead of being absorbed into a balancing line. Recoveries are a part of their own because a recovery settles no item.
-3. **What a borrower's line shows is frozen with the run.** The arrears list prints a name only for a holder of `lending.members.read`
-   and a full phone only in the branches of `lending.members.contact` (masked elsewhere, as the collection lists); both are decided at
-   request time, stored in the run's scope, and a download by someone whose access has narrowed is refused.
+3. **What a borrower's line shows is frozen with the run, branch by branch.** The arrears list prints a name only in the branches of
+   `lending.members.read` and a full phone only in the branches of `lending.members.contact` (masked elsewhere, as the collection lists);
+   both branch lists are decided at request time, stored in the run's scope, and a download by someone whose access to either has
+   narrowed is refused.
 4. **An officer is the loan's responsible officer now.** Flows, actions and promises count for the officer the loan has today, the
    positions of a past date for the snapshot's officer; the report says so. Counting actions by who logged them would split one loan's
    follow up across officers and leave the collection rate and the actions in different rows.

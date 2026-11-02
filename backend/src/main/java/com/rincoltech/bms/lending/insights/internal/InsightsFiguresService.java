@@ -413,7 +413,7 @@ class InsightsFiguresService implements InsightsFigures {
     public void arrears(
             PortfolioScope p,
             String bucket,
-            boolean names,
+            List<UUID> nameBranchIds,
             List<UUID> contactBranchIds,
             Runnable checkpoint,
             java.util.function.Consumer<ArrearsLine> lines) {
@@ -438,13 +438,16 @@ class InsightsFiguresService implements InsightsFigures {
             Map<UUID, FlowFigures.ArrearsExtras> extras =
                     flows.arrearsExtras(block.stream().map(Position::loanId).toList(), p.to(), zone);
             for (Position l : block) {
-                FlowFigures.ArrearsExtras x = extras.get(l.loanId());
-                boolean contact = contactBranchIds == null || contactBranchIds.contains(x.branchId());
+                // A loan whose row cannot be read keeps its position line, without the member and the extras.
+                FlowFigures.ArrearsExtras x = extras.getOrDefault(l.loanId(), FlowFigures.ArrearsExtras.NONE);
+                // The position's branch: the snapshot's on a past date, the loan's today.
+                boolean name = nameBranchIds == null || nameBranchIds.contains(l.branchId());
+                boolean contact = contactBranchIds == null || contactBranchIds.contains(l.branchId());
                 lines.accept(new ArrearsLine(
                         l.bucket(),
                         l.loanNo(),
                         x.memberNo(),
-                        names ? x.memberName() : null,
+                        name ? x.memberName() : null,
                         contact ? x.phone() : masked(x.phone()),
                         officers.getOrDefault(l.officerUserId(), InsightsService.staffLabel(l.officerUserId())),
                         l.daysPastDue(),

@@ -177,13 +177,14 @@ public interface InsightsFigures {
      * The active loans more than zero days past due as at {@code scope.to()} (chapter 14 section 14.4,
      * {@code lending.arrears_list}), from the same positions as {@link #par}, most overdue first within each bucket and
      * the buckets in age order; {@code bucket} keeps one bucket ({@code 1_30}, {@code 31_60}, {@code 61_90},
-     * {@code over_90}) or all when null. A member's name is given when {@code names} is true, and a phone in full only in
-     * the branches of {@code contactBranchIds} (null for every branch), else masked.
+     * {@code over_90}) or all when null. A member's name is given only in the branches of {@code nameBranchIds}, and a
+     * phone in full only in the branches of {@code contactBranchIds} (each null for every branch, empty for none); the
+     * branch is the position's (the snapshot's for a past date). Elsewhere the name is null and the phone masked.
      */
     void arrears(
             PortfolioScope scope,
             String bucket,
-            boolean names,
+            List<UUID> nameBranchIds,
             List<UUID> contactBranchIds,
             Runnable checkpoint,
             java.util.function.Consumer<ArrearsLine> lines);
@@ -249,7 +250,7 @@ public interface InsightsFigures {
             long feesMinor) {}
 
     /**
-     * One loan in arrears. {@code memberName} is null without the names, {@code phone} masked outside the contact
+     * One loan in arrears. {@code memberName} is null outside the name branches, {@code phone} masked outside the contact
      * branches. {@code penaltiesOutstandingMinor} is null for a past date (the snapshot does not hold it); the last
      * repayment, the last collection action and the open promise are those on or before the date.
      */

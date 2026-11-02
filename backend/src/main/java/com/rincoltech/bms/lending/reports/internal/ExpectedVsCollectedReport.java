@@ -95,7 +95,7 @@ class ExpectedVsCollectedReport extends RangeReport {
         equation.row("Plus prepayments (items due after the range)", t.prepaymentsMinor());
         equation.row("Plus penalties collected", t.penaltiesMinor());
         equation.row("Plus overpayments", t.overpaymentsMinor());
-        equation.row("Plus recoveries on written-off loans", t.recoveriesMinor());
+        equation.row("Plus recoveries on loans written off", t.recoveriesMinor());
         if (t.unexplainedMinor() != 0) {
             equation.row("Not explained by the parts", t.unexplainedMinor());
         }
