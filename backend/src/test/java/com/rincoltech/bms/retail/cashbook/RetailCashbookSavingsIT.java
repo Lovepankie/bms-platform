@@ -600,16 +600,20 @@ class RetailCashbookSavingsIT extends IntegrationTest {
 
         JsonNode s = suggestion(CASHIER);
         assertThat(s.get("suggested_minor").asLong()).isEqualTo(2_000);
-        assertThat(s.get("available_minor").asLong()).isEqualTo(4_000);
+        // Only what the request needs: never the cap, the profit or the expenses.
+        assertThat(s.has("available_minor")).isFalse();
         assertThat(s.has("daily_profit_minor")).isFalse();
         assertThat(s.has("day_expenses_minor")).isFalse();
 
-        // The cap holds, in words that leave the profit and the expenses out.
+        // The cap holds, in plain words that state neither the cap, the profit nor the expenses.
         ResponseEntity<JsonNode> above = cb.post("/savings", body(s, 4_001, null), CASHIER);
         assertThat(above.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(above.getBody().get("code").asString()).isEqualTo("savings_above_available");
         assertThat(above.getBody().get("detail").asString())
-                .isEqualTo("You can save at most UGX 4,000 for " + words(day) + ".");
+                .isEqualTo(
+                        "That amount is more than this shop can save on " + words(day) + ". Enter a smaller amount.");
+        assertThat(above.getBody().toString()).doesNotContain("4,000").doesNotContain("4000");
+        assertThat(above.getBody().has("available_minor")).isFalse();
         assertThat(above.getBody().has("daily_profit_minor")).isFalse();
         assertThat(above.getBody().has("day_expenses_minor")).isFalse();
 

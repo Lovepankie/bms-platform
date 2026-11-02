@@ -7,7 +7,8 @@ import { formatMinor } from '../../../components/money';
 // The savings form's rules (FR-RET-18, FR-RET-19, ADR-022 decisions 11 to 13, ADR-080), apart from the screen so
 // they can be tested. A caller without retail.profit.read gets a suggestion with no `suggested_minor`:
 // that caller sends no amount and no reason at all and the server records the standard amount, unless the owner
-// turned on "Salespeople can see and change the savings amount" (ADR-115): then the amount comes without the profit. The day's
+// turned on "Salespeople can see and change the savings amount" (ADR-115): then the suggestion comes without the profit, the
+// expenses or the cap, and only the server checks the cap for that caller. The day's
 // available amount is its profit less its expenses, never below 0; nothing above it is sent, and the server
 // refuses it too. The reason for changing the amount is optional (#538).
 
@@ -24,13 +25,12 @@ export function reasonText(pick: string, other: string): string {
 }
 
 /**
- * "You can save at most UGX X today (profit UGX P minus expenses UGX E)." The server says the same. A salesperson under the
- * owner's setting (ADR-115) is not told the profit or the expenses, so the words stop at the amount.
+ * "You can save at most UGX X today (profit UGX P minus expenses UGX E)." The server says the same. Only a caller with profit
+ * read gets the cap; a salesperson under the owner's setting (ADR-115) never does, and the server's refusal leaves it out.
  */
 export function capWords(s: SavingsSuggestion, date: string, today: string): string {
   const when = date === today ? 'today' : `for ${showDate(date)}`;
-  const why = s.daily_profit_minor !== undefined ? ` (profit ${money(s.daily_profit_minor)} minus expenses ${money(s.day_expenses_minor ?? 0)})` : '';
-  return `You can save at most ${money(s.available_minor ?? 0)} ${when}${why}.`;
+  return `You can save at most ${money(s.available_minor ?? 0)} ${when} (profit ${money(s.daily_profit_minor ?? 0)} minus expenses ${money(s.day_expenses_minor ?? 0)}).`;
 }
 
 /**

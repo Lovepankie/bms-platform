@@ -41,8 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
  * suggestion is that amount times the tenant rate; a savings amount is half the profit, so every figure
  * that carries it is absent without {@code retail.profit.read}, the audit row carries flags only, and a
  * caller without that permission cannot send an amount at all (no equality oracle). ADR-115 (issue #768): when the owner turns
- * on {@code salespeople_see_savings_amount}, such a caller sees the suggestion, the cap and the saved amount and may change the
- * amount within the cap; the profit and the expenses stay hidden.
+ * on {@code salespeople_see_savings_amount}, such a caller sees the suggestion and the saved amount and may change the amount
+ * within the cap; the profit, the expenses and the cap itself stay hidden, and an amount above the cap is refused in words that
+ * do not state it. The profit can still be worked out from the suggestion (ADR-115, Worse).
  */
 @Service("retailSavingsService")
 class SavingsService {
@@ -114,7 +115,9 @@ class SavingsService {
         LocalDate on = support.businessDate(date, "date");
         Day d = day(branch, on);
         boolean gate = mayProfit(branch);
-        // ADR-115: with the owner's setting on, the amounts show without profit read; the profit and expenses never do.
+        // ADR-115: with the owner's setting on, the suggestion shows without profit read; the profit, the expenses and
+        // the
+        // day's cap never do.
         boolean sees = gate || support.salespeopleSeeSavingsAmount();
         UUID existing = repo.activeSavings(branch, on).orElse(null);
         return new SavingsSuggestion(
@@ -125,7 +128,7 @@ class SavingsService {
                 sees ? d.suggested() : null,
                 gate ? d.profit() : null,
                 gate ? d.expenses() : null,
-                sees ? d.available() : null,
+                gate ? d.available() : null,
                 existing,
                 sees && existing != null
                         ? repo.savings(existing, false)
@@ -243,17 +246,20 @@ class SavingsService {
     }
 
     /**
-     * A typed amount above the day's available amount (ADR-080). A caller with profit read is told the profit and
-     * expenses too; a salesperson typing under the owner's setting (ADR-115) is told only the most the day allows.
+     * A typed amount above the day's available amount (ADR-080). A caller with profit read is told the cap, the profit
+     * and the expenses; a salesperson typing under the owner's setting (ADR-115) is told none of them, only that the amount
+     * is too large, so the words never state the cap.
      */
     private ApiException aboveAvailable(Day d, LocalDate date, boolean profit) {
-        String when = date.equals(support.today()) ? "today" : "for " + date.format(DAY);
-        String detail = "You can save at most " + money(d.available()) + " " + when
-                + (profit ? " (profit " + money(d.profit()) + " minus expenses " + money(d.expenses()) + ")" : "")
-                + ".";
+        boolean today = date.equals(support.today());
+        String detail = profit
+                ? "You can save at most " + money(d.available()) + " " + (today ? "today" : "for " + date.format(DAY))
+                        + " (profit " + money(d.profit()) + " minus expenses " + money(d.expenses()) + ")."
+                : "That amount is more than this shop can save " + (today ? "today" : "on " + date.format(DAY))
+                        + ". Enter a smaller amount.";
         Map<String, Object> extra = new LinkedHashMap<>();
-        extra.put("available_minor", d.available());
         if (profit) {
+            extra.put("available_minor", d.available());
             extra.put("daily_profit_minor", d.profit());
             extra.put("day_expenses_minor", d.expenses());
         }
