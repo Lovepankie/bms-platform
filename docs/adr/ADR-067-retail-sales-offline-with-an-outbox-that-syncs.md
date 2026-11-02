@@ -54,7 +54,13 @@ left, the branch, the period, the person's roles.
    header asks the person to sign in. The engine goes on whenever a new access token arrives (a sign-in or any refresh). A 2xx removes the item and keeps the server's sale
    number for the receipt. Any other 4xx is a refusal: the item is kept, marked failed with the server's words, reported to
    the server (decision 7) and skipped, so the next one goes. Sync starts on the `online` event, on a successful health ping
-   (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now.
+   (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now. A ping with no answer
+   within 3 s counts as offline (issue #769): on a weak mobile connection a slow answer means a sale would hang. For the
+   same reason a cash, mobile money or bank sale sent online with no answer within 8 s, or lost on the network, goes to
+   the outbox at once exactly as it was sent, under the same `Idempotency-Key`, and the seller gets the provisional
+   receipt. The answer that comes later is ignored on the phone; the server answers the outbox's send from the key row
+   (or, while the first request still holds the key, 409 `idempotency_in_progress`, which is tried again), so the sale
+   is recorded once (decision 5).
 5. **Sent once.** The request carries `Idempotency-Key` (replays within 7 days answer from the key row) and
    `client_sale_id`, stored on `retail_sales` with a unique index per tenant. The server looks for the client sale id
    before any other check: a sale already recorded with it is answered as a replay (`Idempotent-Replayed: true`) when the

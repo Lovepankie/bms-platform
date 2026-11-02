@@ -170,6 +170,30 @@ class RetailOfflineSalesIT extends IntegrationTest {
         assertThat(sales()).isEqualTo(2);
     }
 
+    /**
+     * Issue #769: an online sale with no answer in time goes to the outbox exactly as sent under the same key, so the
+     * late first request and the outbox's send, in either order, are one sale.
+     */
+    // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+    @Test
+    void anOnlineSaleSentAgainFromTheOutboxUnderItsKeyIsOneSale() {
+        api.stockUp(t.headOffice(), product, "5");
+        Map<String, Object> online = new LinkedHashMap<>();
+        online.put("branch_id", t.headOffice());
+        online.put("payment_method", "cash");
+        online.put("lines", List.of(Map.of("product_id", product, "qty", "1")));
+        online.put("client_sale_id", UUID.randomUUID());
+        String key = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> first = send(online, key);
+        assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> fromOutbox = send(online, key);
+        assertThat(fromOutbox.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(fromOutbox.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+        assertThat(fromOutbox.getBody().get("id")).isEqualTo(first.getBody().get("id"));
+        assertThat(sales()).isEqualTo(1);
+        assertThat(balance()).isEqualTo("4.000");
+    }
+
     /** ADR-067 decision 5: another person's client sale id is refused, never answered with their sale. */
     @Test
     void anotherPersonsClientIdIsRefused() {
