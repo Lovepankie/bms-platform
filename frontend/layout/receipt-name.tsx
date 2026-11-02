@@ -37,7 +37,9 @@ const facts: SaleReceipt = {
 const link: ReceiptLink = { url: 'https://example.test/abcdefghijklmnopqrstuvwxyz', link: 'example.test/abcdefghijklmnopqrstuvwxyz', expires_at: '2027-01-31T09:00:00Z' };
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 client.setQueryData(['retail', 'sale-receipt', receiptKey(sale)], facts);
-retail.saleReceiptLink = () => new Promise((made) => setTimeout(() => made(link), 150));
+// The link is asked for on the tap and answered after a short wait; ?nolink=1 makes it fail, as with no network.
+retail.saleReceiptLink = () =>
+  new Promise((made, failed) => setTimeout(() => (query.get('nolink') === '1' ? failed(new Error('offline')) : made(link)), 150));
 const router = layoutRouter('/staff/retail/sell');
 
 function Page() {

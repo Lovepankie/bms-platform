@@ -124,6 +124,8 @@ export function offlineSale(args: {
   branchName: string;
   pricesAsOf?: string;
   buyerName?: string;
+  /** The phone typed for the receipt of a sale paid now (issue #760), kept with the name. */
+  buyerContact?: string;
   /** An online request whose answer was lost: it goes as it was sent, dated when it was sent (ADR-067 decision 5). */
   sent?: { body: SaleRequest; at: string };
   now: Date;
@@ -148,12 +150,14 @@ export function offlineSale(args: {
     };
   });
   const buyer = args.buyerName?.trim();
+  const contact = args.buyerContact?.trim();
   const delivery = { occurred_at: occurredAt, recorded_offline: true, ...(pricesAsOf ? { prices_as_of: pricesAsOf } : {}) };
   const request: SaleRequest = sent ? { ...sent.body, client_sale_id: clientSaleId, ...delivery } : {
     branch_id: draft.branchId,
     payment_method: draft.method,
     ...(draft.customerId ? { customer_id: draft.customerId } : {}),
     ...(!draft.customerId && buyer ? { buyer_name: buyer } : {}),
+    ...(!draft.customerId && contact ? { buyer_contact: contact } : {}),
     lines: lines.map((l) => l.request),
     client_sale_id: clientSaleId,
     ...delivery,

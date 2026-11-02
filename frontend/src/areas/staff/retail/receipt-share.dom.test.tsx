@@ -361,7 +361,7 @@ describe('WhatsApp customer', () => {
     saleReceipt.mockResolvedValue({ ...facts, buyer_name: 'Test Buyer \uD83D' });
     screenOf(seller, sale);
     fireEvent.click(await whatsAppButton());
-    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(chat()).toMatch(/^https:\/\/wa\.me\//));
   });
 
   it('offers to save a typed number on a buyer with no number, unticked, and saves it only when ticked', async () => {
