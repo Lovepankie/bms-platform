@@ -64,16 +64,31 @@ export const restockPage: Tour = {
 export const usagePage: Tour = {
   id: 'page-usage',
   // Version 2 words the Add the items step for the picker that lists items only while you type (issue #534).
-  version: 2,
+  // Version 3 adds the link to Past usage and damage (issue #145).
+  version: 3,
   title: 'This page: usage and damage',
   audience: (me) => held(me, USAGE),
   autoStart: false,
   page: '/staff/retail/usage',
   steps: [
+    retail({ id: 'past', target: 'usage-past', needs: [STOCK_READ], optional: true, title: 'What was used before', body: 'Tap Past usage and damage to see what was used or damaged, by day, branch and item.' }),
     retail({ id: 'kind', target: 'usage-kind', title: 'What happened', body: 'Choose Used in the shop, or Damaged or lost.' }),
     retail({ id: 'reason', target: 'usage-reason', title: 'Say why', body: 'Type a short reason. It is kept with the record.' }),
     retail({ id: 'search', target: 'usage-search', title: 'Add the items', body: 'Type part of the name or code, and tap the item in the list under the box. Then type the quantity for each item.' }),
     retail({ id: 'save', target: 'usage-save', title: 'Save', body: 'Tap Save. The items leave your stock.' }),
+  ],
+};
+
+export const usageHistoryPage: Tour = {
+  id: 'page-usage-history',
+  version: 1,
+  title: 'This page: past usage and damage',
+  audience: (me) => held(me, STOCK_READ),
+  autoStart: false,
+  page: '/staff/retail/usage-history',
+  steps: [
+    retail({ id: 'filters', target: 'usage-history-filters', title: 'Find the record', body: 'Choose the first and last day. Type part of an item name to see only that item. The branch at the top of the page picks the shop.' }),
+    retail({ id: 'list', target: 'usage-history-list', title: 'What was taken out', body: 'Each line says the item, how many, the day and the reason. The newest is first.' }),
   ],
 };
 
@@ -214,6 +229,6 @@ export const evaluationPage: Tour = {
 };
 
 export const RETAIL_REPORT_TOURS: readonly Tour[] = [
-  retailHomePage, restockPage, usagePage, transferPage, transfersPage, valuationPage, profitPage,
+  retailHomePage, restockPage, usagePage, usageHistoryPage, transferPage, transfersPage, valuationPage, profitPage,
   salesAnalysisPage, marginsPage, stockHealthPage, creditControlPage, evaluationPage,
 ];

@@ -1283,6 +1283,15 @@ export function createMockRetail(): RetailApi {
     stockHistory: ({ productId, branchId }) =>
       run(() => ({ items: stockLog.filter((m) => m.product_id === productId && m.branch_id === branchId).reverse() })),
 
+    usageHistory: ({ from, to, branchId, productId }) =>
+      run(() => ({
+        items: stockLog
+          // The business day, as the server's from and to (StockService.movements, the tenant's time zone), never the UTC day.
+          .filter((m) => (m.kind === 'usage' || m.kind === 'damage') && businessToday(new Date(m.at ?? '')) >= from && businessToday(new Date(m.at ?? '')) <= to
+            && (!branchId || m.branch_id === branchId) && (!productId || m.product_id === productId))
+          .reverse(),
+      })),
+
     listPurchases: ({ branchId, from, to, supplierId, categoryId: category, productId, status }) =>
       run(() => ({
         items: purchases
@@ -1365,6 +1374,7 @@ export function createMockRetail(): RetailApi {
         const p = find(l.product_id);
         const lineCost = lineTotal(p.costMinor, toMilli(l.qty));
         move(branchId, p.id, -toMilli(l.qty));
+        logMove(cost({ branch_id: branchId, product_id: p.id, code: p.code, description: p.description, unit: p.unit, kind: body.kind === 'used' ? 'usage' : 'damage', qty: `-${l.qty}`, source_type: 'retail.usage', note: body.reason }, { unit_cost_minor: p.costMinor, line_cost_minor: lineCost }));
         costTotal += lineCost;
         return cost({ line_no: n + 1, product_id: p.id, code: p.code, description: p.description, qty: l.qty }, { unit_cost_minor: p.costMinor, line_cost_minor: lineCost });
       });

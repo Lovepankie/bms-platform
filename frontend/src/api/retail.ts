@@ -474,6 +474,8 @@ export interface RetailApi {
   correctStock(body: StockCorrectionRequest, idempotencyKey: string): Promise<StockCorrection | ApprovalWaiting>;
   /** The stock history of an item at a branch, newest first (issue #351). */
   stockHistory(q: { productId: string; branchId: string; cursor?: string; limit?: number; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
+  /** Stock used and damaged, newest first, in the days given and the caller's branch scope (#145); a blank branch or item means all. */
+  usageHistory(q: { from: string; to: string; branchId?: string; productId?: string; cursor?: string; signal?: AbortSignal }): Promise<{ items: StockMovement[]; next_cursor?: string }>;
   listStock(q: { branchId: string; query?: string; categoryId?: string; negativeOnly?: boolean; level?: StockLevel; includeInactive?: boolean; signal?: AbortSignal }): Promise<StockRow[]>;
   /** One page of sales, newest first, narrowed by the filters (#145). */
   listSales(q: SalesQuery): Promise<SalePage>;
@@ -940,6 +942,16 @@ const realRetail: RetailApi = {
     const page = unwrap(
       await api.GET('/api/v1/retail/stock/movements', {
         params: { query: { product_id: productId, branch_id: [branchId], newest_first: true, ...(cursor ? { cursor } : {}), ...(limit ? { limit } : {}) } },
+        signal,
+      }),
+    );
+    return { items: page.items ?? [], ...(page.next_cursor ? { next_cursor: page.next_cursor } : {}) };
+  },
+
+  async usageHistory({ from, to, branchId, productId, cursor, signal }) {
+    const page = unwrap(
+      await api.GET('/api/v1/retail/stock/movements', {
+        params: { query: { from, to, kind: ['usage', 'damage'], newest_first: true, ...(branchId ? { branch_id: [branchId] } : {}), ...(productId ? { product_id: productId } : {}), ...(cursor ? { cursor } : {}) } },
         signal,
       }),
     );

@@ -344,6 +344,7 @@ class StockRepository {
             UUID productId,
             LocalDate from,
             LocalDate to,
+            List<String> kinds,
             String zone,
             boolean newestFirst,
             Instant afterCreated,
@@ -354,7 +355,11 @@ class StockRepository {
                        source_id, reverses_movement_id, historical, note, recorded_by,
                        (SELECT c.reason_code FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_reason,
                        (SELECT c.old_qty FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_old,
-                       (SELECT c.new_qty FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_new
+                       (SELECT c.new_qty FROM retail_stock_corrections c WHERE c.movement_id = retail_stock_movements.id) AS correction_new,
+                       (SELECT p.code FROM retail_products p WHERE p.id = retail_stock_movements.product_id) AS product_code,
+                       (SELECT p.description FROM retail_products p WHERE p.id = retail_stock_movements.product_id) AS product_description,
+                       (SELECT u.name FROM retail_products p JOIN retail_units u ON u.id = p.unit_id
+                         WHERE p.id = retail_stock_movements.product_id) AS product_unit
                   FROM retail_stock_movements WHERE true
                 """);
         Map<String, Object> params = new LinkedHashMap<>();
@@ -368,6 +373,10 @@ class StockRepository {
         if (productId != null) {
             sql.append(" AND product_id = :productId");
             params.put("productId", productId);
+        }
+        if (kinds != null) {
+            sql.append(" AND kind IN (:kinds)");
+            params.put("kinds", kinds);
         }
         // The local-date test decides; the instant range around it, a day wider than any zone offset,
         // only lets the (tenant_id, occurred_at, id) index narrow the scan (issue #107).
@@ -404,9 +413,13 @@ class StockRepository {
                         rs.getTimestamp("occurred_at").toInstant(),
                         rs.getObject("branch_id", UUID.class),
                         rs.getObject("product_id", UUID.class),
+                        rs.getString("product_code"),
+                        rs.getString("product_description"),
+                        rs.getString("product_unit"),
                         rs.getString("kind"),
                         Quantities.format(rs.getBigDecimal("qty")),
                         rs.getLong("unit_cost_minor"),
+                        Quantities.value(rs.getBigDecimal("qty").abs(), rs.getLong("unit_cost_minor")),
                         rs.getString("source_type"),
                         rs.getObject("source_id", UUID.class),
                         rs.getObject("reverses_movement_id", UUID.class),

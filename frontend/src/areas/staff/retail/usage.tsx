@@ -9,6 +9,7 @@ import { BranchRequired, Gate, Problem, ProductPicker, useStockingBranch } from 
 import { canUse, needsOf } from './permissions';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { RowChevron } from '../../../app/ui/ListRow';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -98,6 +99,7 @@ export function UsagePage() {
   const [round, setRound] = useState(0);
   return (
     <Gate screen="usage" title="Usage and damage">
+      {canUse(me, 'stock') && <Link className="link-row" data-tour="usage-past" to="/staff/retail/usage-history">Past usage and damage<RowChevron /></Link>}
       {branchId === null ? (
         <BranchRequired permissions={needsOf('usage')} stocking />
       ) : done ? (

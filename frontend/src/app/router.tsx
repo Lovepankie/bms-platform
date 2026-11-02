@@ -144,6 +144,7 @@ const retailOrdersReportRoute = retailScreen('/orders-report', 'Delivery fees an
 const retailRestockRoute = retailScreen('/restock', WORDS.buyStock).lazy(() => import('../areas/staff/retail/restock').then((m) => m.Route));
 const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(() => import('../areas/staff/retail/restocks').then((m) => m.Route));
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
+const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
 // Quick add (issue #632): `name` is what Sell's search typed before it found nothing, so the form starts with it.
 const retailQuickAddRoute = retailScreen('/quick-add', 'Quick add', textParams('name')).lazy(() => import('../areas/staff/retail/quick-add').then((m) => m.Route));
@@ -430,6 +431,7 @@ export const router = createRouter({
         retailRestockRoute,
         retailRestocksRoute,
         retailUsageRoute,
+        retailUsageHistoryRoute,
         retailStockRoute,
         retailStocktakeRoute,
         retailQuickAddRoute,

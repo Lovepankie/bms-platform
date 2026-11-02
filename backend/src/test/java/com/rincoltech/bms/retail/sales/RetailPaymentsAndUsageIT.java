@@ -7,13 +7,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
@@ -192,6 +196,17 @@ class RetailPaymentsAndUsageIT extends IntegrationTest {
                 .query(String.class)
                 .list();
         assertThat(kinds).containsExactly("usage", "damage");
+        // #145: the Usage and damage history asks the movements list for these two kinds only, with the reason
+        // in the note; the stock-up movement is left out and an unknown kind is refused.
+        JsonNode history = api.get("/stock/movements?kind=usage&kind=damage&newest_first=true", ADMIN)
+                .getBody()
+                .get("items");
+        assertThat(history.valueStream()
+                        .map(m ->
+                                m.get("kind").asString() + ": " + m.get("note").asString()))
+                .containsExactlyInAnyOrder("usage: Test installation", "damage: Test water damage");
+        assertThat(api.get("/stock/movements?kind=stolen", ADMIN).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         Long shrinkage = TestDatabase.owner()
                 .sql("""
                         SELECT sum(l.debit - l.credit) FROM journal_lines l JOIN journal_entries e ON e.id = l.entry_id
@@ -221,5 +236,78 @@ class RetailPaymentsAndUsageIT extends IntegrationTest {
         assertThat(tooMuch.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(tooMuch.getBody().get("code").asString()).isEqualTo("insufficient_stock");
         assertThat(api.post("/usage", Map.of(), ADMIN).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    // JUSTIFICATION-A3: the scoping and permission proofs the #751 review asked for, as one test of their own.
+    /**
+     * #145: the usage history rows name their item; a stock reader without retail.profit.read gets no cost; a caller scoped
+     * to another branch sees none of them with kind and no branch_id; a blank kind is a 422; the line cost is the one the report posted; and every kind the table's
+     * check allows is a kind the filter takes, so the two cannot drift.
+     */
+    @Test
+    void usageHistoryNamesItemsAndKeepsScope() {
+        api.stockUp(t.headOffice(), product, "5");
+        ResponseEntity<JsonNode> used = api.postKeyed(
+                "/usage",
+                Map.of(
+                        "branch_id",
+                        t.headOffice(),
+                        "kind",
+                        "damaged",
+                        "reason",
+                        "Test breakage",
+                        "lines",
+                        List.of(Map.of("product_id", product, "qty", "1"))),
+                ADMIN,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(used.getStatusCode()).as("%s", used.getBody()).isEqualTo(HttpStatus.CREATED);
+        String path = "/stock/movements?kind=usage&kind=damage";
+
+        JsonNode admin = api.get(path, ADMIN).getBody().get("items");
+        assertThat(admin).hasSize(1);
+        assertThat(admin.get(0).get("code").asString()).isEqualTo("WIRE-1MM");
+        assertThat(admin.get(0).get("description").asString()).isEqualTo("Test Product WIRE-1MM");
+        assertThat(admin.get(0).get("unit").asString()).isNotBlank();
+        assertThat(admin.get(0).has("unit_cost_minor")).isTrue();
+        // The server sends the line cost, equal to what the usage report posted, so the screen never recomputes it.
+        assertThat(admin.get(0).get("line_cost_minor").asLong())
+                .isEqualTo(used.getBody()
+                        .get("lines")
+                        .get(0)
+                        .get("line_cost_minor")
+                        .asLong());
+
+        JsonNode seller = api.get(path, SALES).getBody().get("items");
+        assertThat(seller).hasSize(1);
+        assertThat(seller.get(0).has("unit_cost_minor")).isFalse();
+        assertThat(seller.get(0).has("line_cost_minor")).isFalse();
+
+        JsonNode elsewhere = api.call(
+                        HttpMethod.GET, path, null, ADMIN, t.secondBranch().toString(), Map.of())
+                .getBody()
+                .get("items");
+        assertThat(elsewhere).isEmpty();
+
+        // A blank kind is refused like an unknown one: a 422, never a 500 and never read as every kind.
+        assertThat(api.get("/stock/movements?kind=", ADMIN).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        String check = TestDatabase.owner()
+                .sql(
+                        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'retail_stock_movements_kind_check'")
+                .query(String.class)
+                .single();
+        Matcher kind = Pattern.compile("'([a-z_]+)'").matcher(check);
+        List<String> allowed = new ArrayList<>();
+        while (kind.find()) {
+            allowed.add(kind.group(1));
+        }
+        assertThat(allowed).hasSize(11);
+        for (String k : allowed) {
+            assertThat(api.get("/stock/movements?kind=" + k, ADMIN).getStatusCode())
+                    .as(k)
+                    .isEqualTo(HttpStatus.OK);
+        }
     }
 }
