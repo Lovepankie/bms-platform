@@ -27,6 +27,7 @@ export const STATUS_WORDS: Record<MerchantAccount['status'], string> = {
 
 const FAILURE_WORDS: Record<string, string> = {
   account_not_allowed: 'This merchant account cannot be used for your business. Use your own Pesapal account.',
+  account_unreadable: 'We could not read the saved key and secret. Paste them again and test, or ask the platform operator for help.',
   invalid_credentials: 'Pesapal did not accept this consumer key and secret. Check them in your Pesapal account and paste them again.',
   registration_refused: 'Pesapal accepted the key and secret but refused the address it should tell us about payments on. Test again in a few minutes.',
 };

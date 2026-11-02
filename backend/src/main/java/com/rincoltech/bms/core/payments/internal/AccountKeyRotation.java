@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -101,25 +102,46 @@ class AccountKeyRotation {
      * so a problem with a payment account never rolls back the re-seal of the seeds, and the reverse.
      */
     Outcome resealTenant(UUID tenantId, String current) {
-        Integer accounts = piece(tenantId, "payment accounts", () -> tx.execute(s -> resealAccounts(current)));
-        Integer seeds = piece(tenantId, "second-factor seeds", () -> tx.execute(s -> secrets.resealBoundTenant()));
+        Integer accounts = piece(tenantId, "payment accounts", true, () -> tx.execute(s -> resealAccounts(current)));
+        Integer seeds =
+                piece(tenantId, "second-factor seeds", false, () -> tx.execute(s -> secrets.resealBoundTenant()));
         return new Outcome(
                 (accounts == null ? 0 : accounts) + (seeds == null ? 0 : seeds),
                 (accounts == null ? 1 : 0) + (seeds == null ? 1 : 0));
     }
 
-    /** One part of one tenant's re-seal, as that tenant; null (and a log line by type) when it failed. */
-    private Integer piece(UUID tenantId, String what, java.util.function.Supplier<Integer> work) {
+    /**
+     * One part of one tenant's re-seal, as that tenant; null (and a log line by type) when it failed. For the payment accounts
+     * piece only, a clash on the key digest's unique constraint is logged as "duplicate account found" (issue #311): another
+     * business's account holds the digest this tenant's key gets now, so the same merchant account is connected twice (for
+     * example a row saved before #310 with the key in another letter case). Left for the operator (runbook payments.md section
+     * 4c). The database message is never logged: its detail quotes the digest.
+     */
+    private Integer piece(
+            UUID tenantId, String what, boolean paymentAccounts, java.util.function.Supplier<Integer> work) {
         try {
             return tenantJobs.callAs(tenantId, work);
         } catch (RuntimeException e) {
-            log.error(
-                    "{} of tenant {} could not be re-sealed: {}",
-                    what,
-                    tenantId,
-                    e.getClass().getSimpleName());
+            if (paymentAccounts && keyDigestClash(e)) {
+                log.error("{} of tenant {} could not be re-sealed: duplicate account found", what, tenantId);
+            } else {
+                log.error(
+                        "{} of tenant {} could not be re-sealed: {}",
+                        what,
+                        tenantId,
+                        e.getClass().getSimpleName());
+            }
             return null;
         }
+    }
+
+    /** The unique constraint on {@code payment_gateway_accounts.consumer_key_hmac} (migration V56). */
+    static final String KEY_DIGEST_CONSTRAINT = "payment_gateway_accounts_consumer_key_hmac_key";
+
+    /** True for a unique violation on the key digest and nothing else; reads the message, never logs it. */
+    static boolean keyDigestClash(RuntimeException e) {
+        return e instanceof DuplicateKeyException d
+                && String.valueOf(d.getMostSpecificCause().getMessage()).contains(KEY_DIGEST_CONSTRAINT);
     }
 
     /** The bound tenant's secrets sealed with another key: payment accounts and second-factor seeds. */

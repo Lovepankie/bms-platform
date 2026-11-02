@@ -2763,6 +2763,14 @@ class PaymentGatewayIT extends IntegrationTest {
                 .isEmpty();
         assertThat(tenantJobs.callForTenant(t.tenantId(), () -> verifiedAccounts.verified()))
                 .isFalse();
+        // Issue #311: a test names why (the box cannot be opened), apart from a refused key, and calls no one.
+        long before = fake.calls().size();
+        ResponseEntity<JsonNode> tested =
+                as(HttpMethod.POST, "/api/v1/payments/merchant-account/test", t, admin, PERMS, null);
+        assertThat(tested.getStatusCode().value()).isEqualTo(200);
+        assertThat(tested.getBody().get("status").asString()).isEqualTo("failed");
+        assertThat(tested.getBody().get("failure_reason").asString()).isEqualTo("account_unreadable");
+        assertThat(fake.calls()).hasSize((int) before);
     }
 
     @Test

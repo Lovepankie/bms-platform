@@ -1133,7 +1133,7 @@ collected only into this account, never into the platform's.
 | `ipn_id` | `text` | The provider's registration of this account's notification address; set by Test connection |
 | `ipn_token_hash` | `char(64) UNIQUE` | The SHA-256 of the random path token of that address; the token itself is never stored |
 | `ipn_registered_at`, `last_checked_at` | `timestamptz` | |
-| `failure_reason` | `varchar(60)` | A closed word: `invalid_credentials` or `registration_refused` |
+| `failure_reason` | `varchar(60)` | A closed word: `invalid_credentials`, `registration_refused`, `account_not_allowed` (a platform operator's key) or `account_unreadable` (the key box cannot be opened, issue #311) |
 | `updated_by` | `uuid NOT NULL` | The tenant user who last saved or tested it |
 
 Checks: `verified` needs the registration and the check time, `failed` needs a reason and the check time, `saved` carries no registration. A

@@ -313,6 +313,94 @@ class AccountGuardTest {
     }
 
     @Test
+    void onlyAKeyDigestClashInThePaymentAccountsPieceIsLoggedAsADuplicateAccountAndNoDigestIsLogged() {
+        // JUSTIFICATION-A3: the new test the #311 review asked for; it reuses the mocks of the test above.
+        String digest = "ab".repeat(32);
+        RuntimeException clash = new org.springframework.dao.DuplicateKeyException(
+                "reseal",
+                new java.sql.SQLException("duplicate key value violates unique constraint \""
+                        + AccountKeyRotation.KEY_DIGEST_CONSTRAINT + "\" Detail: Key (consumer_key_hmac)=(" + digest
+                        + ") already exists."));
+        RuntimeException other = new org.springframework.dao.DuplicateKeyException(
+                "reseal", new java.sql.SQLException("duplicate key value violates unique constraint \"another_key\""));
+        assertThat(AccountKeyRotation.keyDigestClash(clash)).isTrue();
+        assertThat(AccountKeyRotation.keyDigestClash(other)).isFalse();
+        assertThat(AccountKeyRotation.keyDigestClash(
+                        new IllegalStateException(AccountKeyRotation.KEY_DIGEST_CONSTRAINT)))
+                .isFalse();
+
+        DataKeys rotated = new FakeKeys("k2", "k1");
+        AccountStore store = mock(AccountStore.class);
+        when(store.sealedWithOtherKey("k2"))
+                .thenReturn(List.of(row(new FakeKeys("k1"), "verified", "lender-key-000001", "lender-secret-1")));
+        org.mockito.Mockito.doThrow(clash)
+                .when(store)
+                .reseal(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+        TenantJobs jobs = mock(TenantJobs.class);
+        when(jobs.callAs(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(i -> ((java.util.function.Supplier<?>) i.getArgument(1)).get());
+        SealedSecrets secrets = mock(SealedSecrets.class);
+        when(secrets.resealBoundTenant()).thenThrow(clash);
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AccountKeyRotation.class);
+        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            AccountKeyRotation.Outcome outcome = new AccountKeyRotation(
+                            null, jobs, store, rotated, secrets, CLOCK, transactions())
+                    .resealTenant(LENDER, "k2");
+            assertThat(outcome.failures()).isEqualTo(2);
+            List<String> lines = logs.list.stream()
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                    .toList();
+            // The accounts piece names the duplicate; the same clash in the seeds piece is only its type.
+            assertThat(lines)
+                    .containsExactly(
+                            "payment accounts of tenant " + LENDER + " could not be re-sealed: duplicate account found",
+                            "second-factor seeds of tenant " + LENDER
+                                    + " could not be re-sealed: DuplicateKeyException");
+            assertThat(String.join("\n", lines)).doesNotContain(digest);
+        } finally {
+            logger.detachAppender(logs);
+        }
+    }
+
+    @Test
+    void anUnreadableBoxHasItsOwnReasonAndItsWarningIsLoggedOnceAnHourPerTenant() {
+        // JUSTIFICATION-A3: one new test for the two #311 behaviours (reason and hourly warning); no helper added.
+        BusinessClock clock = mock(BusinessClock.class);
+        Instant t0 = Instant.parse("2026-10-18T10:00:00Z");
+        when(clock.now()).thenReturn(t0, t0.plusSeconds(60), t0.plus(VerifiedAccounts.WARN_SPACING));
+        VerifiedAccounts accounts =
+                new VerifiedAccounts(mock(AccountStore.class), new FakeKeys("k3"), settingsWithPlatformPair(), clock);
+        AccountStore.Account unreadable = row(new FakeKeys("k1"), "verified", "lender-key-000001", "lender-secret-1");
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(VerifiedAccounts.class);
+        var logs = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            assertThat(accounts.refusal(unreadable)).contains("account_unreadable");
+            assertThat(accounts.refusal(unreadable)).contains("account_unreadable");
+            assertThat(logs.list).hasSize(1);
+            assertThat(accounts.refusal(unreadable)).contains("account_unreadable");
+            assertThat(logs.list).hasSize(2);
+        } finally {
+            logger.detachAppender(logs);
+        }
+        FakeKeys k3 = new FakeKeys("k3");
+        assertThat(accounts.refusal(row(k3, "verified", "invented-platform-key", "s-000001")))
+                .contains("account_not_allowed");
+        assertThat(accounts.refusal(row(k3, "verified", "lender-key-000002", "s-000002")))
+                .isEmpty();
+    }
+
+    @Test
     void theBlindIndexesCoverTheCurrentAndEveryRetiredKeySoARowSealedBeforeARotationStillClashes() {
         FakeKeys rotated = new FakeKeys("k2", "k1");
         List<String> all = rotated.blindIndexes("p", "key-0001");

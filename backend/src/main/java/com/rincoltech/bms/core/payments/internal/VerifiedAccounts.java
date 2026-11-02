@@ -1,9 +1,14 @@
 package com.rincoltech.bms.core.payments.internal;
 
 import com.rincoltech.bms.core.identity.DataKeys;
+import com.rincoltech.bms.kernel.BusinessClock;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,14 +23,20 @@ class VerifiedAccounts {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VerifiedAccounts.class);
 
+    /** The unreadable box warning is logged at most once in this time per tenant (issue #311). */
+    static final Duration WARN_SPACING = Duration.ofHours(1);
+
     private final AccountStore store;
     private final DataKeys keys;
     private final PesapalSettings settings;
+    private final BusinessClock clock;
+    private final Map<UUID, Instant> lastWarned = new ConcurrentHashMap<>();
 
-    VerifiedAccounts(AccountStore store, DataKeys keys, PesapalSettings settings) {
+    VerifiedAccounts(AccountStore store, DataKeys keys, PesapalSettings settings, BusinessClock clock) {
         this.store = store;
         this.keys = keys;
         this.settings = settings;
+        this.clock = clock;
     }
 
     /** The merchant account of the bound tenant when it is connected, tested and allowed. */
@@ -57,11 +68,34 @@ class VerifiedAccounts {
      * whose key cannot be read is not collected into. Nothing about the box or the key is logged.
      */
     boolean refused(AccountStore.Account row) {
+        return refusal(row).isPresent();
+    }
+
+    /**
+     * Why the account may not be used, or empty when it may: {@code account_unreadable} when its key box cannot be opened,
+     * {@code account_not_allowed} when the key is one of the platform operator's (issue #311). The warning for a box that
+     * cannot be opened is logged at most once an hour per tenant, since this runs on every collection check.
+     */
+    Optional<String> refusal(AccountStore.Account row) {
         try {
-            return settings.isRefusedKey(new String(keys.open(row.consumerKeyBox()), StandardCharsets.UTF_8));
+            return settings.isRefusedKey(new String(keys.open(row.consumerKeyBox()), StandardCharsets.UTF_8))
+                    ? Optional.of("account_not_allowed")
+                    : Optional.empty();
         } catch (RuntimeException e) {
-            log.warn("a payment account's consumer key could not be opened; the account is treated as refused");
-            return true;
+            Instant now = clock.now();
+            // One atomic step per tenant, so two threads at the same moment log once between them. One entry per tenant
+            // that ever had an unreadable box; never pruned, which is small at any expected number of lenders.
+            boolean[] due = {false};
+            lastWarned.compute(row.tenantId(), (tenant, last) -> {
+                due[0] = last == null || !now.isBefore(last.plus(WARN_SPACING));
+                return due[0] ? now : last;
+            });
+            if (due[0]) {
+                log.warn(
+                        "a payment account's consumer key could not be opened; the account is treated as refused (tenant {})",
+                        row.tenantId());
+            }
+            return Optional.of("account_unreadable");
         }
     }
 }

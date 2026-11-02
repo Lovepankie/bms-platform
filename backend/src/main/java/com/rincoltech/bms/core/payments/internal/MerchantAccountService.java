@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -340,10 +341,11 @@ class MerchantAccountService {
         }
         lastTest.put(tenantId, started);
         UUID user = CurrentPrincipal.require().userId();
-        if (verifiedAccounts.refused(row)) {
-            // Saved while the list was empty or before this key was added to it: it can never become a lender's
-            // account.
-            return failed(row, "account_not_allowed", user);
+        Optional<String> refusal = verifiedAccounts.refusal(row);
+        if (refusal.isPresent()) {
+            // account_not_allowed: saved while the list was empty or before this key was added to it, so it can never
+            // become a lender's account. account_unreadable: its key box cannot be opened (issue #311).
+            return failed(row, refusal.get(), user);
         }
         // An account whose notification address is already registered keeps it (orders made before notify that address,
         // and a

@@ -396,7 +396,9 @@ environment, bound to a named tenant"; the rest of the ADR stands.
     because a row sealed before a rotation keeps its old digest until re-sealed. The re-seal runs a tenant's payment accounts and its second-factor seeds in
     separate transactions, so a problem with one can never block the other (or the `remaining` count from reaching 0).
 20. **Step-up cannot be brute-forced.** A locked account (five wrong codes, 15 minutes) refuses step-up and recovery-code regeneration, and the lock ends all of the
-    user's sessions (`revoked_reason = admin`), audited as `core.auth.account_locked`.
+    user's sessions (`revoked_reason = admin`), audited as `core.auth.account_locked`. Since decision 26 of review round 4 (migration V58) the
+    step-up lock has its own counter and is audited as `core.auth.step_up_locked` (`AuthFlow`); `core.auth.account_locked` is the password
+    lock only. This pointer was added under issue #311; the behaviour is round 4's, unchanged.
 21. **A provider refusal of a lender's credentials never ends an intent.** `AUTH` on a tenant account (a rotated secret, a backoff) takes the same path as "no
     credentials": the intent is neither closed nor cancelled at the provider, counter `provider_auth`, asked again in an hour.
 22. **Intents are bound to the merchant account they were made under.** `payment_gateway_accounts.merchant_id` is new when the consumer key changes (not when only the
@@ -430,7 +432,9 @@ environment, bound to a named tenant"; the rest of the ADR stands.
     the cross-tenant uniqueness digest use the lower cased key; the key sent to Pesapal is never altered. Operators list the digest of the lower
     cased form of each platform key too (runbook `payments.md` section 4c).
 28. **Fail closed, and lock the row.** An account whose key box cannot be opened is treated as refused. Intent creation reads the account row
-    `FOR SHARE`, so it cannot be created under a merchant a concurrent key change is replacing.
+    `FOR SHARE`, so it cannot be created under a merchant a concurrent key change is replacing. Since issue #311, Test connection marks such an
+    account `failed` with its own reason, `account_unreadable` (not `account_not_allowed`), and the warning is logged at most once an hour per
+    tenant; a re-seal that meets another business's digest logs `duplicate account found` and leaves the rows as they are.
 
 ## Amendment (2026-10-19, slice A3, issue #216): loan repayment by mobile money into the lender's own account
 
