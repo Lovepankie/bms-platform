@@ -882,6 +882,13 @@ class OutboxTemplates {
                             "{tenant_name}: Received {currency} {amount} on {date} for loan {loan_no}. Receipt {receipt_no}."
                                     + " Balance {currency} {balance}.")),
             Map.entry("loan.closed", new Template(null, "{tenant_name}: Loan {loan_no} is fully paid. Thank you.")),
+            // The payment link of issue #231 (spec 4.13), sent from the collection screen to the payer's number: the
+            // business, the amount, what it is for (a loan or savings account number) and the provider's hosted page.
+            // No name and no balance. Not a wording a tenant can change: the link is long, and the default is kept to
+            // one or two segments.
+            Map.entry(
+                    "payment.link",
+                    new Template(null, "{tenant_name}: Pay {currency} {amount} for {reference} at {link}")),
             Map.entry(
                     "investment.funded",
                     new Template(

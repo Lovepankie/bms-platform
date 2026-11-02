@@ -7427,6 +7427,21 @@
           }
         }
       },
+      "PaymentLinkText" : {
+        "properties" : {
+          "already_sent" : {
+            "type" : "boolean"
+          },
+          "expires_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "intent_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "PaymentMethodMapping" : {
         "properties" : {
           "account_code" : {
@@ -32910,6 +32925,34 @@
           }
         },
         "summary" : "Put the reversal of a payment the provider reversed to a checker again (a person asking; 202 with the request)",
+        "tags" : [ "payments" ]
+      }
+    },
+    "/api/v1/payments/intents/{intent_id}/sms" : {
+      "post" : {
+        "operationId" : "textPaymentLink",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "intent_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentLinkText"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send the payment link to the payer's number by SMS, once per intent, while it is open; refused when SMS or collections are off",
         "tags" : [ "payments" ]
       }
     },

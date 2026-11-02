@@ -66,6 +66,17 @@ const MESSAGES: Record<string, string | undefined> = {
   payment_method_unmapped: 'That way of paying has no account set up. Choose another, or ask your accountant to set it up under payment methods.',
   invalid_status_transition: 'That loan cannot take a payment now.',
   period_closed: 'Today\'s accounting period is closed.',
+  // Sending the payment link by text message (issue #231).
+  sms_off: 'Text messages are not switched on for this business. Copy the link or show the QR code instead.',
+  member_opted_out: 'This member asked not to get text messages. Copy the link or show the QR code instead.',
+  too_many_link_texts: 'This member was sent 3 payment links in the last hour. Wait a while, or copy the link instead.',
+  intent_not_open: 'This payment link has expired or the payment has ended. Make a new payment link to send one.',
+  payer_phone_not_textable: "The payer's number on this payment cannot take a text message. Copy the link instead.",
+  link_text_failed: 'The text message could not be sent just now. Nothing was sent. Try again in a moment.',
+  link_text_not_offered: 'A link cannot be sent by text message for this kind of payment.',
+  link_text_daily_limit: 'This business sent 200 payment links by text message in the last day. Copy the link or show the QR code instead.',
+  link_text_not_queued:
+    'The text message was not sent: text messages are off for this business or its limit for today is reached. Copy the link or show the QR code instead.',
 };
 
 function fail(error: unknown, status: number, fallback: string): never {
@@ -86,6 +97,9 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }, fa
 // status and the link the payer opens. Money goes only into the business's own merchant account; a business without a verified one is
 // refused (merchant_account_not_verified) before any order is made.
 export type PaymentIntent = components['schemas']['PaymentIntent'];
+
+/** The answer to sending the link by text message (issue #231): already_sent is true when it had gone before. */
+export type PaymentLinkText = components['schemas']['PaymentLinkText'];
 
 /** The purpose of a loan repayment collected through the gateway; the subject is the loan. */
 export const LOAN_REPAYMENT_PURPOSE = 'lending.loan_repayment';
@@ -156,6 +170,11 @@ export const payments = {
 
   async intent(id: string): Promise<PaymentIntent> {
     return unwrap(await api.GET('/api/v1/payments/intents/{intent_id}', { params: { path: { intent_id: id } } }), 'Could not load the payment.');
+  },
+
+  /** Texts the open link to the payer's number, once per payment; a repeat sends nothing and says it went before. */
+  async textLink(id: string): Promise<PaymentLinkText> {
+    return unwrap(await api.POST('/api/v1/payments/intents/{intent_id}/sms', { params: { path: { intent_id: id } } }), 'Could not send the link.');
   },
 
   async cancelIntent(id: string): Promise<PaymentIntent> {

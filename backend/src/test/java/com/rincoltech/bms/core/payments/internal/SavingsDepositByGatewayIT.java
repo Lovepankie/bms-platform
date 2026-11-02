@@ -858,4 +858,38 @@ class SavingsDepositByGatewayIT extends LoanFixtures {
                     .update();
         }
     }
+
+    /** Issue #231: a savings deposit link goes to the payer, about the account's holder, naming the account. */
+    // JUSTIFICATION-A3: the review of #231 asked for this test; it reuses this suite's account and gateway setup.
+    @Test
+    void frNtf02_aSavingsDepositLinkIsTextedAboutTheAccountsHolderAndNamesTheAccount() {
+        SmsTenants.operator(t.tenantId(), true, 1000);
+        SmsTenants.enable(t.tenantId());
+        String account = account();
+        JsonNode intent = intentFor(account, 100_000);
+        ResponseEntity<JsonNode> sent = call(
+                HttpMethod.POST, "/api/v1/payments/intents/" + intent.get("id").asString() + "/sms", null, null);
+        assertThat(sent.getStatusCode().value()).as("%s", sent.getBody()).isEqualTo(200);
+        assertThat(sent.getBody().get("already_sent").asBoolean()).isFalse();
+        Map<String, Object> row = TestDatabase.owner()
+                .sql("SELECT recipient, params::text AS params, subject_type, subject_id FROM notification_outbox"
+                        + " WHERE template_key = 'payment.link' AND idempotency_key LIKE ?")
+                .param("sms:payment.link:%:" + intent.get("id").asString() + ":%")
+                .query()
+                .singleRow();
+        String accountNo = TestDatabase.owner()
+                .sql("SELECT account_no FROM lending_savings_accounts WHERE id = ?")
+                .param(UUID.fromString(account))
+                .query(String.class)
+                .single();
+        UUID holder = TestDatabase.owner()
+                .sql("SELECT member_id FROM lending_savings_accounts WHERE id = ?")
+                .param(UUID.fromString(account))
+                .query(UUID.class)
+                .single();
+        assertThat(row.get("recipient")).isEqualTo("+256700000219");
+        assertThat(row.get("params").toString()).contains("savings account " + accountNo);
+        assertThat(row.get("subject_type")).isEqualTo("member");
+        assertThat(row.get("subject_id")).isEqualTo(holder);
+    }
 }

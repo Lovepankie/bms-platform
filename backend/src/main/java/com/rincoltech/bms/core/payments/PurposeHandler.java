@@ -107,6 +107,14 @@ public interface PurposeHandler {
         return java.util.Optional.empty();
     }
 
+    /**
+     * The member the subject belongs to (a loan's borrower, an account's holder), for the payment link text (issue #231):
+     * the SMS opt-out is matched on the member. Empty: the purpose has no member, and no link can be texted for it.
+     */
+    default java.util.Optional<UUID> memberOf(UUID subjectId) {
+        return java.util.Optional.empty();
+    }
+
     record Subject(String subjectType, UUID branchId) {}
 
     /**

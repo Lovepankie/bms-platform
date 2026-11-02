@@ -66,6 +66,42 @@ class SmsPureTest {
         }
     }
 
+    /** A sandbox hosted page address of the provider's shape, with a fabricated tracking id. */
+    static final String PAYMENT_LINK =
+            "https://cybqa.pesapal.com/pesapaliframe/PesapalIframe3/Index?OrderTrackingId=00000000-0000-4000-8000-000000000231";
+
+    /**
+     * Issue #231: the payment link text names the business, the amount, what it is for and the hosted page, and nothing
+     * else (no name, no balance). The provider's address alone is 113 characters, so the text is two GSM-7 segments, and
+     * stays two with a long business name and a large amount.
+     */
+    @Test
+    void frNtf02_thePaymentLinkTextRendersTheLinkAndFitsTwoSegmentsAtMost() {
+        OutboxTemplates templates = new OutboxTemplates();
+        Map<String, String> params = Map.of(
+                "tenant_name", "Test Lender",
+                "currency", "UGX",
+                "amount", "520,000",
+                "reference", "loan LN HQ 000123",
+                "link", PAYMENT_LINK);
+        String text = templates.render("sms", "payment.link", params).text();
+        assertThat(text).isEqualTo("Test Lender: Pay UGX 520,000 for loan LN HQ 000123 at " + PAYMENT_LINK);
+        SmsSegments.Count count = SmsSegments.count(text);
+        assertThat(count.encoding()).isEqualTo(SmsSegments.Encoding.GSM7);
+        assertThat(count.segments()).isEqualTo(2);
+        assertThat(OutboxTemplates.placeholders("sms", "payment.link"))
+                .containsExactlyInAnyOrder("tenant_name", "currency", "amount", "reference", "link");
+        // A long business name and a large amount still fit two segments, never a third.
+        Map<String, String> longer = new java.util.HashMap<>(params);
+        longer.put("tenant_name", "Test Lender and Savings Society");
+        longer.put("amount", "123,456,789");
+        longer.put("reference", "savings account SV000001");
+        assertThat(SmsSegments.count(
+                                templates.render("sms", "payment.link", longer).text())
+                        .segments())
+                .isEqualTo(2);
+    }
+
     @Test
     void everyDefaultTemplateFitsOneSegmentOrDeclaresTwo() {
         OutboxTemplates templates = new OutboxTemplates();
@@ -85,15 +121,19 @@ class SmsPureTest {
                 Map.entry("voucher_no", "VC-HQ-000001"),
                 Map.entry("due_date", "15/11/2026"),
                 Map.entry("arrears", "123,456,789"),
-                Map.entry("dpd", "365"));
-        // The templates that may take two segments: the ones that carry a balance.
+                Map.entry("dpd", "365"),
+                Map.entry("reference", "savings account SV000001"),
+                Map.entry("link", PAYMENT_LINK));
+        // The templates that may take two segments: the ones that carry a balance, and the payment link (issue #231),
+        // whose hosted page address alone is about 110 characters.
         for (String key : OutboxTemplates.keys("sms")) {
             int segments = SmsSegments.count(
                             templates.render("sms", key, params).text())
                     .segments();
             assertThat(segments)
                     .as("template %s", key)
-                    .isLessThanOrEqualTo(key.endsWith(OutboxTemplates.WITH_BALANCE) ? 2 : 1);
+                    .isLessThanOrEqualTo(
+                            key.endsWith(OutboxTemplates.WITH_BALANCE) || key.equals("payment.link") ? 2 : 1);
         }
         assertThat(OutboxTemplates.keys("sms"))
                 .contains("savings.deposit", "savings.deposit.with_balance", "savings.withdrawal");
