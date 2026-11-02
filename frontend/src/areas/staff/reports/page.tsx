@@ -433,7 +433,8 @@ export function RunsTable({
                     const finished = !OPEN_STATUSES.includes(r.status);
                     return (
                       <tr key={r.id}>
-                        <td data-label="Report">{r.title} <span className="ln-muted">({formatName(r.format)})</span></td>
+                        {/* One value for the phone card's flex row, so the title and its format wrap together inside the card. */}
+                        <td data-label="Report"><span>{r.title} <span className="ln-muted">({formatName(r.format)})</span></span></td>
                         <td data-label="As at">{reportDate(r.as_of)}</td>
                         <td data-label="Asked">{when(r.requested_at)}</td>
                         <td data-label="Status">

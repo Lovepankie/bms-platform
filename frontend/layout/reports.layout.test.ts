@@ -110,4 +110,14 @@ describe.each([1, 2])('The report centre at 412px, font scale %i', (font) => {
     expect((await action.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
     await page.close();
   });
+
+  it('keeps the runs inside the phone in a wide fallback font, before the web font loads', async () => {
+    // A runner that measures before Open Sans loads draws the system font; DejaVu Sans is wider and once put a run's
+    // "(Excel)" 6px past the phone (review of #735).
+    const page = await open(font);
+    await page.addStyleTag({ content: '* { font-family: "DejaVu Sans", sans-serif !important; }' });
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);
+    await page.close();
+  });
 });

@@ -11,6 +11,7 @@ import { useStaff } from './context';
 import { money as lendingMoney } from './lending/loan-state';
 import { showLending } from './lending/permissions';
 import { ALL_SELLERS, branchesWhere, canUse, holds, holdsAt, recordsSalesOffline, showRetail } from './retail/permissions';
+import { RetailAdvisorCard, canUseRetailAdvisor } from './retail/advisor-card';
 import { shortDate } from './retail/range-state';
 import { money as retailMoney } from './retail/ui';
 import { RowChevron } from '../../app/ui/ListRow';
@@ -331,9 +332,12 @@ export function HomeCards() {
   const parts = homeParts(me, branch);
   const shop = parts.sales || parts.lowStock || parts.orders;
   const lendingCard = parts.loans || parts.approvals;
-  if (!shop && !lendingCard) return null;
+  // The shop's AI assistant card (issue #422): absent when the assistant is off for the business (the server answers 204).
+  const brief = canUseRetailAdvisor(me);
+  if (!shop && !lendingCard && !brief) return null;
   return (
     <section className="home-cards" aria-label="Your business today">
+      {brief && <RetailAdvisorCard />}
       {shop && <ShopCards parts={parts} />}
       {lendingCard && <LendingCard parts={parts} />}
     </section>

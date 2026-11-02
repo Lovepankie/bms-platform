@@ -183,4 +183,24 @@ SELECT tenant_id, brief_date, source, reason, facts_as_of, generated_at, call_id
 | No row for a date, the tenant being on | A run of that date came after midnight, before the night's snapshot was written (nothing is stored then) | Nothing: the card says "not ready" and shows the automatic summary; the next day's run makes its brief |
 | A user says they see the automatic summary | Their scope does not cover every branch, or they lack `lending.insights.all_officers`: reason `scope` | Expected. A branch manager never receives the all-branches brief |
 
-To remove one day's brief (for example after a wrong switch-on), delete the row as the owner role; the next run of that date makes it again.
+## 11. The shop brief (issue #422)
+
+A business with the retail module gets the same morning brief on Home. The job `retail.advisor-daily-brief` runs like the lending
+one (every 15 minutes from 06:00 Kampala time, once per tenant and business date) and stores the brief in `retail_ai_briefs`; the
+call log shows its calls with purpose `retail_brief`. It uses the same switch, platform list and caps as the lending brief: a
+business with both modules has one setting, switched at `/staff/assistant` by whoever holds `lending.advisor.configure` or
+`retail.advisor.configure` (and `core.settings.manage`). Switching a shop on is section 4 unchanged.
+
+```sql
+SELECT tenant_id, brief_date, source, reason, facts_as_of, generated_at, call_id
+  FROM retail_ai_briefs WHERE brief_date >= current_date - 7 ORDER BY brief_date DESC, tenant_id;
+```
+
+The signs and steps of section 10 hold. The card is for the administrators: `retail.advisor.use` is seeded to them alone, so
+switching the assistant on shows it to no seller or Storekeeper. A user who sees the automatic summary instead of the AI brief lacks
+one of `retail.sale.all_sellers`, `retail.profit.read`, `retail.stock.read`, `retail.controls.read` or `retail.order.manage` over
+every branch, which the stored brief needs; that is expected. A day whose model answer flagged nothing shows the automatic summary
+with the reason `empty`. Item names never leave the server (they are sent as Item A).
+
+To remove one day's brief, lending or shop (for example after a wrong switch-on), delete the row of `lending_ai_briefs` or
+`retail_ai_briefs` as the owner role; the next run of that date makes it again.

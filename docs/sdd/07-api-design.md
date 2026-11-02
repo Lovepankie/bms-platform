@@ -1536,6 +1536,22 @@ Nothing is read for a 204 (no figures of the caller), and the card is not drawn.
 The daily job `lending.advisor-daily-brief` is not a route: every 15 minutes it makes, for each active lending tenant with the
 assistant on and on the platform list, the brief of the Africa/Kampala business date its run was due on (not before 06:00), once per tenant and date.
 
+### 7.11.24a Retail: AI brief (`/retail/advisor`, ADR-037 amendment of #422, off by default)
+
+The shop and wholesale brief, built in #422 on the gateway, the switch and the caps of 7.11.24. The bodies have the shape of the
+lending brief and settings (schemas `RetailAdvisorBrief` and `RetailAdvisorSettings`); a chip's `metric` is the figure's family
+(`sales.yesterday`, `item.sales_week`, `credit.overdue`), which the Home card opens the page of. 204 when the assistant is not active
+for the business, as for lending.
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| GET | `/retail/advisor/brief` | `retail.advisor.use` | Today's brief; `retail.advisor.use` is seeded to the administrators only. The stored model brief (one per tenant and day, every branch, every seller, cost, profit, the Controls counts and the open orders) is returned only to a caller holding `retail.advisor.use`, `retail.sale.all_sellers`, `retail.profit.read`, `retail.stock.read`, `retail.controls.read` and `retail.order.manage` over every branch; anyone else, and every day with no model brief, gets `source: fallback` of what they may see (ADR-055) with `reason` `scope`, `not_ready`, `validation`, `empty` (the model flagged nothing), `provider_down`, `cap` or `unavailable` |
+| GET | `/retail/advisor/settings` | `retail.advisor.configure` | As `/lending/advisor/settings`, the same record, with the shop notice (`retail-advisor-1`) |
+| PUT | `/retail/advisor/settings` | `retail.advisor.configure`; `core.settings.manage` as well to switch on or off | As `/lending/advisor/settings`: `If-Match`, the acknowledgement of the shop notice, the caps, audited as `core.ai.settings.changed` |
+
+The daily job `retail.advisor-daily-brief` is not a route: every 15 minutes from 06:00 Kampala time it makes, for each active
+tenant with the retail module and the assistant active, the brief of the business date its run was due on, once (`retail_ai_briefs`).
+
 ### 7.11.25 Feedback (`/feedback`, ADR-065, issue #447)
 
 Open to every signed-in member of staff (`@AuthenticatedEndpoint(kind = "staff")`, like `/me`): no matrix permission. The operator's

@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessZone } from '../../../api/retail';
-import { advisor, type AdvisorSettings } from '../../../api/advisor';
+import { advisor, type AdvisorSettings, type AdvisorSettingsChange } from '../../../api/advisor';
+import { retailAdvisor } from '../../../api/retail-advisor';
+import { canConfigureRetailAdvisor } from '../retail/advisor-card';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
 import { SETTINGS_MANAGE, canConfigureAdvisor } from '../insights/permissions';
@@ -35,8 +37,8 @@ export function AssistantSwitch({ saved, canManage, busy, error, onChange }: {
       <p>
         {saved.enabled ? <span className="badge badge-success">On</span> : <span className="badge">Off</span>}{' '}
         {saved.enabled
-          ? 'A summary of your portfolio figures is made each morning. It only advises and changes nothing.'
-          : 'Off. No figure leaves your business, and the Insights page shows the automatic summary.'}
+          ? 'A summary of your business figures is made each morning. It only advises and changes nothing.'
+          : 'Off. No figure leaves your business, and the brief shows the automatic summary.'}
       </p>
       {!saved.allowed && <p role="note" className="alert alert-info">The platform has not opened the assistant for your business yet. Ask the platform operator.</p>}
       {saved.allowed && !saved.provider_configured && <p role="note" className="alert alert-info">No provider is set up on the platform, so the automatic summary is shown.</p>}
@@ -104,20 +106,43 @@ export function AssistantCaps({ saved, busy, error, onSave }: { saved: AdvisorSe
   );
 }
 
+/**
+ * The client of the settings the session may configure: the lending assistant's, else a shop's (issue #422). Both read and write
+ * the same switch and caps of the business, so a business with both modules has one setting.
+ */
+export function settingsClientFor(me: Parameters<typeof canConfigureAdvisor>[0]) {
+  const lendingSide = { client: advisor, key: ['advisor', 'settings'] };
+  const retailSide = { client: retailAdvisor, key: ['retail', 'advisor', 'settings'] };
+  // The module first (review of #735): a business without lending always reads the shop settings and sees the shop notice,
+  // whatever lending permission a role still carries; a business without retail always reads the lending ones.
+  const modules = me.modules;
+  if (modules && !modules.includes('lending')) return canConfigureRetailAdvisor(me) ? retailSide : null;
+  if (modules && !modules.includes('retail')) return canConfigureAdvisor(me) ? lendingSide : null;
+  if (canConfigureAdvisor(me)) return lendingSide;
+  if (canConfigureRetailAdvisor(me)) return retailSide;
+  return null;
+}
+
 export function AssistantSettingsPage() {
   const { me } = useStaff();
   const queryClient = useQueryClient();
-  const query = useQuery({ queryKey: ['advisor', 'settings'], queryFn: advisor.settings, enabled: canConfigureAdvisor(me) });
+  const side = settingsClientFor(me);
+  const query = useQuery({
+    queryKey: side?.key ?? ['advisor', 'settings'],
+    queryFn: () => (side ? side.client.settings() : advisor.settings()),
+    enabled: side !== null,
+  });
   const save = useMutation({
-    mutationFn: (change: Parameters<typeof advisor.changeSettings>[1]) => advisor.changeSettings(query.data?.version ?? 0, change),
+    mutationFn: (change: AdvisorSettingsChange) => (side ?? { client: advisor }).client.changeSettings(query.data?.version ?? 0, change),
     onSuccess: (saved) => {
-      queryClient.setQueryData(['advisor', 'settings'], saved);
+      queryClient.setQueryData(side?.key ?? ['advisor', 'settings'], saved);
       void queryClient.invalidateQueries({ queryKey: ['advisor', 'brief'] });
+      void queryClient.invalidateQueries({ queryKey: ['retail', 'advisor', 'brief'] });
     },
-    onError: () => void queryClient.invalidateQueries({ queryKey: ['advisor', 'settings'] }),
+    onError: () => void queryClient.invalidateQueries({ queryKey: side?.key ?? ['advisor', 'settings'] }),
     meta: { success: 'Settings saved' },
   });
-  if (!canConfigureAdvisor(me)) {
+  if (side === null) {
     return (
       <main className="rt ln">
         <h1>AI assistant</h1>

@@ -4557,6 +4557,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/advisor/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today's retail brief: the stored AI brief for the owner, else the automatic summary of what the caller may see */
+        get: operations["getRetailAdvisorBrief"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/advisor/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The AI assistant's settings, limits and use today */
+        get: operations["getRetailAdvisorSettings"];
+        /** Switch the assistant on (with the acknowledgement) or off, or set its daily caps; audited */
+        put: operations["updateRetailAdvisorSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/bankings": {
         parameters: {
             query?: never;
@@ -12554,6 +12589,72 @@ export interface components {
             purpose?: string;
             /** Format: uuid */
             taken_by_party_id?: string;
+        };
+        /** @description The text to show before switching on, and its version */
+        RetailAdvisorAcknowledgement: {
+            text?: string;
+            text_version?: string;
+        };
+        RetailAdvisorBrief: {
+            /** @description Always true: every text here is advisory */
+            advisory?: boolean;
+            /**
+             * Format: date-time
+             * @description When the brief was made (a stored brief) or computed (the caller's own summary)
+             */
+            as_of?: string;
+            facts?: components["schemas"]["RetailAdvisorFact"][];
+            /**
+             * Format: date
+             * @description The business date the figures stand at: the end of the day before the brief
+             */
+            facts_as_of?: string;
+            /** @description The label the card carries: AI assistant (advisory) or Automatic summary */
+            label?: string;
+            /** @description The line shown under the text */
+            note?: string;
+            points?: components["schemas"]["RetailAdvisorPoint"][];
+            /** @description Why the automatic summary is shown: off, scope, validation, empty (the model flagged nothing), provider_down, cap, not_ready or unavailable; null for a model brief */
+            reason?: string;
+            /** @description model: written from an accepted structured model answer. fallback: the automatic summary */
+            source?: string;
+            summary?: string;
+        };
+        /** @description A figure the brief rests on; metric is the figure's family, which the screen opens the page of */
+        RetailAdvisorFact: {
+            display?: string;
+            key?: string;
+            label?: string;
+            metric?: string;
+        };
+        /** @description One point of the brief, written by our code from the reviewed catalogue */
+        RetailAdvisorPoint: {
+            facts?: string[];
+            text?: string;
+        };
+        RetailAdvisorSettings: {
+            /** Format: date-time */
+            acknowledged_at?: string;
+            /** Format: uuid */
+            acknowledged_by?: string;
+            acknowledged_text_version?: string;
+            acknowledgement?: components["schemas"]["RetailAdvisorAcknowledgement"];
+            /** @description The platform has opened the assistant for the business; switching on is refused otherwise */
+            allowed?: boolean;
+            cost_currency?: string;
+            /** Format: int64 */
+            cost_used_today_micro?: number;
+            /** Format: int64 */
+            daily_cost_cap_micro?: number;
+            /** Format: int64 */
+            daily_token_cap?: number;
+            enabled?: boolean;
+            /** @description A provider is configured on the platform; false means every brief is the automatic summary */
+            provider_configured?: boolean;
+            /** Format: int64 */
+            tokens_used_today?: number;
+            /** Format: int32 */
+            version?: number;
         };
         /** @description What is owed on completed credit sales, by days past the due date as of today; a sale with no due date counts as not yet due */
         RetailAgeing: {
@@ -20580,6 +20681,23 @@ export interface components {
              */
             daily_ceiling_minor?: number;
         };
+        /** @description Omitted fields are unchanged */
+        UpdateRetailAdvisorSettingsRequest: {
+            /** @description The version of the acknowledgement text that was shown; required when switching on */
+            acknowledged_text_version?: string;
+            /**
+             * Format: int32
+             * @description Estimated cost a day in millionths of the cost currency, at most the platform ceiling
+             */
+            daily_cost_cap_micro?: number;
+            /**
+             * Format: int32
+             * @description Tokens a day for this business, at most the platform ceiling; 0 stops every call
+             */
+            daily_token_cap?: number;
+            /** @description Switch the assistant on or off; needs core.settings.manage as well */
+            enabled?: boolean;
+        };
         UpdateRetailCapabilitiesRequest: {
             branch_roles?: boolean;
             /** @enum {string} */
@@ -28479,6 +28597,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RetailAdvance"];
+                };
+            };
+        };
+    };
+    getRetailAdvisorBrief: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvisorBrief"];
+                };
+            };
+        };
+    };
+    getRetailAdvisorSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvisorSettings"];
+                };
+            };
+        };
+    };
+    updateRetailAdvisorSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRetailAdvisorSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailAdvisorSettings"];
                 };
             };
         };

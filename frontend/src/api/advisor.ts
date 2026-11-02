@@ -102,6 +102,9 @@ function unwrap<T>(result: { data?: T; error?: unknown; response: Response }, fa
   return result.data;
 }
 
+/** The same unwrapping for the retail brief's client (api/retail-advisor.ts, issue #422), so both speak the same messages. */
+export const advisorUnwrap = unwrap;
+
 const ifMatch = (version: number) => `"${version}"`;
 
 export const advisor = {

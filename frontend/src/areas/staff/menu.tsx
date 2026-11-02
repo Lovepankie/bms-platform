@@ -7,6 +7,7 @@ import type { MenuGroup, MenuLink, MenuSection } from '../../components/side-men
 import { useOptionalStaff } from './context';
 import { homeParts, homeSummaryQuery } from './home-cards';
 import { canConfigureAdvisor, showInsights } from './insights/permissions';
+import { canConfigureRetailAdvisor } from './retail/advisor-card';
 import { showInvestments } from './lending/investment-state';
 import { showCollateral, showMembers } from './lending/member-permissions';
 import { showLending } from './lending/permissions';
@@ -147,7 +148,7 @@ export function staffMenu(me: Me, { sells, counts = {}, ask = false }: { sells: 
         showUnallocated(me) && { to: '/staff/payments/unallocated', label: 'Unallocated payments', icon: icons.unallocatedPayments },
         showReconciliation(me) && { to: '/staff/payments/reconciliation', label: 'Payment reconciliation', icon: icons.paymentReconciliation },
         showSms(me) && { to: '/staff/sms', label: 'SMS', icon: icons.phone },
-        canConfigureAdvisor(me) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.assistant },
+        (canConfigureAdvisor(me) || canConfigureRetailAdvisor(me)) && { to: '/staff/assistant', label: 'AI assistant', icon: icons.assistant },
         permissions.includes('core.settings.manage') && { to: '/staff/setup', label: 'Business set-up', icon: icons.settings },
       ],
     },

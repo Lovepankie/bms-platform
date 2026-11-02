@@ -1868,6 +1868,8 @@ class MigrationOrderIT {
         // V48's to answer for.
         assertThat(owner.sql(
                                 "SELECT count(*) FROM permissions WHERE key NOT IN ('lending.advisor.use', 'lending.advisor.configure',"
+                                        // V125 (the shop brief, #422): the two retail advisor permissions.
+                                        + " 'retail.advisor.use', 'retail.advisor.configure',"
                                         + " 'core.payment_account.manage', 'retail.controls.read', 'retail.credit.write_off',"
                                         + " 'retail.order.manage', 'retail.sale.all_sellers', 'retail.till.close',"
                                         + " 'retail.offline.resolve', 'lending.members.contact',"
@@ -2878,6 +2880,57 @@ class MigrationOrderIT {
                                 .single())
                         .isZero();
             }
+        }
+    }
+
+    /**
+     * V125 (issue #422) is expand only: an empty retail_ai_briefs table under forced row-level security that the application role
+     * may read and insert into but never change, and the two retail advisor permissions with their grants. No tenant is switched
+     * on. JUSTIFICATION-A3: a new test case; no existing case covers the retail brief table.
+     */
+    @Test
+    void retailBriefMigrationAddsAnAppendOnlyTableAndTheTwoPermissionsAndSwitchesNobodyOn() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("125") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            long aiSettingsBefore = owner.sql(
+                            "SELECT count(*) FROM tenant_settings WHERE settings -> 'module_groups' -> 'ai' IS NOT NULL")
+                    .query(Long.class)
+                    .single();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT relrowsecurity AND relforcerowsecurity FROM pg_class"
+                                    + " WHERE relname = 'retail_ai_briefs'")
+                            .query(Boolean.class)
+                            .single())
+                    .isTrue();
+            assertThat(owner.sql("SELECT privilege_type FROM information_schema.role_table_grants"
+                                    + " WHERE table_name = 'retail_ai_briefs' AND grantee = 'bms_app' ORDER BY 1")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("INSERT", "SELECT");
+            assertThat(owner.sql("SELECT count(*) FROM retail_ai_briefs")
+                            .query(Long.class)
+                            .single())
+                    .isZero();
+            assertThat(owner.sql("SELECT role_key || ' ' || permission_key FROM role_permissions"
+                                    + " WHERE permission_key LIKE 'retail.advisor.%' ORDER BY 1")
+                            .query(String.class)
+                            .list())
+                    // Administrators only: switching the assistant on shows the brief to nobody else (review of #735).
+                    .containsExactly("tenant_admin retail.advisor.configure", "tenant_admin retail.advisor.use");
+            assertThat(owner.sql("SELECT count(*) FROM tenant_settings"
+                                    + " WHERE settings -> 'module_groups' -> 'ai' IS NOT NULL")
+                            .query(Long.class)
+                            .single())
+                    .as("no business is switched on")
+                    .isEqualTo(aiSettingsBefore);
         }
     }
 

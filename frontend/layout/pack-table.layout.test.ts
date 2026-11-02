@@ -58,4 +58,15 @@ describe.each([1, 1.5])('An item\'s packages at 412px, font scale %s', (font) =>
     expect(seen.first).toBe('1 Piece Single unit');
     await page.close();
   });
+
+  it('keeps the table inside its card in a wide fallback font, before the web font loads', async () => {
+    // JUSTIFICATION-A3: a new layout case; in DejaVu Sans at font 1.5 an unbroken "UGX 25,500,000" made the table 2px too wide.
+    const page = await browser.newPage({ viewport: { width: WIDTH, height: 900 }, hasTouch: true, isMobile: true });
+    await openLayout(page, `layout/pack-table.html?font=${font}`, page.locator('[data-testid="pack-table"]'));
+    await page.addStyleTag({ content: '* { font-family: "DejaVu Sans", sans-serif !important; }' });
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    const wrap = page.locator('[data-testid="pack-table"]').locator('xpath=ancestor::*[contains(@class,"table-wrap")][1]');
+    expect(await wrap.evaluate((e) => e.scrollWidth - e.clientWidth), 'the table scrolls sideways').toBeLessThanOrEqual(0);
+    await page.close();
+  });
 });

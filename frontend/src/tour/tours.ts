@@ -1043,9 +1043,10 @@ export const retailSettingsPage: Tour = {
 // screens adds the tour here and sets `ready` in capabilities-state.ts (tours.test.tsx checks both).
 export const assistantPage: Tour = {
   id: 'page-assistant',
-  version: 1,
+  // Version 2 opens the page to a shop's administrator too (issue #422) and words the limit for any brief.
+  version: 2,
   title: 'This page: AI assistant',
-  audience: (me) => held(me, 'lending.advisor.configure'),
+  audience: (me) => held(me, 'lending.advisor.configure') || (showRetail(me) && held(me, 'retail.advisor.configure')),
   autoStart: false,
   page: '/staff/assistant',
   steps: [
@@ -1059,7 +1060,7 @@ export const assistantPage: Tour = {
       id: 'limit',
       target: 'assistant-caps',
       title: 'The daily limit',
-      body: 'This is the most the assistant may use in a day. At the limit, the Insights page shows the automatic summary instead.',
+      body: 'This is the most the assistant may use in a day. At the limit, the brief shows the automatic summary instead.',
     },
   ],
 };

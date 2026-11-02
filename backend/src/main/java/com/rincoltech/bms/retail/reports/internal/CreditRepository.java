@@ -191,6 +191,21 @@ class CreditRepository {
                 .list();
     }
 
+    /** Credit customers whose open sales owe more than their limit, counted with no row limit (the AI brief, #422). */
+    long overLimitCount(List<UUID> branchIds, LocalDate today) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return 0;
+        }
+        return jdbc.sql("SELECT count(*) FROM (SELECT 1"
+                        + " FROM retail_sales s JOIN retail_customers c ON c.tenant_id = s.tenant_id AND c.id = s.customer_id"
+                        + OPEN + branch(branchIds) + " GROUP BY s.customer_id"
+                        + " HAVING max(c.credit_limit_minor) IS NOT NULL AND sum(" + OWED
+                        + ") > max(c.credit_limit_minor)) o")
+                .params(params(branchIds, today))
+                .query(Long.class)
+                .single();
+    }
+
     List<OverdueRow> overdue(List<UUID> branchIds, LocalDate today, boolean byAge, int limit) {
         if (branchIds != null && branchIds.isEmpty()) {
             return List.of();

@@ -124,6 +124,18 @@ class SalesAnalysisRepository {
                 .list();
     }
 
+    /** Sales at a price list's price over the window (price lists, ADR-033 trade 5): the wholesale figure of the AI brief (#422). */
+    long listPricedSales(List<UUID> branchIds, LocalDate from, LocalDate to) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return 0;
+        }
+        return jdbc.sql("SELECT coalesce(sum(l.line_total_minor), 0)" + GROSS_LINES + WHERE + branchClause(branchIds)
+                        + " AND l.price_source = 'list'")
+                .params(params(branchIds, from, to))
+                .query(Long.class)
+                .single();
+    }
+
     /** The whole window as one row, so totals do not depend on the row limit of the lists. */
     Agg total(List<UUID> branchIds, LocalDate from, LocalDate to) {
         if (branchIds != null && branchIds.isEmpty()) {

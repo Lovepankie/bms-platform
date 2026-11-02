@@ -517,7 +517,8 @@ export const staffHomePage: Tour = {
   id: 'page-staff-home',
   // Version 3 words the menu step for the phone's bottom tabs (issue #539).
   // Version 4 words it for the grouped menu, which a phone opens from the button at the top left (issue #564).
-  version: 4,
+  // Version 5 adds the shop's AI assistant card (issue #422).
+  version: 5,
   title: 'This page: staff home',
   audience: () => true,
   autoStart: false,
@@ -544,6 +545,16 @@ export const staffHomePage: Tour = {
       optional: true,
       title: 'Your shop today',
       body: 'See the money taken today by cash and by mobile money. Below it: what customers owe, the best selling items and each shop. Tap the link under a card to open the full page.',
+    },
+    {
+      // Issue #422: the shop's AI assistant card, drawn only while the assistant is on for the business.
+      id: 'shop-brief',
+      target: 'home-retail-brief',
+      module: 'retail',
+      needs: ['retail.advisor.use'],
+      optional: true,
+      title: 'Your morning brief',
+      body: 'A short summary of yesterday and the last seven days: sales, best sellers, stock that is low, what buyers owe. It only advises. Tap a figure to open its page.',
     },
     {
       id: 'members',

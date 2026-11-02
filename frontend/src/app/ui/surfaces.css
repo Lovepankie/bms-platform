@@ -122,6 +122,11 @@ dialog h2 {
   margin-bottom: var(--space-6);
 }
 
+/* The shop's AI assistant card (issue #422) takes the whole row: its points are sentences, not figures. */
+.home-advisor {
+  grid-column: 1 / -1;
+}
+
 .home-card .card-title {
   display: flex;
   align-items: center;

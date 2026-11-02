@@ -56,6 +56,7 @@ class ModularityTest {
                         "lending.members",
                         "lending.products",
                         "lending.reports",
+                        "retail.advisor",
                         "retail.cashbook",
                         "lending.savings",
                         "lending.seed",
