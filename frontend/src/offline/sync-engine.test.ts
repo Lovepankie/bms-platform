@@ -113,6 +113,21 @@ describe('the sync engine', () => {
     expect(engine.snapshot().items[0]?.state).toBe('sent');
   });
 
+  it('tries again a sale whose key the first online request still holds, never failing it (issue #769)', async () => {
+    let held = true;
+    const { engine, sent, deps } = setup(async (i) =>
+      held ? { status: 409, body: { code: 'idempotency_in_progress', detail: 'A request with this Idempotency-Key is still being processed; retry shortly.' } } : ok(i),
+    );
+    await engine.queue(item('a', 1));
+    await engine.sync();
+    expect(engine.snapshot().items[0]?.state).toBe('queued');
+    held = false;
+    await engine.syncNow();
+    expect(sent).toEqual(['a:key-a', 'a:key-a']);
+    expect(engine.snapshot().items[0]).toMatchObject({ state: 'sent', sale: { saleNo: 'RS-a' } });
+    expect(deps.report).not.toHaveBeenCalled();
+  });
+
   it('keeps a refused sale with its reason, reports it, and goes on with the next', async () => {
     const { engine, sent, deps } = setup(async (i) =>
       i.id === 'a' ? { status: 422, body: { code: 'period_closed', detail: 'The period 2026-9 is closed.' } } : ok(i),
@@ -140,6 +155,42 @@ describe('the sync engine', () => {
     expect(a).toMatchObject({ state: 'failed', error: { code: 'not_taken_after_retries' }, failureId: 'f-a' });
     expect(b?.state).toBe('sent');
     expect(deps.report).toHaveBeenCalledTimes(1);
+  });
+
+  // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+  it('tries a 409 in progress again later with backoff, never as a refusal, and then takes the replay (issue #769)', async () => {
+    const replay = { status: 201, body: { id: 'sale-a', sale_no: 'RS-a' } };
+    let busy = MAX_SERVER_TRIES + 2;
+    const { engine, sent, deps, tick } = setup(async (i) => {
+      if (i.id === 'a' && busy > 0) {
+        busy -= 1;
+        return { status: 409, body: { code: busy % 2 ? 'idempotency_in_progress' : 'client_sale_in_progress', detail: 'Still being processed.' } };
+      }
+      return i.id === 'a' ? replay : ok(i);
+    });
+    await engine.queue(item('a', 1));
+    await engine.queue(item('b', 2));
+    await engine.syncNow();
+    // The first answer is 409: a try again later, with backoff, and the order is kept.
+    expect(sent).toEqual(['a:key-a']);
+    expect(engine.snapshot().items.map((i) => i.state)).toEqual(['queued', 'queued']);
+    expect(engine.snapshot().items[0]).toMatchObject({ attempts: 1, error: { code: 'idempotency_in_progress' } });
+    expect(engine.snapshot().items[0]?.serverTries ?? 0).toBe(0);
+    await engine.sync();
+    expect(sent).toHaveLength(1);
+    // More 409s than the tries that fail a sale, and longer than a day: never failed, reported or offered to discard.
+    for (let n = 0; n < MAX_SERVER_TRIES + 2; n++) {
+      tick(GIVE_UP_AFTER_MS);
+      await engine.sync();
+      expect(engine.snapshot().items[0]?.state).not.toBe('failed');
+    }
+    expect(deps.report).not.toHaveBeenCalled();
+    expect(deps.decisions).not.toHaveBeenCalled();
+    expect(engine.snapshot().items.map((i) => [i.id, i.state, i.sale?.saleNo])).toEqual([
+      ['a', 'sent', 'RS-a'],
+      ['b', 'sent', 'RS-b'],
+    ]);
+    expect(sent.filter((s) => s === 'a:key-a')).toHaveLength(MAX_SERVER_TRIES + 3);
   });
 
   it('fails a sale the server has not taken for 24 hours, but never for a phone with no network', async () => {

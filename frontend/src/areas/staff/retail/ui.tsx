@@ -271,7 +271,8 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
   label?: string;
   /** Absent for a screen that is about an item and not a branch's stock (the price list editor), which also sets showStock false. */
   branchId?: string;
-  onAdd: (p: Product) => void;
+  /** `readAt`: when the item was read from the server (ms), which may be earlier than the pick when the answer was cached. */
+  onAdd: (p: Product, readAt?: number) => void;
   showPrice?: boolean;
   showStock?: boolean;
   addLabel?: string;
@@ -296,7 +297,8 @@ export function ProductPicker({ id, branchId, onAdd, showPrice = false, showStoc
       fetching={products.isPending}
       error={products.isError ? <Problem error={products.error} /> : undefined}
       optionKey={(p) => p.id ?? p.code ?? ''}
-      onPick={onAdd}
+      // The time the answer was read from the server (a cached answer keeps its own), for a sale that may be kept on the phone (#769).
+      onPick={(p) => onAdd(p, products.dataUpdatedAt || undefined)}
       renderOption={(p) => {
         const facts = [p.category, showPrice && p.sell_minor !== undefined ? `${money(p.sell_minor)} each` : null].filter(Boolean).join(', ');
         return (

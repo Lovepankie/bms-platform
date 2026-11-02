@@ -21,6 +21,8 @@ export interface DraftLine {
   typed?: boolean;
   /** Why the typed price differs from the resolved one; required then. */
   reason?: string;
+  /** Issue #769: when the item and its price were read from the server, so a sale kept on the phone says how old its prices are. */
+  readAt?: string;
 }
 
 /** The price the server defaults to for the line's unit: the sell price, or a pack's own price, else times the factor (#624). */
@@ -69,8 +71,8 @@ export interface Pricing {
   checking: boolean;
 }
 
-export function newLine(product: Product): DraftLine {
-  return { product, qty: '1', price: String(product.sell_minor ?? 0) };
+export function newLine(product: Product, readAt?: string): DraftLine {
+  return { product, qty: '1', price: String(product.sell_minor ?? 0), ...(readAt ? { readAt } : {}) };
 }
 
 /** Quantity and unit price as numbers when both are valid, and the line total they give. */

@@ -113,21 +113,30 @@ export function waitingWords(count: number): string {
   return count === 0 ? '' : `${count} waiting to sync`;
 }
 
+/** 409 codes that mean an earlier request for the same sale has not finished yet (issue #769, ADR-067 decision 4). */
+export const IN_PROGRESS_CODES = ['idempotency_in_progress', 'client_sale_in_progress'];
+
 /** The answer to one try, as the engine reads it. */
 export type SendOutcome =
   | { kind: 'sent'; sale: { id: string; saleNo: string } }
-  | { kind: 'retry'; message: string; answered?: boolean }
+  | { kind: 'retry'; code?: string; message: string; answered?: boolean }
   | { kind: 'auth' }
   | { kind: 'refused'; code?: string; message: string };
 
 /**
  * A status and body from POST /retail/sales. 2xx sent; 401 the session; 408, 409, 425, 429 and 5xx are tried again later
  * (409 includes a key or a client sale id still in progress); every other answer is a refusal kept with its words.
+ * Issue #769: a 409 saying the same sale is still in progress (an earlier request under its key or its client sale id has
+ * not finished) means try again later, never a refusal, and does not count towards giving up, so the item is never failed,
+ * reported or discarded while that earlier request may still record the sale.
  */
 export function classify(status: number, body: unknown): SendOutcome {
   const b = (body ?? {}) as { id?: string; sale_no?: string; code?: string; detail?: string; errors?: { field?: string; message?: string }[] };
   if (status >= 200 && status < 300 && b.id) return { kind: 'sent', sale: { id: b.id, saleNo: b.sale_no ?? '' } };
   if (status === 401) return { kind: 'auth' };
+  if (status === 409 && IN_PROGRESS_CODES.includes(b.code ?? '')) {
+    return { kind: 'retry', code: b.code, message: 'The server is still recording this sale.', answered: false };
+  }
   // 426: this app is too old for the server (#576). The sale waits in the outbox for the new app, which sends it, and the answer
   // does not count towards giving up: the server never looked at the sale.
   if (status === 408 || status === 409 || status === 425 || status === 426 || status === 429 || status >= 500 || status === 0) {
@@ -161,7 +170,7 @@ export function applyOutcome(item: OutboxItem, outcome: SendOutcome, now: number
         }
         return { ...item, state: 'queued', attempts, serverTries, firstServerTryAt, nextAttemptAt: now + backoff(attempts), error: { message: outcome.message } };
       }
-      return { ...item, state: 'queued', attempts, nextAttemptAt: now + backoff(attempts), error: { message: outcome.message } };
+      return { ...item, state: 'queued', attempts, nextAttemptAt: now + backoff(attempts), error: { code: outcome.code, message: outcome.message } };
     }
     case 'auth':
       return { ...item, state: 'queued' };

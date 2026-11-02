@@ -49,15 +49,35 @@ left, the branch, the period, the person's roles.
    tab that holds it reads the outbox again first, and the others show what it did. A network failure, a 5xx, a 409
    or a 429 backs off (5 s, 15 s, 1 min, 5 min, then every 15 min) and keeps the order. A sale the server answers without
    taking it (a 5xx, a 409, a 429) 8 times, or for 24 hours, is marked failed (`not_taken_after_retries`) and reported like a
-   refusal, so it never holds up the sales behind it; a try with no answer at all (no network) does not count. A 401 tries
+   refusal, so it never holds up the sales behind it; a try with no answer at all (no network) does not count. A 409
+   `idempotency_in_progress` or `client_sale_in_progress` (an earlier request for the same sale has not finished) is
+   always "try again later" with the same backoff, never a refusal, and does not count towards those 8 tries or 24 hours
+   either (issue #769): the item is never marked failed, reported or offered to a manager to discard while its last answer
+   was in progress, since the earlier request may still record the sale. A 401 tries
    one session refresh; a refresh that got no answer is a try to do again later; a refused refresh stops the engine and the
    header asks the person to sign in. The engine goes on whenever a new access token arrives (a sign-in or any refresh). A 2xx removes the item and keeps the server's sale
-   number for the receipt. Any other 4xx is a refusal: the item is kept, marked failed with the server's words, reported to
+   number for the receipt. Any other 4xx (a 409 that is not "in progress" included) is a refusal: the item is kept, marked failed with the server's words, reported to
    the server (decision 7) and skipped, so the next one goes. Sync starts on the `online` event, on a successful health ping
-   (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now.
+   (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now. A ping with no answer
+   within 3 s is pinged again at once, and two in a row count as offline (issue #769): on a weak mobile connection a slow
+   answer means a sale would hang, and one slow ping on a cold link does not flip the state. For the same reason a cash,
+   mobile money or bank sale sent online with no answer within 8 s, or lost on the network (fetch's `TypeError`; a 401 or
+   any refusal is not, and with no session left it is never kept), goes to the outbox at once under the same
+   `Idempotency-Key` and client sale id, with `occurred_at` (when Save was pressed), `prices_as_of` (the oldest time the
+   form read its items, or with price lists its resolved prices, from the server: what it priced the sale from, never the
+   copy on the phone, unless the item was picked from that copy, which dates it; when any line's read time is not known no
+   `prices_as_of` is sent at all, so the server holds each price to today's, never a later time) and `recorded_offline` added, and the seller gets the provisional receipt. With no session left the
+   form stays locked, since the request may have been recorded, and Try again sends the same sale after sign-in. So when the first request never arrived, the outbox's send hours later is a sale recorded
+   offline, dated when it was taken. The answer that comes later is ignored on the phone. The server finds the sale by
+   its client sale id, or, while the first request still holds the key, answers 409 `idempotency_in_progress` (tried
+   again, never a refusal, `classify` in `outbox.ts`) and then replays from the key, whose hash leaves the delivery
+   fields out (decision 5), so the sale is recorded once. A refused first request leaves no key row (the key and the sale
+   commit or roll back together), so the outbox copy is never answered with that refusal.
 5. **Sent once.** The request carries `Idempotency-Key` (replays within 7 days answer from the key row) and
    `client_sale_id`, stored on `retail_sales` with a unique index per tenant. The server looks for the client sale id
-   before any other check: a sale already recorded with it is answered as a replay (`Idempotent-Replayed: true`) when the
+   before any other check, the key's included (issue #769), and for a request with a client sale id the key's request
+   hash leaves out `occurred_at`, `recorded_offline` and `prices_as_of`, so an online request and the same sale sent
+   from the outbox under its key are one request: a sale already recorded with it is answered as a replay (`Idempotent-Replayed: true`) when the
    same person made it, and refused with 422 `client_sale_id_reused` otherwise. A replay after the key expired, or with a
    new key after a lost answer, is therefore still the same sale. Two concurrent sends that both miss the lookup are settled
    by the unique index: the loser answers 409 `client_sale_in_progress` and its retry finds the sale. The online sale screen
