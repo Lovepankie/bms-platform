@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +57,24 @@ class LoanServicingIT extends LoanFixtures {
         cashierPerms = permissionsOf("cashier");
         accountantPerms = permissionsOf("accountant");
         today = clock.today(BusinessClock.DEFAULT_ZONE);
+    }
+
+    /**
+     * A disbursement date whose monthly instalment number {@code months} fell due exactly
+     * {@code daysLate} days before today. "Today minus a month minus five days" is not that: from
+     * 1 to 5 November it lands on a September date whose instalment falls due on an October date
+     * six days back, because October has 31 days (#744). Walking back from the due date avoids it.
+     * No disbursement date reaches a due date on the 29th to 31st after a shorter month (2 Nov
+     * minus 2 days is 31 Oct, and September has no 31st); on those few days the test is skipped
+     * with that reason instead of failing.
+     */
+    LocalDate dueDaysAgo(int months, int daysLate) {
+        LocalDate due = today.minusDays(daysLate);
+        LocalDate disbursed = due.minusMonths(months);
+        Assumptions.assumeTrue(
+                disbursed.plusMonths(months).equals(due),
+                () -> "no disbursement date has instalment " + months + " due on " + due);
+        return disbursed;
     }
 
     // ---- Fixtures -------------------------------------------------------------------------
@@ -383,7 +402,7 @@ class LoanServicingIT extends LoanFixtures {
         String tillB = assetAccount("1015", "Test till B");
         setMethod("cash", null, tillA, null, perms);
         String loan = approved(exampleB("REMAP"), 1_200_000, 3, 72);
-        LocalDate disbursed = today.minusMonths(2).minusDays(5);
+        LocalDate disbursed = dueDaysAgo(2, 5);
         disburse(loan, disbursed);
         String first = repaid(loan, 300_000, disbursed.plusMonths(1))
                 .get("transaction")
@@ -695,7 +714,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frRep02_workedExampleD_partialRepaymentAllocatesAndPosts() {
         String loan = approved(exampleB("REPAY"), 1_200_000, 3, 43);
-        LocalDate disbursed = today.minusMonths(1).minusDays(10);
+        LocalDate disbursed = dueDaysAgo(1, 10);
         disburse(loan, disbursed);
         LocalDate due1 = disbursed.plusMonths(1);
         assertThat(loan(loan).get("balances").get("days_past_due").asInt())
@@ -1232,7 +1251,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frRep05_reversingAnEarlierRepaymentReallocatesTheLaterOneAndPostsTheNetDifference() {
         String loan = approved(exampleB("REALLOC"), 1_200_000, 3, 47);
-        LocalDate disbursed = today.minusMonths(2).minusDays(5);
+        LocalDate disbursed = dueDaysAgo(2, 5);
         disburse(loan, disbursed);
         String first = repaid(loan, 300_000, disbursed.plusMonths(1))
                 .get("transaction")
@@ -2425,7 +2444,7 @@ class LoanServicingIT extends LoanFixtures {
         penalty.put("penalty_grace_days", 0);
         penalty.put("penalty_flat_minor", 2_000);
         String loan = approved(product("PEN", penalty, List.of()), 1_200_000, 3, 91);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
 
         runArrears();
         JsonNode b = loan(loan).get("balances");
@@ -2485,7 +2504,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_noPenaltyWithoutARuleOrBeforeTheDueDate() {
         String loan = approved(exampleB("NOPEN"), 1_200_000, 3, 92);
-        disburse(loan, today.minusMonths(1).minusDays(3));
+        disburse(loan, dueDaysAgo(1, 3));
         runArrears();
         assertThat(penaltyCharges(loan)).isZero();
         assertThat(loan(loan).get("balances").get("days_past_due").asInt()).isEqualTo(3);
@@ -2502,7 +2521,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_theNightlyRunLeavesPendingApprovalsCurrent() {
         String loan = approved(exampleB("NIGHTAPR"), 1_200_000, 3, 96);
-        disburse(loan, today.minusMonths(1).minusDays(3));
+        disburse(loan, dueDaysAgo(1, 3));
         int version = loan(loan).get("version").asInt();
         ResponseEntity<JsonNode> r = send(
                 HttpMethod.POST,
@@ -2570,7 +2589,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr04_aWaiverTakesThePenaltyOffAndPostsNothing() throws Exception {
         String loan = approved(dailyPenaltyProduct("WAIVE"), 1_200_000, 3, 94);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         JsonNode charges = get(loan, "/charges").get("items");
         assertThat(charges).hasSize(5);
@@ -2632,7 +2651,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr04_aReversalKeepsTheWaiver() {
         String loan = approved(dailyPenaltyProduct("WAIVEREV"), 1_200_000, 3, 95);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         JsonNode charges = get(loan, "/charges").get("items");
         waived(loan, charges.get(0).get("id").asString(), null);
@@ -2667,7 +2686,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_aBackDatedRepaymentNeverPaysALaterPenaltyAndCancelsIt() throws Exception {
         String loan = approved(product("PENBACK", dailyPenalty(), List.of()), 1_200_000, 3, 97);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         assertThat(penaltyCharges(loan)).isEqualTo(5);
         LocalDate due = LocalDate.parse(
@@ -2699,7 +2718,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_theFirstRunChargesNothingBeforeItsOwnDate() {
         String loan = approved(product("PENFIRST", dailyPenalty(), List.of()), 1_200_000, 3, 98);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         TestDatabase.owner()
                 .sql("DELETE FROM lending_arrears_runs WHERE tenant_id = ?")
                 .param(t.tenantId())
@@ -2716,7 +2735,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_aRunIsClaimedOnceAndALapsedLeaseIsTakenOver() {
         String loan = approved(product("PENLEASE", dailyPenalty(), List.of()), 1_200_000, 3, 99);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         arrearsSinceLongAgo();
         JdbcClient owner = TestDatabase.owner();
         owner.sql("DELETE FROM lending_arrears_runs WHERE tenant_id = ? AND business_date > DATE '2000-01-01'")
@@ -2763,7 +2782,7 @@ class LoanServicingIT extends LoanFixtures {
                 .params(UUID.randomUUID(), t.tenantId())
                 .update();
         String loan = approved(dailyPenaltyProduct("WAIVESPLIT"), 1_200_000, 3, 93);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         JsonNode charges = get(loan, "/charges").get("items");
         for (int i = 0; i < 2; i++) {
@@ -2797,7 +2816,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr04_noWaiverOnAWrittenOffLoanOrFromAnotherBranch() {
         String loan = approved(dailyPenaltyProduct("WAIVENOT"), 1_200_000, 3, 92);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         String charge = get(loan, "/charges").get("items").get(0).get("id").asString();
 
@@ -2840,7 +2859,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_aReversalChargesTheCancelledPenaltiesAgain() throws Exception {
         String loan = approved(product("PENREV", dailyPenalty(), List.of()), 1_200_000, 3, 73);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         LocalDate due = LocalDate.parse(
                 get(loan, "/schedule").get("items").get(0).get("due_date").asString());
@@ -2895,7 +2914,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_reversingOnePaymentMeansTheOtherNoLongerPaysTheInstalmentUp() {
         String loan = approved(product("PENAB", dailyPenalty(), List.of()), 1_200_000, 3, 72);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         LocalDate due = LocalDate.parse(
                 get(loan, "/schedule").get("items").get(0).get("due_date").asString());
@@ -2922,9 +2941,9 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_aMissedNightIsCaughtUpAroundAPaymentPostedInBetween() {
         String partly = approved(product("PENMISSA", dailyPenalty(), List.of()), 1_200_000, 3, 71);
-        disburse(partly, today.minusMonths(1).minusDays(5));
+        disburse(partly, dueDaysAgo(1, 5));
         String fully = approved(product("PENMISSB", dailyPenalty(), List.of()), 1_200_000, 3, 70);
-        disburse(fully, today.minusMonths(1).minusDays(5));
+        disburse(fully, dueDaysAgo(1, 5));
         repaid(partly, 100_000, today.minusDays(2));
         repaid(fully, 520_000, today.minusDays(2));
         runArrears();
@@ -2943,7 +2962,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_aRepaymentRacingTheRunIsStampedAfterTheChargeItPays() throws Exception {
         String loan = approved(product("PENRACE", dailyPenalty(), List.of()), 1_200_000, 3, 69);
-        disburse(loan, today.minusMonths(1).minusDays(1));
+        disburse(loan, dueDaysAgo(1, 1));
         arrearsSinceLongAgo();
         ExecutorService pool = Executors.newSingleThreadExecutor();
         try (java.sql.Connection c = TestDatabase.ownerDataSource().getConnection()) {
@@ -3010,7 +3029,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr04_aPartlyWaivedPenaltyIsStillCancelledByABackDatedRepayment() {
         String loan = approved(dailyPenaltyProduct("WAIVECANCEL"), 1_200_000, 3, 68);
-        disburse(loan, today.minusMonths(1).minusDays(2));
+        disburse(loan, dueDaysAgo(1, 2));
         runArrears();
         JsonNode charges = get(loan, "/charges").get("items");
         assertThat(charges).hasSize(2);
@@ -3039,7 +3058,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr04_aWaiverOfALaterPenaltyNeverBlocksPayingAnEarlierOne() {
         String loan = approved(dailyPenaltyProduct("WAIVEDATE"), 1_200_000, 3, 67);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         runArrears();
         JsonNode charges = get(loan, "/charges").get("items");
         waived(loan, charges.get(4).get("id").asString(), null);
@@ -3054,7 +3073,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr04_theLoansOfficerCannotApproveItsWaiver() {
         String loan = approved(dailyPenaltyProduct("WAIVEOFF"), 1_200_000, 3, 66);
-        disburse(loan, today.minusMonths(1).minusDays(2));
+        disburse(loan, dueDaysAgo(1, 2));
         runArrears();
         ResponseEntity<JsonNode> r = requestWaiver(
                 loan, get(loan, "/charges").get("items").get(0).get("id").asString(), null);
@@ -3402,7 +3421,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_aReversalSetsThePenaltiesBeforeItReallocatesTheSurvivingPayment() {
         String loan = approved(product("PENREPLAY", dailyPenalty(), List.of()), 1_200_000, 3, 62);
-        disburse(loan, today.minusMonths(2).minusDays(5));
+        disburse(loan, dueDaysAgo(2, 5));
         runArrears();
         JsonNode items = get(loan, "/schedule").get("items");
         LocalDate due1 = LocalDate.parse(items.get(0).get("due_date").asString());
@@ -3450,7 +3469,7 @@ class LoanServicingIT extends LoanFixtures {
         penalty.put("penalty_rate_bp", 500);
         penalty.put("penalty_cap_bp", 500);
         String loan = approved(product("PENPCT", penalty, List.of()), 1_200_000, 3, 61);
-        disburse(loan, today.minusMonths(1).minusDays(8));
+        disburse(loan, dueDaysAgo(1, 8));
         runArrears();
         assertThat(penaltyCharges(loan)).as("week 2 finds the cap reached").isEqualTo(1);
         assertThat(loan(loan).get("balances").get("penalties_outstanding_minor").asLong())
@@ -3478,7 +3497,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void frArr01_anImportedLoanIsNotBackCharged() {
         String loan = approved(product("PENIMP", dailyPenalty(), List.of()), 1_200_000, 3, 60);
-        disburse(loan, today.minusMonths(1).minusDays(5));
+        disburse(loan, dueDaysAgo(1, 5));
         TestDatabase.owner()
                 .sql("UPDATE lending_loans SET channel = 'import' WHERE id = ?::uuid")
                 .param(loan)
@@ -3660,9 +3679,9 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln02_03_theDueListAndTheArrearsList() {
         String late = approved(exampleB("DUELATE"), 1_200_000, 3, 83);
-        disburse(late, today.minusMonths(1).minusDays(3));
+        disburse(late, dueDaysAgo(1, 3));
         String dueToday = approved(exampleB("DUETODAY"), 1_200_000, 3, 84);
-        disburse(dueToday, today.minusMonths(1));
+        disburse(dueToday, dueDaysAgo(1, 0));
 
         JsonNode todayList = lending("/collections/due-list");
         assertThat(todayList.get("items")).hasSize(1);
@@ -3738,7 +3757,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln04_05_actionsAndPromisesSettledByTheNightlyRun() {
         String loan = approved(exampleB("PROMISE"), 1_200_000, 3, 85);
-        disburse(loan, today.minusMonths(1).minusDays(3));
+        disburse(loan, dueDaysAgo(1, 3));
 
         assertThat(logAction(loan, Map.of("action_type", "call", "note", "Test call, no answer"))
                         .getStatusCode())
@@ -3831,7 +3850,7 @@ class LoanServicingIT extends LoanFixtures {
     void cln03_theListsAreCappedAndOnlyCallersSeePhones() {
         for (int i = 0; i < 2; i++) {
             String late = approved(exampleB("CAP" + i), 1_200_000, 3, 86 + i);
-            disburse(late, today.minusMonths(1).minusDays(3 + i));
+            disburse(late, dueDaysAgo(1, 3 + i));
         }
         runArrears();
         JsonNode one = lending("/collections/arrears?limit=1");
@@ -3867,9 +3886,9 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln03_aLoanOfficerSeesOnlyTheirOwnPortfolio() {
         String mine = approved(exampleB("OWNA"), 1_200_000, 3, 78);
-        disburse(mine, today.minusMonths(1).minusDays(3));
+        disburse(mine, dueDaysAgo(1, 3));
         String theirs = approved(exampleB("OWNB"), 1_200_000, 3, 79);
-        disburse(theirs, today.minusMonths(1).minusDays(4));
+        disburse(theirs, dueDaysAgo(1, 4));
         UUID other = staffUser("loan_officer", t.headOffice());
         assertThat(send(
                                 HttpMethod.PUT,
@@ -3988,7 +4007,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln05_onlyAPaymentRecordedAfterThePromiseKeepsIt() {
         String loan = approved(exampleB("PROMAFTER"), 1_200_000, 3, 77);
-        disburse(loan, today.minusMonths(1).minusDays(3));
+        disburse(loan, dueDaysAgo(1, 3));
         repaid(loan, 100_000, today);
         String early = logAction(loan, promise(today.plusDays(3), 100_000))
                 .getBody()
@@ -4006,7 +4025,7 @@ class LoanServicingIT extends LoanFixtures {
                 .isEqualTo("promised_date_too_far");
 
         String other = approved(exampleB("PROMBACK"), 1_200_000, 3, 74);
-        disburse(other, today.minusMonths(1).minusDays(6));
+        disburse(other, dueDaysAgo(1, 6));
         String back = UUID.randomUUID().toString();
         TestDatabase.owner()
                 .sql("""
@@ -4031,7 +4050,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln05_onePaymentKeepsOnePromiseAndAReversalReopensIt() {
         String loan = approved(exampleB("PROMTWO"), 1_200_000, 3, 88);
-        disburse(loan, today.minusMonths(1).minusDays(3));
+        disburse(loan, dueDaysAgo(1, 3));
         String first = logAction(loan, promise(today.plusDays(3), 100_000))
                 .getBody()
                 .get("id")
@@ -4064,9 +4083,9 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln03_everyOfficersLoansIsDecidedPerBranch() {
         String hq = approved(exampleB("PERBRA"), 1_200_000, 3, 65);
-        disburse(hq, today.minusMonths(1).minusDays(3));
+        disburse(hq, dueDaysAgo(1, 3));
         String second = approvedIn(t.secondBranch(), exampleB("PERBRB"), 64);
-        disburse(second, today.minusMonths(1).minusDays(3));
+        disburse(second, dueDaysAgo(1, 3));
         runArrears();
         HttpHeaders h = as(manager, managerPerms, "*", null);
         h.add("X-Dev-Scopes", "lending.collections.all_officers=" + t.headOffice());
@@ -4081,7 +4100,7 @@ class LoanServicingIT extends LoanFixtures {
     @Test
     void cln05_aPromiseDueSoonerIsKeptFirstEvenIfMadeLater() {
         String loan = approved(exampleB("PROMORD"), 1_200_000, 3, 63);
-        disburse(loan, today.minusMonths(1).minusDays(3));
+        disburse(loan, dueDaysAgo(1, 3));
         String later = UUID.randomUUID().toString();
         officerIsStaff();
         TestDatabase.owner()
@@ -4130,9 +4149,9 @@ class LoanServicingIT extends LoanFixtures {
     void issue471_theHomeSummaryCountsLoansDueTodayAndInArrears() {
         String product = exampleB("HOME");
         String due = approved(product, 1_200_000, 3, 81);
-        disburse(due, today.minusMonths(1));
+        disburse(due, dueDaysAgo(1, 0));
         String late = approved(product, 1_200_000, 3, 82);
-        disburse(late, today.minusMonths(2).minusDays(5));
+        disburse(late, dueDaysAgo(2, 5));
         approved(product, 1_200_000, 3, 83);
 
         JsonNode s = asOfficer(HttpMethod.GET, LOANS + "/summary", null, null).getBody();
@@ -4176,9 +4195,9 @@ class LoanServicingIT extends LoanFixtures {
     void issue471_aLoanOfficersHomeSummaryCountsOnlyTheirOwnLoans() {
         String product = exampleB("HOMEOWN");
         String mine = approved(product, 1_200_000, 3, 77);
-        disburse(mine, today.minusMonths(2).minusDays(5));
+        disburse(mine, dueDaysAgo(2, 5));
         String theirs = approved(product, 1_200_000, 3, 76);
-        disburse(theirs, today.minusMonths(2).minusDays(5));
+        disburse(theirs, dueDaysAgo(2, 5));
         UUID other = staffUser("loan_officer", t.headOffice());
         assertThat(send(
                                 HttpMethod.PUT,
