@@ -410,12 +410,13 @@ export function Setup() {
           <fieldset>
             <legend>Daily savings</legend>
             <label>
-              <input type="checkbox" checked={current.salespeople_see_savings_amount === true} disabled={busy}
+              <input type="checkbox" checked={current.salespeople_see_savings_amount === true} disabled={busy || me.is_owner !== true}
                 aria-describedby="salespeople-savings-hint" onChange={(e) => setSalespeopleSavings(e.target.checked)} />{' '}
               Salespeople can see and change the savings amount
             </label>
             <p id="salespeople-savings-hint" className="hint">
               The suggested amount is half of the day&apos;s profit, so salespeople will be able to work out the profit.
+              {me.is_owner !== true && ' Only the Owner of the business changes this.'}
             </p>
           </fieldset>
         )}

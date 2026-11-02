@@ -35,7 +35,7 @@ vi.mock('../../../api/retail', async (original) => {
   };
 });
 
-const { businessToday } = await import('../../../api/retail');
+const { businessToday, RetailError } = await import('../../../api/retail');
 const { SavingsScreen } = await import('./savings');
 
 afterEach(() => {
@@ -161,7 +161,7 @@ describe('the savings screen', () => {
 describe('the savings screen for a salesperson', () => {
   const seller = mockMe('cashier');
   const hidden: SavingsSuggestion = { branch_id: branch, business_date: today, total_sold_minor: 50000, suggestion_token: 'tok-1' };
-  const shown: SavingsSuggestion = { ...hidden, available_minor: 8000, suggested_minor: 4000 };
+  const shown: SavingsSuggestion = { ...hidden, suggested_minor: 4000, may_change_amount: true };
 
   it('with the setting off shows no amount and sends none, as before', async () => {
     savingsSuggestion.mockResolvedValue(hidden);
@@ -178,26 +178,31 @@ describe('the savings screen for a salesperson', () => {
     expect(panel.textContent).toContain('The savings were recorded using the standard amount.');
   });
 
-  it('with the setting on shows the suggestion and the cap but never the profit or expenses, and saves a changed amount', async () => {
+  it('with the setting on shows the suggestion but no profit, expenses or cap figure, and saves a changed amount', async () => {
     savingsSuggestion.mockResolvedValue(shown);
     const row: Savings = { ...saved, amount_minor: 3000, suggested_minor: undefined, overwritten: true };
     listSavings.mockResolvedValueOnce([]).mockResolvedValue([row]);
-    createSavings.mockResolvedValue(row);
+    const above = 'That is more than this day allows. Save a smaller amount, or the suggested one.';
+    createSavings
+      .mockRejectedValueOnce(new RetailError(above, 422, 'savings_above_available', { code: 'savings_above_available', detail: above }))
+      .mockResolvedValue(row);
     open(seller);
     await screen.findByText('UGX 4,000', { selector: '.key-figure-value' });
-    expect(screen.getByText(/The most you can save on this day/).textContent).toContain('UGX 8,000');
     expect(screen.queryByLabelText("The day's figures")).toBeNull();
-    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day/);
+    expect(document.body.textContent).not.toMatch(/Profit|Expenses for the day|Available to save|at most/);
 
+    // The cap is the server's: the form has no figure to check it against, and shows the refusal in plain words.
     fireEvent.change(amount(), { target: { value: '9000' } });
     fireEvent.blur(amount());
-    expect(screen.getByRole('alert').textContent).toBe('You can save at most UGX 8,000 today.');
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(saveButton());
+    expect(await screen.findByText(above)).toBeTruthy();
 
     fireEvent.change(amount(), { target: { value: '3000' } });
     expect(screen.queryByText(/Only an administrator can change the amount/)).toBeNull();
     fireEvent.click(saveButton());
-    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(1));
-    expect(createSavings.mock.calls[0]?.[0]).toMatchObject({ amount_minor: 3000, suggestion_token: 'tok-1' });
+    await waitFor(() => expect(createSavings).toHaveBeenCalledTimes(2));
+    expect(createSavings.mock.calls[1]?.[0]).toMatchObject({ amount_minor: 3000, suggestion_token: 'tok-1' });
     const panel = await screen.findByRole('region', { name: 'Savings recorded' });
     expect(panel.textContent).toContain('Amount saved: UGX 3,000');
     const records = screen.getByRole('region', { name: 'Savings records' });

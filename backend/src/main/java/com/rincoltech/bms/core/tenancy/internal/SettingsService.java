@@ -122,6 +122,10 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
             // ADR-090: the retention of a closed business's money records counts from the end of its financial year.
             guard.requireOwner("set the end of the financial year");
         }
+        if (request.salespeopleSeeSavingsAmount() != null) {
+            // ADR-115: it lets salespeople work out the day's profit, so only the Owner decides it.
+            guard.requireOwner("let salespeople see the savings amount");
+        }
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());
@@ -178,6 +182,16 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
                     request.requireMfaRoles().stream().distinct().sorted().toList());
         }
         placeTwoStepDeadline(stored, changes);
+        if (request.salespeopleSeeSavingsAmount() != null) {
+            // ADR-115 decision 2: salespeople see only the amounts saved after the moment it was turned on, never
+            // earlier ones.
+            boolean was = Boolean.TRUE.equals(stored.values().get("salespeople_see_savings_amount"));
+            if (!request.salespeopleSeeSavingsAmount()) {
+                changes.put("salespeople_see_savings_amount_since", null);
+            } else if (!was) {
+                changes.put("salespeople_see_savings_amount_since", clock.now().toString());
+            }
+        }
         return changes;
     }
 

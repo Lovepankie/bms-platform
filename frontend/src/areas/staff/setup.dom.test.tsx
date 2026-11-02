@@ -344,7 +344,7 @@ describe('the salespeople savings setting', () => {
   it('is off until the owner turns it on, and says salespeople can then work out the profit', async () => {
     delete settings.salespeople_see_savings_amount;
     client.PATCH.mockClear();
-    show({ modules: ['retail'] });
+    show({ modules: ['retail'], owner: true });
     const box = (await screen.findByLabelText('Salespeople can see and change the savings amount')) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(document.getElementById(box.getAttribute('aria-describedby') ?? '')?.textContent).toContain(
@@ -353,6 +353,13 @@ describe('the salespeople savings setting', () => {
     fireEvent.click(box);
     await screen.findByText('Salespeople can now see and change the savings amount');
     expect(client.PATCH).toHaveBeenCalledWith('/api/v1/settings', expect.objectContaining({ body: { salespeople_see_savings_amount: true } }));
+  });
+
+  it('is shown to another administrator, who cannot change it', async () => {
+    show({ modules: ['retail'] });
+    const box = (await screen.findByLabelText('Salespeople can see and change the savings amount')) as HTMLInputElement;
+    expect(box.disabled).toBe(true);
+    expect(screen.getByText(/Only the Owner of the business changes this/)).toBeTruthy();
   });
 
   it('is not shown to a business without retail', async () => {

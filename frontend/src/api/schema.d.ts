@@ -17460,6 +17460,8 @@ export interface components {
             existing_amount_minor?: number;
             /** Format: uuid */
             existing_id?: string;
+            /** @description Present with suggested_minor: true when a different amount is accepted, through retail.savings.overwrite or the Owner's setting salespeople_see_savings_amount (ADR-115) */
+            may_change_amount?: boolean;
             /**
              * Format: int64
              * @description Present only with retail.profit.read in the record's branch
@@ -20071,7 +20073,7 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description Staff role keys whose holders must use two-step sign-in (ADR-046); empty when none is chosen */
             require_mfa_roles?: string[];
-            /** @description Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115) */
+            /** @description Salespeople without profit read see the suggested daily savings amount and the amounts saved since it was turned on, and anyone recording savings may change the amount within the day's cap (default false; set only by the Owner; issue #768, ADR-115) */
             salespeople_see_savings_amount?: boolean;
             /** @description True once the business set-up checklist has been dismissed */
             setup_dismissed?: boolean;
@@ -20444,7 +20446,7 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description Staff role keys whose holders must use two-step sign-in; an empty list clears the choice (ADR-046) */
             require_mfa_roles?: string[];
-            /** @description Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115) */
+            /** @description Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115) */
             salespeople_see_savings_amount?: boolean;
             setup_dismissed?: boolean;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */

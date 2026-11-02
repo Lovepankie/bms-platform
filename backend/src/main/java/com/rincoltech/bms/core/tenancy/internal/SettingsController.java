@@ -113,7 +113,7 @@ class SettingsController {
 
             @Schema(
                     description =
-                            "Salespeople without profit read see the suggested daily savings amount, may change it within the day's cap and see the saved amount (default false; issue #768, ADR-115)")
+                            "Salespeople without profit read see the suggested daily savings amount and the amounts saved since it was turned on, and anyone recording savings may change the amount within the day's cap (default false; set only by the Owner; issue #768, ADR-115)")
             boolean salespeopleSeeSavingsAmount,
 
             int version) {}
@@ -176,7 +176,7 @@ class SettingsController {
 
             @Schema(
                     description =
-                            "Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115)")
+                            "Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115)")
             Boolean salespeopleSeeSavingsAmount,
 
             @Size(max = 20)

@@ -109,7 +109,13 @@ final class CashbookApi {
 
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = PROFIT_ONLY + "; the amount of the active record for the day, if any")
-            Long existingAmountMinor) {}
+            Long existingAmountMinor,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Present with suggested_minor: true when a different amount is accepted, through retail.savings.overwrite or the Owner's setting salespeople_see_savings_amount (ADR-115)")
+            Boolean mayChangeAmount) {}
 
     @Schema(name = "RetailSavingsRequest")
     record SavingsRequest(

@@ -195,15 +195,20 @@ class CashbookSupport {
     }
 
     /**
-     * Issue #768, ADR-115: {@code salespeople_see_savings_amount}, set in Business set-up; false when unset. When true a caller
-     * without {@code retail.profit.read} sees and may change the savings amount, never the profit or the expenses.
+     * Issue #768, ADR-115: when the Owner turned on {@code salespeople_see_savings_amount} in Business set-up, the moment it
+     * was turned on ({@code salespeople_see_savings_amount_since}); null when it is off or carries no such moment. While on, a
+     * caller without {@code retail.profit.read} sees and may change the savings amount, never the profit or the expenses.
      */
-    boolean salespeopleSeeSavingsAmount() {
-        return "true"
-                .equals(jdbc.sql("SELECT settings ->> 'salespeople_see_savings_amount' FROM tenant_settings")
-                        .query(String.class)
-                        .optional()
-                        .orElse(null));
+    Instant salespeopleSavingsSince() {
+        String since = jdbc.sql("""
+                        SELECT settings ->> 'salespeople_see_savings_amount_since' FROM tenant_settings
+                         WHERE settings ->> 'salespeople_see_savings_amount' = 'true'
+                        """).query(String.class).optional().orElse(null);
+        try {
+            return since == null ? null : Instant.parse(since);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
     }
 
     private long setting(String key, long fallback) {

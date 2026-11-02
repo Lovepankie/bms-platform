@@ -7,7 +7,8 @@ import { formatMinor } from '../../../components/money';
 // The savings form's rules (FR-RET-18, FR-RET-19, ADR-022 decisions 11 to 13, ADR-080), apart from the screen so
 // they can be tested. A caller without retail.profit.read gets a suggestion with no `suggested_minor`:
 // that caller sends no amount and no reason at all and the server records the standard amount, unless the owner
-// turned on "Salespeople can see and change the savings amount" (ADR-115): then the amount comes without the profit. The day's
+// turned on "Salespeople can see and change the savings amount" (ADR-115): then the suggestion comes without the profit, the
+// expenses or the available amount, so only the server checks the cap for that caller. The day's
 // available amount is its profit less its expenses, never below 0; nothing above it is sent, and the server
 // refuses it too. The reason for changing the amount is optional (#538).
 
@@ -23,22 +24,18 @@ export function reasonText(pick: string, other: string): string {
   return (SAVINGS_REASONS as readonly string[]).includes(pick) ? pick : '';
 }
 
-/**
- * "You can save at most UGX X today (profit UGX P minus expenses UGX E)." The server says the same. A salesperson under the
- * owner's setting (ADR-115) is not told the profit or the expenses, so the words stop at the amount.
- */
+/** "You can save at most UGX X today (profit UGX P minus expenses UGX E)." The server says the same. */
 export function capWords(s: SavingsSuggestion, date: string, today: string): string {
   const when = date === today ? 'today' : `for ${showDate(date)}`;
-  const why = s.daily_profit_minor !== undefined ? ` (profit ${money(s.daily_profit_minor)} minus expenses ${money(s.day_expenses_minor ?? 0)})` : '';
-  return `You can save at most ${money(s.available_minor ?? 0)} ${when}${why}.`;
+  return `You can save at most ${money(s.available_minor ?? 0)} ${when} (profit ${money(s.daily_profit_minor ?? 0)} minus expenses ${money(s.day_expenses_minor ?? 0)}).`;
 }
 
 /**
- * Issue #768, ADR-115: the suggestion carries the amount but not the profit only when the owner let salespeople see and change
- * the savings amount and the caller has no profit read; such a caller may change the amount within the cap.
+ * Whether a different amount will be accepted: the server says so with the suggestion (`may_change_amount`, issue #768,
+ * ADR-115: the overwrite permission, or the Owner's setting for everyone who records savings); the permission otherwise.
  */
-export const salespersonMayChange = (s: SavingsSuggestion | undefined): boolean =>
-  s?.suggested_minor !== undefined && s.daily_profit_minor === undefined;
+export const mayChangeAmount = (s: SavingsSuggestion | undefined, holdsOverwrite: boolean): boolean =>
+  s?.may_change_amount ?? holdsOverwrite;
 
 /**
  * "Saved UGX X; profit less expenses is now UGX Y." for a day whose savings are above what it has now, after an expense
