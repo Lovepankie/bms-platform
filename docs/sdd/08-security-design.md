@@ -323,6 +323,7 @@ platform API and holds no tenant permissions.
 | `core.payments.collect` | Y | Y | | Y | | | | | | | | |
 | `core.payments.allocate` | Y | | | Y | Y | | | | | | | |
 | `core.payments.allocate_approve` | Y | Y | | | Y | | | | | | | |
+| `core.payments.manage` | Y | | | | Y | | | | | | | |
 | `core.reports.financial` | Y | Y | | | Y | Y | | | | | | |
 | `core.reports.audit` | Y | | | | | Y | | | | | | |
 | `core.data_export.run` | Y | | | | | | | | | | | |
@@ -859,6 +860,8 @@ CHECK constraint as well as the service.
 | `unallocated_allocation` | `core.payments.allocate` | `core.payments.allocate_approve` | No (always checked) |
 | `unallocated_refund` | `core.payments.allocate` | `core.payments.allocate_approve` | No (always checked) |
 | `gateway_payment_reversal` | the tenant's system user (raised by the platform; no person holds the maker permission); when a person asks for it to be put to a checker again (`POST /payments/intents/{id}/reversal-request`), that person is the maker, so they can never decide it, and neither can anyone who rejected an earlier request for the same payment | `core.payments.allocate_approve` and, besides it, the permission that reverses what the money became (`lending.repayments.reverse_approve` on a loan, `lending.savings.withdraw_approve` on a savings account) | No (always checked) |
+| `statement_fee` | `core.payments.manage` (the uploader of the statement; raised for a fee above the automatic rate of the line's amount, ADR-035 decision 65) | `core.journals.approve` in the order's branch | No (always checked) |
+| `statement_line_outside` | `core.payments.manage` in every branch (the person who marks a statement line as outside this system) | `core.payments.manage` in every branch, never the marker (ADR-035 decision 66) | No (always checked) |
 | `investment_funding` | `lending.investments.fund` | `lending.investments.fund_approve` | Yes |
 | `investment_early_withdrawal` | `lending.investments.payout` | `lending.investments.early_withdraw_approve` | No |
 | `investment_reversal` | `lending.investments.payout` | `lending.investments.reverse_approve` | No (always checked) |
@@ -874,7 +877,7 @@ CHECK constraint as well as the service.
 | `retail_stock_correction` | `retail.stocktake.commit` | `core.settings.manage` | Yes, on the value of the difference at the branch's average cost, only while the approval rules switch it on (off by default, ADR-091) |
 | `retail_expense` | `retail.expense.record` | `core.settings.manage` | Yes, on the amount, only while the approval rules switch it on (off by default, ADR-091) |
 
-Registered so far: `unallocated_allocation`, `unallocated_refund` and `gateway_payment_reversal` (#224, `core.payments`, ADR-035 amendment of slice A5; migration `V123` adds the checker permission `core.payments.allocate_approve` for the tenant admin, branch manager and accountant, and the `system` user kind that makes the platform's own reversal requests); `collateral_release` (#13); `retail_sale_write_off` (#340, `retail.sales`, ADR-043: writing off the unpaid part of a credit sale, with the same open default as returns); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
+Registered so far: `statement_fee` and `statement_line_outside` (#317, `core.payments`, ADR-035 decisions 65 and 66: a statement fee above the automatic rate, and a statement line marked outside this system, each decided by a second person); `unallocated_allocation`, `unallocated_refund` and `gateway_payment_reversal` (#224, `core.payments`, ADR-035 amendment of slice A5; migration `V123` adds the checker permission `core.payments.allocate_approve` for the tenant admin, branch manager and accountant, and the `system` user kind that makes the platform's own reversal requests); `collateral_release` (#13); `retail_sale_write_off` (#340, `retail.sales`, ADR-043: writing off the unpaid part of a credit sale, with the same open default as returns); `retail_purchase_order` (#198, `retail.purchasing`, ADR-033: sending a purchase order, with the same open default as returns); `retail_sale_return` and `retail_sale_return_void` (#201, `retail.sales`, ADR-033: unlike the lending actions an unset threshold means no checker, so the
 action pends only at or above a threshold the tenant sets); `loan_disbursement`, `repayment_reversal` and
 `loan_write_off` (#108, `lending.loans`, ADR-026); `investment_funding`, `investment_early_withdrawal`
 and `investment_reversal` (#152, `lending.investments`, ADR-031). Increment 10 adds two checker

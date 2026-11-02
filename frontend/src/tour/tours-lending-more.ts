@@ -24,6 +24,7 @@ const SETTINGS_READ = 'core.settings.read';
 const SETTINGS_MANAGE = 'core.settings.manage';
 const PAYMENT_ACCOUNT = 'core.payment_account.manage';
 const PAYMENTS_READ = 'core.payments.read';
+const PAYMENTS_MANAGE = 'core.payments.manage';
 const USERS_MANAGE = 'core.users.manage';
 const NOTIFICATIONS_READ = 'core.notifications.read';
 const TEMPLATES_MANAGE = 'core.notification_templates.manage';
@@ -666,6 +667,46 @@ export const paymentsPage: Tour = {
   ],
 };
 
+// JUSTIFICATION-A3: ADR-049 asks one page tour per staff route; this is the tour of the new Payment reconciliation route (#317).
+export const reconciliationPage: Tour = {
+  id: 'page-reconciliation',
+  version: 1,
+  title: 'This page: payment reconciliation',
+  audience: (me) => held(me, PAYMENTS_READ),
+  autoStart: false,
+  page: '/staff/payments/reconciliation',
+  steps: [
+    {
+      id: 'intro',
+      target: 'reconciliation-intro',
+      title: 'What differs',
+      body: 'Every night the system compares what your payment provider says with what is recorded here. It changes nothing by itself.',
+    },
+    {
+      id: 'upload',
+      target: 'reconciliation-upload',
+      needs: [PAYMENTS_MANAGE],
+      optional: true,
+      title: 'Upload the statement',
+      body: 'Download the statement from your payment provider as a CSV file and upload it here. Each line is matched to your own payments.',
+    },
+    {
+      id: 'report',
+      target: 'reconciliation-report',
+      title: 'The differences',
+      body: 'Each difference says what to check. It goes away on the next run once its cause is put right.',
+    },
+    {
+      id: 'run',
+      target: 'reconciliation-run',
+      needs: [PAYMENTS_MANAGE],
+      optional: true,
+      title: 'Run it now',
+      body: 'Tap Run it now to compare again without waiting for the night.',
+    },
+  ],
+};
+
 // JUSTIFICATION-A3: ADR-049 asks one page tour per staff route; this is the tour of the new Unallocated payments route (#224).
 export const unallocatedPage: Tour = {
   id: 'page-unallocated',
@@ -981,6 +1022,6 @@ export const existingLoansImportPage: Tour = {
 export const LENDING_MORE_TOURS: readonly Tour[] = [
   savingsPage, savingsProductsPage, savingsAccountPage, savingsStatementPage, memberSavingsPage, memberEditPage, collateralEditPage,
   investmentsPage, investmentNewPage, investmentNewForMemberPage, maturitiesPage, investmentProductsPage, memberInvestmentsPage,
-  investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, unallocatedPage, inviteUserPage, reportsPage,
+  investmentPage, certificatePage, staffHomePage, approvalsPage, insightsPage, paymentsPage, unallocatedPage, reconciliationPage, inviteUserPage, reportsPage,
   smsSettingsPage, smsWordingPage, smsOptOutsPage, ownTwoStepPage, existingLoansPage, existingLoansImportPage,
 ];

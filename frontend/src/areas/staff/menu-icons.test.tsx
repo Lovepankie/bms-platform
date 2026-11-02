@@ -82,7 +82,7 @@ const AREA_LABELS = [
   'My stock', 'Buy stock', 'Count stock', 'Quick add', 'Move stock', 'Items and categories',
   'Cash book', 'Expenses', 'Customers who owe', 'What I owe suppliers', 'Savings and advances',
   'Loans', 'Members', 'Savings', 'Investments', 'Insights', 'Loan reports',
-  'Reports', 'Controls', 'Staff', 'Receive payments', 'Unallocated payments', 'SMS', 'AI assistant', 'Business set-up',
+  'Reports', 'Controls', 'Staff', 'Receive payments', 'Unallocated payments', 'Payment reconciliation', 'SMS', 'AI assistant', 'Business set-up',
   'Notifications', 'Feedback',
 ];
 

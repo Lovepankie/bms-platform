@@ -93,6 +93,30 @@ public interface PurposeHandler {
         return java.util.Optional.empty();
     }
 
+    /**
+     * The receipts staff keyed by hand (any method but {@code gateway}, not reversed) whose reference equals one of these
+     * payment codes, ignoring letter case and surrounding spaces, other than the transactions in {@code excluding} (the ones the
+     * gateway booked). The reconciliation uses it to find the same mobile money payment entered twice (spec 3.9); the payments
+     * module reads no vertical's tables. Read only.
+     */
+    default java.util.List<ManualReceipt> manualReceiptsWithReference(
+            java.util.Collection<String> references, java.util.Collection<UUID> excluding) {
+        return java.util.List.of();
+    }
+
+    /** A receipt entered by hand: its transaction, the reference staff typed, its amount, the method they chose, the loan or account it
+     * went to and its value date, which is what lets the reconciliation tell the same payment entered twice from another that
+     * happens to carry the same short code. */
+    record ManualReceipt(
+            UUID transactionId,
+            String reference,
+            long amountMinor,
+            String currency,
+            String methodKey,
+            UUID branchId,
+            UUID subjectId,
+            java.time.LocalDate valueDate) {}
+
     /** @param subjectType a word such as {@code loan} or {@code savings_account} */
     /**
      * What it takes to settle the subject in full today (a loan's payoff), when the purpose has such a ceiling; money above it

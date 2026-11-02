@@ -327,6 +327,14 @@ export const icons = {
       <path d="M12 17h.01" />
     </Svg>
   ),
+  // Two lists side by side with a tick: Payment reconciliation, the provider's statement matched against our own (issue #317).
+  paymentReconciliation: (
+    <Svg>
+      <path d="M3 5h7M3 9h7M3 13h7" />
+      <path d="M14 5h7M14 9h7M14 13h7" />
+      <path d="M8 19l3 3 6-6" />
+    </Svg>
+  ),
   // A bar chart with a cross: delivery fees taken and orders cancelled.
   ordersReport: (
     <Svg>

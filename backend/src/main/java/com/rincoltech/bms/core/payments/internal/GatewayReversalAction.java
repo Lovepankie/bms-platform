@@ -43,6 +43,7 @@ class GatewayReversalAction implements ApprovalAction {
     private final ReceiptSettler settler;
     private final BusinessClock clock;
     private final ReversalHandOver handOver;
+    private final StatementService statements;
     private final org.springframework.jdbc.core.simple.JdbcClient jdbc;
 
     GatewayReversalAction(
@@ -52,7 +53,9 @@ class GatewayReversalAction implements ApprovalAction {
             ReceiptSettler settler,
             BusinessClock clock,
             ReversalHandOver handOver,
-            org.springframework.jdbc.core.simple.JdbcClient jdbc) {
+            org.springframework.jdbc.core.simple.JdbcClient jdbc,
+            @org.springframework.context.annotation.Lazy StatementService statements) {
+        this.statements = statements;
         this.intents = intents;
         this.intentAudit = intentAudit;
         this.targets = targets;
@@ -201,6 +204,8 @@ class GatewayReversalAction implements ApprovalAction {
             case NONE ->
                 throw ApiException.rule("nothing_to_reverse", "Nothing stands in the books for this payment any more.");
         }
+        // The provider's fee posted from a statement goes with the money, in this transaction (ADR-035 decision 67(c)).
+        statements.reverseFeeOf(intent.id(), intent.merchantReference());
         if (!intents.update(intent.id(), "reversed_pending_review", "reversed", now, new java.util.HashMap<>())) {
             throw new IllegalStateException("the intent changed under its own row lock");
         }

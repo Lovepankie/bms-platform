@@ -143,7 +143,10 @@ receipt's own entry is reversed to clear the liability, once. A payment the prov
 raises one `gateway_payment_reversal` request per order, made by the tenant's system user (or by the person who asked again after a hand-over, who then cannot decide it); approving it reverses
 the repayment or deposit through the same code as a staff reversal (which still refuses a gateway transaction by
 hand), or clears the receipt if the money is still in the queue, and ends the order `reversed`. Nothing in the
-ledger moves until a person decides. A booked payment is kept under review for 7 days when the provider names a
+ledger moves until a person decides. Each night (03:10 Kampala) and on request a reconciliation lists, per business and without changing anything, what differs between this system, the
+provider's statement the operator uploaded as CSV, and the receipts people keyed by hand (FR-PAY-18); the upload posts the provider's fee of each cleanly matched line
+once to the gateway charges account (FR-PAY-06, FR-PAY-19). Statement lines that match no order are reported, not booked: the lender's own merchant account can
+receive money for things that never went through this system. A booked payment is kept under review for 7 days when the provider names a
 mobile money wallet, and for 120 days (daily for 14 days, then weekly) otherwise.
 
 ### 12.4.3 Direct mobile money without a gateway

@@ -472,6 +472,37 @@ class SavingsRepository {
                 .optional();
     }
 
+    /** Deposits keyed by hand whose reference is one of these upper-case codes (reconciliation, spec 3.9), reversed ones left out. */
+    List<com.rincoltech.bms.core.payments.PurposeHandler.ManualReceipt> manualWithReference(
+            java.util.Collection<String> upperCodes, java.util.Collection<UUID> excluding) {
+        if (upperCodes.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                        SELECT t.id, t.external_reference, t.amount_minor, t.currency, t.payment_method_key, t.branch_id, t.account_id, t.value_date
+                          FROM lending_savings_transactions t
+                         WHERE t.txn_type = 'deposit' AND t.payment_method_key <> 'gateway'
+                           AND upper(btrim(t.external_reference)) IN (:codes)
+                           AND t.id <> ALL (string_to_array(:excluding, ',')::uuid[])
+                           AND NOT EXISTS (SELECT 1 FROM lending_savings_transactions r WHERE r.reverses_txn_id = t.id)
+                         ORDER BY t.seq, t.id
+                        """)
+                .param("codes", upperCodes)
+                .param(
+                        "excluding",
+                        excluding.stream().map(UUID::toString).collect(java.util.stream.Collectors.joining(",")))
+                .query((rs, n) -> new com.rincoltech.bms.core.payments.PurposeHandler.ManualReceipt(
+                        rs.getObject(1, UUID.class),
+                        rs.getString(2),
+                        rs.getLong(3),
+                        rs.getString(4),
+                        rs.getString(5),
+                        rs.getObject(6, UUID.class),
+                        rs.getObject(7, UUID.class),
+                        rs.getObject(8, java.time.LocalDate.class)))
+                .list();
+    }
+
     Optional<Transaction> transaction(UUID id) {
         return jdbc.sql(TXN + " WHERE t.id = ?")
                 .param(id)

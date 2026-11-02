@@ -733,6 +733,16 @@ class BusinessClosureIT extends IntegrationTest {
             }
         }
         assertThat(kept).as("tables still holding rows after the purge").isEmpty();
+        // The five tables of V124 (#317), seeded with a statement line that names a fee entry, a review of it,
+        // and a run with a finding: the purge's passes delete the line before the journal entry it names.
+        for (String table : List.of(
+                "payment_statements",
+                "payment_statement_rows",
+                "payment_statement_reviews",
+                "payment_reconciliation_runs",
+                "payment_reconciliation_findings")) {
+            assertThat(RlsIsolationIT.tenantOwnedTables()).contains(table);
+        }
         assertThat(count("SELECT count(*) FROM help_ask_questions WHERE tenant_id = ?", t.tenantId()))
                 .isZero();
         assertThat(count("SELECT count(*) FROM help_ask_spend WHERE tenant_id = ?", t.tenantId()))

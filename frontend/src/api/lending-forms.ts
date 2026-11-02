@@ -170,7 +170,7 @@ export function postFile<T>(
   file: Blob | null,
   fileName: string,
   fields: Record<string, string>,
-  opts: { onProgress?: UploadProgress; signal?: AbortSignal } = {},
+  opts: { onProgress?: UploadProgress; signal?: AbortSignal; onStatus?: (status: number) => void } = {},
 ): Promise<T> {
   const once = (): Promise<{ status: number; body: unknown }> =>
     new Promise((resolve, reject) => {
@@ -210,7 +210,10 @@ export function postFile<T>(
   return (async () => {
     let r = await once();
     if (r.status === 401 && (await refreshSession())) r = await once();
-    if (r.status >= 200 && r.status < 300) return r.body as T;
+    if (r.status >= 200 && r.status < 300) {
+      opts.onStatus?.(r.status);
+      return r.body as T;
+    }
     const problem = (r.body ?? {}) as RetailProblem;
     throw new FormError(formMessage(problem, r.status), r.status, problem.code, fieldMessages(problem), problem.detail);
   })();
