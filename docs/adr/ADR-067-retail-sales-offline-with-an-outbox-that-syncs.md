@@ -49,10 +49,14 @@ left, the branch, the period, the person's roles.
    tab that holds it reads the outbox again first, and the others show what it did. A network failure, a 5xx, a 409
    or a 429 backs off (5 s, 15 s, 1 min, 5 min, then every 15 min) and keeps the order. A sale the server answers without
    taking it (a 5xx, a 409, a 429) 8 times, or for 24 hours, is marked failed (`not_taken_after_retries`) and reported like a
-   refusal, so it never holds up the sales behind it; a try with no answer at all (no network) does not count. A 401 tries
+   refusal, so it never holds up the sales behind it; a try with no answer at all (no network) does not count. A 409
+   `idempotency_in_progress` or `client_sale_in_progress` (an earlier request for the same sale has not finished) is
+   always "try again later" with the same backoff, never a refusal, and does not count towards those 8 tries or 24 hours
+   either (issue #769): the item is never marked failed, reported or offered to a manager to discard while its last answer
+   was in progress, since the earlier request may still record the sale. A 401 tries
    one session refresh; a refresh that got no answer is a try to do again later; a refused refresh stops the engine and the
    header asks the person to sign in. The engine goes on whenever a new access token arrives (a sign-in or any refresh). A 2xx removes the item and keeps the server's sale
-   number for the receipt. Any other 4xx is a refusal: the item is kept, marked failed with the server's words, reported to
+   number for the receipt. Any other 4xx (a 409 that is not "in progress" included) is a refusal: the item is kept, marked failed with the server's words, reported to
    the server (decision 7) and skipped, so the next one goes. Sync starts on the `online` event, on a successful health ping
    (`GET /healthz` every 30 s while the page is open), after a sale is queued and on Sync now. A ping with no answer
    within 3 s counts as offline (issue #769): on a weak mobile connection a slow answer means a sale would hang. For the

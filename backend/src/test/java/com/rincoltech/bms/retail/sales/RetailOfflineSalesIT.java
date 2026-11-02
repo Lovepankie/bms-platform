@@ -171,27 +171,146 @@ class RetailOfflineSalesIT extends IntegrationTest {
     }
 
     /**
-     * Issue #769: an online sale with no answer in time goes to the outbox exactly as sent under the same key, so the
-     * late first request and the outbox's send, in either order, are one sale.
+     * Issue #769: the body the online sale screen sends, with its client sale id and occurred_at, which the outbox sends
+     * again unchanged under the same key when no answer came in time.
+     */
+    Map<String, Object> onlineSale(Instant occurredAt, long priceMinor) {
+        Map<String, Object> online = new LinkedHashMap<>();
+        online.put("branch_id", t.headOffice());
+        online.put("payment_method", "cash");
+        online.put("lines", List.of(Map.of("product_id", product, "qty", "1", "unit_price_minor", priceMinor)));
+        online.put("client_sale_id", UUID.randomUUID());
+        online.put("occurred_at", occurredAt.toString());
+        return online;
+    }
+
+    /**
+     * Issue #769: the first request arrived; the outbox's late resend of the same body under the same key, after a price
+     * change, matches the key's request hash and replays the sale, and a resend under a new key finds it by its client id.
      */
     // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
     @Test
     void anOnlineSaleSentAgainFromTheOutboxUnderItsKeyIsOneSale() {
         api.stockUp(t.headOffice(), product, "5");
-        Map<String, Object> online = new LinkedHashMap<>();
-        online.put("branch_id", t.headOffice());
-        online.put("payment_method", "cash");
-        online.put("lines", List.of(Map.of("product_id", product, "qty", "1")));
-        online.put("client_sale_id", UUID.randomUUID());
+        Map<String, Object> online = onlineSale(Instant.now().truncatedTo(ChronoUnit.MILLIS), 2_000);
         String key = UUID.randomUUID().toString();
         ResponseEntity<JsonNode> first = send(online, key);
         assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(first.getBody().get("device").path("recorded_offline").asBoolean())
+                .isFalse();
+        assertThat(api.editPrices(product, Map.of("sell_minor", 2_500, "reason", "Test price rise"), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
         ResponseEntity<JsonNode> fromOutbox = send(online, key);
-        assertThat(fromOutbox.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(fromOutbox.getStatusCode()).as("%s", fromOutbox.getBody()).isEqualTo(HttpStatus.CREATED);
         assertThat(fromOutbox.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
         assertThat(fromOutbox.getBody().get("id")).isEqualTo(first.getBody().get("id"));
+        ResponseEntity<JsonNode> newKey = send(online, UUID.randomUUID().toString());
+        assertThat(newKey.getStatusCode()).as("%s", newKey.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(newKey.getBody().get("id")).isEqualTo(first.getBody().get("id"));
         assertThat(sales()).isEqualTo(1);
         assertThat(balance()).isEqualTo("4.000");
+    }
+
+    /**
+     * Issue #769: the first request never arrived and the outbox sends the same body hours later, after a price change. It
+     * takes the offline acceptance path: dated when it happened, the price the screen showed stands with a price_changed
+     * clash, never refused as an online override.
+     */
+    // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+    @Test
+    void anOnlineSaleThatArrivesHoursLateIsDatedWhenItHappenedAndTakenAsOffline() {
+        api.stockUp(t.headOffice(), product, "5");
+        Instant at = Instant.now().truncatedTo(ChronoUnit.MILLIS).minus(Duration.ofHours(3));
+        Map<String, Object> online = onlineSale(at, 2_000);
+        assertThat(api.editPrices(product, Map.of("sell_minor", 2_500, "reason", "Test price rise"), ADMIN)
+                        .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ResponseEntity<JsonNode> late = send(online, UUID.randomUUID().toString());
+        assertThat(late.getStatusCode()).as("%s", late.getBody()).isEqualTo(HttpStatus.CREATED);
+        JsonNode device = late.getBody().get("device");
+        assertThat(device.get("recorded_offline").asBoolean()).isTrue();
+        assertThat(Instant.parse(device.get("occurred_at").asString())).isEqualTo(at);
+        assertThat(late.getBody().get("sale_date").asString())
+                .isEqualTo(dayIn(at).toString());
+        assertThat(late.getBody().get("total_minor").asLong()).isEqualTo(2_000);
+        assertThat(clashKinds(late.getBody())).containsExactly("price_changed");
+        assertThat(sales()).isEqualTo(1);
+    }
+
+    /**
+     * Issue #769, ADR-067 decision 4: the outbox's send overlaps the first request, still in flight with the same key. The
+     * send waits on the key and replays the sale, or is 409 idempotency_in_progress and its next try replays it: one sale.
+     */
+    // JUSTIFICATION-A3: a new test the issue asks for (#769), not a mechanism.
+    @Test
+    void theOutboxSendOverlappingTheFirstRequestUnderItsKeyIsOneSale() throws Exception {
+        api.stockUp(t.headOffice(), product, "5");
+        Map<String, Object> online = onlineSale(Instant.now(), 2_000);
+        String key = UUID.randomUUID().toString();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try (java.sql.Connection conn = TestDatabase.ownerDataSource().getConnection()) {
+            conn.setAutoCommit(false);
+            java.util.concurrent.Future<ResponseEntity<JsonNode>> first;
+            java.util.concurrent.Future<ResponseEntity<JsonNode>> fromOutbox;
+            try (java.sql.Statement st = conn.createStatement()) {
+                // Hold the item's stock row, so the first request takes its key and then waits, still in flight.
+                st.execute("SELECT 1 FROM retail_stock_balances WHERE branch_id = '" + t.headOffice()
+                        + "' AND product_id = '" + product + "' FOR UPDATE");
+                String holder;
+                try (java.sql.ResultSet rs = st.executeQuery("SELECT txid_current() % 4294967296")) {
+                    rs.next();
+                    holder = rs.getString(1);
+                }
+                first = pool.submit(() -> send(online, key));
+                assertThat(waitersOn(holder))
+                        .as("the first request holds its key and waits")
+                        .isEqualTo(1);
+                fromOutbox = pool.submit(() -> send(online, key));
+                assertThat(waitingOnAWaiterOf(holder))
+                        .as("the outbox's send waits on the key")
+                        .isTrue();
+                conn.commit();
+            }
+            ResponseEntity<JsonNode> sale = first.get(60, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(sale.getStatusCode()).as("%s", sale.getBody()).isEqualTo(HttpStatus.CREATED);
+            ResponseEntity<JsonNode> overlap = fromOutbox.get(60, java.util.concurrent.TimeUnit.SECONDS);
+            if (overlap.getStatusCode() == HttpStatus.CONFLICT) {
+                assertThat(overlap.getBody().get("code").asString()).isEqualTo("idempotency_in_progress");
+                overlap = send(online, key);
+            }
+            assertThat(overlap.getStatusCode()).as("%s", overlap.getBody()).isEqualTo(HttpStatus.CREATED);
+            assertThat(overlap.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+            assertThat(overlap.getBody().get("id")).isEqualTo(sale.getBody().get("id"));
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(sales()).isEqualTo(1);
+        assertThat(balance()).isEqualTo("4.000");
+    }
+
+    /**
+     * True once a transaction waits on one that itself waits on {@code txid}: the second request waiting on the first
+     * request's uncommitted Idempotency-Key row, while the first waits on the row the test holds.
+     */
+    boolean waitingOnAWaiterOf(String txid) throws InterruptedException {
+        long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(4);
+        while (System.nanoTime() < until) {
+            long waiting =
+                    TestDatabase.owner().sql("""
+                            SELECT count(*) FROM pg_locks w
+                              JOIN pg_locks h ON h.locktype = 'transactionid' AND h.granted
+                                             AND h.transactionid = w.transactionid AND h.pid <> w.pid
+                             WHERE w.locktype = 'transactionid' AND NOT w.granted
+                               AND h.pid IN (SELECT pid FROM pg_locks WHERE locktype = 'transactionid'
+                                                AND NOT granted AND transactionid::text = ?)
+                            """).param(txid).query(Long.class).single();
+            if (waiting > 0) {
+                return true;
+            }
+            Thread.sleep(50);
+        }
+        return false;
     }
 
     /** ADR-067 decision 5: another person's client sale id is refused, never answered with their sale. */
@@ -648,6 +767,8 @@ class RetailOfflineSalesIT extends IntegrationTest {
                 List.of(Map.of("product_id", product, "qty", "1", "unit_id", carton, "unit_price_minor", 24_000)));
         Map<String, Object> online = new LinkedHashMap<>(body);
         online.remove("recorded_offline");
+        // Sent online when it happened: a request arriving late takes the offline path (issue #769).
+        online.put("occurred_at", Instant.now().toString());
         assertThat(send(online, UUID.randomUUID().toString()).getBody().toString())
                 .contains("unknown_pack_unit");
 

@@ -287,12 +287,16 @@ class SalesService {
         // A store never sells (ADR-048, ADR-104).
         branches.requireSells(branch, "branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
-        boolean offline = r.offline();
         boolean credit = r.paymentMethod().equals("credit");
+        // Issue #769: an online sale that arrives late is taken as a sale recorded offline, its money already in hand.
+        boolean late = arrivedLate(r, credit);
+        boolean offline = r.offline() || late;
         List<PendingClash> clashes = offline ? new ArrayList<>() : null;
-        // A phone clock ahead of the server cannot date its prices in the future: they are as of now at the latest.
-        Instant pricesAsOf =
-                r.pricesAsOf() == null || r.pricesAsOf().isBefore(clock.now()) ? r.pricesAsOf() : clock.now();
+        // A phone clock ahead of the server cannot date its prices in the future: they are as of now at the latest. A
+        // late
+        // online sale was priced as the screen showed it when it was made, so its prices are as of occurred_at.
+        Instant asked = r.pricesAsOf() == null && late ? r.occurredAt() : r.pricesAsOf();
+        Instant pricesAsOf = asked == null || asked.isBefore(clock.now()) ? asked : clock.now();
         Instant occurredAt = occurredAt(r, pricesAsOf, clashes);
         LocalDate occurredOn = occurredAt == null
                 ? null
@@ -521,6 +525,18 @@ class SalesService {
                     Map.of("branch_id", branch.toString(), "path", "/staff/retail/sales")));
         }
         return visible(repo.find(id, false).orElseThrow().sale());
+    }
+
+    /**
+     * Issue #769, ADR-067 decision 4: an online cash, mobile money or bank sale that carries its client sale id and
+     * occurred_at and reaches the server more than {@link #CLOCK_SKEW} after it happened (the first request held up on a
+     * weak connection, or the same request sent later from the outbox) gets the rules of a sale recorded offline.
+     */
+    private boolean arrivedLate(SaleRequest r, boolean credit) {
+        return !credit
+                && r.clientSaleId() != null
+                && r.occurredAt() != null
+                && r.occurredAt().isBefore(clock.now().minus(CLOCK_SKEW));
     }
 
     /**
