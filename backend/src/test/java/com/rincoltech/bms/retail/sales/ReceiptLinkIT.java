@@ -184,18 +184,99 @@ class ReceiptLinkIT extends IntegrationTest {
                 .contains("Received by Test Customer 42")
                 .contains("Test Seller 41");
 
-        // Only the hash is stored, and the link is the one sale's.
+        // The hash and the sealed token are stored, never the token itself, and the link is the one sale's.
         Map<String, Object> row = TestDatabase.owner()
-                .sql("SELECT sale_id, token_hash, created_by FROM retail_receipt_links WHERE tenant_id = ?")
+                .sql("SELECT sale_id, token_hash, token_sealed, created_by FROM retail_receipt_links"
+                        + " WHERE tenant_id = ?")
                 .param(t.tenantId())
                 .query()
                 .singleRow();
         assertThat(row.get("sale_id")).isEqualTo(sale);
         assertThat(row.get("created_by")).isEqualTo(seller.userId());
         assertThat(String.valueOf(row.get("token_hash"))).hasSize(64).isNotEqualTo(token);
+        assertThat(new String((byte[]) row.get("token_sealed"), StandardCharsets.ISO_8859_1))
+                .doesNotContain(token);
+    }
 
-        // Each tap makes a new link to the same receipt.
-        assertThat(token(makeLink(seller, sale, SALES))).isNotEqualTo(token);
+    // JUSTIFICATION-A3: review of #762 items 2, 5 and 6: one link per sale, the token index and the definer's owner.
+    long links(UUID sale) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ? AND sale_id = ?")
+                .params(t.tenantId(), sale)
+                .query(Long.class)
+                .single();
+    }
+
+    long audits(UUID sale) {
+        return TestDatabase.owner()
+                .sql("SELECT count(*) FROM audit_log WHERE tenant_id = ? AND action = 'retail.receipt_link.created'"
+                        + " AND entity_id = ?")
+                .params(t.tenantId(), sale)
+                .query(Long.class)
+                .single();
+    }
+
+    @Test
+    void aSaleHasOneLinkGivenAgainWhileItIsValid() {
+        UUID sale = cashSale("Test Customer 44", "0700 000 064");
+        // Reading the receipt, as the share screen does when it opens, makes no link.
+        assertThat(seller.get("/sales/" + sale + "/receipt", SALES).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(links(sale)).isZero();
+
+        String first = token(makeLink(seller, sale, SALES));
+        assertThat(token(makeLink(seller, sale, SALES))).isEqualTo(first);
+        assertThat(token(makeLink(other, sale, SaleReceiptPdfIT.SUPERVISOR))).isEqualTo(first);
+        assertThat(links(sale)).isEqualTo(1);
+        assertThat(audits(sale)).as("only the link that was made is audited").isEqualTo(1);
+
+        // Within a week of its end a link is not given again: the customer gets a new one with 90 days to run.
+        TestDatabase.owner()
+                .sql("UPDATE retail_receipt_links SET created_at = created_at - interval '85 days',"
+                        + " expires_at = expires_at - interval '85 days' WHERE tenant_id = ? AND sale_id = ?")
+                .params(t.tenantId(), sale)
+                .update();
+        String second = token(makeLink(seller, sale, SALES));
+        assertThat(second).isNotEqualTo(first);
+        assertThat(token(makeLink(seller, sale, SALES))).isEqualTo(second);
+        assertThat(links(sale)).isEqualTo(2);
+        assertThat(audits(sale)).isEqualTo(2);
+    }
+
+    @Test
+    void theTokenLookupUsesTheUniqueIndexAndTheLookupFunctionReadsAcrossBusinesses() throws Exception {
+        UUID sale = cashSale("Test Customer 45", null);
+        token(makeLink(seller, sale, SALES));
+        // The lookup of retail_receipt_link_shop compares the column with a text value: with sequential scans off, a
+        // column that needed a cast would still be scanned, so an index scan here shows the unique index is used.
+        List<String> plan = new java.util.ArrayList<>();
+        try (java.sql.Connection c = TestDatabase.ownerDataSource().getConnection()) {
+            c.setAutoCommit(false);
+            try (java.sql.Statement s = c.createStatement()) {
+                s.execute("SET LOCAL enable_seqscan = off");
+            }
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "EXPLAIN SELECT 1 FROM retail_receipt_links l WHERE l.token_hash = ?::text AND l.expires_at > now()")) {
+                ps.setString(1, "0".repeat(64));
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        plan.add(rs.getString(1));
+                    }
+                }
+            }
+            c.rollback();
+        }
+        assertThat(String.join("\n", plan))
+                .contains("Index")
+                .contains("retail_receipt_links_token_hash_key")
+                .doesNotContain("Seq Scan");
+        // The definer function's owner bypasses row level security, as in production (01-roles.sh).
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT r.rolbypassrls FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner"
+                                + " WHERE p.proname = 'retail_receipt_link_shop'")
+                        .query(Boolean.class)
+                        .single())
+                .isTrue();
     }
 
     @Test
@@ -227,9 +308,9 @@ class ReceiptLinkIT extends IntegrationTest {
         assertThat(makeLink(other, sale, SALES).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(makeLink(other, sale, SaleReceiptPdfIT.STOREKEEPER).getStatusCode())
                 .isEqualTo(HttpStatus.FORBIDDEN);
-        token(makeLink(other, sale, SaleReceiptPdfIT.SUPERVISOR));
-        // A link made while the sale had a receipt stops opening once the sale no longer has one.
-        String token = token(makeLink(seller, sale, SALES));
+        String token = token(makeLink(other, sale, SaleReceiptPdfIT.SUPERVISOR));
+        // The sale's one link, given again to its seller; it stops opening once the sale no longer has a receipt.
+        assertThat(token(makeLink(seller, sale, SALES))).isEqualTo(token);
         assertThat(admin.post("/sales/" + sale + "/void", Map.of("reason", "Wrong item sold"), RetailTestSupport.ADMIN)
                         .getStatusCode())
                 .isEqualTo(HttpStatus.OK);

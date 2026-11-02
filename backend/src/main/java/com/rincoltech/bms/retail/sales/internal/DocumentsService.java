@@ -860,13 +860,17 @@ class DocumentsService {
     // JUSTIFICATION-A3: the receipt link of issue #760 (ADR-116) reuses the receipt's checks and model above.
     /**
      * A link to the sale's receipt for a message to a typed WhatsApp number (issue #760, ADR-116): whoever may share the
-     * receipt may make one, with the same 404 and 422 refusals. Each call makes a new link, valid for 90 days.
+     * receipt may ask for it, with the same 404 and 422 refusals. The sale's link is given again while it is valid; a new
+     * one, valid for 90 days, is made and audited only when there is none.
      */
     ReceiptLinks.Minted receiptLink(UUID saleId) {
         return writing.execute(status -> {
             Sale sale = receipt(saleId).sale();
             ReceiptLinks.Minted minted =
-                    links.mint(sale.id(), CurrentPrincipal.require().userId());
+                    links.forSale(sale.id(), CurrentPrincipal.require().userId());
+            if (!minted.created()) {
+                return minted;
+            }
             audit.record(AuditLog.Entry.created(
                     "retail.receipt_link.created",
                     "retail.sale",
@@ -879,15 +883,44 @@ class DocumentsService {
 
     /**
      * The receipt PDF a live link opens, with nobody signed in (issue #760): the receipt the seller shares, as it stands
-     * now, issued by whoever made the link. Empty when the link is wrong or expired, or its sale has no receipt any more.
+     * now, issued by whoever made the link. Gone when the link is wrong or expired, or its sale has no receipt any more;
+     * busy (429) past the limits of {@link ReceiptLinks.Opens}, or (503) while another link's PDF is being rendered.
      */
-    Optional<byte[]> linkedReceiptPdf(String token) {
+    LinkedReceipt linkedReceiptPdf(String token, String address) {
+        ReceiptLinks.Opens opens = links.opens();
+        if (!opens.open(address, ReceiptLinks.hash(String.valueOf(token)))) {
+            return LinkedReceipt.busy(HttpStatus.TOO_MANY_REQUESTS);
+        }
         Optional<ReceiptLinks.Live> live =
                 reading.execute(status -> links.live(token).filter(l -> linked(l) != null));
-        return live.map(l -> documents.renderSharedPdf(
-                "invoice",
-                () -> reading.execute(status -> receiptModel(
-                        Optional.ofNullable(linked(l)).orElseThrow(ApiException::notFound), l.createdBy()))));
+        if (live.isEmpty()) {
+            return LinkedReceipt.GONE;
+        }
+        if (!opens.startRender()) {
+            return LinkedReceipt.busy(HttpStatus.SERVICE_UNAVAILABLE);
+        }
+        try {
+            ReceiptLinks.Live l = live.get();
+            return new LinkedReceipt(
+                    documents.renderSharedPdf(
+                            "invoice",
+                            () -> reading.execute(status -> receiptModel(
+                                    Optional.ofNullable(linked(l)).orElseThrow(ApiException::notFound),
+                                    l.createdBy()))),
+                    HttpStatus.OK);
+        } finally {
+            opens.endRender();
+        }
+    }
+
+    /** What a receipt link opens: the PDF (200), or no PDF with the status of the plain page to show instead. */
+    record LinkedReceipt(byte[] pdf, HttpStatus status) {
+
+        static final LinkedReceipt GONE = new LinkedReceipt(null, HttpStatus.NOT_FOUND);
+
+        static LinkedReceipt busy(HttpStatus status) {
+            return new LinkedReceipt(null, status);
+        }
     }
 
     /** The receipt of a live link's sale, or null when it was voided, written off or wholly returned since. */

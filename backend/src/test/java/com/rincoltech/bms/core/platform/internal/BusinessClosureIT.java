@@ -583,6 +583,7 @@ class BusinessClosureIT extends IntegrationTest {
             for (String eraser : List.of(
                     "app_erase_core_personal_data()",
                     "lending_erase_personal_data()",
+                    "retail_erase_receipt_links()",
                     "retail_erase_personal_data()")) {
                 try (Statement s = c.createStatement()) {
                     s.execute("SELECT set_config('app.tenant_id', '" + b.t().tenantId() + "', true)");
@@ -677,8 +678,16 @@ class BusinessClosureIT extends IntegrationTest {
         assertThat(count("SELECT count(*) FROM help_setup_drafts WHERE tenant_id = ?", t.tenantId()))
                 .as("the setup helper's draft row seeded by RlsIsolationIT.seedOneRowInEveryTable")
                 .isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .as("the receipt link seeded by RlsIsolationIT.seedOneRowInEveryTable (V128, issue #760)")
+                .isEqualTo(1);
         ResponseEntity<JsonNode> removed = remove(op, closureId, code(op));
         assertThat(removed.getStatusCode()).as("%s", removed.getBody()).isEqualTo(HttpStatus.OK);
+        // Receipt links (V128): the removal deletes them before the shop's eraser anonymises the sales they point
+        // at, so no link opens a receipt of a removed business. The sales stay.
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
+        assertThat(removed.getBody().get("erased").get("retail").asInt()).isPositive();
         assertThat(removed.getBody().get("erased").get("core").asInt()).isPositive();
         // Ask BMS (ADR-096): the factory's cached answer and limit ticket go with the removal; the question log and the
         // spend
@@ -722,7 +731,21 @@ class BusinessClosureIT extends IntegrationTest {
                 .sql("UPDATE tenant_closures SET keep_until = ? WHERE id = ?")
                 .params(today.minusDays(1), closureId)
                 .update();
+        // JUSTIFICATION-A3: the lead asked for a test that the purge takes receipt links before retail_sales (#760).
+        // A receipt link row still pointing at a kept sale, put back by hand: the purge, which reads its tables
+        // from the catalogue, deletes it before the sale it references, so its foreign key never stops the purge.
+        TestDatabase.owner().sql("""
+                        INSERT INTO retail_receipt_links (id, tenant_id, sale_id, token_hash, token_sealed, created_by,
+                                                          created_at, expires_at)
+                        SELECT gen_random_uuid(), s.tenant_id, s.id, encode(sha256(s.id::text::bytea), 'hex'), '\\x00'::bytea,
+                               s.created_by, now(), now() + interval '90 days'
+                          FROM retail_sales s WHERE s.tenant_id = ? LIMIT 1
+                        """).param(t.tenantId()).update();
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .isEqualTo(1);
         assertThat(closures.purgeDue()).isGreaterThanOrEqualTo(1);
+        assertThat(count("SELECT count(*) FROM retail_receipt_links WHERE tenant_id = ?", t.tenantId()))
+                .isZero();
         List<String> kept = new ArrayList<>();
         for (String table : RlsIsolationIT.tenantOwnedTables()) {
             if (List.of("tenants", "users", "tenant_closures").contains(table)) {

@@ -14,6 +14,7 @@
             "kernel",
             "core.tenancy",
             "core.approvals",
+            "core.identity",
             "core.audit",
             "core.ledger",
             "core.documents",

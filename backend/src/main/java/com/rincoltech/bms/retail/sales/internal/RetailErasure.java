@@ -8,7 +8,8 @@ import org.springframework.stereotype.Component;
  * The shop's part of removing a closed business (issue #571, ADR-090), through the definer function
  * {@code retail_erase_personal_data} of V102: customers, suppliers and cash book people become numbered placeholders without
  * contact details, and a buyer's name and contact on a sale, quotation, document, credit note or order is removed. Sales,
- * payments, purchases and the cash book are money records and keep their amounts and dates.
+ * payments, purchases and the cash book are money records and keep their amounts and dates. The sales' receipt links
+ * (issue #760, V128) are deleted first, so none opens a receipt of a removed business.
  */
 @Component
 class RetailErasure implements PersonalDataEraser {
@@ -26,8 +27,12 @@ class RetailErasure implements PersonalDataEraser {
 
     @Override
     public int erase() {
-        return jdbc.sql("SELECT retail_erase_personal_data()")
+        int links = jdbc.sql("SELECT retail_erase_receipt_links()")
                 .query(Integer.class)
                 .single();
+        return links
+                + jdbc.sql("SELECT retail_erase_personal_data()")
+                        .query(Integer.class)
+                        .single();
     }
 }

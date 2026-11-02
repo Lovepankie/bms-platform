@@ -27006,6 +27006,15 @@ export interface operations {
                     "text/html": string;
                 };
             };
+            /** @description A module's links followed too often from one address: a plain page, with Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
         };
     };
     followShortLink_1: {
@@ -27028,6 +27037,15 @@ export interface operations {
             };
             /** @description A module's link that is wrong or has expired, such as a receipt link (issue #760) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description A module's links followed too often from one address: a plain page, with Retry-After */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -31654,6 +31672,24 @@ export interface operations {
             };
             /** @description This receipt link has expired: a plain page */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Opened too often from one address or of one link: a plain page, with Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Another link's receipt is being laid out: a plain page, with Retry-After */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

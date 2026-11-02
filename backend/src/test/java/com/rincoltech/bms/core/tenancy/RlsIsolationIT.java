@@ -629,16 +629,18 @@ public class RlsIsolationIT {
                         INSERT INTO retail_credit_note_issues (tenant_id, return_id, issued_by, issued_on, buyer_name)
                         VALUES (?, ?, ?, DATE '2026-01-16', 'Test Buyer 01')
                         """).params(t.tenantId(), saleReturn, user).update();
-        // A short link to the fixture sale's receipt (migration V128, #760): only the token's hash is stored.
+        // A short link to the fixture sale's receipt (migration V128, #760): the token's hash, and the token sealed.
         owner.sql("""
-                        INSERT INTO retail_receipt_links (id, tenant_id, sale_id, token_hash, created_by, created_at, expires_at)
-                        VALUES (?, ?, ?, ?, ?, TIMESTAMPTZ '2026-01-16 09:00:00+03', TIMESTAMPTZ '2026-04-16 09:00:00+03')
+                        INSERT INTO retail_receipt_links (id, tenant_id, sale_id, token_hash, token_sealed, created_by,
+                                                          created_at, expires_at)
+                        VALUES (?, ?, ?, ?, ?, ?, TIMESTAMPTZ '2026-01-16 09:00:00+03', TIMESTAMPTZ '2026-04-16 09:00:00+03')
                         """)
                 .params(
                         UUID.randomUUID(),
                         t.tenantId(),
                         sale,
                         "%064x".formatted(new java.math.BigInteger(128, new java.util.Random())),
+                        new byte[] {0},
                         user)
                 .update();
         // The retail import's source references (migration V20, #55).

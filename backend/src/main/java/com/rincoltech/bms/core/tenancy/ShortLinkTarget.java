@@ -14,16 +14,21 @@ public interface ShortLinkTarget {
 
     /**
      * Either the path on a shop's host the link opens ({@code slug} and {@code path}), or, for a link of this kind that is
-     * wrong or has expired, a plain HTML page to show instead ({@code page}).
+     * wrong or has expired, a plain HTML page to show instead ({@code page}) with its HTTP {@code status}: 404, or 429
+     * when the module limits how often its links are followed.
      */
-    record Answer(String slug, String path, String page) {
+    record Answer(String slug, String path, String page, int status) {
 
         public static Answer to(String slug, String path) {
-            return new Answer(slug, path, null);
+            return new Answer(slug, path, null, 302);
         }
 
         public static Answer gone(String page) {
-            return new Answer(null, null, page);
+            return new Answer(null, null, page, 404);
+        }
+
+        public static Answer busy(String page) {
+            return new Answer(null, null, page, 429);
         }
     }
 }

@@ -305,25 +305,41 @@ class DocumentsController {
         @ApiResponse(
                 responseCode = "404",
                 description = "This receipt link has expired: a plain page",
+                content = @Content(mediaType = "text/html", schema = @Schema(type = "string"))),
+        @ApiResponse(
+                responseCode = "429",
+                description = "Opened too often from one address or of one link: a plain page, with Retry-After",
+                content = @Content(mediaType = "text/html", schema = @Schema(type = "string"))),
+        @ApiResponse(
+                responseCode = "503",
+                description = "Another link's receipt is being laid out: a plain page, with Retry-After",
                 content = @Content(mediaType = "text/html", schema = @Schema(type = "string")))
     })
     ResponseEntity<byte[]> openReceiptLink(@PathVariable("token") String token) {
-        return service.linkedReceiptPdf(token)
-                .map(pdf -> ResponseEntity.ok()
-                        .contentType(MediaType.APPLICATION_PDF)
-                        .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                        .header("X-Robots-Tag", "noindex")
-                        .header(
-                                HttpHeaders.CONTENT_DISPOSITION,
-                                ContentDisposition.inline()
-                                        .filename("receipt.pdf")
-                                        .build()
-                                        .toString())
-                        .body(pdf))
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .contentType(new MediaType(MediaType.TEXT_HTML, java.nio.charset.StandardCharsets.UTF_8))
-                        .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                        .body(ReceiptLinks.GONE_PAGE.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        DocumentsService.LinkedReceipt opened =
+                service.linkedReceiptPdf(token, com.rincoltech.bms.kernel.RequestContext.clientIp());
+        if (opened.pdf() != null) {
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                    .header("X-Robots-Tag", "noindex")
+                    .header(
+                            HttpHeaders.CONTENT_DISPOSITION,
+                            ContentDisposition.inline()
+                                    .filename("receipt.pdf")
+                                    .build()
+                                    .toString())
+                    .body(opened.pdf());
+        }
+        boolean gone = opened.status() == HttpStatus.NOT_FOUND;
+        ResponseEntity.BodyBuilder page = ResponseEntity.status(opened.status())
+                .contentType(new MediaType(MediaType.TEXT_HTML, java.nio.charset.StandardCharsets.UTF_8))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store");
+        if (!gone) {
+            page.header(HttpHeaders.RETRY_AFTER, "60");
+        }
+        return page.body((gone ? ReceiptLinks.GONE_PAGE : ReceiptLinks.BUSY_PAGE)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     private static ResponseEntity<IssuedDocument> created(Outcome<IssuedDocument> outcome) {

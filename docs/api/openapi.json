@@ -34798,6 +34798,16 @@
               }
             },
             "description" : "A module's link that is wrong or has expired, such as a receipt link (issue #760)"
+          },
+          "429" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "A module's links followed too often from one address: a plain page, with Retry-After"
           }
         },
         "summary" : "Follow a short link: 302 to the shop, to its new address while an old name forwards, or to the page 'No shop uses this link' (ADR-108)",
@@ -34828,6 +34838,16 @@
               }
             },
             "description" : "A module's link that is wrong or has expired, such as a receipt link (issue #760)"
+          },
+          "429" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "A module's links followed too often from one address: a plain page, with Retry-After"
           }
         },
         "summary" : "Follow a short link: 302 to the shop, to its new address while an old name forwards, or to the page 'No shop uses this link' (ADR-108)",
@@ -42090,6 +42110,26 @@
               }
             },
             "description" : "This receipt link has expired: a plain page"
+          },
+          "429" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Opened too often from one address or of one link: a plain page, with Retry-After"
+          },
+          "503" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "Another link's receipt is being laid out: a plain page, with Retry-After"
           }
         },
         "summary" : "The receipt PDF a receipt link opens, with no sign-in; a wrong or expired link is a plain page (issue #760)",

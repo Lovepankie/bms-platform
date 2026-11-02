@@ -72,6 +72,10 @@ class ShortLinkRedirectController {
             responseCode = "404",
             description = "A module's link that is wrong or has expired, such as a receipt link (issue #760)",
             content = @Content(mediaType = "text/html", schema = @Schema(type = "string")))
+    @ApiResponse(
+            responseCode = "429",
+            description = "A module's links followed too often from one address: a plain page, with Retry-After",
+            content = @Content(mediaType = "text/html", schema = @Schema(type = "string")))
     ResponseEntity<String> follow(@PathVariable("name") String name) {
         // JUSTIFICATION-A3: after the shops, the modules' own links, such as a receipt link (issue #760, ADR-116).
         String shop = names.target(name).orElse(null);
@@ -83,10 +87,13 @@ class ShortLinkRedirectController {
                         .findFirst()
                         .orElse(null);
         if (other != null && other.page() != null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            ResponseEntity.BodyBuilder page = ResponseEntity.status(other.status())
                     .contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
-                    .header("Cache-Control", "no-store")
-                    .body(other.page());
+                    .header("Cache-Control", "no-store");
+            if (other.status() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+                page.header("Retry-After", "60");
+            }
+            return page.body(other.page());
         }
         String location = shop != null
                 ? hosts.tenantOrigin(shop) + "/"
