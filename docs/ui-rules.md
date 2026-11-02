@@ -76,7 +76,10 @@ back to what opened it.
 
 14. A page load shows a skeleton, and nothing at all for under 1 second.
 15. Toasts are dark and neutral, at the bottom, with an icon, for 6 seconds (12 with an Undo), with at most one action. An error is never
-    a blocking dialog.
+    a blocking dialog. Sign-in and the invitation page say an error in an error toast as well as in their error line (issue
+    #122); the line stays on the page and is the one read out, so that toast is silent and carries no button. The toast shows
+    only while the line does, so the next attempt and the step after it never keep an old error, and a second failure
+    replaces it.
     Every toast names its tone: the check of `success` only where a write succeeded, `info` for a refusal (an item already on
     the sale) or a change that waits for approval, `error` for a failure. `show()` has no default tone.
     Every successful save, sale, add, edit, delete, move, purchase and payment in the staff area says so in a success toast
