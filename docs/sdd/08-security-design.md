@@ -494,6 +494,13 @@ Notes:
   The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
   and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
   sign-in (ADR-074 decision 6).
+  Built (extras slice D4, issue #225): `lending.collateral_register` runs under `lending.reports.members` in the branches the requester
+  holds it in, prints who owns an item (the member number and name, the reference, which can be an ID number, a plate or a title
+  number, and the description) only where they hold `lending.members.read` in the member's branch, and without
+  `lending.insights.all_officers` lists only the items securing the requester's own loans and names only those loans; all of it is
+  frozen with the run and checked again at download.
+  `lending.regulatory_summary` runs under `lending.reports.compliance` with `lending.insights.read` and its scope. No permission and no
+  seeded row are added.
   Built (extras slice D3, issue #222): `lending.disbursements` runs under `lending.reports.portfolio`, and
   `lending.expected_vs_collected`, `lending.arrears_list` and `lending.officer_performance` under `lending.reports.collections`; each also
   needs `lending.insights.read`, and without `lending.insights.all_officers` covers only the caller's own loans. The arrears list prints a

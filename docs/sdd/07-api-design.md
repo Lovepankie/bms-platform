@@ -731,7 +731,9 @@ generic `POST /documents`. Built (#12): these two routes and the member document
 Responses of these routes are `Cache-Control: no-store`. The switch is the tenant setting `reports_enabled` (`PATCH /settings`,
 `core.settings.manage`; also `GET /me` `reports_enabled`, which the PWA reads to show the Reports tab), off by default. No new permission exists: a report is run under its own `lending.reports.*`
 permission and a loan officer sees only their own loans. The lending report `lending.par` additionally needs
-`lending.insights.read`, because its branch scope is the insights page's.
+`lending.insights.read`, because its branch scope is the insights page's. So does `lending.regulatory_summary` (slice D4, issue #225);
+`lending.collateral_register` does not: its branches are those of `lending.reports.members`. Both offer all four formats; no route is
+added.
 
 Formats (slice D2, issue #217): `json`, `csv`, `pdf` (`application/pdf`) and `xlsx`
 (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`); the catalogue lists the formats each report offers, and a request for

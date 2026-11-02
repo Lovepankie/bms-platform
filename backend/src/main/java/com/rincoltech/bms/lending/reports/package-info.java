@@ -5,7 +5,9 @@
  * {@link com.rincoltech.bms.lending.insights.InsightsFigures} port, so there is one implementation of PAR and
  * the report equals the insights page. Today: {@code lending.par} and {@code lending.portfolio_outstanding} (D1, D2),
  * {@code lending.expected_vs_collected}, {@code lending.arrears_list}, {@code lending.disbursements} and
- * {@code lending.officer_performance} (D3, issue #222). The collateral register and regulator summary arrive with D4.
+ * {@code lending.officer_performance} (D3, issue #222), and {@code lending.collateral_register} and
+ * {@code lending.regulatory_summary} (D4, issue #225), which read through the public
+ * {@link com.rincoltech.bms.lending.insights.RegisterFigures} port.
  */
 @ApplicationModule(
         id = "lending.reports",

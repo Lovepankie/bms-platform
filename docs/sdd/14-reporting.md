@@ -299,6 +299,31 @@ latest value, custody status and location, linked loans and their status. Flags:
 custody while every linked loan is closed ("release overdue"); imported items not yet
 verified (13.6.8); items without a valuation.
 
+**Built (extras slice D4, issue #225).** Offered as `pdf`, `xlsx`, `csv` and `json` under `lending.reports.members`; no migration and no
+permission. Parameters `branch_id`, `collateral_type` and `custody_status`; the branches are those the requester holds the permission in,
+resolved at request time and frozen with the run, and a download by someone whose access has narrowed since is refused. Not `as_at`: the
+register is the items as they stand when it is made, under the business date of the request, because custody and values are not kept by
+date (the report says so). A requester without `lending.insights.all_officers` gets only the items that secure a loan they are the
+responsible officer for (chapter 7: a loan officer sees only their own loans), and its Loans column names only those loans. Two tables,
+the short one first so the PDF always prints it whole; both are read in the run's one `REPEATABLE READ` snapshot transaction, so the
+counts are of the very items listed. A missing value or date prints blank in the PDF, not as a dash (ADR-038, #225 amendment point 6):
+
+- `flags`: the items with each flag and the items in the register (a total row).
+- `items`, by branch, member number and registration order: branch, member number, the name, type, description, reference, the
+  estimated value given at registration, the latest valuation's market value and date, custody status, where it is kept, the linked
+  loans with their status in words ("LN0001 (active)"), and its flags. Who owns an item (the member number, the name, the reference,
+  which can be an ID number, a plate or a title number, and the description) is printed only where the requester holds `lending.members.read`
+  in the member's branch, and blank elsewhere; the branches are frozen with the run and checked again at download, as is the officer
+  limit.
+
+The flags: **Release overdue**, an item still pledged or in custody that secures at least one loan and whose loans are all closed,
+cancelled or rejected (a written-off loan keeps its collateral for recovery, so it does not count as finished); **Imported, not
+verified**, an item whose registration event carries exactly the import's note "imported; verify custody and value" (chapter 13 section 13.6.8)
+and that has no valuation and no later event; **No valuation**, an item with no valuation recorded. Nothing writes the import's note
+yet (the import commit is issue #133), so the second flag is proven on fabricated rows only. A register longer than the PDF row cap is
+cut with the printed pointer to the Excel file, which holds every item. The figures come through the new public port `RegisterFigures` of
+`lending.insights`, read with plain SQL like the other insights reads (ADR-030 decision 1). Test: `LendingRegistersReportsIT`.
+
 ## 14.6 Operational and audit reports
 
 ### `lending.operational_trend` (`lending.reports.portfolio`)
@@ -333,6 +358,37 @@ the period by count and amount; portfolio outstanding by product and purpose; PA
 PAR90; interest rate range and weighted average per product (in bp, weighted by `PO`);
 loans written off in the period; savings held from members (total, number of accounts);
 investments held from members (total principal, number); number of branches and staff.
+
+**Built (extras slice D4, issue #225).** Offered as `pdf`, `xlsx`, `csv` and `json` under `lending.reports.compliance`, and, like the
+portfolio reports, it also needs `lending.insights.read` because its scope is the insights page's (a caller without
+`lending.insights.all_officers` gets their own loans and no savings, investments, branches or staff, which belong to no officer). No migration and no
+permission. Parameters `from` (the first of the month of `to` by default), `to` (the period end, today by default) and `branch_id`. Its
+first note is the cover note "Data summary. Not a filed return.", printed on every format; a date in a note is printed `7 Oct 2026`.
+Six tables, a table per kind of figure; each total is the sum of its own rows, and a figure with nothing to measure (PAR on an empty
+book, the weighted rate of a product owing nothing) prints blank in the PDF, not as a dash (ADR-038, #225 amendment point 6):
+
+- `loans`, a number and an amount per row: active loans and their principal outstanding at the period end; loans disbursed and loans
+  written off in the period (the insights page's `portfolio.disbursed` and `portfolio.written_off` rules; V29 allows one disbursement
+  row per loan, so the disbursements are loans); savings held (the savings panel's balance at the period end, and the accounts open
+  then); investments held (the investment panel's balance at the period end, and the open investments now). The savings and investment
+  rows are left out for a caller limited to their own loans, and the report says why.
+- `risk`: PAR 30 and PAR 90.
+- `people`: active borrowers at the period end; the active branches of the scope; active staff with a role that is not revoked in
+  those branches or in every branch, now. Branches and staff are left out for a caller limited to their own loans.
+- `borrowers`: the distinct borrowers with an active loan by gender (women, men, other, not recorded; a value outside the list counts
+  as not recorded) and the total.
+- `products`: by product and rate unit, the active loans, principal outstanding, lowest and highest rate and the rate weighted by
+  principal outstanding (half up), in basis points per the unit; rates of different units are never averaged together, so the table has
+  no total row (the `purposes` total is the book's, summed from its rows).
+- `purposes`: the active loans and principal outstanding by loan purpose (the purpose is the loan's own and never changes, so a past
+  date can be grouped by it); a purpose outside the list is one row "Not recorded", so the rows always add up to the total.
+
+The loan book at the period end is the positions of `lending.par` (the loan tables for today, the nightly snapshot for an earlier
+date, with the same refusals), so PAR 30 and PAR 90 are those of section 14.3: tests assert they equal `lending.par` and the insights
+page today, and `lending.par` on a past date read from the snapshot, and that a past date without a snapshot is refused with
+`snapshot_unavailable`. On a past date the breakdowns join the snapshot's loans to their loan and member rows as they are now (rate,
+purpose, gender); the report says it reads the snapshot. The figures come through the public port `RegisterFigures` of
+`lending.insights`. Test: `LendingRegistersReportsIT`.
 
 ## 14.9 Live insights (`lending.insights.*`, #153, ADR-030)
 
@@ -425,7 +481,8 @@ migration (the `format` check of `report_runs` already allowed `pdf` and `xlsx`)
   made the file and when, when the data was read, the notes), then each table with its heading repeated on every page, tinted rows and a
   total row set off between rules, and "page x of y" in the footer. A4, landscape when a table has more than seven columns, Open Sans
   embedded. Money is in whole currency units with the currency in the column heading, a rate is a percentage to one decimal made from
-  the integer basis points half up (so 755 basis points reads 7.6%, not 7.5%), a date is `8 Oct 2026`, a missing figure is a dash, and
+  the integer basis points half up (so 755 basis points reads 7.6%, not 7.5%), a date is `8 Oct 2026`, a missing figure is a dash (blank in a report that sets
+  `ReportDefinition.blankMissingFigures()`, ADR-038 #225 amendment point 6), and
   a long unbroken word wraps inside its cell. A table longer than `BMS_REPORTS_PDF_ROW_CAP` (3,000; 500 on staging) is cut to that many
   rows with the printed note "Showing the first 500 of 900 rows. The full detail is in the Excel file." and keeps its total row. A
   character the font lacks prints as "?" (ADR-034). The layout is read from the spool after the snapshot has committed and holds no

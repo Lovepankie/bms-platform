@@ -1360,6 +1360,12 @@ settled.
 Chapter 14 sections 14.5 and 14.7. The regulator summary carries the cover note "Data summary. Not a
 filed return." until the client's return formats are known (scope question 5).
 
+**As built in slice D4 (issue #225).** `lending.collateral_register` and `lending.regulatory_summary` as PDF, Excel, CSV and JSON,
+through the new public port `RegisterFigures` of `lending.insights`; no migration and no permission. The register is the items as they
+stand when it is made (no `as_at`), with a table of flag counts first and the items after, cut at the PDF row cap with the pointer to the
+Excel file. The summary's book, PAR 30 and PAR 90 are `InsightsFigures.par`'s own. Chapter 14 sections 14.5 and 14.7 list the columns and
+the rules.
+
 ### 6.11 Operations and threats
 
 | Threat or risk | Control |

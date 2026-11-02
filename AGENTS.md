@@ -464,6 +464,12 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   by branch, product or officer) are offered in all four formats, from `InsightsFigures.par` and `.portfolio`, with tests that every group
   equals the insights endpoints for the same filter and caller. `ReportMemoryIT` runs both reports as PDF and Excel on the 224 MB
   heap. The Reports screen offers the PDF first. Visual check: `make document-samples` and `docs/ui/report-samples/`.
+- **Built (extras slice D4, issue #225, ADR-038 amendment):** no migration and no permission. `lending.collateral_register` (flag counts,
+  then every item with its valuation, custody, linked loans and flags: release overdue, imported and not verified, no valuation; cut at
+  the PDF row cap with the pointer to the workbook) and `lending.regulatory_summary` (cover note "Data summary. Not a filed return.";
+  borrowers by gender, the book by product with rates and by purpose, PAR 30 and 90 from `InsightsFigures.par`, disbursed, written off,
+  savings, investments, branches, staff), in all four formats, through the new public port `RegisterFigures` of `lending.insights`;
+  `LendingRegistersReportsIT` proves the flags, the row cap and that PAR equals `lending.par` and the insights page.
 - **Built (extras slice D3, issue #222, ADR-038 amendment):** no migration and no permission. `lending.expected_vs_collected` (expected,
   collected on due, rate and the printed collections equation), `lending.arrears_list` (late loans by bucket with the last payment,
   follow up and open promise; name and phone as the collection lists decide, frozen with the run), `lending.disbursements` (each loan,

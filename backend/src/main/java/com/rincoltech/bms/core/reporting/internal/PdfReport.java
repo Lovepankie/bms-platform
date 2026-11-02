@@ -102,7 +102,7 @@ final class PdfReport {
 
         List<Map<String, Object>> out = new ArrayList<>();
         for (TableMeta t : tables) {
-            out.add(table(t, rowCap, h.currency(), exponent, spool, guard));
+            out.add(table(t, rowCap, h.currency(), exponent, p.blankMissing() ? "" : DASH, spool, guard));
         }
 
         Map<String, Object> model = new LinkedHashMap<>();
@@ -115,7 +115,7 @@ final class PdfReport {
     }
 
     private static Map<String, Object> table(
-            TableMeta t, int rowCap, String currency, int exponent, Spool spool, Guard guard) {
+            TableMeta t, int rowCap, String currency, int exponent, String missing, Spool spool, Guard guard) {
         List<Column> columns = t.columns();
         double weights = 0;
         for (Column c : columns) {
@@ -146,7 +146,7 @@ final class PdfReport {
             seen[0]++;
             List<String> cells = new ArrayList<>(columns.size());
             for (int i = 0; i < columns.size(); i++) {
-                cells.add(text(columns.get(i), row.get(i), exponent));
+                cells.add(text(columns.get(i), row.get(i), exponent, missing));
             }
             if (t.hasTotal() && seen[0] > head) {
                 total[0] = cells;
@@ -184,9 +184,10 @@ final class PdfReport {
         return Math.max(c.kind() == Kind.MONEY ? 1.9 : 1.4, longest * 0.24);
     }
 
-    private static String text(Column c, Object v, int exponent) {
+    /** A cell in words; a missing figure is {@code missing}, a dash unless the report asks for a blank. */
+    private static String text(Column c, Object v, int exponent, String missing) {
         if (v == null) {
-            return c.kind() == Kind.TEXT ? "" : DASH;
+            return c.kind() == Kind.TEXT ? "" : missing;
         }
         return switch (c.kind()) {
             case TEXT -> String.valueOf(v);

@@ -28,6 +28,7 @@ import java.util.Map;
  * @param logo a {@code data:} URI of the logo, or null
  * @param scope the branches in words, for the letterhead's second line ("All branches you may see")
  * @param parameters the run's parameters in words, in the order the report declares them
+ * @param blankMissing the PDF prints a missing figure blank, not as a dash ({@link ReportDefinition#blankMissingFigures})
  */
 record Presentation(
         String by,
@@ -39,9 +40,25 @@ record Presentation(
         String footer,
         String logo,
         String scope,
-        List<Line> parameters) {
+        List<Line> parameters,
+        boolean blankMissing) {
 
     // JUSTIFICATION-A3: new file of this slice (issue #217); no existing code builds the presentation of a report.
+
+    /** A presentation that prints a missing figure as a dash. */
+    Presentation(
+            String by,
+            ZoneId zone,
+            String businessName,
+            String brand,
+            String onBrand,
+            String tint,
+            String footer,
+            String logo,
+            String scope,
+            List<Line> parameters) {
+        this(by, zone, businessName, brand, onBrand, tint, footer, logo, scope, parameters, false);
+    }
 
     /** The presentation of a run from the tenant's letterhead and what the run stored. */
     static Presentation of(
@@ -68,7 +85,8 @@ record Presentation(
                                 + Base64.getEncoder().encodeToString(l.bytes()))
                         .orElse(null),
                 scope,
-                lines);
+                lines,
+                def.blankMissingFigures());
     }
 
     /** A pale tint of the brand colour for alternate table rows: 88% white over it (as the other documents do). */
