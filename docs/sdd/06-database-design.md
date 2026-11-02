@@ -283,7 +283,7 @@ unused until agents), `referral_code varchar(10)` and `referrer_tenant_id uuid` 
 brought and its business, resolved at the sign-up, made the referral at Activate; `V88`, ADR-069; the operator reads it through
 `onboarding_application_referrer`, which refuses a tenant-bound transaction), `message varchar(1000)`, `link_token_hash char(64) UNIQUE` and
 `link_token_expires_at` (the applicant link: SHA-256 of 256 random bits, 7 days; replaced by every
-email to the applicant), `email_verified_at` (in the operator queue once set), `operator_note`,
+email to the applicant; cleared on expiry, kept through Activate since `V122`, issue #746), `email_verified_at` (in the operator queue once set), `operator_note`,
 `applicant_reply`, `reject_reason`, `decided_by` and `decided_at` (FK `platform_users`),
 `activated_by`, `activated_at`, `activated_tenant` (FK `tenants`), `activation_way`,
 `activation_term`, `activation_note varchar(500)` (the free text note of the payment received,
