@@ -176,7 +176,7 @@ class SettingsController {
 
             @Schema(
                     description =
-                            "Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115)")
+                            "Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115)")
             Boolean salespeopleSeeSavingsAmount,
 
             @Size(max = 20)

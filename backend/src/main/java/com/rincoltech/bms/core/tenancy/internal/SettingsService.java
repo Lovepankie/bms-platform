@@ -122,6 +122,11 @@ class SettingsService implements TenantSettings, ModuleSettings, GoLiveDate, App
             // ADR-090: the retention of a closed business's money records counts from the end of its financial year.
             guard.requireOwner("set the end of the financial year");
         }
+        if (request.salespeopleSeeSavingsAmount() != null) {
+            // ADR-115: a salesperson who sees the savings amount can work out the day's profit, so only the Owner
+            // decides.
+            guard.requireOwner("let salespeople see the savings amount");
+        }
         Stored stored = lock();
         if (stored.version() != expected) {
             throw Versions.conflict(stored.version());

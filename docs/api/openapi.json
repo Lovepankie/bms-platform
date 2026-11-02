@@ -25422,7 +25422,7 @@
             "type" : "array"
           },
           "salespeople_see_savings_amount" : {
-            "description" : "Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115)",
+            "description" : "Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115)",
             "type" : "boolean"
           },
           "setup_dismissed" : {

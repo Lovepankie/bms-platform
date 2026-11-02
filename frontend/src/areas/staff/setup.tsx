@@ -218,7 +218,8 @@ export function Setup() {
     });
   }
 
-  // Issue #768, ADR-115: off by default; when on, salespeople see and may change the daily savings amount.
+  // Issue #768, ADR-115: off by default; when on, salespeople see and may change the daily savings amount. Only the Owner sees the
+  // switch (the server answers owner_only for anyone else).
   function setSalespeopleSavings(on: boolean) {
     void run(async () => {
       const { error } = await api.PATCH('/api/v1/settings', {
@@ -406,7 +407,7 @@ export function Setup() {
           </label>
         </fieldset>
 
-        {hasRetail(me.modules) && (
+        {hasRetail(me.modules) && me.is_owner === true && (
           <fieldset>
             <legend>Daily savings</legend>
             <label>
@@ -415,7 +416,7 @@ export function Setup() {
               Salespeople can see and change the savings amount
             </label>
             <p id="salespeople-savings-hint" className="hint">
-              The suggested amount is half of the day&apos;s profit, so salespeople will be able to work out the profit.
+              A salesperson who sees the savings amount can work out the day&apos;s profit from it. Only you, the owner, can change this.
             </p>
           </fieldset>
         )}

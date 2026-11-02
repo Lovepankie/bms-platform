@@ -20444,7 +20444,7 @@ export interface components {
             require_mfa_all_staff?: boolean;
             /** @description Staff role keys whose holders must use two-step sign-in; an empty list clears the choice (ADR-046) */
             require_mfa_roles?: string[];
-            /** @description Let salespeople see and change the daily savings amount; they can then work out the day's profit (issue #768, ADR-115) */
+            /** @description Let salespeople see and change the daily savings amount; they can then work out the day's profit. Only the Owner sets it, 403 owner_only otherwise (issue #768, ADR-115) */
             salespeople_see_savings_amount?: boolean;
             setup_dismissed?: boolean;
             /** @description #RRGGBB, or an empty string to clear it; white or near-black text on it must reach contrast 4.5 (FR-TEN-08) */

@@ -10,6 +10,7 @@ import com.rincoltech.bms.IntegrationTest;
 import com.rincoltech.bms.TestDatabase;
 import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.retail.RetailTestSupport;
+import com.rincoltech.bms.testsupport.Api;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -491,10 +492,33 @@ class RetailCashbookSavingsIT extends IntegrationTest {
     }
 
     // JUSTIFICATION-A3: new on and off tests for issue #768; a test per case, no new mechanism.
-    /** Business set-up's switch "Salespeople can see and change the savings amount" (issue #768, ADR-115), through the API. */
+    // JUSTIFICATION-A3: the review asks that only the Owner sets it, so the switch is sent as a real Owner, or as an
+    // Admin to be refused.
+    UUID owner;
+
+    /** The Owner of the business, made on first use (ADR-062): only the Owner sets the salespeople savings setting (ADR-115). */
+    UUID owner() {
+        if (owner == null) {
+            owner = Api.staff(t, Api.email("sav-owner"), new Api.Role("tenant_admin", null));
+            TestDatabase.owner()
+                    .sql("UPDATE users SET is_owner = true WHERE id = ?")
+                    .param(owner)
+                    .update();
+        }
+        return owner;
+    }
+
+    /** Business set-up's switch "Salespeople can see and change the savings amount" (issue #768, ADR-115), by the Owner. */
     JsonNode salespeopleSeeSavingsAmount(boolean on) {
+        ResponseEntity<JsonNode> r = patchSalespeopleSetting(owner(), on);
+        assertThat(r.getStatusCode()).as("%s", r.getBody()).isEqualTo(HttpStatus.OK);
+        return r.getBody();
+    }
+
+    ResponseEntity<JsonNode> patchSalespeopleSetting(UUID by, boolean on) {
         org.springframework.http.HttpHeaders h =
                 cb.api.headers("core.settings.manage,core.settings.read", "*", Map.of());
+        h.set("X-Dev-User-Id", by.toString());
         int version = http.exchange(
                         "/api/v1/settings",
                         org.springframework.http.HttpMethod.GET,
@@ -504,13 +528,35 @@ class RetailCashbookSavingsIT extends IntegrationTest {
                 .get("version")
                 .asInt();
         h.add("If-Match", "\"" + version + "\"");
-        ResponseEntity<JsonNode> r = http.exchange(
+        return http.exchange(
                 "/api/v1/settings",
                 org.springframework.http.HttpMethod.PATCH,
                 new org.springframework.http.HttpEntity<>(Map.of("salespeople_see_savings_amount", on), h),
                 JsonNode.class);
-        assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        return r.getBody();
+    }
+
+    @Test
+    void onlyTheOwnerTurnsTheSalespeopleSettingOnAnAdminWithSettingsManageIsRefused() {
+        UUID admin = Api.staff(t, Api.email("sav-admin"), new Api.Role("tenant_admin", null));
+        owner();
+        ResponseEntity<JsonNode> refused = patchSalespeopleSetting(admin, true);
+        assertThat(refused.getStatusCode()).as("%s", refused.getBody()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(refused.getBody().get("code").asString()).isEqualTo("owner_only");
+        assertThat(patchSalespeopleSetting(admin, false).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(suggestion(CASHIER).has("suggested_minor")).isFalse();
+
+        salespeopleSeeSavingsAmount(true);
+        // Read back after the save, not only from the PATCH answer: the key is stored.
+        org.springframework.http.HttpHeaders h = cb.api.headers("core.settings.read", "*", Map.of());
+        assertThat(http.exchange(
+                                "/api/v1/settings",
+                                org.springframework.http.HttpMethod.GET,
+                                new org.springframework.http.HttpEntity<>(h),
+                                JsonNode.class)
+                        .getBody()
+                        .get("salespeople_see_savings_amount")
+                        .asBoolean())
+                .isTrue();
     }
 
     @Test
