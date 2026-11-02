@@ -40,12 +40,18 @@ class MigrationOrderIT {
      * Merge order matters because {@code outOfOrder} is off: V41 (the retail price lists, #247, merged)
      * came before V42 (the loan pledge guard, #176, merged), then V43 (payment methods, #160, merged),
      * then V44 (the retail customer accounts, #196), then V45 (customer returns, #201, merged). Nothing here enforces the order, merge order does.
-     * Today V80 to V91 are merged (V91 is download my data, #478); V92 is billing, this pull request (#482). A number above
-     * them is allowed only as an ordered claim (AGENTS.md), merged in its turn or renumbered at merge.
+     * Every number up to V121 (the standard units, a Java migration) is merged; V99 and V114 stay unused. A number above
+     * them is allowed only as an ordered claim (AGENTS.md), merged in its turn or renumbered at merge. A migration pull
+     * request does not touch this list; it is extended now and then to what main holds (#172).
      */
     static final List<String> MERGED = List.of(
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "20", "21", "22", "23", "26",
-            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46");
+            "28", "29", "30", "31", "32", "33", "34", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47",
+            "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65",
+            "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83",
+            "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "100", "101",
+            "102", "103", "104", "105", "106", "107", "108", "109", "110", "111", "112", "113", "115", "116", "117",
+            "118", "119", "120", "121");
 
     /**
      * Columns a later migration adds to a table these cases watch, left out of the "keeps its shape" comparisons: each case
