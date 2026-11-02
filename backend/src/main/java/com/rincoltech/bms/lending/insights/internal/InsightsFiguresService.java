@@ -417,6 +417,7 @@ class InsightsFiguresService implements InsightsFigures {
             List<UUID> contactBranchIds,
             Runnable checkpoint,
             java.util.function.Consumer<ArrearsLine> lines) {
+        requireNotFuture(p);
         // Only the loans in arrears are kept, to sort them; the book's other loans pass through.
         List<Position> late = new ArrayList<>();
         boolean live = read(p, checkpoint, l -> {
@@ -476,6 +477,7 @@ class InsightsFiguresService implements InsightsFigures {
     @Override
     @Transactional(readOnly = true)
     public OfficerFigures officers(PortfolioScope p, Runnable checkpoint) {
+        requireNotFuture(p);
         Totals all = new Totals("all", "All officers");
         Map<UUID, Totals> stock = new LinkedHashMap<>();
         boolean live = read(p, checkpoint, l -> {

@@ -165,10 +165,9 @@ class FlowFigures {
 
     /**
      * The loans disbursed in the range per group, each indexed by {@link #LOANS} to {@link #MEDIAN} (a median of -1
-     * when there are no loans). The principal is {@code disbursedByDay} summed and the loans are the distinct loans
-     * behind it; the upfront fees are the {@code fee_upfront} entries taken with each disbursement (same loan, same value
-     * date; a reversed one excluded), so a fee is never counted twice; the median is the middle disbursement, or the mean
-     * of the two middle ones rounded half up.
+     * when there are no loans), over {@link #perLoan}: one row per loan, so the loans, the principal, the fees, the
+     * average and the median all count a loan once. The median is the middle loan, or the mean of the two middle ones
+     * rounded half up.
      *
      * @return the groups, and under the key {@link #TOTAL_KEY} the whole range
      */
@@ -181,21 +180,13 @@ class FlowFigures {
         Map<String, Object> p = range(s);
         String g = groupColumn(by);
         String grouping = by == ParGroupBy.NONE
-                ? "SELECT NULL::uuid AS g, 1 AS whole,"
-                : "SELECT " + g + " AS g, GROUPING(" + g + ") AS whole,";
-        String sql = grouping + """
-                 count(DISTINCT t.loan_id) AS n, coalesce(sum(t.amount_minor), 0) AS amount, coalesce(sum(f.fee), 0) AS fees,
-                 round((percentile_cont(0.5) WITHIN GROUP (ORDER BY t.amount_minor))::numeric) AS median
-                  FROM lending_loan_transactions t
-                  JOIN lending_loans l ON l.id = t.loan_id""" + PRODUCT_JOIN + """
-
-                  LEFT JOIN LATERAL (SELECT sum(u.amount_minor) AS fee FROM lending_loan_transactions u
-                                      WHERE u.loan_id = t.loan_id AND u.txn_type = 'fee_upfront'
-                                        AND u.value_date = t.value_date
-                                        AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r
-                                                         WHERE r.reverses_txn_id = u.id)) f ON true
-                 WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + NOT_REVERSED
-                + s.loanFilter("l", p)
+                ? " SELECT NULL::uuid AS g, 1 AS whole,"
+                : " SELECT " + g + " AS g, GROUPING(" + g + ") AS whole,";
+        String sql = perLoan(s, p) + grouping + """
+                 count(*) AS n, coalesce(sum(x.amount), 0) AS amount, coalesce(sum(x.fee), 0) AS fees,
+                 round((percentile_cont(0.5) WITHIN GROUP (ORDER BY x.amount))::numeric) AS median
+                  FROM x
+                  JOIN lending_loans l ON l.id = x.loan_id""" + PRODUCT_JOIN
                 + (by == ParGroupBy.NONE ? "" : " GROUP BY GROUPING SETS ((" + g + "), ())");
         jdbc.sql(sql)
                 .params(p)
@@ -213,29 +204,56 @@ class FlowFigures {
     /** The key of the whole range in {@link #disbursements}; no branch, product or user has it. */
     static final UUID TOTAL_KEY = new UUID(0, 0);
 
+    // JUSTIFICATION-A3: review round 2 of #750: one per-loan table replaces the two per-transaction fee joins of the
+    // summary and the detail, so both count a loan and its fee once.
+
+    /**
+     * The common table {@code x}: one row per loan disbursed in the range, with the date of its first disbursement in
+     * the range ({@code first_on}), its principal disbursed in the range ({@code amount}, every disbursement that is not
+     * reversed, summed) and its upfront fee ({@code fee}: the {@code fee_upfront} entries of that loan dated on
+     * {@code first_on}, a reversed one excluded), so a fee belongs to exactly one disbursement, the loan's first. The
+     * index {@code lending_loan_transactions_one_disbursement} (V29) allows one disbursement row per loan, reversed or
+     * not, so today a loan has one; this keeps the figures right if tranches ever come.
+     */
+    private static String perLoan(Scope s, Map<String, Object> p) {
+        return """
+                WITH d AS (
+                    SELECT t.loan_id, min(t.value_date) AS first_on, sum(t.amount_minor) AS amount
+                      FROM lending_loan_transactions t
+                      JOIN lending_loans l ON l.id = t.loan_id
+                     WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + NOT_REVERSED + s.loanFilter("l", p) + """
+
+                     GROUP BY t.loan_id
+                ), x AS (
+                    SELECT d.loan_id, d.first_on, d.amount,
+                           coalesce((SELECT sum(u.amount_minor) FROM lending_loan_transactions u
+                                      WHERE u.loan_id = d.loan_id AND u.txn_type = 'fee_upfront'
+                                        AND u.value_date = d.first_on
+                                        AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r
+                                                         WHERE r.reverses_txn_id = u.id)), 0) AS fee
+                      FROM d
+                )
+                """;
+    }
+
     /** Each loan disbursed in the range, by date then loan number, one at a time in blocks. */
     void disbursementLines(Scope s, Consumer<DisbursementLine> sink) {
         if (s.empty()) {
             return;
         }
         Map<String, Object> p = range(s);
-        String sql =
-                """
-                SELECT t.value_date, l.loan_no, m.member_no, b.name AS branch, pr.name AS product,
-                       l.officer_user_id, u.full_name AS officer, t.amount_minor, coalesce(f.fee, 0) AS fee
-                  FROM lending_loan_transactions t
-                  JOIN lending_loans l ON l.id = t.loan_id
-                  JOIN lending_members m ON m.id = l.member_id
-                  JOIN branches b ON b.id = l.branch_id""" + PRODUCT_JOIN + """
+        String sql = perLoan(s, p) + """
+                 SELECT x.first_on AS value_date, l.loan_no, m.member_no, b.name AS branch, pr.name AS product,
+                        l.officer_user_id, u.full_name AS officer, x.amount AS amount_minor, x.fee
+                   FROM x
+                   JOIN lending_loans l ON l.id = x.loan_id
+                   JOIN lending_members m ON m.id = l.member_id
+                   JOIN branches b ON b.id = l.branch_id""" + PRODUCT_JOIN + """
 
-                  JOIN lending_loan_products pr ON pr.id = pv.product_id
-                  LEFT JOIN users u ON u.id = l.officer_user_id
-                  LEFT JOIN LATERAL (SELECT sum(x.amount_minor) AS fee FROM lending_loan_transactions x
-                                      WHERE x.loan_id = t.loan_id AND x.txn_type = 'fee_upfront'
-                                        AND x.value_date = t.value_date
-                                        AND NOT EXISTS (SELECT 1 FROM lending_loan_transactions r
-                                                         WHERE r.reverses_txn_id = x.id)) f ON true
-                 WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to""" + NOT_REVERSED + s.loanFilter("l", p) + " ORDER BY t.value_date, l.loan_no";
+                   JOIN lending_loan_products pr ON pr.id = pv.product_id
+                   LEFT JOIN users u ON u.id = l.officer_user_id
+                  ORDER BY x.first_on, l.loan_no
+                """;
         try (java.util.stream.Stream<DisbursementLine> rows = streaming
                 .sql(sql)
                 .params(p)

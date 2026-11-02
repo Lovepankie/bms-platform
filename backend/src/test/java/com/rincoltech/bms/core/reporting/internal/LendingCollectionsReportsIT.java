@@ -457,7 +457,67 @@ class LendingCollectionsReportsIT extends LendingBookSupport {
                         "[\"Test Officer Amber\",2,1040000,0,1,1000000,115000,115000,10000,1,1,0]",
                         "[\"Test Officer Birch\",3,840000,3452,1,400000,220000,50000,2273,2,0,1]",
                         "[\"Total\",5,1880000,1543,2,1400000,335000,165000,4925,3,1,1]");
-        assertThat(file.get("notes").toString()).contains("nightly snapshot of 2026-10-06");
+        assertThat(file.get("notes").toString()).contains("nightly snapshot of 6 Oct 2026");
+    }
+
+    // JUSTIFICATION-A3: review round 2 of #750 asked for the multi-disbursement case and an officer with no user row.
+
+    @Test
+    void aLoanHasOneDisbursementSoALoanAndItsFeeCountOnceOnTheReportAndThePage() throws Exception {
+        Flows f = flows();
+        // A second tranche, the same day or later, and a payout entered again after a reversal are all refused by the
+        // database (V29's lending_loan_transactions_one_disbursement): a loan has one disbursement row.
+        for (String loan : List.of("DS01", "DS04")) {
+            for (LocalDate on : List.of(LocalDate.of(2026, 10, 2), LocalDate.of(2026, 10, 6))) {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> TestDatabase.owner()
+                                .sql("""
+                                        INSERT INTO lending_loan_transactions (id, tenant_id, branch_id, loan_id, txn_type,
+                                            amount_minor, currency, value_date, source, is_historic)
+                                        SELECT ?, l.tenant_id, l.branch_id, l.id, 'disbursement', 500000, 'UGX', ?, 'staff', true
+                                          FROM lending_loans l WHERE l.tenant_id = ? AND l.loan_no = ?
+                                        """)
+                                .params(UUID.randomUUID(), java.sql.Date.valueOf(on), f.t().tenantId(), loan)
+                                .update())
+                        .as("%s %s", loan, on)
+                        .hasMessageContaining("lending_loan_transactions_one_disbursement");
+            }
+        }
+        // So the loans, their principal, fees, average and median are each a loan's once, and the page agrees.
+        UUID user = UUID.randomUUID();
+        JsonNode page = insights(f, user, ALL, null);
+        JsonNode summary = last(table(file(f, user, ALL, run(f, user, ALL, DISBURSEMENTS, RANGE, "json")), "summary"));
+        assertThat(summary.toString()).isEqualTo("[\"All loans\",3,2000000,32000,666667,600000]");
+        assertThat(summary.get(1).asLong()).isEqualTo(metric(page, "portfolio.disbursed_count"));
+        assertThat(summary.get(2).asLong()).isEqualTo(metric(page, "portfolio.disbursed"));
+        assertThat(summary.get(4).asLong()).isEqualTo(metric(page, "portfolio.average_loan_size"));
+    }
+
+    @Test
+    void anOfficerWhoIsNoLongerAUserIsLabelledAndCounted() throws Exception {
+        Flows f = flows();
+        // A loan whose responsible officer has no user row (removed, or brought in by an import): 50,000 due on 4 Oct,
+        // nothing paid.
+        UUID gone = UUID.randomUUID();
+        UUID loan = loanRow(
+                f.t(), product(f.t()), f.t().headOffice(), gone, "UO01", "active", 50_000, LocalDate.of(2026, 1, 5));
+        item(f.t(), loan, 1, LocalDate.of(2026, 10, 4), 50_000, 0, 0, 0, 0, 0, 0, 0);
+        UUID user = UUID.randomUUID();
+        String label = "Staff " + gone.toString().substring(32);
+        JsonNode officers = file(f, user, ALL, run(f, user, ALL, OFFICERS, RANGE, "json"));
+        assertThat(rows(table(officers, "officers")))
+                .contains("[\"" + label + "\",1,50000,0,0,0,50000,0,0,0,0,0]")
+                .contains("[\"Total\",7,2410000,1245,3,2000000,385000,315000,8182,3,1,1]");
+        JsonNode byOfficer = file(f, user, ALL, run(f, user, ALL, EVC, with(RANGE, "group_by", "officer"), "json"));
+        assertThat(rows(table(byOfficer, "collections"))).contains("[\"" + label + "\",50000,0,0,0,0,0,0,0,0,0]");
+    }
+
+    /** The product of the fabricated book. */
+    UUID product(TestDatabase.Fixture t) {
+        return TestDatabase.owner()
+                .sql("SELECT id FROM lending_loan_products WHERE tenant_id = ? AND code = 'PAR'")
+                .param(t.tenantId())
+                .query(UUID.class)
+                .single();
     }
 
     /** Queues a report with these branches and per-permission scopes, drains the queue, and returns the ready run. */

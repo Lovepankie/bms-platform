@@ -52,14 +52,17 @@ class InsightsQueries {
         return p;
     }
 
-    /** Disbursements by value date in the range. */
+    /**
+     * Disbursements by value date in the range: the amount and the distinct loans (a loan is counted once, the
+     * definition {@code lending.disbursements} uses; V29 allows one disbursement row per loan, so it is also the rows).
+     */
     List<DayTotal> disbursedByDay(Scope s) {
         if (s.empty()) {
             return List.of();
         }
         Map<String, Object> p = range(s);
         String sql = """
-                SELECT t.value_date, sum(t.amount_minor) AS amount, count(*) AS n
+                SELECT t.value_date, sum(t.amount_minor) AS amount, count(DISTINCT t.loan_id) AS n
                   FROM lending_loan_transactions t
                   JOIN lending_loans l ON l.id = t.loan_id
                  WHERE t.txn_type = 'disbursement' AND t.value_date BETWEEN :from AND :to

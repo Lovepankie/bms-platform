@@ -490,10 +490,14 @@ requester's scope decides whose loans are listed, and `group_by` is not offered 
   report says so). Only the late loans are kept in memory, to sort them; the rest of the book passes through.
 - **`lending.disbursements`** (`lending.reports.portfolio`). Parameters `from`, `to`, `branch_id`, `group_by`. Table `loans`: each loan
   disbursed in the range, not reversed, by date then loan number (loan, date, member number, branch, product, officer, principal, the
-  upfront fee taken at disbursement) and a total row, written as the loans are read. Table `summary`, per group and a total row: loans
-  (distinct), principal disbursed, upfront fees (the `fee_upfront` entries of the same loan and value date as the disbursement, a
-  reversed one excluded, so a fee is never counted twice), the average loan (half up) and the
-  median loan (the middle one, or the mean of the two middle ones rounded half up).
+  upfront fee taken at disbursement) and a total row, written as the loans are read. Both tables count a loan once: its principal is
+  every disbursement of it in the range that is not reversed, summed, dated by the first, and its upfront fee is the `fee_upfront`
+  entries dated on that first disbursement (a reversed one excluded), so a fee belongs to exactly one disbursement. Today V29's index
+  `lending_loan_transactions_one_disbursement` allows one disbursement row per loan, reversed or not (a test proves a second tranche and
+  a payout entered again are refused), and the insights page's `portfolio.disbursed_count` counts distinct loans too. Table `summary`,
+  per group and a total row: loans, principal disbursed, upfront fees, the average loan (half up) and the
+  median loan (the middle loan, or the mean of the two middle ones rounded half up). A responsible officer with no user row is labelled
+  "Staff" and the last four characters of the id, in this and the officer reports.
 - **`lending.officer_performance`** (`lending.reports.collections`, FR-CLN-06). Parameters `from`, `to`, `branch_id`. Table `officers`,
   a row per responsible officer and a total row: active loans, principal outstanding and PAR 30 at the end of the range; loans disbursed
   and their principal, expected, collected on due and the collection rate over the range; the collection actions logged on the officer's

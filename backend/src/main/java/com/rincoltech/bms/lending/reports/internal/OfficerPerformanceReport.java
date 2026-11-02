@@ -22,6 +22,10 @@ class OfficerPerformanceReport extends RangeReport {
 
     static final String KEY = "lending.officer_performance";
 
+    /** A date in a note as the report prints dates: {@code 6 Oct 2026}. */
+    static final java.time.format.DateTimeFormatter DATE =
+            java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.ENGLISH);
+
     OfficerPerformanceReport(InsightsFigures figures, ObjectMapper mapper) {
         super(figures, mapper);
     }
@@ -55,7 +59,7 @@ class OfficerPerformanceReport extends RangeReport {
     public void query(Prepared prepared, ReportOutput out) {
         OfficerFigures f = figures.officers(scope(prepared), out::checkpoint);
         out.note("Active loans, principal outstanding and PAR 30 are read from the "
-                + (f.source().equals("live") ? "loan tables" : "nightly snapshot of " + f.to())
+                + (f.source().equals("live") ? "loan tables" : "nightly snapshot of " + DATE.format(f.to()))
                 + ", at the end of the range.");
         out.note(
                 "Each loan counts for the officer responsible for it now; actions and promises count by that officer too.");

@@ -189,12 +189,17 @@ class ArrearsListReport extends PortfolioReport {
         // Penalties are blank on a line whose figures came from the snapshot (a past date, or a run that outlived its
         // date) or whose loan could not be read; the total is then blank too, never a sum of blanks.
         boolean[] blankPenalty = {pastDate};
+        boolean[] fromSnapshot = {pastDate};
+        boolean[] unreadable = {false};
         figures.arrears(scope, bucket, nameBranches, branches(prepared, CONTACT_BRANCHES), out::checkpoint, l -> {
             totals[0]++;
             totals[1] += l.arrearsMinor();
             totals[2] += l.penaltiesOutstandingMinor() == null ? 0 : l.penaltiesOutstandingMinor();
             totals[3] += l.principalOutstandingMinor();
             blankPenalty[0] |= l.penaltiesOutstandingMinor() == null;
+            // Every member has a number, so a line without one is a loan whose row could not be read.
+            unreadable[0] |= l.memberNo() == null;
+            fromSnapshot[0] |= l.memberNo() != null && l.penaltiesOutstandingMinor() == null;
             List<Object> cells = new ArrayList<>();
             cells.add(BUCKET_LABELS.get(l.bucket()));
             cells.add(l.loanNo());
@@ -234,10 +239,14 @@ class ArrearsListReport extends PortfolioReport {
         total.add(null);
         total.add(null);
         table.total(total.toArray());
-        if (blankPenalty[0]) {
+        if (fromSnapshot[0]) {
             out.note(
                     "Penalties outstanding are not shown: the nightly snapshot the figures were read from does not hold"
                             + " them.");
+        }
+        if (unreadable[0]) {
+            out.note("Some loans could not be read in full: their member, penalties and follow up are blank, and so is"
+                    + " the penalties total.");
         }
     }
 
