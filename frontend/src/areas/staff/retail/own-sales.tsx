@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { businessToday, daysBefore, retail, type SalesSummaryGroup } from '../../../api/retail';
 import { useStaff } from '../context';
-import { ChangeLine, ChartLegend, RangeChart, RangePicker, type ChartPoint } from './range-ui';
+import { ChangeLine, ChartLegend, CompareLine, RangeChart, RangePicker, type ChartPoint } from './range-ui';
 import { daysBetween, previousWords, rangeDays, rangeTitle, readRange, shortDate, stepWords, writeRange, type RangeChoice, type RangeDays } from './range-state';
 import { money } from './ui';
 import { Hint } from '../../../app/ui/Hint';
@@ -143,6 +143,7 @@ export function OwnSales() {
       {now.isError && <Hint full>Your figures could not be loaded. Open your sales below.</Hint>}
       {figures && (
         <>
+          {prev && <CompareLine words={words} />}
           <div className="rc-headline">
             <strong className="rc-total num">{money(figures.total)}</strong>
             <ChangeLine now={figures.total} before={prev?.total} words={words} />

@@ -339,10 +339,11 @@ describe('owner dashboard', () => {
     const html = renderToString(<DashboardView data={full} nameOf={nameOf} choice={{ period: '7d' }} />);
     expect(html).toContain('Sales, Last 7 days');
     expect(html).toContain('UGX 6,600');
-    expect(html).toContain('Up UGX 1,100, 20% on the 7 days before');
-    expect(html).toContain('class="rc-change rc-up"');
-    expect(html).toContain('Down 1, 20% on the 7 days before');
-    expect(html).toContain('class="rc-change rc-down"');
+    expect(html).toContain('Compared with the 7 days before');
+    expect(html).toContain('Up UGX 1,100 (20%)');
+    expect(html).toContain('class="rc-change rc-up num"');
+    expect(html).toContain('Down 1 (20%)');
+    expect(html).toContain('class="rc-change rc-down num"');
     expect(html).toContain('Average sale');
     expect(html).toContain('UGX 1,650');
     expect(html).toContain('Busiest day');
@@ -351,7 +352,7 @@ describe('owner dashboard', () => {
     expect(html).toContain('Head office');
     expect(html).toContain('Best seller');
     expect(html).toContain('Test Item 01');
-    expect(html).toContain('Same as the 7 days before');
+    expect(html).toContain('No change');
     expect(html).toContain('Top salesperson');
     expect(html).toContain('Profit');
     expect(html).toContain('Stock at buying price');

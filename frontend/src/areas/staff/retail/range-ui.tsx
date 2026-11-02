@@ -55,20 +55,28 @@ export function RangePicker({ value, onChange, today }: { value: RangeChoice; on
   );
 }
 
-/** Up or down on the period before, in amount and percent; nothing when there is no period before. */
+/**
+ * Up or down on the period before, in words as well as colour: "Down 20 (95%)", "Up 3 (12%)" (#732). What it is set against is
+ * said once at the top by {@link CompareLine}, and to a screen reader on each line, which it may reach on its own. Nothing when
+ * there is no period before.
+ */
 export function ChangeLine({ now, before, words, format = money }: { now: number; before: number | undefined; words: string; format?: (n: number) => string }) {
   if (before === undefined) return null;
   const c = changeOf(now, before);
-  const pct = c.percent === null ? '' : `, ${Math.abs(c.percent)}%`;
-  const text = c.direction === 'same'
-    ? `Same as ${words}`
-    : `${c.direction === 'up' ? 'Up' : 'Down'} ${format(Math.abs(c.amount))}${pct} on ${words}`;
+  const pct = c.percent === null ? '' : ` (${Math.abs(c.percent)}%)`;
+  const text = c.direction === 'same' ? 'No change' : `${c.direction === 'up' ? 'Up' : 'Down'} ${format(Math.abs(c.amount))}${pct}`;
   return (
-    <span className={`rc-change rc-${c.direction}`}>
+    <span className={`rc-change rc-${c.direction} num`}>
       {c.direction !== 'same' && <span aria-hidden="true">{c.direction === 'up' ? '▲ ' : '▼ '}</span>}
       {text}
+      {words && <span className="visually-hidden">, compared with {words}</span>}
     </span>
   );
+}
+
+/** The one quiet line at the top of a summary that says what every change line under it is set against (#732). */
+export function CompareLine({ words }: { words: string }) {
+  return words ? <p className="hint" data-testid="compare-line">Compared with {words}</p> : null;
 }
 
 export interface ChartPoint {

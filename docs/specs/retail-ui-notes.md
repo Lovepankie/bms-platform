@@ -405,8 +405,10 @@ Each screen is a date range (the last 30 days, at most 366, checked on the scree
   "Banked against expected" and "Savings", were placeholders for the cash book until the range of #428 filled them.
 - **The home follows one range (#428, ADR-060).** A row of buttons under the heading: Today, 7 days, 30 days, This year,
   1 year, All and Choose days (two dates and Show these days; at most 366 days, checked before asking). The choice is kept per
-  person in this browser (`bms.homeRange.<host>.<user>`), 7 days at first. Under it: the total of the range in large type with
-  Up or Down, the amount and the percent on the period before (green up, red down, with an arrow and the words); the chart,
+  person in this browser (`bms.homeRange.<host>.<user>`), 7 days at first. Under it: one quiet line that says what every change
+  is set against ("Compared with the 7 days before", "Compared with yesterday", "Compared with the 30 days before"; #732); the
+  total of the range in large type with its change in words, "Up UGX 300 (12%)", "Down 20 (95%)" or "No change" (green up, red
+  down, with an arrow, in tabular figures; a screen reader also hears what it is compared with on each line); the chart,
   320 by 150 in SVG, the range as a line and the period before dashed, a step picked by hover, tap or the arrow keys and read out
   under it ("Wed 21 Oct UGX 3,600 (before: UGX 1,500)"); then cards for the number of sales, average sale, profit (profit
   readers), money collected and on credit now (`on_payment`), busiest day, best shop, best seller and top salesperson (profit
