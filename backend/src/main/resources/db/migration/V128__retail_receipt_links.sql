@@ -18,12 +18,12 @@ CREATE TABLE retail_receipt_links (
     sale_id     uuid         NOT NULL,
     -- The hex SHA-256 of the token in the link.
     token_hash  char(64)     NOT NULL UNIQUE,
+    -- Who made the link, whom the receipt it opens names as issuing it; like retail_sales.created_by, no foreign key.
     created_by  uuid         NOT NULL,
     created_at  timestamptz  NOT NULL,
     expires_at  timestamptz  NOT NULL,
     CHECK (expires_at > created_at),
-    FOREIGN KEY (tenant_id, sale_id) REFERENCES retail_sales (tenant_id, id),
-    FOREIGN KEY (tenant_id, created_by) REFERENCES users (tenant_id, id)
+    FOREIGN KEY (tenant_id, sale_id) REFERENCES retail_sales (tenant_id, id)
 );
 CREATE INDEX retail_receipt_links_by_sale ON retail_receipt_links (tenant_id, sale_id);
 SELECT bms_apply_tenant_rls('retail_receipt_links');
