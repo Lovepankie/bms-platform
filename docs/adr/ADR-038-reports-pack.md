@@ -293,3 +293,33 @@ permission were needed.
    dashes would read as a figure. `ReportDefinition.blankMissingFigures()` (false by default) lets a report print such a cell blank; both
    reports set it, and tests assert their PDFs carry no dash, the summary on an empty book. The summary still has a table per kind of
    figure (numbers and amounts, rates, counts), and each total is the sum of its own rows.
+
+## Amendment (issue #229, slice D5: the monthly pack and the report centre)
+
+Building `lending.monthly_pack` settled six things. None reverses a decision; no migration and no permission were needed.
+
+1. **A pack is a definition of parts, run by the framework.** `core.reporting` gains the public `ReportPack`, a `ReportDefinition`
+   offered only in the format `pack` that names its parts and the request each part is prepared with. The core prepares each part with
+   its own `prepare` in the request (so each freezes exactly the scope it freezes alone: branches, own loans, the branches of names and
+   phones), stores them in the run's scope, queries them in the one snapshot transaction of decision 2, and asks every part's
+   `stillAllowed` at download. The core still names no vertical; the lending module only lists its eight reports.
+2. **The union of the permissions is enforced in three places.** The catalogue lists a pack only to a holder of its permission and every
+   part's, a request without them is refused 403, and a download of either file needs them still. This completes decision 4.
+3. **Two files, one run, no column.** A pack's PDF and workbook are two `documents` rows of type `report` with the run as subject and the
+   same number; `report_runs.document_id` names the PDF and the run lists both as `files`. The expiry of decision 7 deletes every file of a
+   run. No column was added (the migration queue is busy, and the documents table already ties a file to its run).
+4. **The PDF is merged on disk, as decision 5 says.** Each part is rendered alone through the `report` template, its pages counted, then a
+   cover (parameters, contents with the page each part starts on, a sign off block) is laid out, and PDFBox joins the files with
+   temporary-file storage through two new methods of `core.documents` (`pdfPages`, `mergePdfs`), which owns PDFBox. Page numbers stay each
+   part's own ("part n of 8, page x of y" in the footer), because one layout per part is what bounds memory; the contents give the page of
+   the whole file.
+5. **Every missing figure in a pack prints blank.** The amendment for #225 left the dash as the default for a report alone; in a board
+   pack a dash reads as a figure, so the pack prints every part's missing figures blank, and the workbook leaves them empty as before.
+6. **The ready notice of decision 7.** When a pack is ready the requester gets a push notice (when push is on and they have a device) and
+   an email naming the pack and its date, written in the transaction that marks the run ready, so neither exists for a run that did not
+   finish. A single report still relies on the screen's own refresh, because it is quick and its requester is usually watching.
+
+**Better:** the board and the auditor get the eight reports from one instant in two files, with the sign off on the cover; a pack can
+show no more than its requester could see in each report alone. **Worse:** a pack holds the tenant's one run place for the length of its
+eight reports, and page numbers restart at each part. **Watch for:** a new report added to the pack must offer PDF and Excel (the registry
+refuses one that does not at start); a pack of many large reports reaching the byte cap on staging.

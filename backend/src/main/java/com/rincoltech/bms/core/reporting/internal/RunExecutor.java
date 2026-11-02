@@ -4,18 +4,22 @@ import com.rincoltech.bms.core.audit.AuditLog;
 import com.rincoltech.bms.core.documents.Documents;
 import com.rincoltech.bms.core.documents.Documents.GeneratedObject;
 import com.rincoltech.bms.core.documents.Documents.StoredDocument;
+import com.rincoltech.bms.core.notifications.Outbox;
 import com.rincoltech.bms.core.reporting.ReportDefinition;
 import com.rincoltech.bms.core.reporting.ReportDefinition.Prepared;
 import com.rincoltech.bms.core.reporting.ReportFailure;
+import com.rincoltech.bms.core.reporting.ReportPack;
 import com.rincoltech.bms.core.reporting.internal.Renderers.Header;
 import com.rincoltech.bms.core.reporting.internal.RunStore.Run;
 import com.rincoltech.bms.core.reporting.internal.Spool.Guard;
 import com.rincoltech.bms.core.reporting.internal.Spool.TableMeta;
 import com.rincoltech.bms.core.tenancy.CurrentTenant;
 import com.rincoltech.bms.core.tenancy.Letterheads;
+import com.rincoltech.bms.core.tenancy.PlatformHost;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.BusinessClock;
+import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.kernel.TenantContext;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -23,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -80,6 +86,10 @@ class RunExecutor {
     private final TransactionTemplate snapshotRead;
     private final TransactionTemplate plain;
     private final TransactionTemplate separate;
+    private final Packs packs;
+    private final Outbox outbox;
+    private final PlatformHost hosts;
+    private final ApplicationEventPublisher events;
 
     RunExecutor(
             RunStore store,
@@ -93,7 +103,15 @@ class RunExecutor {
             ObjectMapper mapper,
             ReportsProperties limits,
             JdbcClient jdbc,
-            PlatformTransactionManager transactions) {
+            PlatformTransactionManager transactions,
+            Packs packs,
+            Outbox outbox,
+            PlatformHost hosts,
+            ApplicationEventPublisher events) {
+        this.packs = packs;
+        this.outbox = outbox;
+        this.hosts = hosts;
+        this.events = events;
         this.store = store;
         this.registry = registry;
         this.settings = settings;
@@ -188,6 +206,10 @@ class RunExecutor {
         try {
             ReportDefinition def = precheck(run);
             RunGuard guard = new RunGuard(runId, timeout(def));
+            if (def instanceof ReportPack pack) {
+                runPack(run, pack, spool, guard);
+                return;
+            }
             Queried queried = query(run, def, spool, guard);
             plain.executeWithoutResult(s -> store.recordSnapshot(runId, queried.snapshotAt(), clock.now()));
             Rendered rendered = render(run, def, spool, queried, guard);
@@ -252,12 +274,211 @@ class RunExecutor {
             // The business clock, like every other timestamp of a run, so a test that pins the clock pins this too.
             Instant snapshotAt = clock.now();
             String currency = tenant.profile().currency();
-            try (Spool.Writer out = spool.writer(rowCap, sizeCap, guard)) {
-                def.query(prepared, out);
-                List<TableMeta> tables = out.finish();
-                return new Queried(tables, out.notes(), out.rows(), snapshotAt, currency);
-            }
+            return queryInto(def, prepared, spool, rowCap, sizeCap, guard, snapshotAt, currency);
         });
+    }
+
+    // JUSTIFICATION-A3: the pack path of issue #229 (one snapshot over every part, two files, the ready notice) is new.
+    /** One report's query into its spool, inside the caller's snapshot transaction. */
+    private static Queried queryInto(
+            ReportDefinition def,
+            Prepared prepared,
+            Spool spool,
+            int rowCap,
+            long sizeCap,
+            RunGuard guard,
+            Instant snapshotAt,
+            String currency) {
+        try (Spool.Writer out = spool.writer(rowCap, sizeCap, guard)) {
+            def.query(prepared, out);
+            List<TableMeta> tables = out.finish();
+            return new Queried(tables, out.notes(), out.rows(), snapshotAt, currency);
+        }
+    }
+
+    // ---- a pack (ADR-038 decision 4, issue #229) ------------------------------------------------------------
+
+    /** One part of a pack after the query phase: its definition and request, its spool and what it wrote. */
+    private record PartQueried(Packs.Part part, Spool spool, Queried queried) {}
+
+    /**
+     * A pack: every part is queried in the run's one snapshot transaction, each into a spool of its own, so the reports
+     * agree with each other; then one combined PDF and one workbook are rendered from the spools, stored as two files of
+     * the run, and the requester is told the pack is ready.
+     */
+    private void runPack(Run run, ReportPack pack, Spool spool, RunGuard guard) {
+        Prepared stored = new Prepared(run.params(), run.scope(), run.asOf());
+        List<Packs.Part> parts = packs.parts(stored);
+        int rowCap = Math.min(run.rowCap(), limits.tableRowCap);
+        long sizeCap = Math.min(run.sizeCapBytes(), limits.maxFileBytes);
+        TransactionTemplate read = pack.timeout() == null ? snapshotRead : snapshotRead(timeout(pack));
+        List<PartQueried> queried = read.execute(status -> {
+            Duration remaining = guard.remaining();
+            jdbc.sql(
+                            "SELECT set_config('statement_timeout', ?, true), set_config('idle_in_transaction_session_timeout', ?, true)")
+                    .params(
+                            remaining.plusSeconds(1).toMillis() + "ms",
+                            remaining.plusSeconds(30).toMillis() + "ms")
+                    .query((rs, n) -> 1)
+                    .single();
+            Instant snapshotAt = clock.now();
+            String currency = tenant.profile().currency();
+            List<PartQueried> out = new ArrayList<>();
+            for (Packs.Part part : parts) {
+                Spool own = new Spool(spool.dir().resolve("part-" + part.number()), mapper);
+                out.add(new PartQueried(
+                        part,
+                        own,
+                        queryInto(part.def(), part.prepared(), own, rowCap, sizeCap, guard, snapshotAt, currency)));
+            }
+            return out;
+        });
+        Instant snapshotAt = queried.getFirst().queried().snapshotAt();
+        String currency = queried.getFirst().queried().currency();
+        long rows = queried.stream().mapToLong(q -> q.queried().rows()).sum();
+        plain.executeWithoutResult(s -> store.recordSnapshot(run.id(), snapshotAt, clock.now()));
+
+        Instant made = clock.now();
+        List<String> notes = List.of(
+                "Every report in this pack was read from the books at the same moment, so their figures agree.",
+                "Each report keeps its own scope and notes; a report on dates in the month covers the month up to the"
+                        + " period end.");
+        Header header =
+                new Header(pack.key(), pack.title(), run.params(), run.asOf(), snapshotAt, made, currency, notes);
+        Presentation p = presentation(run.requestedBy(), pack, Packs.own(stored));
+        String number = ReportFormats.reportNumber(run.id(), made, p.zone());
+        List<PackPdf.Section> sections = new ArrayList<>();
+        List<XlsxWriter.PackPart> sheets = new ArrayList<>();
+        for (PartQueried q : queried) {
+            ReportDefinition def = q.part().def();
+            Prepared prepared = q.part().prepared();
+            Header h = new Header(
+                    def.key(),
+                    def.title(),
+                    prepared.params(),
+                    prepared.asOf(),
+                    snapshotAt,
+                    made,
+                    currency,
+                    q.queried().notes());
+            // A missing figure prints blank in every report of a pack, as the register and the summary print it alone
+            // (ADR-038 amendment for #225): a board pack reads a dash as a figure.
+            Presentation pp = presentation(run.requestedBy(), def, prepared).blankingMissing();
+            sections.add(new PackPdf.Section(h, pp, q.queried().tables(), q.spool()));
+            sheets.add(new XlsxWriter.PackPart(h, pp, q.queried().tables(), q.spool()));
+        }
+        Path pdf = spool.dir().resolve("pack.pdf");
+        PackPdf.write(documents, limits, header, p, number, sections, spool.dir(), pdf, guard);
+        guard.checkpoint();
+        Path xlsx = spool.dir().resolve("pack.xlsx");
+        XlsxWriter.writePack(xlsx, sizeCap, header, p, sheets, guard);
+        guard.checkpoint();
+        long size;
+        try {
+            if (Files.size(pdf) > sizeCap || Files.size(xlsx) > sizeCap) {
+                throw new ReportFailure("report_too_large", "The pack is larger than the size limit.");
+            }
+            size = Files.size(pdf) + Files.size(xlsx);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        finishPack(run, pack, rows, size, number, pdf, xlsx);
+    }
+
+    /** Stores the pack's two files with no transaction open, then records both and marks the run ready in one. */
+    private void finishPack(Run run, ReportPack pack, long rows, long size, String number, Path pdf, Path xlsx) {
+        GeneratedObject pdfObject = documents.putFile(pdf, "report", "application/pdf", "pdf");
+        GeneratedObject xlsxObject = null;
+        boolean recorded = false;
+        try {
+            xlsxObject = documents.putFile(xlsx, "report", XLSX, "xlsx");
+            GeneratedObject workbook = xlsxObject;
+            Instant now = clock.now();
+            Boolean ready = plain.execute(s -> {
+                StoredDocument doc =
+                        documents.recordGenerated(pdfObject, number, SUBJECT, run.id(), null, run.requestedBy());
+                documents.recordGenerated(workbook, number, SUBJECT, run.id(), null, run.requestedBy());
+                boolean marked = store.markReady(
+                        run.id(), doc.id(), (int) rows, size, now, now.plus(Duration.ofDays(limits.retentionDays)));
+                if (!marked) {
+                    s.setRollbackOnly();
+                    return false;
+                }
+                Map<String, Object> after = new LinkedHashMap<>();
+                after.put("report_key", pack.key());
+                after.put("format", run.format());
+                after.put("as_of", run.asOf().toString());
+                after.put("row_count", rows);
+                after.put("size_bytes", size);
+                audit.record(
+                        AuditLog.Entry.created(AUDIT_FINISHED, RunService.ENTITY, run.id(), null, after),
+                        run.requestedBy(),
+                        "system");
+                tellReady(run, pack);
+                return true;
+            });
+            recorded = Boolean.TRUE.equals(ready);
+            if (!recorded) {
+                throw new Cancelled();
+            }
+            log.info("report pack run {} of {} ready: {} rows, {} bytes", run.id(), pack.key(), rows, size);
+        } finally {
+            if (!recorded) {
+                documents.discardGenerated(pdfObject);
+                if (xlsxObject != null) {
+                    documents.discardGenerated(xlsxObject);
+                }
+            }
+        }
+    }
+
+    /**
+     * The ready notice of a pack (ADR-038 decision 7, FR-RPT-04), written in the transaction that marks the run ready, so
+     * it exists exactly when the run is ready: a push notice to the requester's devices (sent only when push is on and they
+     * have one) and an email to their address (sent when email is configured). Neither carries a figure or a name.
+     */
+    private void tellReady(Run run, ReportPack pack) {
+        String asOf = ReportFormats.date(run.asOf());
+        events.publishEvent(new PushNotice(
+                "core.report_pack_ready",
+                run.id().toString(),
+                new PushNotice.Users(java.util.Set.of(run.requestedBy())),
+                Map.of("report_title", pack.title(), "as_of", asOf, "path", "/staff/reports")));
+        jdbc.sql("""
+                        SELECT coalesce(full_name, 'there') AS full_name, email FROM users
+                         WHERE id = ? AND status = 'active' AND email IS NOT NULL
+                        """)
+                .param(run.requestedBy())
+                .query((rs, n) -> Map.of("name", rs.getString("full_name"), "email", rs.getString("email")))
+                .optional()
+                .ifPresent(user -> outbox.enqueue(new Outbox.Message(
+                        Outbox.EMAIL,
+                        user.get("email"),
+                        "core.report_pack_ready",
+                        Map.of(
+                                "name",
+                                user.get("name"),
+                                "report_title",
+                                pack.title().toLowerCase(java.util.Locale.ENGLISH),
+                                "as_of",
+                                asOf,
+                                "link",
+                                hosts.tenantOrigin(tenant.profile().slug()) + "/staff/reports"),
+                        "core.report_pack_ready:" + run.id(),
+                        null,
+                        null)));
+    }
+
+    static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    /** The format of a stored report file, from its content type. */
+    static String formatOf(String contentType) {
+        return switch (contentType == null ? "" : contentType) {
+            case "application/pdf" -> "pdf";
+            case XLSX -> "xlsx";
+            case "text/csv" -> "csv";
+            default -> "json";
+        };
     }
 
     private Rendered render(Run run, ReportDefinition def, Spool spool, Queried q, RunGuard guard) {
@@ -308,14 +529,20 @@ class RunExecutor {
     // here read them.
     /** The letterhead, the requester's name and the time zone, read in one short transaction before rendering. */
     private Presentation presentation(Run run, ReportDefinition def) {
+        return presentation(run.requestedBy(), def, new Prepared(run.params(), run.scope(), run.asOf()));
+    }
+
+    /** As above for one report of a pack, or the pack itself, from what it was prepared with. */
+    private Presentation presentation(UUID requestedBy, ReportDefinition def, Prepared prepared) {
         return plain.execute(s -> {
             String by = jdbc.sql("SELECT full_name FROM users WHERE id = ?")
-                    .param(run.requestedBy())
+                    .param(requestedBy)
                     .query(String.class)
                     .optional()
                     .orElse("Staff");
-            String scope = def.describeScope(new ReportDefinition.Prepared(run.params(), run.scope(), run.asOf()));
-            return Presentation.of(letterheads.current(), by, tenant.profile().timezone(), def, run.params(), scope);
+            String scope = def.describeScope(prepared);
+            return Presentation.of(
+                    letterheads.current(), by, tenant.profile().timezone(), def, prepared.params(), scope);
         });
     }
 

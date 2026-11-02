@@ -2,6 +2,7 @@ package com.rincoltech.bms.core.reporting.internal;
 
 import com.rincoltech.bms.core.documents.DocumentAccess;
 import com.rincoltech.bms.core.reporting.ReportDefinition;
+import com.rincoltech.bms.core.reporting.ReportPack;
 import com.rincoltech.bms.core.reporting.internal.RunStore.Run;
 import com.rincoltech.bms.core.tenancy.TenantSettings;
 import com.rincoltech.bms.kernel.ApiException;
@@ -28,13 +29,16 @@ class ReportDocumentAccess implements DocumentAccess {
     private final ReportRegistry registry;
     private final BusinessClock clock;
     private final TenantSettings settings;
+    private final Packs packs;
 
     ReportDocumentAccess(
             RunStore store,
             ReportRegistry registry,
             BusinessClock clock,
-            @org.springframework.context.annotation.Lazy TenantSettings settings) {
+            @org.springframework.context.annotation.Lazy TenantSettings settings,
+            Packs packs) {
         // Lazy: the settings service uses the documents module, which collects every DocumentAccess, this one included.
+        this.packs = packs;
         this.store = store;
         this.registry = registry;
         this.clock = clock;
@@ -66,14 +70,19 @@ class ReportDocumentAccess implements DocumentAccess {
             return false;
         }
         Optional<ReportDefinition> def = registry.find(run.reportKey());
-        if (def.isEmpty() || !principal.hasPermission(def.get().permission())) {
+        // A pack's files need every part's permission still held (ADR-038 decision 4).
+        if (def.isEmpty() || !registry.permitted(principal, def.get())) {
             return false;
         }
         // The business's own copy of its data is fetched whatever the reports switch says (ADR-074).
         if (!def.get().everyBusiness() && !settings.reportsEnabled()) {
             return false;
         }
-        if (!def.get().stillAllowed(new ReportDefinition.Prepared(run.params(), run.scope(), run.asOf()))) {
+        ReportDefinition.Prepared prepared = new ReportDefinition.Prepared(run.params(), run.scope(), run.asOf());
+        boolean allowed = def.get() instanceof ReportPack pack
+                ? packs.stillAllowed(pack, prepared)
+                : def.get().stillAllowed(prepared);
+        if (!allowed) {
             return false;
         }
         if (run.filesDeletedAt() != null

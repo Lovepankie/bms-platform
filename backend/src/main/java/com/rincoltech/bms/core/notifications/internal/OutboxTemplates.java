@@ -627,6 +627,28 @@ class OutboxTemplates {
                     "Open Plan and billing",
                     "You got this email because you receive the bills of {business_name} on BMS."));
 
+    // Issue #229, ADR-038 decision 7: the requester of a report pack is told when it is ready. The email names the
+    // pack and its date only; the files are fetched after signing in, never attached, because they hold members' names
+    // and balances.
+    private static final Map<String, Template> EMAIL_REPORTS = Map.of(
+            "core.report_pack_ready",
+            new Template(
+                    "Your {report_title} is ready",
+                    """
+                    Hello {name},
+
+                    The {report_title} you asked for, as at {as_of}, is ready. Sign in and open Reports to download \
+                    the PDF and the Excel workbook:
+
+                    {link}
+
+                    The files are kept for 30 days.
+
+                    Rincol Tech
+                    """,
+                    "Open Reports",
+                    "You got this email because you asked for this report pack on BMS."));
+
     private static final Map<String, Template> EMAIL = emailTemplates();
 
     private static Map<String, Template> emailTemplates() {
@@ -640,6 +662,7 @@ class OutboxTemplates {
         all.putAll(EMAIL_PLAN);
         all.putAll(EMAIL_BILLING);
         all.putAll(EMAIL_CLOSURE);
+        all.putAll(EMAIL_REPORTS);
         return Map.copyOf(all);
     }
 
@@ -683,6 +706,11 @@ class OutboxTemplates {
                     new Template(
                             "Stock is on its way to you",
                             "Stock was sent from {from_branch_name} to {to_branch_name}. Receive it when it arrives.")),
+            Map.entry(
+                    "core.report_pack_ready",
+                    new Template(
+                            "Your report pack is ready",
+                            "{report_title} as at {as_of} is ready. Open Reports to download it.")),
             Map.entry(
                     "core.approval_waiting",
                     new Template(

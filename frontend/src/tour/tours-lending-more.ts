@@ -733,25 +733,34 @@ export const inviteUserPage: Tour = {
 
 export const reportsPage: Tour = {
   id: 'page-reports',
-  version: 1,
+  version: 2,
   title: 'This page: reports',
   audience: (me) => me.reports_enabled === true && heldAny(me, REPORT_PERMISSIONS),
   autoStart: false,
   page: '/staff/reports',
   steps: [
     {
+      id: 'pack',
+      target: 'reports-pack',
+      module: 'lending',
+      needs: REPORT_PERMISSIONS,
+      optional: true,
+      title: 'The monthly pack',
+      body: 'All the lending reports for one month in one go: one PDF to print and sign, and one Excel workbook. Choose the last day of the month and tap Run the pack.',
+    },
+    {
       id: 'catalogue',
       target: 'reports-catalogue',
       module: 'lending',
       title: 'Choose a report',
-      body: 'Each report has its own form. Fill in the date, pick the file type and tap Run report.',
+      body: 'The reports are grouped by what they are about. Open one, fill in the date, pick the file type and tap Run report.',
     },
     {
       id: 'runs',
       target: 'reports-runs',
       module: 'lending',
       title: 'Your reports',
-      body: 'A report takes a moment. When it says Ready, tap Download. Files are kept for 30 days.',
+      body: 'A report takes a moment. When it says Ready, tap Download. A pack has a PDF and an Excel file. Files are kept for 30 days.',
     },
   ],
 };

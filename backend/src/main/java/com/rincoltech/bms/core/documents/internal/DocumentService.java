@@ -363,6 +363,31 @@ class DocumentService implements Documents {
         pdf.renderTo(template, model, target, waitMillis);
     }
 
+    // JUSTIFICATION-A3: the report pack (issue #229) is merged on disk with PDFBox, which only this module uses.
+    @Override
+    public int pdfPages(java.nio.file.Path file) {
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = org.apache.pdfbox.Loader.loadPDF(
+                file.toFile(), org.apache.pdfbox.io.IOUtils.createTempFileOnlyStreamCache())) {
+            return doc.getNumberOfPages();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    @Override
+    public void mergePdfs(List<java.nio.file.Path> sources, java.nio.file.Path target) {
+        org.apache.pdfbox.multipdf.PDFMergerUtility merger = new org.apache.pdfbox.multipdf.PDFMergerUtility();
+        merger.setDestinationFileName(target.toString());
+        try {
+            for (java.nio.file.Path source : sources) {
+                merger.addSource(source.toFile());
+            }
+            merger.mergeDocuments(org.apache.pdfbox.io.IOUtils.createTempFileOnlyStreamCache());
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     @Override
     public GeneratedObject putGenerated(byte[] bytes, String docType) {
         return putFile(bytes, docType, "application/pdf", "pdf");

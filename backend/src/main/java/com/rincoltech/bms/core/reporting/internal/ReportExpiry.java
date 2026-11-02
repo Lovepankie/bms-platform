@@ -111,7 +111,15 @@ class ReportExpiry {
                     return done;
                 }
                 try {
-                    documents.deleteReportObject(e.documentId());
+                    // A pack run has two files (its PDF and its workbook, issue #229); every file of the run goes.
+                    Set<UUID> files = new java.util.LinkedHashSet<>();
+                    files.add(e.documentId());
+                    transaction
+                            .execute(s -> documents.listGenerated(RunExecutor.SUBJECT, e.runId()))
+                            .forEach(g -> files.add(g.document().id()));
+                    for (UUID file : files) {
+                        documents.deleteReportObject(file);
+                    }
                 } catch (RuntimeException ex) {
                     // Storage hiccup: leave the run for tomorrow's pass; the other files still go.
                     log.warn("report file of run {} could not be deleted: {}", e.runId(), RunExecutor.describe(ex));

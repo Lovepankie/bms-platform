@@ -9142,6 +9142,13 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "files" : {
+            "description" : "The files of a ready run that has not expired: one, or for a pack the PDF and the workbook",
+            "items" : {
+              "$ref" : "#/components/schemas/ReportRunFile"
+            },
+            "type" : "array"
+          },
           "finished_at" : {
             "format" : "date-time",
             "type" : "string"
@@ -9190,6 +9197,19 @@
             "type" : "string"
           },
           "title" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReportRunFile" : {
+        "description" : "The files of a ready run that has not expired: one, or for a pack the PDF and the workbook",
+        "properties" : {
+          "document_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "format" : {
+            "description" : "json, csv, pdf or xlsx",
             "type" : "string"
           }
         }

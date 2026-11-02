@@ -464,6 +464,15 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   by branch, product or officer) are offered in all four formats, from `InsightsFigures.par` and `.portfolio`, with tests that every group
   equals the insights endpoints for the same filter and caller. `ReportMemoryIT` runs both reports as PDF and Excel on the 224 MB
   heap. The Reports screen offers the PDF first. Visual check: `make document-samples` and `docs/ui/report-samples/`.
+- **Built (extras slice D5, issue #229, ADR-038 amendment):** no migration and no permission. The monthly pack `lending.monthly_pack`
+  (format `pack`): the eight lending reports for one month, every one prepared with its own rules (names, phones and owner details
+  per branch, an officer's own loans) and queried in one snapshot, rendered as one merged PDF (cover with the parameters, contents with
+  the page each report starts on, a sign off block; each report's footer says which part it is) and one workbook (Parameters, then
+  every report's sheets numbered by part); both files are documents of the run (`files` on the run), expire together and are
+  rechecked at download against every part. The requester needs every report's permission; a push and an email say the pack is
+  ready. `core.reporting` gains the public `ReportPack`; `core.documents` gains `pdfPages` and `mergePdfs`. The Reports screen is the
+  report centre: the pack first, the reports in groups, the runs with a filter, each file's download and Run again.
+  `LendingPackIT` proves the figures agree across the reports and with the insights page.
 - **Built (extras slice D4, issue #225, ADR-038 amendment):** no migration and no permission. `lending.collateral_register` (flag counts,
   then every item with its valuation, custody, linked loans and flags: release overdue, imported and not verified, no valuation; cut at
   the PDF row cap with the pointer to the workbook) and `lending.regulatory_summary` (cover note "Data summary. Not a filed return.";

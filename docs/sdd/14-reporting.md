@@ -416,7 +416,8 @@ route.
 
 ## 14.10 The reports pack and report runs (ADR-038, issue #111)
 
-Design only. The seven formal reports are defined in sections 14.3, 14.4, 14.5 and 14.7 and are not redefined here:
+Built (slices D1 to D5, issues #214, #217, #222, #225 and #229; each slice's paragraph below). The seven formal reports are defined in
+sections 14.3, 14.4, 14.5 and 14.7 and are not redefined here:
 
 | Report | Key | Section |
 |---|---|---|
@@ -566,6 +567,43 @@ requester's scope decides whose loans are listed, and `group_by` is not offered 
   branch-limited caller asking for another branch), names and phones by the branches of their own permissions, a download refused after
   either is lost, golden snapshot cases for the arrears list and officer performance (a repayment reversed after the date still shows on
   it), the catalogue, and the PDF and workbook figures.
+
+**Built (extras slice D5, issue #229).** The monthly pack and the report centre. No migration (`report_runs.format` already allowed `pack`)
+and no permission.
+
+- **`lending.monthly_pack`** (format `pack` only). Parameters `period_end` (today by default; a future date is refused as the reports
+  refuse it) and `branch_id`. The month runs from the first day of the month of the period end to the period end. The eight reports of
+  the table above, in that order: `lending.portfolio_outstanding` and `lending.par` at the period end grouped by branch,
+  `lending.expected_vs_collected` and `lending.disbursements` over the month grouped by branch, `lending.arrears_list` at the period end,
+  `lending.officer_performance` and `lending.regulatory_summary` over the month, and `lending.collateral_register` as the items stand when
+  the pack is made (it takes no date). A past period end reads that date's nightly snapshot for the figures at a date, and fails
+  `snapshot_unavailable` without it.
+- **One snapshot, each report's own rules.** The requester needs the pack's permission (`lending.reports.portfolio`) and every report's;
+  otherwise the pack is refused with 403 and is not in the catalogue, and the reports they hold can still be run singly. Each report is
+  prepared with its own rules in the request, so in the pack it freezes the same scope as alone: the branches, the requester's own loans
+  without `lending.insights.all_officers`, names and owner details only in the branches of `lending.members.read`, full phones only in the
+  branches of `lending.members.contact`. Every report is then queried in the run's one `REPEATABLE READ` transaction, so their figures agree.
+  A download of either file is refused when any report's check at download fails.
+- **The PDF.** A cover on the shared letterhead (the title, a parameters box with the period end, the scope, the currency, who made it
+  and when, and when the data was read; the contents with each report's date, its pages and the page of the file it starts on; a sign off
+  block with Prepared by, Approved by and the date), then each report as it prints alone, its footer reading "part n of 8, page x of y"
+  beside the pack's number. In a pack every missing figure prints blank, never a dash. Each report is rendered to its own file and the
+  files are merged on disk.
+- **The workbook.** A Parameters sheet for the pack (the period end as a real date, when the data was read and the file made, by whom,
+  the currency and the scope), then for each report its title, its sheets, its date, its parameters and its notes; then every report's
+  sheets, each named with its part number ("3 Expected and collected"; a name is cut at the 31 characters a sheet name holds).
+- **Files and notice.** The PDF and the workbook are both documents of the run; the run lists them under `files` and the expiry deletes
+  both after 30 days. When the pack is ready the requester gets a push notice and an email that names the pack and its date and attaches
+  nothing.
+- **The report centre.** The Reports screen offers the pack first (a period end and Run the pack), then every report in groups (loan book,
+  collections and officers, members and collateral, for the regulator), each a card that opens to its form; then the user's runs with a
+  filter (all, in progress, ready, failed), the date each stands at in the report format, a download for each file (a pack's PDF and
+  Excel), Cancel and Run again.
+- **Tests.** `LendingPackIT` on the fabricated golden book: the principal outstanding and PAR 30 (computed by hand) are equal in the
+  portfolio, PAR, officer and regulator reports and on the insights page, and the month's expected, collection rate and disbursed agree
+  across reports and with the page; the cover, contents and sign off and each part's footer; refusals for a missing permission and the
+  wrong format; names and phones by branch and both files refused after the name permission is lost; an officer's pack of their own loans;
+  a past period end from the snapshot and refused without it; both files deleted after 30 days; the ready email.
 
 ## 14.8 Test datasets
 

@@ -3,7 +3,21 @@ import type { ReactElement } from 'react';
 import { renderToString as render } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { runErrorText, type ReportCatalogueEntry, type ReportRun } from '../../../api/reports';
-import { CatalogueList, RunsTable, defaultFormat, formatName, paramLabel, sizeText, words } from './page';
+import {
+  CatalogueList,
+  PackCard,
+  RunsTable,
+  defaultFormat,
+  downloadLabel,
+  filesOf,
+  formatName,
+  grouped,
+  paramLabel,
+  reportDate,
+  shows,
+  sizeText,
+  words,
+} from './page';
 import { showReports } from './permissions';
 
 const renderToString = (node: ReactElement) =>
@@ -169,6 +183,129 @@ describe('your reports', () => {
     );
     expect(stopping).toContain('stopping');
     expect(stopping).not.toContain('>Cancel<');
+  });
+});
+
+// JUSTIFICATION-A3: new tests for the report centre of issue #229, beside the tests of the screen they extend.
+// The report centre (issue #229): the monthly pack, the catalogue in groups, the run list's filter, a pack's two files and
+// Run again.
+const pack: ReportCatalogueEntry = {
+  key: 'lending.monthly_pack',
+  title: 'Monthly report pack',
+  description: 'All eight lending reports for one month from one reading of your books.',
+  permission: 'lending.reports.portfolio',
+  formats: ['pack'],
+  params: [
+    { name: 'period_end', type: 'date', required: false, description: 'The last day the pack covers.', values: [] },
+    { name: 'branch_id', type: 'uuid_list', required: false, description: 'Branches to include.', values: [] },
+  ],
+};
+
+const register: ReportCatalogueEntry = {
+  ...par,
+  key: 'lending.collateral_register',
+  title: 'Collateral register',
+  permission: 'lending.reports.members',
+  params: [],
+};
+
+const packRun = (over: Partial<ReportRun>): ReportRun =>
+  run({
+    report_key: 'lending.monthly_pack',
+    title: 'Monthly report pack',
+    format: 'pack',
+    params: { period_end: '2026-10-31' },
+    as_of: '2026-10-31',
+    files: [
+      { document_id: '00000000-0000-4000-8000-0000000000d1', format: 'pdf' },
+      { document_id: '00000000-0000-4000-8000-0000000000d2', format: 'xlsx' },
+    ],
+    ...over,
+  });
+
+describe('the report centre', () => {
+  it('groups the reports by what they are about and keeps the pack out of the list', () => {
+    const groups = grouped([register, par, pack]);
+    expect(groups.map((g) => g.title)).toEqual(['Loan book', 'Members and collateral']);
+    expect(groups.flatMap((g) => g.entries.map((e) => e.key))).not.toContain('lending.monthly_pack');
+    const html = renderToString(<CatalogueList entries={[register, par, pack]} branchIds={undefined} onQueued={() => {}} />);
+    expect(html.indexOf('Loan book')).toBeLessThan(html.indexOf('Members and collateral'));
+    expect(html).toContain('<details');
+    expect(html).not.toContain('Monthly report pack');
+  });
+
+  it('offers the pack with a period end and one button, no file type to choose', () => {
+    const html = renderToString(<PackCard entry={pack} branchIds={undefined} onQueued={() => {}} />);
+    expect(html).toContain('Monthly report pack');
+    expect(html).toContain('Period end');
+    expect(html).toContain('type="date"');
+    expect(html).toContain('Run the pack');
+    expect(html).not.toContain('File type');
+    expect(html).not.toMatch(/style="/);
+  });
+
+  it('offers a pack as a PDF and an Excel workbook, each with its own download', () => {
+    const r = packRun({});
+    const files = filesOf(r);
+    expect(files.map((f) => f.format)).toEqual(['pdf', 'xlsx']);
+    expect(downloadLabel(files, files[0]!)).toBe('Download PDF');
+    expect(downloadLabel(files, files[1]!)).toBe('Download Excel');
+    const html = renderToString(<RunsTable runs={[r]} onChange={() => {}} />);
+    expect(html).toContain('(PDF and Excel)');
+    expect(html).toContain('>Download PDF<');
+    expect(html).toContain('>Download Excel<');
+    expect(html).not.toContain('>Download<');
+  });
+
+  it('writes the date a report stands at as the reports print it', () => {
+    expect(reportDate('2026-10-08')).toBe('8 Oct 2026');
+    expect(reportDate('2026-12-31')).toBe('31 Dec 2026');
+    expect(reportDate(null)).toBe('');
+    const html = renderToString(<RunsTable runs={[packRun({})]} onChange={() => {}} />);
+    expect(html).toContain('31 Oct 2026');
+    expect(html).not.toContain('2026-10-31<');
+  });
+
+  it('offers no file for an expired pack or one still being made', () => {
+    expect(filesOf(packRun({ expired: true }))).toEqual([]);
+    expect(filesOf(packRun({ status: 'running', files: [] }))).toEqual([]);
+    // A run from before files were listed still offers its one file.
+    expect(filesOf(run({ files: undefined }))).toEqual([{ document_id: '00000000-0000-4000-8000-0000000000d1', format: 'csv' }]);
+  });
+
+  it('offers Run again for a finished report the user may still run, never for an open one', () => {
+    const html = renderToString(
+      <RunsTable
+        runs={[
+          run({}),
+          run({ id: 'b', status: 'failed', error: 'timeout', document_id: null }),
+          run({ id: 'c', status: 'queued', document_id: null }),
+          run({ id: 'd', report_key: 'lending.gone', status: 'ready' }),
+        ]}
+        onChange={() => {}}
+        canRun={(key) => key === 'lending.par'}
+      />,
+    );
+    expect(html.match(/>Run again</g)).toHaveLength(2);
+  });
+
+  it('filters the runs by status, a cancelled run under All only', () => {
+    expect(shows({ status: 'queued' }, 'open')).toBe(true);
+    expect(shows({ status: 'running' }, 'open')).toBe(true);
+    expect(shows({ status: 'ready' }, 'open')).toBe(false);
+    expect(shows({ status: 'failed' }, 'failed')).toBe(true);
+    expect(shows({ status: 'cancelled' }, 'ready')).toBe(false);
+    expect(shows({ status: 'cancelled' }, 'all')).toBe(true);
+    const html = renderToString(<RunsTable runs={[run({})]} onChange={() => {}} />);
+    expect(html).toContain('In progress');
+    expect(html).toContain('aria-label="Show"');
+  });
+
+  it('has one line and one action when there is no run yet', () => {
+    const html = renderToString(<RunsTable runs={[]} onChange={() => {}} />);
+    expect(html).toContain('You have not run a report yet.');
+    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html).toContain('Choose a report');
   });
 });
 

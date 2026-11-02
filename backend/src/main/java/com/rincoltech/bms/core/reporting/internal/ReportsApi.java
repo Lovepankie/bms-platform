@@ -90,5 +90,16 @@ final class ReportsApi {
             @Schema(description = "A running run that has been asked to stop")
             boolean cancelRequested,
 
-            String error) {}
+            String error,
+
+            @Schema(
+                    description =
+                            "The files of a ready run that has not expired: one, or for a pack the PDF and the workbook")
+            List<RunFile> files) {}
+
+    /** One file of a run, fetched with {@code POST /documents/{document_id}/download-url}. */
+    @Schema(name = "ReportRunFile")
+    record RunFile(
+            UUID documentId,
+            @Schema(description = "json, csv, pdf or xlsx") String format) {}
 }

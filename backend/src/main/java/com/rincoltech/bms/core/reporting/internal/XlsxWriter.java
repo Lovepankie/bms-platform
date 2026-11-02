@@ -100,6 +100,107 @@ final class XlsxWriter {
         }
     }
 
+    // JUSTIFICATION-A3: the pack's one workbook (issue #229) joins every report's sheets, each from its own spool.
+    /** One report of a pack, as its sheets are written. */
+    record PackPart(Header header, Presentation presentation, List<TableMeta> tables, Spool spool) {}
+
+    /**
+     * Writes the one workbook of a pack (ADR-038 decision 4): a {@code Parameters} sheet for the whole pack, which also lists
+     * each report with its own scope, parameters, notes and sheets, then the sheets of every report in order, each named
+     * with its part number so it carries the report ("3 Expected and collected").
+     */
+    static void writePack(Path target, long maxBytes, Header h, Presentation p, List<PackPart> parts, Guard guard) {
+        int exponent = ReportFormats.exponent(h.currency());
+        List<TableMeta> sheets = new ArrayList<>();
+        List<Spool> spools = new ArrayList<>();
+        List<Header> headers = new ArrayList<>();
+        List<Integer> firstSheet = new ArrayList<>();
+        for (int i = 0; i < parts.size(); i++) {
+            PackPart part = parts.get(i);
+            firstSheet.add(sheets.size());
+            for (TableMeta t : part.tables()) {
+                if (t.rows() + 1 > MAX_ROWS) {
+                    throw new ReportFailure("report_too_large", "A table has more rows than a sheet can hold.");
+                }
+                sheets.add(new TableMeta(
+                        t.key(), (i + 1) + " " + t.title(), t.columns(), t.rows(), t.file(), t.hasTotal()));
+                spools.add(part.spool());
+                headers.add(part.header());
+            }
+        }
+        List<String> names = sheetNames(sheets);
+        try (OutputStream raw = Renderers.capped(Files.newOutputStream(target), maxBytes);
+                ZipOutputStream zip = new ZipOutputStream(raw)) {
+            long stamp = h.generatedAt().toEpochMilli();
+            part(zip, stamp, "[Content_Types].xml", contentTypes(sheets.size()));
+            part(zip, stamp, "_rels/.rels", rootRels());
+            part(zip, stamp, "xl/workbook.xml", workbook(names, sheets));
+            part(zip, stamp, "xl/_rels/workbook.xml.rels", workbookRels(sheets.size()));
+            part(zip, stamp, "xl/styles.xml", styles(p, exponent));
+            sheet(zip, stamp, "xl/worksheets/sheet1.xml", w -> {
+                sheetStart(w, false, List.of(32, 80));
+                int row = packParameters(w, h, p, exponent);
+                row++;
+                row = textRow(w, row, S_TITLE, "Reports in this pack");
+                for (int i = 0; i < parts.size(); i++) {
+                    PackPart part = parts.get(i);
+                    int from = firstSheet.get(i);
+                    List<String> own =
+                            names.subList(from + 1, from + 1 + part.tables().size());
+                    row++;
+                    row = labelled(w, row, (i + 1) + ". " + part.header().title(), "Sheets: " + String.join(", ", own));
+                    row = labelled(
+                            w, row, "As at", ReportFormats.date(part.header().asOf()));
+                    for (Presentation.Line line : part.presentation().parameters()) {
+                        row = labelled(w, row, line.label(), line.value());
+                    }
+                    for (String note : part.header().notes()) {
+                        row = labelled(w, row, "Note", note);
+                    }
+                }
+                sheetEnd(w, false);
+            });
+            for (int i = 0; i < sheets.size(); i++) {
+                TableMeta t = sheets.get(i);
+                Header th = headers.get(i);
+                Spool s = spools.get(i);
+                sheet(zip, stamp, "xl/worksheets/sheet" + (i + 2) + ".xml", w -> tableSheet(w, t, th, s, guard));
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** The pack's own lines at the top of its Parameters sheet; returns the next free row. */
+    private static int packParameters(Writer w, Header h, Presentation p, int exponent) throws IOException {
+        int row = 1;
+        row = textRow(w, row, S_TITLE, h.title());
+        row++;
+        row = labelled(w, row, "Report key", h.reportKey());
+        w.write("<row r=\"" + row + "\"><c r=\"A" + row + "\" t=\"inlineStr\" s=\"" + S_LABEL
+                + "\"><is><t>Period end</t></is></c><c r=\"B" + row + "\" s=\"" + S_DATE + "\"><v>"
+                + ReportFormats.excelSerial(h.asOf()) + "</v></c></row>");
+        row++;
+        row = labelled(
+                w, row, "Data read at", ReportFormats.dateTime(h.snapshotAt(), p.zone()) + " (" + p.zone() + ")");
+        row = labelled(
+                w, row, "File made at", ReportFormats.dateTime(h.generatedAt(), p.zone()) + " (" + p.zone() + ")");
+        row = labelled(w, row, "Made by", p.by());
+        row = labelled(w, row, "Business", p.businessName());
+        row = labelled(
+                w,
+                row,
+                "Amounts",
+                "In " + h.currency() + (exponent == 0 ? ", whole units" : ", with " + exponent + " decimal places"));
+        for (Presentation.Line line : p.parameters()) {
+            row = labelled(w, row, line.label(), line.value());
+        }
+        for (String note : h.notes()) {
+            row = labelled(w, row, "Note", note);
+        }
+        return row;
+    }
+
     // ---- parts
     // -------------------------------------------------------------------------------------------------------
 

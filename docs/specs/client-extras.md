@@ -1299,6 +1299,12 @@ reports in the order above) and one workbook (a sheet per report plus Parameters
 every report's permission; otherwise the pack is refused and the reports can still be run singly. Loan
 officers see their own loans in the collections and officer reports.
 
+**As built in slice D5 (issue #229).** `lending.monthly_pack`, offered as the format `pack`: the eight reports (collections is two),
+each prepared with its own rules and queried in the run's one snapshot, as one merged PDF (cover, contents with start pages, sign off,
+then each report with "part n of 8" in its footer and blanks for missing figures) and one workbook (Parameters, then every report's sheets
+numbered by part). No migration and no permission: the second file is a second `documents` row of the run, listed under `files`. The
+requester is told by a push notice and an email. The Reports screen became the report centre. Chapter 14 section 14.10 has the details.
+
 ### 6.5 Catalogue and permissions
 
 `GET /reports` lists what the user may run (FR-RPT-01). No new permission is needed: the existing report

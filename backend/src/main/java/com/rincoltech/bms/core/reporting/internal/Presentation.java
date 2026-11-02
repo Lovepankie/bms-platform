@@ -89,6 +89,11 @@ record Presentation(
                 def.blankMissingFigures());
     }
 
+    /** The same presentation printing a missing figure blank: every report of a pack does (issue #229). */
+    Presentation blankingMissing() {
+        return new Presentation(by, zone, businessName, brand, onBrand, tint, footer, logo, scope, parameters, true);
+    }
+
     /** A pale tint of the brand colour for alternate table rows: 88% white over it (as the other documents do). */
     static String tint(String hex) {
         int rgb = Integer.parseInt(hex.substring(1), 16);
@@ -111,8 +116,9 @@ record Presentation(
         List<Line> lines = new ArrayList<>();
         for (Param p : def.params()) {
             Object value = params.get(p.name());
-            if (p.name().equals("as_at")) {
-                // The date the figures stand at has its own line on the page and its own row in the workbook.
+            if (p.name().equals("as_at") || p.name().equals("period_end")) {
+                // The date the figures stand at (a pack's period end) has its own line on the page and its own row in
+                // the workbook.
                 continue;
             }
             String label = ReportFormats.label(p.name(), p.type());

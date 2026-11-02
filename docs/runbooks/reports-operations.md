@@ -76,6 +76,27 @@ The visual check of the PDFs (ADR-034 quality bar item 8) is `make document-samp
 into one sheet to look at. The reviewed sheet is `docs/ui/report-samples/report-sample-sheet.png`. Look for: the heading of a column running into its
 neighbour, a table cut at the page edge, a heading or total that is not repeated or set off, text over a rule, a missing brand colour.
 
+## The monthly pack
+
+`lending.monthly_pack` (issue #229) is one run of format `pack`: the eight lending reports for one month, each queried in the run's one
+snapshot into a spool folder of its own (`part-1` to `part-8` inside the run's folder), then one PDF and one workbook. The PDF is made one
+report at a time (each report its own file through the `report` template, then a cover with the contents and the sign off block) and the
+files are joined on disk by PDFBox with temporary files, so the heap holds at most one report's layout, as for a single report. Expect a
+pack to take about the sum of its eight reports. On staging, where one run at a time is allowed, a pack holds the tenant's queue while it
+runs.
+
+- **Caps.** Every table of every report obeys `BMS_REPORTS_XLSX_ROW_CAP` and the PDF row cap, as alone. Each of the two files must fit
+  `BMS_REPORTS_MAX_FILE_BYTES`; a pack over it fails `report_too_large`, and the user can run fewer branches or the reports one at a time.
+  `size_bytes` of the run is the two files together.
+- **Files.** Both files are `documents` rows of type `report` with the run as subject and the same `RPT-` number; `report_runs.document_id`
+  is the PDF, and `GET /report-runs/{id}` lists both under `files`. The nightly expiry deletes both and marks the run once.
+- **Refused or failed.** A user without one of the reports' permissions does not see the pack and is refused 403; they can run the others
+  singly. A past period end with no nightly snapshot fails `snapshot_unavailable`, as each report does. A download of either file is
+  refused (404) when the requester has since lost any report's access; this is expected, not a fault.
+- **Ready notice.** When a pack is ready the requester gets a push notice (only when push is on and they have a device) and an email
+  (`core.report_pack_ready`, when email is configured; it names the pack and its date and carries no file). Both are rows of
+  `notification_outbox`; check there if a user says they were not told.
+
 ## A run is stuck, slow or failed
 
 Look from the database as `bms_owner` (it sees every tenant; the application's role sees one tenant at a time):

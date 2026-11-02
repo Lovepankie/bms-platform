@@ -494,6 +494,13 @@ Notes:
   The weekly copy emailed to the Owner leaves out the columns of personal data (members' phones, ID numbers, dates of birth
   and villages, the arrears phone, customers' and suppliers' contacts); they are only in the full workbook downloaded after
   sign-in (ADR-074 decision 6).
+  Built (extras slice D5, issue #229): the monthly pack `lending.monthly_pack` runs under `lending.reports.portfolio` and the permission
+  of each of its eight reports (`lending.reports.collections`, `lending.reports.members`, `lending.reports.compliance`), with
+  `lending.insights.read`; a requester missing any is refused 403 and does not see the pack in the catalogue, and can still run the
+  reports they hold one at a time. Each report in the pack freezes its own scope as when it is run alone (names, phones and owner
+  details by branch, the requester's own loans without `lending.insights.all_officers`), and a download of either file of the pack is
+  refused when any report's check fails. The ready email names the pack and its date only; no file is attached. No permission and no
+  seeded row are added.
   Built (extras slice D4, issue #225): `lending.collateral_register` runs under `lending.reports.members` in the branches the requester
   holds it in, prints who owns an item (the member number and name, the reference, which can be an ID number, a plate or a title
   number, and the description) only where they hold `lending.members.read` in the member's branch, and without

@@ -12104,6 +12104,8 @@ export interface components {
              * @description When the file is deleted
              */
             expires_at?: string;
+            /** @description The files of a ready run that has not expired: one, or for a pack the PDF and the workbook */
+            files?: components["schemas"]["ReportRunFile"][];
             /** Format: date-time */
             finished_at?: string;
             format?: string;
@@ -12130,6 +12132,13 @@ export interface components {
             /** @description queued, running, ready, failed or cancelled */
             status?: string;
             title?: string;
+        };
+        /** @description The files of a ready run that has not expired: one, or for a pack the PDF and the workbook */
+        ReportRunFile: {
+            /** Format: uuid */
+            document_id?: string;
+            /** @description json, csv, pdf or xlsx */
+            format?: string;
         };
         ReportRunRequest: {
             /** @description json, csv, pdf or xlsx */
