@@ -40,7 +40,7 @@ function ReceiveForm({ transfer }: { transfer: InFlightTransfer }) {
   const save = useMutation({
     mutationFn: () => retail.receiveTransfer(transfer.id ?? '', buildReceive(lines, arrived), idempotencyKey.current),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
-    meta: { success: 'Stock received' },
+    meta: { success: `Stock received, ${lines.length} ${lines.length === 1 ? 'item' : 'items'}` },
   });
   const id = transfer.id ?? '';
   return (
@@ -76,7 +76,7 @@ function TakeBackForm({ transfer }: { transfer: InFlightTransfer }) {
   const take = useMutation({
     mutationFn: () => retail.cancelTransfer(transfer.id ?? '', reason.trim(), idempotencyKey.current),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail'] }),
-    meta: { success: 'Stock taken back' },
+    meta: { success: `Stock taken back, ${(transfer.lines ?? []).length} ${(transfer.lines ?? []).length === 1 ? 'item' : 'items'}` },
   });
   const id = transfer.id ?? '';
   return (

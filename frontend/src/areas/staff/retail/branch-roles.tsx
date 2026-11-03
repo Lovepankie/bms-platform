@@ -48,7 +48,7 @@ export function BranchRoles() {
   const set = useMutation({
     mutationFn: (v: { branchId: string; role: Role }) => retail.setBranchRole(v.branchId, v.role),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'branch-roles'] }),
-    meta: { success: 'Role saved' },
+    meta: { success: (_: unknown, v: { branchId: string; role: Role }) => `${(roles.data ?? []).find((r) => r.branch_id === v.branchId)?.name ?? 'The branch'} now ${v.role === 'shop' ? 'sells to customers' : 'keeps stock and sells'}` },
   });
   return (
     <Gate screen="branchRoles" title="Branch roles">

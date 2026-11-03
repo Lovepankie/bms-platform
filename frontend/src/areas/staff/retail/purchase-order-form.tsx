@@ -130,7 +130,7 @@ export function PurchaseOrderNewPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail', 'purchase-orders'] });
       void navigate({ to: '/staff/retail/purchase-orders/$orderId', params: { orderId: order.id ?? '' } });
     },
-    meta: { success: 'Order saved' },
+    meta: { success: (order: { order_no?: string }) => (order?.order_no ? `Purchase order ${order.order_no} saved` : 'Purchase order saved') },
   });
   const picker = useItemPicker((line) => setDraft((d) => ({ ...d, lines: [...d.lines, line] })));
   return (
@@ -185,7 +185,7 @@ export function PurchaseOrderEditPage() {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       void navigate({ to: '/staff/retail/purchase-orders/$orderId', params: { orderId } });
     },
-    meta: { success: 'Changes saved' },
+    meta: { success: () => `Changes to ${order.data?.order_no ? `purchase order ${order.data.order_no}` : 'the purchase order'} saved` },
   });
   const picker = useItemPicker((line) => setForm((f) => (f ? { ...f, lines: [...f.lines, line] } : f)));
   return (

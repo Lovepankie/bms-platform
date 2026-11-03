@@ -55,7 +55,7 @@ function ChangeDetails({ order }: { order: Order }) {
       void client.invalidateQueries({ queryKey: ['retail', 'order', order.id] });
       void client.invalidateQueries({ queryKey: ['retail', 'orders'] });
     },
-    meta: { success: 'Changes saved' },
+    meta: { success: `Changes to ${order.order_no ? `order ${order.order_no}` : 'the order'} saved` },
   });
   const problem = name.trim() === '' ? 'Type the name of the customer.' : feeOf(fee) === null ? 'The delivery fee is a whole number of shillings.' : null;
   if (!open) return <button type="button" className="btn-sm" data-tour="order-change" onClick={() => setOpen(true)}>Change the delivery details</button>;
@@ -115,7 +115,7 @@ function ChangeItems({ order }: { order: Order }) {
       void client.invalidateQueries({ queryKey: ['retail', 'orders'] });
       void client.invalidateQueries({ queryKey: ['retail', 'stock'] });
     },
-    meta: { success: 'Items saved' },
+    meta: { success: `Items on ${order.order_no ? `order ${order.order_no}` : 'the order'} saved` },
   });
   if (!open) return <button type="button" className="btn-sm" data-tour="order-items-change" onClick={() => setOpen(true)}>Change the items</button>;
   const edit = (f: (ls: DraftLine[]) => DraftLine[]) => setLines(f(shown ?? []));
@@ -171,7 +171,7 @@ function PayFee({ order }: { order: Order }) {
       void client.invalidateQueries({ queryKey: ['retail', 'order', order.id] });
       void client.invalidateQueries({ queryKey: ['retail', 'orders'] });
     },
-    meta: { success: 'Delivery fee paid' },
+    meta: { success: `Delivery fee paid on ${order.order_no ? `order ${order.order_no}` : 'the order'}` },
   });
   return (
     <fieldset>

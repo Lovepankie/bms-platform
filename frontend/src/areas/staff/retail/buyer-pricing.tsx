@@ -25,7 +25,7 @@ export function BuyerPricing({ row }: { row: Customer }) {
   const save = useMutation({
     mutationFn: () => retail.setCustomerPricing(row.id ?? '', requireVersion(row.version), { ...(groupId ? { customer_group_id: groupId } : {}), ...(listId ? { price_list_id: listId } : {}) }),
     onSuccess: () => { setEditing(false); void queryClient.invalidateQueries({ queryKey: ['retail'] }); },
-    meta: { success: 'Prices saved' },
+    meta: { success: `Prices saved for ${row.name ?? 'the customer'}` },
   });
   if (!on) return null;
   const group = (groups.data ?? []).find((g) => g.id === row.customer_group_id);

@@ -76,7 +76,7 @@ export function PurchasingSettings() {
     onSuccess: (next) => {
       queryClient.setQueryData(['retail', 'purchasing-settings'], next);
     },
-    meta: { success: 'Settings saved' },
+    meta: { success: 'Purchasing tolerances saved' },
   });
   if (!on) return null;
   return (

@@ -37,7 +37,7 @@ export function DocumentsPage() {
   const save = useMutation({
     mutationFn: ({ kind, prefix }: { kind: DocumentType; prefix: string }) => retail.setDocumentPrefix(kind, prefix),
     onSuccess: (rows) => queryClient.setQueryData(['retail', 'document-series'], rows),
-    meta: { success: 'Prefix saved' },
+    meta: { success: (_: unknown, v: { kind: DocumentType; prefix: string }) => `${TYPE_LABEL[v.kind] ?? 'Document'} numbers now start with ${v.prefix}` },
   });
   return (
     <Gate screen="documents" title="Documents" wide>
