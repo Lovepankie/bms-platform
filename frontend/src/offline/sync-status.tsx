@@ -252,7 +252,7 @@ function ManagerQueue() {
       setSelfReason('');
       void queryClient.invalidateQueries({ queryKey: ['retail', 'offline-failures'] });
     },
-    meta: { success: (_: unknown, sent: { action: 'retry' | 'discard' }) => (sent?.action === 'retry' ? 'Sent again' : 'Discarded') },
+    meta: { success: (_: unknown, sent: { action: 'retry' | 'discard' }) => (sent?.action === 'retry' ? 'Sale sent again' : 'Sale discarded, never recorded') },
   });
   const resolve = useMutation({
     mutationFn: async (id: string) => {

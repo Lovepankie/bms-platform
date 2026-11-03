@@ -270,7 +270,7 @@ export function ReverseForm({ inv, txn }: { inv: Investment; txn: InvestmentTran
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`invest-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
   // success-screen: the Reversed screen replaces the form; one sent for approval raises no toast
   const save = useMutation({
-    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Reversed' : null) },
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? `${money(txn.amount_minor, inv.currency)} reversed on investment ${inv.account_no ?? ''}`.trim() : null) },
     mutationFn: () => investments.reverse(id, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {
       finish();
