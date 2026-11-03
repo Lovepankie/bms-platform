@@ -54,6 +54,18 @@ export function saveDraft<T>(store: DraftStore | null, name: string, saved: Save
   }
 }
 
+/** The event a form under `detail` (its draft name) hears when a draft was put back for it while it is open. */
+export const DRAFT_RESTORED = 'retail-draft-restored';
+
+/**
+ * Puts a draft back under `name` with a fresh key, for a refused entry kept on the phone that its maker fixes (issue #812):
+ * the form opens on it, or, already open, reads it again. The new key makes the fixed entry a new request.
+ */
+export function restoreDraft<T>(name: string, draft: T, store: DraftStore | null = tabStore()): void {
+  saveDraft(store, name, { key: newIdempotencyKey(), draft });
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(DRAFT_RESTORED, { detail: name }));
+}
+
 export function dropDraft(store: DraftStore | null, name: string): void {
   try {
     store?.removeItem(`retail-draft:${name}`);
@@ -84,6 +96,8 @@ export function usePersistedDraft<T>(
 ): {
   key: string; draft: T; setDraft: Dispatch<SetStateAction<T>>; finish: () => void; discard: () => void; sending: () => void;
   mended: boolean; unmend: () => void; sent: boolean; sentBefore: string | null; sentDraft: T | null;
+  /** The draft's name, so an entry kept on the phone can put its draft back here to be fixed (issue #812). */
+  name: string;
 } {
   const store = useRef(tabStore()).current;
   const blank = useRef(initial).current;
@@ -108,6 +122,22 @@ export function usePersistedDraft<T>(
   useEffect(() => {
     if (!done.current) saveDraft(store, name, saved);
   }, [store, name, saved]);
+  // A refused entry kept on the phone, put back for fixing while this form is open (issue #812): read it again.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hear = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== name) return;
+      const back = loadDraft(store, name, blank);
+      done.current = false;
+      setFinished(false);
+      setMended(false);
+      setSentBefore(null);
+      setSentDraft(null);
+      setSaved({ key: back.key, draft: back.draft });
+    };
+    window.addEventListener(DRAFT_RESTORED, hear);
+    return () => window.removeEventListener(DRAFT_RESTORED, hear);
+  }, [store, name, blank]);
   const latest = useRef(saved.draft);
   latest.current = saved.draft;
   // The draft as it was finished, so a change that leaves it as it was starts nothing new.
@@ -151,6 +181,6 @@ export function usePersistedDraft<T>(
   }, [store, name, blank]);
   return {
     key: saved.key, draft: saved.draft, setDraft, finish, discard, sending, mended, unmend, sent: saved.sent !== undefined, sentBefore,
-    sentDraft,
+    sentDraft, name,
   };
 }

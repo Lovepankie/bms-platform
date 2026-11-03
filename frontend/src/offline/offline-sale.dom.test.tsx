@@ -143,7 +143,7 @@ describe('Record a sale offline', () => {
       buyer_name: 'Test Buyer 21',
       lines: [{ product_id: 'p2', qty: '2.000', unit_price_minor: 5000 }],
     });
-    expect(items[0]?.request.client_sale_id).toBe(items[0]?.id);
+    expect(items[0]?.request?.client_sale_id).toBe(items[0]?.id);
     expect(createSale).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
 
@@ -176,7 +176,7 @@ describe('Record a sale offline', () => {
     expect(screen.getByText('Offline, the price saved on this phone is used. You do not have permission to change it.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save on this phone' }));
     expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
-    expect(offline.engine.snapshot().items[0]?.request.lines).toEqual([{ product_id: 'p2', qty: '1.000', unit_price_minor: 5000 }]);
+    expect(offline.engine.snapshot().items[0]?.request?.lines).toEqual([{ product_id: 'p2', qty: '1.000', unit_price_minor: 5000 }]);
   });
 
   it('says plainly when the items of the branch are not on the phone yet (issue #769)', async () => {
@@ -229,8 +229,8 @@ describe('Record a sale offline', () => {
     expect(item).toMatchObject({ id: key, key, state: 'queued' });
     // Priced online from the items as they were read, never from the copy on the phone (the next test pins the time).
     expect(item?.request).toMatchObject({ ...body, occurred_at: item?.occurredAt, recorded_offline: true });
-    expect(item?.request.prices_as_of).not.toBe(catalogue.pricesAsOf);
-    expect(String(item?.request.prices_as_of) <= String(item?.occurredAt)).toBe(true);
+    expect(item?.request?.prices_as_of).not.toBe(catalogue.pricesAsOf);
+    expect(String(item?.request?.prices_as_of) <= String(item?.occurredAt)).toBe(true);
   });
 
   // JUSTIFICATION-A3: a new test the review asks for (#769), not a mechanism.
@@ -248,7 +248,7 @@ describe('Record a sale offline', () => {
     await waitFor(() => expect(ready(save)).toBe(true));
     fireEvent.click(save);
     expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
-    expect(offline.engine.snapshot().items[0]?.request.prices_as_of).toBe(catalogue.pricesAsOf);
+    expect(offline.engine.snapshot().items[0]?.request?.prices_as_of).toBe(catalogue.pricesAsOf);
     cleanup();
 
     // A draft from before the read times were kept (no readAt on its line): the time is not known, so none is sent, never
@@ -264,7 +264,7 @@ describe('Record a sale offline', () => {
     fireEvent.click(record);
     expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
     const [kept] = again.engine.snapshot().items;
-    expect(kept?.request.recorded_offline).toBe(true);
+    expect(kept?.request?.recorded_offline).toBe(true);
     expect(kept?.request).not.toHaveProperty('prices_as_of');
   });
 
@@ -285,7 +285,7 @@ describe('Record a sale offline', () => {
     await waitFor(() => expect(ready(save)).toBe(true));
     fireEvent.click(save);
     expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
-    expect(offline.engine.snapshot().items[0]?.request.prices_as_of).toBe(catalogue.pricesAsOf);
+    expect(offline.engine.snapshot().items[0]?.request?.prices_as_of).toBe(catalogue.pricesAsOf);
   });
 
   // JUSTIFICATION-A3: a new test the review asks for (#769), not a mechanism.
@@ -308,8 +308,8 @@ describe('Record a sale offline', () => {
       fireEvent.click(save);
       expect(await screen.findByText('Sale saved on this phone')).toBeTruthy();
       const [item] = offline.engine.snapshot().items;
-      expect(item?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
-      expect(item?.request.occurred_at).toBe('2026-11-02T09:10:00.000Z');
+      expect(item?.request?.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
+      expect(item?.request?.occurred_at).toBe('2026-11-02T09:10:00.000Z');
     } finally {
       vi.useRealTimers();
     }
@@ -343,7 +343,7 @@ describe('Record a sale offline', () => {
       fireEvent.click(await pick('cable', /^Test Cable 2.5mm/));
       at('09:10');
       await record();
-      expect(two.engine.snapshot().items[0]?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
+      expect(two.engine.snapshot().items[0]?.request?.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
       cleanup();
       sessionStorage.clear();
 
@@ -356,7 +356,7 @@ describe('Record a sale offline', () => {
       at('09:07');
       fireEvent.click(option);
       await record();
-      expect(cached.engine.snapshot().items[0]?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
+      expect(cached.engine.snapshot().items[0]?.request?.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
       cleanup();
       sessionStorage.clear();
 
@@ -375,7 +375,7 @@ describe('Record a sale offline', () => {
       expect(resolvePrices).toHaveBeenCalled();
       at('09:10');
       await record();
-      expect(listed.engine.snapshot().items[0]?.request.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
+      expect(listed.engine.snapshot().items[0]?.request?.prices_as_of).toBe('2026-11-02T09:00:00.000Z');
     } finally {
       vi.useRealTimers();
     }

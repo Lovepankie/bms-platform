@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { icons } from '../../../components/icons';
 import { announceToSheet } from '../../../app/ui/announce';
 import { BusyButton } from '../../../app/ui/BusyButton';
+import { isKept, keptWords } from '../../../offline/entries';
 
 // A toast (the .toast class of app/ui/feedback.css, docs/ui-rules.md rule 15): a dark neutral pill at the bottom with a leading
 // icon for its kind, raised on top of the on-screen success message and gone after four seconds: six from 29 Oct 2026 for slow
@@ -137,6 +138,11 @@ export function doneToasts(): MutationCache {
   return new MutationCache({
     onSuccess: (data, variables, _context, mutation) => {
       const { success, undo } = mutation.meta ?? {};
+      // Issue #812: an entry kept on the phone says so, never the words of one the server took.
+      if (isKept(data)) {
+        sayDone(keptWords(data.kept));
+        return;
+      }
       try {
         const message = typeof success === 'function' ? (success as (d: unknown, v: unknown) => string | null)(data, variables) : success;
         const back = undo ? (undo as (d: unknown, v: unknown) => (() => Promise<unknown>) | null)(data, variables) : null;

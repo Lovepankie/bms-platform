@@ -1,6 +1,6 @@
 import type { Me } from '../api/client';
 import type { Connectivity } from './connectivity';
-import { isAdmin, sellsOffline, type Offline } from './offline-context';
+import { isAdmin, worksOffline, type Offline } from './offline-context';
 import { memoryStore, scopeOf, type Catalogue, type OfflineStore } from './store';
 import { SyncEngine, type SyncDeps } from './sync-engine';
 
@@ -40,7 +40,7 @@ export function testOffline(
     othersWaiting?: number;
   } = {},
 ): (Offline & { connectivity: TestConnectivity }) | null {
-  if (!sellsOffline(me)) return null;
+  if (!worksOffline(me)) return null;
   const store = options.store ?? memoryStore();
   const scope = scopeOf('test.example', me.user_id ?? 'nobody');
   const connectivity = options.connectivity ?? testConnectivity(options.online ?? true);
