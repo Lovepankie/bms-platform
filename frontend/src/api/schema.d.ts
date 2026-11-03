@@ -14615,19 +14615,19 @@ export interface components {
              * @description Metres, as the phone reports it
              * @example 15
              */
-            accuracy_m: number;
+            accuracy_m?: number;
             /**
              * Format: double
              * @description Degrees north
              * @example 0.3136
              */
-            latitude: number;
+            latitude?: number;
             /**
              * Format: double
              * @description Degrees east
              * @example 32.5811
              */
-            longitude: number;
+            longitude?: number;
         };
         RetailDocument: {
             /** Format: uuid */

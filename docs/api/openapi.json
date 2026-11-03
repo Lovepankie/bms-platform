@@ -12943,8 +12943,7 @@
             "minimum" : -180,
             "type" : "number"
           }
-        },
-        "required" : [ "accuracy_m", "latitude", "longitude" ]
+        }
       },
       "RetailDocument" : {
         "properties" : {
