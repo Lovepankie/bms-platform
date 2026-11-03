@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
@@ -86,8 +85,9 @@ final class XlsxRows {
                     default -> {}
                 }
             }
-        } catch (ZipException | XMLStreamException e) {
-            throw Parsing.unreadable("The workbook is damaged or not an XLSX file.");
+        } catch (IOException | XMLStreamException e) {
+            // A zip cut short or damaged, or XML that is not well formed.
+            throw damaged(e, "The workbook is damaged or not an XLSX file.");
         }
         Workbook.SheetRef chosen = book.choose(sheetName);
         boolean found = false;
@@ -100,14 +100,27 @@ final class XlsxRows {
                     break;
                 }
             }
-        } catch (ZipException | XMLStreamException e) {
-            throw Parsing.unreadable("The sheet is damaged and cannot be read.");
+        } catch (IOException | XMLStreamException e) {
+            throw damaged(e, "The sheet is damaged and cannot be read.");
         }
         if (!found) {
             throw Parsing.unreadable("The workbook names a sheet it does not hold.");
         }
         sheet.end();
         return chosen.name();
+    }
+
+    /**
+     * A damaged file is {@code FILE_UNREADABLE}; a quarantined file that failed its authentication is not the customer's
+     * damage, even when the XML reader wrapped it, and goes up as it is.
+     */
+    private static Parsing.Failure damaged(Exception e, String reason) throws QuarantineCipher.Unreadable {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof QuarantineCipher.Unreadable u) {
+                throw u;
+            }
+        }
+        return Parsing.unreadable(reason);
     }
 
     private static XMLStreamReader xml(InputStream in) throws XMLStreamException {

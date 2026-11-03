@@ -74,6 +74,9 @@ class UploadService implements ImportUploads {
     private final UploadSettings.ImportKey importKey;
     private final ObjectMapper mapper;
 
+    /** For tests: the free disk the next uploads see, in bytes; {@code null} reads the work directory's file store. */
+    volatile java.util.function.LongSupplier freeDisk;
+
     UploadService(
             JdbcClient jdbc,
             DataSource dataSource,
@@ -480,7 +483,7 @@ class UploadService implements ImportUploads {
         long usable;
         try {
             Files.createDirectories(settings.work());
-            usable = Files.getFileStore(settings.work()).getUsableSpace();
+            usable = freeDisk != null ? freeDisk.getAsLong() : Files.getFileStore(settings.work()).getUsableSpace();
         } catch (IOException e) {
             throw new UncheckedIOException("the import work directory cannot be used", e);
         }
