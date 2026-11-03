@@ -39,11 +39,18 @@ import tools.jackson.databind.ObjectMapper;
  * the timestamp must be within five minutes of now; anything else gets 401 and writes nothing. With the secret unset the
  * route answers 404.
  *
- * <p>A bounce ({@code email.bounced}) or a complaint ({@code email.complained}) becomes one row of the platform audit log
- * ({@code platform.email.bounced}, {@code platform.email.complained}), with the outbox row id and the business from the
- * tags the sender put on the email, the recipient's domain only (never the address) and the bounce type. No migration:
- * the application role already writes that log. A repeat delivery of the same message id writes nothing more. Other
- * event types are acknowledged and ignored. The operator's outbox page lists these rows.
+ * <p>A bounce ({@code email.bounced}), a complaint ({@code email.complained}) or a send Resend refused because the address
+ * is on its suppression list ({@code email.suppressed}) becomes one row of the platform audit log
+ * ({@code platform.email.bounced}, {@code platform.email.complained}, {@code platform.email.suppressed}), with the outbox
+ * row id and the business from the tags the sender put on the email, the recipient's domain only (never the address)
+ * and the bounce type. No migration: the application role already writes that log. A repeat delivery of the same
+ * message id writes nothing more. Other event types are acknowledged and ignored. The operator's outbox page lists
+ * these rows.
+ *
+ * <p>Only events whose {@code env} tag is this environment's are recorded: staging and production share the Resend
+ * account, so the others (and any event with no tag, such as an email sent by SMTP or Resend's test event) are answered
+ * 200 and dropped. A hard bounce, a complaint and a suppressed send also carry {@code recipient_hash}, the address's
+ * keyed hash from {@link EmailSuppressions}, which stops later sends to it (ADR-117 decision 9); a soft bounce does not.
  */
 @RestController
 @RequestMapping("/api/v1/platform/webhooks")

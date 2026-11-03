@@ -1,6 +1,8 @@
 package com.rincoltech.bms.core.notifications.internal;
 
 import com.rincoltech.bms.core.audit.PlatformAuditLog;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -48,16 +50,24 @@ class EmailSuppressions {
     /** The key of the dev and test profiles when no data key is set: public, fixed, and refused everywhere else. */
     private static final String DEV_AND_TEST_KEY = "bms-dev-and-test-only-email-suppression-key";
 
+    /** The time of each suppression check, one per email sent. */
+    static final String CHECK_METRIC = "bms.email.suppression.check";
+
     private final PlatformAuditLog audit;
     private final TransactionTemplate reads;
     private final byte[] key;
+    private final Timer check;
 
     EmailSuppressions(
             PlatformAuditLog audit,
             PlatformTransactionManager transactionManager,
             @Value("${bms.auth.data-key:}") String dataKey,
-            Environment environment) {
+            Environment environment,
+            MeterRegistry meters) {
         this.audit = audit;
+        this.check = Timer.builder(CHECK_METRIC)
+                .description("The suppression check before each email, a read of the platform audit log")
+                .register(meters);
         this.reads = new TransactionTemplate(transactionManager);
         this.reads.setReadOnly(true);
         if (dataKey == null || dataKey.isBlank()) {
@@ -79,12 +89,15 @@ class EmailSuppressions {
         return HexFormat.of().formatHex(hmac(key, normal.getBytes(StandardCharsets.UTF_8)));
     }
 
-    /** True while the newest entry for this address suppresses it. Opens its own read when none is open. */
+    /**
+     * True while the newest entry for this address suppresses it. Opens its own read when none is open. Timed as
+     * {@link #CHECK_METRIC}: the read has no time bound, so its cost grows with the platform audit log (issue #777).
+     */
     boolean suppressed(String address) {
         String hash = hash(address);
-        return Boolean.TRUE.equals(reads.execute(status -> audit.latestAction(ENTRIES, KEY, hash)
+        return check.record(() -> Boolean.TRUE.equals(reads.execute(status -> audit.latestAction(ENTRIES, KEY, hash)
                 .map(action -> !action.equals(UNSUPPRESSED))
-                .orElse(false)));
+                .orElse(false))));
     }
 
     /** Records the operator's clear in the caller's transaction; false (nothing written) when it was not suppressed. */

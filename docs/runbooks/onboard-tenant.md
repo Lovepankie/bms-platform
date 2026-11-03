@@ -60,6 +60,12 @@ Set these in `/opt/bms/.env` (never in git; `.env.example` lists them empty), th
 | `BMS_TELEGRAM_BOT_TOKEN` | The bot's token from BotFather |
 | `BMS_TELEGRAM_OPERATOR_CHAT_ID` | The chat that receives operator alerts |
 
+**Every host needs `BMS_DATA_KEY`, even one that sends by SMTP only** (issue #777, ADR-117 decision 9). The suppressed
+email addresses are matched by a hash under it whatever the provider is, so outside the dev and test profiles a blank
+`BMS_DATA_KEY` stops the start with `BMS_DATA_KEY must be set`. Set it before the release reaches the host (`java -jar
+bms-api.jar keys` prints one); it is the same key that seals second-factor seeds (`docs/runbooks/payments.md`), so a host
+that already has one needs nothing new.
+
 On production (`BMS_ENVIRONMENT=production`) the four email values are required: without any of them, or with a
 `BMS_MAIL_FROM` that is not an address, the API refuses to start and its log names the unset variables (ADR-059).
 Elsewhere, with a sender's values unset it is off: its messages wait as `pending` and nothing fails; the
@@ -116,7 +122,9 @@ The `BMS_SMTP_*` values can stay on the host; they are not used while the provid
   at all (`resend_unreachable`: refused, no route, DNS, connect timeout or TLS handshake, before any of the request
   left) then goes by SMTP at once. The log says `resend unreachable; sent by smtp instead` and then
   `outbox row sent: ... via=smtp`, and the platform audit log has one `platform.outbox.sent_via` row with the outbox row
-  id and `via` `smtp`, which is how to tell afterwards which sender carried an email. A Resend that answers with
+  id and `via` `smtp`, which is how to tell afterwards which sender carried an email. SMTP has no idempotency key: if
+  the SMTP server accepted the message and the connection then failed (on close), the row is retried, and the next try
+  may reach Resend, so the reader can get the email twice, as with SMTP alone. A Resend that answers with
   errors, times out after the request was sent, or drops the connection once made is not bypassed (it may already hold
   the email, and SMTP would send a second copy): those rows are tried three times over about six minutes, then show as
   failed on "Messages not sent". When Resend is back, press "Send again" on them; an activation or reset whose link has

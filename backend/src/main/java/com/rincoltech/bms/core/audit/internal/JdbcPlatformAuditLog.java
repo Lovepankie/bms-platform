@@ -24,9 +24,12 @@ class JdbcPlatformAuditLog implements PlatformAuditLog {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(String action, UUID platformUserId, UUID tenantId, Map<String, Object> data) {
+        // The time of the write itself, not of the transaction's start (issue #777): a bounce whose transaction waited
+        // while an operator's clear committed is still the newer of the two for latestAction.
         jdbc.sql("""
-                        INSERT INTO platform_audit_log (id, platform_user_id, action, tenant_id, data, request_id, ip)
-                        VALUES (?, ?, ?, ?, CAST(? AS jsonb), ?, CAST(? AS inet))
+                        INSERT INTO platform_audit_log (id, platform_user_id, action, tenant_id, data, request_id, ip,
+                                                        occurred_at)
+                        VALUES (?, ?, ?, ?, CAST(? AS jsonb), ?, CAST(? AS inet), clock_timestamp())
                         """)
                 .param(UUID.randomUUID())
                 .param(platformUserId)

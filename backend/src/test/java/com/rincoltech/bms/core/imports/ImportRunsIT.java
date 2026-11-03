@@ -32,6 +32,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -432,6 +434,81 @@ class ImportRunsIT extends IntegrationTest {
         }
         assertThat(batchStatus(run.id(), 1)).isEqualTo("pending");
         assertThat(audits("core.import_run.resumed")).isZero();
+    }
+
+    @Test
+    void aResumeInTheGapBetweenTwoBatchesIsRefusedAndTheHaltIsHonoured() throws Exception {
+        // JUSTIFICATION-A3: the test issue #779 asks for, a halt and a resume in the gap between two batches.
+        Run run = readyRun(3);
+        CountDownLatch inGap = new CountDownLatch(1);
+        CountDownLatch answered = new CountDownLatch(1);
+        List<Integer> written = new CopyOnWriteArrayList<>();
+        BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
+            written.add(seq);
+            postJournal("lending");
+            if (seq == 1) {
+                // Runs once batch 1 has committed and its business lock is gone: the loop waits here, before batch 2.
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        inGap.countDown();
+                        try {
+                            answered.await(20, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                });
+            }
+            return Map.of();
+        };
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<CommitOutcome> commit = pool.submit(() -> as(t, () -> runs.commit(run.id(), writer)));
+            assertThat(inGap.await(20, TimeUnit.SECONDS)).isTrue();
+            try {
+                assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
+                as(t, () -> {
+                    runs.requestHalt(run.id());
+                    assertCode(() -> runs.resume(run.id(), writer), "IMPORT_IN_PROGRESS");
+                    return null;
+                });
+                assertThat(as(t, () -> runs.get(run.id())).haltRequested())
+                        .as("the refused resume leaves the halt set")
+                        .isTrue();
+            } finally {
+                answered.countDown();
+            }
+            assertThat(commit.get(60, TimeUnit.SECONDS)).isEqualTo(CommitOutcome.HALTED);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(written).as("the halt stopped the loop before batch 2").containsExactly(1);
+        assertThat(batchStatus(run.id(), 2)).isEqualTo("pending");
+        assertThat(batchStatus(run.id(), 3)).isEqualTo("pending");
+        assertThat(audits("core.import_run.halted")).isEqualTo(1);
+        assertThat(audits("core.import_run.resumed")).isZero();
+
+        // The loop has ended and its lock with it, so the operator's resume now goes on.
+        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(written).containsExactly(1, 2, 3);
+        assertThat(journals()).isEqualTo(3);
+    }
+
+    @Test
+    void aHaltOfAnImportNotBeingImportedIsRefusedInPlainWords() {
+        as(t, () -> {
+            Run run = runs.open(operator);
+            runs.transition(run.id(), "uploaded");
+            runs.transition(run.id(), "in_review");
+            assertThatThrownBy(() -> runs.requestHalt(run.id()))
+                    .isInstanceOfSatisfying(
+                            ApiException.class,
+                            e -> assertThat(e.getMessage())
+                                    .isEqualTo("Only an import being imported can be stopped; this one is in review.")
+                                    .doesNotContain("in_review", "committing"));
+            return null;
+        });
     }
 
     // ---------------------------------------------------------------------------------------------

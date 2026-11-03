@@ -412,11 +412,22 @@ class EmailLayoutTest {
     void anSmtpMessageCarriesNoTagsSoItsBouncesAreNotTrackedOrSuppressed() throws Exception {
         // ADR-117 decision 8: Resend's SMTP documentation names no header that carries tags, so an email sent by SMTP
         // has no env, outbox_id or tenant_id tag, and the webhook drops its events (ResendWebhookIT pins that half).
+        // The message is the one transmit itself sends, already saved (issue #777), not a separate compose.
         OutboxChannel.Delivery delivery = delivery("identity.password_reset", params());
-        SmtpEmailChannel.Body body = SmtpEmailChannel.body(templates, delivery, platform(), "", TRUSTED);
-        MimeMessage message = SmtpEmailChannel.compose(
-                Session.getInstance(new Properties()), "BMS by Rincol Tech <no-reply@example.test>", delivery, body);
-        message.saveChanges();
+        SmtpEmailChannel channel = new SmtpEmailChannel(
+                new NotificationProperties(
+                        new NotificationProperties.Smtp(
+                                "smtp.example.test", null, "u", "fabricated-01", "no-reply@example.test"),
+                        null,
+                        ""),
+                templates,
+                HOSTS,
+                null,
+                null,
+                null,
+                null,
+                "");
+        MimeMessage message = channel.message(Session.getInstance(new Properties()), delivery);
         String outboxId = delivery.context().outboxId().toString();
         java.util.Enumeration<jakarta.mail.Header> headers = message.getAllHeaders();
         List<String> names = new java.util.ArrayList<>();

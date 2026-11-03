@@ -670,9 +670,15 @@ The commit is a sequence of transactions:
    message, which may quote a row) and is rethrown.
 3. **Finish.** The run moves to `committed`, and a halt pressed during the last batch, after its last checkpoint, is cleared.
 
-`resume` continues a committing run from its first pending batch and clears the halt. While a batch is being written it
-holds the business's lock, so `resume` asks for that lock with `pg_try_advisory_xact_lock` and answers `IMPORT_IN_PROGRESS`
-when it is taken: a resume never clears a halt under a writer that is still running. It does not ask the trading guard
+`resume` continues a committing run from its first pending batch and clears the halt. The commit loop has an owner (issue
+#779): before anything else, a commit or a resume takes `pg_try_advisory_lock`, a session lock, on the business's loop key,
+on a connection of its own held in autocommit outside every transaction, and keeps it until the loop ends (committed,
+halted or failed). A second commit or resume of the business, on any instance, finds the lock taken and gets
+`IMPORT_IN_PROGRESS`, in a batch and in the gap between two batches alike: a resume never clears a halt under a loop that
+is still alive, so a halt pressed between batches stops the loop at the next batch. The lock is the loop's heartbeat:
+PostgreSQL drops it when the loop's connection or process dies, so a crashed loop never blocks a resume, and no column or
+migration is needed. The audit of a failed batch never replaces the batch's error: when it fails too (a lost connection
+fails both), its error is attached to the batch's as suppressed. It does not ask the trading guard
 again: the batches already committed are the business's records now. The override is set by one platform operator with a
 reason and approved by a different one (the CHECK `import_runs_checker_not_maker`, and `self_approval_forbidden`); both
 steps are audited. Branch limits are each template writer's: a writer checks that every row it writes falls in a branch

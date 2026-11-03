@@ -9,6 +9,7 @@ import com.rincoltech.bms.testsupport.Api.Session;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Map;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -19,6 +20,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -333,4 +336,40 @@ class ResendWebhookIT extends IntegrationTest {
         deliver("email.bounced", to, "Permanent");
         assertThat(suppressions.suppressed(to)).isTrue();
     }
+
+    @Autowired
+    com.rincoltech.bms.core.audit.PlatformAuditLog audit;
+
+    @Autowired
+    org.springframework.jdbc.core.simple.JdbcClient jdbc;
+
+    @Autowired
+    org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    // JUSTIFICATION-A3: the race test issue #777 asks for (fifth #759 review, 5); no existing test orders two writers.
+    @Test
+    void aBounceWhoseTransactionStartedBeforeAClearIsStillTheNewer() {
+        String to = "late-bounce-01@suppress.example.test";
+        String hash = suppressions.hash(to);
+        TransactionTemplate webhook = new TransactionTemplate(transactionManager);
+        TransactionTemplate operator = new TransactionTemplate(transactionManager);
+        operator.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        webhook.executeWithoutResult(s -> {
+            // The webhook's transaction starts, then waits (as on its svix lock) while the operator's clear commits.
+            jdbc.sql("SELECT pg_sleep(0.05)").query().singleRow();
+            operator.executeWithoutResult(
+                    o -> audit.record(EmailSuppressions.UNSUPPRESSED, null, null, Map.of(EmailSuppressions.KEY, hash)));
+            audit.record(ResendWebhookController.BOUNCED, null, null, Map.of(EmailSuppressions.KEY, hash));
+        });
+        long checks = meters.get(EmailSuppressions.CHECK_METRIC).timer().count();
+        assertThat(suppressions.suppressed(to))
+                .as("the bounce was written after the clear, so it decides")
+                .isTrue();
+        assertThat(meters.get(EmailSuppressions.CHECK_METRIC).timer().count())
+                .as("each check is timed, so its growing cost shows")
+                .isGreaterThan(checks);
+    }
+
+    @Autowired
+    io.micrometer.core.instrument.MeterRegistry meters;
 }

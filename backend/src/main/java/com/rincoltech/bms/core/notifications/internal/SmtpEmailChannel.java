@@ -175,15 +175,21 @@ class SmtpEmailChannel implements OutboxChannel {
         props.put("mail.smtps.timeout", "20000");
         props.put("mail.smtps.writetimeout", "20000");
         Session session = Session.getInstance(props);
-        Body body = body(delivery, brand(delivery.context()));
-        MimeMessage message =
-                compose(session, sender(delivery.context()), delivery, body, attachment(delivery.context()));
+        MimeMessage message = message(session, delivery);
         try (Transport transport = session.getTransport("smtps")) {
             transport.connect(smtp.host(), smtp.port(), smtp.user(), smtp.password());
-            message.saveChanges();
             transport.sendMessage(message, message.getAllRecipients());
         }
         return Result.SENT;
+    }
+
+    /** The message {@link #transmit} sends, complete and saved, so a test reads exactly what goes out (issue #777). */
+    MimeMessage message(Session session, Delivery delivery) throws MessagingException, SendFailure {
+        Body body = body(delivery, brand(delivery.context()));
+        MimeMessage message =
+                compose(session, sender(delivery.context()), delivery, body, attachment(delivery.context()));
+        message.saveChanges();
+        return message;
     }
 
     // JUSTIFICATION-A3: the staging allow-list and business from-name are new (#333), shared by both senders.

@@ -3,7 +3,17 @@ package com.rincoltech.bms.core.notifications.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.env.MockEnvironment;
 
 /**
@@ -18,7 +28,8 @@ class EmailSuppressionsTest {
     static EmailSuppressions build(String dataKey, String... profiles) {
         MockEnvironment environment = new MockEnvironment();
         environment.setActiveProfiles(profiles);
-        return new EmailSuppressions(null, null, dataKey, environment);
+        return new EmailSuppressions(
+                null, null, dataKey, environment, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
     @Test
@@ -41,5 +52,42 @@ class EmailSuppressionsTest {
                 .isEqualTo(build(key, "server").hash(ADDRESS))
                 .isNotEqualTo(build("", "test").hash(ADDRESS))
                 .hasSize(64);
+    }
+
+    // JUSTIFICATION-A3: the new test issue #777 item 1 asks for; no existing test reads the main application.yml.
+    @Test
+    void theDataKeyIsBmsDataKeyThroughTheRealApplicationYml() throws Exception {
+        // Issue #777: the test profile has a key of its own, so this binds the constructor's own @Value placeholder
+        // against the main application.yml alone, with BMS_DATA_KEY set as a host's environment would set it.
+        String placeholder = Arrays.stream(EmailSuppressions.class.getDeclaredConstructors()[0].getParameters())
+                .map(p -> p.getAnnotation(Value.class))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow()
+                .value();
+        String key = "ZmFicmljYXRlZC1ob3N0LWRhdGEta2V5LTAwMDAwMDE=";
+
+        assertThat(applicationYml(Map.of("BMS_DATA_KEY", key)).resolvePlaceholders(placeholder))
+                .isEqualTo(key);
+        assertThat(applicationYml(Map.of()).resolvePlaceholders(placeholder))
+                .as("unset on the host: blank, which stops the start")
+                .isBlank();
+        String bound = applicationYml(Map.of("BMS_DATA_KEY", key)).resolvePlaceholders(placeholder);
+        assertThat(build(bound, "server").hash(ADDRESS))
+                .isEqualTo(build(key, "server").hash(ADDRESS));
+    }
+
+    /** The main application.yml under a host environment of {@code variables} only, as a server would read it. */
+    static StandardEnvironment applicationYml(Map<String, Object> variables) throws Exception {
+        StandardEnvironment environment = new StandardEnvironment();
+        MutablePropertySources sources = environment.getPropertySources();
+        sources.remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+        sources.remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
+        sources.addFirst(new SystemEnvironmentPropertySource("host", variables));
+        for (PropertySource<?> document :
+                new YamlPropertySourceLoader().load("application.yml", new ClassPathResource("application.yml"))) {
+            sources.addLast(document);
+        }
+        return environment;
     }
 }

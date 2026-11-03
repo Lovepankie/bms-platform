@@ -39,7 +39,8 @@ types, which can be a real person's.
    leaves its rows failed there; an outage that refuses connections goes by SMTP. The outbox row only says `sent`, so
    which sender carried a fallback is recorded beside it: the sender's result names SMTP, the dispatcher's log line says
    `via=smtp`, and one `platform_audit_log` row `platform.outbox.sent_via` holds the row id, the channel and `smtp`
-   (no address, no text), written in the transaction that marks the row sent.
+   (no address, no text), written through the `PlatformAuditLog` port (so its masking, request id and client address
+   apply; issue #777) in the transaction that marks the row sent.
 2. **Resend over HTTP.** `ResendEmailChannel` sends one `POST /emails` to `BMS_RESEND_API_URL` (default
    `https://api.resend.com`; anything but `https`, apart from the loopback a test uses, stops the start, so the key never
    travels in clear) with `Authorization: Bearer <BMS_RESEND_API_KEY>`. The message is the one the SMTP sender builds:
@@ -118,7 +119,9 @@ types, which can be a real person's.
    key (`BMS_DATA_KEY`) with its own purpose label (`bms.email.recipient-hash.v1`), as ADR-036 hashes SMS numbers. The
    address itself is never stored, and only a holder of the data key can test one. The hash key is never random: a
    blank `BMS_DATA_KEY` stops the start outside the dev and test profiles (`EmailSuppressionsTest`), so a restart can
-   never silently forget every suppression, and dev and test use one fixed key of their own. A soft bounce carries no hash and
+   never silently forget every suppression, and dev and test use one fixed key of their own. The check exists whatever
+   the provider is, so every host needs `BMS_DATA_KEY`, even one that sends by SMTP only (issue #777; a test binds the
+   real `application.yml` mapping, and the runbook says so). A soft bounce carries no hash and
    suppresses nothing. Before sending, both senders (`SmtpEmailChannel` and `ResendEmailChannel`, through one shared
    check after the staging allow-list) read the newest platform audit row carrying that hash among
    `platform.email.bounced`, `platform.email.complained`, `platform.email.suppressed` and `platform.email.unsuppressed`;
@@ -126,7 +129,9 @@ types, which can be a real person's.
    not sent" and never reaches Resend. An operator clears it with `POST /api/v1/platform/outbox/unsuppress` (body
    `{email}`, `platform.tenants.manage`), which records `platform.email.unsuppressed` with the hash and the operator
    (409 `email_not_suppressed`, nothing written, when the address was not suppressed). A later hard bounce or complaint
-   suppresses it again. No migration and no new column: the same audit log, read by the same role. The check is one
+   suppresses it again. The newest row is the one written last: a platform audit row carries `clock_timestamp()`, the
+   time of its own write, not of its transaction's start, so a bounce whose transaction waited while a clear committed
+   is still the newer (issue #777). No migration and no new column: the same audit log, read by the same role. The check is one
    query per email on a log that holds operator events only, small enough without an index; an index on the hash would
    be a migration. A rotation of `BMS_DATA_KEY` changes the hash, so suppressions recorded before it stop matching (as
    SMS opt-outs do under ADR-036); Resend's own list still drops those sends until the next bounce records them again.
@@ -143,10 +148,13 @@ silent `sent`.
 and the operator has to add it. The bounced email itself is beside its outbox row, not on it: that row still reads
 `sent`, and the operator matches the two by the row id (#767). A fixed mailbox needs the operator's clear before BMS sends
 to it again, and Resend's own suppression list needs clearing in Resend too. Email sent by SMTP, including every
-fallback, is neither tracked nor suppressed (decision 8).
+fallback, is neither tracked nor suppressed (decision 8). SMTP has no idempotency key: when a fallback's SMTP server
+accepted the message and the connection then failed, the row is retried and may go out again through Resend, so the
+reader gets it twice, as with SMTP alone (decision 1).
 
 **Watch for:** setting `BMS_MAIL_ALLOWLIST` on staging before this release reaches it (an empty list sends nothing, the
 rows show as failed with `not_on_staging_allowlist`); setting `BMS_RESEND_WEBHOOK_SECRET` and adding the webhook in
 Resend on each host; a business name a mail client shows oddly; Resend's limits on attachment size for the weekly
 workbook (ADR-074); the bounce on the outbox row itself (issue #767, a migration); the cost of the suppression check if
-the platform audit log ever grows large.
+the platform audit log ever grows large, timed per email as `bms.email.suppression.check` (issue #777): a time that
+keeps rising is the cue for an index on the hash, which is a migration.

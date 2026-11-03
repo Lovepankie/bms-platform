@@ -289,7 +289,9 @@ Until the `bms_platform` role exists, `bms_app` holds the grants on the platform
 
 `id uuid PK`, `occurred_at timestamptz`, `platform_user_id uuid`, `action text`,
 `tenant_id uuid NULL` (not a FK, survives tenant deletion), `data jsonb`, `request_id text`,
-`ip inet`.
+`ip inet`. The port (`PlatformAuditLog`) writes `occurred_at` as `clock_timestamp()`, the time of the write, so the
+newest row is the one written last even across transactions that overlap (issue #777); the column default `now()` is
+unchanged.
 
 ### `onboarding_applications` (platform; no privilege for `bms_app`, definer functions only, ADR-016, ADR-024)
 

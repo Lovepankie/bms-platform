@@ -7,6 +7,8 @@ import com.rincoltech.bms.core.imports.ImportRuns;
 import com.rincoltech.bms.kernel.ApiException;
 import com.rincoltech.bms.kernel.LiveRecordProbe;
 import com.rincoltech.bms.kernel.TenantContext;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -16,9 +18,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import javax.sql.DataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -32,6 +39,13 @@ import tools.jackson.databind.ObjectMapper;
  * one per batch, and the finish. A batch takes {@code pg_advisory_xact_lock} on the business's import key before it reads
  * its own status, so two resumes of one run, or a resume racing a commit, write each batch once. The kill switch and the
  * halt are read with a fresh snapshot each time (read committed), so an operator's stop is seen within 1,000 rows.
+ *
+ * <p>The commit loop itself has an owner (issue #779): a commit or a resume first takes {@code pg_try_advisory_lock}, a
+ * session lock, on the business's loop key, on a connection of its own that it holds outside every transaction until
+ * the loop ends. While that lock is held, a second commit or resume of the business is refused with
+ * {@code IMPORT_IN_PROGRESS}, also in the gap between two batches, so an operator's halt can never be cleared under a
+ * live loop. The lock is the loop's heartbeat: PostgreSQL drops it when the loop's connection or process dies, so a
+ * crashed loop never blocks a resume, and no column is needed.
  */
 @Service
 class ImportRunService implements ImportRuns {
@@ -39,8 +53,13 @@ class ImportRunService implements ImportRuns {
     /** Rows between two reads of the kill switch and the halt inside a batch (spec section 5.4). */
     static final int CHECKPOINT_ROWS = 1_000;
 
-    /** The business's import key: the advisory lock every batch takes, and that a resume must find free. */
+    /** The business's import key: the advisory lock every batch takes. */
     private static final String LOCK_KEY = "hashtextextended('core.imports:' || current_setting('app.tenant_id'), 0)";
+
+    /** The business's loop key, followed by the business's id: the session lock the whole commit loop holds. */
+    private static final String LOOP_KEY = "core.imports.loop:";
+
+    private static final Logger log = LoggerFactory.getLogger(ImportRunService.class);
 
     private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 
@@ -49,6 +68,7 @@ class ImportRunService implements ImportRuns {
             allow_trading_approved_by, pre_import_dump_file, committing_at, committed_at""";
 
     private final JdbcClient jdbc;
+    private final DataSource dataSource;
     private final TransactionTemplate tx;
     private final AuditLog audit;
     private final PlatformAuditLog platformAudit;
@@ -57,12 +77,14 @@ class ImportRunService implements ImportRuns {
 
     ImportRunService(
             JdbcClient jdbc,
+            DataSource dataSource,
             PlatformTransactionManager transactions,
             AuditLog audit,
             PlatformAuditLog platformAudit,
             List<LiveRecordProbe> probes,
             ObjectMapper mapper) {
         this.jdbc = jdbc;
+        this.dataSource = dataSource;
         this.tx = new TransactionTemplate(transactions);
         this.audit = audit;
         this.platformAudit = platformAudit;
@@ -157,7 +179,8 @@ class ImportRunService implements ImportRuns {
         return tx.execute(s -> {
             Run run = find(runId, true);
             if (!RunStates.COMMITTING.equals(run.status())) {
-                throw invalidTransition("Only a committing run can be stopped; this one is " + run.status() + ".");
+                throw invalidTransition("Only an import being imported can be stopped; this one is "
+                        + RunStates.words(run.status()) + ".");
             }
             jdbc.sql(
                             "UPDATE import_runs SET halt_requested = true, version = version + 1, updated_at = now() WHERE id = ?")
@@ -241,22 +264,24 @@ class ImportRunService implements ImportRuns {
     @Override
     public CommitOutcome commit(UUID runId, BatchWriter writer) {
         requireNoTransaction();
-        List<String> trading;
-        try {
-            trading = tx.execute(s -> start(runId));
-        } catch (DuplicateKeyException e) {
-            // import_runs_one_committing: another run of this business is committing.
-            throw importInProgress();
+        try (LoopClaim claim = claimLoop()) {
+            List<String> trading;
+            try {
+                trading = tx.execute(s -> start(runId));
+            } catch (DuplicateKeyException e) {
+                // import_runs_one_committing: another run of this business is committing.
+                throw importInProgress();
+            }
+            if (!trading.isEmpty()) {
+                throw new ApiException(
+                        HttpStatus.CONFLICT,
+                        "TENANT_TRADING",
+                        "Business already trades",
+                        "The tenant already has live transactions (" + String.join(", ", trading)
+                                + "); an import needs the trading override.");
+            }
+            return writeBatches(runId, writer);
         }
-        if (!trading.isEmpty()) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "TENANT_TRADING",
-                    "Business already trades",
-                    "The tenant already has live transactions (" + String.join(", ", trading)
-                            + "); an import needs the trading override.");
-        }
-        return writeBatches(runId, writer);
     }
 
     /**
@@ -300,30 +325,88 @@ class ImportRunService implements ImportRuns {
     @Override
     public CommitOutcome resume(UUID runId, BatchWriter writer) {
         requireNoTransaction();
-        tx.executeWithoutResult(s -> {
-            Run run = find(runId, true);
-            if (!RunStates.COMMITTING.equals(run.status())) {
-                throw invalidTransition(
-                        "Only an import being imported can go on; this one is " + RunStates.words(run.status()) + ".");
+        // A live commit loop owns the business's loop lock, inside a batch and between two: going on now would clear
+        // the operator's halt under it, and the halt would be lost (reviews of #736, issue #779).
+        try (LoopClaim claim = claimLoop()) {
+            tx.executeWithoutResult(s -> {
+                Run run = find(runId, true);
+                if (!RunStates.COMMITTING.equals(run.status())) {
+                    throw invalidTransition("Only an import being imported can go on; this one is "
+                            + RunStates.words(run.status()) + ".");
+                }
+                requireCommitPossible(run);
+                // The trading guard is not asked again: it was passed when the run started, and the batches this run
+                // already committed are the business's records now.
+                jdbc.sql(
+                                "UPDATE import_runs SET halt_requested = false, version = version + 1, updated_at = now() WHERE id = ?")
+                        .param(runId)
+                        .update();
+                audit(runId, "core.import_run.resumed", Map.of(), Map.of("halt_requested", false));
+            });
+            return writeBatches(runId, writer);
+        }
+    }
+
+    /**
+     * Claims the business's commit loop: {@code pg_try_advisory_lock} on the loop key, on a connection of its own, in
+     * autocommit so it never sits idle in a transaction. Refused with {@code IMPORT_IN_PROGRESS} when another loop of the
+     * business holds it, on this instance or another.
+     */
+    private LoopClaim claimLoop() {
+        String key = LOOP_KEY + TenantContext.require();
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        boolean claimed;
+        try {
+            connection.setAutoCommit(true);
+            try (PreparedStatement claim =
+                    connection.prepareStatement("SELECT pg_try_advisory_lock(hashtextextended(?, 0))")) {
+                claim.setString(1, key);
+                try (ResultSet rs = claim.executeQuery()) {
+                    claimed = rs.next() && rs.getBoolean(1);
+                }
             }
-            // A writer still holds the business's lock while a batch is being written: going on now would clear the
-            // operator's halt under it, and the halt would be lost (review of #736).
-            Boolean free = jdbc.sql("SELECT pg_try_advisory_xact_lock(" + LOCK_KEY + ")")
-                    .query(Boolean.class)
-                    .single();
-            if (!Boolean.TRUE.equals(free)) {
-                throw importInProgress();
+        } catch (SQLException e) {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+            throw new DataAccessResourceFailureException("The import's commit loop could not be claimed", e);
+        }
+        if (!claimed) {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+            throw importInProgress();
+        }
+        return new LoopClaim(connection, key);
+    }
+
+    /** The claimed loop; closing it unlocks the loop key and gives the connection back. */
+    private final class LoopClaim implements AutoCloseable {
+
+        private final Connection connection;
+        private final String key;
+
+        LoopClaim(Connection connection, String key) {
+            this.connection = connection;
+            this.key = key;
+        }
+
+        @Override
+        public void close() {
+            try (PreparedStatement unlock =
+                    connection.prepareStatement("SELECT pg_advisory_unlock(hashtextextended(?, 0))")) {
+                unlock.setString(1, key);
+                unlock.execute();
+            } catch (SQLException e) {
+                // A session that could not unlock must not go back to the pool still holding the loop: end it.
+                log.warn(
+                        "import commit loop not unlocked, closing its connection: {}",
+                        e.getClass().getSimpleName());
+                try {
+                    connection.abort(Runnable::run);
+                } catch (SQLException ignored) {
+                    // The connection is being thrown away either way.
+                }
+            } finally {
+                DataSourceUtils.releaseConnection(connection, dataSource);
             }
-            requireCommitPossible(run);
-            // The trading guard is not asked again: it was passed when the run started, and the batches this run
-            // already committed are the business's records now.
-            jdbc.sql(
-                            "UPDATE import_runs SET halt_requested = false, version = version + 1, updated_at = now() WHERE id = ?")
-                    .param(runId)
-                    .update();
-            audit(runId, "core.import_run.resumed", Map.of(), Map.of("halt_requested", false));
-        });
-        return writeBatches(runId, writer);
+        }
     }
 
     private CommitOutcome writeBatches(UUID runId, BatchWriter writer) {
@@ -346,12 +429,17 @@ class ImportRunService implements ImportRuns {
             } catch (RuntimeException e) {
                 // The batch rolled back as a whole and the run stays committing, so it can go on once fixed. The audit
                 // says which batch failed and the kind of failure, never the message, which may quote the row's data.
-                tx.executeWithoutResult(s -> audit(
-                        runId,
-                        "core.import_run.batch_failed",
-                        Map.of(),
-                        Map.of("batch_seq", batch.seq(), "error", e.getClass().getSimpleName())));
-                throw e;
+                throw audited(
+                        e,
+                        () -> tx.executeWithoutResult(s -> audit(
+                                runId,
+                                "core.import_run.batch_failed",
+                                Map.of(),
+                                Map.of(
+                                        "batch_seq",
+                                        batch.seq(),
+                                        "error",
+                                        e.getClass().getSimpleName()))));
             }
         }
         tx.executeWithoutResult(s -> {
@@ -394,6 +482,19 @@ class ImportRunService implements ImportRuns {
                         """)
                 .params(mapper.writeValueAsString(counts == null ? Map.of() : counts), batch.id())
                 .update();
+    }
+
+    /**
+     * Runs the audit of a failed batch and returns the batch's failure to throw. When the audit fails too (a lost
+     * connection fails both), its error is added to the failure as suppressed, so the cause is never replaced.
+     */
+    static RuntimeException audited(RuntimeException failure, Runnable audit) {
+        try {
+            audit.run();
+        } catch (RuntimeException auditFailure) {
+            failure.addSuppressed(auditFailure);
+        }
+        return failure;
     }
 
     /** Throws {@link Halted} when the kill switch is off or the run's halt is set, read with a fresh snapshot. */

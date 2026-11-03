@@ -60,6 +60,9 @@ class SmsEventsIT extends IntegrationTest {
     OutboxTemplates templates;
 
     @Autowired
+    com.rincoltech.bms.core.audit.PlatformAuditLog platformAudit;
+
+    @Autowired
     TenantSettings tenantSettings;
 
     @Autowired
@@ -115,8 +118,8 @@ class SmsEventsIT extends IntegrationTest {
                     tenantJobs,
                     hasher,
                     outbox);
-            this.dispatcher =
-                    new OutboxDispatcher(jdbc, transactionManager, templates, mapper, business, List.of(channel));
+            this.dispatcher = new OutboxDispatcher(
+                    jdbc, transactionManager, templates, mapper, business, List.of(channel), platformAudit);
             channel.enabled();
         }
 
