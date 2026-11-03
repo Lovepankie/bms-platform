@@ -49,6 +49,7 @@ import com.rincoltech.bms.retail.sales.internal.SalesRepository.Header;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.LinePricing;
 import com.rincoltech.bms.retail.sales.internal.SalesRepository.NewLine;
 import com.rincoltech.bms.retail.stock.CreditPeriods;
+import com.rincoltech.bms.retail.stock.EntryLocations;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -111,6 +112,7 @@ class SalesService {
     private final ApplicationEventPublisher events;
     // Lazy: the approvals module holds the void action, which calls back into this service on approval.
     private final Approvals approvals;
+    private final EntryLocations locations;
 
     SalesService(
             SalesRepository repo,
@@ -129,7 +131,9 @@ class SalesService {
             AccountsService accounts,
             ReturnsRepository returns,
             ApplicationEventPublisher events,
-            @Lazy Approvals approvals) {
+            @Lazy Approvals approvals,
+            EntryLocations locations) {
+        this.locations = locations;
         this.approvals = approvals;
         this.events = events;
         this.repo = repo;
@@ -213,6 +217,7 @@ class SalesService {
                 r.creditOverrideReason(),
                 r.lines(),
                 r.clientSaleId(),
+                null,
                 null,
                 null,
                 null);
@@ -444,6 +449,8 @@ class SalesService {
                     "This sale is being recorded by another request; try again shortly.");
         }
         lines.forEach(l -> repo.insertLine(id, l));
+        // ADR-122: where the phone was, online or offline, when it said; never in the audit entry or the request hash.
+        locations.record(EntryLocations.SALE, id, branch, r.location());
         List<Movement> movements = lines.stream()
                 .map(l -> new Movement(
                         branch,

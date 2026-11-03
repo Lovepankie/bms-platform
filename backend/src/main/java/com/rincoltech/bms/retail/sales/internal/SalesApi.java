@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.sales.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.stock.EntryLocations;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -114,7 +115,14 @@ final class SalesApi {
                     description = "ADR-067: the server's time when the device last refreshed its prices. A device price"
                             + " equal to the catalogue or pack price in force then stands; an occurred_at before it means"
                             + " the phone clock was behind (clock_behind)")
-            Instant pricesAsOf) {
+            Instant pricesAsOf,
+
+            @Valid
+            @Schema(
+                    description =
+                            "ADR-122: where the phone was when the sale was made, also offline; optional, a sale is"
+                                    + " never refused without it. Not part of the client sale id's fingerprint")
+            EntryLocations.Fix location) {
 
         /** A sale request of the server's own (a quotation or an order becoming a sale): no device fields. */
         SaleRequest(
@@ -139,6 +147,7 @@ final class SalesApi {
                     priceListId,
                     creditOverrideReason,
                     lines,
+                    null,
                     null,
                     null,
                     null,

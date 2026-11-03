@@ -148,13 +148,20 @@ class OfflineSalesRepository {
                                 Timestamp.from(r.occurredAt()),
                                 r.paymentMethod(),
                                 r.totalMinor(),
-                                mapper.writeValueAsString(r.request()),
+                                // ADR-122: a manager reads this request, so where the phone was is never kept in it.
+                                mapper.writeValueAsString(withoutLocation(r.request())),
                                 r.code(),
                                 r.message(),
                                 saleId == null ? "open" : "recorded",
                                 saleId)
                         .update()
                 == 1;
+    }
+
+    static Map<String, Object> withoutLocation(Map<String, Object> request) {
+        Map<String, Object> kept = new java.util.LinkedHashMap<>(request);
+        kept.remove("location");
+        return kept;
     }
 
     /** A report whose sale turned out to be recorded is closed by it. */

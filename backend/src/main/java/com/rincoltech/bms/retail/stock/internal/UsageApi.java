@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.stock.EntryLocations;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -41,7 +42,11 @@ final class UsageApi {
             @Schema(description = "Defaults to today; not in the future")
             LocalDate occurredOn,
 
-            @NotEmpty @Size(max = 200) List<@Valid @NotNull UsageLineRequest> lines) {}
+            @NotEmpty @Size(max = 200) List<@Valid @NotNull UsageLineRequest> lines,
+
+            @Valid
+            @Schema(description = "ADR-122: where the phone was; optional, the entry is never refused without it")
+            EntryLocations.Fix location) {}
 
     @Schema(name = "RetailUsageLine")
     record UsageLine(

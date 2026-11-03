@@ -36,7 +36,8 @@ class SaleRequestKeyTest {
                 CLIENT,
                 occurredAt,
                 offline,
-                pricesAsOf);
+                pricesAsOf,
+                null);
     }
 
     @Test
