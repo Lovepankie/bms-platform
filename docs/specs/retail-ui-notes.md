@@ -1820,6 +1820,21 @@ ADR-070, FR-RET-68, migration `V87`. Generic for every business; no capability s
 - The list, with who sees each button, is `docs/ui/next-steps.md`, the single source; `next-steps.dom.test.tsx` holds the code
   to it and fails on a success screen drawn with no next step.
 
+## Every shop's stock on My stock (issue #807)
+
+A business owner asked that everyone on My stock see how many of each item every shop has, in one view, the way the old
+spreadsheet catalogue showed it, without the Switch button that moved them to the other shop (ADR-119, FR-RET-84).
+
+- **Each card** (and the In stock cell on a wide screen) lists every active shop that keeps goods: "In stock here: 0 pieces"
+  first and larger, then "Another shop: 1 piece", in the item's packs and pieces when it has a standard pack. A shop with none
+  shows 0; a quantity below zero keeps its minus sign and adds "Below zero" in words. Quantities in tabular figures, no stripe.
+- **Everyone** who may see My stock at the shop in use sees it, a seller scoped to one shop included. Only the counts: the
+  buying price shows only to a reader of costs, for this shop, as before; the selling price as before.
+- **The owner's switch** is on Retail settings: "Show other shops' stock to everyone", on by default. Off, the card is as before
+  issue #807, with the "0 here" note and no Switch button.
+- The search, the filters, the category chips and their counts are those of the shop in use. The list comes in the same request
+  as before, page by page, and is kept for reading offline with the rest of My stock.
+
 ## Where is my stock (issue #728)
 
 A shop owner added his items with Quick add at his store, looked at My stock in his main shop, saw 0 and thought his numbers
@@ -1827,7 +1842,8 @@ were lost; he also left two counts at Review the difference, because the last st
 `docs/ui/where-is-my-stock`.
 
 - **My stock and the item's page** say where an item is when the shop in use has none of it and another shop has some:
-  "0 here. 456 at Test Store", with **Switch to Test Store**, which changes the shop in use with the house toast (issue #680).
+  "0 here. 456 at Test Store" (the **Switch to Test Store** button it had is gone since issue #807; with the owner's switch on,
+  My stock lists every shop instead, see below).
   The other shops are those the all-branches stock list returns (cut by the server to the shops the person may read stock at)
   that are in the person's own branch list; the one holding the most is named. A negative balance keeps its own flag. The flat
   list and the grouped view both say it, and both read the all-branches list under one cache key (`allBranchesKey`).

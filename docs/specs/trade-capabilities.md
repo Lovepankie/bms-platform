@@ -67,7 +67,9 @@ is ignored by the sale path when off, even if rows exist. This is what makes swi
 
 The group also holds two settings that are not capabilities and are never listed in `/me`: the slow mover rules of Stock
 health (issue #414), `slow_mover_months` (whole, 1 to 24, default 4) and `slow_mover_min_sold` (whole, 0 to 1,000,000, default
-0 meaning off). A profile never changes them.
+0 meaning off). A profile never changes them. It also holds `other_shops_stock` (issue #807, ADR-119; boolean, true unless the
+owner switched it off): My stock shows every shop's quantity of each item to everyone who may read stock. A profile never
+changes it either.
 
 ### 1.2 The tenant profile switch: the kind of business
 

@@ -29,6 +29,16 @@ const rows: StockRow[] = [
   { product_id: 'p2', code: 'BL-1', description: 'Test LED bulb 9W screw, warm white', category: 'Bulbs', unit: 'piece', qty: '1127.000', negative: false, sell_minor: 4500, cost_minor: 3200, standard_pack: { unit: 'Box', factor: '10.000' } },
   { product_id: 'p3', code: 'BL-2', description: 'Test tube light 4 ft', category: 'Bulbs', unit: 'piece', qty: '-2.000', negative: true, sell_minor: 15000, cost_minor: 11000 },
 ];
+// ?shops=1: every shop's quantity on each card (issue #807), with a long shop name, a shop with none and one below zero.
+if (query.get('shops') === '1') {
+  const [a, b] = me.branches ?? [];
+  const names = [a?.name ?? 'Test Branch A', 'Another shop with a rather long name on the main road', 'Third Test Shop'];
+  const ids = [a?.id ?? 'a', b?.id ?? 'b', 'c'];
+  rows.forEach((r, i) => {
+    const qtys = [r.qty ?? '0.000', i === 0 ? '0.000' : '12.000', i === 2 ? '-1.000' : '3.000'];
+    r.shops = qtys.map((qty, k) => ({ branch_id: ids[k], name: names[k], qty, negative: qty.startsWith('-'), here: k === 0 }));
+  });
+}
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
 const router = layoutRouter('/staff/retail/stock');
 

@@ -8,7 +8,7 @@ import { branchesWhere, holdsAt } from './permissions';
 
 // Where the stock is (issue #728): a shop owner added his items at his store and looked at My stock in his main shop, where they
 // showed 0, and thought his numbers were lost. An item with none here and some at another shop says so, "0 here. 456 at Test Store",
-// with one tap to switch there, on My stock and on the item's page. The other shops come from the all-branches stock list, which
+// on My stock and on the item's page (the Switch button went with issue #807; with the owner's switch on, My stock lists every shop). The other shops come from the all-branches stock list, which
 // the server cuts to the branches this person may read, and only a shop in their branch list is offered.
 
 /** Another shop holding an item: its id, its name and how many it holds. */
@@ -33,6 +33,9 @@ export function stockElsewhere(data: AllBranchesStock | undefined, here: string,
   return out;
 }
 
+/** Issue #807: a row's every-shop list, only when it holds the shop listed, so the row's own quantity is never lost. */
+export const shopsOf = (r: StockRow) => (r.shops?.some((s) => s.here) ? r.shops : undefined);
+
 /** True for a quantity of exactly none, the one "0 here" speaks of; a negative balance keeps its own flag. */
 export const noneHere = (qty: string | undefined) => milliOf(qty ?? '0') === 0;
 
@@ -53,18 +56,17 @@ export function useStockElsewhere(branchId: string | null, rows: StockRow[] | un
   const read = useQuery({
     queryKey: allBranchesKey({ ...f, negativeOnly: false, level: '', includeClosed: false }),
     queryFn: ({ signal }) => retail.listStockAllBranches({ query: f.query, categoryId: f.categoryId, includeInactive: f.includeInactive, signal }),
-    enabled: enabled && branchId !== null && shops.length > 0 && (rows ?? []).some((r) => noneHere(r.qty)),
+    // Issue #807: rows that carry every shop's quantity need no second read.
+    enabled: enabled && branchId !== null && shops.length > 0 && (rows ?? []).some((r) => noneHere(r.qty) && !shopsOf(r)),
   });
   return branchId === null ? undefined : stockElsewhere(read.data, branchId, shops);
 }
 
-/** "0 here. 456 at Test Store" and Switch to Test Store, which makes that shop the one in use. */
+/** "0 here. 456 at Test Store". Issue #807: no Switch button, since seeing another shop's count must not move the person there. */
 export function ElsewhereNote({ at, id }: { at: Elsewhere; id: string }) {
-  const { chooseBranch } = useStaff();
   return (
     <div className="stock-elsewhere" data-testid={`elsewhere-${id}`}>
       <p>{`0 here. ${showQty(at.qty)} at ${at.name}`}</p>
-      {chooseBranch && <button type="button" onClick={() => chooseBranch(at.branchId)}>{`Switch to ${at.name}`}</button>}
     </div>
   );
 }

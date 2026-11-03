@@ -447,6 +447,12 @@ Notes:
   moves it later (`PUT /platform/tenants/{tenant_id}/go-live`), since a later date reopens the window for bringing loans in. An approved bring-in is reversed only
   through `loan_bring_in_reversal`, with the same maker and checker permissions, never decided by its maker, and only
   while the loan has no transaction in the app and no penalty charge (ADR-071 decision 9).
+- Every shop's stock on My stock (issue #807, ADR-119): `retail.stock.read` at the branch listed by `GET /retail/stock` also
+  returns, on each row, the quantity of that item in every active branch of the business that keeps goods, whatever the
+  caller's scope at those branches. Quantities only: the other branches' cost, average buying price, value and movements stay
+  behind their own permission and scope (ADR-017), and the row's own cost fields keep `retail.profit.read` at the listed
+  branch. The owner turns it off with `other_shops_stock` (`core.settings.manage`, audited as `retail.capabilities.changed`).
+  No permission is added and no role changes in the matrix above.
 - Retail AI brief (issue #422, migration `V125`, ADR-037 as amended): `retail.advisor.use` reads the shop brief on Home
   and `retail.advisor.configure` reads and sets the assistant's switch and caps at `/staff/assistant` (switching on also needs
   `core.settings.manage`). Both are seeded to the administrators only, so switching the assistant on shows the brief to nobody

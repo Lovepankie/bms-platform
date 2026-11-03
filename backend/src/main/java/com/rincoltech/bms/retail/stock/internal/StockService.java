@@ -26,6 +26,7 @@ import com.rincoltech.bms.retail.stock.internal.StockApi.BranchBalance;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.MovementRow;
 import com.rincoltech.bms.retail.stock.internal.StockApi.OpenStocktake;
+import com.rincoltech.bms.retail.stock.internal.StockApi.ShopQty;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockBranch;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockPage;
 import com.rincoltech.bms.retail.stock.internal.StockApi.StockRow;
@@ -226,27 +227,63 @@ class StockService {
         // ADR-055: a storekeeper sees no selling price.
         boolean price = RetailCatalogue.maySeePrices(CurrentPrincipal.require());
         boolean packs = capabilities.enabled(RetailCapabilities.UNITS);
+        // Issue #807 (ADR-119): every active shop's quantity, this shop first, read for the whole page in one query.
+        List<Branch> shops = shopsListed(branch);
+        Map<UUID, Map<UUID, BigDecimal>> held = shops.isEmpty() || items.isEmpty()
+                ? Map.of()
+                : repo.balances(
+                        items.stream().map(StockRow::productId).toList(),
+                        shops.stream().map(Branch::id).toList());
         return new StockPage(
                 branch,
                 items.stream()
-                        .map(r -> cost && price && packs
-                                ? r
-                                : new StockRow(
-                                        r.productId(),
-                                        r.code(),
-                                        r.description(),
-                                        r.categoryId(),
-                                        r.category(),
-                                        r.unit(),
-                                        r.qty(),
-                                        r.negative(),
-                                        price ? r.sellMinor() : null,
-                                        cost ? r.costMinor() : null,
-                                        r.reservedQty(),
-                                        packs ? r.standardPack() : null))
+                        .map(r -> new StockRow(
+                                r.productId(),
+                                r.code(),
+                                r.description(),
+                                r.categoryId(),
+                                r.category(),
+                                r.unit(),
+                                r.qty(),
+                                r.negative(),
+                                price ? r.sellMinor() : null,
+                                cost ? r.costMinor() : null,
+                                r.reservedQty(),
+                                packs ? r.standardPack() : null,
+                                shops.isEmpty()
+                                        ? null
+                                        : shops.stream()
+                                                .map(b -> {
+                                                    BigDecimal q = held.getOrDefault(r.productId(), Map.of())
+                                                            .getOrDefault(b.id(), BigDecimal.ZERO);
+                                                    return new ShopQty(
+                                                            b.id(),
+                                                            b.name() == null ? b.code() : b.name(),
+                                                            Quantities.format(q),
+                                                            q.signum() < 0,
+                                                            b.id().equals(branch));
+                                                })
+                                                .toList()))
                         .toList(),
                 Quantities.format(lowStock()),
                 next);
+    }
+
+    /**
+     * Issue #807 (ADR-119): the shops whose quantities My stock lists for {@code here}, here first and then every other active
+     * shop that keeps goods; none while the owner has switched it off or the business has only one shop.
+     */
+    private List<Branch> shopsListed(UUID here) {
+        if (!capabilities.showsOtherShopsStock()) {
+            return List.of();
+        }
+        // The listed branch is always in, so its own quantity is never dropped, even when it keeps no goods (a closed
+        // one is refused by resolve before this and never listed).
+        List<Branch> active = branches.activeStocking(here);
+        List<Branch> out =
+                new ArrayList<>(active.stream().filter(b -> b.id().equals(here)).toList());
+        active.stream().filter(b -> !b.id().equals(here)).forEach(out::add);
+        return out.size() > 1 ? out : List.of();
     }
 
     @Transactional(readOnly = true)

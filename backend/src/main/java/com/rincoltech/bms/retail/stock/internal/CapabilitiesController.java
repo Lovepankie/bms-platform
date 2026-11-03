@@ -93,7 +93,13 @@ class CapabilitiesController {
                     description =
                             "Stock health (issue #414): an item is also a slow mover when fewer than this many units sold"
                                     + " in the branch in the last 90 days; 0 (the default) switches this rule off")
-            int slowMoverMinSold) {}
+            int slowMoverMinSold,
+
+            @Schema(
+                    description =
+                            "Issue #807 (ADR-119): My stock shows everyone who may read stock at a shop how many of each item"
+                                    + " every active shop holds (quantities only); true, the default, unless the owner switched it off")
+            boolean otherShopsStock) {}
 
     /** Omitted fields are unchanged; choosing a profile first writes its preset of the flags. */
     @Schema(name = "UpdateRetailCapabilitiesRequest")
@@ -121,7 +127,10 @@ class CapabilitiesController {
             @Schema(description = "1 to 24") Integer slowMoverMonths,
 
             @Schema(description = "0 to 1,000,000; 0 is off")
-            Integer slowMoverMinSold) {}
+            Integer slowMoverMinSold,
+
+            @Schema(description = "Show every shop's quantity on My stock to everyone who may read stock (issue #807)")
+            Boolean otherShopsStock) {}
 
     @GetMapping
     @RequiresPermission("core.settings.manage")
@@ -151,6 +160,7 @@ class CapabilitiesController {
         put(proposed, RetailCapabilities.CREDIT_RECOGNITION, r.creditSaleRecognition());
         put(proposed, "slow_mover_months", r.slowMoverMonths());
         put(proposed, "slow_mover_min_sold", r.slowMoverMinSold());
+        put(proposed, RetailCapabilities.OTHER_SHOPS_STOCK, r.otherShopsStock());
         // Switching transfer_receipt off while stock is on its way is refused inside the change
         // (TransferService.check).
         CapabilitiesResponse saved = response(capabilities.change(proposed, expected));
@@ -179,7 +189,8 @@ class CapabilitiesController {
                 g.get("credit_recognition_effective_from") instanceof String d ? LocalDate.parse(d) : null,
                 returns.on() ? returns.thresholdMinor() : null,
                 g.get("slow_mover_months") instanceof Number m ? m.intValue() : 4,
-                g.get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0);
+                g.get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0,
+                !Boolean.FALSE.equals(g.get(RetailCapabilities.OTHER_SHOPS_STOCK)));
     }
 
     private static boolean flag(Map<String, Object> g, String key) {

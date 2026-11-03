@@ -136,7 +136,8 @@ class StockRepository {
                                     rs.getBigDecimal("reserved_qty").signum() == 0
                                             ? null
                                             : Quantities.format(rs.getBigDecimal("reserved_qty")),
-                                    standardPack(rs));
+                                    standardPack(rs),
+                                    null);
                         },
                         match != null))
                 .list();

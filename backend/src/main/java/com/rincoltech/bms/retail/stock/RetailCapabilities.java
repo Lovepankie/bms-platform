@@ -110,6 +110,17 @@ public class RetailCapabilities {
         return settings.group(MODULE).get("slow_mover_min_sold") instanceof Number n ? n.intValue() : 0;
     }
 
+    /**
+     * Issue #807 (ADR-119): whether My stock lists every active shop's quantity of each item to everyone who may read stock
+     * at a shop; on unless the owner switched it off.
+     */
+    public boolean showsOtherShopsStock() {
+        return !Boolean.FALSE.equals(settings.group(MODULE).get(OTHER_SHOPS_STOCK));
+    }
+
+    /** The setting read by {@link #showsOtherShopsStock}. */
+    public static final String OTHER_SHOPS_STOCK = "other_shops_stock";
+
     /** 404 {@code capability_not_enabled} for a route of a capability that is off, in plain words (issue #257). */
     public void require(String capability) {
         if (!enabled(capability)) {

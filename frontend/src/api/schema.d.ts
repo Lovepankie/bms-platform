@@ -13245,6 +13245,8 @@ export interface components {
             credit_sale_recognition?: "on_sale" | "on_payment";
             customer_accounts?: boolean;
             documents?: boolean;
+            /** @description Issue #807 (ADR-119): My stock shows everyone who may read stock at a shop how many of each item every active shop holds (quantities only); true, the default, unless the owner switched it off */
+            other_shops_stock?: boolean;
             price_lists?: boolean;
             /**
              * @description What kind of business this is (issue #424, ADR-092): a preset of the switches, never a mode; shops (the default), stores_and_shops, wholesale or wholesale_and_shops
@@ -18098,6 +18100,17 @@ export interface components {
             /** @description Whole units to move: what that branch sells in cover_days, less its stock, at most what this branch holds above slow_months of its own sales */
             suggested_qty?: string;
         };
+        /** @description Issue #807: how many of an item one shop holds, nothing else of it */
+        RetailShopQty: {
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description True for the shop the list was read for */
+            here?: boolean;
+            name?: string;
+            /** @description Below zero in this shop */
+            negative?: boolean;
+            qty?: string;
+        };
         RetailShrinkageBranch: {
             /** Format: uuid */
             branch_id?: string;
@@ -18456,6 +18469,8 @@ export interface components {
              * @description Present only to whoever sells, oversees selling, sets prices or reads cost (retail.sale.create, retail.sale.all_sellers, retail.price.edit or retail.profit.read): the storekeeper sees no prices (ADR-055)
              */
             sell_minor?: number;
+            /** @description Issue #807 (ADR-119): the quantity in every active shop of the business, this shop first and marked here, a shop with none at 0; quantities only, whatever the caller's branch scope. Absent while the owner has switched other shops' stock off or fewer than two shops would be listed */
+            shops?: components["schemas"]["RetailShopQty"][];
             standard_pack?: components["schemas"]["RetailStandardPack"];
             unit?: string;
         };
@@ -20992,6 +21007,8 @@ export interface components {
             credit_sale_recognition?: "on_sale" | "on_payment";
             customer_accounts?: boolean;
             documents?: boolean;
+            /** @description Show every shop's quantity on My stock to everyone who may read stock (issue #807) */
+            other_shops_stock?: boolean;
             price_lists?: boolean;
             /**
              * @description The kind of business: sets units, price_lists, customer_accounts, documents, purchasing and transfer_receipt to its preset (branch_roles and returns are left as they are); a flag sent in the same change wins

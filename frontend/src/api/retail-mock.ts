@@ -282,7 +282,7 @@ export function createMockRetail(): RetailApi {
   // from the branch's flag (setMockStores, ADR-104) and is never stored as a role.
   const roles = new Map<string, 'shop' | 'both'>();
   const roleOf = (branch: string): 'store' | 'shop' | 'both' => (storeBranches.includes(branch) ? 'store' : roles.get(branch) ?? 'both');
-  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shops', slow_mover_months: 4, slow_mover_min_sold: 0 }, version: 1 };
+  let caps: { value: Record<string, unknown>; version: number } = { value: { profile: 'shops', slow_mover_months: 4, slow_mover_min_sold: 0, other_shops_stock: true }, version: 1 };
   const twoStep = () => transferReceipt || caps.value['transfer_receipt'] === true;
   const read = (): CapabilitiesRead => ({ capabilities: { ...caps.value, ...Object.fromEntries(MOCK_FLAGS.map((k) => [k, caps.value[k] === true])) }, version: caps.version });
   const balances = new Map<string, number>();
@@ -1061,7 +1061,11 @@ export function createMockRetail(): RetailApi {
     listStock: ({ branchId, query, categoryId: category, negativeOnly, level, includeInactive }) =>
       delay([...products.values()].filter((p) => (includeInactive || p.active !== false) && matches(p, query) && (!category || categoryId(p.category) === category)).map((p): StockRow => {
         const milli = bal(branchId, p.id);
-        return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, ...stockPack(p.id) }, { cost_minor: p.costMinor });
+        // Issue #807: every shop's quantity, this one first, while the owner's switch is on (the server's rule, StockService).
+        // Every mock branch is active and keeps goods; with one there is no list, as on the server.
+        const shops = caps.value.other_shops_stock === false || MOCK_BRANCHES.length < 2 ? undefined : [...MOCK_BRANCHES].sort((a, b) => Number(b.id === branchId) - Number(a.id === branchId))
+          .map((b) => ({ branch_id: b.id, name: b.name, qty: fromMilli(bal(b.id, p.id)), negative: bal(b.id, p.id) < 0, here: b.id === branchId }));
+        return cost({ product_id: p.id, code: p.code, description: p.description, category_id: categoryId(p.category), category: p.category, unit: p.unit, qty: fromMilli(milli), negative: milli < 0, sell_minor: p.sellMinor, ...stockPack(p.id), ...(shops ? { shops } : {}) }, { cost_minor: p.costMinor });
       }).filter((r) => (!negativeOnly || r.negative) && atLevel(Number(r.qty), level))),
 
     listSales: ({ cursor, ...q }) => {
@@ -1541,6 +1545,7 @@ export function createMockRetail(): RetailApi {
       // The slow mover rules of Stock health (issue #414), whole numbers in the server's ranges.
       if (typeof body.slow_mover_months === 'number') next.slow_mover_months = body.slow_mover_months;
       if (typeof body.slow_mover_min_sold === 'number') next.slow_mover_min_sold = body.slow_mover_min_sold;
+      if (typeof body.other_shops_stock === 'boolean') next.other_shops_stock = body.other_shops_stock;
       caps = { value: next, version: caps.version + 1 };
       return delay(read());
     },

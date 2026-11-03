@@ -55,7 +55,27 @@ final class StockApi {
             String reservedQty,
 
             @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(description = STANDARD_PACK)
-            StandardPack standardPack) {}
+            StandardPack standardPack,
+
+            // JUSTIFICATION-A3: the one response field and its element type the issue asks for, no new mechanism.
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "Issue #807 (ADR-119): the quantity in every active shop of the business, this shop first and"
+                                    + " marked here, a shop with none at 0; quantities only, whatever the caller's branch scope."
+                                    + " Absent while the owner has switched other shops' stock off or fewer than two shops would be listed")
+            List<ShopQty> shops) {}
+
+    @Schema(name = "RetailShopQty", description = "Issue #807: how many of an item one shop holds, nothing else of it")
+    record ShopQty(
+            UUID branchId,
+            String name,
+            String qty,
+
+            @Schema(description = "Below zero in this shop") boolean negative,
+
+            @Schema(description = "True for the shop the list was read for")
+            boolean here) {}
 
     static final String STANDARD_PACK =
             "Issue #650: the pack the stock is shown in (packs and pieces); absent while the units"

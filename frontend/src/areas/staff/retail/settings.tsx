@@ -156,6 +156,44 @@ export function ReturnsThresholdWarning({ capabilities }: { capabilities: Capabi
   );
 }
 
+// JUSTIFICATION-A3: the owner switch issue #807 asks for; no existing setting form holds a single on and off choice like it.
+/**
+ * Issue #807 (ADR-119): the owner's switch for My stock showing everyone how many of each item every shop holds. On unless switched
+ * off; off keeps the list of this shop alone. Saved with the settings version like every other retail setting.
+ */
+export function OtherShopsSetting({ read, onSaved }: { read: CapabilitiesRead; onSaved?: () => void }) {
+  const queryClient = useQueryClient();
+  const saved = read.capabilities.other_shops_stock !== false;
+  const [on, setOn] = useState(saved);
+  // toast-exempt: the Settings screen shows the success toast through onSaved
+  const save = useMutation({
+    mutationFn: () => retail.changeCapabilities({ other_shops_stock: on }, read.version),
+    onSuccess: (next) => {
+      queryClient.setQueryData(['retail', 'capabilities'], next);
+      void queryClient.invalidateQueries({ queryKey: ['retail', 'stock'] });
+      onSaved?.();
+    },
+  });
+  return (
+    <fieldset className="stack">
+      <legend>Stock in other shops</legend>
+      <label>
+        <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} />
+        <span>
+          <strong>Show other shops' stock to everyone</strong>
+          <span className="hint"> On My stock, everyone who may see stock sees how many of each item every shop has. Only the numbers, never the buying price.</span>
+        </span>
+      </label>
+      <Problem error={save.error && new Error(changeFailureText(save.error, queryClient))} />
+      <p className="cluster">
+        <BusyButton type="button" className="rt-primary" busy={save.isPending} disabled={on === saved} onClick={() => save.mutate()}>
+          Save
+        </BusyButton>
+      </p>
+    </fieldset>
+  );
+}
+
 export function RetailSettings() {
   const read = useQuery({ queryKey: ['retail', 'capabilities'], queryFn: () => retail.capabilities() });
   const { show, toast } = useToast();
@@ -170,6 +208,7 @@ export function RetailSettings() {
       {read.data && <Editor key={read.data.version} read={read.data} onSaved={() => show('Saved', 'success')} />}
       {read.data && <CreditRecognitionSetting key={`credit-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
       {read.data && <SlowMoverSetting key={`slow-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
+      {read.data && <OtherShopsSetting key={`shops-${read.data.version}`} read={read.data} onSaved={() => show('Saved', 'success')} />}
       <PurchasingSettings />
     </Gate>
   );

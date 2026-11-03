@@ -124,6 +124,46 @@ it('shows one toast at a time: the switch replaces a toast of the screen', async
   await page.close();
 });
 
+// JUSTIFICATION-A3: the 412px layout case issue #807 asks for; a new test, not a mechanism.
+// Issue #807: every shop's quantity on each card, this shop first and larger, inside the phone at both font sizes, the
+// quantities in tabular figures, no stripe and no Switch button.
+describe.each([1, 2])('My stock with every shop at 412px, font scale %i', (font) => {
+  it('lists each shop inside its card with no Switch button', async () => {
+    const page = await browser.newPage({ viewport: { width: WIDTH, height: 915 }, hasTouch: true, isMobile: true });
+    await openLayout(page, `layout/my-stock.html?font=${font}&shops=1`, page.locator('.shop-qtys'));
+    if (SHOTS && font === 1) await page.screenshot({ path: `${SHOTS}/05-my-stock-every-shop-412.png`, fullPage: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), 'page width').toBeLessThanOrEqual(WIDTH);
+    expect(await page.getByRole('button', { name: /Switch to/ }).count()).toBe(0);
+    const lists = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('.stock-card')].map((card) => {
+        const box = card.getBoundingClientRect();
+        const lines = [...card.querySelectorAll<HTMLElement>('.shop-qtys li')];
+        const style = getComputedStyle(card);
+        return {
+          text: lines.map((l) => l.textContent ?? ''),
+          inside: lines.every((l) => l.getBoundingClientRect().right <= box.right + 0.5 && l.getBoundingClientRect().left >= box.left - 0.5),
+          tabular: [...card.querySelectorAll<HTMLElement>('.shop-qtys .num')].every((n) => getComputedStyle(n).fontVariantNumeric.includes('tabular-nums')),
+          hereLarger: lines[0] !== undefined && lines[1] !== undefined && parseFloat(getComputedStyle(lines[0]).fontSize) > parseFloat(getComputedStyle(lines[1]).fontSize),
+          edges: new Set([style.borderLeftColor, style.borderRightColor, style.borderTopColor, style.borderBottomColor]).size,
+        };
+      }),
+    );
+    expect(lists).toHaveLength(3);
+    for (const l of lists) {
+      expect(l.text).toHaveLength(3);
+      expect(l.text[0]).toMatch(/^In stock here: /);
+      expect(l.inside, l.text.join(' / ')).toBe(true);
+      expect(l.tabular, l.text.join(' / ')).toBe(true);
+      expect(l.hereLarger, l.text.join(' / ')).toBe(true);
+      expect(l.edges).toBe(1);
+    }
+    const lines = lists.flatMap((l) => l.text);
+    expect(lines).toContain('Another shop with a rather long name on the main road: 0 pieces');
+    expect(lines).toContain('Third Test Shop: -1 piece Below zero');
+    await page.close();
+  });
+});
+
 it('draws My stock and the shop label in the dark theme too', async () => {
   const page = await open(1, 'dark');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(WIDTH);

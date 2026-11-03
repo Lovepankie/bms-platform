@@ -62,6 +62,12 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
     /** Slow when fewer than this many units sold in the last 90 days; 0 switches the rule off (issue #414). */
     static final String SLOW_MIN_SOLD = "slow_mover_min_sold";
 
+    /**
+     * Issue #807 (ADR-119): My stock lists every active shop's quantity of each item to everyone who may read stock at a
+     * shop. On unless the owner switched it off, so a business with more than one shop starts with it.
+     */
+    static final String OTHER_SHOPS_STOCK = "other_shops_stock";
+
     static final int DEFAULT_SLOW_MONTHS = 4;
     static final int MAX_SLOW_MONTHS = 24;
     static final int MAX_SLOW_MIN_SOLD = 1_000_000;
@@ -117,9 +123,16 @@ class RetailCapabilityGroup implements ModuleSettingsGroup {
         }
         out.put(SLOW_MONTHS, whole(current.get(SLOW_MONTHS), 1, MAX_SLOW_MONTHS, DEFAULT_SLOW_MONTHS));
         out.put(SLOW_MIN_SOLD, whole(current.get(SLOW_MIN_SOLD), 0, MAX_SLOW_MIN_SOLD, 0));
+        out.put(OTHER_SHOPS_STOCK, !Boolean.FALSE.equals(current.get(OTHER_SHOPS_STOCK)));
         List<FieldProblem> problems = new ArrayList<>();
         proposed.forEach((key, value) -> {
-            if (key.equals(SLOW_MONTHS) || key.equals(SLOW_MIN_SOLD)) {
+            if (key.equals(OTHER_SHOPS_STOCK)) {
+                if (value instanceof Boolean on) {
+                    out.put(OTHER_SHOPS_STOCK, on);
+                } else {
+                    problems.add(new FieldProblem(key, "invalid", "Use true or false."));
+                }
+            } else if (key.equals(SLOW_MONTHS) || key.equals(SLOW_MIN_SOLD)) {
                 int max = key.equals(SLOW_MONTHS) ? MAX_SLOW_MONTHS : MAX_SLOW_MIN_SOLD;
                 int min = key.equals(SLOW_MONTHS) ? 1 : 0;
                 if (whole(value, min, max, -1) < 0) {

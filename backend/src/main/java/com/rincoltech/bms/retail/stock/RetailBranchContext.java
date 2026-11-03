@@ -37,6 +37,17 @@ public class RetailBranchContext {
         return visible(permission, Set.of());
     }
 
+    /**
+     * Every active branch of the business that keeps goods, and {@code listed} when it is active even if it keeps no goods,
+     * head office first, whatever the caller's scope: the shops whose quantities My stock lists to everyone who may read stock
+     * (issue #807, ADR-119). A closed branch is never in it. Never use it to read more than quantities.
+     */
+    public List<Branches.Branch> activeStocking(UUID listed) {
+        return branches.all().stream()
+                .filter(b -> b.active() && (b.id().equals(listed) || b.stocksGoods()))
+                .toList();
+    }
+
     /** Ids of the inactive branches the permission covers: the only ones a balance can keep in a column. */
     public List<UUID> inactiveInScope(String permission) {
         Principal principal = CurrentPrincipal.require();

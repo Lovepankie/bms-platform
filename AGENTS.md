@@ -874,6 +874,13 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   answer; the Sell line's price field is Selling price, and the sale lines export sheet's price column too. Tests:
   `shop-here.dom.test.tsx`, `stock-cards.dom.test.tsx`, `layout/my-stock.layout.test.ts`, `design-guard.test.ts`,
   `glossary.test.ts`, `maths.test.ts`, `DataExportIT`.
+- **Built (every shop's stock on My stock, issue #807, ADR-119, FR-RET-84):** no migration and no permission. Each row of
+  `GET /retail/stock` carries `shops` (`{branch_id, name, qty, negative, here}` per active shop that keeps goods, the listed one
+  first), from one read of the stock balances per page, for everyone who may read stock at the listed shop; absent while the
+  retail setting `other_shops_stock` (on by default, Retail settings, "Show other shops' stock to everyone") is off or
+  fewer than two shops would be listed. My stock lists the shops on each card and in the In stock cell, "In stock here" first; the Switch to
+  button of #728 is gone. Tests: `RetailAllShopsStockIT`, `RetailAllShopsStockReadsIT`, `all-shops-stock.dom.test.tsx`, `where-is-my-stock.dom.test.tsx`,
+  `layout/my-stock.layout.test.ts`.
 - **Built (Past usage and damage, issue #145, AppSheet "Damaged or used stock not sold"):** no migration and no permission.
   `GET /retail/stock/movements` takes a repeatable `kind` filter (422 for an unknown or blank kind) and each row carries the
   item's `code`, `description` and `unit`, and for a profit reader `line_cost_minor`, the value the screen shows as is. The page `/staff/retail/usage-history` (`usage-history.tsx`, `retail.stock.read`), linked
@@ -1368,6 +1375,10 @@ Accepted (this list is the ADR index):
   "Messages not sent" page; a hard bounce, a complaint or `email.suppressed` stores a keyed hash of the address
   (`EmailSuppressions`, never the address), both senders then refuse it with `recipient_suppressed`, and
   `POST /api/v1/platform/outbox/unsuppress` clears it (#333; no migration, no new column)
+- ADR-119 My stock shows every shop's quantity to everyone who may see stock (#807, asked for by the owner): each row of
+  `GET /retail/stock` carries `shops`, the quantity in every active shop that keeps goods, the listed shop always first and
+  marked `here`, the balances read for the page in one query; quantities only, whatever the caller's scope at the other shops; the owner's switch `other_shops_stock`
+  in the retail settings group, on unless switched off; the Switch to button of #728 is gone (no migration)
 
 Pending (cite only as "pending ADR-NNN"):
 

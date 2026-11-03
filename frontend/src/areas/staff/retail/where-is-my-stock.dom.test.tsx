@@ -10,7 +10,7 @@ import { StaffContext } from '../context';
 
 // Where is my stock (issue #728): an owner added his items at his store, looked at My stock in his main shop, saw 0 and thought
 // his numbers were lost; and he left two counts at Review the difference because the last step said Commit. My stock and the
-// item's page say where the stock is, with a switch there; Quick add and Add an item name the shop beside How many; counts left
+// item's page say where the stock is (no switch there since issue #807); Quick add and Add an item name the shop beside How many; counts left
 // unsaved are named with Finish it and Throw it away. Every name, figure and id below is invented.
 
 vi.mock('@tanstack/react-router', async (original) => {
@@ -73,13 +73,13 @@ const everywhere: AllBranchesStock = {
 };
 
 describe('My stock says where the stock is (issue #728)', () => {
-  it('says "0 here. 456 at the store" under an item with none here, and switches there in one tap', () => {
+  it('says "0 here. 456 at the store" under an item with none here, with no Switch button (issue #807)', () => {
     const elsewhere = stockElsewhere(everywhere, shop, otherStockShops(owner, shop));
     const choose = show(<StockTable rows={[row('B-1', '0.000'), row('B-2', '0.000'), row('B-3', '7.000')]} showCost={false} elsewhere={elsewhere} />);
     const note = screen.getByTestId('elsewhere-B-1');
     expect(within(note).getByText(`0 here. 456 at ${storeName}`)).toBeTruthy();
-    fireEvent.click(within(note).getByRole('button', { name: `Switch to ${storeName}` }));
-    expect(choose).toHaveBeenCalledWith(store);
+    expect(within(note).queryByRole('button')).toBeNull();
+    expect(choose).not.toHaveBeenCalled();
     // None anywhere, or some here: nothing more is said.
     expect(screen.queryByTestId('elsewhere-B-2')).toBeNull();
     expect(screen.queryByTestId('elsewhere-B-3')).toBeNull();
