@@ -3,6 +3,7 @@ package com.rincoltech.bms.retail.cashbook.internal;
 import com.rincoltech.bms.core.operations.Idempotency.Outcome;
 import com.rincoltech.bms.kernel.RequiresPermission;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.Savings;
+import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsGroups;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsPage;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.SavingsSuggestion;
@@ -28,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
  * The day's savings for sales staff (issue #799, ADR-115). The till's savings routes need {@code retail.savings.record} and
  * {@code retail.till.close}, which the Sales role does not hold; in a shop where the sales people put the money aside, the
  * Owner's switch "Salespeople can see and change the savings amount" lets a caller who may sell at a branch open that
- * branch's savings, see and change the suggested amount, save it, and see this month's records with their amounts. These
+ * branch's savings, see and change the suggested amount, save it, and see every month's records with their amounts, grouped with totals (issue #827). These
  * routes answer only while the switch is on (403 {@code permission_denied} otherwise); after the branch the checks, their
  * order and what is sent are those of the till's routes, so the profit, the expenses and the cap are never sent, and
  * replacing a saved amount still needs {@code retail.savings.overwrite}. Kept apart from {@link CashbookController}, whose
@@ -82,9 +83,9 @@ class SalesStaffSavingsController {
     @GetMapping
     @RequiresPermission("retail.sale.create")
     @Operation(
-            summary = "This month's savings records for sales staff, newest first",
+            summary = "Savings records of every month for sales staff, newest first",
             operationId = "listRetailSalesStaffSavings",
-            description = WHEN + " Only records dated this month, at the branches where the caller may sell.")
+            description = WHEN + " Records of every month (issue #827), at the branches where the caller may sell.")
     SavingsPage list(
             @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
             @RequestParam(name = "from", required = false) LocalDate from,
@@ -93,5 +94,18 @@ class SalesStaffSavingsController {
             @RequestParam(name = "limit", required = false) Integer limit,
             @RequestParam(name = "cursor", required = false) String cursor) {
         return savings.list(Caller.SALES_STAFF, branchIds, from, to, includeVoided, limit, cursor);
+    }
+
+    @GetMapping("/groups")
+    @RequiresPermission("retail.sale.create")
+    @Operation(
+            summary = "Savings of every month for sales staff, by shop, year, month and person, with totals",
+            operationId = "getRetailSalesStaffSavingsGroups",
+            description = WHEN + " Issue #827: active records only, amounts saved only.")
+    SavingsGroups groups(
+            @RequestParam(name = "branch_id", required = false) List<UUID> branchIds,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to) {
+        return savings.groups(branchIds, from, to);
     }
 }

@@ -171,6 +171,36 @@ final class CashbookApi {
     @Schema(name = "RetailSavingsPage")
     record SavingsPage(List<Savings> items, String nextCursor) {}
 
+    // JUSTIFICATION-A3: issue #827 asks for four nested levels with a total each; one record per level is the smallest
+    // shape.
+    /**
+     * Issue #827: the active savings records a seller may see, grouped by shop, year, month and the person who saved, with
+     * the sum of the amount saved at each level. Amounts saved only: no profit, no suggestion, no sales.
+     */
+    @Schema(name = "RetailSavingsGroups")
+    record SavingsGroups(long totalMinor, List<SavingsShop> shops) {}
+
+    @Schema(name = "RetailSavingsShop")
+    record SavingsShop(UUID branchId, long totalMinor, List<SavingsYear> years) {}
+
+    @Schema(name = "RetailSavingsYear")
+    record SavingsYear(int year, long totalMinor, List<SavingsMonth> months) {}
+
+    @Schema(name = "RetailSavingsMonth")
+    record SavingsMonth(@Schema(description = "1 to 12") int month, long totalMinor, List<SavingsPerson> people) {}
+
+    @Schema(name = "RetailSavingsPerson")
+    record SavingsPerson(
+            @Schema(description = "Null on a record brought in from an earlier system with no person")
+            UUID userId,
+
+            String name,
+            long totalMinor,
+            List<SavedDay> records) {}
+
+    @Schema(name = "RetailSavedDay")
+    record SavedDay(UUID id, LocalDate businessDate, long amountMinor) {}
+
     // --------------------------------------------------------------------------------- banking
 
     @Schema(name = "RetailBankingExpected")

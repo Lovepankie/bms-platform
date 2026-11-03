@@ -661,51 +661,40 @@ class RetailCashbookSavingsIT extends IntegrationTest {
         return cb.post("/savings", b, perms);
     }
 
-    // JUSTIFICATION-A3: issue #799 changes which records show amounts; the test now proves both rules on fixed months.
+    // JUSTIFICATION-A3: issue #827 opens every month's amounts while the setting is on; the test proves it on fixed
+    // months.
     @Test
-    void withTheSettingOnThisMonthsRecordsAndLaterOnesShowAmountsButNeverToAReaderOfTheCashBookOnly() {
+    void withTheSettingOnEveryMonthsRecordsShowAmountsButNeverToAReaderOfTheCashBookOnly() {
         LocalDate today = LocalDate.now(BusinessClock.DEFAULT_ZONE);
         LocalDate lastMonth = today.withDayOfMonth(1).minusDays(1);
         // Made before the Owner turned the setting on: one last month and one this month.
         UUID earlier = RetailTestSupport.id(recordOn(lastMonth, PROFIT_RECORDER));
         UUID thisMonths = RetailTestSupport.id(recordOn(today, PROFIT_RECORDER));
+        assertThat(listed(earlier, CASHIER).has("amount_minor")).isFalse();
         salespeopleSeeSavingsAmount(true);
 
-        // Issue #799 (the owner asked for the whole month): this month's record shows, whenever it was made.
-        assertThat(listed(thisMonths, CASHIER).has("amount_minor")).isTrue();
-        assertThat(listed(thisMonths, CASHIER).has("overwritten")).isTrue();
-        // An earlier month's record made before the setting was turned on stays hidden.
-        assertThat(listed(earlier, CASHIER).has("amount_minor")).isFalse();
-        assertThat(listed(earlier, CASHIER).has("overwritten")).isFalse();
+        // Issue #827, as the owner's old app did: every month's record shows, whenever it was made.
+        for (UUID id : java.util.List.of(earlier, thisMonths)) {
+            assertThat(listed(id, CASHIER).has("amount_minor")).isTrue();
+            assertThat(listed(id, CASHIER).has("overwritten")).isTrue();
+        }
         JsonNode s = cb.get("/savings/suggestion?branch_id=" + hq + "&date=" + lastMonth, CASHIER)
                 .getBody();
         assertThat(s.get("existing_id").asString()).isEqualTo(earlier.toString());
-        assertThat(s.has("existing_amount_minor")).isFalse();
-
-        // Made while it is on, even for an earlier month: shown to a caller holding retail.savings.record (#768).
-        assertThat(cb.voidIt("/savings/" + earlier, "Wrong day", ALL).getStatusCode())
-                .isEqualTo(HttpStatus.OK);
-        ResponseEntity<JsonNode> made = recordOn(lastMonth, CASHIER);
-        assertThat(made.getStatusCode()).as("%s", made.getBody()).isEqualTo(HttpStatus.CREATED);
-        UUID fresh = RetailTestSupport.id(made);
-        assertThat(made.getBody().has("amount_minor")).isTrue();
-        assertThat(listed(fresh, CASHIER).has("amount_minor")).isTrue();
-        assertThat(listed(earlier, CASHIER).has("amount_minor")).isFalse();
+        assertThat(s.has("existing_amount_minor")).isTrue();
 
         // A reader of the cash book who neither records savings nor sells sees no amount, on any record.
-        for (UUID id : java.util.List.of(fresh, thisMonths)) {
+        for (UUID id : java.util.List.of(earlier, thisMonths)) {
             assertThat(listed(id, AUDIT_ONLY).has("amount_minor")).isFalse();
             assertThat(listed(id, AUDIT_ONLY).has("overwritten")).isFalse();
         }
 
-        // Off again: every amount is hidden again. On once more: this month's show, the earlier month's made before the
-        // new
-        // moment do not.
+        // Off again: every amount is hidden again. On once more: every month's show again.
         salespeopleSeeSavingsAmount(false);
-        assertThat(listed(fresh, CASHIER).has("amount_minor")).isFalse();
+        assertThat(listed(earlier, CASHIER).has("amount_minor")).isFalse();
         assertThat(listed(thisMonths, CASHIER).has("amount_minor")).isFalse();
         salespeopleSeeSavingsAmount(true);
-        assertThat(listed(fresh, CASHIER).has("amount_minor")).isFalse();
+        assertThat(listed(earlier, CASHIER).has("amount_minor")).isTrue();
         assertThat(listed(thisMonths, CASHIER).has("amount_minor")).isTrue();
         // A caller with profit read sees every amount, as before.
         assertThat(listed(earlier, PROFIT_RECORDER).has("amount_minor")).isTrue();
