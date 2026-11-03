@@ -88,7 +88,7 @@ export function TwoStepPolicyScreen() {
       setServerAsks(false);
       const now = policyOf(after);
       const date = deadlineWords(after.mfa_enforce_from, after.timezone);
-      sayDone(now === 'off' ? 'Saved, now optional' : date ? `Saved, due by ${date}` : 'Saved, asked at sign in');
+      sayDone(now === 'off' ? 'Two-step sign-in is now optional' : date ? `Two-step sign-in is due by ${date}` : 'Two-step sign-in is now asked at sign in');
       setReviewing(false);
       setChoice(choiceOf(after));
       await queryClient.invalidateQueries({ queryKey: ['settings'] });

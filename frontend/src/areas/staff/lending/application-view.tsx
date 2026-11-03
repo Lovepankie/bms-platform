@@ -276,7 +276,7 @@ export function ApplicationPanel({ loan: l }: { loan: Loan }) {
     setFailure(null);
     try {
       await api.submit(id, l.version ?? 0);
-      sayDone('Sent for appraisal');
+      sayDone(`${l.loan_no ? `Application ${l.loan_no}` : 'Application'} sent for appraisal`);
       refresh();
     } catch (raw) {
       setFailure(asFormError(raw).message);

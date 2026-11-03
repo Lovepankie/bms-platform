@@ -137,7 +137,7 @@ function Editor({ saved, canManage, notice, setNotice }: { saved: SmsSettings; c
       void queryClient.invalidateQueries({ queryKey: ['sms', 'settings'] });
     },
     meta: {
-      success: (_: unknown, c: SmsSettingsChange) => (c.enabled === true ? 'SMS turned on' : c.enabled === false ? 'SMS turned off' : 'Settings saved'),
+      success: (_: unknown, c: SmsSettingsChange) => (c.enabled === true ? 'SMS turned on' : c.enabled === false ? 'SMS turned off' : 'SMS settings saved'),
       // Turning SMS on can be taken back from the toast (#682), on the version the change made. Turning it off cannot: on again
       // needs the notice read and acknowledged on this screen, so the toast offers no Undo for it.
       undo: (next: { version?: number }, c: SmsSettingsChange) =>

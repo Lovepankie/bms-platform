@@ -401,7 +401,7 @@ describe('the opt-out list', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve)); await new Promise((resolve) => setTimeout(resolve)); });
     fireEvent.click(screen.getByRole('button', { name: 'Add to the list' }));
     await waitFor(() => expect(api.addOptOut).toHaveBeenLastCalledWith('0700000601', 'all', undefined));
-    expect(await screen.findByText('Number added')).toBeTruthy();
+    expect(await screen.findByText('0700000601 added to the numbers that get no texts')).toBeTruthy();
     expect(screen.queryByText('Added.')).toBeNull();
   });
 
