@@ -14,6 +14,8 @@ export const PROFIT = 'retail.profit.read';
  * their totals are the person's own sales (the server filters them), and the reports that add up everybody's sales are not offered.
  */
 export const ALL_SELLERS = 'retail.sale.all_sellers';
+/** See how far from the shop each sale and usage entry was made (issue #826, ADR-122): the owner's; sellers never see it. */
+export const ENTRY_LOCATION = 'retail.entry_location.read';
 
 export type RetailScreen =
   | 'sale' | 'creditSales' | 'salesHistory' | 'orders' | 'ordersReport' | 'restock' | 'usage' | 'stock' | 'stocktake' | 'transfer' | 'transfers' | 'valuation' | 'profit' | 'salesAnalysis' | 'margins' | 'stockHealth' | 'creditControl' | 'evaluation' | 'controls'

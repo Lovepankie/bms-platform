@@ -200,11 +200,12 @@ class SalesService {
         return earlier[0] ? new Outcome<>(outcome.body(), true) : outcome;
     }
 
-    /** What the Idempotency-Key covers: a request with a client sale id without its delivery fields (issue #769). */
+    /**
+     * What the Idempotency-Key covers: a request with a client sale id without its delivery fields (issue #769), and never
+     * where the phone was (ADR-122), so a retry from a phone that has moved is the same request.
+     */
     static SaleRequest keyed(SaleRequest r) {
-        if (r.clientSaleId() == null) {
-            return r;
-        }
+        boolean device = r.clientSaleId() != null;
         return new SaleRequest(
                 r.branchId(),
                 r.saleDate(),
@@ -217,9 +218,9 @@ class SalesService {
                 r.creditOverrideReason(),
                 r.lines(),
                 r.clientSaleId(),
-                null,
-                null,
-                null,
+                device ? null : r.occurredAt(),
+                device ? null : r.recordedOffline(),
+                device ? null : r.pricesAsOf(),
                 null);
     }
 

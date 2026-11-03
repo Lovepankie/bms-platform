@@ -49,6 +49,7 @@ import { dropWords } from './stocktake';
 import { useBranchHold } from '../branch-picker';
 import { SELL_COUNT_NOTE, savingCount, unfinishedKey } from './unfinished-counts';
 import { icons } from '../../../components/icons';
+import { LocationAsk, useWhereNow } from './entry-location';
 
 // Record a sale (FR-RET-04, FR-RET-05). One idempotency key per draft, kept with the draft in this
 // tab until the sale is saved or the draft is cleared: a double tap, a retry after a lost answer or a
@@ -243,6 +244,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   const offline = useOffline();
   const online = useOnline();
   const offlineMode = offline !== null && !online;
+  const where = useWhereNow();
   const { key, draft, setDraft, finish, discard } = usePersistedDraft<SaleDraft>(`sale:${me.user_id ?? ''}:${branchId}`, {
     branchId, method: 'cash', customerId: '', newBuyerName: '', newBuyerContact: '', dueDate: '', lines: [],
   });
@@ -611,7 +613,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   });
   /** Sends the sale as the screen shows it now (or the request already sent, which is all that can go again). */
   const send = () => {
-    const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}) };
+    // ADR-122: where the phone is goes with the sale when it says, and stays with a request sent again.
+    const body = draft.sent?.body ?? { ...buildSaleRequest(shown, pricing, accounts), ...(offline ? { client_sale_id: key } : {}), ...where.now() };
     const at = draft.sent?.at ?? new Date().toISOString();
     // The oldest read of the items and, with price lists, of the resolved prices: what the form priced the sale from (#769).
     // A line whose read time is not known (a draft from before #769, a scan found in a copy) leaves it unknown: no
@@ -641,6 +644,8 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
         // A name typed for the receipt while online goes with a sale the network then made wait (issue #760).
         buyerName: draft.newBuyerName.trim() || (draft.cashName ?? '').trim(),
         buyerContact: draft.newBuyerName.trim() ? undefined : draft.cashPhone,
+        // ADR-122: where the phone is, kept with the sale in the outbox until it is sent.
+        location: where.now().location,
         now: new Date(),
       });
       await offline.engine.queue(item);
@@ -688,6 +693,7 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
       }}
     >
       {offlineMode && <OfflineNote branchId={branchId} />}
+      <LocationAsk where={where} />
       <fieldset disabled={locked} className="sale-lock" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div data-tour="sale-search">
         {offlineMode ? <OfflineProductPicker branchId={branchId} onAdd={(p) => add(p, offline?.catalogue?.pricesAsOf)} /> : (

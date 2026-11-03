@@ -236,6 +236,37 @@ class RetailEntryLocationIT extends IntegrationTest {
                 .isEqualTo("3.2 km from the shop");
     }
 
+    // JUSTIFICATION-A3: one new test case for the key rule of ADR-122 decision 6; a test, not a mechanism.
+    @Test
+    void aRetryUnderTheSameKeyFromAPhoneThatMovedIsTheSameEntry() {
+        setShop();
+        String key = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> first = seller.postKeyed("/sales", sale(fix(NEAR_LAT, SHOP_LNG, 12)), SALES, "*", key);
+        assertThat(first.getStatusCode()).as("%s", first.getBody()).isEqualTo(HttpStatus.CREATED);
+        ResponseEntity<JsonNode> again = seller.postKeyed("/sales", sale(fix(SHOP_LAT, FAR_LNG, 9)), SALES, "*", key);
+        assertThat(again.getStatusCode()).as("%s", again.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(again.getHeaders().getFirst("Idempotent-Replayed")).isEqualTo("true");
+        assertThat(again.getBody().get("id")).isEqualTo(first.getBody().get("id"));
+        assertThat(distance(owner, OWNER, "sale", first.getBody().get("id").asString())
+                        .get(0)
+                        .get("words")
+                        .asString())
+                .isEqualTo("40 m from the shop");
+
+        Map<String, Object> usage = new LinkedHashMap<>();
+        usage.put("branch_id", t.headOffice());
+        usage.put("kind", "used");
+        usage.put("reason", "Test shop lights");
+        usage.put("lines", List.of(Map.of("product_id", product, "qty", "1")));
+        usage.put("location", fix(NEAR_LAT, SHOP_LNG, 12));
+        String usageKey = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> used = seller.postKeyed("/usage", usage, SALES, "*", usageKey);
+        usage.put("location", fix(SHOP_LAT, FAR_LNG, 9));
+        ResponseEntity<JsonNode> usedAgain = seller.postKeyed("/usage", usage, SALES, "*", usageKey);
+        assertThat(usedAgain.getStatusCode()).as("%s", usedAgain.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(usedAgain.getBody().get("id")).isEqualTo(used.getBody().get("id"));
+    }
+
     @Test
     void aRefusedOfflineSaleIsKeptWithoutItsLocation() {
         UUID client = UUID.randomUUID();

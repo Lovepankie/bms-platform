@@ -81,7 +81,10 @@ class UsageService {
 
     @Transactional
     Outcome<UsageReport> report(String idempotencyKey, UsageRequest r) {
-        return idempotency.once(idempotencyKey, "POST", PATH, r, UsageReport.class, () -> record(r));
+        // ADR-122: the key never covers where the phone was, so a retry from a phone that has moved is the same
+        // request.
+        UsageRequest keyed = new UsageRequest(r.branchId(), r.kind(), r.reason(), r.occurredOn(), r.lines(), null);
+        return idempotency.once(idempotencyKey, "POST", PATH, keyed, UsageReport.class, () -> record(r));
     }
 
     private UsageReport record(UsageRequest r) {
