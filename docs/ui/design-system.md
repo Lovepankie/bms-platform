@@ -384,8 +384,8 @@ cannot be read on a dark page: `--color-link` and `--color-focus` become `color-
    `frontend/src/tour/tours.ts` (a page tour at least), with plain, short sentences.
 8. Follow the three rules of issue #336 (`docs/ui/ux-rules.md`, each with a good and a bad example): show little and let
    people open more (lists grouped, a summary on each group header, rows behind it); every name opens its record (a buyer,
-   an item, a sale, a branch, a total; `ScreenLink`, `SaleLink`, `ItemStockLink`, `BranchStockLink` in
-   `retail/screen-link.tsx`, and a stable address for a screen that opens one record); and no training needed (plain words,
+   an item, a sale, a branch, a total; `ScreenLink` and `SaleLink` in `retail/screen-link.tsx`, `ToStock` with `item` or
+   `branch`, and a stable address for a screen that opens one record); and no training needed (plain words,
    one primary action, an empty state that names the next step).
 
 ## Checks

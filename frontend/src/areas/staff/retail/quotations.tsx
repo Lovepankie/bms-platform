@@ -17,6 +17,7 @@ import { CustomerPicker } from './customer-picker';
 import { Gate, Note, Problem, ProductPicker, money, useBranchName, useBranchView, useSingleBranch } from './ui';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Hint } from '../../../app/ui/Hint';
+import { SaleLink } from './screen-link';
 
 // Quotations (documents capability, ADR-033, issue #197): prices offered to a buyer until a date. A quotation reserves no stock and
 // posts nothing; it is numbered and its PDF stored like every document, and it can be made into a sale (and its invoice) once,
@@ -121,7 +122,7 @@ function QuotationCard({ q, branchName }: { q: Quotation; branchName?: string })
         ))}
       </ul>
       {q.notes && <p className="hint">{q.notes}</p>}
-      {q.status === 'converted' && <p className="hint">Sale {q.converted_sale_no}</p>}
+      {q.status === 'converted' && <p className="hint">Sale <SaleLink saleId={q.converted_sale_id}>{q.converted_sale_no}</SaleLink></p>}
       {q.status === 'cancelled' && q.cancel_reason && <p className="hint">Cancelled because: {q.cancel_reason}</p>}
       <div className="rt-row">
         <PdfButton doc={{ id: q.document_id, pdf_document_id: q.pdf_document_id, number: q.number }} />
@@ -288,7 +289,7 @@ export function QuotationsPage() {
         {list.data && (
           <SearchResults fetching={fetching}>
             {items.length === 0 ? (
-              search.term ? <NoResults term={search.term} onClear={search.clear} noun="quotations" /> : <p className="empty-state">No quotations here.</p>
+              search.term ? <NoResults term={search.term} onClear={search.clear} noun="quotations" /> : <p className="empty-state">No quotations here. Make one with New quotation.</p>
             ) : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
                 {items.map((q) => <QuotationCard key={q.id} q={q} branchName={all ? nameOf(q.branch_id) : undefined} />)}

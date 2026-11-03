@@ -35,7 +35,7 @@ function RowsTable({ title, rows, profit }: { title: string; rows: AnalysisRow[]
         {rows.map((r) => (
           <tr key={r.id ?? r.label}>
             <td>
-              {title === 'Item' || title === 'Branch' ? <ToStock>{r.label ?? 'Unknown'}</ToStock> : (r.label ?? 'Unknown')}
+              {title === 'Item' || title === 'Branch' ? <ToStock {...(title === 'Item' ? { item: r.id } : { branch: r.id })}>{r.label ?? 'Unknown'}</ToStock> : (r.label ?? 'Unknown')}
               {r.code && <><br /><span className="hint">{r.code}</span></>}
               {phone && <><br /><span className="hint">{showQty(r.qty ?? '0')}{r.unit ? ` ${r.unit}` : ''} sold{profit && r.margin_bp !== undefined && r.margin_bp !== null ? `, margin ${percentOrNone(r.margin_bp)}` : ''}</span></>}
             </td>
@@ -62,7 +62,7 @@ function Stocked({ items, total, empty }: { items: StockedItem[]; total: number;
         <tbody>
           {items.map((i) => (
             <tr key={i.product_id}>
-              <td><ToStock>{i.description}</ToStock><br /><span className="hint">{i.code}</span></td>
+              <td><ToStock item={i.product_id}>{i.description}</ToStock><br /><span className="hint">{i.code}</span></td>
               <td className="num">{showQty(i.qty_on_hand ?? '0')} {i.unit}</td>
               <td className="num">{i.stock_at_price_minor !== undefined ? money(i.stock_at_price_minor) : ''}</td>
             </tr>

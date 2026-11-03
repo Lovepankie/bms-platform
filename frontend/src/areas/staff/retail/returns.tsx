@@ -7,6 +7,7 @@ import { retail, type SaleReturn } from '../../../api/retail';
 import { settledWords } from './returns-state';
 import { showDate } from './transfers';
 import { Gate, Problem, money, useBranchName } from './ui';
+import { SaleLink } from './screen-link';
 
 // Customer returns (returns capability, ADR-033, issue #201): the credit notes, newest first, found by their number, the
 // number of the sale or the buyer's name. A return is made from a sale: open it in All sales or Credit sales and choose
@@ -22,7 +23,7 @@ export function ReturnRow({ row, branchName }: { row: SaleReturn; branchName?: s
         {showDate(row.returned_on)}, <strong>{money(row.total_minor ?? 0)}</strong>
       </p>
       <p className="hint">
-        Sale {row.sale_no}{row.customer_name ? `, ${row.customer_name}` : ''}{branchName ? `, ${branchName}` : ''}. {settledWords(row)}.
+        Sale <SaleLink saleId={row.sale_id}>{row.sale_no}</SaleLink>{row.customer_name ? `, ${row.customer_name}` : ''}{branchName ? `, ${branchName}` : ''}. {settledWords(row)}.
       </p>
       <p>
         <Link className="btn-sm" to="/staff/retail/returns/$returnId" params={{ returnId: row.id ?? '' }} aria-label={`Open credit note ${row.credit_note_no}`}>Open</Link>
@@ -59,7 +60,7 @@ function ReturnsPage() {
         <option value="completed">Standing</option>
         <option value="voided">Voided</option>
       </select>
-      {rows.data && notes.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="credit notes" /> : <p className="empty-state">No goods have been taken back yet.</p>)}
+      {rows.data && notes.length === 0 && (query ? <NoResults term={query} onClear={search.clear} noun="credit notes" /> : <p className="empty-state">No goods have been taken back yet. Open the sale and choose Return goods.</p>)}
       <SearchResults fetching={finding}>
         <ul style={{ listStyle: 'none', padding: 0 }} data-tour="returns-list">
           {notes.map((r) => <ReturnRow key={r.id} row={r} branchName={nameOf(r.branch_id)} />)}

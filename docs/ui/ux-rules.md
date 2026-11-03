@@ -30,9 +30,10 @@ always there and leads back.
   (`/staff/retail/sales?sale=<id>`).
 - **Bad.** The same sale number printed as plain text, so the user goes to All sales and searches for it by hand.
 
-Use `ScreenLink`, `SaleLink`, `ItemStockLink` and `BranchStockLink` (`retail/screen-link.tsx`): each draws only for a
-person who may open the screen, so a link never leads to "not allowed". A screen that opens one record has a stable
-address that can be linked to and shared:
+Use `ScreenLink` and `SaleLink` (`retail/screen-link.tsx`) and `ToStock` with `item` or `branch`
+(`retail/analytics-ui.tsx`): each draws a link only for a person who may open the screen, and plain text otherwise, so a
+link never leads to "not allowed". A screen that opens one record has a stable address that can be linked to and shared
+(`useAddress` in `retail/screen-link.tsx` reads it):
 
 | Record | Address |
 |---|---|

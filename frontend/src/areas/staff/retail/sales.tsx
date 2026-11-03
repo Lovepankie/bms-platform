@@ -1,6 +1,7 @@
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, createLazyRoute } from '@tanstack/react-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useAddress } from './screen-link';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Highlight, NoResults, SearchBox } from '../../../app/ui/SearchBox';
 import { useLiveSearch } from '../../../app/ui/useLiveSearch';
 import { businessToday, retail, type Sale, type SalePayment, type SalesQuery } from '../../../api/retail';
@@ -255,9 +256,28 @@ export function openUnder(opened: { key: string; id: string } | null, key: strin
   return opened && opened.key === key ? opened.id : null;
 }
 
-function useOpenSale(key: string): [string | null, (id: string | null) => void] {
-  const [opened, setOpened] = useState<{ key: string; id: string } | null>(null);
-  return [openUnder(opened, key), (id) => setOpened(id === null ? null : { key, id })];
+type SalesPath = '/staff/retail/sales' | '/staff/retail/credit-sales';
+
+/**
+ * The sale shown open (issue #336): `?sale=<id>` in the address, so a sale number on another screen opens it, the address can
+ * be shared, and Back closes it. A change of branch after it opened closes it, as before.
+ */
+function useOpenSale(key: string, to: SalesPath): [string | null, (id: string | null) => void] {
+  const address = useAddress();
+  // Outside a router (a test drawing the list alone) the open sale is the screen's own state, as before.
+  const [local, setLocal] = useState<{ key: string; id: string } | null>(null);
+  const openedAt = useRef(key);
+  const fromAddress = typeof address.search.sale === 'string' && address.search.sale !== '' ? address.search.sale : null;
+  const id = address.routed ? openUnder(fromAddress ? { key: openedAt.current, id: fromAddress } : null, key) : openUnder(local, key);
+  const { routed, go } = address;
+  useEffect(() => {
+    if (routed && fromAddress && id === null) go(to, {}, true);
+  }, [routed, fromAddress, id, go, to]);
+  return [id, (next) => {
+    openedAt.current = key;
+    if (routed) go(to, next ? { sale: next } : {});
+    else setLocal(next === null ? null : { key, id: next });
+  }];
 }
 
 type Owing = 'all' | 'owing' | 'overdue' | 'paid';
@@ -273,7 +293,7 @@ export function CreditSales() {
   const nameOf = useBranchName();
   const search = useLiveSearch();
   const [owing, setOwing] = useState<Owing>('all');
-  const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''));
+  const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''), '/staff/retail/credit-sales');
   const today = businessToday();
   const { me } = useStaff();
   const view = useChainView(chainUser(me), 'credit');
@@ -328,7 +348,7 @@ export function AllSales() {
   const itemSearch = itemBox.term;
   const [productId, setProductId] = useState('');
   useEffect(() => setProductId(''), [itemSearch]);
-  const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''));
+  const [open, setOpen] = useOpenSale(all ? 'all' : (branchId ?? ''), '/staff/retail/sales');
   const products = useQuery({ queryKey: ['retail', 'products', 'all', itemSearch], queryFn: ({ signal }) => retail.listProducts({ query: itemSearch, signal }), enabled: itemSearch !== '', placeholderData: keepPreviousData });
   const { me } = useStaff();
   const view = useChainView(chainUser(me), 'all');

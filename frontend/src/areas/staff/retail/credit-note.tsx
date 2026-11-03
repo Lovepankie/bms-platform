@@ -15,6 +15,7 @@ import { showDate } from './transfers';
 import { Note, Problem, money, useBranchName, useToast } from './ui';
 import { NoAccess } from '../../../app/ui/EmptyState';
 import { Hint } from '../../../app/ui/Hint';
+import { SaleLink } from './screen-link';
 
 // One credit note (returns capability, ADR-033, issue #201), on screen: the goods that came back, what each was credited,
 // where they went, and how the credit was settled. The printable credit note (a PDF under this number) shows while the documents capability is on. A
@@ -25,7 +26,7 @@ export function CreditNoteView({ note, nameOf, buyerOpens }: { note: SaleReturn;
   const facts: [string, ReactNode][] = [
     ['Date', showDate(note.returned_on)],
     ['Branch', nameOf(note.branch_id)],
-    ['Sale', note.sale_no ?? ''],
+    ['Sale', <SaleLink key="sale" saleId={note.sale_id}>{note.sale_no ?? ''}</SaleLink>],
     ...(note.customer_name
       ? [['Buyer', buyerOpens && note.customer_id ? <Link key="buyer" to="/staff/retail/accounts/$customerId" params={{ customerId: note.customer_id }}>{note.customer_name}</Link> : note.customer_name] as [string, ReactNode]]
       : []),

@@ -49,13 +49,15 @@ describe('links on the retail report pages', () => {
     show(<SalesAnalysisView data={data} />);
     const sales = screen.getAllByRole('link').filter((a) => a.getAttribute('href') === '/staff/retail/sales');
     expect(sales.length).toBe(2);
-    expect(screen.getAllByRole('link', { name: 'Test Item 01' })[0]?.getAttribute('href')).toBe('/staff/retail/stock');
+    // Issue #336: the item opens its own stock, not the whole list.
+    expect(screen.getAllByRole('link', { name: 'Test Item 01' })[0]?.getAttribute('href')).toBe('/staff/retail/stock?item=p1');
   });
 
   it('opens Stock from both branches of a stock move', () => {
     show(<TransferSummary transfer={{ id: 't1', from_branch_id: BRANCH, to_branch_id: BRANCH, transfer_date: '2026-04-01', status: 'completed', lines: [] }} />);
     const links = screen.getAllByRole('link', { name: /Test Branch A/ });
     expect(links.length).toBe(2);
-    for (const a of links) expect(a.getAttribute('href')).toBe('/staff/retail/stock');
+    // Issue #336: each branch name opens that branch's stock.
+    for (const a of links) expect(a.getAttribute('href')).toBe(`/staff/retail/stock?branch=${BRANCH}`);
   });
 });
