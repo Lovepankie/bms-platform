@@ -3418,6 +3418,23 @@
         },
         "required" : [ "code", "name" ]
       },
+      "HostnameCheck" : {
+        "properties" : {
+          "host" : {
+            "description" : "The business's own host, from the slug and the tenant host pattern",
+            "type" : "string"
+          },
+          "http_status" : {
+            "description" : "The HTTP status of a wrong answer; null otherwise",
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "outcome" : {
+            "description" : "answers: this app answered /version there; not_found: the name has no DNS record; no_answer: the name exists but nothing answered in time or the connection failed; wrong_answer: something answered, but not this app (http_status says what)",
+            "type" : "string"
+          }
+        }
+      },
       "ImportSmsOptOutsRequest" : {
         "properties" : {
           "dry_run" : {
@@ -34346,6 +34363,33 @@
           }
         },
         "summary" : "The applications queue with counts (FR-ONB-05)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/applications/hostname-check" : {
+      "get" : {
+        "operationId" : "platformHostnameCheck",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "slug",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HostnameCheck"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Does the business's own address already answer? Asks that host for /version (issue #155)",
         "tags" : [ "platform" ]
       }
     },

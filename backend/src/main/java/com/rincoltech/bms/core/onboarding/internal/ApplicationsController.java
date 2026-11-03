@@ -34,9 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
 class ApplicationsController {
 
     private final ApplicationService service;
+    private final HostnameCheck hostnames;
 
-    ApplicationsController(ApplicationService service) {
+    ApplicationsController(ApplicationService service, HostnameCheck hostnames) {
         this.service = service;
+        this.hostnames = hostnames;
     }
 
     @Schema(name = "Application")
@@ -152,6 +154,15 @@ class ApplicationsController {
             @RequestParam(name = "status", required = false)
                     List<@Pattern(regexp = "submitted|needs_info|verified|activated|rejected|expired") String> status) {
         return service.list(status);
+    }
+
+    @GetMapping("/hostname-check")
+    @RequiresPermission("platform.tenants.manage")
+    @Operation(
+            summary = "Does the business's own address already answer? Asks that host for /version (issue #155)",
+            operationId = "platformHostnameCheck")
+    HostnameCheck.Result hostnameCheck(@RequestParam("slug") String slug) {
+        return hostnames.check(slug);
     }
 
     @GetMapping("/{application_id}")

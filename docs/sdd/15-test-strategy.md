@@ -584,7 +584,12 @@ output changed.
   codes, busy and error states, first password; the queue with counts, filters and links; the
   possible-repeat warning; decisions allowed per status and notes required; the Activate form
   labelled and not sent twice; the result and the repeat; failed messages masked with a retry and
-  a warning for an unconfigured sender; the new routes on the shared shell).
+  a warning for an unconfigured sender; the new routes on the shared shell). Issue #155:
+  `areas/platform/hostname-check.dom.test.tsx` (Check the address on the Activate form, each outcome
+  in plain words with the runbook pointer, an old answer hidden when the slug changes),
+  `app/landing.dom.test.tsx` (operator sign-in is a quiet link, not a landing button),
+  `layout/signup-findings.layout.test.ts` (both at 412px), and `HostnameCheckTest` (each outcome
+  against a real HTTP server on the loopback) and `HostnameCheckIT` (the endpoint, its refusals).
 - First run and guided tours (FR-IAM-13, FR-IAM-14): `areas/auth/first-run.test.tsx` renders each
   first-run step and error state; `tour/model.test.ts` covers step filtering by permission, module
   and feature flag, the first-run and replay rules, the skip of a missing anchor, the focus trap,

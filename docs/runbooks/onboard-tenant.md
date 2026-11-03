@@ -260,7 +260,14 @@ setup token.
    gets an email and answers on their application page), or **Reject** with a reason (they see it).
 4. Before activating on staging, make the tenant host reachable (next section) with the slug you
    will use. The portal suggests a free slug from the business name; edit it if needed. It cannot
-   change later.
+   change later. Then press **Check the address** on the Activate form: it asks
+   `https://<slug host>/version` and says "answers" when the host reaches this app. "No DNS record
+   yet" means step 1 of the next section is missing; "did not answer" or "something answered, but
+   not this app" usually means the tunnel entry (step 2) is missing or the record is minutes old.
+   "Refused the check (HTTP 403 or 503)" usually means a Cloudflare security rule, bot check or
+   Access policy answered the server's request: open the address in a browser and check the
+   zone's security rules before you touch the tunnel.
+   The check changes nothing, and Activate works either way.
 5. **Activate**: choose the modules, term and way in. For the paid way, note the payment received
    (method, the sender's reference, date); no amounts are modelled in this release. Activate
    creates the tenant with the applicant as invited tenant admin, starts the subscription as
@@ -300,7 +307,8 @@ curl -s -X PUT "$CF/accounts/$ACCOUNT_ID/cfd_tunnel/$TUNNEL_ID/configurations" -
   -H 'Content-Type: application/json' --data @tunnel-config.json | jq '.success, .errors'
 ```
 
-cloudflared picks up the new configuration within seconds; nothing changes on the host. To remove
+cloudflared picks up the new configuration within seconds; nothing changes on the host. Confirm
+with **Check the address** on the application's Activate form (issue #155). To remove
 a tenant host, delete the DNS record and run step 2 with a `map(select(.hostname != $host))` only.
 
 **Check the whole ingress before writing it (ADR-018 finding M6).** The `PUT` above replaces the

@@ -127,6 +127,14 @@
   font-size: var(--text-sm);
 }
 
+/* A link most visitors do not need, at the foot of the page (#155: operator sign-in on the platform host). */
+.landing-quiet {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* The sign-in family: one centred card, comfortable at 360px. */
 .auth-card {
   width: 100%;

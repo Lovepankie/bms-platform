@@ -371,6 +371,7 @@ workspace "BMS Platform" "Multi-tenant business management platform: core plus v
         bms.api.onboarding  -> bms.db "Finds the businesses where an email is an active staff user, through the SECURITY DEFINER function app_staff_sign_in_pages (V72, ADR-016)"
         bms.api.onboarding  -> bms.api.notifications "Queues applicant emails, the activation email, operator alerts and the staff sign-in page email in the outbox"
         bms.api.onboarding  -> bms.api.audit "Writes the platform audit log"
+        bms.api.onboarding  -> bms.proxy "Check the address on the Activate form: asks the business's own host for /version over its public address, changes nothing (issue #155)" "HTTPS"
         bms.api.onboarding  -> bms.api.tenancy "Builds links from BMS_PLATFORM_HOST and BMS_TENANT_HOST_PATTERN; checks and claims short names and follows short links (ShortNames, ADR-108)"
         bms.api.notifications -> emailService "Sends outbox email" "HTTPS (Resend API) or SMTPS"
         bms.api.notifications -> pushService "Sends the push channel's encrypted, VAPID signed messages to the endpoint of each of a person's devices; only hosts of known push services (ADR-050)" "HTTPS"

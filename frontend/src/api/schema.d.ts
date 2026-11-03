@@ -3171,6 +3171,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/applications/hostname-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Does the business's own address already answer? Asks that host for /version (issue #155) */
+        get: operations["platformHostnameCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/applications/{application_id}": {
         parameters: {
             query?: never;
@@ -9830,6 +9847,17 @@ export interface components {
         HeadOfficeRequest: {
             code: string;
             name: string;
+        };
+        HostnameCheck: {
+            /** @description The business's own host, from the slug and the tenant host pattern */
+            host?: string;
+            /**
+             * Format: int32
+             * @description The HTTP status of a wrong answer; null otherwise
+             */
+            http_status?: number;
+            /** @description answers: this app answered /version there; not_found: the name has no DNS record; no_answer: the name exists but nothing answered in time or the connection failed; wrong_answer: something answered, but not this app (http_status says what) */
+            outcome?: string;
         };
         ImportSmsOptOutsRequest: {
             /** @description Default true: report what would happen and change nothing */
@@ -26703,6 +26731,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplicationList"];
+                };
+            };
+        };
+    };
+    platformHostnameCheck: {
+        parameters: {
+            query: {
+                slug: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostnameCheck"];
                 };
             };
         };
