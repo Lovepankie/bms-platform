@@ -147,6 +147,15 @@ class ImportRunService implements ImportRuns {
                 throw invalidTransition("The import is " + RunStates.words(run.status()) + ", so it cannot be "
                         + RunStates.words(status) + " now.");
             }
+            // Ready means every file is read (spec section 3.11): a file not yet parsed, or refused, is parsed again or
+            // cancelled first (#128).
+            if (RunStates.READY.equals(status)
+                    && jdbc.sql("""
+                                    SELECT EXISTS (SELECT 1 FROM import_batches WHERE run_id = ? AND status IN ('uploaded', 'failed'))
+                                    """).param(runId).query(Boolean.class).single()) {
+                throw invalidTransition(
+                        "A file of this import is not read yet or was refused; read it again or cancel it.");
+            }
             setStatus(runId, status);
             audit(runId, "core.import_run.status_changed", Map.of("status", run.status()), Map.of("status", status));
             return find(runId, false);
@@ -472,7 +481,7 @@ class ImportRunService implements ImportRuns {
 
     private CommitOutcome writeBatches(UUID runId, BatchWriter writer, LoopClaim claim) {
         List<PendingBatch> pending = tx.execute(s -> jdbc.sql("""
-                        SELECT id, seq FROM import_batches WHERE run_id = ? AND status = 'pending' ORDER BY seq
+                        SELECT id, seq FROM import_batches WHERE run_id = ? AND status IN ('pending', 'parsed') ORDER BY seq
                         """)
                 .param(runId)
                 .query((rs, n) -> new PendingBatch(rs.getObject("id", UUID.class), rs.getInt("seq")))
@@ -516,7 +525,8 @@ class ImportRunService implements ImportRuns {
         }
         tx.executeWithoutResult(s -> {
             Run run = find(runId, true);
-            long left = jdbc.sql("SELECT count(*) FROM import_batches WHERE run_id = ? AND status = 'pending'")
+            long left = jdbc.sql(
+                            "SELECT count(*) FROM import_batches WHERE run_id = ? AND status IN ('pending', 'parsed')")
                     .param(runId)
                     .query(Long.class)
                     .single();

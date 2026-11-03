@@ -532,6 +532,25 @@ class DocumentService implements Documents {
                 log.warn("could not delete object {} of a purged business", key, e);
             }
         }
+        // The quarantined import files (issue #128) have no documents row; they go by their prefix.
+        List<String> quarantined;
+        try (var held = storage.list(QuarantineStore.prefix())) {
+            quarantined = held.map(ObjectStorage.Listed::key).toList();
+        }
+        int refused = 0;
+        for (int from = 0; from < quarantined.size(); from += 1000) {
+            List<String> page = quarantined.subList(from, Math.min(from + 1000, quarantined.size()));
+            int failed = storage.deleteAll(page).size();
+            refused += failed;
+            deleted += page.size() - failed;
+        }
+        if (refused > 0) {
+            // No later job visits a removed business, so the purge stops here and runs again the next night rather than
+            // leave its quarantined files behind.
+            log.warn("{} quarantined import files of a purged business could not be deleted", refused);
+            throw new IllegalStateException(
+                    "quarantined import files of a purged business remain; the purge runs again");
+        }
         return deleted;
     }
 

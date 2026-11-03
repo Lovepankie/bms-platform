@@ -156,6 +156,18 @@ bms:
       access-key-id: ${R2_DOCUMENTS_ACCESS_KEY_ID:}
       secret-access-key: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:}
       bucket: ${R2_DOCUMENTS_BUCKET:}
+  # Customer data onboarding uploads (issue #128, spec section 3.1). The limits are raised only after the big file test
+  # passes at the new size. The key (32 bytes, base64) wraps each import run's data key; without it uploads answer 503.
+  # The work directory holds encrypted copies only, for the length of one call. The daily cleanup removes quarantined
+  # files no batch names once older than orphan-age, and the files and staged rows of cancelled runs.
+  imports:
+    max-file-size: ${BMS_IMPORTS_MAX_FILE_SIZE:25MB}
+    max-rows: ${BMS_IMPORTS_MAX_ROWS:100000}
+    max-columns: ${BMS_IMPORTS_MAX_COLUMNS:200}
+    key: ${BMS_IMPORT_KEY:}
+    work-dir: ${BMS_IMPORTS_WORK_DIR:}
+    orphan-age: ${BMS_IMPORTS_ORPHAN_AGE:24h}
+    cleanup-enabled: ${BMS_IMPORTS_CLEANUP_ENABLED:true}
   # The daily sweep of orphaned uploads (issue #39): objects under tenants/<id>/upload/ older than 24 hours that no
   # documents row names. Dry run logs the counts and removes nothing; it is the default until the operator has read a
   # dry run's summary (docs/runbooks/restore-from-backup.md section 4 sets it again after a restore). Bounds: most

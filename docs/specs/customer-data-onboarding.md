@@ -130,6 +130,10 @@ Every issue has:
 | `FILE_TYPE_UNSUPPORTED` | batch fails | The file is not CSV, XLSX or JSON Lines. |
 | `FILE_TOO_LARGE`, `TOO_MANY_ROWS` | batch fails | The file is over the limit of {limit}; split it and upload the parts. |
 | `HEADER_NOT_FOUND` | batch fails | No row matches the mapping's headers in the first 20 rows. |
+| `TOO_MANY_COLUMNS` | batch fails | The file is over the limit of {limit} columns; remove the columns not needed. (#128) |
+| `FILE_UNREADABLE` | batch fails | The file is damaged at {row}: a quote never closed, a cell over 32,767 characters, a broken workbook, a sheet name over 100 characters, a value the database cannot store. (#128) |
+| `FILE_ALREADY_UPLOADED` | upload refused | This import already holds this file. (#128) |
+| `UPLOAD_DISK_LOW` | upload refused | The server has too little free disk for this file now; try again later. (#128) |
 | `COLUMN_UNMAPPED` | warning | Column {column} is not in the mapping; map it or mark it ignored. |
 | `REQUIRED_MISSING` | blocking | {field} is empty on {file} line {line}. |
 | `TYPE_INVALID` | blocking | {field} on {file} line {line} is not a valid {type}. |

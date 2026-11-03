@@ -1183,9 +1183,15 @@ public class RlsIsolationIT {
         owner.sql("INSERT INTO import_runs (id, tenant_id, created_by) VALUES (?, ?, ?)")
                 .params(importRun, t.tenantId(), user)
                 .update();
+        UUID importBatch = UUID.randomUUID();
         owner.sql("INSERT INTO import_batches (id, tenant_id, run_id, seq) VALUES (?, ?, ?, 1)")
-                .params(UUID.randomUUID(), t.tenantId(), importRun)
+                .params(importBatch, t.tenantId(), importRun)
                 .update();
+        // The quarantined upload (migration V129, #128): one staged row of fabricated cells.
+        owner.sql("""
+                        INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw)
+                        VALUES (?, ?, ?, 2, '{"Item": {"value": "Fabricated item", "type": "text"}}')
+                        """).params(UUID.randomUUID(), t.tenantId(), importBatch).update();
     }
 
     /**

@@ -209,13 +209,21 @@ ObjectStorage
   put(key, bytes, content_type) -> {etag}
   signed_get_url(key, ttl_seconds=300, download_filename?) -> url
   delete(key)
-  list(prefix) -> stream of {key, last_modified}   (read page by page; the orphan sweep only)
+  list(prefix) -> stream of {key, last_modified}   (read page by page; the orphan sweeps only)
+  open(key) -> stream                               (read as consumed; the quarantined import files)
 ```
 
 - Buckets: one for documents, one for backups, per environment (names in chapter 9).
   Both private; no public access.
 - Keys: `tenants/<tenant_id>/<doc_type>/<yyyy>/<mm>/<document_id>.<ext>` for documents;
   backups under `backups/<environment>/<yyyy>/<mm>/<dd>/`.
+- Quarantine (issue #128, ADR-027 decision 2): the files of customer data onboarding are stored
+  under `tenants/<tenant_id>/quarantine/imports/<run_id>/<batch_id>.bin`, already encrypted by
+  `core.imports` with the run's data key, through `QuarantineStorage`, which refuses any key
+  outside the bound business's prefix. No `documents` row names them, no signed URL serves them,
+  and the orphan sweep below never lists them: `core.imports` deletes them itself and sweeps the
+  ones no batch names (chapter 9 section 9.9). The purge of a removed business deletes its
+  quarantine prefix with its documents.
 - Access: scoped API token per bucket and environment. The API issues signed URLs only
   after a permission check (FR-DOC-03).
 - Upload of user files goes through the API (size and type checks, chapter 8 section

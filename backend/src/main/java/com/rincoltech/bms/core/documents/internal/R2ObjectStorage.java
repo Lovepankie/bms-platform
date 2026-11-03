@@ -82,6 +82,15 @@ class R2ObjectStorage implements ObjectStorage {
     }
 
     @Override
+    public Optional<java.io.InputStream> open(String key) {
+        try {
+            return Optional.of(s3.getObject(b -> b.bucket(bucket).key(key)));
+        } catch (NoSuchKeyException e) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
     public void delete(String key) {
         s3.deleteObject(b -> b.bucket(bucket).key(key));
     }

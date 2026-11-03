@@ -17,6 +17,14 @@ interface ObjectStorage {
     /** The object's bytes; empty when there is none. For assets the application serves itself. */
     Optional<byte[]> get(String key);
 
+    /**
+     * The object's bytes as a stream the caller closes; empty when there is none. R2 streams it from the network, so an
+     * object of megabytes is never held in memory (the quarantined import files, issue #128); the fakes wrap {@link #get}.
+     */
+    default Optional<java.io.InputStream> open(String key) {
+        return get(key).map(java.io.ByteArrayInputStream::new);
+    }
+
     /** Removes an object; used when the transaction that stored it rolls back. */
     void delete(String key);
 

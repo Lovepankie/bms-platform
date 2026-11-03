@@ -695,3 +695,82 @@ steps are audited. Branch limits are each template writer's: a writer checks tha
 the import may write to, first in the template of #136. The maker-checker
 `import_commit` request is #133; until then the commit is called by the operator's tooling. The operator screens and the
 stop button are #141.
+
+**2/16, the quarantined upload (#128, migration `V129`).** `core.imports` gains the public API `ImportUploads` (upload, parse
+again, cancel a batch, read batches); the operator's route and screen are #141, so until then it is called by the operator's
+tooling, as the commit is. Every call works on the bound business only: a run or batch of another business is
+`not_found`, and the quarantine port refuses another business's key.
+
+- **Upload.** A file is added to a run that is `draft`, `uploaded` or `in_review` (the first moves the run to `uploaded`).
+  Its name's extension gives the type (`.csv`, `.xlsx`, `.jsonl` or `.ndjson`) and its first bytes must agree: a zip for XLSX;
+  for the text types no zip, old Excel, PDF or NUL byte, and `{` first for JSON Lines. Anything else is
+  `FILE_TYPE_UNSUPPORTED` (422). The file is read once, in blocks of 64 KiB, counting its size against the limit
+  (`FILE_TOO_LARGE`, 413, also when a declared size is over it), taking its SHA-256 and checking for a CSV or JSON Lines file
+  whether it is UTF-8 (otherwise it is read as Windows-1252 and the batch carries `ENCODING_CONVERTED`). As it is read it is
+  encrypted with the run's data key into a work file, the only copy on disk, which goes to object storage under
+  `tenants/<tenant_id>/quarantine/imports/<run_id>/<batch_id>.bin` (chapter 12 section 12.5). The upload is refused with
+  `UPLOAD_DISK_LOW` (507) when free disk is under twice the file, and with `FILE_ALREADY_UPLOADED` (409) when the run already
+  holds the same bytes. The batch row records the file name, type, size, SHA-256, encoding, uploader and time; no transaction
+  is open while the file streams or goes to storage.
+- **Encryption.** The run's data key is 32 random bytes made at its first upload and stored only wrapped by the platform
+  import key `BMS_IMPORT_KEY` (AES-256-GCM, bound to the business and the run, `import_runs.data_key_wrapped`). A file is
+  sealed in segments of 64 KiB, each AES-256-GCM with its number and a last-segment mark in its IV and the batch id in its
+  associated data, so neither side holds more than a segment and a file cut short, changed, reordered or moved onto another
+  batch does not open (`quarantine_unreadable`, nothing changed or deleted). Without the server's import key, uploads answer
+  503 `imports_key_missing`.
+- **Parse.** The encrypted object is copied to a work file and read back through the decryption by a streaming reader: CSV
+  (RFC 4180), XLSX (StAX over the zip in two forward passes, the workbook, styles and shared strings, then the sheet named or
+  the first visible one, with values as the sheet shows them: a formula's cached value, numbers to 15 significant digits,
+  dates in a date style as `2026-06-30` or with their time, never shifted by a zone) and JSON Lines (one object per line, its
+  keys the columns). The header is the first of the first 20 rows that holds every header the mapping requires, or the first
+  row that is not blank (`HEADER_NOT_FOUND`). Every row below it becomes one `import_rows` row with its cells in `raw`, blank
+  rows included and trailing blank rows not, and columns the mapping ignores are dropped. Rows are written 1,000 at a time in
+  one transaction, so the limits (`TOO_MANY_ROWS` over 100,000, `TOO_MANY_COLUMNS` over 200) and a damaged file
+  (`FILE_UNREADABLE`: an unclosed quote, a cell over 32,767 characters, a broken zip or XML) roll every row back: the batch
+  is `failed` with its code and a reason that names a limit, a row or a column, never a value, and its file is deleted. A
+  batch can be parsed again with other options before the run is ready; its rows are replaced. Until the mappings of #129,
+  the caller passes the required headers, the ignored columns and the sheet. A repeated header gets the first count no
+  other header holds (`Phone`, `Phone (2)`, and for `Phone, Phone, Phone (2)` the third is `Phone (2) (2)`), and a cell
+  beyond the header is `column_7` unless a header already has that name, so no cell is lost under another's name. A
+  refusal on a re-parse deletes the file like any other, a `HEADER_NOT_FOUND` caused by the options included; keeping the
+  file for refusals the mapping caused belongs with the mappings of #129.
+- **States.** A batch is `uploaded`, `parsed`, `failed` or `cancelled` (`pending` and `committed` keep their meaning for the
+  commit). A run becomes `ready` only when no batch is `uploaded` or `failed`, and the commit writes the `pending` and
+  `parsed` batches. Cancelling a batch deletes its rows and file.
+- **Cleanup.** The daily `core.imports.quarantine-cleanup` (chapter 9 section 9.9) removes the rows and files of cancelled
+  runs, files whose delete failed (a failed or cancelled batch keeps its file's key until storage confirms the delete),
+  files no batch names after 24 hours, and work files a crash left. The purge of a removed business deletes its quarantine
+  prefix and, when storage refuses any file, stops so it runs again the next night.
+- **Concurrency.** The parse writes in a transaction that first takes the run `FOR SHARE` and the batch `FOR UPDATE` and
+  checks again that the run is open and the batch still `uploaded` or `parsed` with the same file, so a cancel, a move to
+  ready or a second parse while the file was being fetched is refused and nothing is written; a refusal recorded after that
+  point is dropped the same way. The cancel takes the same locks in the same order. The run stays held `FOR SHARE` for
+  the whole parse (a few seconds at the row limit, `UploadMemoryTest`), so an upload to the same run, which takes the run
+  `FOR UPDATE`, waits for it; the wait counts against the 60 second `statement_timeout`, and each insert of 1,000 rows is
+  one short statement, well inside it and the 60 second `idle_in_transaction_session_timeout`.
+- **Memory.** Besides the row chunk, the XLSX reader keeps only what its first pass needs (shared strings, styles, sheet
+  list), charged at an estimate of its heap cost against 96 MiB, so many empty or short strings are stopped as surely as
+  long ones, and never more shared strings than the sheet can have cells (rows plus the header, times columns); every text is read in pieces and stopped at 32,767 characters, and a shared or inline string made of many runs is checked after each run, its phonetic readings (`rPh`) left out in both; a part named twice is refused; and each pass may
+  unpack at most 1 GiB, skipped parts included. A text used many times is charged at every use: the header names and
+  texts the rows hold may total at most eight times the file size limit in characters (200 million at 25 MB), past which
+  the batch is `FILE_TOO_LARGE` and its file deleted, so one 32,767 character shared string in every cell of a few KB of
+  zipped sheet is refused in about a second instead of staging gigabytes. A chunk is also written early once its JSON
+  reaches 8 million characters, so wide rows of long texts never fill the heap between writes. A sheet name over the 100
+  characters `sheet_name` holds is
+  `FILE_UNREADABLE`. A NUL in a cell or anywhere in nested JSON, which PostgreSQL cannot store, is `FILE_UNREADABLE`, as is
+  any value the database refuses anywhere in the parse's write, the batch's own update included. A write that passes the
+  `statement_timeout` (57014) would time out again on a retry, so it fails the batch with `FILE_TOO_LARGE`. Any other
+  transient database error (a lost connection, a lock timeout) stays a server error and the batch keeps its file for
+  another try. A failure reason is cut to 300 characters without splitting a character.
+- **Proven by** `ImportUploadsIT` (only `import_*` and the audit log change; the stored object opens with the run's key and
+  not without; each refusal; isolation; a file at the row limit streamed in blocks; no file content, personal value or file
+  name in the logs; the cleanup), `UploadMemoryTest` (a CSV and an XLSX of 100,000 rows parse in a child JVM at the staging
+  heap of 224 MB, and one long shared string in every cell is refused there in seconds), `SourceParserTest`,
+  `QuarantineCipherTest`, `UploadServiceTest` (the reason's cut, the timeout check), `ReaderLimitsTest` (the memory
+  budget, a zip bomb in a skipped part, texts over the cell limit, many runs in one inline cell, one long shared string in
+  every cell, a phonetic reading in an inline cell, a sheet name over 100 characters, a part named
+  twice, a number format with a unit, NUL in every format and not in the text of an escaped backslash, headers renamed
+  without collisions) and `ImportUploadReviewIT` (a cancel or a move to ready while a file is fetched writes nothing, a NUL,
+  a long sheet name and a refused update of the batch fail the batch with a code, the daily job as the scheduler runs it);
+  `BusinessClosureIT` shows a removed business's quarantined file deleted, and `QuarantinePurgeIT` a refused delete that
+  stops the purge and goes on the next run.

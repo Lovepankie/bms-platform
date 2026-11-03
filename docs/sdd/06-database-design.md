@@ -1248,6 +1248,22 @@ As built so far (migration `V127__import_runs.sql`, issue #127, ADR-027; chapter
 
 Both are removed with a closed business by the generic purge (ADR-090); neither holds personal data.
 
+Added by `V129__import_upload.sql` (issue #128, chapter 13 section 13.14.1), expand only:
+
+- **`import_runs.data_key_wrapped`** (`bytea`): the run's data key wrapped by the platform import key, made at the first upload.
+- **`import_batches`** gains `source_filename`, `source_sha256`, `size_bytes`, `file_type` [`csv`, `xlsx`, `jsonl`], `object_key`
+  (the encrypted file under `tenants/<tenant_id>/quarantine/imports/`, NULL once deleted, with `quarantine_deleted_at`), `encoding`
+  [`utf-8`, `windows-1252`], `uploaded_by`, `uploaded_at`, `sheet_name`, `header_row_no`, `row_count`, `column_count`,
+  `parse_warnings text[]` (codes only), `parsed_at`, `failure_code`, `failure_reason` (set when `failed`, and kept when a failed batch is cancelled), `failed_at`
+  and `cancelled_at`; its `status` check becomes [`pending`, `uploaded`, `parsed`, `failed`, `cancelled`, `committed`] (replaced in
+  the migration's one transaction; the table is empty on every server). A failed or cancelled batch keeps its `object_key`
+  until storage confirms the file's delete, so the cleanup finds a delete that failed. A partial unique index `import_batches_one_file_per_run (run_id, source_sha256)` over batches
+  not failed or cancelled holds one copy of a file per run, and `import_batches_held_files` finds the files still held.
+- **`import_rows`** (RLS, `SELECT, INSERT, DELETE`; never updated): `batch_id` (FK `(tenant_id, batch_id)`), `source_row_no`
+  (`UNIQUE (batch_id, source_row_no)`), `raw jsonb` (per kept column `{"value", "type"}`, a column absent is empty). It holds a
+  customer's cells and so may hold personal data: it is the quarantine, read by no business module, removed with a cancelled
+  run by the cleanup and purged by #139; the generic purge removes it with a closed business before its batch.
+
 ## 6.6 General ledger (RLS)
 
 ### 6.6.1 Tables

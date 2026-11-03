@@ -188,7 +188,9 @@ public interface Documents {
     /**
      * Deletes every stored file of the bound business from the object store, for the purge of a removed business's kept
      * records (owner decision D46, ADR-090); the rows are the purge's. Runs outside any transaction it holds open; a file that
-     * cannot be deleted is logged by its key and counted out. Returns the files deleted.
+     * cannot be deleted is logged by its key and counted out. The business's quarantined import files (#128) go by their
+     * prefix; when storage refuses any of them this throws, so the purge stops and runs again the next night. Returns the
+     * files deleted.
      */
     int deleteAllStoredFiles();
 
