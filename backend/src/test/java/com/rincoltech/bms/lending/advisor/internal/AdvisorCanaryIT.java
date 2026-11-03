@@ -128,6 +128,12 @@ class AdvisorCanaryIT extends IntegrationTest {
                     .update();
         }
         CANARIES.add("Canary Staff Qx");
+        // Fresh statistics for the book just written (issue #773). Whether autovacuum analysed it
+        // during the seed was a race; planned on statistics taken before it, every join of the facts
+        // reads estimates one row for this tenant and loops over the whole tenant inside each loop:
+        // the facts took 36 s on an idle machine and passed the 60 s statement timeout on a loaded
+        // runner. After ANALYZE they take half a second; the indexes they need already exist.
+        TestDatabase.owner().sql("ANALYZE").update();
         int version = TenantContext.callAs(TENANT.tenantId(), ai::status).version();
         TenantContext.callAs(TENANT.tenantId(), () -> ai.enable("ack-v1", version));
         ready = true;

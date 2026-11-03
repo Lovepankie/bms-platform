@@ -539,7 +539,7 @@ output changed.
   20:59 and 21:01 UTC edge; a scope read after midnight; an empty tenant), `AdvisorCanaryIT` (a book whose branches and products
   are named with canaries goes through the real gateway with the recording client: no canary in the request the client received,
   in the call log or in the facts, the gateway's input screen lets the prompt through, a structured answer comes back rendered
-  with the real names, and prose, an extra field and an unknown key are refused), `StructuredValidatorTest` (the limits,
+  with the real names, and prose, an extra field and an unknown key are refused; the seeded book's statistics fresh before the first read, #773), `StructuredValidatorTest` (the limits,
   extras, enum near-misses such as case, padding and look-alikes, the closed codes, the rendering word for word, a property
   test that renders every catalogue action with every fact of its topic and finds only template text plus values written by our
   code), `CatalogueTest` (twelve to twenty actions, a topic for each, file order kept, duplicates refused, calm wording marked, no officer or savings text, no figure reference, no digit, markup or foreign placeholder in any text, the

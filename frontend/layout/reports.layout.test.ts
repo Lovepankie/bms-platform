@@ -1,6 +1,6 @@
 import { chromium, type Browser, type Page } from 'playwright';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { openLayout } from './open';
+import { openLayout, settle } from './open';
 
 // The report centre on a phone 412 wide (issue #229), at the default and a large font size: the monthly pack card, the report
 // cards with long titles and descriptions, and the runs with a pack's two downloads and a long failure stay inside the phone;
@@ -26,7 +26,10 @@ async function open(font: number, extra = ''): Promise<Page> {
     : extra.includes('empty')
       ? page.getByText('You have not run a report yet.')
       : page.getByText('Download Excel');
-  return openLayout(page, `layout/reports.html?font=${font}${extra}`, ready);
+  await openLayout(page, `layout/reports.html?font=${font}${extra}`, ready);
+  // Measured only once the fonts are in and the page measures the same twice in a row (issue #775).
+  await settle(page.locator('body'));
+  return page;
 }
 
 const pageWidth = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth);
@@ -73,6 +76,7 @@ describe.each([1, 2])('The report centre at 412px, font scale %i', (font) => {
     const page = await open(font);
     await page.locator('.rp-report summary').first().click();
     await page.getByRole('button', { name: 'Run report' }).first().waitFor();
+    await settle(page.locator('.rp-report[open] form'));
     expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);
     const form = await page.locator('.rp-report[open] form').boundingBox();
     expect((form?.x ?? 0) + (form?.width ?? 0)).toBeLessThanOrEqual(WIDTH);
@@ -135,7 +139,7 @@ describe.each([1, 2])('The report centre at 412px, font scale %i', (font) => {
     // "(Excel)" 6px past the phone (review of #735).
     const page = await open(font);
     await page.addStyleTag({ content: '* { font-family: "DejaVu Sans", sans-serif !important; }' });
-    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    await settle(page.locator('body'));
     expect(await pageWidth(page), 'page width').toBeLessThanOrEqual(WIDTH);
     await page.close();
   });
