@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouter } from '@tanstack/react-router';
 import { useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { TOAST_MS, useToast as useToastOf } from './toast';
 import { Highlight } from '../../../app/ui/SearchBox';
@@ -10,7 +10,7 @@ import { RETAIL_CURRENCY, RetailError, retail, type BranchRole, type Product } f
 import { ALL_BRANCHES, branchLabel } from '../../../auth/branch';
 import { formatMinor } from '../../../components/money';
 import { useStockedBranches } from '../branch-picker';
-import { useStaff } from '../context';
+import { useOptionalStaff, useStaff } from '../context';
 import { ItemPhoto, shownPhoto } from './item-photo';
 import { parseCount, qtyString, showQty } from './maths';
 import { ladderLevels, packsAndPieces, packsAndPiecesMilli, packsAndPiecesProblem, unitWords, type PackSize } from './units-state';
@@ -206,6 +206,27 @@ export function NoStockHere({ branchId }: { branchId: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Opens the item page (issue #813): what each shop holds of the item and every movement of it. Shown only to whoever may read
+ * stock; a full size tap target.
+ */
+export function ItemPageLink({ productId, name }: { productId?: string; name?: string }) {
+  // Nothing outside the staff layout, and a plain link outside a router (a screen test), as NoAccess does.
+  const me = useOptionalStaff()?.me;
+  const router = useRouter({ warn: false });
+  if (!productId || !me || !canUse(me, 'stock')) return null;
+  const label = name ? `Open ${name}: stock in each shop and every movement` : undefined;
+  return router ? (
+    <Link className="btn btn-ghost item-page-link" to="/staff/retail/items/$productId" params={{ productId }} aria-label={label}>
+      Open the item
+    </Link>
+  ) : (
+    <a className="btn btn-ghost item-page-link" href={`/staff/retail/items/${encodeURIComponent(productId)}`} aria-label={label}>
+      Open the item
+    </a>
   );
 }
 

@@ -92,6 +92,20 @@ export const usageHistoryPage: Tour = {
   ],
 };
 
+export const itemPage: Tour = {
+  id: 'page-item',
+  version: 1,
+  title: 'This page: one item',
+  audience: (me) => held(me, STOCK_READ),
+  autoStart: false,
+  page: '/staff/retail/items/$productId',
+  steps: [
+    retail({ id: 'shops', target: 'item-page-shops', title: 'In stock in each shop', body: 'See how many of this item each shop holds now.' }),
+    retail({ id: 'filters', target: 'item-page-filters', title: 'Narrow the list', body: 'Choose one shop, or the first and last day, to see only those movements.' }),
+    retail({ id: 'moves', target: 'item-page-moves', title: 'Check the count', body: 'Every delivery, sale, move, use, damage and count, newest first. Each line shows what the shop held just after it.' }),
+  ],
+};
+
 export const transferPage: Tour = {
   id: 'page-transfer',
   // Version 2 adds the Scan here step (issue #345, ADR-070).
@@ -229,6 +243,6 @@ export const evaluationPage: Tour = {
 };
 
 export const RETAIL_REPORT_TOURS: readonly Tour[] = [
-  retailHomePage, restockPage, usagePage, usageHistoryPage, transferPage, transfersPage, valuationPage, profitPage,
+  retailHomePage, restockPage, usagePage, usageHistoryPage, itemPage, transferPage, transfersPage, valuationPage, profitPage,
   salesAnalysisPage, marginsPage, stockHealthPage, creditControlPage, evaluationPage,
 ];

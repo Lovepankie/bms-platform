@@ -296,6 +296,21 @@ class StockService {
             boolean newestFirst,
             Integer limit,
             String cursor) {
+        return movements(branchIds, productId, from, to, kinds, newestFirst, limit, cursor, false);
+    }
+
+    /** As above; {@code withBalance} adds each row's running balance and a sale's profit (the item page, issue #813). */
+    @Transactional(readOnly = true)
+    MovementPage movements(
+            List<UUID> branchIds,
+            UUID productId,
+            LocalDate from,
+            LocalDate to,
+            List<String> kinds,
+            boolean newestFirst,
+            Integer limit,
+            String cursor,
+            boolean withBalance) {
         Principal principal = CurrentPrincipal.require();
         List<UUID> filter = principal.branchFilter("retail.stock.read", branchIds);
         int size = limit == null ? DEFAULT_LIMIT : Math.clamp(limit, 1, MAX_LIMIT);
@@ -310,7 +325,8 @@ class StockService {
                 newestFirst,
                 after == null ? null : after.at(),
                 after == null ? null : after.id(),
-                size + 1);
+                size + 1,
+                withBalance);
         boolean more = rows.size() > size;
         List<MovementRow> items = more ? rows.subList(0, size) : rows;
         String next = more
@@ -338,7 +354,9 @@ class StockService {
                                         m.historical(),
                                         m.note(),
                                         m.by(),
-                                        m.correction()))
+                                        m.correction(),
+                                        m.balanceAfter(),
+                                        null))
                         .toList(),
                 next);
     }

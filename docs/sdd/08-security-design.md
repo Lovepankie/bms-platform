@@ -560,7 +560,11 @@ Notes:
   unless the caller holds `retail.profit.read`, and the profit routes refuse without it. On a
   branch-bound row the permission must cover that row's branch (`principal.may`, ADR-017), so a
   user with profit read at branch A only sees no cost on branch B's stock, movements, sales or
-  valuation (review F5); tenant-wide products and price history need it in any branch. The sales
+  valuation (review F5); tenant-wide products and price history need it in any branch. The item page
+  (issue #813, ADR-121: `GET /retail/stock/items/{product_id}` and its `/movements`) declares `retail.stock.read` and shows
+  every quantity and running balance to whoever holds it, in the branches it covers; a shop's average buying price, a
+  movement's cost and a sale's `profit_minor` follow the same per-branch `retail.profit.read` rule, and a `branch_id` outside
+  the caller's `retail.stock.read` scope is 404, never an empty page that would confirm the branch. The sales
   summary (`GET /retail/sales/summary`, issues #328 and #341) is a sum at every level of its grouping chain (shop, year, month, salesperson, day, category, item), so its `profit_minor` is offered only when the caller holds
   `retail.profit.read` in every branch the figures cover (the requested branches within the `retail.sale.read` scope, or
   every branch when none were asked for and the scope is all of them) and is absent otherwise: a profit summed over some

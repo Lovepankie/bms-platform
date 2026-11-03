@@ -207,7 +207,20 @@ final class StockApi {
             String note,
             UUID by,
 
-            @JsonInclude(JsonInclude.Include.NON_NULL) MovementCorrection correction) {}
+            @JsonInclude(JsonInclude.Include.NON_NULL) MovementCorrection correction,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    type = "string",
+                    description = "The item page (issue #813): what the branch held of the item just after this"
+                            + " movement, over its whole history in movement order; absent on the list across items")
+            String balanceAfter,
+
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(
+                    description =
+                            "The item page (issue #813), on a sale: the sale line's total less its cost; " + COST_ONLY)
+            Long profitMinor) {}
 
     @Schema(
             name = "RetailStockMovementCorrection",

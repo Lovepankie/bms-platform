@@ -49,6 +49,8 @@ const RETAIL_READS = new Set([
   'customers', // the customers who buy on credit
   'customer-ageing', // what customers owe, by how late
   'usage-history', // Past usage and damage
+  'item-stock', // the item page's stock in each shop (issue #813)
+  'item-movements', // the item page's movements with the balance after each
 ]);
 
 /** Whether a read is kept for offline reading. Lending, the profile and every other read never are. */

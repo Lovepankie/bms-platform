@@ -7415,6 +7415,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/stock/items/{product_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One item's stock in each shop the caller may read (issue #813) */
+        get: operations["getRetailItemStock"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/stock/items/{product_id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every movement of one item newest first, with the shop's balance after each (issue #813); a branch outside the caller's scope is 404 */
+        get: operations["listRetailItemMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/stock/movements": {
         parameters: {
             query?: never;
@@ -15172,6 +15206,35 @@ export interface components {
             sell_price_minor?: number;
             unit?: string;
         };
+        /** @description The item in one shop or store */
+        RetailItemShop: {
+            /**
+             * Format: int64
+             * @description The shop's average buying price per piece (ADR-079); Present only with retail.profit.read
+             */
+            avg_cost_minor?: number;
+            /** Format: uuid */
+            branch_id?: string;
+            /** @description A closed branch, listed only while it still holds the item */
+            closed?: boolean;
+            code?: string;
+            name?: string;
+            negative?: boolean;
+            qty?: string;
+        };
+        /** @description The top of the item page (issue #813) */
+        RetailItemStock: {
+            active?: boolean;
+            category?: string;
+            code?: string;
+            description?: string;
+            /** Format: uuid */
+            product_id?: string;
+            shops?: components["schemas"]["RetailItemShop"][];
+            /** @description The sum over the shops listed */
+            total_qty?: string;
+            unit?: string;
+        };
         /** @description An item without sizes that becomes one size or colour of the item */
         RetailJoinItem: {
             /** @description A colour or a print */
@@ -18395,6 +18458,8 @@ export interface components {
         RetailStockMovement: {
             /** Format: date-time */
             at?: string;
+            /** @description The item page (issue #813): what the branch held of the item just after this movement, over its whole history in movement order; absent on the list across items */
+            balance_after?: string;
             /** Format: uuid */
             branch_id?: string;
             /** Format: uuid */
@@ -18415,6 +18480,11 @@ export interface components {
             note?: string;
             /** Format: uuid */
             product_id?: string;
+            /**
+             * Format: int64
+             * @description The item page (issue #813), on a sale: the sale line's total less its cost; Present only with retail.profit.read
+             */
+            profit_minor?: number;
             qty?: string;
             /** Format: uuid */
             reverses_movement_id?: string;
@@ -34029,6 +34099,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalWaiting"];
+                };
+            };
+        };
+    };
+    getRetailItemStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailItemStock"];
+                };
+            };
+        };
+    };
+    listRetailItemMovements: {
+        parameters: {
+            query?: {
+                branch_id?: string[];
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                product_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailStockMovementPage"];
                 };
             };
         };

@@ -14226,6 +14226,70 @@
           }
         }
       },
+      "RetailItemShop" : {
+        "description" : "The item in one shop or store",
+        "properties" : {
+          "avg_cost_minor" : {
+            "description" : "The shop's average buying price per piece (ADR-079); Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "branch_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "closed" : {
+            "description" : "A closed branch, listed only while it still holds the item",
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "negative" : {
+            "type" : "boolean"
+          },
+          "qty" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RetailItemStock" : {
+        "description" : "The top of the item page (issue #813)",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "category" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "product_id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "shops" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RetailItemShop"
+            },
+            "type" : "array"
+          },
+          "total_qty" : {
+            "description" : "The sum over the shops listed",
+            "type" : "string"
+          },
+          "unit" : {
+            "type" : "string"
+          }
+        }
+      },
       "RetailJoinItem" : {
         "description" : "An item without sizes that becomes one size or colour of the item",
         "properties" : {
@@ -20434,6 +20498,10 @@
             "format" : "date-time",
             "type" : "string"
           },
+          "balance_after" : {
+            "description" : "The item page (issue #813): what the branch held of the item just after this movement, over its whole history in movement order; absent on the list across items",
+            "type" : "string"
+          },
           "branch_id" : {
             "format" : "uuid",
             "type" : "string"
@@ -20473,6 +20541,11 @@
           "product_id" : {
             "format" : "uuid",
             "type" : "string"
+          },
+          "profit_minor" : {
+            "description" : "The item page (issue #813), on a sale: the sale line's total less its cost; Present only with retail.profit.read",
+            "format" : "int64",
+            "type" : "integer"
           },
           "qty" : {
             "type" : "string"
@@ -45818,6 +45891,104 @@
           }
         },
         "summary" : "Correct the quantity of an item at a branch with a reason; an adjustment that is not shrinkage (issue #351); M",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/stock/items/{product_id}" : {
+      "get" : {
+        "operationId" : "getRetailItemStock",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailItemStock"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "One item's stock in each shop the caller may read (issue #813)",
+        "tags" : [ "retail-stock" ]
+      }
+    },
+    "/api/v1/retail/stock/items/{product_id}/movements" : {
+      "get" : {
+        "operationId" : "listRetailItemMovements",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "product_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "branch_id",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailStockMovementPage"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Every movement of one item newest first, with the shop's balance after each (issue #813); a branch outside the caller's scope is 404",
         "tags" : [ "retail-stock" ]
       }
     },

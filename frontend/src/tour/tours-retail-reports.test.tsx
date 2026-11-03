@@ -16,6 +16,7 @@ import { MoveStock } from '../areas/staff/retail/transfer';
 import { StockMoves } from '../areas/staff/retail/transfers';
 import { UsagePage } from '../areas/staff/retail/usage';
 import { UsageHistoryPage } from '../areas/staff/retail/usage-history';
+import { ItemPageView } from '../areas/staff/retail/item-page';
 import { RETAIL_REPORT_TOURS } from './tours-retail-reports';
 import { describeTours } from './test-kit';
 
@@ -31,6 +32,7 @@ function screen(path: string): ReactElement {
     case '/staff/retail/restock': return <RestockPage />;
     case '/staff/retail/usage': return <UsagePage />;
     case '/staff/retail/usage-history': return <UsageHistoryPage />;
+    case '/staff/retail/items/$productId': return <ItemPageView item={{ product_id: 'p1', code: 'TST-0001', description: 'Test item', unit: 'pc', total_qty: '5.000', active: true, shops: [] }} productId="p1" />;
     case '/staff/retail/transfer': return <MoveStock />;
     case '/staff/retail/transfers': return <StockMoves />;
     case '/staff/retail/valuation': return <ValuationPage />;
@@ -62,6 +64,7 @@ describeTours('retail reports', RETAIL_REPORT_TOURS, {
   'page-restock': [ADMIN],
   'page-usage': [ADMIN],
   'page-usage-history': [ADMIN],
+  'page-item': [ADMIN, SELLER],
   'page-transfer': [ADMIN],
   'page-transfers': [ADMIN],
   'page-valuation': [ADMIN],

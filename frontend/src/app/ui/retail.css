@@ -149,6 +149,28 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* Issue #813: the item page. Each shop's stock and each movement as a card in tabular figures; long names wrap inside it. */
+.item-shops,
+.item-moves {
+  list-style: none;
+  padding: 0;
+}
+
+.item-shop,
+.item-move {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.item-shop p,
+.item-move p {
+  margin: var(--space-1) 0;
+}
+
+.item-after {
+  font-weight: 600;
+}
+
 /* Issue #680: one shop's stock on a phone, a card per item with the quantity large and the prices small under it. */
 .stock-cards {
   list-style: none;

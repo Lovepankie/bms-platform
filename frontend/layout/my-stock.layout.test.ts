@@ -160,6 +160,14 @@ describe.each([1, 2])('My stock with every shop at 412px, font scale %i', (font)
     const lines = lists.flatMap((l) => l.text);
     expect(lines).toContain('Another shop with a rather long name on the main road: 0 pieces');
     expect(lines).toContain('Third Test Shop: -1 piece Below zero');
+    // Issue #813: each card opens its item page with a full size target inside the card.
+    const opens = await page.locator('.stock-card .item-page-link').all();
+    expect(opens).toHaveLength(3);
+    for (const open of opens) {
+      const box = await open.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(48);
+      expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(WIDTH);
+    }
     await page.close();
   });
 });

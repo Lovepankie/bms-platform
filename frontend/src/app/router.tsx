@@ -146,6 +146,8 @@ const retailRestocksRoute = retailScreen('/restocks', WORDS.pastPurchases).lazy(
 const retailUsageRoute = retailScreen('/usage', 'Usage and damage').lazy(() => import('../areas/staff/retail/usage').then((m) => m.Route));
 const retailUsageHistoryRoute = retailScreen('/usage-history', 'Past usage and damage').lazy(() => import('../areas/staff/retail/usage-history').then((m) => m.Route));
 const retailStockRoute = retailScreen('/stock', 'Stock').lazy(() => import('../areas/staff/retail/stock').then((m) => m.Route));
+// The item page (issue #813): one item's stock in each shop and every movement of it with the balance after each.
+const retailItemPageRoute = retailScreen('/items/$productId', 'Item').lazy(() => import('../areas/staff/retail/item-page').then((m) => m.Route));
 // Quick add (issue #632): `name` is what Sell's search typed before it found nothing, so the form starts with it.
 const retailQuickAddRoute = retailScreen('/quick-add', 'Quick add', textParams('name')).lazy(() => import('../areas/staff/retail/quick-add').then((m) => m.Route));
 // Count it now (issue #700): `item` is the item just added, put on the sheet ready to type, and `from` the screen it came from.
@@ -437,6 +439,7 @@ export const router = createRouter({
         retailUsageRoute,
         retailUsageHistoryRoute,
         retailStockRoute,
+        retailItemPageRoute,
         retailStocktakeRoute,
         retailQuickAddRoute,
         retailTransferRoute,
