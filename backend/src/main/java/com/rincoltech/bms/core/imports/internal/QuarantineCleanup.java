@@ -119,6 +119,11 @@ class QuarantineCleanup {
 
     /** One business, bound to the thread, with no transaction open. */
     Result cleanBound() {
+        return cleanBound(clock.now().minus(settings.orphanAge()));
+    }
+
+    /** As {@link #cleanBound()}, removing the files no batch names that storage wrote before {@code before}. */
+    Result cleanBound(Instant before) {
         // The batches of cancelled runs: rows gone and marked cancelled in one transaction; their files follow.
         int cancelled = tx.execute(s -> {
             List<UUID> ids = jdbc.sql("""
@@ -160,7 +165,6 @@ class QuarantineCleanup {
             files++;
         }
         // Files no batch names, older than the age an upload in progress could have.
-        Instant before = clock.now().minus(settings.orphanAge());
         List<String> old;
         try (Stream<QuarantineStorage.Held> listed = quarantine.list()) {
             old = listed.filter(o -> o.lastModified().isBefore(before))

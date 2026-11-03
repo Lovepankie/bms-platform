@@ -260,6 +260,14 @@ migration) with status only, no details.
   `BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_SHARE` (default `0.5`) are passed by both compose files;
   `BMS_DOCUMENTS_ORPHAN_SWEEP_ENABLED` (default `true`), `_MAX_PER_TENANT` (1000), `_MAX_PER_RUN` (10000) and `_PAUSE`
   (`1s`) are read by the API but not passed by them (chapter 12 section 12.5).
+- Customer data onboarding uploads (issue #128, spec section 3.1), optional: `BMS_IMPORT_KEY` (32 bytes in base64, the
+  platform import key of chapter 8 section 8.7; both compose files pass it; unset, uploads answer 503 and the rest runs). Read
+  by the API with defaults and not passed by the compose files: `BMS_IMPORTS_MAX_FILE_SIZE` (25MB), `BMS_IMPORTS_MAX_ROWS`
+  (100000), `BMS_IMPORTS_MAX_COLUMNS` (200), raised only after the big file test passes at the new size;
+  `BMS_IMPORTS_WORK_DIR` (empty: the temp folder; holds encrypted copies for the length of one call, mode 600; an upload is
+  refused with `UPLOAD_DISK_LOW` when its free space is under twice the file); `BMS_IMPORTS_ORPHAN_AGE` (24h) and
+  `BMS_IMPORTS_CLEANUP_ENABLED` (true) for the daily cleanup (section 9.9). The quarantined files go to the documents bucket
+  under `tenants/<tenant_id>/quarantine/imports/<run_id>/<batch_id>.bin` (chapter 12 section 12.5).
 - Web Push (ADR-050), optional on every host: `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_VAPID_PRIVATE_KEY`, `BMS_PUSH_SUBJECT` and
   `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`; both compose files pass them; unset means push is off (`docs/runbooks/push-notifications.md`).
 - Outbox senders (ADR-024, spec section 11), optional on every host except that email is required in production:
@@ -337,6 +345,12 @@ with no beat for a minute (`bms.reports.heartbeat-stale`; the same limit on the 
 and a clean stop interrupts the workers and gives them 15 seconds to close their runs (the api containers set `stop_grace_period: 30s`),
 `lending.advisor.daily-brief` (per tenant with the assistant on, idempotent by date), and a higher batch for the SMS
 channel of the outbox sender.
+
+`core.imports.quarantine-cleanup` (issue #128, daily at 04:25 Kampala time, per active business): removes the staged rows and
+quarantined files of cancelled import runs, the file of a failed or cancelled batch whose delete failed at the time, and a
+quarantined file no batch names once storage wrote it more than `BMS_IMPORTS_ORPHAN_AGE` (24 hours) ago, then this instance's
+encrypted work files of the same age. Audited per removal (`core.import_batch.quarantine_deleted`, actor `system`); logs carry
+counts only. A run simply left open is not removed here: that is the retention of #139.
 
 Platform jobs (no tenant bound): `core.notifications.outbox-sender` every 30 seconds (at most 50
 rows a run), `core.notifications.outbox-purge` nightly at 03:15 (sent rows after 30 days) and

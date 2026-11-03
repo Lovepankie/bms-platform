@@ -76,8 +76,8 @@ CREATE TABLE import_rows (
     batch_id      uuid         NOT NULL,
     -- 1-based row number in the source sheet (CSV record, XLSX row, JSON Lines line); the header is its own number.
     source_row_no integer      NOT NULL CHECK (source_row_no > 0),
-    -- Per column kept by the mapping: {"<header>": {"value": ..., "type": "text" | "number" | "date" | "datetime" | "bool"
-    -- | "error" | "json"}}. A column that is absent is empty in the source. Never modified.
+    -- Per column kept by the mapping: {"<header>": {"value": ..., "type": "text" | "number" | "date" | "datetime" | "time"
+    -- | "bool" | "error" | "json"}}. A column that is absent is empty in the source. Never modified.
     raw           jsonb        NOT NULL CHECK (jsonb_typeof(raw) = 'object'),
     UNIQUE (batch_id, source_row_no),
     FOREIGN KEY (tenant_id, batch_id) REFERENCES import_batches (tenant_id, id)
