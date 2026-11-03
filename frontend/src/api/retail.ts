@@ -683,7 +683,7 @@ export interface RetailApi {
   createExpenseCategory(body: { name: string }): Promise<ExpenseCategory>;
   /** `version` is the one the list showed; the server answers 409 version_conflict when it is stale. */
   updateExpenseCategory(id: string, body: { name?: string; active?: boolean }, version: number): Promise<ExpenseCategory>;
-  createExpenseItem(categoryId: string, body: { name: string; requires_explanation?: boolean }): Promise<ExpenseItem>;
+  createExpenseItem(categoryId: string, body: { name: string; requires_explanation?: boolean; reuse_existing?: boolean }): Promise<ExpenseItem>;
   updateExpenseItem(categoryId: string, itemId: string, body: { name?: string; active?: boolean; requires_explanation?: boolean }, version: number): Promise<ExpenseItem>;
   listCashParties(q?: { kind?: CashPartyKind }): Promise<CashParty[]>;
   createCashParty(body: CashPartyRequest): Promise<CashParty>;

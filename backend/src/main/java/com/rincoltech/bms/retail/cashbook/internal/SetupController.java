@@ -91,15 +91,21 @@ class SetupController {
     }
 
     @PostMapping("/expense-categories/{category_id}/items")
-    @RequiresPermission("retail.expense.manage")
+    @RequiresPermission("retail.expense.record")
     @Operation(
-            summary = "Add an item to a category",
+            summary = "Add an item to a category, in set-up or in place while recording an expense (ADR-118)",
             operationId = "createRetailExpenseItem",
             description =
-                    "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied")
+                    "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied. "
+                            + "ADR-118: without retail.expense.manage the category must be active (422 category_inactive) and requires_explanation may not be true (403). "
+                            + "With reuse_existing an active item of the same name is answered with 200 instead of 409 duplicate_item; a switched off one is 409 item_switched_off")
     ResponseEntity<ExpenseItem> createItem(
             @PathVariable("category_id") UUID categoryId, @Valid @RequestBody ItemRequest request) {
-        ExpenseItem i = service.createItem(categoryId, request);
+        SetupService.AddedItem added = service.createItem(categoryId, request);
+        ExpenseItem i = added.item();
+        if (!added.created()) {
+            return ResponseEntity.ok().eTag("\"" + i.version() + "\"").body(i);
+        }
         return ResponseEntity.created(
                         URI.create("/api/v1/retail/expense-categories/" + categoryId + "/items/" + i.id()))
                 .eTag("\"" + i.version() + "\"")

@@ -3,19 +3,19 @@ import { createLazyRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { Segmented } from '../../../app/ui/Segmented';
-import { businessToday, isWaiting, retail, type Expense, type ExpenseGroup } from '../../../api/retail';
+import { businessToday, isWaiting, retail, type Expense, type ExpenseCategory, type ExpenseGroup, type ExpenseItem } from '../../../api/retail';
 import { useStaff } from '../context';
 import { DateField, RecordsByShop, Saved, WindowFields, useReadScope, useSavedFor, useWindow } from './cash-ui';
-import { MIN_EXPLANATION, activeCategories, itemsOf, needsExplanation, planExpense } from './expenses-state';
+import { MIN_EXPLANATION, activeCategories, itemsOf, needsExplanation, planExpense, withItem } from './expenses-state';
 import { usePersistedDraft } from './idempotency';
 import { PartyPicker, useCashParties } from './party-picker';
-import { CASHBOOK_READ, holds, needsOf } from './permissions';
+import { CASHBOOK_READ, EXPENSE_RECORD, holds, holdsAt, needsOf } from './permissions';
 import { ScreenLink } from './screen-link';
 import { useToast } from './toast';
 import { BranchRequired, Gate, Problem, WaitingForApproval, money, useBranchName, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
-import { EmptyChoice, showsEmptyChoice } from '../../../app/ui/EmptyChoice';
+import { AddByName, EmptyChoice, showsEmptyChoice, type AddInline, type ChoiceAdd } from '../../../app/ui/EmptyChoice';
 import { addOn } from './screen-link';
 
 // Company expenses (FR-RET-24): shop, date, category, then an item of that category, an optional
@@ -48,6 +48,22 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
     },
   });
   const update = (patch: Partial<ExpenseDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  // ADR-118 (issue #802): whoever records expenses adds a missing item in place, the same way as a new beneficiary.
+  // A name the category has already picks that item; the new one goes into the list at once and is chosen.
+  const [addingItem, setAddingItem] = useState(false);
+  const addItem: AddInline<ExpenseItem> | null = draft.categoryId !== '' && holdsAt(me, EXPENSE_RECORD, branchId) ? {
+    label: 'Add a new item', name: 'Name of the new item', send: 'Add to the list', maxLength: 100,
+    // The category is the one chosen when the name is sent; the item is picked only if it is still the chosen one.
+    create: async (name) => {
+      const categoryId = draft.categoryId;
+      const row = await retail.createExpenseItem(categoryId, { name, reuse_existing: true });
+      queryClient.setQueryData<ExpenseCategory[]>(['retail', 'expense-categories', true], (old) => withItem(old, categoryId, row));
+      void queryClient.invalidateQueries({ queryKey: ['retail', 'expense-categories'] });
+      setDraft((d) => (d.categoryId === categoryId ? { ...d, itemId: row.id ?? '', explanation: '' } : d));
+      return row;
+    },
+    onAdded: () => undefined,
+  } : null;
   const blocked = plan.problem !== null || save.isPending;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
@@ -69,9 +85,11 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
       </>
       )}
 
-      {draft.categoryId !== '' && items.length === 0 ? (
+      {addingItem && addItem ? (
+        <AddByName id="expense-item-add" title={addItem.label} add={{ ...addItem, onAdded: (row) => { setAddingItem(false); addItem.onAdded(row); } }} onCancel={() => setAddingItem(false)} />
+      ) : draft.categoryId !== '' && items.length === 0 ? (
         <EmptyChoice id="expense-item" label="Item" text="This category has no items yet." ask="Ask the owner to add its items first."
-          add={addOn(me, 'expenseSetup', 'Add an item to it', '/staff/retail/expense-lists')} />
+          add={addItem ?? (addOn(me, 'expenseSetup', 'Add an item to it', '/staff/retail/expense-lists') as ChoiceAdd<ExpenseItem> | null)} />
       ) : (
       <>
       <label htmlFor="expense-item">Item</label>
@@ -81,6 +99,7 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
           <option key={i.id} value={i.id}>{i.name}</option>
         ))}
       </select>
+      {addItem && <button type="button" className="btn-sm" onClick={() => setAddingItem(true)}>{addItem.label}</button>}
       </>
       )}
 

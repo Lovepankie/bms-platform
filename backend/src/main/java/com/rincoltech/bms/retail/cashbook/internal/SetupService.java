@@ -127,23 +127,69 @@ class SetupService {
         return view(repo.category(id, false).orElseThrow(), items);
     }
 
+    /** The item a create answers with, and whether it is new (201) or an existing one picked again (200). */
+    record AddedItem(ExpenseItem item, boolean created) {}
+
+    // ADR-118: whoever records expenses may add an item in place; an inactive category and the explanation flag stay
+    // with retail.expense.manage. With reuse_existing an active item of the same name is picked, a switched off one
+    // refused.
+    // JUSTIFICATION-A3: the permission split and the reuse rule are the issue's two rules, inside the one create.
     @Transactional
-    ExpenseItem createItem(UUID categoryId, ItemRequest r) {
+    AddedItem createItem(UUID categoryId, ItemRequest r) {
+        // The category row is locked (FOR UPDATE) for the whole transaction, so two tills adding the same name to one
+        // category run one after the other: the second sees the first's item and reuses it (unique index V34 as
+        // backstop).
         CategoryRow c = repo.category(categoryId, true).orElseThrow(ApiException::notFound);
-        String name = r.name().trim();
+        boolean manager = CurrentPrincipal.require().hasPermission(CashbookSupport.EXPENSE_MANAGE);
+        if (!manager && !c.active()) {
+            throw ApiException.rule("category_inactive", "This category is switched off. Pick another one.");
+        }
+        if (!manager && Boolean.TRUE.equals(r.requiresExplanation())) {
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "permission_denied",
+                    "Permission denied",
+                    "Asking for an explanation on an item needs permission to manage expenses.");
+        }
+        // Spaces inside the name are one space, so "Generator  fuel" is "Generator fuel" (ADR-118 decision 2).
+        String name = r.name().strip().replaceAll("\\s+", " ");
+        boolean reuse = Boolean.TRUE.equals(r.reuseExisting());
+        var same = reuse ? repo.itemNamed(c.id(), name) : java.util.Optional.<ItemRow>empty();
+        if (same.isPresent()) {
+            return existing(same.get());
+        }
         if (repo.itemNameTaken(c.id(), name, null)) {
             throw duplicate("duplicate_item", "This category has an item with that name already.");
         }
         UUID id = UUID.randomUUID();
         boolean explain = Boolean.TRUE.equals(r.requiresExplanation());
-        repo.insertItem(id, c.id(), name, explain, CurrentPrincipal.require().userId());
+        if (!repo.insertItem(
+                id, c.id(), name, explain, CurrentPrincipal.require().userId())) {
+            // The loser of a race with a writer that did not take the category lock: answer with the winner, never a
+            // 500.
+            ItemRow winner = repo.itemNamed(c.id(), name).orElseThrow();
+            if (reuse) {
+                return existing(winner);
+            }
+            throw duplicate("duplicate_item", "This category has an item with that name already.");
+        }
         audit.record(AuditLog.Entry.created(
                 "retail.expense_item.created",
                 "retail.expense_item",
                 id,
                 null,
                 Map.of("category_id", c.id().toString(), "name", name, "requires_explanation", explain)));
-        return view(repo.item(id, false).orElseThrow());
+        return new AddedItem(view(repo.item(id, false).orElseThrow()), true);
+    }
+
+    /** An item of the same name, picked again when it is active (200) and refused in plain words when switched off. */
+    private AddedItem existing(ItemRow same) {
+        if (!same.active()) {
+            throw duplicate(
+                    "item_switched_off",
+                    "This category has an item with that name that the owner switched off. Ask the owner to switch it on again.");
+        }
+        return new AddedItem(view(same), false);
     }
 
     @Transactional

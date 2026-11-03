@@ -264,8 +264,13 @@ export function createCashbookMock(env: CashbookEnv): Pick<RetailApi, Keys> {
       run(() => {
         const c = categories.find((x) => x.id === categoryId);
         if (!c) return refuse(404, 'not_found', 'Not found.');
-        if ((c.items ?? []).some((i) => i.name?.toLowerCase() === body.name.trim().toLowerCase())) refuse(409, 'duplicate_item', 'Duplicate.');
-        const item = { id: nextId('e'), name: body.name.trim(), requires_explanation: body.requires_explanation ?? false, active: true, version: 1 };
+        // ADR-118: with reuse_existing an active item of the same name is picked again, a switched off one refused.
+        const spaced = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+        const same = (c.items ?? []).find((i) => spaced(i.name ?? '') === spaced(body.name));
+        if (same && body.reuse_existing && same.active !== false) return { ...same };
+        if (same && body.reuse_existing) refuse(409, 'item_switched_off', 'This category has an item with that name that the owner switched off. Ask the owner to switch it on again.');
+        if (same) refuse(409, 'duplicate_item', 'Duplicate.');
+        const item = { id: nextId('e'), name: body.name.trim().replace(/\s+/g, ' '), requires_explanation: body.requires_explanation ?? false, active: true, version: 1 };
         c.items = [...(c.items ?? []), item];
         return { ...item };
       }),

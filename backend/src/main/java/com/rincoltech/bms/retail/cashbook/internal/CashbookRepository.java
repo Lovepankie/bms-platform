@@ -136,6 +136,13 @@ class CashbookRepository {
                         """).params(name, exceptId, exceptId).query(Long.class).single() > 0;
     }
 
+    Optional<ItemRow> itemNamed(UUID categoryId, String name) {
+        return jdbc.sql("""
+                        SELECT id, category_id, name, requires_explanation, active, version FROM retail_expense_items
+                         WHERE category_id = ? AND lower(regexp_replace(btrim(name), '\\s+', ' ', 'g')) = lower(?)
+                         ORDER BY active DESC, id LIMIT 1""").params(categoryId, name).query((rs, n) -> item(rs)).optional();
+    }
+
     boolean itemNameTaken(UUID categoryId, String name, UUID exceptId) {
         return jdbc.sql("""
                         SELECT count(*) FROM retail_expense_items
@@ -163,11 +170,16 @@ class CashbookRepository {
                         """).params(name, accountId, active, sortOrder, id).update();
     }
 
-    void insertItem(UUID id, UUID categoryId, String name, boolean requiresExplanation, UUID by) {
-        jdbc.sql("""
+    /** False when the name was taken by a transaction that committed after the caller's check (ADR-118). */
+    boolean insertItem(UUID id, UUID categoryId, String name, boolean requiresExplanation, UUID by) {
+        return jdbc.sql("""
                         INSERT INTO retail_expense_items (id, tenant_id, category_id, name, requires_explanation, created_by)
                         VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, ?, ?)
-                        """).params(id, categoryId, name, requiresExplanation, by).update();
+                        ON CONFLICT (tenant_id, category_id, lower(name)) DO NOTHING
+                        """)
+                        .params(id, categoryId, name, requiresExplanation, by)
+                        .update()
+                == 1;
     }
 
     void updateItem(UUID id, String name, boolean requiresExplanation, boolean active) {

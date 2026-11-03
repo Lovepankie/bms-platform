@@ -58,7 +58,7 @@ final class CashbookApi {
             Integer sortOrder) {}
 
     @Schema(name = "RetailCashItemRequest")
-    record ItemRequest(@NotBlank @Size(max = 100) String name, Boolean requiresExplanation) {}
+    record ItemRequest(@NotBlank @Size(max = 100) String name, Boolean requiresExplanation, Boolean reuseExisting) {}
 
     @Schema(name = "RetailCashItemPatch")
     record ItemPatch(@Size(max = 100) String name, Boolean requiresExplanation, Boolean active) {}

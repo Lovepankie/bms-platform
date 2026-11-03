@@ -90,6 +90,7 @@ export const SAVINGS_OVERWRITE = 'retail.savings.overwrite';
 export const CASHBOOK_READ = 'retail.cashbook.read';
 export const CASHBOOK_VOID = 'retail.cashbook.void';
 export const EXPENSE_MANAGE = 'retail.expense.manage';
+export const EXPENSE_RECORD = 'retail.expense.record';
 
 /** Party kinds anyone who records expenses may add on the fly; the others need retail.expense.manage (ADR-022 decision 13). */
 const BENEFICIARY_KINDS: readonly string[] = ['supplier', 'other'];

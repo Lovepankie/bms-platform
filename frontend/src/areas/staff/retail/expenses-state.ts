@@ -16,6 +16,11 @@ export function itemsOf(categories: ExpenseCategory[], categoryId: string): Expe
   return (category?.items ?? []).filter((i) => i.active !== false);
 }
 
+/** The list with an item added in place to its category (ADR-118); an item already there is left as it is. */
+export function withItem(categories: ExpenseCategory[] | undefined, categoryId: string, item: ExpenseItem): ExpenseCategory[] | undefined {
+  return categories?.map((c) => (c.id !== categoryId || (c.items ?? []).some((i) => i.id === item.id) ? c : { ...c, items: [...(c.items ?? []), item] }));
+}
+
 /** True when the chosen item is flagged "needs an explanation". */
 export function needsExplanation(categories: ExpenseCategory[], categoryId: string, itemId: string): boolean {
   return itemsOf(categories, categoryId).find((i) => i.id === itemId)?.requires_explanation === true;
