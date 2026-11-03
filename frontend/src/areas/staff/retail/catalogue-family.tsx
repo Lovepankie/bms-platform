@@ -197,7 +197,7 @@ function RenameFamily({ family, onDone }: { family: Family; onDone: (text: strin
     onSuccess: (saved) => {
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       setOpen(false);
-      onDone(`Saved. Every size and colour is now called ${saved.name} and is in ${saved.category}.`);
+      onDone(`Every size and colour is now called ${saved.name} and is in ${saved.category}.`);
     },
   });
   if (!open) return <p><button type="button" onClick={() => setOpen(true)} data-tour="family-rename">Change the name or category</button></p>;
