@@ -327,14 +327,16 @@ final class StockApi {
                     description = "The quantity there should be, not the difference")
             BigDecimal newQty,
 
+            // No lower bound: a quantity below zero (imported history, ADR-020 decision 4) is the one most in need of a
+            // correction, and the form sends it as it showed it (issue #804).
             @NotNull
-            @PositiveOrZero
             @Digits(integer = 11, fraction = 3)
             @Schema(
                     type = "string",
                     example = "12.5",
-                    description = "The quantity the form showed when it was opened; 409 stock_moved when it has "
-                            + "changed since, with current_qty, the quantity now")
+                    description =
+                            "The quantity the form showed when it was opened, below zero when the shelf list "
+                                    + "shows that; 409 stock_moved when it has changed since, with current_qty, the quantity now")
             BigDecimal expectedQty,
 
             @NotNull
