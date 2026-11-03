@@ -115,13 +115,16 @@ final class TestFiles {
             put(zip, "[Content_Types].xml", """
                     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                     <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>""");
-            put(zip, "xl/workbook.xml", """
+            put(
+                    zip,
+                    "xl/workbook.xml",
+                    """
                     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                     <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
                               xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
                     <workbookPr/><sheets>
                     """ + (hiddenNotes ? "<sheet name=\"Notes\" sheetId=\"2\" state=\"hidden\" r:id=\"rId2\"/>" : "")
-                    + "<sheet name=\"Items\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
+                            + "<sheet name=\"Items\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
             put(zip, "xl/_rels/workbook.xml.rels", """
                     <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                     <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -182,13 +185,14 @@ final class TestFiles {
                 }
                 case Boolean b -> w.write("<c r=\"" + ref + "\" t=\"b\"><v>" + (b ? 1 : 0) + "</v></c>");
                 // Excel's 1900 system: serial 1 is 1 January 1900, and it counts a 29 February 1900 that never was.
-                case LocalDate d -> w.write("<c r=\"" + ref + "\" s=\"1\"><v>"
-                        + ChronoUnit.DAYS.between(
-                                d.isBefore(LocalDate.of(1900, 3, 1))
-                                        ? LocalDate.of(1899, 12, 31)
-                                        : LocalDate.of(1899, 12, 30),
-                                d)
-                        + "</v></c>");
+                case LocalDate d ->
+                    w.write("<c r=\"" + ref + "\" s=\"1\"><v>"
+                            + ChronoUnit.DAYS.between(
+                                    d.isBefore(LocalDate.of(1900, 3, 1))
+                                            ? LocalDate.of(1899, 12, 31)
+                                            : LocalDate.of(1899, 12, 30),
+                                    d)
+                            + "</v></c>");
                 default -> w.write("<c r=\"" + ref + "\"><v>" + v + "</v></c>");
             }
         }

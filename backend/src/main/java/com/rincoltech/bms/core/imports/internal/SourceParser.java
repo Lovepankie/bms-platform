@@ -96,8 +96,7 @@ final class SourceParser {
     }
 
     private static Reader reader(InputStream in, boolean utf8) {
-        return new BufferedReader(
-                new InputStreamReader(in, utf8 ? StandardCharsets.UTF_8 : WINDOWS_1252), 64 * 1024);
+        return new BufferedReader(new InputStreamReader(in, utf8 ? StandardCharsets.UTF_8 : WINDOWS_1252), 64 * 1024);
     }
 
     /** Collects rows into chunks of {@link #CHUNK} as JSON and hands each full chunk on; nothing more is held. */

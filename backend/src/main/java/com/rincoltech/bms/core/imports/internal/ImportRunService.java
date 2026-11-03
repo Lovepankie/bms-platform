@@ -134,11 +134,9 @@ class ImportRunService implements ImportRuns {
             if (RunStates.READY.equals(status)
                     && jdbc.sql("""
                                     SELECT EXISTS (SELECT 1 FROM import_batches WHERE run_id = ? AND status IN ('uploaded', 'failed'))
-                                    """)
-                            .param(runId)
-                            .query(Boolean.class)
-                            .single()) {
-                throw invalidTransition("A file of this import is not read yet or was refused; read it again or cancel it.");
+                                    """).param(runId).query(Boolean.class).single()) {
+                throw invalidTransition(
+                        "A file of this import is not read yet or was refused; read it again or cancel it.");
             }
             setStatus(runId, status);
             audit(runId, "core.import_run.status_changed", Map.of("status", run.status()), Map.of("status", status));

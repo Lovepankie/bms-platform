@@ -1254,7 +1254,7 @@ Added by `V129__import_upload.sql` (issue #128, chapter 13 section 13.14.1), exp
 - **`import_batches`** gains `source_filename`, `source_sha256`, `size_bytes`, `file_type` [`csv`, `xlsx`, `jsonl`], `object_key`
   (the encrypted file under `tenants/<tenant_id>/quarantine/imports/`, NULL once deleted, with `quarantine_deleted_at`), `encoding`
   [`utf-8`, `windows-1252`], `uploaded_by`, `uploaded_at`, `sheet_name`, `header_row_no`, `row_count`, `column_count`,
-  `parse_warnings text[]` (codes only), `parsed_at`, `failure_code`, `failure_reason` (set exactly when `failed`), `failed_at`
+  `parse_warnings text[]` (codes only), `parsed_at`, `failure_code`, `failure_reason` (set when `failed`, and kept when a failed batch is cancelled), `failed_at`
   and `cancelled_at`; its `status` check becomes [`pending`, `uploaded`, `parsed`, `failed`, `cancelled`, `committed`] (replaced
   `NOT VALID`, then validated). A partial unique index `import_batches_one_file_per_run (run_id, source_sha256)` over batches
   not failed or cancelled holds one copy of a file per run, and `import_batches_held_files` finds the files still held.

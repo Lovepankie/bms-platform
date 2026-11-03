@@ -175,7 +175,8 @@ final class QuarantineWriter {
             }
             in.flip();
             out.clear();
-            return !decoder.decode(in, out, true).isError() && !decoder.flush(out).isError();
+            return !decoder.decode(in, out, true).isError()
+                    && !decoder.flush(out).isError();
         }
     }
 }

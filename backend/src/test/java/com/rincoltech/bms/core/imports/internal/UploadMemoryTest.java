@@ -55,7 +55,9 @@ class UploadMemoryTest {
                 .redirectErrorStream(true)
                 .start();
         String output = new String(child.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        assertThat(child.waitFor(300, TimeUnit.SECONDS)).as("the child finished").isTrue();
+        assertThat(child.waitFor(300, TimeUnit.SECONDS))
+                .as("the child finished")
+                .isTrue();
         assertThat(child.exitValue()).as(output).isZero();
         assertThat(output).contains("maxHeapMb=224");
         Matcher m = Pattern.compile("rows=(\\d+) .*largestChunk=(\\d+)").matcher(output);

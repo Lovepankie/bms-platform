@@ -52,7 +52,10 @@ ALTER TABLE import_batches
     ADD COLUMN failed_at           timestamptz,
     ADD COLUMN cancelled_at        timestamptz,
     ADD COLUMN quarantine_deleted_at timestamptz,
-    ADD CONSTRAINT import_batches_failed_has_code CHECK ((status = 'failed') = (failure_code IS NOT NULL)),
+    -- A failed batch has its code; a batch cancelled after it failed keeps it.
+    ADD CONSTRAINT import_batches_failed_has_code CHECK (
+        (status <> 'failed' OR failure_code IS NOT NULL)
+        AND (failure_code IS NULL OR status IN ('failed', 'cancelled'))),
     ADD CONSTRAINT import_batches_upload_complete CHECK (
         (source_sha256 IS NULL) = (size_bytes IS NULL)
         AND (source_sha256 IS NULL) = (file_type IS NULL)

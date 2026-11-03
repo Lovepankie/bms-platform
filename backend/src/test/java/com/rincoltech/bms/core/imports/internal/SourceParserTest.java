@@ -59,11 +59,12 @@ class SourceParserTest {
                 + "\r\n"
                 + "FAB-2,\"Two\nlines and a \"\"quote\"\"\",0700000001,4\n"
                 + ",,,\n\n\n");
-        var parsed = parse(
-                FileType.CSV, file, new Parsing.Limits(100, 200, Set.of("code", "QTY"), Set.of(" phone ")));
+        var parsed = parse(FileType.CSV, file, new Parsing.Limits(100, 200, Set.of("code", "QTY"), Set.of(" phone ")));
         assertThat(parsed.headerRowNo()).isEqualTo(3);
         assertThat(parsed.columns()).isEqualTo(4);
-        assertThat(parsed.rows()).as("two rows and the blank row between them; trailing blanks are not rows").isEqualTo(3);
+        assertThat(parsed.rows())
+                .as("two rows and the blank row between them; trailing blanks are not rows")
+                .isEqualTo(3);
         assertThat(rows).extracting(StagedRow::sourceRowNo).containsExactly(4, 5, 6);
         assertThat(raw(0).get("Description").get("value").asString()).isEqualTo("Plain, with a comma");
         assertThat(raw(0).get("Qty").get("type").asString()).isEqualTo("text");
@@ -87,29 +88,34 @@ class SourceParserTest {
         for (int i = 1; i <= 2_500; i++) {
             s.append("FAB-").append(i).append('\n');
         }
-        var parsed = parse(FileType.CSV, TestFiles.csv(s.toString()), new Parsing.Limits(2_500, 200, Set.of(), Set.of()));
+        var parsed =
+                parse(FileType.CSV, TestFiles.csv(s.toString()), new Parsing.Limits(2_500, 200, Set.of(), Set.of()));
         assertThat(parsed.rows()).isEqualTo(2_500);
         assertThat(chunkSizes).as("handed on 1,000 at a time").containsExactly(1_000, 1_000, 500);
-        assertThatThrownBy(() ->
-                        parse(FileType.CSV, TestFiles.csv(s.toString()), new Parsing.Limits(2_499, 200, Set.of(), Set.of())))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_ROWS));
+        assertThatThrownBy(() -> parse(
+                        FileType.CSV, TestFiles.csv(s.toString()), new Parsing.Limits(2_499, 200, Set.of(), Set.of())))
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_ROWS));
     }
 
     @Test
     void blankRowsCountTowardsTheRowLimit() {
         byte[] file = TestFiles.csv("Code\nFAB-1\n\n\n\nFAB-2\n");
         assertThatThrownBy(() -> parse(FileType.CSV, file, new Parsing.Limits(4, 200, Set.of(), Set.of())))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_ROWS));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_ROWS));
     }
 
     @Test
     void tooManyColumnsInTheHeaderOrInARowIsRefused() {
         String wide = String.join(",", TestFiles.header(201)) + "\nFAB-1\n";
         assertThatThrownBy(() -> parse(FileType.CSV, TestFiles.csv(wide), limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_COLUMNS));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_COLUMNS));
         String row = "Code\nFAB-1" + ",".repeat(200) + "x\n";
         assertThatThrownBy(() -> parse(FileType.CSV, TestFiles.csv(row), limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_COLUMNS));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_COLUMNS));
     }
 
     @Test
@@ -117,18 +123,22 @@ class SourceParserTest {
         String late = "note\n".repeat(20) + "Code,Qty\nFAB-1,2\n";
         var needs = new Parsing.Limits(100, 200, Set.of("Code", "Qty"), Set.of());
         assertThatThrownBy(() -> parse(FileType.CSV, TestFiles.csv(late), needs))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.HEADER_NOT_FOUND));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.HEADER_NOT_FOUND));
         assertThatThrownBy(() -> parse(FileType.CSV, TestFiles.csv("\n\n"), limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.HEADER_NOT_FOUND));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.HEADER_NOT_FOUND));
     }
 
     @Test
     void anUnclosedQuoteOrAHugeCellIsUnreadable() {
         assertThatThrownBy(() -> parse(FileType.CSV, TestFiles.csv("Code\n\"FAB-1\n"), limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
         byte[] huge = TestFiles.csv("Code\n" + "x".repeat(Parsing.MAX_CELL_CHARS + 1) + "\n");
         assertThatThrownBy(() -> parse(FileType.CSV, huge, limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
     }
 
     @Test
@@ -136,7 +146,8 @@ class SourceParserTest {
         byte[] book = TestFiles.xlsx(
                 List.of("Code", "Description", "Qty", "Bought on", "Phone", "Active"),
                 Arrays.asList(
-                        Arrays.asList("FAB-1", "Fabricated soap", 0.1 + 0.2, LocalDate.of(2026, 6, 30), "0700000000", true),
+                        Arrays.asList(
+                                "FAB-1", "Fabricated soap", 0.1 + 0.2, LocalDate.of(2026, 6, 30), "0700000000", true),
                         Arrays.asList(null, null, null, null, null, null),
                         Arrays.asList("FAB-2", null, 12, LocalDate.of(1900, 1, 1), null, false)));
         var parsed = parse(FileType.XLSX, book, true, null, new Parsing.Limits(100, 200, Set.of(), Set.of("phone")));
@@ -160,7 +171,8 @@ class SourceParserTest {
         var parsed = parse(FileType.XLSX, book, true, "notes", limits());
         assertThat(parsed.sheetName()).isEqualTo("Notes");
         assertThatThrownBy(() -> parse(FileType.XLSX, book, true, "Missing", limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
         byte[] cut = Arrays.copyOf(book, book.length / 2);
         assertThatThrownBy(() -> parse(FileType.XLSX, cut, true, null, limits()))
                 .isInstanceOf(Parsing.Failure.class);
@@ -178,9 +190,12 @@ class SourceParserTest {
                         true,
                         null,
                         new Parsing.Limits(10, 200, Set.of(), Set.of())))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_ROWS));
-        assertThatThrownBy(() -> parse(FileType.XLSX, TestFiles.xlsx(TestFiles.header(201), List.of()), true, null, limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_COLUMNS));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_ROWS));
+        assertThatThrownBy(() ->
+                        parse(FileType.XLSX, TestFiles.xlsx(TestFiles.header(201), List.of()), true, null, limits()))
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.TOO_MANY_COLUMNS));
     }
 
     @Test
@@ -197,10 +212,14 @@ class SourceParserTest {
         assertThat(raw(0).has("phone")).isFalse();
         assertThat(raw(2).has("qty")).as("null is empty").isFalse();
         assertThatThrownBy(() -> parse(FileType.JSONL, TestFiles.csv("{\"code\":1}\n[1]\n"), limits()))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
         assertThatThrownBy(() -> parse(
-                        FileType.JSONL, TestFiles.csv("{\"name\":1}\n"), new Parsing.Limits(10, 200, Set.of("code"), Set.of())))
-                .isInstanceOfSatisfying(Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.HEADER_NOT_FOUND));
+                        FileType.JSONL,
+                        TestFiles.csv("{\"name\":1}\n"),
+                        new Parsing.Limits(10, 200, Set.of("code"), Set.of())))
+                .isInstanceOfSatisfying(
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.HEADER_NOT_FOUND));
     }
 
     @Test
@@ -209,15 +228,18 @@ class SourceParserTest {
         assertThatThrownBy(() -> QuarantineWriter.copy(
                         new ByteArrayInputStream(TestFiles.csv("Code\n")), FileType.XLSX, 1_000, sink))
                 .isInstanceOfSatisfying(
-                        QuarantineWriter.Refused.class, r -> assertThat(r.code).isEqualTo(Parsing.FILE_TYPE_UNSUPPORTED));
+                        QuarantineWriter.Refused.class,
+                        r -> assertThat(r.code).isEqualTo(Parsing.FILE_TYPE_UNSUPPORTED));
         byte[] zip = TestFiles.xlsx(List.of("Code"), List.of());
         assertThatThrownBy(() -> QuarantineWriter.copy(new ByteArrayInputStream(zip), FileType.CSV, 100_000, sink))
                 .isInstanceOfSatisfying(
-                        QuarantineWriter.Refused.class, r -> assertThat(r.code).isEqualTo(Parsing.FILE_TYPE_UNSUPPORTED));
+                        QuarantineWriter.Refused.class,
+                        r -> assertThat(r.code).isEqualTo(Parsing.FILE_TYPE_UNSUPPORTED));
         byte[] utf16 = "Code\nFAB-1\n".getBytes(StandardCharsets.UTF_16LE);
         assertThatThrownBy(() -> QuarantineWriter.copy(new ByteArrayInputStream(utf16), FileType.CSV, 100_000, sink))
                 .isInstanceOf(QuarantineWriter.Refused.class);
-        assertThatThrownBy(() -> QuarantineWriter.copy(new ByteArrayInputStream(new byte[2_000]), FileType.CSV, 1_000, sink))
+        assertThatThrownBy(() ->
+                        QuarantineWriter.copy(new ByteArrayInputStream(new byte[2_000]), FileType.CSV, 1_000, sink))
                 .isInstanceOf(QuarantineWriter.Refused.class);
         byte[] big = TestFiles.csv("x".repeat(1_001));
         assertThatThrownBy(() -> QuarantineWriter.copy(new ByteArrayInputStream(big), FileType.CSV, 1_000, sink))
@@ -229,7 +251,8 @@ class SourceParserTest {
     void theWriterTellsUtf8FromWindows1252AcrossBlocks() throws IOException {
         // A two byte character split across the 64 KiB block boundary is still UTF-8.
         byte[] utf8 = ("a".repeat(64 * 1024 - 1) + "é fabricated\n").getBytes(StandardCharsets.UTF_8);
-        assertThat(QuarantineWriter.copy(new ByteArrayInputStream(utf8), FileType.CSV, 1_000_000, new ByteArrayOutputStream())
+        assertThat(QuarantineWriter.copy(
+                                new ByteArrayInputStream(utf8), FileType.CSV, 1_000_000, new ByteArrayOutputStream())
                         .utf8())
                 .isTrue();
         byte[] cp1252 = "Café\n".getBytes(Charset.forName("windows-1252"));

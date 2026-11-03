@@ -173,8 +173,7 @@ final class XlsxRows {
                 if (r.next() == XMLStreamConstants.START_ELEMENT && "Relationship".equals(r.getLocalName())) {
                     String target = attr(r, "Target");
                     if (target != null) {
-                        targets.put(
-                                attr(r, "Id"), target.startsWith("/") ? target.substring(1) : "xl/" + target);
+                        targets.put(attr(r, "Id"), target.startsWith("/") ? target.substring(1) : "xl/" + target);
                     }
                 }
             }
@@ -414,7 +413,9 @@ final class XlsxRows {
                 day = LocalDate.of(1904, 1, 1).plusDays(days);
             } else {
                 // Excel's 1900 system counts a 29 February 1900 that never was (serial 60); before it, one day less.
-                day = days < 60 ? LocalDate.of(1899, 12, 31).plusDays(days) : LocalDate.of(1899, 12, 30).plusDays(days);
+                day = days < 60
+                        ? LocalDate.of(1899, 12, 31).plusDays(days)
+                        : LocalDate.of(1899, 12, 30).plusDays(days);
             }
             LocalTime time = LocalTime.ofSecondOfDay(seconds);
             return switch (kind) {

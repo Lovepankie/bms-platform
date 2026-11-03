@@ -121,7 +121,10 @@ final class QuarantineCipher {
     }
 
     private static byte[] header(byte[] prefix) {
-        return ByteBuffer.allocate(MAGIC.length + PREFIX_BYTES).put(MAGIC).put(prefix).array();
+        return ByteBuffer.allocate(MAGIC.length + PREFIX_BYTES)
+                .put(MAGIC)
+                .put(prefix)
+                .array();
     }
 
     private static byte[] aad(byte[] header, UUID batchId) {

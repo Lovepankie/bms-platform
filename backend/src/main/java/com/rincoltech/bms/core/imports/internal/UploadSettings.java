@@ -28,12 +28,7 @@ class UploadSettings {
 
     @ConfigurationProperties("bms.imports")
     record Properties(
-            DataSize maxFileSize,
-            Integer maxRows,
-            Integer maxColumns,
-            String key,
-            String workDir,
-            Duration orphanAge) {
+            DataSize maxFileSize, Integer maxRows, Integer maxColumns, String key, String workDir, Duration orphanAge) {
 
         Properties {
             maxFileSize = maxFileSize == null ? DataSize.ofMegabytes(25) : maxFileSize;

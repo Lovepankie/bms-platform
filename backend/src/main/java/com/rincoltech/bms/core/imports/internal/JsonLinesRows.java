@@ -42,7 +42,8 @@ final class JsonLinesRows {
             int c;
             while ((c = in.read()) != -1 && c != '\n') {
                 if (line.length() >= MAX_LINE_CHARS) {
-                    throw Parsing.unreadable("Line " + (lineNo + 1) + " is longer than " + MAX_LINE_CHARS + " characters.");
+                    throw Parsing.unreadable(
+                            "Line " + (lineNo + 1) + " is longer than " + MAX_LINE_CHARS + " characters.");
                 }
                 line.append((char) c);
             }

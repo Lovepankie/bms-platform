@@ -87,7 +87,8 @@ final class CsvRows {
 
     private static void append(StringBuilder field, char c, int rowNo) {
         if (field.length() >= Parsing.MAX_CELL_CHARS) {
-            throw Parsing.unreadable("A cell on row " + rowNo + " is longer than " + Parsing.MAX_CELL_CHARS + " characters.");
+            throw Parsing.unreadable(
+                    "A cell on row " + rowNo + " is longer than " + Parsing.MAX_CELL_CHARS + " characters.");
         }
         field.append(c);
     }

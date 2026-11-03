@@ -190,7 +190,9 @@ final class Parsing {
             List<String> out = new ArrayList<>(width);
             for (int i = 0; i < width; i++) {
                 Cell c = cells.get(i);
-                String name = c == null || c.blank() ? "column_" + (i + 1) : String.valueOf(c.value()).strip();
+                String name = c == null || c.blank()
+                        ? "column_" + (i + 1)
+                        : String.valueOf(c.value()).strip();
                 out.add(unique(name));
             }
             names = List.copyOf(out);

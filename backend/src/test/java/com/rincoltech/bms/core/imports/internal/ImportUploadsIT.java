@@ -103,8 +103,10 @@ class ImportUploadsIT extends IntegrationTest {
     }
 
     Batch upload(TestDatabase.Fixture f, UUID runId, String name, byte[] bytes, ParseOptions options) {
-        return as(f, () -> uploads.upload(
-                runId, new Upload(name, new ByteArrayInputStream(bytes), bytes.length, operator, options)));
+        return as(
+                f,
+                () -> uploads.upload(
+                        runId, new Upload(name, new ByteArrayInputStream(bytes), bytes.length, operator, options)));
     }
 
     long rows(UUID batchId) {
@@ -163,7 +165,8 @@ class ImportUploadsIT extends IntegrationTest {
 
     static void refused(Runnable call, String code) {
         assertThatThrownBy(call::run)
-                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.code()).isEqualTo(code));
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.code()).isEqualTo(code));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -185,7 +188,9 @@ class ImportUploadsIT extends IntegrationTest {
         assertThat(batch.rowCount()).isEqualTo(2);
         assertThat(batch.columnCount()).isEqualTo(4);
         assertThat(rows(batch.id())).isEqualTo(2);
-        assertThat(as(t, () -> runs.get(runId)).status()).as("the first file moves the run on").isEqualTo("uploaded");
+        assertThat(as(t, () -> runs.get(runId)).status())
+                .as("the first file moves the run on")
+                .isEqualTo("uploaded");
         String raw = TestDatabase.owner()
                 .sql("SELECT raw::text FROM import_rows WHERE batch_id = ? AND source_row_no = 2")
                 .param(batch.id())
@@ -200,7 +205,9 @@ class ImportUploadsIT extends IntegrationTest {
         String key = objectKey(batch.id());
         assertThat(key).startsWith("tenants/" + t.tenantId() + "/quarantine/imports/" + runId + "/");
         byte[] sealed = stored(t, key);
-        assertThat(new String(sealed, StandardCharsets.ISO_8859_1)).doesNotContain(NAME).doesNotContain("Customer");
+        assertThat(new String(sealed, StandardCharsets.ISO_8859_1))
+                .doesNotContain(NAME)
+                .doesNotContain("Customer");
         byte[] dataKey = runKey(t, runId);
         assertThat(QuarantineCipher.decrypt(new ByteArrayInputStream(sealed), dataKey, batch.id())
                         .readAllBytes())
@@ -225,14 +232,19 @@ class ImportUploadsIT extends IntegrationTest {
         refused(() -> upload(t, runId, "fabricated.xls", TestFiles.csv(CSV), null), Parsing.FILE_TYPE_UNSUPPORTED);
         refused(() -> upload(t, runId, "fabricated.xlsx", TestFiles.csv(CSV), null), Parsing.FILE_TYPE_UNSUPPORTED);
         refused(
-                () -> as(t, () -> uploads.upload(
-                        runId,
-                        new Upload("big.csv", new ByteArrayInputStream(new byte[0]), 26L << 20, operator, null))),
+                () -> as(
+                        t,
+                        () -> uploads.upload(
+                                runId,
+                                new Upload(
+                                        "big.csv", new ByteArrayInputStream(new byte[0]), 26L << 20, operator, null))),
                 Parsing.FILE_TOO_LARGE);
         // Streamed past the limit with no size announced: refused while it streams.
         refused(
-                () -> as(t, () -> uploads.upload(
-                        runId, new Upload("big.csv", new Repeating((25 << 20) + 1), -1, operator, null))),
+                () -> as(
+                        t,
+                        () -> uploads.upload(
+                                runId, new Upload("big.csv", new Repeating((25 << 20) + 1), -1, operator, null))),
                 Parsing.FILE_TOO_LARGE);
         service.freeDisk = () -> 10;
         refused(() -> upload(t, runId, "fabricated.csv", TestFiles.csv(CSV), null), "UPLOAD_DISK_LOW");
@@ -260,7 +272,11 @@ class ImportUploadsIT extends IntegrationTest {
         int n = 0;
         for (Map.Entry<String, byte[]> e : files.entrySet()) {
             Batch b = upload(
-                    t, runId, "fabricated-" + n++ + ".csv", e.getValue(), new ParseOptions(null, Set.of("code"), Set.of()));
+                    t,
+                    runId,
+                    "fabricated-" + n++ + ".csv",
+                    e.getValue(),
+                    new ParseOptions(null, Set.of("code"), Set.of()));
             assertThat(b.status()).as(e.getKey()).isEqualTo("failed");
             assertThat(b.failureCode()).isEqualTo(e.getKey());
             assertThat(b.failureReason()).doesNotContain("FAB-");
@@ -280,7 +296,8 @@ class ImportUploadsIT extends IntegrationTest {
     @Test
     void aRunIsReadyOnlyWhenEveryFileIsParsedAndTakesNoFilesOnceReady() {
         UUID runId = openRun(t);
-        Batch failed = upload(t, runId, "bad.csv", TestFiles.csv("Name\nFAB\n"), new ParseOptions(null, Set.of("code"), Set.of()));
+        Batch failed = upload(
+                t, runId, "bad.csv", TestFiles.csv("Name\nFAB\n"), new ParseOptions(null, Set.of("code"), Set.of()));
         upload(t, runId, "good.csv", TestFiles.csv(CSV), null);
         as(t, () -> runs.transition(runId, "in_review"));
         refused(() -> as(t, () -> runs.transition(runId, "ready")), "invalid_status_transition");
@@ -306,7 +323,8 @@ class ImportUploadsIT extends IntegrationTest {
         assertThat(lines.status()).isEqualTo("parsed");
         assertThat(lines.rowCount()).isEqualTo(1);
         assertThat(lines.headerRowNo()).isNull();
-        Batch cp1252 = upload(t, runId, "cp.csv", "Code\nCafé\n".getBytes(java.nio.charset.Charset.forName("windows-1252")), null);
+        Batch cp1252 = upload(
+                t, runId, "cp.csv", "Code\nCafé\n".getBytes(java.nio.charset.Charset.forName("windows-1252")), null);
         assertThat(cp1252.encoding()).isEqualTo("windows-1252");
         assertThat(cp1252.warnings()).containsExactly(Parsing.ENCODING_CONVERTED);
         assertThat(as(t, () -> uploads.batches(runId))).extracting(Batch::seq).containsExactly(1, 2, 3);
@@ -363,13 +381,16 @@ class ImportUploadsIT extends IntegrationTest {
                 return super.read(b, off, len);
             }
         }) {
-            batch = as(t, () -> uploads.upload(runId, new Upload("fabricated-at-the-limit.csv", in, -1, operator, null)));
+            batch = as(
+                    t, () -> uploads.upload(runId, new Upload("fabricated-at-the-limit.csv", in, -1, operator, null)));
         }
         assertThat(batch.status()).isEqualTo("parsed");
         assertThat(batch.sizeBytes()).isEqualTo(Files.size(csv));
         assertThat(batch.rowCount()).isEqualTo(UploadMemoryTest.ROWS);
         assertThat(rows(batch.id())).isEqualTo(UploadMemoryTest.ROWS);
-        assertThat(largestRead.get()).as("read in blocks of 64 KiB, never as a whole").isLessThanOrEqualTo(64 * 1024);
+        assertThat(largestRead.get())
+                .as("read in blocks of 64 KiB, never as a whole")
+                .isLessThanOrEqualTo(64 * 1024);
         try (var work = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
             assertThat(work.filter(p -> p.getFileName().toString().startsWith(UploadService.TEMP_PREFIX))
                             .filter(p -> !p.startsWith(dir))
@@ -405,21 +426,26 @@ class ImportUploadsIT extends IntegrationTest {
         assertThat(as(t, () -> quarantine.open(parsedKey))).isEmpty();
         assertThat(as(t, () -> quarantine.open(orphan))).isPresent();
 
-        QuarantineCleanup.Result later = as(t, () -> cleanup.cleanBound(clock.now().plusSeconds(60)));
+        QuarantineCleanup.Result later =
+                as(t, () -> cleanup.cleanBound(clock.now().plusSeconds(60)));
         assertThat(later.orphansDeleted()).isEqualTo(1);
         assertThat(as(t, () -> quarantine.open(orphan))).isEmpty();
-        assertThat(as(t, () -> quarantine.open(objectKey(live.id())))).as("a live file stays").isPresent();
+        assertThat(as(t, () -> quarantine.open(objectKey(live.id()))))
+                .as("a live file stays")
+                .isPresent();
         assertThat(rows(live.id())).isEqualTo(1);
 
         // Safe to repeat.
-        QuarantineCleanup.Result again = as(t, () -> cleanup.cleanBound(clock.now().plusSeconds(60)));
+        QuarantineCleanup.Result again =
+                as(t, () -> cleanup.cleanBound(clock.now().plusSeconds(60)));
         assertThat(again).isEqualTo(new QuarantineCleanup.Result(0, 0, 0, 0, 0));
     }
 
     @Test
     void theCleanupRemovesWorkFilesACrashLeft() throws IOException {
         Path left = Files.createTempFile(UploadService.TEMP_PREFIX, ".bin");
-        Files.setLastModifiedTime(left, java.nio.file.attribute.FileTime.from(Instant.now().minusSeconds(3 * 86_400)));
+        Files.setLastModifiedTime(
+                left, java.nio.file.attribute.FileTime.from(Instant.now().minusSeconds(3 * 86_400)));
         Path fresh = Files.createTempFile(UploadService.TEMP_PREFIX, ".bin");
         try {
             assertThat(cleanup.cleanWorkFiles()).isGreaterThanOrEqualTo(1);

@@ -228,8 +228,8 @@ class UploadService implements ImportUploads {
             Held h = held(batchId, true);
             requireOpen(run(h.runId(), false).status());
             if (!List.of("uploaded", "parsed").contains(h.status()) || h.objectKey() == null) {
-                throw invalidTransition("Only a batch that is uploaded or parsed can be read again; this one is "
-                        + h.status() + ".");
+                throw invalidTransition(
+                        "Only a batch that is uploaded or parsed can be read again; this one is " + h.status() + ".");
             }
             return h;
         });
@@ -317,19 +317,19 @@ class UploadService implements ImportUploads {
         for (StagedRow r : chunk) {
             args.add(new Object[] {UUID.randomUUID(), batchId, r.sourceRowNo(), r.rawJson()});
         }
-        batchJdbc.batchUpdate(
-                """
+        batchJdbc.batchUpdate("""
                 INSERT INTO import_rows (id, tenant_id, batch_id, source_row_no, raw)
                 VALUES (?, current_setting('app.tenant_id')::uuid, ?, ?, CAST(? AS jsonb))
-                """,
-                args);
+                """, args);
     }
 
     /** A whole-file refusal: the batch is failed with its code, holds no rows, and its file is deleted. */
     private void fail(Held held, String code, String reason) {
         tx.executeWithoutResult(s -> {
             held(held.id(), true);
-            jdbc.sql("DELETE FROM import_rows WHERE batch_id = ?").param(held.id()).update();
+            jdbc.sql("DELETE FROM import_rows WHERE batch_id = ?")
+                    .param(held.id())
+                    .update();
             jdbc.sql("""
                             UPDATE import_batches SET status = 'failed', failure_code = ?, failure_reason = ?, failed_at = now(),
                                    row_count = 0, object_key = NULL, quarantine_deleted_at = now()
@@ -362,7 +362,9 @@ class UploadService implements ImportUploads {
             if (List.of("committed", "cancelled").contains(h.status())) {
                 throw invalidTransition("The batch is " + h.status() + ", so it cannot be cancelled.");
             }
-            jdbc.sql("DELETE FROM import_rows WHERE batch_id = ?").param(batchId).update();
+            jdbc.sql("DELETE FROM import_rows WHERE batch_id = ?")
+                    .param(batchId)
+                    .update();
             jdbc.sql("""
                             UPDATE import_batches SET status = 'cancelled', cancelled_at = now(), object_key = NULL,
                                    quarantine_deleted_at = coalesce(quarantine_deleted_at, now())
@@ -420,7 +422,8 @@ class UploadService implements ImportUploads {
             byte[] wrappedKey) {}
 
     private RunRow run(UUID runId, boolean forUpdate) {
-        return jdbc.sql("SELECT status, data_key_wrapped FROM import_runs WHERE id = ?" + (forUpdate ? " FOR UPDATE" : ""))
+        return jdbc.sql("SELECT status, data_key_wrapped FROM import_runs WHERE id = ?"
+                        + (forUpdate ? " FOR UPDATE" : ""))
                 .param(runId)
                 .query((rs, n) -> new RunRow(rs.getString("status"), rs.getBytes("data_key_wrapped")))
                 .optional()
@@ -448,21 +451,21 @@ class UploadService implements ImportUploads {
     }
 
     private boolean alreadyUploaded(UUID runId, String sha256) {
-        return Boolean.TRUE.equals(tx.execute(s -> jdbc.sql("""
+        return Boolean.TRUE.equals(tx.execute(
+                s -> jdbc.sql("""
                         SELECT EXISTS (SELECT 1 FROM import_batches WHERE run_id = ? AND source_sha256 = ?
                                           AND status NOT IN ('failed', 'cancelled'))
-                        """)
-                .params(runId, sha256)
-                .query(Boolean.class)
-                .single()));
+                        """).params(runId, sha256).query(Boolean.class).single()));
     }
 
     private byte[] platformKey() {
-        return importKey.bytes().orElseThrow(() -> new ApiException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "imports_key_missing",
-                "Imports unavailable",
-                "This server has no import key yet; ask the platform team."));
+        return importKey
+                .bytes()
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        "imports_key_missing",
+                        "Imports unavailable",
+                        "This server has no import key yet; ask the platform team."));
     }
 
     private static byte[] unwrap(byte[] platformKey, byte[] wrapped, UUID tenantId, UUID runId) {
@@ -483,7 +486,9 @@ class UploadService implements ImportUploads {
         long usable;
         try {
             Files.createDirectories(settings.work());
-            usable = freeDisk != null ? freeDisk.getAsLong() : Files.getFileStore(settings.work()).getUsableSpace();
+            usable = freeDisk != null
+                    ? freeDisk.getAsLong()
+                    : Files.getFileStore(settings.work()).getUsableSpace();
         } catch (IOException e) {
             throw new UncheckedIOException("the import work directory cannot be used", e);
         }
@@ -516,7 +521,9 @@ class UploadService implements ImportUploads {
         try {
             Files.deleteIfExists(temp);
         } catch (IOException e) {
-            log.warn("an import work file could not be deleted; the cleanup will: {}", e.getClass().getSimpleName());
+            log.warn(
+                    "an import work file could not be deleted; the cleanup will: {}",
+                    e.getClass().getSimpleName());
         }
     }
 
@@ -541,7 +548,8 @@ class UploadService implements ImportUploads {
 
     private static void requireOpen(String runStatus) {
         if (!OPEN.contains(runStatus)) {
-            throw invalidTransition("The import is " + RunStates.words(runStatus) + ", so its files can no longer change.");
+            throw invalidTransition(
+                    "The import is " + RunStates.words(runStatus) + ", so its files can no longer change.");
         }
     }
 
@@ -553,9 +561,8 @@ class UploadService implements ImportUploads {
     }
 
     private static ApiException refusal(QuarantineWriter.Refused e) {
-        HttpStatus status = Parsing.FILE_TOO_LARGE.equals(e.code)
-                ? HttpStatus.CONTENT_TOO_LARGE
-                : HttpStatus.UNPROCESSABLE_CONTENT;
+        HttpStatus status =
+                Parsing.FILE_TOO_LARGE.equals(e.code) ? HttpStatus.CONTENT_TOO_LARGE : HttpStatus.UNPROCESSABLE_CONTENT;
         return new ApiException(status, e.code, "File refused", e.getMessage());
     }
 

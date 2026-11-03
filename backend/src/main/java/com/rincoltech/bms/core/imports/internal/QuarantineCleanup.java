@@ -98,7 +98,11 @@ class QuarantineCleanup {
                 failed += r.failed();
             } catch (RuntimeException e) {
                 errors++;
-                log.error("job {} failed for tenant {}: {}", JOB, tenantId, e.getClass().getSimpleName());
+                log.error(
+                        "job {} failed for tenant {}: {}",
+                        JOB,
+                        tenantId,
+                        e.getClass().getSimpleName());
             }
         }
         int work = cleanWorkFiles();
@@ -174,11 +178,11 @@ class QuarantineCleanup {
         int orphans = 0;
         for (int from = 0; from < old.size(); from += 500) {
             List<String> page = old.subList(from, Math.min(from + 500, old.size()));
-            Set<String> named = new HashSet<>(tx.execute(s -> jdbc.sql(
-                            "SELECT object_key FROM import_batches WHERE object_key = ANY (?)")
-                    .param(page.toArray(String[]::new))
-                    .query(String.class)
-                    .list()));
+            Set<String> named = new HashSet<>(
+                    tx.execute(s -> jdbc.sql("SELECT object_key FROM import_batches WHERE object_key = ANY (?)")
+                            .param(page.toArray(String[]::new))
+                            .query(String.class)
+                            .list()));
             List<String> orphaned =
                     page.stream().filter(k -> !named.contains(k)).toList();
             if (orphaned.isEmpty()) {

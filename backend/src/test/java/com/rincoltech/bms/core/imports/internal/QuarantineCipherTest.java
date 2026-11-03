@@ -42,18 +42,22 @@ class QuarantineCipherTest {
     }
 
     static byte[] open(byte[] sealed, byte[] key, UUID batch) throws IOException {
-        return QuarantineCipher.decrypt(new ByteArrayInputStream(sealed), key, batch).readAllBytes();
+        return QuarantineCipher.decrypt(new ByteArrayInputStream(sealed), key, batch)
+                .readAllBytes();
     }
 
     @Test
     void aFileOfManySegmentsOpensWithItsKeyAndIsNotPlainOnDisk() throws IOException {
         byte[] key = QuarantineCipher.newDataKey();
-        for (int size : new int[] {0, 1, QuarantineCipher.SEGMENT, QuarantineCipher.SEGMENT + 1, 3 * QuarantineCipher.SEGMENT, 500_000}) {
+        for (int size : new int[] {
+            0, 1, QuarantineCipher.SEGMENT, QuarantineCipher.SEGMENT + 1, 3 * QuarantineCipher.SEGMENT, 500_000
+        }) {
             byte[] plain = random(size);
             byte[] sealed = seal(plain, key, batch);
             assertThat(open(sealed, key, batch)).as("size %d", size).isEqualTo(plain);
         }
-        byte[] text = "Code,Description\r\nFAB-1,Fabricated item\r\n".repeat(2_000).getBytes();
+        byte[] text =
+                "Code,Description\r\nFAB-1,Fabricated item\r\n".repeat(2_000).getBytes();
         byte[] sealed = seal(text, key, batch);
         assertThat(new String(sealed, java.nio.charset.StandardCharsets.ISO_8859_1))
                 .as("no plaintext in the stored bytes")
@@ -88,7 +92,8 @@ class QuarantineCipherTest {
         System.arraycopy(sealed, header, swapped, header + seg, seg);
         System.arraycopy(sealed, header + seg, swapped, header, seg);
         assertThatThrownBy(() -> open(swapped, key, batch)).isInstanceOf(QuarantineCipher.Unreadable.class);
-        assertThatThrownBy(() -> open(new byte[] {1, 2, 3}, key, batch)).isInstanceOf(QuarantineCipher.Unreadable.class);
+        assertThatThrownBy(() -> open(new byte[] {1, 2, 3}, key, batch))
+                .isInstanceOf(QuarantineCipher.Unreadable.class);
     }
 
     @Test
