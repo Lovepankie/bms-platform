@@ -3580,6 +3580,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/outbox/unsuppress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send email to an address again after a bounce, complaint or suppression (ADR-117) */
+        post: operations["platformUnsuppressEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/outbox/{outbox_id}/retry": {
         parameters: {
             query?: never;
@@ -11365,6 +11382,28 @@ export interface components {
             /** Format: uuid */
             product_id: string;
         };
+        /** @description The latest 100 bounces and complaints Resend reported (issue #333, ADR-117) */
+        OutboxBounce: {
+            /** @description Resend's bounce type, for example Permanent or Transient; null for a complaint */
+            bounce_type?: string;
+            /** @description bounced, complained or suppressed (Resend did not send it: the address is blocked) */
+            kind?: string;
+            /** Format: date-time */
+            occurred_at?: string;
+            /**
+             * Format: uuid
+             * @description The outbox row the email was, when Resend gave it back
+             */
+            outbox_id?: string;
+            /** @description The recipient's domain only, never the address */
+            recipient_domain?: string;
+            template_key?: string;
+            /**
+             * Format: uuid
+             * @description The business whose email it was, or null for a platform email
+             */
+            tenant_id?: string;
+        };
         OutboxFailure: {
             /** Format: int32 */
             attempts?: number;
@@ -11389,6 +11428,8 @@ export interface components {
             tenant_id?: string;
         };
         OutboxStatus: {
+            /** @description The latest 100 bounces and complaints Resend reported (issue #333, ADR-117) */
+            bounces?: components["schemas"]["OutboxBounce"][];
             /** @description Rows per status: pending, sent, failed */
             counts?: {
                 [key: string]: number;
@@ -11396,6 +11437,10 @@ export interface components {
             /** @description Channels whose sender is configured; rows of the others stay pending */
             enabled_channels?: string[];
             failures?: components["schemas"]["OutboxFailure"][];
+        };
+        OutboxUnsuppressRequest: {
+            /** Format: email */
+            email: string;
         };
         /** @description An active administrator of a business with no Owner */
         OwnerCandidate: {
@@ -27076,6 +27121,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OutboxStatus"];
                 };
+            };
+        };
+    };
+    platformUnsuppressEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutboxUnsuppressRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

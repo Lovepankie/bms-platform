@@ -162,6 +162,7 @@ class OutboxDispatcher {
         String error = null;
         Instant retryAt = null;
         Instant newExpiry = null;
+        String via = null;
         try {
             Map<String, String> params = mapper.readValue(row.params(), PARAMS);
             String subject = null;
@@ -190,7 +191,10 @@ class OutboxDispatcher {
                     new OutboxChannel.Delivery(row.recipient(), subject, text, row.idempotencyKey(), context));
             Instant now = clock.now();
             switch (result) {
-                case OutboxChannel.Result.Sent sent -> outcome = "sent";
+                case OutboxChannel.Result.Sent sent -> {
+                    outcome = "sent";
+                    via = sent.via() == null ? null : safeReason(sent.via());
+                }
                 case OutboxChannel.Result.Deferred deferred -> {
                     outcome = "deferred";
                     // A deferral never lands in the past: that would claim the row again at once.
@@ -217,21 +221,40 @@ class OutboxDispatcher {
         String recordedError = error;
         Instant recordedRetry = retryAt;
         Instant recordedExpiry = newExpiry;
-        String status =
-                transactions.execute(tx -> jdbc.sql("SELECT notification_outbox_record_result(?, ?, ?, ?, ?, ?, ?)")
-                        .params(
-                                row.id(),
-                                recordedOutcome,
-                                recordedError,
-                                MAX_ATTEMPTS,
-                                Timestamp.from(recordedRetry),
-                                Timestamp.from(now),
-                                recordedExpiry == null ? null : Timestamp.from(recordedExpiry))
-                        .query(String.class)
-                        .optional()
-                        .orElse("none"));
+        String sentVia = via;
+        String status = transactions.execute(tx -> {
+            String recorded = jdbc.sql("SELECT notification_outbox_record_result(?, ?, ?, ?, ?, ?, ?)")
+                    .params(
+                            row.id(),
+                            recordedOutcome,
+                            recordedError,
+                            MAX_ATTEMPTS,
+                            Timestamp.from(recordedRetry),
+                            Timestamp.from(now),
+                            recordedExpiry == null ? null : Timestamp.from(recordedExpiry))
+                    .query(String.class)
+                    .optional()
+                    .orElse("none");
+            if (sentVia != null && recorded.equals("sent")) {
+                // A row sent by another sender than the channel's chosen one (ADR-117 decision 1): the row only says
+                // sent, so which sender carried it is kept in the platform audit log, with no address and no text.
+                jdbc.sql("""
+                                INSERT INTO platform_audit_log (id, action, tenant_id, data)
+                                VALUES (?, 'platform.outbox.sent_via', ?,
+                                        jsonb_build_object('outbox_id', ?::text, 'channel', ?::text, 'via', ?::text))
+                                """)
+                        .params(UUID.randomUUID(), row.tenantId(), row.id().toString(), row.channel(), sentVia)
+                        .update();
+            }
+            return recorded;
+        });
         if (outcome.equals("sent")) {
-            log.info("outbox row sent: id={} channel={} template={}", row.id(), row.channel(), row.templateKey());
+            log.info(
+                    "outbox row sent: id={} channel={} via={} template={}",
+                    row.id(),
+                    row.channel(),
+                    sentVia == null ? row.channel() : sentVia,
+                    row.templateKey());
         } else {
             log.warn(
                     "outbox row not sent: id={} channel={} template={} attempt={} outcome={} status={} error={}",

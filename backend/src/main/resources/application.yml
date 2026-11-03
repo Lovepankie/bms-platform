@@ -186,6 +186,15 @@ bms:
       user: ${BMS_SMTP_USER:}
       password: ${BMS_SMTP_PASSWORD:}
       from: ${BMS_MAIL_FROM:}
+    # Which sender carries email (issue #333, ADR-117): smtp (the default) or resend, the Resend HTTP API with a send-only
+    # key the operator puts on the host. On staging only the recipients in the allow-list get mail; empty sends nothing.
+    mail:
+      provider: ${BMS_MAIL_PROVIDER:smtp}
+      resend-api-key: ${BMS_RESEND_API_KEY:}
+      resend-url: ${BMS_RESEND_API_URL:}
+      allowlist: ${BMS_MAIL_ALLOWLIST:}
+      # The signing secret (whsec_...) of the Resend webhook for bounces and complaints; unset turns the route off.
+      resend-webhook-secret: ${BMS_RESEND_WEBHOOK_SECRET:}
     telegram:
       bot-token: ${BMS_TELEGRAM_BOT_TOKEN:}
       operator-chat-id: ${BMS_TELEGRAM_OPERATOR_CHAT_ID:}

@@ -268,6 +268,14 @@ migration) with status only, no details.
   `BMS_SMTP_PASSWORD` and `BMS_MAIL_FROM` (an address) are set, naming the unset ones (ADR-059, issue #426).
   The staging host's `/opt/bms/.env` holds them since 2026-10-06 (issue #89). Outbound traffic is
   SMTPS to the mail provider and HTTPS to `api.telegram.org`; nothing is opened inbound.
+  Email can go by the Resend HTTP API instead (issue #333, ADR-117): `BMS_MAIL_PROVIDER=resend` (default `smtp`; any
+  other value stops the start) with `BMS_RESEND_API_KEY`, a send-only key the operator puts on the host, and
+  `BMS_MAIL_FROM`; production then needs those two instead of the SMTP values. Outbound traffic is then HTTPS to
+  `api.resend.com`, and inbound HTTPS from Resend to `POST /api/v1/platform/webhooks/resend` on the platform host for
+  bounces and complaints, signed with `BMS_RESEND_WEBHOOK_SECRET` (both compose files pass it; unset turns the route off).
+  On staging (`BMS_ENVIRONMENT=staging`), or wherever the list is set, both senders send only to `BMS_MAIL_ALLOWLIST` (addresses or
+  `@domain`, comma separated; empty sends nothing). Both compose files pass the provider and the key; only the staging
+  file passes the allow-list.
   `BMS_SIGNUP_MAX_APPLICATIONS_PER_HOUR` (default 30) and
   `BMS_SIGNUP_MAX_VERIFICATION_EMAILS_PER_HOUR` (default 60) are the global sign-up caps.
 - SMS (ADR-036, issue #212, `docs/runbooks/sms-setup.md`), optional on every host: `BMS_ENVIRONMENT` (the staging compose

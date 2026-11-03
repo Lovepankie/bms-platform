@@ -195,6 +195,24 @@ describe('messages not sent (FR-NTF-09)', () => {
     expect(html).not.toContain('The email sender is not configured');
   });
 
+  it('lists bounces and complaints by domain only, in plain words (issue #333)', () => {
+    const withBounces: OutboxStatus = {
+      ...status,
+      bounces: [
+        { kind: 'bounced', bounce_type: 'Permanent', template_key: 'onboarding_activation', recipient_domain: 'example.test', occurred_at: '2026-11-02T10:00:00Z' },
+        { kind: 'complained', template_key: 'identity_password_reset', recipient_domain: 'mail.example.test', occurred_at: '2026-11-02T11:00:00Z' },
+        { kind: 'suppressed', template_key: 'identity_password_reset', recipient_domain: 'mail.example.test', occurred_at: '2026-11-02T12:00:00Z' },
+      ],
+    };
+    const html = renderToStaticMarkup(<OutboxView status={withBounces} busyId={null} onRetry={noop} />);
+    expect(html).toContain('Bounced, address does not work');
+    expect(html).toContain('Marked as unwanted');
+    expect(html).toContain('Not sent, address blocked after an earlier bounce');
+    expect(html).toContain('Activation link');
+    expect(html).toContain('mail.example.test');
+    expect(renderToStaticMarkup(<OutboxView status={status} busyId={null} onRetry={noop} />)).toContain('No email has bounced');
+  });
+
   it('disables every retry while one is sending', () => {
     expect(renderToStaticMarkup(<OutboxView status={status} busyId="f1" onRetry={noop} />)).toMatch(/aria-disabled="true" aria-busy="true">Send again<span class="busy-spinner"/);
   });

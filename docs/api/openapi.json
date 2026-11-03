@@ -7232,6 +7232,40 @@
         },
         "required" : [ "member_id", "product_id" ]
       },
+      "OutboxBounce" : {
+        "description" : "The latest 100 bounces and complaints Resend reported (issue #333, ADR-117)",
+        "properties" : {
+          "bounce_type" : {
+            "description" : "Resend's bounce type, for example Permanent or Transient; null for a complaint",
+            "type" : "string"
+          },
+          "kind" : {
+            "description" : "bounced, complained or suppressed (Resend did not send it: the address is blocked)",
+            "type" : "string"
+          },
+          "occurred_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "outbox_id" : {
+            "description" : "The outbox row the email was, when Resend gave it back",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "recipient_domain" : {
+            "description" : "The recipient's domain only, never the address",
+            "type" : "string"
+          },
+          "template_key" : {
+            "type" : "string"
+          },
+          "tenant_id" : {
+            "description" : "The business whose email it was, or null for a platform email",
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }
+      },
       "OutboxFailure" : {
         "properties" : {
           "attempts" : {
@@ -7277,6 +7311,13 @@
       },
       "OutboxStatus" : {
         "properties" : {
+          "bounces" : {
+            "description" : "The latest 100 bounces and complaints Resend reported (issue #333, ADR-117)",
+            "items" : {
+              "$ref" : "#/components/schemas/OutboxBounce"
+            },
+            "type" : "array"
+          },
           "counts" : {
             "additionalProperties" : {
               "description" : "Rows per status: pending, sent, failed",
@@ -7301,6 +7342,17 @@
             "type" : "array"
           }
         }
+      },
+      "OutboxUnsuppressRequest" : {
+        "properties" : {
+          "email" : {
+            "format" : "email",
+            "maxLength" : 254,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "email" ]
       },
       "OwnerCandidate" : {
         "description" : "An active administrator of a business with no Owner",
@@ -34890,6 +34942,28 @@
           }
         },
         "summary" : "Outbox counts and the failed rows (FR-NTF-09)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/outbox/unsuppress" : {
+      "post" : {
+        "operationId" : "platformUnsuppressEmail",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OutboxUnsuppressRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Send email to an address again after a bounce, complaint or suppression (ADR-117)",
         "tags" : [ "platform" ]
       }
     },

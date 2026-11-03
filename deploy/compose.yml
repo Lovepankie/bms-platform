@@ -119,6 +119,12 @@ services:
       BMS_SMTP_USER: ${BMS_SMTP_USER:-}
       BMS_SMTP_PASSWORD: ${BMS_SMTP_PASSWORD:-}
       BMS_MAIL_FROM: ${BMS_MAIL_FROM:-}
+      # Email by the Resend HTTP API instead of SMTP (issue #333, ADR-117): BMS_MAIL_PROVIDER=resend and a send-only
+      # key; production then needs the key and BMS_MAIL_FROM instead of the SMTP values.
+      BMS_MAIL_PROVIDER: ${BMS_MAIL_PROVIDER:-smtp}
+      BMS_RESEND_API_KEY: ${BMS_RESEND_API_KEY:-}
+      # The signing secret of the Resend webhook for bounces and complaints; unset turns the route off.
+      BMS_RESEND_WEBHOOK_SECRET: ${BMS_RESEND_WEBHOOK_SECRET:-}
       # The support line in the footer of every email (issue #396, ADR-054); empty leaves it out.
       BMS_SUPPORT_CONTACT: ${BMS_SUPPORT_CONTACT:-}
       BMS_TELEGRAM_BOT_TOKEN: ${BMS_TELEGRAM_BOT_TOKEN:-}

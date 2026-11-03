@@ -1355,6 +1355,15 @@ Accepted (this list is the ADR index):
   `bms-offline` store per business and person, never lending or sign-in, capped, cleared at sign-out; one offline banner
   with the time of the figures, and a Home line that Sell works offline (#763, NFR-OFF-09; amends ADR-009 for retail reads;
   no migration)
+- ADR-117 Email through the Resend HTTP API: `BMS_MAIL_PROVIDER` chooses `smtp` (default) or `resend`
+  (`ResendEmailChannel`, `BMS_RESEND_API_KEY` on the host only, Resend's idempotency key
+  `bms:<environment>:<outbox row id>:<row key>`); a business's email carries its name as the from-name from
+  `no-reply@rincoltech.com`; on staging, or wherever `BMS_MAIL_ALLOWLIST` is set, only the list gets mail; bounces and
+  complaints come in on the Svix-signed `POST /api/v1/platform/webhooks/resend` (`BMS_RESEND_WEBHOOK_SECRET`) and are
+  recorded in the platform audit log with the outbox row id and the recipient's domain only, listed on the operator's
+  "Messages not sent" page; a hard bounce, a complaint or `email.suppressed` stores a keyed hash of the address
+  (`EmailSuppressions`, never the address), both senders then refuse it with `recipient_suppressed`, and
+  `POST /api/v1/platform/outbox/unsuppress` clears it (#333; no migration, no new column)
 
 Pending (cite only as "pending ADR-NNN"):
 

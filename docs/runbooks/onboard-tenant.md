@@ -78,6 +78,114 @@ internet for the images to show: a host behind an access gate shows the alt text
 email still reads correctly. To check a change, send yourself a password reset and open it in a
 web mail and a phone mail app, in light and dark mode.
 
+### Email through Resend (issue #333, ADR-117)
+
+The sender is `no-reply@rincoltech.com` on the Rincol Resend account. `rincoltech.com` is verified in Resend and its
+records are in Cloudflare (DNS of the `rincoltech.com` zone); do not change them without the owner:
+
+| Record | Where | What it is for |
+|---|---|---|
+| SPF | `TXT` on the return path subdomain Resend shows under Domains | lets Resend's servers send for the domain |
+| DKIM | `TXT` at the `_domainkey` name Resend shows under Domains | signs every message |
+| DMARC | `TXT` at `_dmarc`, `v=DMARC1` with the policy the owner set | tells receivers what to do with a message that fails |
+| MX | on the return path subdomain, as Resend shows it | receives bounces for Resend |
+
+Copy the exact values from Resend (Domains, `rincoltech.com`); they are not repeated here so they cannot go stale. The
+domain shows **Verified** there when all of them are live.
+
+To send by the HTTP API instead of SMTP, set in `/opt/bms/.env` (never in git), then `docker compose up -d api`:
+
+| Variable | Value |
+|---|---|
+| `BMS_MAIL_PROVIDER` | `resend` (unset or `smtp` keeps SMTP; any other value stops the start) |
+| `BMS_RESEND_API_KEY` | A **send-only** key restricted to `rincoltech.com`, made in Resend under API Keys, one per environment. Never logged |
+| `BMS_MAIL_FROM` | `BMS by Rincol Tech <no-reply@rincoltech.com>` (quote the whole value) |
+| `BMS_MAIL_ALLOWLIST` | **Staging only.** The addresses that may get mail, comma separated; `@<domain>` allows a whole domain, for example `@rincoltech.com`. Empty on staging sends nothing |
+
+The `BMS_SMTP_*` values can stay on the host; they are not used while the provider is `resend`, and setting it back to
+`smtp` returns to them. On production the API refuses to start with `resend` and no key or no `BMS_MAIL_FROM`.
+
+- **From-name.** A business's emails show that business's name as the sender, from `no-reply@rincoltech.com`; the
+  platform's own emails show the name in `BMS_MAIL_FROM`.
+- **Staging allow-list.** With `BMS_ENVIRONMENT=staging`, or on any host where `BMS_MAIL_ALLOWLIST` is set, a message to
+  anyone not on the list is not sent and shows on "Messages not sent" as `not_on_staging_allowlist`. Set the list
+  **before** this release reaches staging, or every email there stops; the API log then says `BMS_MAIL_ALLOWLIST is empty
+  on staging` at every start. To let a tester in, add the address, `docker compose up -d api`, then "Send again". Never
+  set the list on production.
+- **Resend down.** Keep the `BMS_SMTP_*` values on the host when switching to Resend: an email that cannot reach Resend
+  at all (`resend_unreachable`: refused, no route, DNS, connect timeout or TLS handshake, before any of the request
+  left) then goes by SMTP at once. The log says `resend unreachable; sent by smtp instead` and then
+  `outbox row sent: ... via=smtp`, and the platform audit log has one `platform.outbox.sent_via` row with the outbox row
+  id and `via` `smtp`, which is how to tell afterwards which sender carried an email. A Resend that answers with
+  errors, times out after the request was sent, or drops the connection once made is not bypassed (it may already hold
+  the email, and SMTP would send a second copy): those rows are tried three times over about six minutes, then show as
+  failed on "Messages not sent". When Resend is back, press "Send again" on them; an activation or reset whose link has
+  expired needs a new one.
+- **What a failure means.** `resend_rejected`: Resend refused the message as invalid; it is not retried (a refused
+  business from-name is already retried once with `BMS_MAIL_FROM`). `resend_too_large`: the message, usually the weekly
+  workbook, is over Resend's attachment limit (about 40 MB once encoded); it is not retried, so ask the business to use
+  Download my data instead. `resend_unauthorized`: the key is wrong, revoked or not allowed for the domain; make a new one.
+  `resend_timeout`: the request reached Resend and no answer came in time (20 seconds, more for a large attachment).
+  `resend_unreachable`: no connection was made at all (DNS, a firewall or proxy blocking `api.resend.com`, a connect
+  timeout, a failed TLS handshake); check the host's outbound HTTPS before suspecting Resend.
+  `resend_connection_lost`: the connection was made and then dropped before an answer (a proxy or a network fault
+  mid-request); the request may have reached Resend. `resend_unavailable` (Resend answered with a
+  server error), `resend_idempotency_conflict` (two tries at once) and `resend_interrupted` (the API was stopping during
+  the send): all of these are retried twice on their own, and those tries never send a second copy, because the row's key
+  (with the environment and the row id in front) is Resend's idempotency key for 24 hours. "Send again" later than that is
+  a new email: if an earlier try was delivered without an answer, the reader gets it twice. A rate limit from Resend is not
+  a failure: the row waits and is sent later. `resend_no_row_id`: a send without an outbox row, which the dispatcher never
+  makes; report it as a bug.
+- **`resend_payload_changed` on "Messages not sent".** The row's email is built again on every try, from the template, the
+  business's name and logo. If one of them changed between a try that reached Resend without an answer and the next try
+  (the business renamed itself, or was suspended so its name could not be read), Resend refuses the second as a different
+  email under the same key. The first may have been delivered: look it up in Resend by its `outbox_id` tag before pressing
+  "Send again", which within 24 hours ends the same way. It is rare: it needs a lost answer and a change within minutes.
+- **`BMS_RESEND_API_URL`** stays unset on every host. It must be an `https` address; the only exception is a test's
+  `http://127.0.0.1` or `http://localhost` stand-in, and production refuses even that at start.
+- **Bounces and complaints (ADR-117 decision 8).** Set it up once per host: in Resend, Webhooks, add the endpoint
+  `https://<BMS_PLATFORM_HOST>/api/v1/platform/webhooks/resend` with the events `email.bounced`, `email.complained` and
+  `email.suppressed`,
+  copy its Signing secret (`whsec_...`) into `/opt/bms/.env` as `BMS_RESEND_WEBHOOK_SECRET`, then
+  `docker compose up -d api`. The platform host must be reachable from the internet on that path (no access gate in
+  front of it). Resend's "Send test event" must show 200 (a test event carries no `env` tag, so it is acknowledged and
+  not recorded); a 401 means the secret differs, a 404 that it is unset. Staging and production share the Resend
+  account, so each endpoint receives the other's events too: each records only the events whose `env` tag is its own,
+  and answers the others 200 with a debug line in the log and nothing recorded. Each bounce,
+  complaint and suppressed send then shows on "Messages not sent" under **Bounced and complained** (a suppressed send
+  reads "Not sent, address blocked after an earlier bounce": Resend refused to send to an address that bounced or
+  complained before), with the message, the
+  recipient's domain only and the time; the full address is never stored. Match it to its outbox row by the row id
+  (in the platform audit log, action `platform.email.bounced`, `platform.email.complained` or
+  `platform.email.suppressed`), or in Resend under Emails by the tag `outbox_id`.
+- **Email that goes by SMTP is not tracked or suppressed (ADR-117 decision 8).** Only email sent through the Resend API
+  carries the tags (`env`, `outbox_id`); Resend's SMTP documentation names no header for tags. So with
+  `BMS_MAIL_PROVIDER=smtp` (even when the SMTP host is Resend's), and for every email sent by the fallback (`via=smtp`),
+  a bounce or complaint is not recorded, does not show under **Bounced and complained**, and does not stop later sends:
+  such a row can read `sent` while Resend drops it. If a user says an email never came and the row reads `sent`, look
+  the address up in Resend (Emails, or Suppressions) before anything else. BMS still refuses an address it suppressed
+  earlier, over SMTP too. Choose `resend` on a host where bounces must be tracked.
+- **`recipient_suppressed` on "Messages not sent" (ADR-117 decision 9).** An address that bounced hard, complained, or
+  that Resend reported as suppressed is not sent to again by BMS, over Resend or SMTP: each later email to it is refused
+  and shows here as failed with `recipient_suppressed`, instead of reading `sent` while Resend drops it. BMS keeps only a
+  keyed hash of the address, never the address. A soft bounce (a full mailbox) suppresses nothing. To send to the
+  address again, first make sure it works (or fix the user's email in BMS, which needs no clear), remove it from
+  Resend's suppression list (Resend, Suppressions) if it is there, then clear it in BMS as a platform operator with
+  `platform.tenants.manage`, signed in to the operator portal:
+
+  ```
+  curl -sS -X POST "https://<BMS_PLATFORM_HOST>/api/v1/platform/outbox/unsuppress" \
+    -H "Authorization: Bearer <your operator access token>" -H "Content-Type: application/json" \
+    -d '{"email":"<the address>"}'
+  ```
+
+  204 means cleared (audited as `platform.email.unsuppressed` under your name); 409 `email_not_suppressed` means BMS was
+  not holding it back (check the spelling). Then issue a new link or "Send again" on a newer row; a refused row has had
+  its values cleared and cannot be sent again. Run the command from your own machine, not a shared shell history, since
+  the address is in it.
+- **Rotating the key.** Make the new key, put it in `.env`, `docker compose up -d api`, send yourself a password reset,
+  then delete the old key in Resend.
+
 SMS is a channel of the same outbox but is off for every tenant until the platform operator switches it on
 (`PUT /api/v1/platform/tenants/{tenant_id}/sms`) and off for the environment until a provider and a mode are set;
 see `docs/runbooks/sms-setup.md`. A new tenant therefore sends no SMS until you decide it should.
