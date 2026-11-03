@@ -881,6 +881,17 @@ The first customer is referred to only as **the pilot tenant**: a licensed money
   fewer than two shops would be listed. My stock lists the shops on each card and in the In stock cell, "In stock here" first; the Switch to
   button of #728 is gone. Tests: `RetailAllShopsStockIT`, `RetailAllShopsStockReadsIT`, `all-shops-stock.dom.test.tsx`, `where-is-my-stock.dom.test.tsx`,
   `layout/my-stock.layout.test.ts`.
+- **Built (where each sale and usage entry is made, issue #826, ADR-122, FR-RET-86):** migration `V132`
+  (`retail_entry_locations`, `retail_shop_locations`) and the permission `retail.entry_location.read` (the administrator's).
+  `POST /retail/sales` (online and from the outbox) and `POST /retail/usage` take an optional `location` (422 out of range,
+  never refused without it, left out of every key and fingerprint) recorded through the `retail.stock` port `EntryLocations`.
+  `GET /retail/entry-locations` gives the owner the distance from the shop in words, never the coordinates; the shop's own
+  location is set in Business set-up ("Shop locations", `core.settings.manage`, `GET`, `PUT` and `DELETE
+  /retail/shop-locations`). The Sell and Usage and damage forms ask once (`entry-location.tsx`, `useWhereNow`, answer kept
+  on the phone); the sale shows "Where" and Past usage and damage each entry's distance to the owner only. No coordinate is
+  logged or audited; removal of a closed business deletes them (`EntryLocationErasure`). Staff note: help article
+  `where-a-sale-is-made`. Tests: `RetailEntryLocationIT`, `EntryDistanceTest`, `entry-location.dom.test.tsx`,
+  `layout/entry-location.layout.test.ts`.
 - **Built (Past usage and damage, issue #145, AppSheet "Damaged or used stock not sold"):** no migration and no permission.
   `GET /retail/stock/movements` takes a repeatable `kind` filter (422 for an unknown or blank kind) and each row carries the
   item's `code`, `description` and `unit`, and for a profit reader `line_cost_minor`, the value the screen shows as is. The page `/staff/retail/usage-history` (`usage-history.tsx`, `retail.stock.read`), linked
@@ -1379,6 +1390,10 @@ Accepted (this list is the ADR index):
   `GET /retail/stock` carries `shops`, the quantity in every active shop that keeps goods, the listed shop always first and
   marked `here`, the balances read for the page in one query; quantities only, whatever the caller's scope at the other shops; the owner's switch `other_shops_stock`
   in the retail settings group, on unless switched off; the Switch to button of #728 is gone (no migration)
+- ADR-122 Where each sale and usage entry is made (#826, asked for by the owner, as the old app did): an optional phone
+  location and accuracy on every sale (online and offline) and usage or damage entry, never refused without one; an optional
+  location per shop set by the owner; the owner alone (`retail.entry_location.read`) reads the distance from the shop in
+  words, never the coordinates; the phone asks once; never logged, audited or hashed; migration `V132`
 
 Pending (cite only as "pending ADR-NNN"):
 
