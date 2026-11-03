@@ -61,8 +61,9 @@ export function FundForm({ inv }: { inv: Investment }) {
     startedOn: today,
   }, (d) => onToday(d, 'date', today));
   const update = (patch: Partial<FundDraft>) => setDraft((d) => ({ ...d, ...patch }));
-  // toast-exempt: success screen, the Funded screen replaces the form
+  // success-screen: the Funded screen replaces the form; one sent for approval says so there and raises no toast
   const save = useMutation({
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Investment funded' : null) },
     mutationFn: () => {
       sending();
       return investments.fund(id, { value_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key);
@@ -107,8 +108,9 @@ export function PayForm({ inv, kind }: { inv: Investment; kind: 'pay_return' | '
     kind === 'pay_return'
       ? inv.return_available_minor ?? 0
       : (inv.principal_held_minor ?? 0) + (inv.return_accrued_minor ?? 0) - (inv.return_paid_minor ?? 0);
-  // toast-exempt: success screen, the Paid screen with the voucher replaces the form
+  // success-screen: the Paid screen with the voucher replaces the form; a payment is never sent for approval
   const save = useMutation<TransactionResult>({
+    meta: { success: kind === 'pay_return' ? 'Return paid' : 'Investment paid out' },
     mutationFn: () => {
       const body = { payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined };
       return kind === 'pay_return' ? investments.payReturn(id, body, key) : investments.payout(id, body, key);
@@ -190,8 +192,9 @@ export function EarlyWithdrawalForm({ inv }: { inv: Investment }) {
   const refresh = useRefresh(id);
   const quote = useQuery({ queryKey: ['lending', 'investment', id, 'early-quote'], queryFn: () => investments.earlyQuote(id) });
   const { key, draft, setDraft, finish } = usePersistedDraft<EarlyDraft>(`invest-early:${me.user_id ?? ''}:${id}`, { method: 'cash', reason: '' });
-  // toast-exempt: success screen, the Withdrawn screen replaces the form
+  // success-screen: the Withdrawn screen replaces the form; one sent for approval raises no toast
   const save = useMutation({
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Investment withdrawn' : null) },
     mutationFn: () => investments.earlyWithdraw(id, { payment_method_key: draft.method, reason: draft.reason.trim() }, key),
     onSuccess: () => {
       finish();
@@ -265,8 +268,9 @@ export function ReverseForm({ inv, txn }: { inv: Investment; txn: InvestmentTran
   const id = inv.id ?? '';
   const refresh = useRefresh(id);
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`invest-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
-  // toast-exempt: success screen, the Reversed screen replaces the form
+  // success-screen: the Reversed screen replaces the form; one sent for approval raises no toast
   const save = useMutation({
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Reversed' : null) },
     mutationFn: () => investments.reverse(id, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {
       finish();

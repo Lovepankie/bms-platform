@@ -74,7 +74,7 @@ export function ImportPage({ helperApi = setupHelper, shop }: { helperApi?: Setu
   const [checked, setChecked] = useState<{ text: string; makeCodes: boolean; result: ImportResult } | null>(null);
   const [report, setReport] = useState<ImportResult | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
-  // toast-exempt: a check of the file that saves nothing; the report below says what it found
+  // toast-exempt: saves nothing: a check of the file that saves nothing; the report below says what it found
   const check = useMutation({
     mutationFn: (codes: boolean) => retail.importProducts(text, true, codes),
     onMutate: () => setReport(null),

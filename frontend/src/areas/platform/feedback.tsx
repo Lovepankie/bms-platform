@@ -181,11 +181,13 @@ export function FeedbackInbox({
   const change = useMutation({
     mutationFn: ({ id, status, reply }: { id: string; status: FeedbackStatus; reply: string | null }) => save(id, status, reply),
     onSuccess: () => client.invalidateQueries({ queryKey: ['platform-feedback'] }),
+    meta: { success: (_: unknown, sent: { reply: string | null }) => (sent?.reply ? 'Reply sent' : 'Feedback updated') },
   });
   // busy-exempt: each FeedbackCard shows its own busy state
   const linkIssue = useMutation({
     mutationFn: ({ id, issueNumber }: { id: string; issueNumber: number | null }) => link(id, issueNumber),
     onSuccess: () => client.invalidateQueries({ queryKey: ['platform-feedback'] }),
+    meta: { success: (_: unknown, sent: { issueNumber: number | null }) => (sent?.issueNumber ? `Linked to issue ${sent.issueNumber}` : 'Issue link removed') },
   });
   const items = list.data ?? [];
   return (

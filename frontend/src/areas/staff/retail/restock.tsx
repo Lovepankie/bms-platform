@@ -185,8 +185,9 @@ export function RestockForm({ onSaved, draftName, initial, again = false }: { on
   const setLines = (f: (ls: RestockLine[]) => RestockLine[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
 
-  // toast-exempt: success screen, the purchase saved screen that replaces the form
+  // success-screen: the purchase saved screen that replaces the form
   const save = useMutation({
+    meta: { success: ({ saved }: { saved: Purchase }) => (saved?.purchase_no ? `Purchase ${saved.purchase_no} saved` : 'Purchase saved') },
     mutationFn: async () => {
       const supplierName = (suppliers.data ?? []).find((x) => x.id === supplierId)?.name ?? '';
       const before = Object.fromEntries(lines.map((l) => [l.product.id ?? '', { sell: l.product.sell_minor, cost: l.product.cost_minor }]));

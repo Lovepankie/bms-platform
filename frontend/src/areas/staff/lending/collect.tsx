@@ -209,11 +209,12 @@ export function CollectStatus({ target, initial, onNew }: { target: CollectTarge
   });
   const textWords = textAnswer ? linkTextWords(textAnswer, intent.payer_phone) : null;
   // A text that failed or expired cannot be sent again for this payment: this one is cancelled and a new link is made.
-  // toast-exempt: the screen moves to the new payment form, which is the answer.
   const renew = useMutation({
     mutationFn: async () => {
       if (isCancellable(status)) await payments.cancelIntent(id);
     },
+    // A link cancelled is a change (#824); with nothing to cancel the screen only moves to the new payment form.
+    meta: { success: () => (isCancellable(status) ? 'Old payment link cancelled' : null) },
     onSuccess: onNew,
   });
   const link = intent.redirect_url;

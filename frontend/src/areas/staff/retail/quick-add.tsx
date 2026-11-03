@@ -257,8 +257,9 @@ export function QuickAddForm({ initialName = '', onSell }: {
   // The button that sends the held request again: Add is off while the name panel shows, so then the panel button that sent it.
   const resend = exists === null ? 'Add' : unsure.current?.duplicate_reason ? 'Add anyway' : openLabel;
 
-  // toast-exempt: success screen, the form turns into its added screen (qa-done) with Sell it and Add another
+  // success-screen: the form turns into its added screen (qa-done) with Sell it and Add another
   const add = useMutation({
+    meta: { success: ({ added }: { added: { item_made?: boolean } }) => (added?.item_made ? 'Item added' : 'Stock added') },
     mutationFn: async (extra: { productId?: string; duplicateReason?: string }) => {
       const body: QuickAddRequest = unsure.current ?? {
           ...(extra.productId

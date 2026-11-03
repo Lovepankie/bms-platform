@@ -108,6 +108,7 @@ function Outbox() {
   const retry = useMutation({
     mutationFn: retryOutbox,
     onSuccess: () => client.invalidateQueries({ queryKey: ['outbox'] }),
+    meta: { success: 'Sending the messages again' },
   });
   return (
     <main>

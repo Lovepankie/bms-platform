@@ -269,11 +269,27 @@ describe('busy guard on fixtures', () => {
 // options name `meta: { success }` (the app's DoneToast says it), or its own success path shows a success toast: the
 // useMutation options (or those of the local hook it comes from), each send with the rest of its block, and the local functions
 // and same-file callback props (`onSaved={...}`) these call, three deep, hold a toast call with the 'success' tone or an
-// `added(` of useItemAdded. Anything else carries `// toast-exempt: <reason>` in the `//` lines directly above it. Like the
+// `added(` of useItemAdded. Anything else carries `// toast-exempt: <kind>: <reason>` in the `//` lines directly above it. Like the
 // busy guard it reads text, not data flow, so it proves a success toast is on the path, not what it says.
 // JUSTIFICATION-A3: #682 asks for this guard; it reuses the busy guard's mutation parser rather than a second copy.
 
-const TOAST_EXEMPT = /^\/\/\s*toast-exempt:\s*\S/;
+// Issue #824 (lead's call on the review of #828): a toast-exempt reason is one of four kinds, named first, then the reason in
+// words: `saves nothing:` (a look, a check or a download), `waits for approval:`, `said elsewhere:` (a toast the screen it
+// hands on to shows), or `success note:` (a note beside the form says it). Anything else is no reason to say nothing.
+const TOAST_EXEMPT = /^\/\/\s*toast-exempt:\s*(?:saves nothing|waits for approval|said elsewhere|success note):\s*\S/;
+// Issue #824: the owner wants a toast after every save, a success screen too, so a success screen is no reason to say nothing.
+// A write whose screen replaces the form carries `// success-screen: <what>` above it: it still toasts, and the screen it
+// sets is not read as a second success note.
+const SUCCESS_SCREEN = /^\/\/\s*success-screen:\s*\S/;
+// A toast-exempt reason that says a screen, panel or receipt takes the form's place, in any words, is a success screen.
+const SCREEN_AS_EXEMPT = /\/\/\s*toast-exempt:[^\n]*\b(?:success screen|replaces?|replaced|in (?:its|the form's) place|in place of|instead of the form|(?:saved|success|receipt|done) (?:panel|screen))\b/i;
+// A success-screen tag turns off the said-twice check, so it is for a screen that replaces the form, never a note beside it.
+const SCREEN_ON_NOTE = /\/\/\s*success-screen:[^\n]*\bnote\b/i;
+
+/** The toast-exempt and success-screen comments of one file that misuse their tag (#824). */
+function misusedTags(text: string): string[] {
+  return text.split('\n').flatMap((line, i) => (SCREEN_AS_EXEMPT.test(line) || SCREEN_ON_NOTE.test(line) ? [`${i + 1} ${line.trim()}`] : []));
+}
 // meta.success that is not a bare `() => null`; a toast call whose own parentheses (one level of nesting) hold the 'success'
 // tone; sayDone(; or useItemAdded's added(.
 const SAYS_DONE =
@@ -309,12 +325,32 @@ function restOfBlock(text: string, from: number): string {
   return text.slice(from);
 }
 
-/** The code that runs when a mutation works: its options, its hook's, each send to the end of its block, and what they call. */
+/**
+ * The code after a send: to the end of its block, or, once the send has left the expression it sits in (a callback handed
+ * to a call), to the end of that statement. A send in a top-level callback of a component (`useEntryChecks(..., () =>
+ * save.mutate())`) would otherwise read the whole rest of the component, and any toast in it passed Move stock while its
+ * save said nothing (#824). A send that is a statement of its own block reads the rest of the block. Strings are skipped.
+ */
+function restOfSend(text: string, from: number): string {
+  const rest = restOfBlock(text, from);
+  let depth = 0;
+  for (let i = 0; i < rest.length; i += 1) {
+    const c = rest[i] ?? '';
+    if (c === "'" || c === '"' || c === '`') {
+      for (i += 1; i < rest.length && (rest[i] !== c || rest[i - 1] === '\\'); i += 1);
+    } else if (c === '{' || c === '(') depth += 1;
+    else if (c === '}' || c === ')') depth -= 1;
+    else if (depth < 0 && (c === ';' || c === '\n')) return rest.slice(0, i);
+  }
+  return rest;
+}
+
+/** The code that runs when a mutation works: its options, its hook's, each send to the end of its statement, and what they call. */
 function successCode(text: string, m: Mutation, hookOpts: Map<string, string>, successOnly = false): string {
   const callee = /=\s*(\w+)/.exec(text.slice(m.index))?.[1] ?? '';
   const parts = [balanced(text, text.indexOf('(', m.index)), hookOpts.get(callee) ?? ''];
   for (const send of m.sends) {
-    for (const call of text.matchAll(new RegExp(`(^|[^\\w.])${send.replace('.', '\\.')}\\s*\\(`, 'g'))) parts.push(restOfBlock(text, call.index + call[0].length - 1));
+    for (const call of text.matchAll(new RegExp(`(^|[^\\w.])${send.replace('.', '\\.')}\\s*\\(`, 'g'))) parts.push(restOfSend(text, call.index + call[0].length - 1));
   }
   if (!successOnly) return follow(text, parts, true);
   // Stripped after following too: following a name can bring back a function whose failure path sets a message.
@@ -330,7 +366,7 @@ function silent(text: string, hooks: string[] = mutationHooks(text), hookOpts = 
 
 // One success signal per action (review of #685): a success path that shows a toast and also sets a success note
 // (`setDone('Saved.')`, `setMessage(...)`, `setSaved(true)`) says it twice. A full success screen that replaces the form keeps
-// its screen, sets no toast and is marked `// toast-exempt: success screen`, so it never reaches this check. Clearing a note
+// its screen, also toasts (#824) and is marked `// success-screen: <what>`, so it never reaches this check. Clearing a note
 // (`setMessage(null)`) is not a note, and an onError handler or a catch block is not the success path. The check reads state
 // names, so a state that holds what a write returned is named for what it holds (`setVoided`, `setReport`); renaming a
 // success note to slip past this list is the same defect, and review must refuse it.
@@ -378,7 +414,7 @@ function withoutCatch(code: string): string {
 /** The writes by hand of one file whose success path both shows a toast and sets a success note. */
 function doubledByHand(text: string): string[] {
   return [...text.matchAll(BUSY_ON)]
-    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT))
+    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT) && !exempted(text, m.index, SUCCESS_SCREEN))
     .filter((m) => {
       // Stripped after following too: following a name can bring back the whole function the write sits in.
       const code = withoutCatch(withoutOnError(follow(text, [withoutCatch(restOfBlock(text, m.index))], true)));
@@ -390,7 +426,7 @@ function doubledByHand(text: string): string[] {
 /** The mutations of one file whose success path both shows a toast and sets, or draws, a success note. */
 function doubled(text: string, hooks: string[] = mutationHooks(text), hookOpts = new Map(hookOptions(text))): string[] {
   return mutations(text, hooks)
-    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT))
+    .filter((m) => !exempted(text, m.index, TOAST_EXEMPT) && !exempted(text, m.index, SUCCESS_SCREEN))
     .filter((m) => {
       const code = successCode(text, m, hookOpts, true);
       return SAYS_DONE.test(code) && (SUCCESS_NOTE.test(code) || notesItself(text, m));
@@ -399,7 +435,10 @@ function doubled(text: string, hooks: string[] = mutationHooks(text), hookOpts =
 }
 
 const hookOpts = new Map(sources.flatMap(({ text }) => hookOptions(text)));
-const staff = sources.filter((s) => s.file.startsWith('areas/staff/'));
+// Issue #824: every screen with a mutation, so the operator console and the offline sales screen too. Writes by hand are
+// checked in the staff area and the offline sales screen.
+const staff = sources.filter((s) => /^(?:areas\/staff|areas\/platform|offline)\//.test(s.file));
+const shop = staff.filter((s) => !s.file.startsWith('areas/platform/'));
 
 describe('success toast guard', () => {
   it('finds the staff mutations it guards', () => {
@@ -415,12 +454,16 @@ describe('success toast guard', () => {
   });
 
   it('no staff write by hand says its success twice, in a toast and a success note', () => {
-    expect(staff.flatMap(({ file, text }) => doubledByHand(text).map((m) => `${file}:${m}`))).toEqual([]);
+    expect(shop.flatMap(({ file, text }) => doubledByHand(text).map((m) => `${file}:${m}`))).toEqual([]);
   });
 
   it('every staff write by hand says in a toast when it worked, or says why not', () => {
-    expect(staff.flatMap(({ text }) => [...text.matchAll(BUSY_ON)]).length).toBeGreaterThan(20);
-    expect(staff.flatMap(({ file, text }) => silentByHand(text).map((m) => `${file}:${m}`))).toEqual([]);
+    expect(shop.flatMap(({ text }) => [...text.matchAll(BUSY_ON)]).length).toBeGreaterThan(20);
+    expect(shop.flatMap(({ file, text }) => silentByHand(text).map((m) => `${file}:${m}`))).toEqual([]);
+  });
+
+  it('never takes a success screen as a reason to say nothing, nor a note as a success screen (#824)', () => {
+    expect(staff.flatMap(({ file, text }) => misusedTags(text).map((m) => `${file}:${m}`))).toEqual([]);
   });
 });
 
@@ -450,7 +493,8 @@ describe('success toast guard on fixtures', () => {
     expect(doubled(`const save = useMutation({ mutationFn: send, onSuccess: () => { setMessage(t); show(t, 'success'); } });`)).toEqual(['1 save']);
     expect(doubled(`const save = useMutation({ mutationFn: send, onSuccess: () => setMessage(null), meta: { success: 'Saved' } });`)).toEqual([]);
     expect(doubled(`const save = useMutation({ mutationFn: send, onError: (e) => setMessage(e.message), meta: { success: 'Saved' } });`)).toEqual([]);
-    expect(doubled(`// toast-exempt: success screen, the receipt replaces the form\nconst save = useMutation({ mutationFn: send, onSuccess: () => setDone(r) });`)).toEqual([]);
+    expect(doubled(`// success-screen: the receipt replaces the form\nconst save = useMutation({ mutationFn: send, onSuccess: () => setDone(r), meta: { success: 'Saved' } });`)).toEqual([]);
+    expect(silent(`// success-screen: the receipt replaces the form\nconst save = useMutation({ mutationFn: send, onSuccess: () => setDone(r) });`)).toEqual(['2 save']);
     expect(doubled(`const save = useMutation({ mutationFn: send, meta: { success: 'Saved' } });\nreturn save.isSuccess && <Success>Saved.</Success>;`)).toEqual(['1 save']);
   });
 
@@ -464,7 +508,29 @@ describe('success toast guard on fixtures', () => {
     const write = (after: string) => `async function save() {\n  setBusy(true);\n  try {\n    await api.save();${after}\n  } finally {\n    setBusy(false);\n  }\n}`;
     expect(silentByHand(write(''))).toEqual(['2 setBusy(true)']);
     expect(silentByHand(write("\n    sayDone('Member saved');"))).toEqual([]);
-    expect(silentByHand(write('').replace('  setBusy(true);', '  // toast-exempt: the welcome screen that opens says it\n  setBusy(true);'))).toEqual([]);
+    expect(silentByHand(write('').replace('  setBusy(true);', '  // toast-exempt: said elsewhere: the welcome page that opens says it in its toast\n  setBusy(true);'))).toEqual([]);
+  });
+
+  it('refuses a success screen as a toast-exempt reason in other words, and a success-screen tag on a note (#824)', () => {
+    for (const reason of ['success screen, the receipt', 'the receipt replaces the form', 'the Saved panel shows', 'the done screen in its place', 'it shows in place of the form']) {
+      expect(misusedTags(`// toast-exempt: ${reason}\nconst save = useMutation({ mutationFn: send });`), reason).toHaveLength(1);
+    }
+    expect(misusedTags(`// success-screen: the Saved note under the form\nconst save = useMutation({ mutationFn: send });`)).toHaveLength(1);
+    expect(misusedTags(`// toast-exempt: waits for approval: it only asks, nothing is saved yet\n// success-screen: the receipt replaces the form`)).toEqual([]);
+    // A screen named under an allowed kind is still refused.
+    expect(misusedTags(`// toast-exempt: said elsewhere: the receipt replaces the form`)).toHaveLength(1);
+  });
+
+  it('reads a send in a top-level callback to the end of its statement, not the rest of the component (#824)', () => {
+    const form = `const save = useMutation({ mutationFn: send });\nconst entry = useChecks(() => save.mutate());\nconst add = (p) => added(p.id, p.name);`;
+    expect(silent(form)).toEqual(['1 save']);
+    expect(silent(`const save = useMutation({ mutationFn: send });\nasync function go() {\n  await save.mutateAsync(x);\n  show('Saved', 'success');\n}`)).toEqual([]);
+    // A declaration between the send and its toast inside one callback still counts (review of #828).
+    expect(silent(`const save = useMutation({ mutationFn: send });\nconst go = async () => {\n  const r = await save.mutateAsync(x);\n  const n = r.no;\n  show(\`Saved \${n}\`, 'success');\n};`)).toEqual([]);
+    // A toast in a later statement that does not start with a keyword is not the send's.
+    expect(silent(`const save = useMutation({ mutationFn: send });\nconst entry = useChecks(() => save.mutate());\nuseEffect(() => show('Saved', 'success'));`)).toEqual(['1 save']);
+    // A brace or parenthesis in a string does not move the depth.
+    expect(silent(`const save = useMutation({ mutationFn: send });\nconst entry = useChecks(() => save.mutate(')'));\nconst add = (p) => added(p.id, p.name);`)).toEqual(['1 save']);
   });
 
   it('follows a local function and a callback prop of the same file', () => {
@@ -480,8 +546,14 @@ describe('success toast guard on fixtures', () => {
 
   it('honours a toast-exempt comment with a reason directly above the mutation, and nothing else', () => {
     const save = `const save = useMutation({ mutationFn: send });`;
-    expect(silent(`// toast-exempt: the receipt screen that opens says it\n${save}`)).toEqual([]);
+    for (const kind of ['saves nothing', 'waits for approval', 'said elsewhere', 'success note']) {
+      expect(silent(`// toast-exempt: ${kind}: why, in words\n${save}`), kind).toEqual([]);
+    }
     expect(silent(`// toast-exempt:\n${save}`)).toEqual(['2 save']);
+    expect(silent(`// toast-exempt: saves nothing:\n${save}`)).toEqual(['2 save']);
+    // A reason of no allowed kind does not count, however it is worded (review of #828).
+    expect(silent(`// toast-exempt: the receipt screen that opens says it\n${save}`)).toEqual(['2 save']);
+    expect(silent(`// toast-exempt: the receipt replaces the form\n${save}`)).toEqual(['2 save']);
     expect(silent(`// busy-exempt: the switch says Working itself\n${save}`)).toEqual(['2 save']);
   });
 });

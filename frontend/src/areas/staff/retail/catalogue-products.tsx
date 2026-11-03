@@ -225,7 +225,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
     },
     onSettled: () => { sending.current = false; },
   });
-  // toast-exempt: a look for items with the same name that saves nothing; the save it hands on to says it
+  // toast-exempt: saves nothing: a look for items with the same name that saves nothing; the save it hands on to says it
   const check = useMutation({
     mutationFn: () => retail.similarProducts({ description: description.trim(), unitId, ...(product ? { excludeId: product.id } : {}) }),
     onSuccess: (found) => {

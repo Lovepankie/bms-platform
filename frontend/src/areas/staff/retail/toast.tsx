@@ -6,12 +6,13 @@ import { announceToSheet } from '../../../app/ui/announce';
 import { BusyButton } from '../../../app/ui/BusyButton';
 
 // A toast (the .toast class of app/ui/feedback.css, docs/ui-rules.md rule 15): a dark neutral pill at the bottom with a leading
-// icon for its kind, raised on top of the on-screen success message and gone after six seconds (four was too short for slow readers, Hillary, 29 Oct 2026). A screen calls `useToast()`,
+// icon for its kind, raised on top of the on-screen success message and gone after four seconds: six from 29 Oct 2026 for slow
+// readers, back to about four on 3 Nov 2026 because the shop owner asks for that in issue #824. A screen calls `useToast()`,
 // renders `toast` once and calls `show(message, 'success')` when a write succeeds, `show(message, 'error')` when it fails and
 // `show(message, 'info')` for anything else (a refusal, or a change that waits for approval). The tone has no default, so a
 // refusal can never draw the green check by omission (#508, docs/ui-rules.md rule 16).
 
-export const TOAST_MS = 6000;
+export const TOAST_MS = 4000;
 
 export type ToastTone = 'success' | 'error' | 'info';
 
@@ -103,8 +104,10 @@ export function useToast(ms: number = TOAST_MS, silent = false): { show: (messag
  * outcome that is not a success); `doneToasts` raises them in the one `DoneToast` the app mounts beside the router. A write
  * that can be taken back names how in `meta.undo`, and the toast then carries Undo. A write that is not a mutation (a
  * hand-rolled try and catch) calls `sayDone(words)` when it works. A screen that already says it worked, in its own success
- * toast or a success note or screen, keeps that and sets neither, so nothing is said twice. `busy-guard.test.ts` fails a
- * staff write that says nothing, unless a `// toast-exempt: <reason>` line sits above it.
+ * toast or a success note, keeps that and sets neither, so nothing is said twice. A success screen that replaces the form
+ * still names its words, with `// success-screen: <what>` above the write (issue #824). `busy-guard.test.ts` fails a write
+ * that says nothing, unless a `// toast-exempt: <kind>: <reason>` line sits above it, the kind one of saves nothing, waits
+ * for approval, said elsewhere or success note.
  */
 export type DoneWords = string | ((data: never, variables: never) => string | null);
 

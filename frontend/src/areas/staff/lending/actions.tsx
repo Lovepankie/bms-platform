@@ -123,8 +123,9 @@ export function RepaymentForm({ loan, onDone }: { loan: Loan; onDone: (r: Repaym
   const update = (patch: Partial<RepayDraft>) => setDraft((d) => ({ ...d, ...patch }));
   const amountMinor = parseAmount(draft.amount, loan.currency);
   const valid = amountMinor !== null && isIsoDate(draft.valueDate);
-  // toast-exempt: success screen, the loan page shows the repayment receipt card instead of the form through onDone
+  // success-screen: the loan page shows the repayment receipt card instead of the form through onDone
   const save = useMutation({
+    meta: { success: 'Repayment recorded' },
     mutationFn: () => {
       sending();
       return lending.repay(
@@ -179,8 +180,9 @@ export function DisburseForm({ loan }: { loan: Loan }) {
     startedOn: today,
   }, (d) => onToday(d, 'date', today));
   const update = (patch: Partial<DisburseDraft>) => setDraft((d) => ({ ...d, ...patch }));
-  // toast-exempt: success screen, the Disbursed screen replaces the form
+  // success-screen: the Disbursed screen replaces the form; one sent for approval says so there and raises no toast
   const save = useMutation({
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Loan disbursed' : null) },
     mutationFn: () => {
       sending();
       return lending.disburse(loanId, { disbursement_date: draft.date, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined }, key);

@@ -81,7 +81,7 @@ export function UsualPackSheet({ unit, units, onClose, onSaved }: {
   const [size, setSize] = useState(unit.fixed_count ? String(unit.fixed_count) : had?.size ? showQty(had.size) : '');
   const [purpose, setPurpose] = useState<Purpose>(asPurpose(had?.purpose));
   const [sent, setSent] = useState(false);
-  // toast-exempt: the Units list in catalogue-lists shows the success toast through onSaved
+  // toast-exempt: said elsewhere: the Units list in catalogue-lists shows the success toast through onSaved
   const save = useMutation({
     mutationFn: (body: { usual_pack?: UsualPackRequest; clear_usual_pack?: boolean }) => retail.updateUnit(unit.id ?? '', requireVersion(unit.version), body),
     onSuccess: (row, body) => {

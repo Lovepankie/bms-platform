@@ -252,6 +252,7 @@ function ManagerQueue() {
       setSelfReason('');
       void queryClient.invalidateQueries({ queryKey: ['retail', 'offline-failures'] });
     },
+    meta: { success: (_: unknown, sent: { action: 'retry' | 'discard' }) => (sent?.action === 'retry' ? 'Sent again' : 'Discarded') },
   });
   const resolve = useMutation({
     mutationFn: async (id: string) => {
@@ -259,6 +260,7 @@ function ManagerQueue() {
       if (error) throw new Error(problemOf(error).detail ?? 'Could not resolve the clash');
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'sale-clashes'] }),
+    meta: { success: 'Clash resolved' },
   });
   const rows = failures.data ?? [];
   const open = clashes.data ?? [];

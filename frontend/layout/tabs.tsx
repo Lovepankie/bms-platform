@@ -7,6 +7,7 @@ import { ActionBar } from '../src/app/ui/ActionBar';
 import { StaffContext } from '../src/areas/staff/context';
 import { homeSummaryKey } from '../src/areas/staff/home-cards';
 import { StaffTabBar } from '../src/areas/staff/tabs';
+import { Toast } from '../src/areas/staff/retail/toast';
 import '../src/app/theme.css';
 import '../src/app/ui/index.css';
 import { layoutRouter } from './router';
@@ -45,6 +46,8 @@ createRoot(document.getElementById('root') as HTMLElement).render(
         </main>
         </div>
         <StaffTabBar me={me} />
+        {/* ?toast=1 (issue #824): the toast after a save, as the app's DoneToast draws it, above the action bar and the tabs. */}
+        {query.get('toast') === '1' && <Toast message="Expense saved, a few words that run long on a phone" tone="success" />}
       </StaffContext.Provider>
     </QueryClientProvider>
   </RouterContextProvider>,

@@ -610,7 +610,7 @@ function DrillPanel({ target, filter, exportable, onClose }: {
     queryFn: () => insights.table(target.table, filter, target.params),
     refetchInterval: REFRESH_MS,
   });
-  // toast-exempt: the browser downloads the CSV file itself, nothing is saved
+  // toast-exempt: saves nothing: the browser downloads the CSV file itself, nothing is saved
   const download = useMutation({ mutationFn: () => insights.exportCsv(target.table, filter, target.params) });
   const ref = useRef<HTMLElement>(null);
   // The panel opens below the page: bring it into view and give it focus for keyboard users.

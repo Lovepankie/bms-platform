@@ -30,19 +30,19 @@ describe('Toast', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
-  it('shows for six seconds, then goes', () => {
+  it('shows for about four seconds, then goes (#824)', () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useToast());
     act(() => result.current.show('Saved.', 'info'));
     const { container, unmount } = render(<>{result.current.toast}</>);
     expect(container.querySelector('.toast-info')).not.toBeNull();
     unmount();
-    expect(TOAST_MS).toBe(6000);
+    expect(TOAST_MS).toBe(4000);
     act(() => vi.advanceTimersByTime(TOAST_MS));
     expect(result.current.toast).toBeNull();
   });
 
-  it('stays twice as long, 12 seconds, when it carries an Undo (D79)', () => {
+  it('stays twice as long, 8 seconds, when it carries an Undo (D79)', () => {
     vi.useFakeTimers();
     const { result } = renderHook(() => useToast());
     act(() => result.current.show('Pack switched off', 'success', { label: 'Undo', run: () => undefined }));

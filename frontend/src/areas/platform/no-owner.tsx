@@ -22,6 +22,7 @@ function Business({ t }: { t: TenantWithoutOwner }) {
   const [code, setCode] = useState('');
   const [codeProblem, setCodeProblem] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // toast-exempt: success note: the note on the row says who is now the owner of the business
   const set = useMutation({
     mutationFn: (reason: string) => makeOwner(t.tenant_id ?? '', chosen?.id ?? '', code.trim(), reason),
     onSuccess: () => {

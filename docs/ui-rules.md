@@ -75,7 +75,7 @@ back to what opened it.
 ## Feedback
 
 14. A page load shows a skeleton, and nothing at all for under 1 second.
-15. Toasts are dark and neutral, at the bottom, with an icon, for 6 seconds (12 with an Undo), with at most one action. An error is never
+15. Toasts are dark and neutral, at the bottom, with an icon, for 4 seconds (8 with an Undo; the owner's ask in issue #824), with at most one action. An error is never
     a blocking dialog. Sign-in and the invitation page say an error in an error toast as well as in their error line (issue
     #122); the line stays on the page and is the one read out, so that toast is silent and carries no button. The toast shows
     only while the line does, so the next attempt and the step after it never keep an old error, and a second failure
@@ -85,9 +85,12 @@ back to what opened it.
     Every successful save, sale, add, edit, delete, move, purchase and payment in the staff area says so in a success toast
     of a few plain words, because most people read very little (issue #682): the screen's own `show(text, 'success')`, or
     the words in the mutation's `meta: { success }` (or `sayDone` for a write by hand) that the app's one `DoneToast` says,
-    with Undo where `meta.undo` can take it back. Success is never said twice: a screen that already shows a success note
-    or screen keeps that and is exempt. The success toast guard in `busy-guard.test.ts` fails a staff write that says
-    nothing, unless `// toast-exempt: <reason>` sits above it.
+    with Undo where `meta.undo` can take it back. Success is never said twice in a toast and a success note: a screen that
+    already shows a success note keeps that and is exempt. A success screen that replaces the form is not exempt (issue
+    #824): it still says it in a toast, and its write carries `// success-screen: <what replaces the form>`. A save that
+    waits for approval raises no success toast. The success toast guard in `busy-guard.test.ts` fails a write that says
+    nothing, unless `// toast-exempt: <kind>: <reason>` sits above it, the kind one of `saves nothing`, `waits for
+    approval`, `said elsewhere` or `success note`, and never takes a success screen as that reason.
     A press shows at once: every button, tile, link card and row sinks to `--press-scale` and dims to `--press-opacity`,
     by transform and opacity only, in `--motion-fast` (100 to 160ms); under reduced motion it only dims. A busy button
     is the `BusyButton` (rule 6 of the design system) and a disabled one is flat grey, never only faded.

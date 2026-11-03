@@ -39,6 +39,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
   const setLines = (f: (ls: Line[]) => Line[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   // ADR-122: where the phone is goes with the entry when it says; nothing waits for it.
   const where = useWhereNow();
+  // success-screen: with onSaved the Usage and damage page opens its Saved screen, and the toast says it too (#824)
   const save = useMutation({
     mutationFn: () => retail.createUsage({ ...buildUsage({ branchId, kind, reason, lines }), ...where.now() }, key),
     onSuccess: (u) => {
@@ -46,8 +47,7 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(u);
     },
-    // With onSaved the Usage and damage page opens its Saved screen, which says it.
-    meta: { success: (u: Usage) => (onSaved ? null : u?.kind === 'damaged' ? 'Damage recorded' : 'Usage recorded') },
+    meta: { success: (u: Usage) => (u?.kind === 'damaged' ? 'Damage recorded, stock reduced' : 'Usage recorded, stock reduced') },
   });
   const valid = lines.length > 0 && reason.trim() !== '' && lines.every((l) => parseQty(l.qty) !== null);
 

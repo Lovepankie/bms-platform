@@ -50,8 +50,9 @@ export function CloseScreen() {
     await queryClient.invalidateQueries({ queryKey: ['plan-status'] });
   }
 
-  // toast-exempt: success screen, the Closing asked for screen replaces the form
+  // success-screen: the Closing asked for screen replaces the form
   const ask = useMutation({
+    meta: { success: 'Closing asked for' },
     mutationFn: () => requestClosure(mfaEnabled ? { totp_code: typed.trim() } : { password: typed }),
     onSuccess: async (saved) => {
       setTyped('');

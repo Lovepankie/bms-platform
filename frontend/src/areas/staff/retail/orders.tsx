@@ -41,9 +41,10 @@ export function DeliverPanel({ order, onDone }: { order: Order; onDone: (d: Deli
   const client = useQueryClient();
   const [form, setForm] = useState<DeliverForm>(blankDeliver());
   const [key, setKey] = useState(newIdempotencyKey);
-  // toast-exempt: success screen, OrderActions puts its Delivered, Sale made words in place of the order buttons through onDone
+  // success-screen: OrderActions puts its Delivered, Sale made words in place of the order buttons through onDone
   const deliver = useMutation({
     mutationFn: () => retailOrders.deliver(order.id ?? '', buildDeliverRequest(order, form), key),
+    meta: { success: 'Order delivered, sale made' },
     onSuccess: (d) => {
       setKey(newIdempotencyKey());
       invalidate(client);

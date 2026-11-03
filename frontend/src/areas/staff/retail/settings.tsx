@@ -165,7 +165,7 @@ export function OtherShopsSetting({ read, onSaved }: { read: CapabilitiesRead; o
   const queryClient = useQueryClient();
   const saved = read.capabilities.other_shops_stock !== false;
   const [on, setOn] = useState(saved);
-  // toast-exempt: the Settings screen shows the success toast through onSaved
+  // toast-exempt: said elsewhere: the Settings screen shows the success toast through onSaved
   const save = useMutation({
     mutationFn: () => retail.changeCapabilities({ other_shops_stock: on }, read.version),
     onSuccess: (next) => {

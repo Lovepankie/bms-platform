@@ -63,7 +63,7 @@ export async function openCreditNotePdf(returnId: string): Promise<void> {
 /** The button that opens a credit note as a PDF: only while documents are on and the user may issue them at the return's branch. */
 export function CreditNotePdf({ returnId, branchId }: { returnId: string; branchId?: string }) {
   const { me } = useStaff();
-  // toast-exempt: it only opens the credit note PDF in a new tab, which is the answer
+  // toast-exempt: saves nothing: it only opens the credit note PDF in a new tab, which is the answer
   const open = useMutation({ mutationFn: () => openCreditNotePdf(returnId) });
   if (!canIssueDocuments(me) || !holdsAt(me, DOCUMENT_ISSUE, branchId)) return null;
   return (
@@ -95,7 +95,7 @@ export async function openMadePdf(make: () => Promise<Blob>): Promise<void> {
 
 /** The button that opens a document's PDF, with its own waiting and its own failure. */
 export function PdfButton({ doc, label = 'Open PDF' }: { doc: Pick<RetailDocument, 'id' | 'pdf_document_id' | 'number'>; label?: string }) {
-  // toast-exempt: it only opens the PDF in a new tab and saves nothing
+  // toast-exempt: saves nothing: it only opens the PDF in a new tab and saves nothing
   const open = useMutation({ mutationFn: () => openDocumentPdf(doc) });
   return (
     <>

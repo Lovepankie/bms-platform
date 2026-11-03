@@ -45,7 +45,7 @@ export function AddBranchForm({ takenCodes, canOpenBilling, onAdded, onCancel }:
       return;
     }
     if (busy) return;
-    // toast-exempt: the Branches screen shows the success toast naming what was added through onAdded
+    // toast-exempt: said elsewhere: the Branches screen shows the success toast naming what was added through onAdded
     setBusy(true);
     setRefusal(null);
     try {

@@ -89,8 +89,9 @@ export function MoneyForm({ account, kind, onDone }: { account: SavingsAccount; 
   const tooMuch = kind === 'withdraw' && amountMinor !== null && amountMinor > available;
   const valid = amountMinor !== null && !tooMuch;
   const body = () => ({ amount_minor: amountMinor ?? 0, payment_method_key: draft.method, external_reference: draft.reference.trim() || undefined });
-  // toast-exempt: success screen, the receipt with the new balance replaces the form
+  // success-screen: the receipt with the new balance replaces the form; one sent for approval raises no toast
   const save = useMutation({
+    meta: { success: (r: { executed?: boolean }) => (!r?.executed ? null : kind === 'deposit' ? 'Deposit recorded' : 'Withdrawal paid out') },
     mutationFn: async () => {
       if (kind === 'deposit') {
         const r = await savings.deposit(accountId, body(), key);
@@ -177,8 +178,9 @@ export function CloseForm({ account }: { account: SavingsAccount }) {
   const refresh = useRefreshAccount(accountId);
   const { key, draft, setDraft, finish } = usePersistedDraft<CloseDraft>(`savings-close:${me.user_id ?? ''}:${accountId}`, { method: 'cash', reason: '' });
   const [confirming, setConfirming] = useState(false);
-  // toast-exempt: success screen, the Account closed screen with the voucher replaces the form
+  // success-screen: the Account closed screen with the voucher replaces the form; one sent for approval raises no toast
   const save = useMutation({
+    meta: { success: (r: { executed?: boolean }) => (r?.executed ? 'Account closed' : null) },
     mutationFn: () => savings.close(accountId, { payment_method_key: draft.method, reason: draft.reason.trim() || undefined }, key),
     onSuccess: () => {
       finish();
@@ -261,7 +263,7 @@ export function ReverseSavingsForm({ account, txn }: { account: SavingsAccount; 
   const accountId = account.id ?? '';
   const refresh = useRefreshAccount(accountId);
   const { key, draft, setDraft, finish } = usePersistedDraft<string>(`savings-reverse:${me.user_id ?? ''}:${txn.id ?? ''}`, '');
-  // toast-exempt: a reversal waits for a checker, and this form then says it is sent for approval
+  // toast-exempt: waits for approval: a reversal waits for a checker, and this form then says it is sent for approval
   const save = useMutation({
     mutationFn: () => savings.reverse(accountId, txn.id ?? '', draft.trim(), key),
     onSuccess: () => {
