@@ -31,6 +31,17 @@ class UnconfiguredObjectStorage implements ObjectStorage {
     @Override
     public void delete(String key) {}
 
+    /** Nothing was ever stored here, so the orphan sweep finds nothing. */
+    @Override
+    public java.util.stream.Stream<Listed> list(String prefix) {
+        return java.util.stream.Stream.empty();
+    }
+
+    @Override
+    public java.util.List<String> deleteAll(java.util.List<String> keys) {
+        return java.util.List.of();
+    }
+
     @Override
     public String signedGetUrl(String key, Duration ttl, String downloadName, String contentType) {
         throw unavailable();

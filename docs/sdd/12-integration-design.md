@@ -209,6 +209,7 @@ ObjectStorage
   put(key, bytes, content_type) -> {etag}
   signed_get_url(key, ttl_seconds=300, download_filename?) -> url
   delete(key)
+  list(prefix) -> stream of {key, last_modified}   (read page by page; the orphan sweep only)
 ```
 
 - Buckets: one for documents, one for backups, per environment (names in chapter 9).
@@ -219,6 +220,39 @@ ObjectStorage
   after a permission check (FR-DOC-03).
 - Upload of user files goes through the API (size and type checks, chapter 8 section
   8.8), not direct browser to bucket, in the MVP.
+- Orphan sweep (issue #39). An upload stores its object before its row commits, so a process
+  that dies in between, or a failed delete after a rollback, leaves an object with no
+  `documents` row. The db-scheduler task `core.documents.orphan-sweep` runs daily at 04:10
+  Kampala time: for each active business it lists `tenants/<tenant_id>/upload/` and removes
+  each object that storage wrote more than 24 hours ago and that no `documents.object_key`
+  names, checked in a short transaction per batch of 500 keys, and again just before each
+  delete batch. Only `DocumentService.store` writes under `upload/`, with its row in the same
+  transaction (`UploadKeysTest`), so `documents.object_key` is the only reference.
+  - **Fails closed.** Before anything of a business is deleted, the check proves it reads that
+    business's rows: its transaction is bound to that business (`app.tenant_id`), a business
+    with old objects shows at least one upload row, and its orphans are not more than
+    `BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_SHARE` (0.5) of its objects (from 20 objects up). Otherwise
+    the business is skipped, counted (`bms.documents.orphans.skipped`) and logged; nothing is
+    deleted. After a check, raise the share for one run if the orphans are real.
+  - **Bounded.** At most 1000 objects of one business and 10000 in all per run; the rest wait
+    for the next night. Deletes go as `DeleteObjects` requests of 500 keys with a 1 second
+    pause between them.
+  - **Counts, not names.** Logs carry per business listed, old, orphans, removed and failed,
+    never a key. Each removal writes an audit row `core.document.orphan_removed` (actor
+    `system`, with the key) and a count on `bms.documents.orphans.removed`; refused deletes
+    count on `bms.documents.orphans.failed` and fail the run, so the scheduler records it; a
+    failed audit write is counted and the sweep goes on.
+  - No transaction is open while storage is listed or an object deleted. The run is leased by
+    db-scheduler (a picked row with a heartbeat; a dead execution is run again by another
+    instance) and every step repeats safely. Generated objects (receipts, reports) are out of
+    its scope, and so are suspended and closed businesses (only active ones are listed).
+  - The age compares the object store's last-modified time with the application clock; skew
+    between the two is small against 24 hours.
+  - `BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN` is `true` by default: the sweep logs the counts it
+    would remove until the operator has read a summary and sets it `false`, and sets it `true`
+    again after a database restore (`docs/runbooks/restore-from-backup.md` section 4), since a
+    restore to an earlier point would make later uploads look like orphans.
+    `BMS_DOCUMENTS_ORPHAN_SWEEP_ENABLED=false` removes the task.
 
 ## 12.6 Transactional email
 

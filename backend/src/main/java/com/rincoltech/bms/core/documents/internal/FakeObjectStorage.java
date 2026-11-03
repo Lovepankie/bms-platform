@@ -22,7 +22,7 @@ class FakeObjectStorage implements ObjectStorage {
 
     static final String PATH = "/api/v1/storage/fake";
 
-    record StoredObject(byte[] bytes, String contentType) {}
+    record StoredObject(byte[] bytes, String contentType, java.time.Instant at) {}
 
     private final Map<String, StoredObject> objects = new ConcurrentHashMap<>();
     private final byte[] secret;
@@ -35,13 +35,48 @@ class FakeObjectStorage implements ObjectStorage {
 
     @Override
     public void put(String key, byte[] bytes, String contentType) {
-        objects.put(key, new StoredObject(bytes.clone(), contentType));
+        objects.put(key, new StoredObject(bytes.clone(), contentType, clock.now()));
+    }
+
+    /** For tests: an object as if storage had written it at {@code at}, so the sweep's age rule can be tested. */
+    void putAt(String key, byte[] bytes, String contentType, java.time.Instant at) {
+        objects.put(key, new StoredObject(bytes.clone(), contentType, at));
+    }
+
+    /** For tests: keys that {@link #deleteAll} reports as failed and keeps, like an object store that refuses some. */
+    final java.util.Set<String> failDeletes = ConcurrentHashMap.newKeySet();
+
+    @Override
+    public java.util.List<String> deleteAll(java.util.List<String> keys) {
+        java.util.List<String> failed = new java.util.ArrayList<>();
+        for (String key : keys) {
+            if (failDeletes.contains(key)) {
+                failed.add(key);
+            } else {
+                objects.remove(key);
+            }
+        }
+        return failed;
+    }
+
+    /** For tests: whether the fake holds an object under this key. */
+    boolean has(String key) {
+        return objects.containsKey(key);
+    }
+
+    @Override
+    public java.util.stream.Stream<Listed> list(String prefix) {
+        return objects.entrySet().stream()
+                .filter(e -> e.getKey().startsWith(prefix))
+                .map(e -> new Listed(e.getKey(), e.getValue().at()))
+                .toList()
+                .stream();
     }
 
     @Override
     public void putFile(String key, java.nio.file.Path file, String contentType) {
         try {
-            objects.put(key, new StoredObject(java.nio.file.Files.readAllBytes(file), contentType));
+            objects.put(key, new StoredObject(java.nio.file.Files.readAllBytes(file), contentType, clock.now()));
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);
         }

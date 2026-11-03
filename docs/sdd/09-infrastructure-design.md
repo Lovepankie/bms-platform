@@ -255,6 +255,11 @@ migration) with status only, no details.
   and the staging file keeps two of 5 MB. The API's JSON lines are redacted of personal data before Docker sees them
   (chapter 8 section 8.9), and PostgreSQL runs with `log_error_verbosity=terse` in all three files, so its log never
   prints a refused duplicate's key value.
+- Orphan sweep (issue #39), optional: `BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN` (default `true`: the daily sweep only logs
+  the counts it would remove, until the operator has read a dry run's summary and sets `false`) and
+  `BMS_DOCUMENTS_ORPHAN_SWEEP_MAX_SHARE` (default `0.5`) are passed by both compose files;
+  `BMS_DOCUMENTS_ORPHAN_SWEEP_ENABLED` (default `true`), `_MAX_PER_TENANT` (1000), `_MAX_PER_RUN` (10000) and `_PAUSE`
+  (`1s`) are read by the API but not passed by them (chapter 12 section 12.5).
 - Web Push (ADR-050), optional on every host: `BMS_PUSH_VAPID_PUBLIC_KEY`, `BMS_PUSH_VAPID_PRIVATE_KEY`, `BMS_PUSH_SUBJECT` and
   `BMS_PUSH_EXTRA_ENDPOINT_HOSTS`; both compose files pass them; unset means push is off (`docs/runbooks/push-notifications.md`).
 - Outbox senders (ADR-024, spec section 11), optional on every host except that email is required in production:

@@ -1027,7 +1027,7 @@ GitHub Actions deploy secrets live in the `staging` and `production` environment
   stays legible); a canvas over 16 megapixels is refused before decoding (`image_too_large`), at most two images
   are re-encoded at once (a caller that waits 10 seconds gets 503 `uploads_busy`), the re-encoded
   bytes obey the same 5 MB limit, an object whose transaction is known to have rolled back is deleted again (an
-  unknown outcome keeps it, and a sweeper for the remaining orphans is issue #39), and a member keeps at
+  unknown outcome keeps it, and the daily orphan sweep of chapter 12 section 12.5 removes the rest once a day old, issue #39), and a member keeps at
   most 10 active documents per kind: a newer upload supersedes the oldest, which stays for the audit
   trail, so a wrong file can always be replaced, so a
   small compressed file cannot exhaust memory; files are stored in object storage, never on the

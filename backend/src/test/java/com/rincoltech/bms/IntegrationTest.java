@@ -46,6 +46,9 @@ import org.springframework.test.context.TestPropertySource;
  *
  * <p>Nor the purge of the money records removed businesses kept ({@code core.platform.closed-retention}, ADR-090): the tests
  * call {@code ClosureService.purgeDue} themselves.
+ *
+ * <p>Nor the orphan sweep ({@code core.documents.orphan-sweep}, issue #39): every context shares one fake storage per
+ * context but one database, and a sweep must never race another test's uploads. {@code OrphanSweepIT} calls it itself.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -57,7 +60,8 @@ import org.springframework.test.context.TestPropertySource;
             "bms.data-export.weekly-enabled=false",
             "bms.platform.plan-changes-job-enabled=false",
             "bms.payments.poller-enabled=false",
-            "bms.platform.closed-retention-job-enabled=false"
+            "bms.platform.closed-retention-job-enabled=false",
+            "bms.documents.orphan-sweep-enabled=false"
         })
 @AutoConfigureTestRestTemplate
 public abstract class IntegrationTest {

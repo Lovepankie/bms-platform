@@ -8,7 +8,7 @@
 @ApplicationModule(
         id = "core.documents",
         displayName = "Core: Documents",
-        allowedDependencies = {"kernel", "core.audit"})
+        allowedDependencies = {"kernel", "core.audit", "core.jobs"})
 package com.rincoltech.bms.core.documents;
 
 import org.springframework.modulith.ApplicationModule;
