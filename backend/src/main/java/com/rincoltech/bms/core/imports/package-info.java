@@ -8,13 +8,18 @@
  * run stays {@code committing} and resumes from its first uncommitted batch; and the trading tenant guard, which asks
  * every {@link com.rincoltech.bms.kernel.LiveRecordProbe} and refuses a commit into a business that already trades unless
  * one platform operator set the override with a reason and a different one approved it. Templates write their batches
- * through {@link com.rincoltech.bms.core.imports.BatchWriter}; upload, templates, review and the operator screens follow
- * in #128 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns}.
+ * through {@link com.rincoltech.bms.core.imports.BatchWriter}. The second part (issue #128) is the quarantined upload
+ * ({@link com.rincoltech.bms.core.imports.ImportUploads}, migration V129): a file streamed once into a copy encrypted with
+ * the run's data key, stored under the quarantine prefix of {@code core.documents}, within the size, row and column limits,
+ * and parsed by a streaming reader for CSV, XLSX or JSON Lines into {@code import_rows} 1,000 rows at a time, with the
+ * mapping's ignored columns dropped; and the daily cleanup of the files of abandoned uploads. Templates, review and the
+ * operator screens follow in #129 to #141. Public API: {@link com.rincoltech.bms.core.imports.ImportRuns},
+ * {@link com.rincoltech.bms.core.imports.ImportUploads}.
  */
 @ApplicationModule(
         id = "core.imports",
         displayName = "Core: Imports",
-        allowedDependencies = {"kernel", "core.audit"})
+        allowedDependencies = {"kernel", "core.audit", "core.documents", "core.jobs"})
 package com.rincoltech.bms.core.imports;
 
 import org.springframework.modulith.ApplicationModule;

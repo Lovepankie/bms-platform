@@ -109,6 +109,8 @@ services:
       R2_DOCUMENTS_ACCESS_KEY_ID: ${R2_DOCUMENTS_ACCESS_KEY_ID:?}
       R2_DOCUMENTS_SECRET_ACCESS_KEY: ${R2_DOCUMENTS_SECRET_ACCESS_KEY:?}
       R2_DOCUMENTS_BUCKET: ${R2_DOCUMENTS_BUCKET:?}
+      # The platform import key (issue #128): 32 bytes in base64, wraps each import run's data key. Empty: uploads answer 503.
+      BMS_IMPORT_KEY: ${BMS_IMPORT_KEY:-}
       # The daily orphan sweep (issue #39): true (the default) only logs the counts it would remove;
       # MAX_SHARE is the most of a business's objects that may be orphans before it is skipped.
       BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN: ${BMS_DOCUMENTS_ORPHAN_SWEEP_DRY_RUN:-true}

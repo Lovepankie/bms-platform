@@ -532,6 +532,15 @@ class DocumentService implements Documents {
                 log.warn("could not delete object {} of a purged business", key, e);
             }
         }
+        // The quarantined import files (issue #128) have no documents row; they go by their prefix.
+        List<String> quarantined;
+        try (var held = storage.list(QuarantineStore.prefix())) {
+            quarantined = held.map(ObjectStorage.Listed::key).toList();
+        }
+        for (int from = 0; from < quarantined.size(); from += 1000) {
+            List<String> page = quarantined.subList(from, Math.min(from + 1000, quarantined.size()));
+            deleted += page.size() - storage.deleteAll(page).size();
+        }
         return deleted;
     }
 
