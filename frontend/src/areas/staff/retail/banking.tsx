@@ -15,6 +15,7 @@ import { BranchRequired, Gate, Problem, money, useBranchName, useSingleBranch } 
 import { showDate } from './transfers';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { Hint } from '../../../app/ui/Hint';
+import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Cash banked (FR-RET-21 to FR-RET-23). The server works out what to expect: every caller sees "Cash
 // expected" (takings less what was paid out of the till). Only a caller with retail.profit.read also gets
@@ -42,26 +43,38 @@ export function ExpectedFigures({ expected, date }: { expected: BankingExpected;
 export function BankingForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Banking) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish } = usePersistedDraft<BankingDraft>(`banking:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: null, reference: '' });
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<BankingDraft>(`banking:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: null, reference: '' });
   const expected = useQuery({ queryKey: ['retail', 'banking-expected', branchId, draft.date], queryFn: () => retail.bankingExpected({ branchId, date: draft.date }) });
   const shown = draft.amount ?? bankingPrefill(expected.data);
   const minor = amountOrNull(shown);
+  // Issue #812: offline, or when the network drops, the banking is kept on the phone; the figures wait for the network.
+  const entries = useEntrySave();
+  const body = { branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) };
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
-    mutationFn: () => retail.createBanking({ branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) }, key),
+    mutationFn: () => entries.save(
+      { kind: 'banking', body, key, branchId, detail: draft.reference.trim() || undefined, amountMinor: body.amount_minor, fix: { to: '/staff/retail/banking', draftName: name, draft } },
+      () => retail.createBanking(body, key),
+    ),
     meta: { success: 'Banking saved' },
     onSuccess: (saved) => {
+      if (isKept(saved)) {
+        discard();
+        return;
+      }
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(saved);
     },
   });
-  const blocked = minor === null || expected.isPending || save.isPending;
+  const blocked = minor === null || (expected.isPending && !entries.offlineMode) || save.isPending;
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
-      <DateField id="banking-date" label="Date" value={draft.date} onChange={(date) => setDraft((d) => ({ ...d, date, amount: null }))} />
+      {entries.offlineMode && <OfflineFormNote what="banking" />}
+      {!entries.offlineMode && <DateField id="banking-date" label="Date" value={draft.date} onChange={(date) => setDraft((d) => ({ ...d, date, amount: null }))} />}
       {expected.isError && <Problem error={expected.error} />}
-      {expected.isPending && <p className="loading">Loading</p>}
+      {expected.isPending && !entries.offlineMode && <p className="loading">Loading</p>}
       {expected.data && <ExpectedFigures expected={expected.data} date={draft.date} />}
       <label htmlFor="banking-amount">Amount banked</label>
       <input id="banking-amount" inputMode="numeric" value={shown} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} aria-invalid={shown.trim() !== '' && minor === null} />

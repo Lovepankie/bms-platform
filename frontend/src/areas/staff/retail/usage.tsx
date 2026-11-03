@@ -10,6 +10,7 @@ import { canUse, needsOf } from './permissions';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { RowChevron } from '../../../app/ui/ListRow';
+import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Usage and damage (FR-RET-07): items taken out of stock for use in the shop or because they are
 // damaged, with a reason. Valued at cost by the server; no cost is shown here.
@@ -28,7 +29,7 @@ export function buildUsage(input: { branchId: string; kind: 'used' | 'damaged'; 
 export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (u: Usage) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<{ kind: 'used' | 'damaged'; reason: string; lines: Line[] }>(
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<{ kind: 'used' | 'damaged'; reason: string; lines: Line[] }>(
     `usage:${me.user_id ?? ''}:${branchId}`,
     { kind: 'used', reason: '', lines: [] },
   );
@@ -37,9 +38,22 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
   const setReason = (r: string) => setDraft((d) => ({ ...d, reason: r }));
   const setLines = (f: (ls: Line[]) => Line[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   // success-screen: with onSaved the Usage and damage page opens its Saved screen, and the toast says it too (#824)
+  // Issue #812: offline, or when the network drops, the usage or damage is kept on the phone and sent later.
+  const entries = useEntrySave();
   const save = useMutation({
-    mutationFn: () => retail.createUsage(buildUsage({ branchId, kind, reason, lines }), key),
+    mutationFn: () => entries.save(
+      {
+        kind: 'usage', body: buildUsage({ branchId, kind, reason, lines }), key, branchId,
+        detail: `${kind === 'damaged' ? 'damaged' : 'used'}, ${lines.length} ${lines.length === 1 ? 'item' : 'items'}`,
+        fix: { to: '/staff/retail/usage', draftName: name, draft },
+      },
+      () => retail.createUsage(buildUsage({ branchId, kind, reason, lines }), key),
+    ),
     onSuccess: (u) => {
+      if (isKept(u)) {
+        discard();
+        return;
+      }
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(u);
@@ -48,8 +62,10 @@ export function UsageForm({ branchId, onSaved }: { branchId: string; onSaved?: (
   });
   const valid = lines.length > 0 && reason.trim() !== '' && lines.every((l) => parseQty(l.qty) !== null);
 
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (valid && !save.isPending) save.mutate(); }}>
+      {entries.offlineMode && <OfflineFormNote what="usage or damage record" />}
       <fieldset data-tour="usage-kind">
         <legend>What happened?</legend>
         {(['used', 'damaged'] as const).map((k) => (

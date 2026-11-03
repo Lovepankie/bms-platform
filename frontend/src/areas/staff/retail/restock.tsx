@@ -25,6 +25,7 @@ import { entryWarnings, type EntryWarning } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { AddByName } from '../../../app/ui/EmptyChoice';
 import { PickerWithAdd } from '../../../app/ui/PickerWithAdd';
+import { EditNeedsInternet, KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Restock (FR-RET-06): supplier, lines with cost, sell price and a quantity per branch. Saving sets
 // the product's cost and sell price in the same transaction and leaves a price history row.
@@ -192,6 +193,8 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
   const setLines = (f: (ls: RestockLine[]) => RestockLine[]) => setDraft((d) => ({ ...d, lines: f(d.lines) }));
   const suppliers = useQuery({ queryKey: ['retail', 'suppliers'], queryFn: () => retail.listSuppliers() });
 
+  // Issue #812: offline, or when the network drops, a new delivery is kept on the phone; an edit stays online only.
+  const entries = useEntrySave();
   // success-screen: the purchase saved screen that replaces the form; an edited delivery goes back to Past purchases (issue #830)
   const save = useMutation({
     meta: { success: ({ saved }: { saved: Purchase }) => (replaces ? 'Delivery updated' : saved?.purchase_no ? `Purchase ${saved.purchase_no} saved` : 'Purchase saved') },
@@ -201,11 +204,24 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
       // Edit (issue #830): one call voids the old delivery and saves this one naming it, in one transaction on the server, so
       // any refusal (its stock moved, an item switched off) leaves the old delivery as it was. The draft's key covers a retry.
       const request = buildPurchase({ supplierId, purchasedOn, method, lines });
-      const saved = replaces?.id ? await retail.replacePurchase(replaces.id, request, key) : await retail.createPurchase(request, key);
-      return { saved, context: { supplierName, before } };
+      if (replaces?.id) return { saved: await retail.replacePurchase(replaces.id, request, key), context: { supplierName, before } };
+      const saved = await entries.save(
+        {
+          kind: 'purchase', body: request, key, branchId: here ?? branches[0]?.id ?? '',
+          detail: [supplierName, `${lines.length} ${lines.length === 1 ? 'item' : 'items'}`].filter(Boolean).join(', '),
+          fix: { to: '/staff/retail/restock', draftName: `restock:${me.user_id ?? ''}`, draft },
+        },
+        () => retail.createPurchase(request, key),
+      );
+      return isKept(saved) ? saved : { saved, context: { supplierName, before } };
     },
-    onSuccess: ({ saved, context }) => {
+    onSuccess: (result) => {
       entry.saved();
+      if (isKept(result)) {
+        discard();
+        return;
+      }
+      const { saved, context } = result;
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(saved, context);
@@ -275,9 +291,12 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
     });
   });
   const entry = useEntryChecks('buy', here, warnings, () => save.mutate(), lines);
+  const editOffline = replaces !== undefined && entries.offlineMode;
 
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} newLabel="Record another delivery" />;
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending) entry.check(); }}>
+    <form onSubmit={(e) => { e.preventDefault(); if (!blocked && !save.isPending && !editOffline) entry.check(); }}>
+      {editOffline ? <EditNeedsInternet /> : entries.offlineMode && <OfflineFormNote what="delivery" />}
       <Note>Saving a purchase changes the buying and selling price of every item below to the values you enter. The change is recorded in the price history.</Note>
       <FieldsNeededNote />
 
@@ -318,8 +337,11 @@ export function RestockForm({ onSaved, draftName, initial, again = false, replac
         )}
       />
       </div>
+      {/* Issue #812: a delivery kept on the phone is dated when it was made, so no date is asked offline. */}
+      {!entries.offlineMode && <>
       <label htmlFor="bought-on">Bought on</label>
       <input id="bought-on" type="date" max={businessToday()} value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} />
+      </>}
       {again && purchasedOn < businessToday() && (
         <p role="note" className="alert alert-warning" data-testid="date-warning">
           This purchase is dated {showDate(purchasedOn)}. The cash book of that day may be banked already, and saving will change its figures. Use today's date unless the goods really arrived then.

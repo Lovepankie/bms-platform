@@ -14,6 +14,7 @@ import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
 import { KeyFigure } from '../../../app/ui/KeyFigure';
+import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Daily savings (FR-RET-18 to FR-RET-20): per shop per day. The server suggests half the day's profit; a
 // caller without retail.profit.read never sees the profit, the suggestion or any amount, and sends none:
@@ -57,7 +58,7 @@ export function showInRecords(client: QueryClient, saved: Savings) {
 export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Savings) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<SavingsDraft>(`savings:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), ...EMPTY });
   // A draft restored with an amount shows its problem at once; a fresh form waits for blur (rule 10).
   const [touched, setTouched] = useState(() => draft.amount.trim() !== '');
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -74,14 +75,26 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const reason = reasonText(draft.reason, draft.other ?? '');
   const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
+  // Issue #812: offline, or when the network drops, the savings are kept on the phone with the suggestion's token.
+  const entries = useEntrySave();
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => {
       if (!plan) throw new Error('The suggestion has not loaded');
-      return retail.createSavings(plan.request, key, { salesStaff });
+      return entries.save(
+        {
+          kind: 'savings', path: salesStaff ? '/api/v1/retail/savings/sales-staff' : undefined, body: plan.request, key, branchId,
+          amountMinor: plan.request.amount_minor, fix: { to: '/staff/retail/savings', draftName: name, draft },
+        },
+        () => retail.createSavings(plan.request, key, { salesStaff }),
+      );
     },
     meta: { success: 'Savings saved' },
     onSuccess: (saved) => {
+      if (isKept(saved)) {
+        discard();
+        return;
+      }
       finish();
       showInRecords(queryClient, saved);
       // The day is saved: its suggestion goes and only the saved amount stays (issue #799), before the refetch says the same.
@@ -105,10 +118,13 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   // Validation shows on blur (docs/ui-rules.md rule 10) or when Save is pressed; the cap never waits for the server.
   const showProblem = touched && plan?.problem != null && draft.amount.trim() !== '' && !(plan.overwrite && !canOverwrite);
 
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); setTouched(true); if (!blocked) save.mutate(); }}>
+      {entries.offlineMode && <OfflineFormNote what="savings record" />}
+      {entries.offlineMode && !s && <Note>The day's figures are not saved on this phone. Open Savings once while online to save them.</Note>}
       {/* Issue #799: sales staff open days of this month only; the server refuses an earlier one too. */}
-      <DateField id="savings-date" label="Date" value={draft.date} min={salesStaff ? `${businessToday().slice(0, 8)}01` : undefined} onChange={(date) => { update({ date, ...EMPTY }); setTouched(false); }} />
+      {!entries.offlineMode && <DateField id="savings-date" label="Date" value={draft.date} min={salesStaff ? `${businessToday().slice(0, 8)}01` : undefined} onChange={(date) => { update({ date, ...EMPTY }); setTouched(false); }} />}
       {suggestion.isError && <Problem error={suggestion.error} />}
       {suggestion.isPending && <p className="loading">Loading</p>}
       {s && (

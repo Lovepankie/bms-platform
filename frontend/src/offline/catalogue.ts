@@ -78,6 +78,18 @@ export function searchCatalogue(catalogue: Catalogue | null, branchId: string, t
     .slice(0, 50);
 }
 
+/**
+ * The items saved on the phone for a form kept offline (issue #812): the branch's list when the phone has one, otherwise
+ * every saved branch's items once each (Buy stock names no branch; a store sells nothing, so has no list of its own).
+ */
+export function searchSaved(catalogue: Catalogue | null, branchId: string | undefined, term: string): Product[] {
+  if (!catalogue) return [];
+  if (branchId && catalogue.products[branchId]) return searchCatalogue(catalogue, branchId, term);
+  const once = new Map<string, Product>();
+  for (const rows of Object.values(catalogue.products)) for (const p of rows) if (p.id && !once.has(p.id)) once.set(p.id, p);
+  return searchCatalogue({ ...catalogue, products: { all: [...once.values()] } }, 'all', term);
+}
+
 /** "Prices as of 22 Oct, 09:14", in the device's own words for the time. */
 export function pricesAsOfWords(pricesAsOf: string | undefined): string {
   if (!pricesAsOf) return 'No prices saved on this phone yet. Go online once to save them.';

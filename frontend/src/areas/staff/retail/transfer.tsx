@@ -25,6 +25,7 @@ import { entryWarnings } from './entry-checks-state';
 import { useEntryChecks, useEntryNorms } from './entry-checks';
 import { EmptyChoice } from '../../../app/ui/EmptyChoice';
 import { canManageBranches } from '../branches/state';
+import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Move stock to another branch (FR-RET-16). The branch chosen at the top of the page is the one the
 // stock leaves; it moves at cost, so nothing is gained or lost. One idempotency key per draft, kept
@@ -55,16 +56,29 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   const queryClient = useQueryClient();
   const { me } = useStaff();
   const label = useBranchLabel();
-  const { key, draft, setDraft, finish, discard } = usePersistedDraft<TransferDraft>(
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<TransferDraft>(
     `transfer:${me.user_id ?? ''}:${fromBranchId}`,
     { toBranchId: '', transferDate: businessToday(), note: '', lines: [] },
   );
+  // Issue #812: offline, or when the network drops, the move is kept on the phone and sent later.
+  const entries = useEntrySave();
   // success-screen: Move stock shows the summary of the move in place of the form, and the toast says it too (#824)
   const save = useMutation({
-    mutationFn: () => retail.createTransfer(buildTransfer(fromBranchId, draft), key),
+    mutationFn: () => entries.save(
+      {
+        kind: 'transfer', body: buildTransfer(fromBranchId, draft), key, branchId: fromBranchId,
+        detail: `to ${label(draft.toBranchId)}, ${draft.lines.length} ${draft.lines.length === 1 ? 'item' : 'items'}`,
+        fix: { to: '/staff/retail/transfer', draftName: name, draft },
+      },
+      () => retail.createTransfer(buildTransfer(fromBranchId, draft), key),
+    ),
     meta: { success: (t: Transfer) => (t?.status === 'in_transit' ? `Stock sent to ${label(t.to_branch_id)}` : `Stock moved to ${label(t?.to_branch_id)}`) },
     onSuccess: (t) => {
       entry.saved();
+      if (isKept(t)) {
+        discard();
+        return;
+      }
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(t);
@@ -125,8 +139,10 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
   }));
   const entry = useEntryChecks('move', fromBranchId, warnings, () => save.mutate(), draft.lines);
 
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} newLabel="Move more stock" />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!problem && !save.isPending) entry.check(); }}>
+      {entries.offlineMode && <OfflineFormNote what="stock move" />}
       <p>From: {label(fromBranchId)}</p>
       <NoStockHere branchId={fromBranchId} />
       <div data-tour="transfer-to">

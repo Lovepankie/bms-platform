@@ -51,6 +51,12 @@ const RETAIL_READS = new Set([
   'usage-history', // Past usage and damage
   'item-stock', // the item page's stock in each shop (issue #813)
   'item-movements', // the item page's movements with the balance after each
+  // The lists the daily forms kept on the phone offline wait on (issue #812, ADR-067 decision 13).
+  'expense-categories', // the expense form's categories and items
+  'cash-parties', // the beneficiary picker
+  'suppliers', // Buy stock's supplier picker
+  'savings-suggestion', // the savings form's suggestion and its token
+  'banking-expected', // the banking form's cash expected
 ]);
 
 /** Whether a read is kept for offline reading. Lending, the profile and every other read never are. */

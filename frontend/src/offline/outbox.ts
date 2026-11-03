@@ -178,7 +178,13 @@ export function classifyEntry(status: number, body: unknown): SendOutcome {
     return { kind: 'sent', recorded: { id: b.id ?? b.approval_id ?? '', waiting } };
   }
   const read = classify(status, body);
-  return read.kind === 'retry' && IN_PROGRESS_CODES.includes(read.code ?? '') ? { ...read, message: 'The server is still recording this entry.' } : read;
+  if (read.kind === 'retry' && IN_PROGRESS_CODES.includes(read.code ?? '')) return { ...read, message: 'The server is still recording this entry.' };
+  // Any other 409 of an entry is a clash the person must look at (the savings suggestion changed, the day is saved): a refusal.
+  if (status === 409) {
+    const b = (body ?? {}) as { code?: string; detail?: string };
+    return { kind: 'refused', code: b.code, message: b.detail ?? 'The server refused it: something changed since it was made.' };
+  }
+  return read;
 }
 
 /** The item after one try. */

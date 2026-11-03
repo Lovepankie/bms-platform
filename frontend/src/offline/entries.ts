@@ -42,6 +42,8 @@ export function offlineBody(body: Record<string, unknown>, occurredAt: string, o
 
 export interface EntrySpec {
   kind: EntryKind;
+  /** The route when it is not the kind's usual one (savings through the sales staff routes, issue #799). */
+  path?: string;
   /** The body exactly as the form sends it online. */
   body: Record<string, unknown>;
   /** The form's Idempotency-Key, kept with the entry so it is recorded once however often it is sent. */
@@ -69,7 +71,7 @@ export function offlineEntry(spec: EntrySpec & { scope: string; now: Date; onlin
     key: spec.key,
     entry: {
       kind: spec.kind,
-      path: ENTRY_PATHS[spec.kind],
+      path: spec.path ?? ENTRY_PATHS[spec.kind],
       body: spec.lost ? spec.body : offlineBody(spec.body, occurredAt, spec.onlineAsOf),
       words: spec.detail ? `${name}, ${spec.detail}` : name,
       ...(spec.fix ? { fix: spec.fix } : {}),

@@ -13,6 +13,7 @@ import { BranchRequired, Gate, Problem, money, useSingleBranch } from './ui';
 import { showDate } from './transfers';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { ActionBar } from '../../../app/ui/ActionBar';
+import { KeptOnPhone, OfflineFormNote, isKept, useEntrySave } from '../../../offline/keep-entry';
 
 // Cash withdrawn from the bank into a shop's till (FR-RET-25). A withdrawal above the bank balance on
 // record is saved and comes back with a warning, never a refusal.
@@ -22,22 +23,34 @@ interface WithdrawalDraft { date: string; amount: string; purpose: string }
 export function WithdrawalForm({ branchId, onSaved }: { branchId: string; onSaved?: (saved: Withdrawal) => void }) {
   const queryClient = useQueryClient();
   const { me } = useStaff();
-  const { key, draft, setDraft, finish } = usePersistedDraft<WithdrawalDraft>(`withdrawal:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: '', purpose: '' });
+  const { key, draft, setDraft, finish, discard, name } = usePersistedDraft<WithdrawalDraft>(`withdrawal:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), amount: '', purpose: '' });
   const minor = amountOrNull(draft.amount);
+  // Issue #812: offline, or when the network drops, the withdrawal is kept on the phone.
+  const entries = useEntrySave();
+  const body = { branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.purpose.trim() ? { purpose: draft.purpose.trim() } : {}) };
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
-    mutationFn: () => retail.createWithdrawal({ branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.purpose.trim() ? { purpose: draft.purpose.trim() } : {}) }, key),
+    mutationFn: () => entries.save(
+      { kind: 'withdrawal', body, key, branchId, detail: draft.purpose.trim() || undefined, amountMinor: body.amount_minor, fix: { to: '/staff/retail/withdrawals', draftName: name, draft } },
+      () => retail.createWithdrawal(body, key),
+    ),
     meta: { success: 'Withdrawal saved' },
     onSuccess: (saved) => {
+      if (isKept(saved)) {
+        discard();
+        return;
+      }
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });
       onSaved?.(saved);
     },
   });
   const blocked = minor === null || save.isPending;
+  if (entries.kept) return <KeptOnPhone item={entries.kept} onNew={entries.another} />;
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (!blocked) save.mutate(); }}>
-      <DateField id="withdrawal-date" label="Date" value={draft.date} onChange={(date) => setDraft((d) => ({ ...d, date }))} />
+      {entries.offlineMode && <OfflineFormNote what="withdrawal" />}
+      {!entries.offlineMode && <DateField id="withdrawal-date" label="Date" value={draft.date} onChange={(date) => setDraft((d) => ({ ...d, date }))} />}
       <label htmlFor="withdrawal-amount">Amount withdrawn</label>
       <input id="withdrawal-amount" inputMode="numeric" value={draft.amount} onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))} aria-invalid={draft.amount.trim() !== '' && minor === null} />
       {draft.amount.trim() !== '' && minor === null && <p role="alert" className="rt-flag">Enter the amount in whole shillings.</p>}
