@@ -82,6 +82,7 @@ class QuarantineCleanup {
     }
 
     Result cleanAll() {
+        requireNoTransaction();
         List<UUID> tenants = new ArrayList<>();
         tenantJobs.forEachActiveTenant(JOB + ".list", tenants::add);
         int cancelled = 0;
@@ -128,11 +129,7 @@ class QuarantineCleanup {
 
     /** As {@link #cleanBound()}, removing the files no batch names that storage wrote before {@code before}. */
     Result cleanBound(Instant before) {
-        // Storage is listed and deleted with no database transaction open, as in the upload.
-        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new IllegalStateException(
-                    "The quarantine cleanup takes its own short transactions; call it outside one");
-        }
+        requireNoTransaction();
         // The batches of cancelled runs: rows gone and marked cancelled in one transaction; their files follow.
         int cancelled = tx.execute(s -> {
             List<UUID> ids = jdbc.sql("""
@@ -249,6 +246,14 @@ class QuarantineCleanup {
     }
 
     private record Held(UUID id, String key) {}
+
+    /** Storage is listed and deleted with no database transaction open, as in the upload. */
+    private static void requireNoTransaction() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "The quarantine cleanup takes its own short transactions; call it outside one");
+        }
+    }
 
     /** The job, shaped like {@code DocumentJobs}; {@code bms.imports.cleanup-enabled=false} removes it. */
     @Configuration(proxyBeanMethods = false)

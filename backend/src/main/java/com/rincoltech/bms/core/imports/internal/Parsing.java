@@ -100,6 +100,10 @@ final class Parsing {
         private int rows;
         private final Map<String, Integer> seen = new HashMap<>();
 
+        Limits limits() {
+            return limits;
+        }
+
         Sheet(Limits limits, Sink sink) {
             this.limits = limits;
             this.sink = sink;

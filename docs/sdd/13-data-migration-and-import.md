@@ -733,7 +733,7 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   point is dropped the same way. The cancel takes the same locks in the same order.
 - **Memory.** Besides the row chunk, the XLSX reader keeps only what its first pass needs (shared strings, styles, sheet
   list), charged at an estimate of its heap cost against 96 MiB, so many empty or short strings are stopped as surely as
-  long ones; every text is read in pieces and stopped at 32,767 characters; a part named twice is refused; and each pass may
+  long ones, and never more shared strings than the sheet can have cells (rows plus the header, times columns); every text is read in pieces and stopped at 32,767 characters; a part named twice is refused; and each pass may
   unpack at most 1 GiB, skipped parts included. A NUL in a cell, which PostgreSQL cannot store, is `FILE_UNREADABLE`, as is
   any value the database refuses to store.
 - **Proven by** `ImportUploadsIT` (only `import_*` and the audit log change; the stored object opens with the run's key and

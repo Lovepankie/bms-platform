@@ -84,6 +84,10 @@ class ReaderLimitsTest {
     }
 
     static void read(byte[] book, XlsxRows.Caps caps) throws IOException {
+        read(book, caps, LIMITS);
+    }
+
+    static void read(byte[] book, XlsxRows.Caps caps, Parsing.Limits limits) throws IOException {
         Parsing.Sink none = new Parsing.Sink() {
             @Override
             public void header(int headerRowNo, List<String> names) {}
@@ -91,7 +95,7 @@ class ReaderLimitsTest {
             @Override
             public void row(int sourceRowNo, Map<String, Parsing.Cell> raw) {}
         };
-        XlsxRows.read(() -> new ByteArrayInputStream(book), null, new Parsing.Sheet(LIMITS, none), caps);
+        XlsxRows.read(() -> new ByteArrayInputStream(book), null, new Parsing.Sheet(limits, none), caps);
     }
 
     SourceParser.Parsed parse(FileType type, byte[] bytes) throws IOException {
@@ -116,6 +120,24 @@ class ReaderLimitsTest {
         assertThat(book.length).isLessThan(100_000);
         refusedWith(Parsing.FILE_TOO_LARGE, () -> read(book, new XlsxRows.Caps(1L << 30, 1L << 20)));
         read(book, new XlsxRows.Caps(1L << 30, 64L << 20));
+    }
+
+    @Test
+    void millionsOfEmptySharedStringsAreRefusedAtTheProductionCaps() throws IOException {
+        // Two million empty entries: 10 MB of XML, a few kilobytes zipped, and over 100 MB of heap if they were kept.
+        byte[] book = workbook(sst("<si><t>Code</t></si>" + "<si/>".repeat(2_000_000)), SHEET + END, null, Map.of());
+        assertThat(book.length).as("small on disk").isLessThan(1_000_000);
+        refusedWith(Parsing.FILE_TOO_LARGE, () -> read(book, XlsxRows.Caps.DEFAULT));
+    }
+
+    @Test
+    void noMoreSharedStringsThanTheSheetCanHaveCells() throws IOException {
+        // Ten rows of two columns, and a header row: at most 22 distinct texts.
+        Parsing.Limits small = new Parsing.Limits(10, 2, Set.of(), Set.of());
+        byte[] fits = workbook(sst("<si><t>Code</t></si>" + "<si/>".repeat(21)), SHEET + END, null, Map.of());
+        byte[] over = workbook(sst("<si><t>Code</t></si>" + "<si/>".repeat(22)), SHEET + END, null, Map.of());
+        read(fits, XlsxRows.Caps.DEFAULT, small);
+        refusedWith(Parsing.FILE_TOO_LARGE, () -> read(over, XlsxRows.Caps.DEFAULT, small));
     }
 
     @Test

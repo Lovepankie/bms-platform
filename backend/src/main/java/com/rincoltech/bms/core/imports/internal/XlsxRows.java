@@ -96,7 +96,9 @@ final class XlsxRows {
     }
 
     static String read(Source source, String sheetName, Parsing.Sheet sheet, Caps caps) throws IOException {
-        Workbook book = new Workbook(caps);
+        // No sheet within the limits can name more distinct texts than it has cells below and in its header.
+        Workbook book = new Workbook(
+                caps, ((long) sheet.limits().maxRows() + 1) * sheet.limits().maxColumns());
         java.util.Set<String> seen = new java.util.HashSet<>();
         try (ZipInputStream zip = new ZipInputStream(source.open())) {
             Inflated in = new Inflated(zip, caps.inflatedBytes());
@@ -202,8 +204,11 @@ final class XlsxRows {
         private final Caps caps;
         private long held;
 
-        Workbook(Caps caps) {
+        private final long maxShared;
+
+        Workbook(Caps caps, long maxShared) {
             this.caps = caps;
+            this.maxShared = maxShared;
         }
 
         /**
@@ -316,6 +321,11 @@ final class XlsxRows {
                     if ("rPh".equals(r.getLocalName())) {
                         phonetic--;
                     } else if ("si".equals(r.getLocalName()) && si != null) {
+                        if (shared.size() >= maxShared) {
+                            throw new Parsing.Failure(
+                                    Parsing.FILE_TOO_LARGE,
+                                    "The workbook holds more texts than its sheet can have cells; split it and upload the parts.");
+                        }
                         charge(si);
                         shared.add(si.isEmpty() ? "" : si.toString());
                         si = null;

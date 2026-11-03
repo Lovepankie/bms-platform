@@ -74,6 +74,9 @@ class ImportUploadsIT extends IntegrationTest {
     UploadSettings.ImportKey importKey;
 
     @Autowired
+    UploadSettings.Properties settings;
+
+    @Autowired
     com.rincoltech.bms.kernel.BusinessClock clock;
 
     @TempDir
@@ -143,6 +146,18 @@ class ImportUploadsIT extends IntegrationTest {
                 .query(byte[].class)
                 .single();
         return QuarantineCipher.unwrap(importKey.bytes().orElseThrow(), wrapped, f.tenantId(), runId);
+    }
+
+    /** The size of the largest encrypted work file in the work directory now, 0 when there is none. */
+    long largestWorkFile() {
+        try (var files = Files.list(settings.work())) {
+            return files.filter(p -> p.getFileName().toString().startsWith(UploadService.TEMP_PREFIX))
+                    .mapToLong(p -> p.toFile().length())
+                    .max()
+                    .orElse(0);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Row counts of every table the business owns except the staging area and the audit log. */
@@ -374,12 +389,18 @@ class ImportUploadsIT extends IntegrationTest {
         UUID runId = openRun(t);
         AtomicInteger largestRead = new AtomicInteger();
         AtomicInteger reads = new AtomicInteger();
+        java.util.concurrent.atomic.AtomicLong served = new java.util.concurrent.atomic.AtomicLong();
+        java.util.concurrent.atomic.AtomicLong onDiskAtEight = new java.util.concurrent.atomic.AtomicLong(-1);
         Batch batch;
         try (InputStream in = new FilterInputStream(Files.newInputStream(csv)) {
             @Override
             public int read(byte[] b, int off, int len) throws IOException {
                 largestRead.accumulateAndGet(len, Math::max);
                 reads.incrementAndGet();
+                if (served.get() < (8 << 20) && served.get() + len >= (8 << 20)) {
+                    onDiskAtEight.set(largestWorkFile());
+                }
+                served.addAndGet(len);
                 return super.read(b, off, len);
             }
         }) {
@@ -390,10 +411,13 @@ class ImportUploadsIT extends IntegrationTest {
         assertThat(batch.sizeBytes()).isEqualTo(Files.size(csv));
         assertThat(batch.rowCount()).isEqualTo(UploadMemoryTest.ROWS);
         assertThat(rows(batch.id())).isEqualTo(UploadMemoryTest.ROWS);
-        // What the reads ask for, not the heap: the memory at the row limit is proven by UploadMemoryTest, in a JVM
-        // capped
-        // at the staging heap. Here: a stream of unknown size, taken in many reads of at most 64 KiB, all the way into
-        // the database.
+        // Bounded memory on the way in: when the eighth megabyte is asked for, all but the last block and segment of
+        // the
+        // bytes before it are already encrypted on disk, so the upload held a block and a segment, never the file. The
+        // heap of the parse at the row limit is proven by UploadMemoryTest, in a JVM capped at the staging heap.
+        assertThat(onDiskAtEight.get())
+                .as("encrypted bytes on disk when 8 MB had been read")
+                .isGreaterThanOrEqualTo((8L << 20) - 3 * 64 * 1024);
         assertThat(largestRead.get()).isLessThanOrEqualTo(64 * 1024);
         assertThat(reads.get()).isGreaterThanOrEqualTo((int) (Files.size(csv) / (64 * 1024)));
         try (var work = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
