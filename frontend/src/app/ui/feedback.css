@@ -79,6 +79,17 @@
   color: var(--color-danger);
 }
 
+/* Issue #815: Out of stock or Only N left on the sale screen, the icon at the size of the words. */
+.stock-warning svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.cb-text .stock-warning {
+  margin-top: var(--space-1);
+}
+
 .badge-info {
   background: var(--color-accent-tint);
   color: var(--color-link);

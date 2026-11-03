@@ -16632,6 +16632,8 @@ export interface components {
              * @description Issue #384: the id of the photo of the item this size belongs to, which it shows while it has none of its own; absent when the item has none
              */
             item_photo_id?: string;
+            /** @description Issue #815: with branch_id, the quantity at or below which the item is low at that branch: the branch's own minimum, else the item's, else low_stock_threshold of the stock list (ADR-029). The sale screen says Only N left at or below it, and Out of stock at zero */
+            low_stock_level?: string;
             /** @description True when the branch balance is below zero */
             negative?: boolean;
             /** @description The pack sizes of the product; present only while the units capability is on */

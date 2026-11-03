@@ -475,6 +475,23 @@ class CatalogueRepository {
                 .optional();
     }
 
+    /**
+     * The low stock level of ADR-029 for an item with no minimum. It is the stock list's {@code low_stock_threshold}
+     * (retail.stock, which this module may not depend on); {@code RetailSaleStockWarningIT} proves the two agree.
+     */
+    static final String LOW_STOCK_DEFAULT = "10.000";
+
+    /**
+     * Issue #815: the select-list column of the level at or below which the item is low at {@code branch} (a parameter), as
+     * {@code LowStockRule.levelSql} judges it: the branch's own minimum, else the item's, else {@link #LOW_STOCK_DEFAULT}.
+     */
+    private static String lowStockLevel(String branch) {
+        return ", coalesce((SELECT m.min_qty FROM retail_stock_minimums m WHERE m.tenant_id = p.tenant_id"
+                + " AND m.product_id = p.id AND m.branch_id = " + branch + "),"
+                + " (SELECT m.min_qty FROM retail_stock_minimums m WHERE m.tenant_id = p.tenant_id"
+                + " AND m.product_id = p.id AND m.branch_id IS NULL), " + LOW_STOCK_DEFAULT + ") AS low_stock_level";
+    }
+
     /** A product with the balance of a branch, as a search row has it (issue #345, the barcode lookup). */
     Optional<Product> findAt(UUID id, UUID branchId) {
         if (branchId == null) {
@@ -482,9 +499,10 @@ class CatalogueRepository {
         }
         return jdbc.sql(
                         SELECT_PRODUCT.replace(
-                                        " FROM retail_products p", ", b.qty, b.reserved_qty FROM retail_products p")
+                                        " FROM retail_products p",
+                                        ", b.qty, b.reserved_qty" + lowStockLevel("?") + " FROM retail_products p")
                                 + " LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = ? WHERE p.id = ?")
-                .params(branchId, id)
+                .params(branchId, branchId, id)
                 .query(CatalogueRepository::productWithQty)
                 .optional();
     }
@@ -530,7 +548,9 @@ class CatalogueRepository {
         } else {
             // The balance of retail_stock_balances (the stock module's table), read for the search row.
             sql = new StringBuilder(
-                    select.replace(" FROM retail_products p", ", b.qty, b.reserved_qty FROM retail_products p")
+                    select.replace(
+                                    " FROM retail_products p",
+                                    ", b.qty, b.reserved_qty" + lowStockLevel(":branchId") + " FROM retail_products p")
                             + " LEFT JOIN retail_stock_balances b ON b.product_id = p.id AND b.branch_id = :branchId WHERE true");
             params.put("branchId", branchId);
         }
@@ -980,7 +1000,9 @@ class CatalogueRepository {
                         null)
                 .withVariant(p.variant())
                 .withPhoto(p.photoId(), p.itemPhotoId())
-                .withReserved(reserved(rs));
+                .withReserved(reserved(rs))
+                .withLowStockLevel(
+                        rs.getBigDecimal("low_stock_level").setScale(3).toPlainString());
     }
 
     /** What customer orders keep aside of the branch balance (issue #385), or null when nothing is. */

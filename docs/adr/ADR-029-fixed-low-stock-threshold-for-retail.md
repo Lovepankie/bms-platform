@@ -22,7 +22,10 @@ signal for some of them.
   `StockService.LOW_STOCK_MILLI` (10,000 thousandths from issue #830), compared with the branch balance, or in All
   branches with the total across the listed branches. A balance at or below it is low, and so is any
   balance of zero or less. The API reports the value as `low_stock_threshold` on both stock lists so
-  the screens never hard-code it.
+  the screens never hard-code it. Since issue #815 the product search with a branch also reports, per
+  item, the level that applies there as `low_stock_level` (the branch's own minimum when set, else the
+  item's minimum for every branch, else this threshold, copied as `CatalogueRepository.LOW_STOCK_DEFAULT` because the catalogue module may not
+  read the stock module; `RetailSaleStockWarningIT` fails if the two differ).
 - **A per-tenant retail settings group later.** When the settings catalogue gains a retail group, the
   threshold becomes a tenant setting with 5 as its default, and a per-product reorder level can follow.
   Changing the source of the number does not change the response shape.
