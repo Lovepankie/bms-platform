@@ -46,6 +46,11 @@ import tools.jackson.databind.ObjectMapper;
  * {@code IMPORT_IN_PROGRESS}, also in the gap between two batches, so an operator's halt can never be cleared under a
  * live loop. The lock is the loop's heartbeat: PostgreSQL drops it when the loop's connection or process dies, so a
  * crashed loop never blocks a resume, and no column is needed.
+ *
+ * <p>The loop also checks its own claim before each batch (issue #789): if the claim connection died, or its session
+ * no longer holds the loop key (an idle timeout, or a NAT or firewall that dropped the idle connection), a resume may
+ * already own the business, so the loop writes nothing more, audits {@code core.import_run.claim_lost} and ends
+ * {@code HALTED} with the run still {@code committing} and resumable.
  */
 @Service
 class ImportRunService implements ImportRuns {
@@ -58,6 +63,15 @@ class ImportRunService implements ImportRuns {
 
     /** The business's loop key, followed by the business's id: the session lock the whole commit loop holds. */
     private static final String LOOP_KEY = "core.imports.loop:";
+
+    /** True while this session holds the loop key: a bigint advisory key is split over classid and objid. */
+    private static final String CLAIM_HELD = """
+            SELECT EXISTS (SELECT 1 FROM pg_locks
+                            WHERE locktype = 'advisory' AND granted AND pid = pg_backend_pid() AND objsubid = 1
+                              AND ((classid::bigint << 32) | objid::bigint) = hashtextextended(?, 0))""";
+
+    /** Seconds the probe of the claim may take before the claim counts as lost. */
+    private static final int CLAIM_PROBE_TIMEOUT_SECONDS = 10;
 
     private static final Logger log = LoggerFactory.getLogger(ImportRunService.class);
 
@@ -280,7 +294,7 @@ class ImportRunService implements ImportRuns {
                         "The tenant already has live transactions (" + String.join(", ", trading)
                                 + "); an import needs the trading override.");
             }
-            return writeBatches(runId, writer);
+            return writeBatches(runId, writer, claim);
         }
     }
 
@@ -343,7 +357,7 @@ class ImportRunService implements ImportRuns {
                         .update();
                 audit(runId, "core.import_run.resumed", Map.of(), Map.of("halt_requested", false));
             });
-            return writeBatches(runId, writer);
+            return writeBatches(runId, writer, claim);
         }
     }
 
@@ -387,6 +401,22 @@ class ImportRunService implements ImportRuns {
             this.key = key;
         }
 
+        /**
+         * Asks the claim's own session whether it still holds the loop key. Null while it does; otherwise why the
+         * claim is lost: {@code claim_connection_lost} when the probe fails, {@code claim_not_held} when it answers no.
+         */
+        String lostReason() {
+            try (PreparedStatement probe = connection.prepareStatement(CLAIM_HELD)) {
+                probe.setQueryTimeout(CLAIM_PROBE_TIMEOUT_SECONDS);
+                probe.setString(1, key);
+                try (ResultSet rs = probe.executeQuery()) {
+                    return rs.next() && rs.getBoolean(1) ? null : "claim_not_held";
+                }
+            } catch (SQLException e) {
+                return "claim_connection_lost";
+            }
+        }
+
         @Override
         public void close() {
             try (PreparedStatement unlock =
@@ -409,7 +439,7 @@ class ImportRunService implements ImportRuns {
         }
     }
 
-    private CommitOutcome writeBatches(UUID runId, BatchWriter writer) {
+    private CommitOutcome writeBatches(UUID runId, BatchWriter writer, LoopClaim claim) {
         List<PendingBatch> pending = tx.execute(s -> jdbc.sql("""
                         SELECT id, seq FROM import_batches WHERE run_id = ? AND status = 'pending' ORDER BY seq
                         """)
@@ -417,6 +447,17 @@ class ImportRunService implements ImportRuns {
                 .query((rs, n) -> new PendingBatch(rs.getObject("id", UUID.class), rs.getInt("seq")))
                 .list());
         for (PendingBatch batch : pending) {
+            // Without the claim a resume may already own the business: write nothing more, leave the run resumable.
+            String lost = claim.lostReason();
+            if (lost != null) {
+                log.warn("import commit loop lost its claim before batch {}: {}", batch.seq(), lost);
+                tx.executeWithoutResult(s -> audit(
+                        runId,
+                        "core.import_run.claim_lost",
+                        Map.of(),
+                        Map.of("batch_seq", batch.seq(), "reason", lost)));
+                return CommitOutcome.HALTED;
+            }
             try {
                 tx.executeWithoutResult(s -> writeBatch(runId, batch, writer));
             } catch (Halted e) {

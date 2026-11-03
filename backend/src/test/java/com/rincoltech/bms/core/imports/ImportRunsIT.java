@@ -31,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -493,6 +494,54 @@ class ImportRunsIT extends IntegrationTest {
         assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
         assertThat(written).containsExactly(1, 2, 3);
         assertThat(journals()).isEqualTo(3);
+    }
+
+    @Test
+    void aLoopWhoseClaimConnectionDiesStopsBeforeTheNextBatchAndAResumeGoesOn() {
+        // JUSTIFICATION-A3: the test issue #789 asks for, the claim connection killed mid run.
+        Run run = readyRun(3);
+        List<Integer> written = new CopyOnWriteArrayList<>();
+        AtomicBoolean killed = new AtomicBoolean();
+        BatchWriter writer = (runId, batchId, seq, checkpoint) -> {
+            written.add(seq);
+            postJournal("lending");
+            if (seq == 1 && killed.compareAndSet(false, true)) {
+                // As bms_app, the role of the loop's own connections: end the session that holds the loop key.
+                List<Boolean> ended = JdbcClient.create(TestDatabase.appDataSource())
+                        .sql("""
+                                SELECT pg_terminate_backend(pid) FROM pg_locks
+                                 WHERE locktype = 'advisory' AND granted AND objsubid = 1
+                                   AND ((classid::bigint << 32) | objid::bigint)
+                                       = hashtextextended('core.imports.loop:' || ?, 0)
+                                """)
+                        .param(t.tenantId().toString())
+                        .query(Boolean.class)
+                        .list();
+                assertThat(ended).containsExactly(true);
+            }
+            return Map.of();
+        };
+
+        assertThat(as(t, () -> runs.commit(run.id(), writer))).isEqualTo(CommitOutcome.HALTED);
+        assertThat(written).as("the lost claim stopped the loop before batch 2").containsExactly(1);
+        assertThat(batchStatus(run.id(), 1)).isEqualTo("committed");
+        assertThat(batchStatus(run.id(), 2)).isEqualTo("pending");
+        assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committing");
+        assertThat(audits("core.import_run.claim_lost")).isEqualTo(1);
+        String reason = TestDatabase.owner()
+                .sql("""
+                        SELECT data -> 'after' ->> 'reason' FROM audit_log
+                         WHERE tenant_id = ? AND action = 'core.import_run.claim_lost'
+                        """)
+                .param(t.tenantId())
+                .query(String.class)
+                .single();
+        assertThat(reason).isEqualTo("claim_connection_lost");
+
+        assertThat(as(t, () -> runs.resume(run.id(), writer))).isEqualTo(CommitOutcome.COMMITTED);
+        assertThat(written).containsExactly(1, 2, 3);
+        assertThat(journals()).isEqualTo(3);
+        assertThat(as(t, () -> runs.get(run.id())).status()).isEqualTo("committed");
     }
 
     @Test

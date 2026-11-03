@@ -677,7 +677,12 @@ halted or failed). A second commit or resume of the business, on any instance, f
 `IMPORT_IN_PROGRESS`, in a batch and in the gap between two batches alike: a resume never clears a halt under a loop that
 is still alive, so a halt pressed between batches stops the loop at the next batch. The lock is the loop's heartbeat:
 PostgreSQL drops it when the loop's connection or process dies, so a crashed loop never blocks a resume, and no column or
-migration is needed. The audit of a failed batch never replaces the batch's error: when it fails too (a lost connection
+migration is needed. The loop checks its own claim before each batch (issue #789): on the claim connection it asks
+`pg_locks` whether its session still holds the loop key, with a 10 second timeout. If the probe fails
+(`claim_connection_lost`: an idle timeout, or a NAT or firewall that dropped the idle connection) or answers no
+(`claim_not_held`), a resume may already own the business, so the loop writes nothing more, audits
+`core.import_run.claim_lost` with the batch and the reason, and ends `HALTED` with the run `committing`; a resume then goes
+on from the first pending batch. The audit of a failed batch never replaces the batch's error: when it fails too (a lost connection
 fails both), its error is attached to the batch's as suppressed. It does not ask the trading guard
 again: the batches already committed are the business's records now. The override is set by one platform operator with a
 reason and approved by a different one (the CHECK `import_runs_checker_not_maker`, and `self_approval_forbidden`); both
