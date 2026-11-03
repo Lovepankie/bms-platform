@@ -12,6 +12,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -61,8 +62,10 @@ class HostnameCheckTest {
     }
 
     final Hosts hosts = new Hosts();
-    final HostnameCheck check = new HostnameCheck(hosts, new ObjectMapper(), Duration.ofSeconds(3));
+    final HostnameCheck check =
+            new HostnameCheck(hosts, new ObjectMapper(), Duration.ofSeconds(3), InetAddress::getAllByName);
     HttpServer server;
+    ExecutorService handlers;
 
     /** A server whose {@code /version} answers with this status and body. */
     void serve(int status, String contentType, String body) throws IOException {
@@ -86,6 +89,9 @@ class HostnameCheckTest {
     void stop() {
         if (server != null) {
             server.stop(0);
+        }
+        if (handlers != null) {
+            handlers.shutdownNow();
         }
     }
 
@@ -134,45 +140,105 @@ class HostnameCheckTest {
         assertThat(check.check("test-shop-one").outcome()).isEqualTo("no_answer");
     }
 
+    // JUSTIFICATION-A3: the #787 review asks for the not_found path through a resolver stub, a hanging lookup, a
+    // stalled body
+    // and an endless body, each through check(); one case per finding, sharing the slow server below.
     @Test
     void aNameWithNoDnsRecordIsNotFound() {
-        // RFC 6761: .invalid never resolves.
-        hosts.origin = "http://test-shop-one-bms-staging.invalid";
+        // The stub stands in for the resolver, so no machine's DNS (one that rewrites NXDOMAIN, say) decides the
+        // answer.
+        hosts.origin = "http://test-shop-one-bms-staging.example.test";
+        HostnameCheck noRecord = new HostnameCheck(hosts, new ObjectMapper(), Duration.ofSeconds(3), host -> {
+            throw new UnknownHostException(host);
+        });
 
-        HostnameCheck.Result result = check.check("test-shop-one");
+        HostnameCheck.Result result = noRecord.check("test-shop-one");
 
-        assertThat(result.host()).isEqualTo("test-shop-one-bms-staging.invalid");
-        assertThat(result.outcome()).isEqualTo("not_found");
+        assertThat(result)
+                .isEqualTo(new HostnameCheck.Result("test-shop-one-bms-staging.example.test", "not_found", null));
     }
 
-    // JUSTIFICATION-A3: a new test case for must-fix 1 of the #787 review, a stalled body cut off by the one deadline.
     @Test
-    void headersThenAStalledBodyIsNoAnswerWithinTheDeadline() throws IOException {
-        ExecutorService handlers = Executors.newCachedThreadPool();
-        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
-        server.setExecutor(handlers);
-        server.createContext("/", exchange -> {
-            exchange.getResponseHeaders().add("Content-Type", "application/json");
-            exchange.sendResponseHeaders(200, 1000);
-            exchange.getResponseBody().write("{\"git_sha\":".getBytes(StandardCharsets.UTF_8));
-            exchange.getResponseBody().flush();
+    void aLookupThatHangsIsNoAnswerWithinTheDeadline() {
+        hosts.origin = "http://test-shop-one-bms-staging.example.test";
+        HostnameCheck hanging = new HostnameCheck(hosts, new ObjectMapper(), Duration.ofSeconds(1), host -> {
             try {
                 Thread.sleep(30_000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+            throw new UnknownHostException(host);
+        });
+
+        long start = System.nanoTime();
+        HostnameCheck.Result result = hanging.check("test-shop-one");
+
+        assertThat(result.outcome()).isEqualTo("no_answer");
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void headersThenAStalledBodyIsNoAnswerWithinTheDeadline() throws IOException {
+        slow(exchange -> {
+            exchange.sendResponseHeaders(200, 1000);
+            exchange.getResponseBody().write("{\"git_sha\":".getBytes(StandardCharsets.UTF_8));
+            exchange.getResponseBody().flush();
+            Thread.sleep(30_000);
+        });
+
+        long start = System.nanoTime();
+        HostnameCheck.Result result = quick().check("test-shop-one");
+
+        assertThat(result.outcome()).isEqualTo("no_answer");
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void anEndlessBodyIsReadOnlyToTheLimitAndThenDropped() throws IOException {
+        byte[] page = new byte[1024];
+        java.util.Arrays.fill(page, (byte) 'x');
+        slow(exchange -> {
+            exchange.sendResponseHeaders(200, 0);
+            while (true) {
+                exchange.getResponseBody().write(page);
+                exchange.getResponseBody().flush();
+                Thread.sleep(10);
+            }
+        });
+
+        HostnameCheck.Result result = quick().check("test-shop-one");
+
+        // A body read to its end would never end: the deadline would answer no_answer. wrong_answer with the status
+        // means
+        // the check stopped after the first 4 KB and dropped the connection.
+        assertThat(result).isEqualTo(new HostnameCheck.Result("127.0.0.1", "wrong_answer", 200));
+    }
+
+    interface SlowHandler {
+        void handle(com.sun.net.httpserver.HttpExchange exchange) throws IOException, InterruptedException;
+    }
+
+    /** A server whose handler may sleep, on its own threads, shut down after each test whatever happened. */
+    void slow(SlowHandler handler) throws IOException {
+        handlers = Executors.newCachedThreadPool();
+        server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.setExecutor(handlers);
+        server.createContext("/", exchange -> {
+            try {
+                handler.handle(exchange);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (IOException e) {
+                // The client dropped the connection: expected.
+            }
         });
         server.start();
         hosts.origin = "http://127.0.0.1:" + server.getAddress().getPort();
-        HostnameCheck quick = new HostnameCheck(hosts, new ObjectMapper(), Duration.ofSeconds(1));
+    }
 
-        long start = System.nanoTime();
-        HostnameCheck.Result result = quick.check("test-shop-one");
-        Duration took = Duration.ofNanos(System.nanoTime() - start);
-
-        assertThat(result.outcome()).isEqualTo("no_answer");
-        assertThat(took).isLessThan(Duration.ofSeconds(5));
-        handlers.shutdownNow();
+    /** A check with a one second deadline and the real resolver (the loopback address needs no DNS). */
+    HostnameCheck quick() {
+        return new HostnameCheck(hosts, new ObjectMapper(), Duration.ofSeconds(1), InetAddress::getAllByName);
     }
 
     @Test

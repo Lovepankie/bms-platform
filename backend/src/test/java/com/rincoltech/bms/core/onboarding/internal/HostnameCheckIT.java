@@ -44,7 +44,10 @@ class HostnameCheckIT extends IntegrationTest {
 
         assertThat(check.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(check.getBody().path("host").asString()).isEqualTo("test-shop-155-bms-staging.rincoltech.test");
-        assertThat(check.getBody().path("outcome").asString()).isEqualTo("not_found");
+        // Live DNS decides here: the .test name never resolves, but a resolver that rewrites NXDOMAIN could answer.
+        // So this proves the wiring only, that the host the slug names was asked and did not answer. Each outcome,
+        // not_found included, is proven through check() with a resolver stub in HostnameCheckTest.
+        assertThat(check.getBody().path("outcome").asString()).isIn("not_found", "no_answer", "wrong_answer");
     }
 
     @Test
