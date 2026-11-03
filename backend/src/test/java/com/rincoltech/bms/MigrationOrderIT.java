@@ -2934,6 +2934,51 @@ class MigrationOrderIT {
         }
     }
 
+    /**
+     * V126 (issue #423, ADR-112) is expand only: an empty append-only addon_prices (nothing seeded: the price is the operator's)
+     * and two subscription marks that are false for every existing business, so no business is switched on.
+     * JUSTIFICATION-A3: a new test case; no existing case covers the add-on.
+     */
+    @Test
+    void aiAddonMigrationSeedsNoPriceAndSwitchesNobodyOn() {
+        try (PostgreSQLContainer postgres = database()) {
+            postgres.start();
+            String before = VERSIONS.get(VERSIONS.indexOf("126") - 1);
+            assertThat(flyway(postgres, before).migrate().targetSchemaVersion).isEqualTo(before);
+            JdbcClient owner = JdbcClient.create(
+                    new DriverManagerDataSource(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD));
+            UUID tenant = UUID.randomUUID();
+            owner.sql(
+                            "INSERT INTO tenants (id, slug, name, plan_id, status) VALUES (?, 'test-v126', 'Test Tenant V126',"
+                                    + " '00000000-0000-4000-8000-000000000001', 'active')")
+                    .param(tenant)
+                    .update();
+            owner.sql("INSERT INTO subscriptions (id, tenant_id, plan_id, status)"
+                            + " VALUES (?, ?, '00000000-0000-4000-8000-000000000001', 'active')")
+                    .params(UUID.randomUUID(), tenant)
+                    .update();
+
+            assertThat(DatabaseMigrator.migrate(postgres.getJdbcUrl(), "bms_owner", TestDatabase.OWNER_PASSWORD)
+                            .success)
+                    .isTrue();
+
+            assertThat(owner.sql("SELECT count(*) FROM addon_prices")
+                            .query(Long.class)
+                            .single())
+                    .isZero();
+            assertThat(owner.sql("SELECT count(*) FROM subscriptions WHERE ai_addon OR ai_addon_no_charge")
+                            .query(Long.class)
+                            .single())
+                    .as("no business is switched on")
+                    .isZero();
+            assertThat(owner.sql("SELECT privilege_type FROM information_schema.role_table_grants"
+                                    + " WHERE table_name = 'addon_prices' AND grantee = 'bms_app'")
+                            .query(String.class)
+                            .list())
+                    .containsExactly("SELECT");
+        }
+    }
+
     private static PostgreSQLContainer database() {
         // Shared rootless Docker on the runners can hand out a host port another job just took.
         return new PostgreSQLContainer("postgres:16-alpine")

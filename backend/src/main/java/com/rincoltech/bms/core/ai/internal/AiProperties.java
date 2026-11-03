@@ -112,12 +112,26 @@ record AiProperties(
         return value;
     }
 
+    /** {@code BMS_AI_ENABLED_TENANTS=off}: the platform's kill switch, no business may use the assistant (issue #423). */
+    boolean killSwitch() {
+        return enabledTenants.strip().equalsIgnoreCase(OFF);
+    }
+
+    /** {@code BMS_AI_ENABLED_TENANTS=*}: every business may use it, add-on or not; for a demo host only (issue #423). */
+    boolean allowAll() {
+        return enabledTenants.strip().equals("*");
+    }
+
     /**
-     * The tenant ids on the platform allow-list. Ids only, never slugs: a slug is a name an administrator
+     * The tenant ids on the platform allow-list, kept beside the add-on (issue #423) so a host that named businesses before it
+     * keeps them. Ids only, never slugs: a slug is a name an administrator
      * can choose and an id is not. An entry that is not a UUID is ignored (it names nobody), so a typo
      * can only make the list shorter.
      */
     Set<UUID> allowedTenants() {
+        if (killSwitch() || allowAll()) {
+            return Set.of();
+        }
         return Arrays.stream(enabledTenants.split(","))
                 .map(String::strip)
                 .filter(e -> e.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))

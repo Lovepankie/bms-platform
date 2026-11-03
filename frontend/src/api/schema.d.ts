@@ -3120,6 +3120,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/addons/ai_assistant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The AI assistant add-on with its price history (issue #423) */
+        get: operations["platformGetAiAddon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/addons/ai_assistant/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the AI assistant add-on's monthly price from a date; the price already in force on that date again changes nothing */
+        post: operations["platformAddAiAddonPrice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/applications": {
         parameters: {
             query?: never;
@@ -4018,6 +4052,23 @@ export interface paths {
         /** One tenant */
         get: operations["platformGetTenant"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_id}/ai-addon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Switch the AI assistant add-on on or off for a business, charged or not, with a reason; the same state again changes nothing */
+        put: operations["platformSetTenantAiAddon"];
         post?: never;
         delete?: never;
         options?: never;
@@ -8262,6 +8313,21 @@ export interface components {
             tenant_id?: string;
             tenant_slug?: string;
         };
+        AddAddonPriceRequest: {
+            /** @description True when the operator checked a monthly price more than 25% away from the one in force (422 price_change_unusual otherwise) */
+            confirm_large_change?: boolean;
+            /** @description Default UGX */
+            currency?: string;
+            /**
+             * Format: date
+             * @description Default today; never before today, so a price never changes the past
+             */
+            effective_from?: string;
+            /** Format: int64 */
+            monthly_minor: number;
+            /** @description Why, kept with the price and in the audit log */
+            reason: string;
+        };
         AddPlanPriceRequest: {
             /** Format: int32 */
             annual_months: number;
@@ -8301,6 +8367,36 @@ export interface components {
             /** @description Required (3 to 200 characters, kept in the audit row) when this narrows a number from all to reminders; ignored otherwise */
             reason?: string;
             scope: string;
+        };
+        /** @description The add-on, its price in force today and every price it has had */
+        AddonDetail: {
+            code?: string;
+            name?: string;
+            price_today?: components["schemas"]["AddonPrice"];
+            /** @description Every price, newest first */
+            prices?: components["schemas"]["AddonPrice"][];
+            /**
+             * Format: int64
+             * @description Businesses that have the add-on on
+             */
+            tenants_on?: number;
+        };
+        /** @description Every price, newest first */
+        AddonPrice: {
+            /** Format: date-time */
+            created_at?: string;
+            created_by_name?: string;
+            currency?: string;
+            /** Format: date */
+            effective_from?: string;
+            /** Format: uuid */
+            id?: string;
+            /**
+             * Format: int64
+             * @description The monthly price in minor units (whole shillings for UGX)
+             */
+            monthly_minor?: number;
+            reason?: string;
         };
         /** @description The text to show before switching on, and its version */
         AdvisorAcknowledgement: {
@@ -8351,7 +8447,7 @@ export interface components {
             acknowledged_by?: string;
             acknowledged_text_version?: string;
             acknowledgement?: components["schemas"]["AdvisorAcknowledgement"];
-            /** @description The tenant is named in BMS_AI_ENABLED_TENANTS; switching on is refused otherwise */
+            /** @description The operator switched the AI assistant add-on on for the business (ADR-112); switching on is refused otherwise */
             allowed?: boolean;
             cost_currency?: string;
             /** Format: int64 */
@@ -8911,6 +9007,7 @@ export interface components {
         };
         BusinessDetail: {
             admins?: components["schemas"]["TenantAdmin"][];
+            ai_addon?: components["schemas"]["TenantAddon"];
             /** @description Newest first, at most 50 */
             history?: components["schemas"]["TenantHistoryEntry"][];
             /** @description Newest first, at most 50; sent messages are purged after a while */
@@ -20336,6 +20433,28 @@ export interface components {
             reason: string;
             status: string;
         };
+        /** @description The AI assistant add-on on one business */
+        TenantAddon: {
+            /** @description It adds to what the business owes: on, not no charge, not a pilot (nothing is charged in the free month) */
+            charged?: boolean;
+            code?: string;
+            /**
+             * Format: int64
+             * @description The add-on's monthly price today, or null when none was entered
+             */
+            monthly_minor?: number;
+            /** @description On without charge: a demo or a pilot */
+            no_charge?: boolean;
+            /** @description The operator switched it on: the business may use the assistant */
+            on?: boolean;
+        };
+        TenantAddonRequest: {
+            /** @description On without charge (a demo or a pilot); ignored when switching off */
+            no_charge?: boolean;
+            on: boolean;
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+        };
         TenantAdmin: {
             /** Format: date-time */
             created_at?: string;
@@ -26475,6 +26594,50 @@ export interface operations {
             };
         };
     };
+    platformGetAiAddon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddonDetail"];
+                };
+            };
+        };
+    };
+    platformAddAiAddonPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAddonPriceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddonDetail"];
+                };
+            };
+        };
+    };
     platformListApplications: {
         parameters: {
             query?: {
@@ -27796,6 +27959,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformTenant"];
+                };
+            };
+        };
+    };
+    platformSetTenantAiAddon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantAddonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantAddon"];
                 };
             };
         };

@@ -60,7 +60,9 @@ final class AdvisorApi {
     record SettingsView(
             boolean enabled,
 
-            @Schema(description = "The tenant is named in BMS_AI_ENABLED_TENANTS; switching on is refused otherwise")
+            @Schema(
+                    description =
+                            "The operator switched the AI assistant add-on on for the business (ADR-112); switching on is refused otherwise")
             boolean allowed,
 
             @Schema(

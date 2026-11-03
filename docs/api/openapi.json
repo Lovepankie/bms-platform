@@ -90,6 +90,37 @@
           }
         }
       },
+      "AddAddonPriceRequest" : {
+        "properties" : {
+          "confirm_large_change" : {
+            "description" : "True when the operator checked a monthly price more than 25% away from the one in force (422 price_change_unusual otherwise)",
+            "type" : "boolean"
+          },
+          "currency" : {
+            "description" : "Default UGX",
+            "pattern" : "^[A-Z]{3}$",
+            "type" : "string"
+          },
+          "effective_from" : {
+            "description" : "Default today; never before today, so a price never changes the past",
+            "format" : "date",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "format" : "int64",
+            "maximum" : 50000000,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "reason" : {
+            "description" : "Why, kept with the price and in the audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "monthly_minor", "reason" ]
+      },
       "AddPlanPriceRequest" : {
         "properties" : {
           "annual_months" : {
@@ -194,6 +225,63 @@
           }
         },
         "required" : [ "phone", "scope" ]
+      },
+      "AddonDetail" : {
+        "description" : "The add-on, its price in force today and every price it has had",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "price_today" : {
+            "$ref" : "#/components/schemas/AddonPrice"
+          },
+          "prices" : {
+            "description" : "Every price, newest first",
+            "items" : {
+              "$ref" : "#/components/schemas/AddonPrice"
+            },
+            "type" : "array"
+          },
+          "tenants_on" : {
+            "description" : "Businesses that have the add-on on",
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }
+      },
+      "AddonPrice" : {
+        "description" : "Every price, newest first",
+        "properties" : {
+          "created_at" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "created_by_name" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "effective_from" : {
+            "format" : "date",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "description" : "The monthly price in minor units (whole shillings for UGX)",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
       },
       "AdvisorAcknowledgement" : {
         "description" : "The text to show before switching on, and its version",
@@ -303,7 +391,7 @@
             "$ref" : "#/components/schemas/AdvisorAcknowledgement"
           },
           "allowed" : {
-            "description" : "The tenant is named in BMS_AI_ENABLED_TENANTS; switching on is refused otherwise",
+            "description" : "The operator switched the AI assistant add-on on for the business (ADR-112); switching on is refused otherwise",
             "type" : "boolean"
           },
           "cost_currency" : {
@@ -1503,6 +1591,9 @@
               "$ref" : "#/components/schemas/TenantAdmin"
             },
             "type" : "array"
+          },
+          "ai_addon" : {
+            "$ref" : "#/components/schemas/TenantAddon"
           },
           "history" : {
             "description" : "Newest first, at most 50",
@@ -24747,6 +24838,49 @@
         },
         "required" : [ "reason", "status" ]
       },
+      "TenantAddon" : {
+        "description" : "The AI assistant add-on on one business",
+        "properties" : {
+          "charged" : {
+            "description" : "It adds to what the business owes: on, not no charge, not a pilot (nothing is charged in the free month)",
+            "type" : "boolean"
+          },
+          "code" : {
+            "type" : "string"
+          },
+          "monthly_minor" : {
+            "description" : "The add-on's monthly price today, or null when none was entered",
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "no_charge" : {
+            "description" : "On without charge: a demo or a pilot",
+            "type" : "boolean"
+          },
+          "on" : {
+            "description" : "The operator switched it on: the business may use the assistant",
+            "type" : "boolean"
+          }
+        }
+      },
+      "TenantAddonRequest" : {
+        "properties" : {
+          "no_charge" : {
+            "description" : "On without charge (a demo or a pilot); ignored when switching off",
+            "type" : "boolean"
+          },
+          "on" : {
+            "type" : "boolean"
+          },
+          "reason" : {
+            "description" : "Why; kept in the platform audit log",
+            "maxLength" : 300,
+            "minLength" : 5,
+            "type" : "string"
+          }
+        },
+        "required" : [ "on", "reason" ]
+      },
       "TenantAdmin" : {
         "properties" : {
           "created_at" : {
@@ -34115,6 +34249,54 @@
         "tags" : [ "plan" ]
       }
     },
+    "/api/v1/platform/addons/ai_assistant" : {
+      "get" : {
+        "operationId" : "platformGetAiAddon",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddonDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "The AI assistant add-on with its price history (issue #423)",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/addons/ai_assistant/prices" : {
+      "post" : {
+        "operationId" : "platformAddAiAddonPrice",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AddAddonPriceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AddonDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Set the AI assistant add-on's monthly price from a date; the price already in force on that date again changes nothing",
+        "tags" : [ "platform" ]
+      }
+    },
     "/api/v1/platform/applications" : {
       "get" : {
         "operationId" : "platformListApplications",
@@ -35844,6 +36026,44 @@
           }
         },
         "summary" : "One tenant",
+        "tags" : [ "platform" ]
+      }
+    },
+    "/api/v1/platform/tenants/{tenant_id}/ai-addon" : {
+      "put" : {
+        "operationId" : "platformSetTenantAiAddon",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "tenant_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TenantAddonRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TenantAddon"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Switch the AI assistant add-on on or off for a business, charged or not, with a reason; the same state again changes nothing",
         "tags" : [ "platform" ]
       }
     },

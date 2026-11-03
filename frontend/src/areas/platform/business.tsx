@@ -54,7 +54,9 @@ import {
   statusLabel,
   subscriptionLine,
   todayInKampala,
+  withAddon,
 } from './operator-state';
+import { AddonSection } from './addon';
 
 // The Business page (issue #407): one tenant's details and owner, its modules, its subscription (status, plan, free month and paid
 // until), suspend and resume with a reason, a payment received, the owner's sign-in rescue (a one-time reset link, or a lost
@@ -400,7 +402,7 @@ export function BusinessScreen({ tenantId }: { tenantId: string }) {
   }
 
   function startPayment() {
-    changePayment(paymentFormFor(detail?.plan_price, today));
+    changePayment(paymentFormFor(withAddon(detail?.plan_price, detail?.ai_addon), today));
     setProblems({});
     setDone(null);
     setOpen({ kind: 'payment', reviewing: false });
@@ -590,7 +592,7 @@ export function BusinessScreen({ tenantId }: { tenantId: string }) {
                 onChange={changePayment}
                 onReview={reviewPayment}
                 onCancel={close}
-                expected={(months) => expectedAmount(detail.plan_price, months)}
+                expected={(months) => expectedAmount(withAddon(detail.plan_price, detail.ai_addon), months)}
               />
             )}
             {open.kind === 'payment' && payment && open.reviewing && (
@@ -723,6 +725,8 @@ export function BusinessScreen({ tenantId }: { tenantId: string }) {
               />
             )}
           </section>
+
+          <AddonSection tenantId={tenantId} detail={detail} />
 
           <section aria-labelledby="biz-modules-heading" data-tour="biz-modules">
             <h2 id="biz-modules-heading">Modules</h2>

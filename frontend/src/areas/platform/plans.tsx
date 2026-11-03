@@ -5,6 +5,7 @@ import { addPlanPrice, listPricePlans, OperatorError, type Plan, savePlan } from
 import { Breadcrumbs } from '../../components/breadcrumbs';
 import { parseMinor } from '../../components/money';
 import { ConfirmPanel, TourButton } from './operator-parts';
+import { AddonPriceSection } from './addon';
 import {
   EMPTY_PLAN,
   formatDay,
@@ -437,6 +438,7 @@ export function PlansScreen() {
           {warningBox}
         </ConfirmPanel>
       )}
+      <AddonPriceSection />
     </main>
   );
 }

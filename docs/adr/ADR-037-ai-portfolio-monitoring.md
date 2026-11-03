@@ -292,6 +292,12 @@ of its text (no digit, no claim about a figure), and a new fact family must be b
 
 **Better:** the card always has something true to show, and the all-branches brief cannot reach a user who may not see every branch. **Worse:** a paid failure at the morning run stores the automatic summary for the day (the day is not retried), the acknowledgement is a recorded click (the client echoes the public text version and the server stores it with a digest of the wording shown; it is not proof of what was on a screen), and the stored text names branches and products as they were that morning. **Watch for:** the scope check is per permission, so a new role that holds all officers with a partial branch scope must stay out of the stored brief.
 
+## Amendment of 2026-11-02 (issue #423): decision 7, the add-on
+
+The platform allow-list of decision 7 is now the AI assistant add-on, switched on per business by the operator with a reason and
+charged on what the business owes (ADR-112). `BMS_AI_ENABLED_TENANTS` stays as the platform's kill switch (`off`) and a demo
+host's allow-all (`*`); ids named in it are still let in. The business's own switch, acknowledgement and caps are unchanged.
+
 ## Amendment of 2026-11-02 (issue #422): the retail brief
 
 **Context.** Shops and wholesale businesses (the retail module, ADR-020) asked for the same morning brief. The question was whether

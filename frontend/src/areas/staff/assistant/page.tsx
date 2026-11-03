@@ -40,7 +40,7 @@ export function AssistantSwitch({ saved, canManage, busy, error, onChange }: {
           ? 'A summary of your business figures is made each morning. It only advises and changes nothing.'
           : 'Off. No figure leaves your business, and the brief shows the automatic summary.'}
       </p>
-      {!saved.allowed && <p role="note" className="alert alert-info">The platform has not opened the assistant for your business yet. Ask the platform operator.</p>}
+      {!saved.allowed && <p role="note" className="alert alert-info">The AI assistant is an add-on to your plan. The platform has not opened it for your business yet. Ask the platform operator to switch it on.</p>}
       {saved.allowed && !saved.provider_configured && <p role="note" className="alert alert-info">No provider is set up on the platform, so the automatic summary is shown.</p>}
       {saved.enabled && saved.acknowledged_at && (
         <p className="hint">Switched on after the notice was accepted on <When iso={saved.acknowledged_at} />.</p>
