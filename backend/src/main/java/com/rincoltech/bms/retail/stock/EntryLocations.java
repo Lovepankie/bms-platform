@@ -3,7 +3,6 @@ package com.rincoltech.bms.retail.stock;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 
 /**
@@ -28,23 +27,25 @@ public interface EntryLocations {
                     "ADR-122: where the phone was when the entry was made, as the phone reported it. Optional; never"
                             + " returned, only the distance from the shop to holders of retail.entry_location.read")
     record Fix(
-            @NotNull @DecimalMin("-90") @DecimalMax("90") @Schema(description = "Degrees north", example = "0.3136")
+            @DecimalMin("-90") @DecimalMax("90") @Schema(description = "Degrees north", example = "0.3136")
             Double latitude,
 
-            @NotNull @DecimalMin("-180") @DecimalMax("180") @Schema(description = "Degrees east", example = "32.5811")
+            @DecimalMin("-180") @DecimalMax("180") @Schema(description = "Degrees east", example = "32.5811")
             Double longitude,
 
-            @NotNull
             @DecimalMin("0")
             @DecimalMax("1000000")
             @Schema(description = "Metres, as the phone reports it", example = "15")
             Double accuracyM) {
 
-        /** The same checks as the annotations, for a caller that did not validate the body. */
+        /** All three values are there; an entry with an incomplete location is recorded as having none, never refused. */
+        public boolean complete() {
+            return latitude != null && longitude != null && accuracyM != null;
+        }
+
+        /** Complete and in range: the same checks as the annotations, for a caller that did not validate the body. */
         public boolean valid() {
-            return latitude != null
-                    && longitude != null
-                    && accuracyM != null
+            return complete()
                     && Double.isFinite(latitude)
                     && Double.isFinite(longitude)
                     && Double.isFinite(accuracyM)
@@ -58,8 +59,9 @@ public interface EntryLocations {
     }
 
     /**
-     * Keeps where an entry was made, in the caller's transaction. Does nothing when {@code fix} is null. A fix that fails
-     * {@link Fix#valid()} is refused with 422 {@code invalid_location}; a body validated at the controller never gets here.
+     * Keeps where an entry was made, in the caller's transaction. Does nothing when {@code fix} is null or incomplete (the
+     * entry has no location). A complete fix out of range is refused with 422 {@code invalid_location}; a body validated at
+     * the controller never gets here.
      */
     void record(String source, UUID sourceId, UUID branchId, Fix fix);
 }

@@ -1404,7 +1404,7 @@ Accepted (this list is the ADR index):
   in the retail settings group, on unless switched off; the Switch to button of #728 is gone (no migration)
 - ADR-122 Where each sale and usage entry is made (#826, asked for by the owner, as the old app did): an optional phone
   location and accuracy on every sale (online and offline) and usage or damage entry, never refused without one; an optional
-  location per shop set by the owner; the owner alone (`retail.entry_location.read`) reads the distance from the shop in
+  location per shop set by the owner; the owner and administrators (`retail.entry_location.read`) read the distance from the shop in
   words, never the coordinates; the phone asks once; never logged, audited or hashed; migration `V132`
 - ADR-121 One page per item with each shop's stock and every movement of it (Proposed, #813): the movements are the ledger
   read with a running balance per shop from a window sum, one query per page; quantities to every stock reader, buying

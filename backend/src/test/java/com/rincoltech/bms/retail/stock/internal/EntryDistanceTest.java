@@ -28,8 +28,9 @@ class EntryDistanceTest {
 
     @Test
     void metresUnderAKilometreToTheNearestTen() {
-        assertThat(said(0)).isEqualTo("10 m from the shop");
-        assertThat(said(4)).isEqualTo("10 m from the shop");
+        assertThat(said(0)).isEqualTo("at the shop");
+        assertThat(said(9.9)).isEqualTo("at the shop");
+        assertThat(said(10)).isEqualTo("10 m from the shop");
         assertThat(said(44)).isEqualTo("40 m from the shop");
         assertThat(said(40.03)).isEqualTo("40 m from the shop");
         assertThat(said(994)).isEqualTo("990 m from the shop");
@@ -56,5 +57,8 @@ class EntryDistanceTest {
         assertThat(new Fix(Double.NaN, 0.0, 1.0).valid()).isFalse();
         assertThat(new Fix(0.0, 0.0, Double.POSITIVE_INFINITY).valid()).isFalse();
         assertThat(new Fix(null, 0.0, 1.0).valid()).isFalse();
+        assertThat(new Fix(null, 0.0, 1.0).complete()).isFalse();
+        assertThat(new Fix(0.0, 0.0, null).complete()).isFalse();
+        assertThat(new Fix(91.0, 0.0, 1.0).complete()).isTrue();
     }
 }

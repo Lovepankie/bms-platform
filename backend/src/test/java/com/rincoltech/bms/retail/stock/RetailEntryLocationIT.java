@@ -16,8 +16,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +31,7 @@ import tools.jackson.databind.JsonNode;
  * said; nothing is refused without it; the owner reads the distance from the shop in plain words, never the coordinates; a
  * seller reads nothing; one business never sees another's. Every place and figure is fabricated.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class RetailEntryLocationIT extends IntegrationTest {
 
     /** The owner: the retail admin column with Business set-up and the new permission. */
@@ -188,7 +192,7 @@ class RetailEntryLocationIT extends IntegrationTest {
     }
 
     @Test
-    void anEntryAtABranchOutsideTheOwnersScopeIsLeftOut() {
+    void anEntryAtABranchOutsideTheOwnersScopeReadsNoLocation() {
         setShop();
         String id = sell(sale(fix(NEAR_LAT, SHOP_LNG, 12)));
         ResponseEntity<JsonNode> r = owner.call(
@@ -199,7 +203,27 @@ class RetailEntryLocationIT extends IntegrationTest {
                 t.secondBranch().toString(),
                 Map.of());
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(r.getBody().get("items")).isEmpty();
+        // The same answer as no such entry, so the id tells nothing (review of #834).
+        assertThat(r.getBody().get("items").get(0).get("state").asString()).isEqualTo("no_location");
+        assertThat(r.getBody().get("items").get(0).has("distance_m")).isFalse();
+    }
+
+    // JUSTIFICATION-A3: two cases the review of #834 asks for; tests, not a mechanism.
+    @Test
+    void anIncompleteLocationIsNoLocationAndTheOwnerRoleHoldsTheRead() {
+        Map<String, Object> half = new LinkedHashMap<>();
+        half.put("latitude", NEAR_LAT);
+        half.put("longitude", SHOP_LNG);
+        String id = sell(sale(half));
+        assertThat(distance(owner, OWNER, "sale", id).get(0).get("state").asString())
+                .isEqualTo("no_location");
+        // The Owner of a business always holds tenant_admin (V79), which V132 grants the read; no selling role has it.
+        assertThat(TestDatabase.owner()
+                        .sql(
+                                "SELECT role_key FROM role_permissions WHERE permission_key = 'retail.entry_location.read'")
+                        .query(String.class)
+                        .list())
+                .containsExactly("tenant_admin");
     }
 
     @Test
@@ -294,7 +318,7 @@ class RetailEntryLocationIT extends IntegrationTest {
     }
 
     @Test
-    void aLocationOutOfRangeIsRefusedAndNoneIsNeverRefused() {
+    void aLocationOutOfRangeIsRefusedAndNoneIsNeverRefused(CapturedOutput output) {
         Map<String, Object> north = sale(fix(91, SHOP_LNG, 5));
         ResponseEntity<JsonNode> r =
                 seller.postKeyed("/sales", north, SALES, "*", UUID.randomUUID().toString());
@@ -318,6 +342,11 @@ class RetailEntryLocationIT extends IntegrationTest {
                         .getStatusCode())
                 .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         sell(sale(null));
+        // NFR-SEC-03: a refused location is never written to the log, rejected value or not.
+        assertThat(output.getAll())
+                .doesNotContain("32.5811")
+                .doesNotContain("0.3136")
+                .doesNotContain("181.0");
     }
 
     @Test

@@ -24,7 +24,11 @@ class EntryLocationErasure implements PersonalDataEraser {
 
     @Override
     public int erase() {
-        return jdbc.sql("DELETE FROM retail_entry_locations").update()
-                + jdbc.sql("DELETE FROM retail_shop_locations").update();
+        // The tenant predicate as well as row-level security, so a run bound wrongly or as the owner never reaches
+        // another business.
+        return jdbc.sql("DELETE FROM retail_entry_locations WHERE tenant_id = current_setting('app.tenant_id')::uuid")
+                        .update()
+                + jdbc.sql("DELETE FROM retail_shop_locations WHERE tenant_id = current_setting('app.tenant_id')::uuid")
+                        .update();
     }
 }

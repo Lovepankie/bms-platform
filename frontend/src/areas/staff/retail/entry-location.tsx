@@ -15,7 +15,7 @@ const ANSWER_KEY = 'bms.entry-location';
 export const FRESH_MS = 120_000;
 
 /** The reason the phone gives before the browser asks, in plain words. */
-export const ASK_REASON = 'The owner asks the app to note where each sale is made, so a sale can be checked later. It is never shown to other staff.';
+export const ASK_REASON = 'The owner asks the app to note where each sale is made, so a sale can be checked later. Only the owner and the business administrators see it.';
 
 type Answer = 'yes' | 'no' | null;
 
@@ -174,7 +174,7 @@ export function ShopLocationsCard() {
       <legend>Shop locations</legend>
       <Hint>
         Stand inside the shop and tap Use where I am now. Each sale and each used or damaged entry then shows you how far from the shop
-        it was made. Only you see it.
+        it was made. Only you and the business administrators see it.
       </Hint>
       {shops.isPending && <p className="loading">Loading</p>}
       <ul style={{ listStyle: 'none', padding: 0 }}>

@@ -50,7 +50,8 @@ class EntryLocationService implements EntryLocations {
 
     @Override
     public void record(String source, UUID sourceId, UUID branchId, Fix fix) {
-        if (fix == null) {
+        // An incomplete location is no location: the entry is never refused for it (ADR-122 decision 2).
+        if (fix == null || !fix.complete()) {
             return;
         }
         requireValid(fix, "location");
@@ -74,8 +75,8 @@ class EntryLocationService implements EntryLocations {
 
     /**
      * The distances of these entries of one kind, in the order asked. An entry with no location, or no such entry, reads
-     * no_location (the two are the same answer, so nothing is learnt about an id); an entry with a location at a branch
-     * outside the caller's scope of {@link #READ} is left out.
+     * no_location, and so does an entry with a location at a branch outside the caller's scope of {@link #READ}: the three
+     * are the same answer, so nothing is learnt about an id.
      */
     @Transactional(readOnly = true)
     List<Distance> distances(String source, List<UUID> ids) {
@@ -95,7 +96,6 @@ class EntryLocationService implements EntryLocations {
                         UUID id = rs.getObject("source_id", UUID.class);
                         UUID branch = rs.getObject("branch_id", UUID.class);
                         if (!principal.may(READ, branch)) {
-                            found.put(id, null);
                             return 0;
                         }
                         long accuracy =
@@ -118,11 +118,7 @@ class EntryLocationService implements EntryLocations {
         }
         List<Distance> out = new ArrayList<>();
         for (UUID id : ids) {
-            if (!found.containsKey(id)) {
-                out.add(new Distance(id, "no_location", null, null, "no location"));
-            } else if (found.get(id) != null) {
-                out.add(found.get(id));
-            }
+            out.add(found.getOrDefault(id, new Distance(id, "no_location", null, null, "no location")));
         }
         return out;
     }
@@ -258,12 +254,15 @@ class EntryLocationService implements EntryLocations {
     }
 
     /**
-     * A distance rounded as people say it: under a kilometre to the nearest 10 m (at least 10 m, since a phone is rarely
-     * surer than that); from 1 km to under 100 km to the nearest 100 m; further, to the nearest kilometre.
+     * A distance rounded as people say it: under 10 m is 0 (at the shop); under a kilometre to the nearest 10 m; from 1 km to
+     * under 100 km to the nearest 100 m; further, to the nearest kilometre.
      */
     static long rounded(double metres) {
+        if (metres < 10) {
+            return 0;
+        }
         if (metres < 995) {
-            return Math.max(10, Math.round(metres / 10) * 10);
+            return Math.round(metres / 10) * 10;
         }
         if (metres < 99_950) {
             return Math.round(metres / 100) * 100;
@@ -271,8 +270,11 @@ class EntryLocationService implements EntryLocations {
         return Math.round(metres / 1000) * 1000;
     }
 
-    /** "40 m from the shop", "3.2 km from the shop", "1 km from the shop", "250 km from the shop". */
+    /** "at the shop", "40 m from the shop", "3.2 km from the shop", "1 km from the shop", "250 km from the shop". */
     static String words(long rounded) {
+        if (rounded == 0) {
+            return "at the shop";
+        }
         if (rounded < 1000) {
             return rounded + " m from the shop";
         }
