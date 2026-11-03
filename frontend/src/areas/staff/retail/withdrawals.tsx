@@ -27,7 +27,7 @@ export function WithdrawalForm({ branchId, onSaved }: { branchId: string; onSave
   // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => retail.createWithdrawal({ branch_id: branchId, business_date: draft.date, amount_minor: minor ?? 0, ...(draft.purpose.trim() ? { purpose: draft.purpose.trim() } : {}) }, key),
-    meta: { success: 'Withdrawal saved' },
+    meta: { success: (saved: Withdrawal) => `Withdrawal of ${money(saved?.amount_minor ?? minor ?? 0)} saved` },
     onSuccess: (saved) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });

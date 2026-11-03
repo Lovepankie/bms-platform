@@ -65,13 +65,13 @@ function writeOff() {
 }
 
 describe('the sale and the write off say it in a toast (#824)', () => {
-  it('a sale says Sale saved beside its receipt', async () => {
+  it('a sale says Sale of its total saved beside its receipt', async () => {
     api.createSale.mockResolvedValue(sold);
     screenOf(seller, <RecordSale />);
     await pickItem('Test Bulb 9W');
     fireEvent.click(screen.getByRole('button', { name: /^Record sale/ }));
     expect(await screen.findByLabelText('Sale receipt')).toBeTruthy();
-    await waitFor(() => expect(successToasts()).toEqual(['Sale saved']));
+    await waitFor(() => expect(successToasts()).toEqual(['Sale of UGX 6,000 saved']));
   });
 
   it('a write off that went through says Debt written off', async () => {
