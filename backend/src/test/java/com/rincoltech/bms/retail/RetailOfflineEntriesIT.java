@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
@@ -212,5 +214,63 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                     cb.api.postKeyed(path, b, ALL, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         });
+    }
+
+    // JUSTIFICATION-A3: the review of #839 asks for the age bound and the approval of an offline expense to be proven.
+    /** Review of #839: occurred_at comes from the phone, so an entry made more than 7 days ago is refused, never backdated. */
+    @Test
+    void anEntryKeptOfflineForMoreThanSevenDaysIsRefusedAndRecordsNothing() {
+        Instant tooOld = Instant.now().minus(Duration.ofDays(8));
+        bodies(tooOld, tooOld).forEach((path, body) -> {
+            ResponseEntity<JsonNode> r = cb.api.postKeyed(
+                    path, body.get(), ALL, "*", UUID.randomUUID().toString());
+            assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(r.getBody().toString()).as(path).contains("offline_entry_too_old");
+        });
+        assertThat(TestDatabase.owner()
+                        .sql("SELECT count(*) FROM retail_expenses WHERE tenant_id = ?")
+                        .param(t.tenantId())
+                        .query(Long.class)
+                        .single())
+                .isZero();
+    }
+
+    /** Review of #839: an offline expense that waits for approval keeps the day it was made, however late it is approved. */
+    @Test
+    void anOfflineExpenseThatWaitsForApprovalKeepsTheDayItWasMade() {
+        TestDatabase.owner()
+                .sql("INSERT INTO tenant_settings (id, tenant_id) VALUES (?, ?) ON CONFLICT (tenant_id) DO NOTHING")
+                .params(UUID.randomUUID(), t.tenantId())
+                .update();
+        TestDatabase.owner().sql("""
+                        UPDATE tenant_settings SET settings = settings
+                               || jsonb_build_object('approval_switches', jsonb_build_object('retail_expense', true))
+                               || jsonb_build_object('approval_thresholds_minor', jsonb_build_object('retail_expense', 1000))
+                         WHERE tenant_id = ?
+                        """).param(t.tenantId()).update();
+        ResponseEntity<JsonNode> asked = cb.api.postKeyed(
+                "/expenses",
+                bodies(madeYesterday(), null).get("/expenses").get(),
+                ALL,
+                "*",
+                UUID.randomUUID().toString());
+        assertThat(asked.getStatusCode()).as("%s", asked.getBody()).isEqualTo(HttpStatus.ACCEPTED);
+        RetailTestSupport checker = new RetailTestSupport(http, t);
+        ResponseEntity<JsonNode> done = http.exchange(
+                "/api/v1/approvals/" + asked.getBody().get("approval_id").asString() + "/approve",
+                HttpMethod.POST,
+                new HttpEntity<>(
+                        Map.of("note", "Checked"),
+                        checker.headers("core.settings.manage,core.approvals.read", "*", Map.of())),
+                JsonNode.class);
+        assertThat(done.getStatusCode()).as("%s", done.getBody()).isEqualTo(HttpStatus.OK);
+        LocalDate dated = TestDatabase.owner()
+                .sql("SELECT business_date FROM retail_expenses WHERE tenant_id = ? AND id = ?")
+                .params(
+                        t.tenantId(),
+                        UUID.fromString(done.getBody().get("subject_id").asString()))
+                .query(LocalDate.class)
+                .single();
+        assertThat(dated).isEqualTo(yesterday);
     }
 }

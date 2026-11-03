@@ -1,11 +1,14 @@
 package com.rincoltech.bms.retail.stock;
 
+import com.rincoltech.bms.kernel.ApiException;
+import com.rincoltech.bms.kernel.ApiException.FieldProblem;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 
 /**
  * An entry kept on the phone while it had no network and sent later (issue #812, ADR-067 decision 13): an expense, savings,
@@ -19,7 +22,8 @@ import java.time.ZoneId;
         name = "RetailOfflineEntry",
         description =
                 "Sent only by an entry kept on the phone while offline (ADR-067 decision 13): it is dated by when it"
-                        + " was made, and a date field sent with it is not used")
+                        + " was made, and a date field sent with it is not used; one made more than 7 days ago is refused"
+                        + " (422 offline_entry_too_old)")
 public record OfflineEntry(
         @NotNull
         @Schema(description = "When the entry was made on the phone", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -31,8 +35,22 @@ public record OfflineEntry(
     /** How far before {@code online_as_of} an entry may say it was made and still be dated as it says. */
     public static final Duration CLOCK_BEHIND_SKEW = Duration.ofMinutes(2);
 
-    /** When the entry counts as made: as it says, or now when the phone clock was ahead or behind. */
+    /**
+     * The oldest an entry kept offline may be (review of #839): {@code occurred_at} is sent by the phone, so without a bound
+     * any member of staff could date an entry into a closed, banked day with one field. Older is refused (422
+     * {@code offline_entry_too_old}); its maker fixes it on the phone and saves it as an entry of today.
+     */
+    public static final Duration MAX_AGE = Duration.ofDays(7);
+
+    /** When the entry counts as made: as it says, or now when the phone clock was ahead or behind; refused when too old. */
     public Instant judged(Instant now) {
+        if (occurredAt.isBefore(now.minus(MAX_AGE))) {
+            throw ApiException.validation(List.of(new FieldProblem(
+                    "offline.occurred_at",
+                    "offline_entry_too_old",
+                    "This entry was kept on the phone for more than 7 days. Fix it on the phone to save it as an entry"
+                            + " of today.")));
+        }
         // A phone clock ahead of the server cannot say it was online in the future: now at the latest.
         Instant asOf = onlineAsOf == null ? null : onlineAsOf.isAfter(now) ? now : onlineAsOf;
         if (asOf != null && occurredAt.isBefore(asOf.minus(CLOCK_BEHIND_SKEW))) {

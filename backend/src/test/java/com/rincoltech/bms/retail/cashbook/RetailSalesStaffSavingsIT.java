@@ -153,6 +153,34 @@ class RetailSalesStaffSavingsIT extends IntegrationTest {
         assertThat(body.has("day_expenses_minor")).isFalse();
     }
 
+    // JUSTIFICATION-A3: the review of #839 asks for the sales staff route kept offline to be proven; one new test, its
+    // setup reused.
+    /**
+     * Issue #812 (ADR-067 decision 13): savings kept on a seller's phone offline go through the sales staff route, dated by when
+     * they were made; the date sent with them is not used, and the same key sent again records nothing more.
+     */
+    @Test
+    void savingsKeptOfflineThroughTheSalesStaffRouteAreDatedWhenMadeAndRecordedOnce() {
+        theSwitch(true);
+        JsonNode s = suggestion(seller, hq, today).getBody();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("branch_id", hq);
+        // The phone's stale idea of the day, which an entry kept offline does not use.
+        body.put("business_date", today.withDayOfMonth(1).toString());
+        body.put("suggestion_token", s.get("suggestion_token").asString());
+        body.put(
+                "offline",
+                Map.of("occurred_at", java.time.Instant.now().minusSeconds(300).toString()));
+        String key = UUID.randomUUID().toString();
+        ResponseEntity<JsonNode> saved =
+                api.call(HttpMethod.POST, SALES_STAFF, body, seller, Map.of("Idempotency-Key", key));
+        assertThat(saved.getStatusCode()).as("%s", saved.getBody()).isEqualTo(HttpStatus.CREATED);
+        assertThat(saved.getBody().get("business_date").asString()).isEqualTo(today.toString());
+        ResponseEntity<JsonNode> again =
+                api.call(HttpMethod.POST, SALES_STAFF, body, seller, Map.of("Idempotency-Key", key));
+        assertThat(RetailTestSupport.id(again)).isEqualTo(RetailTestSupport.id(saved));
+    }
+
     @Test
     void withTheSwitchOnASalesUserSeesTheAmountChangesItSavesItAndSeesTheMonthsRecordsIncludingAnOlderOne() {
         // Made before the switch was turned on: one this month, at the second branch, and one last month.
