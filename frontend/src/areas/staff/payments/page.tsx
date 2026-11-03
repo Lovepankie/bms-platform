@@ -182,7 +182,7 @@ export function ReceivePaymentsPage() {
     setSaveError(null);
     try {
       keep(await payments.save(key, secret, code));
-      sayDone('Key and secret saved');
+      sayDone('Payment provider key and secret saved');
     } catch (e) {
       setSaveError(messageOf(e));
     } finally {
@@ -194,7 +194,7 @@ export function ReceivePaymentsPage() {
     setRemoveError(null);
     try {
       keep(await payments.remove(code));
-      sayDone('Key and secret removed');
+      sayDone('Payment provider key and secret removed');
     } catch (e) {
       setRemoveError(messageOf(e));
     } finally {

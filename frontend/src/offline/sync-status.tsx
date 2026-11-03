@@ -260,7 +260,7 @@ function ManagerQueue() {
       if (error) throw new Error(problemOf(error).detail ?? 'Could not resolve the clash');
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['retail', 'sale-clashes'] }),
-    meta: { success: 'Clash resolved' },
+    meta: { success: 'Sale clash resolved' },
   });
   const rows = failures.data ?? [];
   const open = clashes.data ?? [];
