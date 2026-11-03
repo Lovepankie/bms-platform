@@ -1,7 +1,9 @@
 package com.rincoltech.bms.retail.cashbook.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -141,7 +143,9 @@ final class CashbookApi {
             Long amountMinor,
 
             @Size(max = 300) @Schema(description = "Optional, even when the amount differs from the suggestion")
-            String overwriteReason) {}
+            String overwriteReason,
+
+            @Valid OfflineEntry offline) {}
 
     @Schema(name = "RetailSavings")
     record Savings(
@@ -212,7 +216,8 @@ final class CashbookApi {
             LocalDate businessDate,
             @NotNull @Positive @Max(MAX_MINOR) Long amountMinor,
             Instant bankedAt,
-            @Size(max = 100) String reference) {}
+            @Size(max = 100) String reference,
+            @Valid OfflineEntry offline) {}
 
     @Schema(name = "RetailBanking")
     record Banking(
@@ -259,7 +264,8 @@ final class CashbookApi {
             LocalDate businessDate,
             @NotNull @Positive @Max(MAX_MINOR) Long amountMinor,
             Instant withdrawnAt,
-            @Size(max = 300) String purpose) {}
+            @Size(max = 300) String purpose,
+            @Valid OfflineEntry offline) {}
 
     @Schema(name = "RetailWithdrawal")
     record Withdrawal(
@@ -293,7 +299,8 @@ final class CashbookApi {
             UUID partyId,
             @NotNull @Positive @Max(MAX_MINOR) Long amountMinor,
             @Size(max = 500) String explanation,
-            UUID receiptDocumentId) {}
+            UUID receiptDocumentId,
+            @Valid OfflineEntry offline) {}
 
     @Schema(name = "RetailExpense")
     record Expense(

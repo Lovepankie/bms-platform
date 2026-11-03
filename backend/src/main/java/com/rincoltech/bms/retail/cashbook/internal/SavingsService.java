@@ -19,6 +19,7 @@ import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookRepository.SavingsRow;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookSupport.SalespeopleSavings;
 import com.rincoltech.bms.retail.reports.DailyProfits;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBranchContext;
 import java.math.BigDecimal;
@@ -217,7 +218,10 @@ class SavingsService {
     private Savings record(Caller caller, SalespeopleSavings setting, SavingsRequest r) {
         UUID branch = resolveBranch(caller, setting, r.branchId());
         branchContext.requireSells(branch, "branch_id");
-        LocalDate date = businessDate(caller, r.businessDate(), "business_date");
+        LocalDate date = businessDate(
+                caller,
+                OfflineEntry.day(r.offline(), r.businessDate(), support.now(), support.zone()),
+                "business_date");
         boolean profit = mayProfit(branch);
         boolean salesperson = !profit && setting.on();
         if (r.suggestionToken() == null || r.suggestionToken().isBlank()) {

@@ -11,6 +11,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -84,7 +85,10 @@ class UsageService {
         // Usage and damage only take stock out, so a branch that keeps no goods may still report them (ADR-041).
         UUID branch = branches.resolve("retail.usage.report", r.branchId());
         LocalDate today = clock.today(tenant.profile().timezone());
-        LocalDate on = r.occurredOn() == null ? today : r.occurredOn();
+        // An entry kept on the phone offline is dated the day it was made (ADR-067 decision 13).
+        LocalDate requested = OfflineEntry.day(
+                r.offline(), r.occurredOn(), clock.now(), tenant.profile().timezone());
+        LocalDate on = requested == null ? today : requested;
         List<FieldProblem> problems = new ArrayList<>();
         if (on.isAfter(today)) {
             problems.add(new FieldProblem("occurred_on", "invalid", "Usage cannot be dated in the future."));

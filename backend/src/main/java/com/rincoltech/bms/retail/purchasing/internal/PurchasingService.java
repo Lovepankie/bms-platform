@@ -26,6 +26,7 @@ import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.SupplierReque
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.UpdateSupplierRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingApi.VoidPurchaseRequest;
 import com.rincoltech.bms.retail.purchasing.internal.PurchasingRepository.NewLine;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.QuickAddPurchase;
 import com.rincoltech.bms.retail.stock.RetailBooks;
@@ -184,7 +185,19 @@ class PurchasingService implements QuickAddPurchase {
 
     @Transactional
     Outcome<Purchase> create(String idempotencyKey, PurchaseRequest r) {
-        return idempotency.once(idempotencyKey, "POST", PATH, r, Purchase.class, () -> record(r));
+        // A purchase kept on the phone offline is dated the day it was made (ADR-067 decision 13); the key is checked
+        // against the request as it was sent.
+        return idempotency.once(
+                idempotencyKey,
+                "POST",
+                PATH,
+                r,
+                Purchase.class,
+                () -> record(r.dated(OfflineEntry.day(
+                        r.offline(),
+                        r.purchasedOn(),
+                        clock.now(),
+                        tenant.profile().timezone()))));
     }
 
     /**
@@ -227,7 +240,7 @@ class PurchasingService implements QuickAddPurchase {
                     null));
         }
         PurchaseRequest r =
-                new PurchaseRequest(null, clock.today(tenant.profile().timezone()), method, "Quick add", lines);
+                new PurchaseRequest(null, clock.today(tenant.profile().timezone()), method, "Quick add", lines, null);
         // The bounds Buy stock's route checks before record(), so nothing Buy stock refuses is taken here; named by the
         // Quick add field the value came from.
         // Review of #716: a problem on the package line is named by the package fields it came from.
@@ -638,7 +651,9 @@ class PurchasingService implements QuickAddPurchase {
                     r.purchasedOn(),
                     r.paymentMethod(),
                     note.length() > 300 ? note.substring(0, 300) : note,
-                    r.lines()));
+                    r.lines(),
+                    // Edits stay online only (issue #812).
+                    null));
         });
     }
 

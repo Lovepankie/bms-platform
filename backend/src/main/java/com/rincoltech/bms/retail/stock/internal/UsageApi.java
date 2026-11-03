@@ -1,6 +1,7 @@
 package com.rincoltech.bms.retail.stock.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -41,7 +42,8 @@ final class UsageApi {
             @Schema(description = "Defaults to today; not in the future")
             LocalDate occurredOn,
 
-            @NotEmpty @Size(max = 200) List<@Valid @NotNull UsageLineRequest> lines) {}
+            @NotEmpty @Size(max = 200) List<@Valid @NotNull UsageLineRequest> lines,
+            @Valid OfflineEntry offline) {}
 
     @Schema(name = "RetailUsageLine")
     record UsageLine(

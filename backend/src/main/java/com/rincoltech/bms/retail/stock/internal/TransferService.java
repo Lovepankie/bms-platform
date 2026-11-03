@@ -16,6 +16,7 @@ import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.kernel.PushNotice;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue.ProductSnapshot;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import com.rincoltech.bms.retail.stock.Quantities;
 import com.rincoltech.bms.retail.stock.RetailBooks;
 import com.rincoltech.bms.retail.stock.RetailBooks.Leg;
@@ -139,7 +140,10 @@ class TransferService implements ModuleSettingsChangeGuard {
         // A branch that keeps no goods may still be the source, so stock stranded there can leave (ADR-041).
         UUID from = branchContext.resolve(PERMISSION, r.fromBranchId(), "from_branch_id");
         LocalDate today = clock.today(tenant.profile().timezone());
-        LocalDate on = r.transferDate() == null ? today : r.transferDate();
+        // An entry kept on the phone offline is dated the day it was made (ADR-067 decision 13).
+        LocalDate requested = OfflineEntry.day(
+                r.offline(), r.transferDate(), clock.now(), tenant.profile().timezone());
+        LocalDate on = requested == null ? today : requested;
         List<FieldProblem> problems = new ArrayList<>();
         Branches.Branch to = null;
         if (r.toBranchId().equals(from)) {

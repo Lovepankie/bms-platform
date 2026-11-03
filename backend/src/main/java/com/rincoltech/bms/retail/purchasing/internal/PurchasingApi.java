@@ -2,6 +2,7 @@ package com.rincoltech.bms.retail.purchasing.internal;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.rincoltech.bms.retail.catalogue.RetailCatalogue;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -111,7 +112,16 @@ final class PurchasingApi {
             String paymentMethod,
 
             @Size(max = 300) String note,
-            @NotEmpty @Size(max = 500) List<@Valid @NotNull PurchaseLineRequest> lines) {}
+            @NotEmpty @Size(max = 500) List<@Valid @NotNull PurchaseLineRequest> lines,
+            @Valid OfflineEntry offline) {
+
+        /** The same purchase dated {@code on}: an entry kept offline takes the day it was made (ADR-067 decision 13). */
+        PurchaseRequest dated(LocalDate on) {
+            return on.equals(purchasedOn)
+                    ? this
+                    : new PurchaseRequest(supplierId, on, paymentMethod, note, lines, offline);
+        }
+    }
 
     @Schema(name = "RetailPurchaseLineBranch")
     record LineBranch(

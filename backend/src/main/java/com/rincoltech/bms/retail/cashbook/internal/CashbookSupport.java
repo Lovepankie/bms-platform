@@ -7,6 +7,7 @@ import com.rincoltech.bms.kernel.BusinessClock;
 import com.rincoltech.bms.kernel.CurrentPrincipal;
 import com.rincoltech.bms.kernel.Principal;
 import com.rincoltech.bms.retail.cashbook.internal.CashbookApi.VoidRequest;
+import com.rincoltech.bms.retail.stock.OfflineEntry;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -14,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -102,8 +104,28 @@ class CashbookSupport {
         return clock.now();
     }
 
+    ZoneId zone() {
+        return tenant.profile().timezone();
+    }
+
     String currency() {
         return tenant.profile().currency();
+    }
+
+    /**
+     * The business date of a record that may have been kept on the phone offline: the day it was made, judged as an offline
+     * sale is (ADR-067 decision 13), otherwise {@link #businessDate(LocalDate, String)} of the date it asks for.
+     */
+    LocalDate entryDate(LocalDate requested, OfflineEntry offline, String field) {
+        return businessDate(OfflineEntry.day(offline, requested, now(), zone()), field);
+    }
+
+    /** When a record kept offline happened (the time it was made, judged), or {@code at} as sent, or now. */
+    Instant entryTime(Instant at, OfflineEntry offline) {
+        if (at != null) {
+            return at;
+        }
+        return offline == null ? now() : offline.judged(now());
     }
 
     /** The business date of a record: today when absent, never in the future (422 field problem). */

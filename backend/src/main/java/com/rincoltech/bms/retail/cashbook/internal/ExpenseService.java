@@ -140,7 +140,9 @@ class ExpenseService {
                     r.partyId(),
                     r.amountMinor(),
                     r.explanation(),
-                    r.receiptDocumentId());
+                    r.receiptDocumentId(),
+                    // The date is fixed above (the day an entry kept offline was made); the approval keeps that day.
+                    null);
             UUID id = UUID.randomUUID();
             Approvals.Outcome o = approvals.request(
                     new ActionRequest(
@@ -172,7 +174,7 @@ class ExpenseService {
     }
 
     private Checked check(UUID branch, ExpenseRequest r) {
-        LocalDate date = support.businessDate(r.businessDate(), "business_date");
+        LocalDate date = support.entryDate(r.businessDate(), r.offline(), "business_date");
         // The savings cap reads the day's expenses under the same lock (ADR-080 decision 3).
         repo.lockBranchDay(branch, date);
         CategoryRow category = repo.category(r.categoryId(), false)
@@ -328,7 +330,9 @@ class ExpenseService {
                     r.partyId(),
                     r.amountMinor(),
                     linked(r.explanation(), old),
-                    r.receiptDocumentId());
+                    r.receiptDocumentId(),
+                    // Edits stay online only (issue #812).
+                    null);
             UUID branch = branchContext.resolve(CashbookSupport.EXPENSE_RECORD, old.branchId());
             Checked c = check(branch, edited);
             if (approvals.rule(ExpenseAction.TYPE).asks(edited.amountMinor())) {
