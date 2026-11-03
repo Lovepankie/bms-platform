@@ -155,14 +155,17 @@ class RetailOfflineEntriesIT extends IntegrationTest {
                     .isEqualTo(yesterday.toString());
             // The answer was lost and the phone sends it again with the same key: the same entry, nothing new.
             ResponseEntity<JsonNode> again = cb.api.postKeyed(path, body.get(), ALL, "*", key);
-            assertThat(again.getStatusCode().is2xxSuccessful()).as("%s %s", path, again.getBody()).isTrue();
+            assertThat(again.getStatusCode().is2xxSuccessful())
+                    .as("%s %s", path, again.getBody())
+                    .isTrue();
             assertThat(RetailTestSupport.id(again)).as(path).isEqualTo(RetailTestSupport.id(first));
         });
     }
 
     @Test
     void savingsKeptOfflineAreDatedTheDayTheyWereMade() {
-        assertThat(cb.sale(hq, "cash", product, "10", yesterday).getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(cb.sale(hq, "cash", product, "10", yesterday).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
         JsonNode suggestion = cb.get("/savings/suggestion?branch_id=" + hq + "&date=" + yesterday, ALL)
                 .getBody();
         Map<String, Object> b = new LinkedHashMap<>();
@@ -182,15 +185,21 @@ class RetailOfflineEntriesIT extends IntegrationTest {
         Instant now = Instant.now();
         // Ahead: the phone says the entry is three hours from now.
         bodies(now.plus(Duration.ofHours(3)), null).forEach((path, body) -> {
-            ResponseEntity<JsonNode> r = cb.api.postKeyed(path, body.get(), ALL, "*", UUID.randomUUID().toString());
+            ResponseEntity<JsonNode> r = cb.api.postKeyed(
+                    path, body.get(), ALL, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
-            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString()).as(path).isEqualTo(today.toString());
+            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString())
+                    .as(path)
+                    .isEqualTo(today.toString());
         });
         // Behind: made two days before the phone was last online, which cannot be.
         bodies(now.minus(Duration.ofDays(2)), now.minus(Duration.ofMinutes(30))).forEach((path, body) -> {
-            ResponseEntity<JsonNode> r = cb.api.postKeyed(path, body.get(), ALL, "*", UUID.randomUUID().toString());
+            ResponseEntity<JsonNode> r = cb.api.postKeyed(
+                    path, body.get(), ALL, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.CREATED);
-            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString()).as(path).isEqualTo(today.toString());
+            assertThat(r.getBody().get(DATE_FIELD.get(path)).asString())
+                    .as(path)
+                    .isEqualTo(today.toString());
         });
     }
 
@@ -199,7 +208,8 @@ class RetailOfflineEntriesIT extends IntegrationTest {
         bodies(madeYesterday(), null).forEach((path, body) -> {
             Map<String, Object> b = body.get();
             b.put("offline", Map.of());
-            ResponseEntity<JsonNode> r = cb.api.postKeyed(path, b, ALL, "*", UUID.randomUUID().toString());
+            ResponseEntity<JsonNode> r =
+                    cb.api.postKeyed(path, b, ALL, "*", UUID.randomUUID().toString());
             assertThat(r.getStatusCode()).as("%s %s", path, r.getBody()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
         });
     }
