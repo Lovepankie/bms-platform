@@ -312,7 +312,7 @@ describe('a level that is slow, fails or is empty', () => {
   it('says so when there are no sales, and when a group below has none', async () => {
     summary.mockImplementationOnce(async (q) => ({ ...(await answer(q)), items: [] }));
     show(<AllSales />);
-    expect(await screen.findByText('No sales found.')).toBeTruthy();
+    expect(await screen.findByText('No sales found. A sale shows here once it is recorded with Record a sale.')).toBeTruthy();
     cleanup();
     summary.mockImplementation(async (q) => (q.level === 'year' ? { ...(await answer(q)), items: [] } : answer(q)));
     show(<AllSales />);
