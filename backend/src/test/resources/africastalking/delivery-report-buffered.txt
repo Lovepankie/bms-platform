@@ -1,0 +1,1 @@
+id=MESSAGE_ID&status=Buffered&phoneNumber=%2B256700000105&networkCode=64110&retryCount=1

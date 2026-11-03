@@ -76,7 +76,29 @@ At the cap: reminders wait for tomorrow's window; receipts continue to twice a t
 hour at a time until they expire; over the platform ceiling everything is held. Nothing is dropped early and
 nothing over a cap is sent. Raising `BMS_SMS_PLATFORM_DAILY_CAP` needs a restart.
 
+## Delivery reports look wrong (issue #215)
+
+Messages stay `sent` and never become `delivered`, or a counter jumps. As `bms_owner`:
+`SELECT day, outcome, hits FROM sms_report_counters WHERE day >= current_date - 7 ORDER BY day, outcome;`
+
+| `outcome` | Meaning | What to do |
+|---|---|---|
+| `moved` | A report moved a row to `delivered` or `undelivered` | Nothing: this is the normal count |
+| `repeated`, `interim` | The provider sent a report again, or an interim one (`Sent`, `Buffered`) | Nothing |
+| `not_forward` | A report that would move a row back or sideways, or a report for a row that was never `sent` | Nothing; a few are normal. Many may mean forged reports with known ids: rotate the token |
+| `unknown_id` | No row has that id: another environment's message, a report that beat the sender's own write, or a forged id | A few are normal. Many with no `moved`: check the callback URL in the provider's dashboard is this environment's |
+| `bad_token` | A request with the wrong token (404) | A burst: someone is guessing, or the dashboard has an old token after a rotation. Check the dashboard; if it is right, add the edge rate limit and the source allow-list (chapter 9) |
+| `throttled` | Over the application's limit per address or overall (429) | The provider retries. If real reports are being throttled, raise `bms.sms.callback-ip-per-minute` and `bms.sms.callback-global-per-minute` |
+| `malformed`, `unknown_status`, `oversized` | A body that is not a report, a status word this build does not know, a body over 16 KB | `unknown_status` after a provider change: tell the developers, the reader maps each word on purpose |
+| `store_failed` | The database could not record it (500); the provider retries | Check the API log for the error class and the database health |
+
+No counter at all: `BMS_SMS_CALLBACK_TOKEN` is unset (the address answers 404 and counts nothing) or the callback host
+does not forward `/api/v1/channels/*`. Setup is "Delivery reports" in `docs/runbooks/sms-setup.md`. A report never touches
+money: a wrong status is a log error, not a financial one.
+
 ## Suspected leak of the key
+
+If the delivery report token leaked, rotate it as "Delivery reports" in `docs/runbooks/sms-setup.md` says.
 
 Revoke the key at the provider first, then follow "Key rotation" in `docs/runbooks/sms-setup.md`. The key is
 never in the repository, a log line or an error message; the application only ever prints whether it is set.

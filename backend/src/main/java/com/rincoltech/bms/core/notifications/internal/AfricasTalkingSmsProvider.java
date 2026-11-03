@@ -48,6 +48,8 @@ final class AfricasTalkingSmsProvider implements SmsProvider {
     static final Duration TOTAL_TIMEOUT = Duration.ofSeconds(15);
     static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Pattern MESSAGE_ID = Pattern.compile("^[A-Za-z0-9_.:-]{1,100}$");
+    /** A delivery report's failure reason is a word of the provider's ({@code DeliveryFailure}); anything else is "other". */
+    private static final Pattern REASON = Pattern.compile("^[A-Za-z]{1,60}$");
 
     private final URI endpoint;
     private final String username;
@@ -187,6 +189,41 @@ final class AfricasTalkingSmsProvider implements SmsProvider {
             case 500, 501 -> throw new Ambiguous("provider_" + code);
             default -> throw new Ambiguous("provider_unknown_status");
         };
+    }
+
+    // JUSTIFICATION-A3: the delivery report reader of #215 is new behaviour of this adapter (spec 4.3
+    // parse_delivery_report).
+    /**
+     * Reads one delivery report (issue #215, spec section 4.7). Per the provider's public reference, a form POST with
+     * {@code id}, {@code status}, {@code phoneNumber}, {@code networkCode}, {@code retryCount} and, for a failure,
+     * {@code failureReason}; whether the provider signs it is confirmed in the sandbox (ADR-036, Watch for). Only the
+     * id, the status and the reason are read: the number is never read, kept or logged. The provider's words map to
+     * ours: {@code Success} is delivered; {@code Failed} and {@code Rejected} are undelivered; {@code Sent},
+     * {@code Submitted} and {@code Buffered} mean the provider or the network still holds the message, an interim
+     * report that never moves a row.
+     *
+     * @param field the request's form field by name, or null when absent
+     * @throws UnreadableReport {@code malformed} without a usable id or status, {@code unknown_status} for a status word
+     *     this adapter does not know (answered and counted, so a new word of the provider's is noticed, not retried)
+     */
+    static DeliveryReport readDeliveryReport(java.util.function.Function<String, String> field)
+            throws UnreadableReport {
+        String id = field.apply("id");
+        String status = field.apply("status");
+        if (id == null || !MESSAGE_ID.matcher(id.strip()).matches() || status == null || status.isBlank()) {
+            throw new UnreadableReport("malformed");
+        }
+        String ours = switch (status.strip()) {
+            case "Success" -> "delivered";
+            case "Failed", "Rejected" -> "undelivered";
+            case "Sent", "Submitted", "Buffered" -> "sent";
+            default -> throw new UnreadableReport("unknown_status");
+        };
+        String reason = field.apply("failureReason");
+        String code = !ours.equals("undelivered") || reason == null
+                ? null
+                : REASON.matcher(reason.strip()).matches() ? reason.strip() : "other";
+        return new DeliveryReport(id.strip(), ours, code);
     }
 
     private static Outcome rejected(String reason) {

@@ -1,0 +1,1 @@
+id=MESSAGE_ID&status=Failed&phoneNumber=%2B256700000102&networkCode=64110&failureReason=DeliveryFailure&retryCount=2

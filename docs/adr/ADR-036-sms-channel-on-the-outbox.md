@@ -5,7 +5,8 @@
 Accepted. Designed in issue #210 (spec `docs/specs/client-extras.md` section 4); the channel core, decisions 1 to 6
 and 8 to 14 except the tenant screens, is built by issue #212 (see the first Amendment below), and the tenant settings,
 the sender id allow-list, the opt-out screens and the template overrides by issue #218 (see the second Amendment).
-Delivery reports (decision 7) come with #215, reminders with #227. The loan, savings and investment events (spec 4.11) are queued
+Delivery reports (decision 7) and the `core.sms_usage` report are built by issue #215 (see the fifth Amendment below;
+migration `V130`), reminders with #227. The loan, savings and investment events (spec 4.11) are queued
 by issue #221 (see the third Amendment below; migration `V53`). The payment link text's status is read as in the fourth
 Amendment (issue #772, no migration).
 Settles the SMS half of what chapter 12 section 12.3.3 carried as pending ADR-013; USSD remains pending ADR-013.
@@ -444,3 +445,49 @@ Accepted because no link text is live anywhere when this ships (staging SMS is a
 
 A link text still waiting is withdrawn (`cancelled_settled`) when its payment leaves `pending`, as a reversal withdraws a
 receipt.
+
+## Amendment (issue #215, delivery reports and the SMS use report)
+
+Decision 7 is built (migration `V130`, spec section 4.18). Where the build sharpens it:
+
+1. **The endpoint.** `POST /api/v1/channels/sms/africastalking/delivery-reports/{token}` on the callback host, which the
+   Caddyfile already forwarded. The tenant filter resolves no business for `/api/v1/channels/`. The token is
+   `BMS_SMS_CALLBACK_TOKEN`, compared in constant time through SHA-256 digests; a value under 32 characters is treated as
+   unset, and unset keeps the route answering 404. A wrong token is 404 and counted, inside a rate limit bucket of its own (a
+   tenth of the report bucket), and past that bucket a guess costs no database write. The application's own limit per
+   address and overall (3000 and 6000 a minute by default) holds without the edge rule and the provider's source address
+   allow-list, which stay operator tasks (chapter 9).
+2. **What is read.** Only `id`, `status` and `failureReason` (the provider's public reference; the sandbox confirms the
+   shape, decision Watch for). The recipient's number the provider sends is never read, stored or logged. `Success` is
+   `delivered`; `Failed` and `Rejected` are `undelivered` with the reason when it is a plain word (else `other`); `Sent`,
+   `Submitted` and `Buffered` are interim and move nothing. A status word the adapter does not know is answered 200 and
+   counted `unknown_status`, so a new word is noticed rather than retried forever; a body without a usable id or status is
+   400.
+3. **Forward only, in the database.** The definer function `sms_delivery_report_apply` refuses a transaction bound to a
+   tenant, finds the row by `(provider, provider_message_id)` across tenants (a new index), and moves it from `sent` to
+   `delivered` or `undelivered` once, under the row lock, so two reports at once agree. A final status never changes again: a
+   replay is `repeated`, a late interim report or a contradicting final one is `not_forward`. A row that was never `sent`
+   (`unknown`, `failed`, `sunk`) is not moved either: a report cannot settle an unknown outcome, because the channel records no
+   message id for it. Two rows with one id move nothing (`ambiguous_id`).
+4. **Counted, never logged by value.** Every outcome is a word of ours counted per Kampala day in the platform table
+   `sms_report_counters` (no grant to the application role), kept as long as the delivery rows. The log line names the
+   outcome only.
+5. **Accepted residual.** A report that arrives before the sender's second transaction has recorded the message id finds no
+   row: it is counted `unknown_id` and the row stays `sent`. The provider reports seconds later, not milliseconds, and
+   nothing money-related reads the status; holding early reports would need a table of unmatched ids for no gain.
+6. **The report.** `core.sms_usage` (chapter 14 section 14.6) reads the delivery log through a new public port `SmsUsage`
+   of this module from the reporting module (which already depends on it): messages handed to the provider (`sent`,
+   `delivered`, `undelivered`, `unknown`), delivered, not delivered, segments (the provider's when given) and the recorded
+   cost in the business's currency per Kampala month and event, under `core.reports.financial`. It is off by default: the
+   report framework gains `ReportDefinition.offeredInTenant`, and this report is offered only to a business whose own SMS
+   switch is on or that has any message in its log, so a business that switched SMS off still sees what it used. Module
+   `core` is a module every business has. It prices nothing and bills nobody (the owner's decision of 2 November 2026: the
+   price a business sees before switching SMS on is the operator's data, not code).
+
+**Better:** the log tells a lender whether a receipt reached the phone, and the business and the operator see the month's
+messages, segments and cost per event without a query.
+
+**Worse:** one more public endpoint on the callback host; a report that beats the sender's write is lost (5).
+
+**Watch for:** whether the provider signs reports (then the token becomes a second factor); a spike of `bad_token` or
+`unknown_id` in `sms_report_counters` (runbook `sms-incident.md`).

@@ -917,6 +917,33 @@ text above:
 - **Not in this slice.** Reminders and arrears notices (#227), the payment link (#231), a correction message for a reversal (decided
   against), delivery reports (#215).
 
+### 4.18 As built in slice #215 (delivery reports and the SMS use report)
+
+Section 4.7 and `core.sms_usage` are built (migration `V130`; ADR-036 fifth amendment carries the decisions; item 12 of the self
+review in section 11, a forged delivery report, holds as answered there). Where the build sharpens the text above:
+
+- **The token and the limit.** `BMS_SMS_CALLBACK_TOKEN` (at least 32 characters; shorter or unset keeps the route answering 404),
+  compared in constant time. A wrong token is 404 and counted `bad_token` inside a bucket of its own, so guesses never use up the
+  provider's budget and past their bucket cost no database write. The application limits each address and all addresses together
+  (3000 and 6000 a minute by default); the edge rule and the source allow-list stay operator tasks (chapter 9).
+- **Read, never kept.** Only the message id, the status and the failure reason are read; the recipient's number the provider sends
+  is never read, kept or logged. `Success` is delivered, `Failed` and `Rejected` undelivered, `Sent`, `Submitted` and `Buffered` an
+  interim report that moves nothing.
+- **Forward only, once.** The definer function `sms_delivery_report_apply` (platform only) finds the one row with the provider's id
+  and moves it from `sent` to `delivered` or `undelivered` under the row lock; a replay, a late interim report and a final report
+  that contradicts the first change nothing, and a row that was never sent is never moved (a report cannot settle an `unknown`
+  outcome, which has no provider id). Unknown ids are answered 200 and ignored.
+- **Counted.** Every outcome is counted per Kampala day in `sms_report_counters` (platform table, no id, no number, no tenant), kept
+  as long as the delivery rows.
+- **Known gap, accepted.** A report that arrives before the sender has recorded the message id finds no row; it is counted
+  `unknown_id` and the row stays `sent`.
+- **The report.** `core.sms_usage` (chapter 14 section 14.6), under `core.reports.financial`: messages handed to the provider,
+  delivered, not delivered, segments and the recorded cost per Kampala month and event, and per month. Off by default: offered only
+  to a business whose own SMS switch is on or that has a message in its log, so a business that stops SMS still sees what it used.
+  It prices nothing; the price a business sees before switching SMS on is the operator's data (owner's decision, issue #215).
+- **Not in this slice.** The operator's view of the counters (read with SQL as the owner role, runbook `sms-incident.md`), the per
+  message history screen of FR-NTF-05, a signed report if the sandbox shows the provider signs them.
+
 ## 5. AI monitoring (ADR-037)
 
 ### 5.1 Summary

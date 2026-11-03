@@ -297,8 +297,12 @@ migration) with status only, no details.
   and `off` elsewhere), `BMS_SMS_ALLOWLIST`, `BMS_SMS_PLATFORM_DAILY_CAP` (default 2000), `BMS_SMS_AT_BASE_URL`,
   `BMS_SMS_AT_USERNAME` and `BMS_SMS_AT_API_KEY`. The API refuses to start, in every mode, when outside production the URL is
   not the Africa's Talking sandbox host or the account is not `sandbox`, when the mode is `live` outside production, and in
-  production when the mode is `sink` or the provider is the fake. Outbound traffic is HTTPS to the provider; nothing is
-  opened inbound until the delivery report slice (#215).
+  production when the mode is `sink` or the provider is the fake. Outbound traffic is HTTPS to the provider. Inbound, the
+  delivery reports (#215) arrive on the callback host at `/api/v1/channels/sms/africastalking/delivery-reports/<token>`,
+  which the Caddyfile already forwards there (`/api/v1/channels/*`); `BMS_SMS_CALLBACK_TOKEN` (at least 32 random
+  characters, a host secret) turns the endpoint on, and unset it answers 404. The application's own limit per address
+  and overall (`bms.sms.callback-ip-per-minute`, 3000, and `bms.sms.callback-global-per-minute`, 6000; a wrong token has a
+  bucket a tenth of those) holds without the edge rule.
 - Client extras (issue #210, design): Pesapal `BMS_PESAPAL_PROVIDER`, `BMS_PESAPAL_BASE_URL`, `BMS_PESAPAL_CALLBACK_BASE_URL` (a lender's own account is entered by the lender and
   stored encrypted, so there is no per-lender variable; the consumer key, secret, IPN id, token and tenant id variables of #213 are gone, #233), `BMS_DATA_KEY_PREVIOUS` (retired data keys during a rotation), `BMS_PESAPAL_PLATFORM_CONSUMER_KEY`, `BMS_PESAPAL_PLATFORM_CONSUMER_SECRET`,
   `BMS_PESAPAL_PLATFORM_IPN_ID`, `BMS_PESAPAL_PLATFORM_IPN_TOKEN` (an IPN registration belongs to one credential pair); SMS `BMS_SMS_PROVIDER`, `BMS_SMS_MODE` (`off` default, `sink` on staging),

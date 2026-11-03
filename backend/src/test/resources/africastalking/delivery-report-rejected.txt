@@ -1,0 +1,1 @@
+id=MESSAGE_ID&status=Rejected&phoneNumber=%2B256700000103&networkCode=64110&failureReason=UserInBlackList&retryCount=0

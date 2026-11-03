@@ -1078,7 +1078,7 @@ Codes (422 unless stated): `term_not_offered`, `amount_out_of_range`, `product_a
 | Method | Path | Notes |
 |---|---|---|
 | POST, GET | `/payments/callbacks/{provider}/{token}` | 7.11.10 |
-| POST | `/channels/sms/{provider}/delivery-reports/{token}` | FR-NTF-05; forward-only status; unknown ids ignored (ADR-036) |
+| POST | `/channels/sms/{provider}/delivery-reports/{token}` | FR-NTF-05, FR-NTF-16; built in #215 for `africastalking` (migration `V130`). Public, no session, no tenant from the host; the path token is `BMS_SMS_CALLBACK_TOKEN` compared in constant time (unset or under 32 characters: 404 for every request). A wrong token: 404, counted `bad_token`, in a rate limit bucket of its own. A rate limit per address and overall (429, counted `throttled`). A form body over 16 KB: 413. Only `id`, `status` and `failureReason` are read; the recipient's number is never read, kept or logged. 400 `malformed_report` without a usable id or status. The row is found by provider message id through the definer function `sms_delivery_report_apply` and moves **forward only**: `sent` to `delivered` (`Success`) or `undelivered` (`Failed`, `Rejected`) once; an interim `Sent`, `Submitted` or `Buffered`, a replay, a contradicting final report and an unknown id change nothing and are answered 200; a status word the adapter does not know is answered 200 and counted `unknown_status`; 500 when it could not be recorded (the provider retries). ADR-036 decision 7 and its #215 amendment |
 | POST | `/channels/ussd/{provider}` | Session callback. FR-MSS-07 (Later) |
 
 ### 7.11.20 Retail (`/retail`, ADR-020)

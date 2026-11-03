@@ -424,7 +424,17 @@ last minute), then by due time, and locks the best twenty candidates in that ord
   `failed`, `rejected`, `blocked_optout`, `sunk`, `unknown`], `failure_reason`, `attempts`. The message text and the number
   are in no column. Indexes on `(tenant_id, provider_message_id)`, `(tenant_id, created_at)` and `(created_at)`. Kept 13
   months by `sms_deliveries_purge`; counted by `sms_platform_count_since` (the platform ceiling) and
-  `sms_tenant_count_since` (the operator's view).
+  `sms_tenant_count_since` (the operator's view). `V130` (issue #215) adds the index `sms_deliveries_by_provider_message`
+  on `(provider, provider_message_id)` where the id is set, for a delivery report that names no tenant, and the definer
+  function `sms_delivery_report_apply(provider, message_id, status, reason, now)`: platform only (it refuses a transaction
+  bound to a tenant), it moves the one row with that id from `sent` to `delivered` or `undelivered` and never back, and
+  answers `moved`, `repeated`, `not_forward`, `unknown_id` or `ambiguous_id`. Read per month and event by the report
+  `core.sms_usage` (chapter 14 section 14.6).
+- `sms_report_counters` (platform, `V130`; row-level security forced with no policy, no grant to `bms_app`): `day`
+  (Kampala), `outcome` (a word of ours: `moved`, `repeated`, `not_forward`, `interim`, `unknown_id`, `ambiguous_id`,
+  `bad_token`, `throttled`, `malformed`, `unknown_status`, `oversized`, `store_failed`), `hits`; primary key `(day,
+  outcome)`. Written only by `app_count_sms_report(day, outcome)`; no id, number or tenant. Cleared with the delivery rows
+  by `sms_deliveries_purge` after 13 months.
 - `sms_opt_outs` (tenant, row-level security): `id`, `tenant_id`, `created_at`, `member_id` (no foreign key; null for a row
   about a number alone), `recipient_hash` (null means the member on any number; a row needs a member or a hash),
   `recipient_masked` (`+256*****1234`, for display; the number is never stored), `scope` [`reminders`, `all`], `source`
@@ -2951,7 +2961,8 @@ tables with `tenant_id`, forced row-level security (`bms_apply_tenant_rls`) and 
 |---|---|---|
 | `notification_outbox.tenant_id`, `.category`, `.subject_type`, `.subject_id` (columns, platform table, additive; built, `V50`) | #212 | The tenant that caused an SMS row, its category and subject (ADR-036). The enqueue takes the tenant from the bound transaction; platform rows keep null |
 | `platform_sms_controls`, `sms_channel_state` (platform; built, `V50`) | #212 | The operator's per tenant switch and cap; the SMS mode last seen, for the backlog drop. See "SMS tables" in section 6.4 |
-| `sms_deliveries` (built, `V50`) | #212 | One row per SMS message, moved from `queued` to its outcome: outbox id, template key, category, subject type and id, recipient masked, `recipient_hash`, provider, `provider_message_id`, `segments`, `provider_segments`, `cost_minor`, `currency`, `cost_raw`, `status`, `failure_reason`, timestamps. Index on `(tenant_id, provider_message_id)` and `(tenant_id, created_at)`. Retention 13 months |
+| `sms_deliveries` (built, `V50`; delivery reports `V130`) | #212, #215 | One row per SMS message, moved from `queued` to its outcome: outbox id, template key, category, subject type and id, recipient masked, `recipient_hash`, provider, `provider_message_id`, `segments`, `provider_segments`, `cost_minor`, `currency`, `cost_raw`, `status`, `failure_reason`, timestamps. Index on `(tenant_id, provider_message_id)` and `(tenant_id, created_at)`, and on `(provider, provider_message_id)` for delivery reports (`V130`). A delivery report moves `sent` to `delivered` or `undelivered` once, never back. Retention 13 months |
+| `sms_report_counters` (built, `V130`) | #215 | Platform: the day's delivery report outcomes for the operator's alerts, `(day, outcome, hits)`; no id, number or tenant |
 | `sms_opt_outs` (table built in `V50`, #212; widened and written by the screens of #218, `V52`) | #212, #218 | `member_id` (null for a number alone), `recipient_hash`, `recipient_masked`, `scope` [`reminders`, `all`], `source` [`staff`, `member`, `number`, `import`], `created_by`, `created_at`; a removal sets `removed_at` |
 | `sms_template_overrides` (built, `V52`) | #218 | Tenant overrides for an `event_key` (channel `sms`) with the text and a version (FR-NTF-03); the planned name `notification_templates` is not used, as only SMS wording exists |
 | `platform_sms_sender_ids` (platform; built, `V52`) | #218 | The operator's allow-list of sender ids per tenant, one tenant per id at a time (ADR-036 second amendment) |

@@ -51,6 +51,16 @@ public interface ReportDefinition {
     }
 
     /**
+     * Whether the bound business is offered the report beyond its module and the reports switch: false hides it from the
+     * catalogue and refuses a request, for a report of a feature the business switches on itself (the SMS use of a business
+     * that never used SMS, issue #215). Read in the request with the business bound. The default is true. A core report
+     * names the module {@code core}, which every business has.
+     */
+    default boolean offeredInTenant() {
+        return true;
+    }
+
+    /**
      * How long a run may take, or null (the default) for the runner's limit, {@code bms.reports.timeout}. Only a report that
      * reads the whole business sets a longer one (the data export of ADR-074).
      */

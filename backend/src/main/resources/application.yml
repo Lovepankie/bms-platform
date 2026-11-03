@@ -243,6 +243,9 @@ bms:
     mode: ${BMS_SMS_MODE:}
     allowlist: ${BMS_SMS_ALLOWLIST:}
     platform-daily-cap: ${BMS_SMS_PLATFORM_DAILY_CAP:2000}
+    # The path token of the delivery report endpoint on the callback host (#215). Unset or shorter than 32
+    # characters: the endpoint answers 404 for every request. A host secret, never in the repository.
+    callback-token: ${BMS_SMS_CALLBACK_TOKEN:}
     africas-talking:
       base-url: ${BMS_SMS_AT_BASE_URL:}
       username: ${BMS_SMS_AT_USERNAME:}

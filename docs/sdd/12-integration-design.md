@@ -23,7 +23,7 @@
 
 | Integration | Direction | Decision | Adapter interface |
 |---|---|---|---|
-| SMS | Outbound (built, #212), plus delivery report callbacks (#215) | ADR-036: Africa's Talking first, as a channel of the notification outbox | `SmsProvider` |
+| SMS | Outbound (built, #212), plus delivery report callbacks (built, #215) | ADR-036: Africa's Talking first, as a channel of the notification outbox | `SmsProvider` |
 | USSD | Inbound session callbacks | Pending ADR-013, later phase | `UssdProvider` |
 | Payment gateway (mobile money, cards) | Outbound collection requests, inbound callbacks, status queries, settlement reports | ADR-035 (proposed): Pesapal v3 | `PaymentGateway` |
 | Object storage | Outbound | Cloudflare R2 over the S3 API (product plan) | `ObjectStorage` |
@@ -61,9 +61,15 @@ accepted can be recognised.
    sending window, calls `send`, stores `provider_message_id` and `segments`, sets
    `sent`.
 3. Failure: retry at 1, 5 and 30 minutes, then `failed` (FR-NTF-05).
-4. Delivery report callback on `<callback host>/api/v1/channels/sms/{provider}/delivery-reports`:
+4. Delivery report callback on `<callback host>/api/v1/channels/sms/{provider}/delivery-reports/{token}`:
    verify, look up by `provider_message_id`, update status to `delivered` or
-   `undelivered`. Unknown ids are logged and ignored.
+   `undelivered`. Unknown ids are counted and ignored. Built in #215 for Africa's Talking
+   (`SmsDeliveryReportController`, `AfricasTalkingSmsProvider.readDeliveryReport`, migration `V130`): the path token
+   `BMS_SMS_CALLBACK_TOKEN` in constant time, a rate limit, only the id, status and failure reason read (never the
+   number); `Success` is delivered, `Failed` and `Rejected` undelivered, `Sent`, `Submitted` and `Buffered` interim (no
+   move). The platform-only definer function `sms_delivery_report_apply` moves a `sent` row once and never back, and every
+   outcome is counted per Kampala day in `sms_report_counters`. A report that arrives before the sender has recorded the
+   message id finds no row and is counted `unknown_id`; the row stays `sent` (accepted: nothing money-related reads it).
 
 ### 12.3.3 What ADR-036 settles and what stays pending ADR-013
 

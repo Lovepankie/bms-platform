@@ -3,8 +3,9 @@ package com.rincoltech.bms.core.notifications.internal;
 /**
  * The SMS provider port (chapter 12 section 12.3.1, ADR-036 decision 1). One call: send one message
  * to one E.164 number. Africa's Talking is the first adapter; the recording fake serves tests; the
- * sink records that a message would have gone and sends nothing. Reading delivery reports comes
- * with the delivery report slice (#215).
+ * sink records that a message would have gone and sends nothing. A provider's delivery report is read by
+ * that provider's adapter into a {@link DeliveryReport} (Africa's Talking:
+ * {@code AfricasTalkingSmsProvider.readDeliveryReport}, issue #215); the endpoint that receives it is the provider's.
  *
  * <p>An adapter never logs or puts into an exception the number, the text or a key. It answers with
  * an {@link Outcome}, or throws one of two exceptions that decide the retry: {@link Transient}
@@ -46,6 +47,24 @@ interface SmsProvider {
             Integer providerSegments,
             String costRaw,
             String failureReason) {}
+
+    /**
+     * One delivery report, in our words (ADR-036 decision 7). Never holds the recipient's number, which the provider
+     * sends with it.
+     *
+     * @param messageId the provider's id for the message, shape checked
+     * @param status {@code sent} (the provider still holds it), {@code delivered} or {@code undelivered}
+     * @param reason for {@code undelivered}, the provider's short reason code, or null
+     */
+    record DeliveryReport(String messageId, String status, String reason) {}
+
+    /** A delivery report that cannot be used; {@link #getMessage()} is a code of ours for the counters. */
+    final class UnreadableReport extends Exception {
+
+        UnreadableReport(String code) {
+            super(code, null, false, false);
+        }
+    }
 
     /** The request certainly produced no message: the connection failed, or the provider answered with an error. */
     final class Transient extends Exception {

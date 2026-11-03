@@ -80,16 +80,22 @@ class ReportRegistry {
         return Optional.ofNullable(byKey.get(key));
     }
 
-    /** The report when it exists and its module is on for the bound tenant. */
+    /** The report when it exists, its module is on for the bound tenant and the report offers itself there. */
     Optional<ReportDefinition> findInTenant(String key) {
-        return find(key).filter(d -> d.everyBusiness() || modules.isEnabled(d.module()));
+        return find(key).filter(this::offered);
     }
 
     /** What the principal may run in the bound tenant, by key. */
     List<ReportDefinition> available(Principal principal) {
         return byKey.values().stream()
-                .filter(d -> d.everyBusiness() || modules.isEnabled(d.module()))
                 .filter(d -> permitted(principal, d))
+                .filter(this::offered)
                 .toList();
+    }
+
+    /** Every business has the module {@code core}; a vertical's report needs its module on (issue #215). */
+    private boolean offered(ReportDefinition d) {
+        return d.everyBusiness()
+                || ((d.module().equals("core") || modules.isEnabled(d.module())) && d.offeredInTenant());
     }
 }

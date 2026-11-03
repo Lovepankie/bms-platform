@@ -149,6 +149,7 @@ services:
       BMS_SMS_AT_BASE_URL: ${BMS_SMS_AT_BASE_URL:-}
       BMS_SMS_AT_USERNAME: ${BMS_SMS_AT_USERNAME:-}
       BMS_SMS_AT_API_KEY: ${BMS_SMS_AT_API_KEY:-}
+      BMS_SMS_CALLBACK_TOKEN: ${BMS_SMS_CALLBACK_TOKEN:-}
       # Web Push (ADR-050). Off unless both VAPID keys are set (docs/runbooks/push-notifications.md).
       BMS_PUSH_VAPID_PUBLIC_KEY: ${BMS_PUSH_VAPID_PUBLIC_KEY:-}
       BMS_PUSH_VAPID_PRIVATE_KEY: ${BMS_PUSH_VAPID_PRIVATE_KEY:-}

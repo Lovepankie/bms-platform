@@ -165,10 +165,39 @@ refused (`invalid_phone`) and never reaches the provider. Fix the member's numbe
 
 `sms_deliveries` holds one row per message: masked recipient, a keyed hash (for the opt-out), segments, the
 provider's cost parsed to minor units with the raw string, status and reason. Statuses: `queued` (in flight),
-`sent`, `delivered`, `undelivered` (the last two come with the delivery report slice, #215), `failed` (a clean
+`sent`, `delivered`, `undelivered` (set by the provider's delivery reports, below; a row stays `sent` until one
+arrives), `failed` (a clean
 failure, retried at once, after 1 and after 5 minutes), `rejected` (the provider or we said no for good),
 `blocked_optout`, `sunk`, `unknown`. The log is kept 13 months. Numbers and message texts are not in it and not
 in any log line.
+
+## Delivery reports (issue #215)
+
+The provider tells us whether each message reached the phone by posting a delivery report to the callback host. Until this
+is set up every sent message stays `sent` in the log; nothing else depends on it.
+
+1. Make a token: `openssl rand -hex 32` (64 characters; anything under 32 is treated as unset). Put it in `/opt/bms/.env` as
+   `BMS_SMS_CALLBACK_TOKEN=<token>` (mode 600, never in git or a ticket) and restart the API. Unset, the address answers 404.
+2. The address is `https://<BMS_CALLBACK_HOST>/api/v1/channels/sms/africastalking/delivery-reports/<token>`. The Caddyfile
+   already forwards `/api/v1/channels/*` on the callback host; on staging the tunnel must expose the callback host.
+3. In the Africa's Talking dashboard (sandbox account on staging, the live account in production), set the SMS delivery
+   reports callback URL to that address and save (the menu's exact name is the provider's; confirm it on the sandbox first).
+4. Check: send one message (a test message on staging, or the pilot check in `allowlist` mode in production), wait a minute,
+   then as `bms_owner`:
+   `SELECT status, failure_reason, updated_at FROM sms_deliveries ORDER BY created_at DESC LIMIT 5;` shows `delivered` or
+   `undelivered`, and `SELECT day, outcome, hits FROM sms_report_counters ORDER BY day DESC, outcome;` shows `moved`.
+   The sandbox simulator may report only some statuses; `unknown_id` there means the report named a message this
+   environment never sent.
+5. Edge rules (chapter 9 section 9.13): add the provider's published source addresses to the proxy allow-list for this
+   path where it publishes them, and keep the path token out of the proxy access log.
+
+Rotate the token yearly, on staff change and after any exposure: make a new one, update the dashboard first, then
+`/opt/bms/.env`, then restart. Reports sent with the old token in between are refused (404, counted `bad_token`) and
+leave those rows `sent`; that is harmless.
+
+The month's use per business is the report **SMS use** (`core.sms_usage`) in the business's Reports, for anyone holding
+`core.reports.financial`: messages, delivered, not delivered, segments and the recorded cost per month and event. It is
+offered to a business with SMS on or with SMS history.
 
 ## Key rotation
 

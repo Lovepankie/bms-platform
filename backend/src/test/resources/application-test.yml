@@ -34,6 +34,9 @@ bms:
   notifications:
     mail:
       resend-webhook-secret: whsec_dGVzdC1vbmx5LXJlc2VuZC13ZWJob29rLXNlY3JldA==
+  # A fabricated delivery report path token, so SmsDeliveryReportIT can post reports (issue #215).
+  sms:
+    callback-token: test-only-fabricated-sms-callback-token-0123456789
   # High global caps, so the whole suite's sign-ups fit in one hour; OnboardingIT fills them on
   # purpose to prove the cap.
   onboarding:

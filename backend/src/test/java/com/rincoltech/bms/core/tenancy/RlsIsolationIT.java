@@ -1756,7 +1756,11 @@ public class RlsIsolationIT {
     @Test
     void smsPlatformTablesAreClosedToTheApplicationRole() throws SQLException {
         for (String table : List.of(
-                "notification_outbox", "platform_sms_controls", "sms_channel_state", "platform_sms_sender_ids")) {
+                "notification_outbox",
+                "platform_sms_controls",
+                "sms_channel_state",
+                "platform_sms_sender_ids",
+                "sms_report_counters")) {
             assertThatThrownBy(() -> asApp(a.tenantId(), c -> count(c, "SELECT count(*) FROM " + table)))
                     .as("SELECT on %s", table)
                     .hasStackTraceContaining("permission denied");
@@ -1793,10 +1797,20 @@ public class RlsIsolationIT {
                     }
                 }))
                 .hasStackTraceContaining("platform operator only");
+        // A tenant transaction cannot apply a delivery report (V130, #215): a report names no tenant, so only the
+        // platform step may move a delivery row, and never a tenant session that names another tenant's message id.
+        assertThatThrownBy(() -> asApp(a.tenantId(), c -> {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "SELECT sms_delivery_report_apply('africastalking', 'ATXid_rls', 'delivered', NULL, now())")) {
+                        ps.execute();
+                        return null;
+                    }
+                }))
+                .hasStackTraceContaining("platform only");
     }
 
     /**
-     * Every SMS and tenant lookup function of V50 is a definer function owned by bms_owner, executable
+     * Every SMS and tenant lookup function of V50 and V130 is a definer function owned by bms_owner, executable
      * by bms_app and not by PUBLIC (ADR-016): they are the only way into the platform SMS tables.
      */
     @Test
@@ -1805,7 +1819,7 @@ public class RlsIsolationIT {
                 TestDatabase.owner().sql("""
                         SELECT p.oid::text AS oid, p.proname FROM pg_proc p
                          WHERE p.pronamespace = 'public'::regnamespace
-                           AND (p.proname LIKE 'sms\\_%' OR p.proname = 'app_tenant_is_active')
+                           AND (p.proname LIKE 'sms\\_%' OR p.proname IN ('app_tenant_is_active', 'app_count_sms_report'))
                         """).query().listOfRows();
         assertThat(functions)
                 .extracting(f -> f.get("proname"))
@@ -1817,6 +1831,8 @@ public class RlsIsolationIT {
                         "sms_platform_count_since",
                         "sms_tenant_count_since",
                         "sms_deliveries_purge",
+                        "sms_delivery_report_apply",
+                        "app_count_sms_report",
                         "app_tenant_is_active");
         for (Map<String, Object> f : functions) {
             Map<String, Object> row =

@@ -1,0 +1,1 @@
+id=MESSAGE_ID&status=Sent&phoneNumber=%2B256700000104&networkCode=64110&retryCount=0

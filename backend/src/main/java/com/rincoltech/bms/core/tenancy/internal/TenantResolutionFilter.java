@@ -59,13 +59,15 @@ class TenantResolutionFilter extends OncePerRequestFilter {
         // Tenant-free paths: health, version, the contract document and the platform API
         // (/api/v1/platform, served on the platform host, which resolves no tenant), and the payment provider's
         // notifications on the callback host (the tenant is found from the merchant reference, never the host;
-        // ADR-035).
+        // ADR-035), and the SMS provider's delivery reports there (the row is found by the provider's message id,
+        // #215).
         return !path.startsWith("/api/v1/")
                 || path.startsWith("/api/v1/openapi.json")
                 || path.equals("/api/v1/platform")
                 || path.startsWith("/api/v1/platform/")
                 || path.startsWith("/api/v1/payments/callbacks/")
-                || path.startsWith("/api/v1/payments/return/");
+                || path.startsWith("/api/v1/payments/return/")
+                || path.startsWith("/api/v1/channels/");
     }
 
     @Override

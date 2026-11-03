@@ -344,6 +344,25 @@ and decided times, amount, outcome, time to decision.
 
 Segments sent per month and per event type (FR-NTF-07).
 
+**Built (extras slice B2, issue #215).** Offered as `pdf`, `xlsx`, `csv` and `json` under `core.reports.financial`, module
+`core` (every business has it) and, through the new `ReportDefinition.offeredInTenant`, only to a business whose own SMS switch
+is on or that has any message in its delivery log (13 months), so it is off by default and a business that switched SMS off
+still sees what it used. No permission; migration `V130` belongs to the delivery reports. Parameters `from` and `to`, each a
+day in the first and last month (the twelve months up to today when absent, at most 24 months), normalised to whole Kampala
+calendar months of the business's time zone; the figures are read through the public port `SmsUsage` of `core.notifications`
+in the run's one snapshot. A message counts once it was handed to the provider (`sent`, `delivered`, `undelivered`, or
+`unknown`, which may have gone), never one the sink took, one refused or blocked by an opt out, or one still queued. Two
+tables:
+
+- `usage`, per month and event (the event's name from the wording list, "Payment link", "Test message, ..."): messages,
+  delivered, not delivered, segments (the provider's count when it gave one, else ours), the recorded cost in the business's
+  currency, and the messages without a cost (none recorded, or recorded in another currency); a total row.
+- `months`: per month, the messages, segments and recorded cost; a total row.
+
+The cost is what the provider reported for each message; the report prices nothing and bills nobody. Test:
+`SmsUsageReportIT` (a golden fabricated September against hand-computed totals, Kampala month edges, another business's
+messages never counted, the offer rule).
+
 ## 14.7 Compliance reports (`lending.reports.compliance`)
 
 The regulator's return formats for the pilot tenant are an open question
