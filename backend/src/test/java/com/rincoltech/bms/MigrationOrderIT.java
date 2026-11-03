@@ -1876,7 +1876,9 @@ class MigrationOrderIT {
                                         + " 'lending.collections.all_officers', 'core.referrals.read',"
                                         + " 'lending.loans.bring_in', 'core.data_export.run', 'core.billing.read',"
                                         + " 'lending.charges.waive_fee_interest', 'core.payments.allocate_approve',"
-                                        + " 'core.payments.manage')")
+                                        + " 'core.payments.manage',"
+                                        // V132 (where an entry is made, #826): the owner's read of the distances.
+                                        + " 'retail.entry_location.read')")
                         .query(Long.class)
                         .single())
                 .as("no permission is added")
