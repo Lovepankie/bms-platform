@@ -340,13 +340,17 @@ final class XlsxRows {
                         ? !d.hidden()
                         : Parsing.key(d.name()).equals(Parsing.key(wanted));
                 if (match && targets.containsKey(d.relationshipId())) {
+                    // Excel allows 31 characters; the batch keeps up to 100. A longer name is a hand-made file.
+                    if (d.name() == null || d.name().length() > 100) {
+                        throw Parsing.unreadable("The workbook's sheet has a name longer than 100 characters.");
+                    }
                     return new SheetRef(d.name(), targets.get(d.relationshipId()));
                 }
             }
-            throw Parsing.unreadable(
-                    wanted == null || wanted.isBlank()
-                            ? "The workbook has no sheet to read."
-                            : "The workbook has no sheet of the name given.");
+            if (wanted == null || wanted.isBlank()) {
+                throw Parsing.unreadable("The workbook has no sheet to read.");
+            }
+            throw new Parsing.Failure(Parsing.SHEET_NOT_FOUND, "The workbook has no sheet of the name given.");
         }
 
         void readSheet(InputStream in, Parsing.Sheet sheet) throws XMLStreamException {
@@ -384,6 +388,12 @@ final class XlsxRows {
                         case "t" -> {
                             if (inline != null) {
                                 inline.append(readText(r, "on row " + rowNo));
+                                // The runs of one inline string add up; the cell limit is on their sum (review of
+                                // #790).
+                                if (inline.length() > Parsing.MAX_CELL_CHARS) {
+                                    throw Parsing.unreadable("A cell on row " + rowNo + " is longer than "
+                                            + Parsing.MAX_CELL_CHARS + " characters.");
+                                }
                             }
                         }
                         default -> {}
@@ -472,7 +482,14 @@ final class XlsxRows {
             TIME
         }
 
+        /** What each number format is, worked out once per format, not once per cell (review of #790). */
+        private final Map<Integer, DateKind> kinds = new HashMap<>();
+
         private DateKind dateKind(int format) {
+            return kinds.computeIfAbsent(format, this::analyse);
+        }
+
+        private DateKind analyse(int format) {
             if (BUILTIN_TIME_ONLY.get(format)) {
                 return DateKind.TIME;
             }

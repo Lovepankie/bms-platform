@@ -75,12 +75,7 @@ class UploadService implements ImportUploads {
     private final UploadSettings.Properties settings;
     private final UploadSettings.ImportKey importKey;
     private final ObjectMapper mapper;
-
-    /** For tests: the free disk the next uploads see, in bytes; {@code null} reads the work directory's file store. */
-    volatile java.util.function.LongSupplier freeDisk;
-
-    /** For tests: runs between fetching a batch's file and reading it, where a concurrent cancel or move can land. */
-    volatile Runnable afterFetch;
+    private final UploadHooks hooks;
 
     UploadService(
             JdbcClient jdbc,
@@ -90,7 +85,8 @@ class UploadService implements ImportUploads {
             QuarantineStorage quarantine,
             UploadSettings.Properties settings,
             UploadSettings.ImportKey importKey,
-            ObjectMapper mapper) {
+            ObjectMapper mapper,
+            UploadHooks hooks) {
         this.jdbc = jdbc;
         this.batchJdbc = new JdbcTemplate(dataSource);
         this.tx = new TransactionTemplate(transactions);
@@ -99,6 +95,7 @@ class UploadService implements ImportUploads {
         this.settings = settings;
         this.importKey = importKey;
         this.mapper = mapper;
+        this.hooks = hooks;
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -241,9 +238,9 @@ class UploadService implements ImportUploads {
         Held held = tx.execute(s -> {
             Held h = held(batchId, true);
             requireOpen(run(h.runId(), false).status());
-            if (!List.of("uploaded", "parsed").contains(h.status()) || h.objectKey() == null) {
-                throw invalidTransition(
-                        "Only a batch that is uploaded or parsed can be read again; this one is " + h.status() + ".");
+            if (!h.readable()) {
+                throw invalidTransition("Only a batch that is uploaded, parsed or refused by its options can be read "
+                        + "again; this one is " + h.status() + ".");
             }
             return h;
         });
@@ -257,10 +254,7 @@ class UploadService implements ImportUploads {
             } catch (IOException e) {
                 throw new UncheckedIOException("the quarantined file could not be fetched", e);
             }
-            Runnable hook = afterFetch;
-            if (hook != null) {
-                hook.run();
-            }
+            hooks.afterFetch();
             Path copy = temp;
             Parsing.Limits limits = new Parsing.Limits(
                     settings.maxRows(), settings.maxColumns(), opts.requiredHeaders(), opts.ignoredColumns());
@@ -290,15 +284,15 @@ class UploadService implements ImportUploads {
      * cancelled, or a run moved on, while the file was being fetched is refused here and nothing is written.
      */
     private boolean stillOpen(Held held) {
-        String runStatus = jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR SHARE")
+        // FOR KEY SHARE: a transition (FOR UPDATE) waits for the parse; an upload into the same run (FOR NO KEY UPDATE)
+        // does not, so a long parse never holds up another file of the run (review of #790).
+        String runStatus = jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR KEY SHARE")
                 .param(held.runId())
                 .query(String.class)
                 .optional()
                 .orElseThrow(ApiException::notFound);
         Held now = held(held.id(), true);
-        return OPEN.contains(runStatus)
-                && List.of("uploaded", "parsed").contains(now.status())
-                && held.objectKey().equals(now.objectKey());
+        return OPEN.contains(runStatus) && now.readable() && held.objectKey().equals(now.objectKey());
     }
 
     private SourceParser.Parsed readInto(
@@ -330,19 +324,25 @@ class UploadService implements ImportUploads {
         } catch (IOException e) {
             throw new UncheckedIOException("the quarantined file could not be read", e);
         }
-        jdbc.sql("""
-                        UPDATE import_batches SET status = 'parsed', sheet_name = ?, header_row_no = ?, row_count = ?,
-                               column_count = ?, parse_warnings = ?, parsed_at = now()
-                         WHERE id = ?
-                        """)
-                .params(
-                        parsed.sheetName(),
-                        parsed.headerRowNo() == 0 ? null : parsed.headerRowNo(),
-                        parsed.rows(),
-                        parsed.columns(),
-                        parsed.warnings().toArray(String[]::new),
-                        held.id())
-                .update();
+        try {
+            jdbc.sql("""
+                            UPDATE import_batches SET status = 'parsed', sheet_name = ?, header_row_no = ?, row_count = ?,
+                                   column_count = ?, parse_warnings = ?, parsed_at = now(), failure_code = NULL,
+                                   failure_reason = NULL, failed_at = NULL
+                             WHERE id = ?
+                            """)
+                    .params(
+                            parsed.sheetName(),
+                            parsed.headerRowNo() == 0 ? null : parsed.headerRowNo(),
+                            parsed.rows(),
+                            parsed.columns(),
+                            parsed.warnings().toArray(String[]::new),
+                            held.id())
+                    .update();
+        } catch (DataIntegrityViolationException e) {
+            // What the file says about itself that the batch row cannot hold: the file's fault, as for its rows.
+            throw Parsing.unreadable("The file describes itself in a way that cannot be stored.");
+        }
         Map<String, Object> after = new LinkedHashMap<>();
         after.put("rows", parsed.rows());
         after.put("columns", parsed.columns());
@@ -401,7 +401,10 @@ class UploadService implements ImportUploads {
         }));
         if (failed) {
             log.info("import batch failed: run {}, batch {}, {}", held.runId(), held.id(), code);
-            deleteHeld(held.id(), held.objectKey());
+            // A refusal the options caused keeps the file, to be read again with corrected options or cancelled.
+            if (!Parsing.BY_OPTIONS.contains(code)) {
+                deleteHeld(held.id(), held.objectKey());
+            }
         }
     }
 
@@ -426,7 +429,7 @@ class UploadService implements ImportUploads {
         String objectKey = tx.execute(s -> {
             // The run first, shared, then the batch: the order of the parse, so the two never wait on each other.
             UUID runId = held(batchId, false).runId();
-            requireOpen(jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR SHARE")
+            requireOpen(jdbc.sql("SELECT status FROM import_runs WHERE id = ? FOR KEY SHARE")
                     .param(runId)
                     .query(String.class)
                     .single());
@@ -489,11 +492,20 @@ class UploadService implements ImportUploads {
             String encoding,
             long sizeBytes,
             String objectKey,
-            byte[] wrappedKey) {}
+            byte[] wrappedKey,
+            String failureCode) {
+
+        /** Its file can be read: uploaded, parsed, or refused only by the options it was read with. */
+        boolean readable() {
+            return objectKey != null
+                    && (List.of("uploaded", "parsed").contains(status)
+                            || ("failed".equals(status) && Parsing.BY_OPTIONS.contains(failureCode)));
+        }
+    }
 
     private RunRow run(UUID runId, boolean forUpdate) {
         return jdbc.sql("SELECT status, data_key_wrapped FROM import_runs WHERE id = ?"
-                        + (forUpdate ? " FOR UPDATE" : ""))
+                        + (forUpdate ? " FOR NO KEY UPDATE" : ""))
                 .param(runId)
                 .query((rs, n) -> new RunRow(rs.getString("status"), rs.getBytes("data_key_wrapped")))
                 .optional()
@@ -503,7 +515,7 @@ class UploadService implements ImportUploads {
     private Held held(UUID batchId, boolean forUpdate) {
         return jdbc.sql("""
                         SELECT b.id, b.run_id, b.status, b.file_type, b.encoding, b.size_bytes, b.object_key,
-                               r.data_key_wrapped
+                               r.data_key_wrapped, b.failure_code
                           FROM import_batches b JOIN import_runs r ON r.id = b.run_id
                          WHERE b.id = ?""" + (forUpdate ? " FOR UPDATE OF b" : ""))
                 .param(batchId)
@@ -515,7 +527,8 @@ class UploadService implements ImportUploads {
                         rs.getString("encoding"),
                         rs.getLong("size_bytes"),
                         rs.getString("object_key"),
-                        rs.getBytes("data_key_wrapped")))
+                        rs.getBytes("data_key_wrapped"),
+                        rs.getString("failure_code")))
                 .optional()
                 .orElseThrow(ApiException::notFound);
     }
@@ -556,9 +569,7 @@ class UploadService implements ImportUploads {
         long usable;
         try {
             Files.createDirectories(settings.work());
-            usable = freeDisk != null
-                    ? freeDisk.getAsLong()
-                    : Files.getFileStore(settings.work()).getUsableSpace();
+            usable = hooks.freeDisk(settings.work());
         } catch (IOException e) {
             throw new UncheckedIOException("the import work directory cannot be used", e);
         }

@@ -147,8 +147,12 @@ class QuarantineCleanup {
         });
         List<Held> held = tx.execute(s -> jdbc.sql("""
                         SELECT b.id, b.object_key FROM import_batches b JOIN import_runs r ON r.id = b.run_id
-                         WHERE b.object_key IS NOT NULL AND (b.status IN ('failed', 'cancelled') OR r.status = 'cancelled')
+                         WHERE b.object_key IS NOT NULL
+                           AND (b.status = 'cancelled' OR r.status = 'cancelled'
+                                OR (b.status = 'failed' AND b.failure_code <> ALL (?)))
                         """)
+                // A batch refused by its options keeps its file until it is read again or cancelled.
+                .param(Parsing.BY_OPTIONS.toArray(String[]::new))
                 .query((rs, n) -> new Held(rs.getObject("id", UUID.class), rs.getString("object_key")))
                 .list());
         int files = 0;

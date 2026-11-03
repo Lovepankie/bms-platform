@@ -23,6 +23,16 @@ final class Parsing {
     static final String TOO_MANY_ROWS = "TOO_MANY_ROWS";
     static final String TOO_MANY_COLUMNS = "TOO_MANY_COLUMNS";
     static final String HEADER_NOT_FOUND = "HEADER_NOT_FOUND";
+
+    /** The XLSX sheet the options name is not in the workbook. */
+    static final String SHEET_NOT_FOUND = "SHEET_NOT_FOUND";
+
+    /**
+     * The refusals the options cause, not the file (the mapping's headers, the sheet named): the batch fails but keeps
+     * its file, so the operator reads it again with corrected options instead of uploading it again (review of #790).
+     */
+    static final Set<String> BY_OPTIONS = Set.of(HEADER_NOT_FOUND, SHEET_NOT_FOUND);
+
     static final String FILE_UNREADABLE = "FILE_UNREADABLE";
 
     /** The warning of a text file read as Windows-1252. */
@@ -98,7 +108,8 @@ final class Parsing {
         private int headerRowNo;
         private int lastRowNo;
         private int rows;
-        private final Map<String, Integer> seen = new HashMap<>();
+        private final Set<String> used = new java.util.HashSet<>();
+        private final Map<Integer, String> extra = new HashMap<>();
 
         Limits limits() {
             return limits;
@@ -143,7 +154,7 @@ final class Parsing {
                 if (i >= limits.maxColumns()) {
                     throw tooManyColumns();
                 }
-                String name = i < names.size() ? names.get(i) : "column_" + (i + 1);
+                String name = i < names.size() ? names.get(i) : extraName(i);
                 if (!limits.ignoredColumns().contains(key(name))) {
                     raw.put(name, c);
                 }
@@ -205,10 +216,21 @@ final class Parsing {
             sink.header(rowNo, names);
         }
 
-        /** A repeated header name gets its count, {@code Phone (2)}, so no cell is lost under another's name. */
+        /**
+         * A repeated header name gets the first free count, {@code Phone (2)}, checked against every name already taken
+         * (a header that is itself {@code Phone (2)}, or {@code column_5}), so no cell is ever lost under another's name.
+         */
         private String unique(String name) {
-            int n = seen.merge(key(name), 1, Integer::sum);
-            return n == 1 ? name : name + " (" + n + ")";
+            String candidate = name;
+            for (int n = 2; !used.add(key(candidate)); n++) {
+                candidate = name + " (" + n + ")";
+            }
+            return candidate;
+        }
+
+        /** The name of a cell beyond the header, made once per column and unique like a header's. */
+        private String extraName(int index) {
+            return extra.computeIfAbsent(index, i -> unique("column_" + (i + 1)));
         }
 
         private Failure tooManyRows() {

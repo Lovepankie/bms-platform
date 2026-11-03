@@ -723,8 +723,11 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   one transaction, so the limits (`TOO_MANY_ROWS` over 100,000, `TOO_MANY_COLUMNS` over 200) and a damaged file
   (`FILE_UNREADABLE`: an unclosed quote, a cell over 32,767 characters, a broken zip or XML) roll every row back: the batch
   is `failed` with its code and a reason that names a limit, a row or a column, never a value, and its file is deleted. A
-  batch can be parsed again with other options before the run is ready; its rows are replaced. Until the mappings of #129,
-  the caller passes the required headers, the ignored columns and the sheet.
+  refusal the options caused rather than the file (`HEADER_NOT_FOUND`, and `SHEET_NOT_FOUND` for a named sheet the
+  workbook lacks) keeps the file: the batch is `failed` but can be parsed again with corrected options, or cancelled. A
+  batch can be parsed again with other options before the run is ready; its rows are replaced. A value the database
+  refuses, in a row or in what the file says of itself (a sheet name over 100 characters), is `FILE_UNREADABLE`. Until the
+  mappings of #129, the caller passes the required headers, the ignored columns and the sheet.
 - **States.** A batch is `uploaded`, `parsed`, `failed` or `cancelled` (`pending` and `committed` keep their meaning for the
   commit). A run becomes `ready` only when no batch is `uploaded` or `failed`, and the commit writes the `pending` and
   `parsed` batches. Cancelling a batch deletes its rows and file.
@@ -732,10 +735,14 @@ tooling, as the commit is. Every call works on the bound business only: a run or
   runs, files whose delete failed (a failed or cancelled batch keeps its file's key until storage confirms the delete),
   files no batch names after 24 hours, and work files a crash left. The purge of a removed business deletes its quarantine
   prefix and, when storage refuses any file, stops so it runs again the next night.
-- **Concurrency.** The parse writes in a transaction that first takes the run `FOR SHARE` and the batch `FOR UPDATE` and
-  checks again that the run is open and the batch still `uploaded` or `parsed` with the same file, so a cancel, a move to
-  ready or a second parse while the file was being fetched is refused and nothing is written; a refusal recorded after that
-  point is dropped the same way. The cancel takes the same locks in the same order.
+- **Concurrency.** The parse writes in a transaction that first takes the run `FOR KEY SHARE` and the batch `FOR UPDATE`
+  and checks again that the run is open and the batch still readable with the same file, so a cancel, a move to ready or a
+  second parse while the file was being fetched is refused and nothing is written; a refusal recorded after that point is
+  dropped the same way. The cancel takes the same locks in the same order. A run's transitions (`FOR UPDATE`) wait for a
+  parse in progress, so a run never becomes ready or cancelled under one; an upload into the same run takes the run
+  `FOR NO KEY UPDATE`, which does not wait for it, so a long parse never holds up another file. A parse at the row limit
+  is one transaction of 100 batched inserts, each well under the 60 second statement timeout, and holds no lock another
+  upload needs.
 - **Memory.** Besides the row chunk, the XLSX reader keeps only what its first pass needs (shared strings, styles, sheet
   list), charged at an estimate of its heap cost against 96 MiB, so many empty or short strings are stopped as surely as
   long ones, and never more shared strings than the sheet can have cells (rows plus the header, times columns); every text is read in pieces and stopped at 32,767 characters; a part named twice is refused; and each pass may

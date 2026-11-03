@@ -123,7 +123,7 @@ final class SourceParser {
                 // PostgreSQL cannot store a NUL in jsonb, though JSON may carry one (JSON Lines {"a":"\u0000"}).
                 if (name.indexOf('\0') >= 0
                         || (cell.value() instanceof String s && s.indexOf('\0') >= 0)
-                        || (cell.value() instanceof JsonNode n && n.toString().contains("\\u0000"))) {
+                        || (cell.value() instanceof JsonNode n && hasNul(n))) {
                     throw Parsing.unreadable("Row " + sourceRowNo + " holds a NUL character.");
                 }
                 Map<String, Object> c = new LinkedHashMap<>();
@@ -136,6 +136,18 @@ final class SourceParser {
             if (chunk.size() == CHUNK) {
                 flush();
             }
+        }
+
+        /** A NUL in a nested value's strings or keys, found by walking it, not by searching its text (review of #790). */
+        private static boolean hasNul(JsonNode node) {
+            if (node.isString()) {
+                return node.asString().indexOf('\0') >= 0;
+            }
+            boolean inKeys = node.properties().stream().anyMatch(e -> e.getKey().indexOf('\0') >= 0);
+            for (JsonNode child : node) {
+                inKeys = inKeys || hasNul(child);
+            }
+            return inKeys;
         }
 
         void flush() {

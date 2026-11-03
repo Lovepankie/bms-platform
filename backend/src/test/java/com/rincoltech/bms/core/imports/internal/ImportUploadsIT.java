@@ -46,6 +46,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
  * uploads. Fabricated data only: the names and phones below are made up for this test.
  */
 @ExtendWith(OutputCaptureExtension.class)
+@org.springframework.context.annotation.Import(TestUploadHooks.Config.class)
 class ImportUploadsIT extends IntegrationTest {
 
     static final String NAME = "Zawadi Fabricatedname";
@@ -59,7 +60,7 @@ class ImportUploadsIT extends IntegrationTest {
     ImportUploads uploads;
 
     @Autowired
-    UploadService service;
+    TestUploadHooks hooks;
 
     @Autowired
     ImportRuns runs;
@@ -94,7 +95,7 @@ class ImportUploadsIT extends IntegrationTest {
 
     @AfterEach
     void diskBack() {
-        service.freeDisk = null;
+        hooks.freeDisk = null;
     }
 
     <T> T as(TestDatabase.Fixture f, Supplier<T> work) {
@@ -261,9 +262,9 @@ class ImportUploadsIT extends IntegrationTest {
                         () -> uploads.upload(
                                 runId, new Upload("big.csv", new Repeating((25 << 20) + 1), -1, operator, null))),
                 Parsing.FILE_TOO_LARGE);
-        service.freeDisk = () -> 10;
+        hooks.freeDisk = () -> 10;
         refused(() -> upload(t, runId, "fabricated.csv", TestFiles.csv(CSV), null), "UPLOAD_DISK_LOW");
-        service.freeDisk = null;
+        hooks.freeDisk = null;
         assertThat(as(t, () -> uploads.batches(runId))).isEmpty();
         assertThat(as(t, () -> quarantine.list().toList())).as("no file stored").isEmpty();
 
@@ -273,7 +274,7 @@ class ImportUploadsIT extends IntegrationTest {
     }
 
     @Test
-    void everyWholeFileRefusalAtParseLeavesAFailedBatchWithNoRowsAndNoFile() {
+    void everyWholeFileRefusalAtParseLeavesAFailedBatchWithNoRows() {
         UUID runId = openRun(t);
         StringBuilder tooMany = new StringBuilder("Code\n");
         for (int i = 1; i <= 100_001; i++) {
@@ -296,9 +297,19 @@ class ImportUploadsIT extends IntegrationTest {
             assertThat(b.failureCode()).isEqualTo(e.getKey());
             assertThat(b.failureReason()).doesNotContain("FAB-");
             assertThat(rows(b.id())).as("a whole-file failure creates no rows").isZero();
-            assertThat(objectKey(b.id())).as("and keeps no file").isNull();
+            if (Parsing.BY_OPTIONS.contains(e.getKey())) {
+                assertThat(objectKey(b.id()))
+                        .as("a refusal the options caused keeps the file")
+                        .isNotNull();
+            } else {
+                assertThat(objectKey(b.id()))
+                        .as("a refusal the file caused keeps no file")
+                        .isNull();
+            }
         }
-        assertThat(as(t, () -> quarantine.list().toList())).isEmpty();
+        assertThat(as(t, () -> quarantine.list().toList()))
+                .as("only the file refused by its options")
+                .hasSize(1);
 
         // A batch parsed once and parsed again into a refusal loses its rows too.
         Batch ok = upload(t, runId, "fabricated.csv", TestFiles.csv(CSV), null);
@@ -306,6 +317,12 @@ class ImportUploadsIT extends IntegrationTest {
         Batch again = as(t, () -> uploads.parse(ok.id(), new ParseOptions(null, Set.of("Not there"), Set.of())));
         assertThat(again.failureCode()).isEqualTo(Parsing.HEADER_NOT_FOUND);
         assertThat(rows(ok.id())).isZero();
+
+        // Its file is kept, so the corrected options read it again without a new upload (review of #790).
+        Batch fixed = as(t, () -> uploads.parse(ok.id(), new ParseOptions(null, Set.of("Code"), Set.of())));
+        assertThat(fixed.status()).isEqualTo("parsed");
+        assertThat(fixed.failureCode()).isNull();
+        assertThat(rows(ok.id())).isEqualTo(2);
     }
 
     @Test

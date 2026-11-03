@@ -172,7 +172,7 @@ class SourceParserTest {
         assertThat(parsed.sheetName()).isEqualTo("Notes");
         assertThatThrownBy(() -> parse(FileType.XLSX, book, true, "Missing", limits()))
                 .isInstanceOfSatisfying(
-                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.FILE_UNREADABLE));
+                        Parsing.Failure.class, f -> assertThat(f.code).isEqualTo(Parsing.SHEET_NOT_FOUND));
         byte[] cut = Arrays.copyOf(book, book.length / 2);
         assertThatThrownBy(() -> parse(FileType.XLSX, cut, true, null, limits()))
                 .isInstanceOf(Parsing.Failure.class);

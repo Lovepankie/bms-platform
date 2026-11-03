@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * database cannot store fails the batch with {@code FILE_UNREADABLE} instead of leaving it stuck behind a server error;
  * and the daily job, as the scheduler runs it, cleans a cancelled run and a file whose delete failed. Fabricated data only.
  */
+@org.springframework.context.annotation.Import(TestUploadHooks.Config.class)
 class ImportUploadReviewIT extends IntegrationTest {
 
     static final String CSV = "Code,Description\nFAB-1,Fabricated item\nFAB-2,Another fabricated item\n";
@@ -34,7 +35,7 @@ class ImportUploadReviewIT extends IntegrationTest {
     ImportUploads uploads;
 
     @Autowired
-    UploadService service;
+    TestUploadHooks hooks;
 
     @Autowired
     ImportRuns runs;
@@ -55,7 +56,7 @@ class ImportUploadReviewIT extends IntegrationTest {
 
     @AfterEach
     void unhook() {
-        service.afterFetch = null;
+        hooks.afterFetch = null;
     }
 
     <T> T as(Supplier<T> work) {
@@ -92,11 +93,11 @@ class ImportUploadReviewIT extends IntegrationTest {
         assertThat(rows(batch.id())).isEqualTo(2);
 
         // The cancel lands between the fetch and the write, as a second operator's would.
-        service.afterFetch = () -> uploads.cancelBatch(batch.id());
+        hooks.afterFetch = () -> uploads.cancelBatch(batch.id());
         assertThatThrownBy(() -> as(() -> uploads.parse(batch.id(), null)))
                 .isInstanceOfSatisfying(
                         ApiException.class, e -> assertThat(e.code()).isEqualTo("invalid_status_transition"));
-        service.afterFetch = null;
+        hooks.afterFetch = null;
 
         Batch after = as(() -> uploads.batch(batch.id()));
         assertThat(after.status()).isEqualTo("cancelled");
@@ -110,11 +111,11 @@ class ImportUploadReviewIT extends IntegrationTest {
         Batch batch = upload(runId, "fabricated.csv", CSV);
         as(() -> runs.transition(runId, "in_review"));
 
-        service.afterFetch = () -> runs.transition(runId, "ready");
+        hooks.afterFetch = () -> runs.transition(runId, "ready");
         assertThatThrownBy(() -> as(() -> uploads.parse(batch.id(), null)))
                 .isInstanceOfSatisfying(
                         ApiException.class, e -> assertThat(e.code()).isEqualTo("invalid_status_transition"));
-        service.afterFetch = null;
+        hooks.afterFetch = null;
 
         assertThat(as(() -> runs.get(runId)).status()).isEqualTo("ready");
         assertThat(as(() -> uploads.batch(batch.id())).status()).isEqualTo("parsed");
@@ -147,7 +148,7 @@ class ImportUploadReviewIT extends IntegrationTest {
         Batch kept = upload(openRun, "other.csv", "Code\nFAB-9\n");
         String keptKey = objectKey(kept.id());
         TestDatabase.owner().sql("""
-                        UPDATE import_batches SET status = 'failed', failure_code = 'HEADER_NOT_FOUND',
+                        UPDATE import_batches SET status = 'failed', failure_code = 'FILE_UNREADABLE',
                                failure_reason = 'fabricated'
                          WHERE id = ?
                         """).param(kept.id()).update();
@@ -156,7 +157,21 @@ class ImportUploadReviewIT extends IntegrationTest {
                 .param(kept.id())
                 .update();
 
+        // A batch refused by its options keeps its file through the cleanup, to be read again.
+        Batch byOptions = as(() -> uploads.upload(
+                openRun,
+                new Upload(
+                        "mapped.csv",
+                        new ByteArrayInputStream(TestFiles.csv("Name\nFAB-3\n")),
+                        -1,
+                        operator,
+                        new ImportUploads.ParseOptions(null, java.util.Set.of("Code"), java.util.Set.of()))));
+        assertThat(byOptions.failureCode()).isEqualTo(Parsing.HEADER_NOT_FOUND);
+        String byOptionsKey = objectKey(byOptions.id());
+
         QuarantineCleanup.Result result = cleanup.cleanAll();
+
+        assertThat(as(() -> quarantine.open(byOptionsKey))).isPresent();
 
         assertThat(result.failed()).isZero();
         assertThat(as(() -> uploads.batch(staged.id())).status()).isEqualTo("cancelled");
