@@ -36,6 +36,8 @@ describe('what is kept', () => {
       ['retail', 'accounts', ''],
       ['retail', 'orders', 'board', 'all'],
       ['retail', 'usage-history', '2026-10-01', '2026-11-02', 'all', ''],
+      ['retail', 'item-stock', 'p1'],
+      ['retail', 'item-movements', 'p1', 'all', '', ''],
       ['data-export'],
       ['reports', 'runs'],
     ]) {

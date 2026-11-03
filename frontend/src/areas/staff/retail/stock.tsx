@@ -11,7 +11,7 @@ import { GroupControls, GroupedBodies, GroupedCards, sameUnitQty, useCategoryGro
 import { lineTotalMinor, milliOf } from './maths';
 import { packsAndPiecesParts, type PackSize } from './units-state';
 import { EmptyState, SkeletonList } from '../../../components/states';
-import { BranchRequired, CategoryLabel, Gate, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
+import { BranchRequired, CategoryLabel, Gate, ItemPageLink, NoStockHere, Problem, money, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { CorrectItem, mayCorrect } from './stock-correct';
 import { useStaff } from '../context';
 import { needsOf } from './permissions';
@@ -98,6 +98,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
         {away(r)}
         {keptWords(r.qty, r.reserved_qty) && <p className="hint">{keptWords(r.qty, r.reserved_qty)}</p>}
         {(r.sell_minor !== undefined || (showCost && r.cost_minor !== undefined)) && <p className="hint"><PriceLine cost={showCost ? r.cost_minor : undefined} sell={r.sell_minor} /></p>}
+        <ItemPageLink productId={r.product_id} name={r.description} />
         {correctable && correct(r)}
         {correctable && corrected === r.product_id && <CorrectItem row={r} branchId={correctable.branchId} onClose={() => setCorrected(null)} />}
       </li>
@@ -116,6 +117,7 @@ export function StockTable({ rows, showCost, searching = false, filterKey = '', 
       <tr>
         <td>
           {r.description}{showCategory && r.category && <><br /><CategoryLabel category={r.category} /></>}
+          <div><ItemPageLink productId={r.product_id} name={r.description} /></div>
           {correctable && <div>{correct(r)}</div>}
         </td>
         {!phone && !grouping && <td>{r.category}</td>}
@@ -203,7 +205,7 @@ export function AllBranchesTable({ data, showCost: mayCost, searching = false, f
   if (data.items.length === 0) return <EmptyState title="No items found.">Try another name or code, or buy stock to add items.</EmptyState>;
   const row = (r: AllBranchesStock['items'][number]) => (
     <tr key={r.product_id}>
-      <td>{r.description}{!grouping && <><br /><CategoryLabel category={r.category} /></>}</td>
+      <td>{r.description}{!grouping && <><br /><CategoryLabel category={r.category} /></>}<div><ItemPageLink productId={r.product_id} name={r.description} /></div></td>
       <td className={r.standard_pack ? 'num qty-packs' : 'num'}><strong><Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} pack={r.standard_pack} /></strong></td>
       {(r.balances ?? []).map((c) => (
         <td key={c.branch_id} className={r.standard_pack ? 'num qty-packs' : 'num'}><Qty qty={c.qty ?? '0'} unit={r.standard_pack ? r.unit : undefined} negative={c.negative} pack={r.standard_pack} /></td>
@@ -247,6 +249,7 @@ export function AllBranchesList({ data, showCost, searching = false, filterKey =
               <span>
                 <strong>{r.description}</strong>
                 {!grouping && <><br /><CategoryLabel category={r.category} /></>}
+                <br /><ItemPageLink productId={r.product_id} name={r.description} />
               </span>
               <span className="num"><strong>Total <Qty qty={r.total_qty ?? '0'} unit={r.unit} negative={r.negative} pack={r.standard_pack} /></strong></span>
             </div>

@@ -12,7 +12,7 @@ import { ENTRY_LOCATION, SALE_RETURN, canRankSellers, canUse, holdsAt } from './
 import { useEntryDistances, whereWords } from './entry-location';
 import { settledWords } from './returns-state';
 import { showDate } from './transfers';
-import { Gate, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
+import { Gate, ItemPageLink, Problem, money, useBranchName, useBranchView, useIsPhone, useProfitAccess } from './ui';
 import { SaleDocuments } from './documents-ui';
 import { ShareReceipt } from './receipt-share';
 import { useRootFigures } from './sales-grouped';
@@ -140,6 +140,7 @@ export function SaleDetail({ sale, today, branchName }: { sale: Sale; today: str
               <td>
                 {l.description}
                 {phone && <><br /><span className="hint">{enteredQty(l)} at {money(enteredPriceMinor(l))}</span></>}
+                <br /><ItemPageLink productId={l.product_id} name={l.description} />
                 {l.price && <><br /><span className="hint" data-testid="price-note">{receiptNote(l, money)}</span></>}
               </td>
               {!phone && <td className="num">{enteredQty(l)}</td>}

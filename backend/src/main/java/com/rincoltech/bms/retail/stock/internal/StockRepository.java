@@ -351,6 +351,43 @@ class StockRepository {
             Instant afterCreated,
             UUID afterId,
             int limit) {
+        return movements(branchIds, productId, from, to, kinds, zone, newestFirst, afterCreated, afterId, limit, false);
+    }
+
+    /**
+     * As above; with {@code withBalance} (the item page, issue #813, which always names the product) each row also carries
+     * the branch's balance of the item just after it and, on a sale, the sale line's profit. The balance is a running sum
+     * over the item's whole history in each branch, taken before the dates, kinds and cursor narrow the rows, so the page
+     * stays one query whatever it holds.
+     */
+    List<MovementRow> movements(
+            List<UUID> branchIds,
+            UUID productId,
+            LocalDate from,
+            LocalDate to,
+            List<String> kinds,
+            String zone,
+            boolean newestFirst,
+            Instant afterCreated,
+            UUID afterId,
+            int limit,
+            boolean withBalance) {
+        if (branchIds != null && branchIds.isEmpty()) {
+            return List.of();
+        }
+        boolean ledger = withBalance && productId != null;
+        String source = ledger
+                ? "(SELECT m.*, sum(m.qty) OVER (PARTITION BY m.branch_id ORDER BY m.occurred_at, m.id) AS balance_after"
+                        + " FROM retail_stock_movements m WHERE m.product_id = :productId"
+                        + (branchIds == null ? "" : " AND m.branch_id IN (:branchIds)")
+                        + ") retail_stock_movements"
+                : "retail_stock_movements";
+        String extra = ledger ? """
+                       , balance_after,
+                       (SELECT l.line_total_minor - l.line_cost_minor FROM retail_sale_lines l
+                         WHERE l.id = retail_stock_movements.source_line_id AND retail_stock_movements.kind = 'sale'
+                           AND retail_stock_movements.reverses_movement_id IS NULL) AS profit_minor
+                  """ : ", NULL::numeric AS balance_after, NULL::bigint AS profit_minor\n";
         StringBuilder sql = new StringBuilder("""
                 SELECT id, occurred_at, branch_id, product_id, kind, qty, unit_cost_minor, source_type,
                        source_id, reverses_movement_id, historical, note, recorded_by,
@@ -361,13 +398,13 @@ class StockRepository {
                        (SELECT p.description FROM retail_products p WHERE p.id = retail_stock_movements.product_id) AS product_description,
                        (SELECT u.name FROM retail_products p JOIN retail_units u ON u.id = p.unit_id
                          WHERE p.id = retail_stock_movements.product_id) AS product_unit
-                  FROM retail_stock_movements WHERE true
-                """);
+                """)
+                .append(extra)
+                .append(" FROM ")
+                .append(source)
+                .append(" WHERE true");
         Map<String, Object> params = new LinkedHashMap<>();
         if (branchIds != null) {
-            if (branchIds.isEmpty()) {
-                return List.of();
-            }
             sql.append(" AND branch_id IN (:branchIds)");
             params.put("branchIds", branchIds);
         }
@@ -432,7 +469,11 @@ class StockRepository {
                                 : new MovementCorrection(
                                         rs.getString("correction_reason"),
                                         Quantities.format(rs.getBigDecimal("correction_old")),
-                                        Quantities.format(rs.getBigDecimal("correction_new")))))
+                                        Quantities.format(rs.getBigDecimal("correction_new"))),
+                        rs.getBigDecimal("balance_after") == null
+                                ? null
+                                : Quantities.format(rs.getBigDecimal("balance_after")),
+                        rs.getObject("profit_minor", Long.class)))
                 .list();
     }
 
