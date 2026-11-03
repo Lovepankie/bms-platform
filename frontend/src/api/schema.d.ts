@@ -5320,6 +5320,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retail/expenses/{expense_id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit an expense: void it and record the request in its place, in one transaction (issue #830); M
+         * @description The old expense is voided with the reason "Edited: entered again with the changes" and the new one, at the same branch, carries an explanation naming it; a refusal of either changes nothing. Needs retail.expense.record at the branch as well, and, as every cash book route, retail.till.close (ADR-055). An amount that would wait for an administrator (ADR-091) is 422 edit_needs_approval.
+         */
+        post: operations["replaceRetailExpense"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retail/expenses/{expense_id}/void": {
         parameters: {
             query?: never;
@@ -6448,6 +6468,23 @@ export interface paths {
         get: operations["getRetailPurchase"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retail/purchases/{purchase_id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Edit a delivery: void the restock and record the request in its place, in one transaction (issue #830); M */
+        post: operations["replaceRetailPurchase"];
         delete?: never;
         options?: never;
         head?: never;
@@ -30327,6 +30364,34 @@ export interface operations {
             };
         };
     };
+    replaceRetailExpense: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                expense_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailExpenseRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailExpense"];
+                };
+            };
+        };
+    };
     voidRetailExpense: {
         parameters: {
             query?: never;
@@ -32469,6 +32534,34 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailPurchase"];
+                };
+            };
+        };
+    };
+    replaceRetailPurchase: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                purchase_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailPurchaseRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

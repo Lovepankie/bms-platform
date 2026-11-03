@@ -158,13 +158,15 @@ interface RecordLike { id?: string; branch_id?: string; business_date?: string; 
  * who entered it, an imported or voided label and, for a holder of retail.cashbook.void in that shop,
  * the Void action when `voidWith` is given.
  */
-export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderRow, voidWith, onVoided }: {
+export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderRow, voidWith, onVoided, actions }: {
   rows: T[];
   empty: string;
   what: string;
   renderRow: (row: T) => ReactNode;
   voidWith?: (row: T, reason: string, key: string) => Promise<unknown>;
   onVoided?: () => void;
+  /** The row's own buttons in place of Void (issue #830: Edit and Delete on an expense), given whether the row may be voided here. */
+  actions?: (row: T, mayVoid: boolean) => ReactNode;
 }) {
   const shopName = useBranchName();
   const mayVoidIn = useMayVoid();
@@ -190,6 +192,7 @@ export function RecordsByShop<T extends RecordLike>({ rows, empty, what, renderR
                     {voidWith && voidOffered(row, mayVoid(row)) && (
                       <VoidAction what={what} run={(reason, key) => voidWith(row, reason, key)} onVoided={onVoided} />
                     )}
+                    {actions?.(row, voidOffered(row, mayVoid(row)))}
                   </li>
                 ))}
               </ul>

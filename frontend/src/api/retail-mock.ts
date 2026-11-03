@@ -161,8 +161,8 @@ const PRODUCTS: MockProduct[] = [
   costMinor: costMinor as number, sellMinor: sellMinor as number,
 }));
 
-/** The server's level filter: out is zero or less, low is at or below 5 (so it includes out). */
-const atLevel = (qty: number, level?: 'out' | 'low'): boolean => level === undefined || qty <= (level === 'out' ? 0 : 5);
+/** The server's level filter: out is zero or less, low is at or below 10 (issue #830; so it includes out). */
+const atLevel = (qty: number, level?: 'out' | 'low'): boolean => level === undefined || qty <= (level === 'out' ? 0 : 10);
 const toMilli = (text: string): number => Math.round(Number(text) * 1000);
 /** A quantity without trailing zeros: 10.000 is 10. */
 const plainQty = (q: string): string => (q.includes('.') ? q.replace(/0+$/, '').replace(/\.$/, '') : q);
@@ -1258,7 +1258,7 @@ export function createMockRetail(): RetailApi {
         total += lineTotal(l.cost_minor, qtyTotal);
         return { id: nextId('p'), line_no: n + 1, product_id: p.id, code: p.code, description: p.description, cost_minor: l.cost_minor, sell_minor: p.sellMinor, qty_total: fromMilli(qtyTotal), qty_by_branch: l.qty_by_branch, line_total_minor: lineTotal(l.cost_minor, qtyTotal), base_unit: p.unit };
       });
-      const made: Purchase = { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, ...(body.supplier_id ? { supplier_id: body.supplier_id } : {}), purchased_on: body.purchased_on, payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total, status: 'posted' };
+      const made: Purchase = { id: nextId('6'), purchase_no: `P-${String(seq).padStart(6, '0')}`, ...(body.supplier_id ? { supplier_id: body.supplier_id } : {}), purchased_on: body.purchased_on, payment_method: body.payment_method, currency: 'UGX', lines, total_minor: total, status: 'posted', ...(body.note ? { note: body.note } : {}) };
       purchases.push({ ...made, before });
       if (body.payment_method === 'credit' && body.supplier_id) {
         purchasingApi.recordCreditRestock({ id: made.id ?? '', purchase_no: made.purchase_no ?? '', supplier_id: body.supplier_id, date: body.purchased_on, total_minor: total });
@@ -1368,6 +1368,13 @@ export function createMockRetail(): RetailApi {
         const { before: _before, ...voided } = found;
         return voided;
       })),
+
+    // Issue #830: as the server's one transaction, a new delivery the mock would refuse is refused before the old one is voided.
+    replacePurchase: async (id, body, key) => {
+      for (const l of body.lines) if (find(l.product_id).active === false) refuse(422, 'product_inactive', 'This item is switched off.');
+      const old = await mock.voidPurchase(id, 'Edited: entered again with the changes', `${key}-void`);
+      return mock.createPurchase({ ...body, note: `Replaces ${old.purchase_no ?? ''}, edited` }, key);
+    },
 
     createUsage: (body, key) =>
       run(() => once(`usage|${key}`, body, (): Usage => {

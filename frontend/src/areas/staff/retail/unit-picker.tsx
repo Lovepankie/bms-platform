@@ -48,7 +48,8 @@ export function UnitPicker({ id, units, loading, load, value, onChange, error, s
       tip={<HelpTip tip={kind === 'single' ? 'singleUnit' : 'package'} />}
       addText="+ Add your own"
       thing="unit"
-      options={units.map((u) => ({ value: u.id ?? '', label: `${u.name ?? ''}${u.active === false ? ' (switched off)' : ''}` }))}
+      // Issue #830: a deleted (switched off) unit is hidden from the picker, unless it is the one already chosen.
+      options={units.filter((u) => u.active !== false || u.id === value).map((u) => ({ value: u.id ?? '', label: `${u.name ?? ''}${u.active === false ? ' (deleted)' : ''}` }))}
       value={value}
       onChange={onChange}
       placeholder="Choose a unit"

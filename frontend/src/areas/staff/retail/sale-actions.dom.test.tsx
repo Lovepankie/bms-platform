@@ -71,7 +71,7 @@ describe('recording a payment', () => {
   it('offers the buttons to someone who may sell at the branch, and to nobody else', () => {
     screenOf(seller, <PaySaleAction sale={credit} today={today} />);
     expect(screen.getByRole('button', { name: 'Record payment' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Mark as fully paid' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mark as paid' })).toBeTruthy();
     cleanup();
     const noSell = { ...seller, permissions: ['retail.sale.read'], permission_scopes: {} };
     screenOf(noSell, <PaySaleAction sale={credit} today={today} />);
@@ -205,15 +205,27 @@ describe('recording a payment', () => {
   it('marks a sale as fully paid with the balance, whatever else was typed', async () => {
     paySale.mockResolvedValue({ payment: { amount_minor: 12000 }, sale_paid_minor: 12000, sale_balance_minor: 0 });
     screenOf(admin, <PaySaleAction sale={unpaid} today={today} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     expect(amount().readOnly).toBe(true);
     expect(amount().value).toBe('12000');
     fireEvent.change(screen.getByLabelText('Paid by'), { target: { value: 'bank' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
     expect(paySale.mock.calls[0]?.[1]).toEqual({ amount_minor: 12000, method: 'bank', paid_on: today });
     await waitFor(() => expect(toastText()).toBe('Sale paid in full'));
     expect(screen.queryByText('Recorded UGX 12,000. This sale is now paid in full.')).toBeNull();
+  });
+
+  it('Mark as paid records the whole balance today, in cash unless another way is picked (issue #830)', async () => {
+    paySale.mockResolvedValue({ payment: { amount_minor: 12000 }, sale_paid_minor: 12000, sale_balance_minor: 0 });
+    screenOf(admin, <PaySaleAction sale={unpaid} today={today} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
+    expect((screen.getByLabelText('Paid by') as HTMLSelectElement).value).toBe('cash');
+    expect((screen.getByLabelText('Date received') as HTMLInputElement).value).toBe(today);
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
+    await waitFor(() => expect(paySale).toHaveBeenCalledTimes(1));
+    expect(paySale.mock.calls[0]?.[1]).toEqual({ amount_minor: 12000, method: 'cash', paid_on: today });
+    await waitFor(() => expect(toastText()).toBe('Sale paid in full'));
   });
 
   it('says each refusal in plain words and repeats the key on a retry', async () => {
@@ -253,8 +265,8 @@ describe('recording a payment', () => {
         <StaffContext.Provider value={{ me: admin, branch }}><PaySaleAction sale={credit} today={today} /></StaffContext.Provider>
       </QueryClientProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('The balance has changed; check the new amount.'));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['retail'] });
     // The reloaded sale owes less: the fixed amount follows it, and a part payment typed above it goes back to the balance.
@@ -290,8 +302,8 @@ describe('recording a payment', () => {
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('the network dropped'));
     // The answer may have been lost: Cancel keeps that draft and its key for the retry.
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as fully paid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as paid' }));
     await waitFor(() => expect(paySale).toHaveBeenCalledTimes(2));
     expect(paySale.mock.calls[1]?.[2]).not.toBe(paySale.mock.calls[0]?.[2]);
   });
@@ -333,109 +345,126 @@ describe('recording a payment', () => {
 describe('voiding a sale', () => {
   it('shows the button only to a holder of retail.sale.void at the branch, on a completed sale', () => {
     screenOf(seller, <VoidSaleAction sale={cash} />);
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
     cleanup();
     screenOf(admin, <VoidSaleAction sale={{ ...cash, status: 'voided' }} />);
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
     cleanup();
     const otherBranch = { ...admin, permission_scopes: { ...admin.permission_scopes, 'retail.sale.void': { all_branches: false, branch_ids: ['some-other-branch'] } } };
     screenOf(otherBranch, <VoidSaleAction sale={cash} />);
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
     cleanup();
     screenOf(admin, <VoidSaleAction sale={cash} />);
-    expect(screen.getByRole('button', { name: 'Void this sale' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete this sale' })).toBeTruthy();
   });
 
   it('says a credit sale with a payment cannot be voided, instead of offering the button', () => {
     screenOf(admin, <VoidSaleAction sale={credit} />);
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
     expect(screen.getByTestId('void-blocked').textContent).toMatch(/had a payment/);
   });
 
-  it('asks for a reason, warns what happens, and sends one request', async () => {
+  it('asks "Delete this sale? The stock goes back." before anything is sent, and sends one request (issue #830)', async () => {
     let finish: (v: unknown) => void = () => undefined;
     voidSale.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     screenOf(admin, <VoidSaleAction sale={cash} branchName="Test Branch A" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    expect(screen.getByTestId('void-sale-warning').textContent).toMatch(/go back into stock at Test Branch A.*stops counting.*cannot be undone/);
-    const go = () => screen.getByRole('button', { name: /^Void this sale$/ }) as HTMLButtonElement;
-    expect(go().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'abcd' } });
-    expect(go().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: '  Rung up twice ' } });
+    expect(screen.queryByTestId('void-sale-question')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    expect(voidSale).not.toHaveBeenCalled();
+    expect(screen.getByTestId('void-sale-question').textContent).toBe('Delete this sale? The stock goes back to Test Branch A.');
+    expect(screen.getByTestId('void-sale-warning').textContent).toMatch(/stays in your lists marked Deleted.*stops counting/);
+    const go = () => screen.getByRole('button', { name: 'Yes, delete it' }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: '  Rung up twice ' } });
     expect(ready(go())).toBe(true);
     fireEvent.click(go());
     fireEvent.click(go());
-    fireEvent.submit(screen.getByRole('form', { name: 'Void this sale' }));
+    fireEvent.submit(screen.getByRole('form', { name: 'Delete this sale' }));
     await waitFor(() => expect(voidSale).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(go().getAttribute('aria-busy')).toBe('true'));
-    expect(go().getAttribute('aria-disabled')).toBe('true');
     expect(voidSale).toHaveBeenCalledWith('s1', 'Rung up twice');
     finish({ ...cash, status: 'voided' });
-    await waitFor(() => expect(screen.queryByLabelText(/Why is this sale being voided/)).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText(/Why\? \(optional\)/)).toBeNull());
+    await waitFor(() => expect(toastText()).toBe('Sale deleted. The stock went back.'));
   });
 
-  it('says why a sale cannot be voided, in plain words', async () => {
+  it('needs no reason: a blank one sends the plain default, which the void keeps', async () => {
+    voidSale.mockResolvedValue({ ...cash, status: 'voided' });
+    screenOf(admin, <VoidSaleAction sale={cash} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
+    await waitFor(() => expect(voidSale).toHaveBeenCalledWith('s1', 'Deleted from the sale screen'));
+  });
+
+  it('keeps a reason shorter than five characters after the default, so the void always has a full reason (review of #830)', async () => {
+    voidSale.mockResolvedValue({ ...cash, status: 'voided' });
+    screenOf(admin, <VoidSaleAction sale={cash} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: ' dup ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
+    await waitFor(() => expect(voidSale).toHaveBeenCalledWith('s1', 'Deleted from the sale screen: dup'));
+  });
+
+  it('says why a sale cannot be deleted, in plain words', async () => {
     voidSale.mockRejectedValueOnce(refusal('sale_has_returns')).mockRejectedValueOnce(refusal('sale_voided', 409)).mockRejectedValueOnce(refusal('permission_denied', 403));
     screenOf(admin, <VoidSaleAction sale={cash} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Wrong buyer' } });
-    const send = () => fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: 'Wrong buyer' } });
+    const send = () => fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
     send();
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('This sale has returns against it. Void the returns first.'));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('This sale has returns against it. Void the returns first, then delete the sale.'));
     await new Promise((r) => setTimeout(r));
     await new Promise((r) => setTimeout(r));
     send();
 
-    await waitFor(() => expect(screen.queryByLabelText(/Why is this sale being voided/)).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText(/Why\? \(optional\)/)).toBeNull());
     cleanup();
     voidSale.mockRejectedValueOnce(refusal('permission_denied', 403));
     screenOf(admin, <VoidSaleAction sale={cash} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Wrong buyer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: 'Wrong buyer' } });
     send();
     await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('You do not have permission to do this.'));
   });
 
   it('keeps an imported sale off the action with a short note', () => {
     screenOf(admin, <VoidSaleAction sale={{ ...cash, historical: true }} />);
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
-    expect(screen.getByTestId('void-blocked').textContent).toMatch(/imported from the old records.*cannot be voided here/);
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
+    expect(screen.getByTestId('void-blocked').textContent).toMatch(/imported from the old records.*cannot be deleted here/);
   });
 
   it('treats a void that already went through as done, and hides the button until the sale reads voided', async () => {
     voidSale.mockRejectedValueOnce(refusal('sale_voided', 409));
     screenOf(admin, <VoidSaleAction sale={cash} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Wrong buyer' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    await waitFor(() => expect(screen.queryByLabelText(/Why is this sale being voided/)).toBeNull());
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: 'Wrong buyer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
+    await waitFor(() => expect(screen.queryByLabelText(/Why\? \(optional\)/)).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('hides the button after a successful void, before the reloaded sale arrives', async () => {
     voidSale.mockResolvedValue({ ...cash, status: 'voided' });
     screenOf(admin, <VoidSaleAction sale={cash} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Wrong buyer' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: 'Wrong buyer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
     await waitFor(() => expect(voidSale).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByLabelText(/Why is this sale being voided/)).toBeNull());
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    await waitFor(() => expect(screen.queryByLabelText(/Why\? \(optional\)/)).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
   });
 
   it('says the void waits for an administrator when the business asks for approval, and offers no second void (issue #343)', async () => {
     voidSale.mockResolvedValue({ approval_id: 'a1', action_type: 'retail_sale_void', amount_minor: 12000, currency: 'UGX' });
     screenOf(admin, <VoidSaleAction sale={cash} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
-    fireEvent.change(screen.getByLabelText(/Why is this sale being voided/), { target: { value: 'Wrong buyer' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Void this sale' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete this sale' }));
+    fireEvent.change(screen.getByLabelText(/Why\? \(optional\)/), { target: { value: 'Wrong buyer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete it' }));
     const waiting = await screen.findByTestId('approval-waiting');
     expect(waiting.getAttribute('role')).toBe('status');
-    expect(waiting.textContent).toContain('The void of this sale waits for an administrator.');
+    expect(waiting.textContent).toContain('Deleting this sale waits for an administrator.');
     expect(waiting.querySelector('a')?.getAttribute('href')).toBe('/staff/approvals');
-    expect(screen.queryByRole('button', { name: 'Void this sale' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete this sale' })).toBeNull();
   });
 
   it('can be cancelled, and keeps the sale', () => {
@@ -445,10 +474,10 @@ describe('voiding a sale', () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
-  it('shows a voided sale as Voided with its reason', () => {
+  it('shows a deleted sale, kept, marked Deleted with its reason', () => {
     screenOf(admin, <SaleDetail sale={{ ...cash, status: 'voided', void_reason: 'Rung up twice' }} today={today} />);
-    expect(screen.getByText('Voided')).toBeTruthy();
-    expect(screen.getByText('Voided because')).toBeTruthy();
+    expect(screen.getByText('Deleted')).toBeTruthy();
+    expect(screen.getByText('Deleted because')).toBeTruthy();
     expect(screen.getByText('Rung up twice')).toBeTruthy();
   });
 });

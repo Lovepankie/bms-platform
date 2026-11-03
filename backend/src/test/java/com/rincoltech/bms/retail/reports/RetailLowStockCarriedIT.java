@@ -118,7 +118,8 @@ class RetailLowStockCarriedIT extends IntegrationTest {
 
     @Test
     void anItemHeldAtOneBranchIsNotLowAtABranchThatNeverCarriedIt() {
-        api.stockUp(t.secondBranch(), e, "10");
+        // 12, above the default level of 10 (issue #830).
+        api.stockUp(t.secondBranch(), e, "12");
         assertThat(get("/reports/home?branch_id=" + t.headOffice())
                         .get("low_stock")
                         .asInt())
@@ -132,7 +133,7 @@ class RetailLowStockCarriedIT extends IntegrationTest {
         assertThat(two.get("low_stock").asInt()).isZero();
 
         // Sold down to zero at branch two, it is out and low there, and still not at head office.
-        ResponseEntity<JsonNode> sold = api.sell(t.secondBranch(), "cash", e, "10");
+        ResponseEntity<JsonNode> sold = api.sell(t.secondBranch(), "cash", e, "12");
         assertThat(sold.getStatusCode()).as("%s", sold.getBody()).isEqualTo(HttpStatus.CREATED);
         two = shop(get("/reports/dashboard"), t.secondBranch());
         assertThat(two.get("out_of_stock").asInt()).isEqualTo(1);

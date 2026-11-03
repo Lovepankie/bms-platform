@@ -327,15 +327,16 @@ class RetailParityIT extends IntegrationTest {
     // ---- D. Low stock and out of stock ------------------------------------------------------
 
     /**
-     * Head office holds 10 cable and 4 bulb (setUp), plus 6 high, 5 five, 0 zero (stocked with 2 and both sold, so held
-     * there with a balance of 0: an item a branch never carried is neither out nor low, issue #490) and minus 1 owed.
+     * Head office holds 10 cable (exactly the threshold of 10, issue #830) and 4 bulb (setUp), plus 11 high, 5 five, 0 zero
+     * (stocked with 2 and both sold, so held there with a balance of 0: an item a branch never carried is neither out nor
+     * low, issue #490) and minus 1 owed.
      */
     void stockLevels() {
         UUID high = api.product("PAR-HIGH", 100, 150);
         UUID five = api.product("PAR-FIVE", 100, 150);
         UUID zero = api.product("PAR-ZERO", 100, 150);
         UUID owed = api.product("PAR-OWED", 100, 150);
-        api.stockUp(t.headOffice(), high, "6");
+        api.stockUp(t.headOffice(), high, "11");
         api.stockUp(t.headOffice(), five, "5");
         api.stockUp(t.headOffice(), zero, "2");
         assertThat(api.sell(t.headOffice(), "cash", zero, "2").getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -367,11 +368,12 @@ class RetailParityIT extends IntegrationTest {
         assertThat(qtyOf(out, "PAR-ZERO")).isEqualTo("0.000");
         assertThat(qtyOf(out, "PAR-OWED")).isEqualTo("-1.000");
         JsonNode low = ok(api.get("/stock?branch_id=" + t.headOffice() + "&stock_level=low", ADMIN));
-        assertThat(codes(low)).containsExactly("PAR-BULB", "PAR-FIVE", "PAR-OWED", "PAR-ZERO");
-        assertThat(low.get("low_stock_threshold").asString()).isEqualTo("5.000");
+        // Issue #830: the default level is 10, the old app's rule, so cable at exactly 10 is low and high at 11 is not.
+        assertThat(codes(low)).containsExactly("PAR-BULB", "PAR-CABLE", "PAR-FIVE", "PAR-OWED", "PAR-ZERO");
+        assertThat(low.get("low_stock_threshold").asString()).isEqualTo("10.000");
         JsonNode all = ok(api.get("/stock?branch_id=" + t.headOffice(), ADMIN));
         assertThat(codes(all)).hasSize(6);
-        assertThat(all.get("low_stock_threshold").asString()).isEqualTo("5.000");
+        assertThat(all.get("low_stock_threshold").asString()).isEqualTo("10.000");
     }
 
     @Test
@@ -393,12 +395,11 @@ class RetailParityIT extends IntegrationTest {
         stockLevels();
         api.stockUp(t.secondBranch(), cable, "1");
         api.stockUp(t.secondBranch(), bulb, "3");
-        // Low at any branch that holds it (issue #490): bulb is low at both, cable at branch two (11 in all); out stays
-        // on
-        // the total.
+        // Low at any branch that holds it (issue #490): bulb is low at both, cable at both (11 in all, still low at
+        // each); high (11, at head office only) is not; out stays on the total.
         JsonNode low = ok(api.get("/stock/all-branches?stock_level=low", ADMIN));
         assertThat(codes(low)).containsExactly("PAR-BULB", "PAR-CABLE", "PAR-FIVE", "PAR-OWED", "PAR-ZERO");
-        assertThat(low.get("low_stock_threshold").asString()).isEqualTo("5.000");
+        assertThat(low.get("low_stock_threshold").asString()).isEqualTo("10.000");
         assertThat(codes(ok(api.get("/stock/all-branches?stock_level=out", ADMIN))))
                 .containsExactly("PAR-OWED", "PAR-ZERO");
     }

@@ -62,8 +62,9 @@ class StockService {
     /**
      * A product at or below this quantity is low stock (#145). One constant for every tenant until a
      * retail settings group exists; the settings catalogue holds only core and lending keys today.
+     * Ten, the old app's rule (issue #830); an item's own minimum still wins.
      */
-    static final long LOW_STOCK_MILLI = 5_000;
+    static final long LOW_STOCK_MILLI = 10_000;
 
     static final String LEVEL_OUT = "out";
     static final String LEVEL_LOW = "low";

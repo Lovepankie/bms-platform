@@ -55,6 +55,15 @@ export function redraftOf(purchase: Purchase, products: Product[], today: string
   };
 }
 
+/**
+ * Edit a delivery (issue #830, the old app's word): the reason the old purchase is voided with when the edited one is saved, and the
+ * note the new one carries, so each points at the other: the old one in its void reason, the new one in its note.
+ */
+export const EDIT_REASON = 'Edited: entered again with the changes';
+
+/** The note of the purchase saved by Edit, naming the delivery it replaces. */
+export const editNote = (purchase: Pick<Purchase, 'purchase_no'>): string => `Replaces ${purchase.purchase_no ?? 'an earlier delivery'}, edited`;
+
 /** A void that went through, found already voided: the same end state, so not an error. */
 export function alreadyVoided(error: unknown): boolean {
   return error instanceof RetailError && error.code === 'purchase_voided';

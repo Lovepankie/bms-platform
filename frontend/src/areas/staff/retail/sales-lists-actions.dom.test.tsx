@@ -75,7 +75,7 @@ function expectActionsOnEachKindOfSale() {
   expect(owing.getByRole('button', { name: 'Record payment' })).toBeTruthy();
   const paid = within(card('Test Buyer Paid'));
   expect(paid.queryByRole('button', { name: 'Record payment' })).toBeNull();
-  expect(paid.queryByRole('button', { name: 'Mark as fully paid' })).toBeNull();
+  expect(paid.queryByRole('button', { name: 'Mark as paid' })).toBeNull();
   const imported = within(card('Test Buyer Imported'));
   expect(imported.queryByRole('button', { name: 'Record payment' })).toBeNull();
   expect(imported.getByTestId('imported-note')).toBeTruthy();

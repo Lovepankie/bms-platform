@@ -98,8 +98,9 @@ class RetailDashboardIT extends IntegrationTest {
         assertThat(stock.get("value_at_price_minor").asLong()).isEqualTo(47_050);
         assertThat(stock.get("value_at_cost_minor").asLong()).isEqualTo(31_100);
         assertThat(stock.get("out_of_stock").asInt()).isEqualTo(1);
-        assertThat(stock.get("low_stock").asInt()).isEqualTo(3);
-        assertThat(stock.get("low_stock_threshold").asString()).isEqualTo("5.000");
+        // Issue #830: the default level is 10, so branch two's 9 of p1 is low too.
+        assertThat(stock.get("low_stock").asInt()).isEqualTo(4);
+        assertThat(stock.get("low_stock_threshold").asString()).isEqualTo("10.000");
 
         JsonNode hq = shop(r, t.headOffice());
         assertThat(hq.get("today_sales_minor").asLong()).isEqualTo(2_100);
@@ -113,7 +114,7 @@ class RetailDashboardIT extends IntegrationTest {
         JsonNode b2 = shop(r, t.secondBranch());
         assertThat(b2.get("today_sales_minor").asLong()).isEqualTo(1_500);
         assertThat(b2.get("out_of_stock").asInt()).isEqualTo(1);
-        assertThat(b2.get("low_stock").asInt()).isEqualTo(1);
+        assertThat(b2.get("low_stock").asInt()).isEqualTo(2);
         assertThat(b2.get("stock_at_price_minor").asLong()).isEqualTo(13_500);
     }
 
@@ -190,7 +191,7 @@ class RetailDashboardIT extends IntegrationTest {
         Map<String, Integer> counts = new HashMap<>();
         counts.put("out", body.get("stock").get("out_of_stock").asInt());
         assertThat(counts.get("out")).isEqualTo(1);
-        assertThat(body.get("stock").get("low_stock").asInt()).isEqualTo(1);
+        assertThat(body.get("stock").get("low_stock").asInt()).isEqualTo(2);
     }
 
     @Test

@@ -95,7 +95,7 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extr
     <li className="rt-card">
       <ItemPhoto photoId={shownPhoto(product)} label={product.description ?? ''} />
       <p>
-        <strong>{product.description}</strong> {product.active === false && <span className="badge badge-warning">Inactive</span>}
+        <strong>{product.description}</strong> {product.active === false && <span className="badge badge-warning">Deleted</span>}
       </p>
       <p className="hint">{product.code}, {product.category}, per {product.unit}</p>
       <VariantNote product={product} />
@@ -112,10 +112,52 @@ export function ProductCard({ product, showCost, canPrice, onEdit, onPrice, extr
   );
 }
 
+/**
+ * Delete an item, the old app's word (issue #830): asked first, it switches the item off (the active flag of issue #342), which hides it
+ * from lists and pickers while its sales, stock history and reports keep it; Bring back switches it on. Only for retail.catalogue.manage.
+ * JUSTIFICATION-A3: #830 asks for a Delete button with a confirm on the item; it replaces the Inactive tick box and reuses its update.
+ */
+export function DeleteItem({ product, onDone }: { product: Product; onDone: (text: string) => void }) {
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const off = product.active === false;
+  // toast-exempt: the Items page says it through onDone (the same success toast as Save changes)
+  const change = useMutation({
+    mutationFn: () => retail.updateProduct(product.id ?? '', product.version ?? 1, { active: off }),
+    onSuccess: (saved) => {
+      void queryClient.invalidateQueries({ queryKey: ['retail'] });
+      onDone(saved.active === false ? `Deleted "${saved.description ?? ''}". Show deleted brings it back.` : `"${saved.description ?? ''}" is back.`);
+    },
+  });
+  if (off) {
+    return (
+      <div className="stack" data-testid="item-deleted">
+        <p className="hint"><span className="badge badge-warning">Deleted</span> Hidden from lists and pickers; its sales, stock history and reports keep it.</p>
+        <Problem error={change.error} />
+        <p><BusyButton busy={change.isPending} type="button" className="btn-sm" onClick={() => change.mutate()}>Bring back</BusyButton></p>
+      </div>
+    );
+  }
+  if (!asking) return <p><button type="button" className="btn-sm btn-danger" onClick={() => setAsking(true)}>Delete this item</button></p>;
+  return (
+    <div className="stack">
+      <p className="alert alert-warning" data-testid="delete-item-question">
+        <strong>Delete {product.description}?</strong> It is hidden from lists and pickers. Its sales, stock history and reports keep it, and Show deleted brings it back.
+      </p>
+      {(product.stock_branches ?? 0) > 0 && <p role="note" className="alert alert-warning">{inactiveWarning(product.stock_on_hand, product.stock_branches)}</p>}
+      <Problem error={change.error} />
+      <p className="cluster">
+        <BusyButton busy={change.isPending} type="button" className="btn-danger" onClick={() => change.mutate()}>Yes, delete it</BusyButton>
+        <button type="button" /* busy-exempt: keep waits for the delete */ className="btn-ghost" disabled={change.isPending} onClick={() => setAsking(false)}>Keep it</button>
+      </p>
+    </div>
+  );
+}
+
 /** The plain warning shown while an item that still has stock in a branch you can see is marked inactive (issue #342). */
 export function inactiveWarning(stockOnHand: string | undefined, branches: number | undefined): string {
   if (!branches) return '';
-  return `This item still has stock in the branches you can see (${stockOnHand} in all). Inactive items cannot be sold, bought or moved, so that stock stays put until you correct it on the Stock page or switch the item on again.`;
+  return `This item still has stock in the branches you can see (${stockOnHand} in all). Deleted items cannot be sold, bought or moved, so that stock stays put until you correct it on the Stock page or bring the item back.`;
 }
 
 export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpen }: {
@@ -136,7 +178,8 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
   const [categoryId, setCategoryId] = useState(product?.category_id ?? fixed?.id ?? '');
   const [showErrors, setShowErrors] = useState(false);
   const [unitId, setUnitId] = useState(product?.unit_id ?? '');
-  const [active, setActive] = useState(product?.active !== false);
+  // Issue #830: Delete and Bring back (DeleteItem) change it on their own; Save changes keeps it as it is.
+  const active = product?.active !== false;
   const canManage = (me.permissions ?? []).includes('retail.catalogue.manage');
   // Issue #384: a size or colour of an item takes its name, category and unit from the item; it changes its own size and colour.
   const variant = product?.variant;
@@ -360,17 +403,7 @@ export function ProductForm({ product, category: fixed, onSaved, onCancel, onOpe
               onClear={() => retail.clearProductPhoto(product.id ?? '')}
             />
           )}
-          {canManage && (
-            <>
-              <label htmlFor="item-inactive">
-                <input id="item-inactive" type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Inactive
-              </label>
-              <Hint full>An inactive item is not offered when selling, buying or moving stock, and leaves the stock list unless you ask for inactive items. It is never deleted: its history and reports stay.</Hint>
-              {!active && (product.stock_branches ?? 0) > 0 && (
-                <p role="note" className="alert alert-warning">{inactiveWarning(product.stock_on_hand, product.stock_branches)}</p>
-              )}
-            </>
-          )}
+          {canManage && <DeleteItem product={product} onDone={onSaved} />}
           <p className="hint">To change the price, use Change price on the list.</p>
           <PacksTurnOn />
           <PackEditor product={product} />
@@ -566,8 +599,8 @@ export function ProductList({ onEdit, onPrice, onAdd, added }: { onEdit: (id: st
           <label htmlFor="items-active">Show</label>
           <select id="items-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as 'active' | 'off' | 'all')}>
             <option value="active">On sale</option>
-            <option value="off">Inactive</option>
-            <option value="all">All items, active and inactive</option>
+            <option value="off">Deleted only</option>
+            <option value="all">Show deleted too</option>
           </select>
         </div>
       </div>

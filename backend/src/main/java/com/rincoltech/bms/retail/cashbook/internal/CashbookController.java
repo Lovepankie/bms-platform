@@ -349,6 +349,25 @@ class CashbookController {
         return ok(expenses.voidExpense(key, id, request));
     }
 
+    @PostMapping("/expenses/{expense_id}/replace")
+    @RequiresPermission("retail.cashbook.void")
+    @Operation(
+            summary =
+                    "Edit an expense: void it and record the request in its place, in one transaction (issue #830); M",
+            operationId = "replaceRetailExpense",
+            description =
+                    "The old expense is voided with the reason \"Edited: entered again with the changes\" and the new one, at the same"
+                            + " branch, carries an explanation naming it; a refusal of either changes nothing. Needs"
+                            + " retail.expense.record at the branch as well, and, as every cash book route, retail.till.close (ADR-055)."
+                            + " An amount that would wait for an administrator (ADR-091) is 422 edit_needs_approval.")
+    ResponseEntity<Expense> replaceExpense(
+            @RequestHeader(name = KEY, required = false) String key,
+            @PathVariable("expense_id") UUID id,
+            @Valid @RequestBody ExpenseRequest request) {
+        Outcome<Expense> outcome = expenses.replace(key, id, request);
+        return created(outcome, "/api/v1/retail/expenses/" + outcome.body().id());
+    }
+
     // ---------------------------------------------------------------------------------- advances
 
     @PostMapping("/advances")

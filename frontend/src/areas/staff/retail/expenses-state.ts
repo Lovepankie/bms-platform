@@ -1,5 +1,6 @@
-import type { ExpenseCategory, ExpenseItem, ExpenseRequest } from '../../../api/retail';
+import type { Expense, ExpenseCategory, ExpenseItem, ExpenseRequest } from '../../../api/retail';
 import { amountOrNull } from './cash-state';
+import { deleteReasonOf, typedAmount } from './sale-actions-state';
 
 // The expense form's rules (FR-RET-17, FR-RET-24): the items offered depend on the chosen category and only
 // active ones are offered, and an item flagged "needs an explanation" makes the explanation field appear and
@@ -60,3 +61,24 @@ export function planExpense(input: ExpenseInput, categories: ExpenseCategory[]):
   if (explain && input.explanation.trim().length < MIN_EXPLANATION) return { problem: `Explain this expense in at least ${MIN_EXPLANATION} characters.`, request };
   return { problem: null, request };
 }
+
+// Edit and Delete an expense as in the owner's old app (issue #830). Underneath, Delete is the void of FR-RET-28 and Edit is
+// POST /retail/expenses/{id}/replace, the void and a new expense in one transaction: the old one is kept, marked Voided, its
+// reason saying it was edited; the new one's explanation names it ("Replaces the Fuel entry of 2026-11-02, edited.").
+
+/** The reason kept on a deleted expense when none was typed. */
+export const EXPENSE_DELETE_REASON = 'Deleted from the expenses screen';
+
+/** The reason sent with Delete: a full typed reason, else the default with any shorter words kept after it. */
+export const deleteExpenseReason = (text: string): string => deleteReasonOf(text, EXPENSE_DELETE_REASON);
+
+/** The form filled in with an expense, to be edited. */
+export const draftOfExpense = (e: Expense) => ({
+  date: e.business_date ?? '',
+  categoryId: e.category_id ?? '',
+  itemId: e.item_id ?? '',
+  partyId: e.party_id ?? '',
+  amount: typedAmount(e.amount_minor ?? 0),
+  // The words the server adds to name the expense it replaced are not the person's own: the next edit adds them afresh.
+  explanation: (e.explanation ?? '').replace(/\s*Replaces the .* entry of .*, edited\.$/, ''),
+});

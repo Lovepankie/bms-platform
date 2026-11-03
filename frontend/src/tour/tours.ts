@@ -187,7 +187,8 @@ export const adminWelcome: Tour = {
   // Version 27 says Tap the branch to switch only to someone with more than one branch to choose (issue #564).
   // Version 28 words the Help and feedback step for How do I...? (issue #598).
   // Version 29 adds the Refresh step: the button beside Search in the top bar again, taken out of the menu (issue #631).
-  version: 29,
+  // Version 30 says the old app's words: Mark as paid and Delete this sale (issue #830).
+  version: 30,
   title: 'Welcome tour',
   audience: isTenantAdmin,
   autoStart: true,
@@ -326,7 +327,7 @@ export const adminWelcome: Tour = {
       needs: ['retail.sale.read', SELL],
       optional: true,
       title: 'When a buyer pays what they owe',
-      body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
+      body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as paid.',
     },
     {
       id: 'credit-counting',
@@ -366,7 +367,7 @@ export const adminWelcome: Tour = {
       needs: ['retail.sale.read', 'retail.sale.void'],
       optional: true,
       title: 'Fix a sale made by mistake',
-      body: 'Open All sales, open the sale and tap Void this sale. Give the reason. The items go back into stock and the sale stops counting.',
+      body: 'Open All sales, open the sale and tap Delete this sale. Say yes. The items go back into stock, and the sale stays in the list marked Deleted.',
     },
     {
       id: 'correct-stock',
@@ -460,7 +461,8 @@ export const retailSales: Tour = {
   // Version 23 words the branch and menu steps for the menu's top on a laptop and the drawer on a phone (issue #564).
   // Version 24 words the Help and feedback step for How do I...? (issue #598).
   // Version 25 adds the Refresh step: the button beside Search in the top bar again, taken out of the menu (issue #631).
-  version: 25,
+  // Version 26 says Mark as paid, the old app's words (issue #830).
+  version: 26,
   title: 'Selling tour',
   audience: isSeller,
   autoStart: true,
@@ -542,7 +544,7 @@ export const retailSales: Tour = {
       needs: ['retail.sale.read'],
       optional: true,
       title: 'When a buyer pays what they owe',
-      body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as fully paid.',
+      body: 'Open Credit sales and pick Still owing to see every debt, or open the day of the sale. Then tap Record payment. A part payment is fine. If they pay it all, tap Mark as paid.',
     },
     {
       id: 'sales-grouping',
@@ -913,7 +915,8 @@ export const loanPage: Tour = {
 export const cataloguePage: Tour = {
   id: 'page-catalogue',
   // Version 3 follows the glossary: Buy stock, Count stock, Customers who owe and the other plain words (issue #547).
-  version: 3,
+  // Version 4 says Delete this item and Show deleted, the old app's words (issue #830).
+  version: 4,
   title: 'This page: catalogue',
   audience: (me) => CATALOGUE.some((p) => held(me, p)),
   autoStart: false,
@@ -938,7 +941,7 @@ export const cataloguePage: Tour = {
       needs: ['retail.catalogue.manage'],
       optional: true,
       title: 'Items you stopped selling',
-      body: 'Open an item and tick Inactive. It is never deleted: it leaves the sale, buy stock and move lists, and its history and reports stay. Show inactive items on the Stock page brings it back into view.',
+      body: 'Open an item and tap Delete this item, then say yes. It leaves the sale, buy stock and move lists, and its history and reports stay. Show deleted too on Items brings it back into view.',
     },
     {
       id: 'importer',

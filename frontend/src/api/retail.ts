@@ -626,6 +626,8 @@ export interface RetailApi {
   getPurchase(id: string): Promise<Purchase>;
   /** Voids a restock by reversal, once (retail.purchase.create at every branch it touched); takes the Idempotency-Key of its form. */
   voidPurchase(id: string, reason: string, idempotencyKey: string): Promise<Purchase>;
+  /** Edit a delivery (issue #830): voids it and records the body in its place, in one call; a refusal changes nothing. */
+  replacePurchase(id: string, body: PurchaseRequest, idempotencyKey: string): Promise<Purchase>;
   createUsage(body: UsageRequest, idempotencyKey: string): Promise<Usage>;
   createStocktake(body: StocktakeRequest): Promise<Stocktake>;
   /** Issue #636: `acknowledged` names the big drops ticked on the review; the server refuses with 409 while one is left out. */
@@ -692,6 +694,8 @@ export interface RetailApi {
   createExpense(body: ExpenseRequest, idempotencyKey: string): Promise<Expense | ApprovalWaiting>;
   listExpenses(q: CashQuery & { categoryId?: string; itemId?: string }): Promise<Expense[]>;
   voidExpense(id: string, reason: string, idempotencyKey: string): Promise<Expense>;
+  /** Edit an expense (issue #830): voids it and records the body in its place, in one call; a refusal changes nothing. */
+  replaceExpense(id: string, body: ExpenseRequest, idempotencyKey: string): Promise<Expense>;
   createAdvance(body: AdvanceRequest, idempotencyKey: string): Promise<Advance>;
   listAdvances(q: CashQuery & { partyId?: string; openOnly?: boolean }): Promise<Advance[]>;
   getAdvance(id: string): Promise<Advance>;
@@ -1444,6 +1448,10 @@ const realRetail: RetailApi = {
     return unwrap(await api.POST('/api/v1/retail/purchases/{purchase_id}/void', { params: { path: { purchase_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
   },
 
+  async replacePurchase(id, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/purchases/{purchase_id}/replace', { params: { path: { purchase_id: id }, header: { 'Idempotency-Key': key } }, body }));
+  },
+
   async createUsage(body, key) {
     return unwrap(await api.POST('/api/v1/retail/usage', { body, params: { header: { 'Idempotency-Key': key } } }));
   },
@@ -1656,6 +1664,10 @@ const realRetail: RetailApi = {
 
   async voidExpense(id, reason, key) {
     return unwrap(await api.POST('/api/v1/retail/expenses/{expense_id}/void', { params: { path: { expense_id: id }, header: { 'Idempotency-Key': key } }, body: { reason } }));
+  },
+
+  async replaceExpense(id, body, key) {
+    return unwrap(await api.POST('/api/v1/retail/expenses/{expense_id}/replace', { params: { path: { expense_id: id }, header: { 'Idempotency-Key': key } }, body }));
   },
 
   async createAdvance(body, key) {

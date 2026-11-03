@@ -4,6 +4,12 @@
 
 Proposed (2026-10-20, issues #351 and #352; not yet accepted by the product owner). Builds on ADR-020 (retail stock and cost), ADR-022 (the cash book) and ADR-015 (maker-checker). The migration is `V63`, the first free number after `V62` (Flyway runs with `outOfOrder` off). The next free ADR number was checked on 2026-10-20: 041 and 042 exist and 043 is held by pull request #349, so this record takes 044.
 
+Screens amended by issue #830 (the decision is unchanged): Past purchases also offers **Edit**, the owner's old app's word. It opens
+Buy stock filled in with the delivery; Save changes voids it through this record's void and saves the form as a new restock whose
+note names the one it replaces, in one transaction (`POST /retail/purchases/{id}/replace`), so a refusal of either changes nothing.
+An expense is edited the same way (`POST /retail/expenses/{id}/replace`, FR-RET-28). A sale void says **Delete this sale**, and a voided sale reads Deleted in the lists; it is still the
+void of FR-RET-04, kept and reversed, never removed.
+
 ## Context
 
 The owner of a hardware business fixes mistakes today by editing his master spreadsheet: a wrong product name, an item entered twice, a wrong quantity when he rushed a restock ("2 rolls of cable, really 1"), an item in the wrong category, a quantity entered in metres when the item is kept in rolls. He fixes the quantity "without saving, without deleting" the entries. In the app, the name and category of an item are editable, but a restock can only be created and listed (a goods receipt and a supplier bill can be voided, a plain restock cannot), a quantity can only be moved by a stock-take or a usage report (which post a variance as shrinkage and so distort the shrinkage and cost reports), and nothing stops the same item being added twice. He asked, in his own words, that the app should not allow an item to be entered twice (confirmed: product names are unique too), and that fixing a quantity should stay as quick as the sheet, but with a trail.

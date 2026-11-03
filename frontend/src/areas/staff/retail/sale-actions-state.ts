@@ -73,7 +73,7 @@ export const paidWords = (paidMinor: number, balanceMinor: number): string =>
 /** The short line for an imported credit sale in a list row, and the fuller one on the opened sale. Only the screen enforces this for now. */
 export const IMPORTED_SHORT = 'Imported from the old records; record this payment with your accountant.';
 export const IMPORTED_FULL = 'This sale was imported from the old records. Payments on it are not recorded from this screen yet, so ask your accountant to record this payment.';
-export const IMPORTED_VOID = 'This sale was imported from the old records, so it cannot be voided here. Ask your accountant.';
+export const IMPORTED_VOID = 'This sale was imported from the old records, so it cannot be deleted here. Ask your accountant.';
 
 /**
  * Why a sale cannot be voided, in words, or null when it can (as far as the screen knows). A credit sale whose paid amount has moved
@@ -81,14 +81,26 @@ export const IMPORTED_VOID = 'This sale was imported from the old records, so it
  * entries predate this system. Returns on a cash sale are only known to the server, which refuses with sale_has_returns.
  */
 export function voidBlocked(sale: Pick<Sale, 'status' | 'payment_method' | 'paid_minor' | 'historical'>): string | null {
-  if (sale.status === 'voided') return 'This sale is already voided.';
+  if (sale.status === 'voided') return 'This sale is already deleted.';
   if (sale.historical === true) return IMPORTED_VOID;
-  if (sale.payment_method === 'credit' && (sale.paid_minor ?? 0) > 0) return 'A credit sale that has had a payment or a return cannot be voided.';
+  if (sale.payment_method === 'credit' && (sale.paid_minor ?? 0) > 0) return 'A credit sale that has had a payment or a return cannot be deleted.';
   return null;
 }
 
 /** The reason to send, or null while it is too short. */
 export const voidReasonOf = (text: string): string | null => reasonOf(text);
+
+/** The reason kept on a deleted sale when none was typed (issue #830: the reason is optional; the void still records one). */
+export const DELETE_REASON = 'Deleted from the sale screen';
+
+/**
+ * The reason sent with Delete this sale: what was typed, trimmed, when it is a full reason ({@link MIN_REASON} characters, the void
+ * rule); else the plain default, with any shorter words typed kept after it ("Deleted from the sale screen: dup").
+ */
+export const deleteReasonOf = (text: string, fallback = DELETE_REASON): string => {
+  const typed = text.trim();
+  return typed.length >= MIN_REASON ? typed : typed ? `${fallback}: ${typed}` : fallback;
+};
 
 const codeOf = (error: unknown): string | undefined => (error instanceof RetailError ? error.code : undefined);
 

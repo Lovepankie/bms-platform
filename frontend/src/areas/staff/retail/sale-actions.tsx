@@ -7,7 +7,7 @@ import { usePersistedDraft } from './idempotency';
 import { CREDIT_WRITE_OFF, SALE_VOID, holdsAt } from './permissions';
 import {
   IMPORTED_FULL, IMPORTED_SHORT, MIN_REASON, PAY_METHODS, blankPay, buildPayRequest, fullPay, importedAndOwing, keyReused, owedMinor, payFailureWords, payProblem,
-  saleMovedOn, settledDate, takesPayment, typedAmount, voidBlocked, voidReasonOf, type PayForm,
+  saleMovedOn, settledDate, takesPayment, typedAmount, voidBlocked, deleteReasonOf, type PayForm,
   WRITE_OFF_CHECKER, WRITE_OFF_PENDING, canWriteOff, writeOffAlreadyPending, writeOffFailureWords, writeOffMovedOn, writeOffReasonOf, writeOffAmount, writeOffWarning, writeOffWords, } from './sale-actions-state';
 import { Problem, Success, WaitingForApproval, money } from './ui';
 
@@ -37,7 +37,7 @@ export function PayFormView({ sale, today, form, full, busy, error, todayOnly, o
   return (
     <form
       className="stack"
-      aria-label={full ? 'Mark as fully paid' : 'Record a payment'}
+      aria-label={full ? 'Mark as paid' : 'Record a payment'}
       onSubmit={(e) => {
         e.preventDefault();
         if (problem === null && !busy) onSubmit();
@@ -56,7 +56,7 @@ export function PayFormView({ sale, today, form, full, busy, error, todayOnly, o
       {problem && <p role="alert" className="rt-flag">{problem}</p>}
       <Problem error={error} />
       <p className="cluster">
-        <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null}>{full ? 'Mark as fully paid' : 'Save payment'}</BusyButton>
+        <BusyButton type="submit" className="rt-primary" busy={busy === true} notReady={problem !== null}>{full ? 'Mark as paid' : 'Save payment'}</BusyButton>
         <button type="button" /* busy-exempt: cancel waits for the payment */ className="btn-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </p>
     </form>
@@ -64,7 +64,7 @@ export function PayFormView({ sale, today, form, full, busy, error, todayOnly, o
 }
 
 /**
- * Mounted only while the form is open. Each way of paying has its own draft and Idempotency-Key, so "Mark as fully paid" never reuses the key
+ * Mounted only while the form is open. Each way of paying has its own draft and Idempotency-Key, so "Mark as paid" never reuses the key
  * of an earlier part payment whose answer was lost. A refusal that says the sale moved on reloads it; a reused key resets the form.
  */
 function PayPanel({ sale, today, full, onDone }: { sale: Sale; today: string; full: boolean; onDone: () => void }) {
@@ -121,7 +121,7 @@ function PayPanel({ sale, today, full, onDone }: { sale: Sale; today: string; fu
 
 /**
  * Take a payment on a credit sale that still owes (retail.sale.create at the sale's branch): "Record payment" and the
- * "Mark as fully paid" shortcut. An imported sale shows a note instead (one short line when `compact`, as in a list row). Nothing shows for
+ * "Mark as paid" shortcut (the old app's words, issue #830: the whole balance, today, in cash unless another way is picked). An imported sale shows a note instead (one short line when `compact`, as in a list row). Nothing shows for
  * anyone else. Only this screen keeps imported sales from being paid; the API does not check it yet.
  */
 export function PaySaleAction({ sale, today, compact = false }: { sale: Sale; today: string; compact?: boolean }) {
@@ -137,7 +137,7 @@ export function PaySaleAction({ sale, today, compact = false }: { sale: Sale; to
       {takesPayment(sale) && mode === null && (
         <p className="cluster">
           <button type="button" className="btn-sm" onClick={() => setMode('part')}>Record payment</button>
-          <button type="button" className="btn-sm" onClick={() => setMode('full')}>Mark as fully paid</button>
+          <button type="button" className="btn-sm" onClick={() => setMode('full')}>Mark as paid</button>
         </p>
       )}
       {takesPayment(sale) && mode !== null && (
@@ -147,7 +147,10 @@ export function PaySaleAction({ sale, today, compact = false }: { sale: Sale; to
   );
 }
 
-/** The void form: a reason of at least five characters, what will happen in plain words, and one clear button. */
+/**
+ * The delete question (issue #830, the old app's words): "Delete this sale? The stock goes back." with an optional reason and one clear
+ * button. Underneath it is the void of FR-RET-04: the sale is kept, marked Deleted, and its stock and books go back.
+ */
 export function VoidFormView({ branchName, busy, error, onVoid, onCancel }: {
   branchName?: string;
   busy?: boolean;
@@ -156,24 +159,26 @@ export function VoidFormView({ branchName, busy, error, onVoid, onCancel }: {
   onCancel: () => void;
 }) {
   const [reason, setReason] = useState('');
-  const ready = voidReasonOf(reason);
   return (
     <form
       className="stack"
-      aria-label="Void this sale"
+      aria-label="Delete this sale"
       onSubmit={(e) => {
         e.preventDefault();
-        if (ready && !busy) onVoid(ready);
+        if (!busy) onVoid(deleteReasonOf(reason));
       }}
     >
-      <label htmlFor="void-sale-reason">Why is this sale being voided? (at least {MIN_REASON} characters)</label>
-      <input id="void-sale-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
-      <p className="hint" data-testid="void-sale-warning">
-        The items go back into stock{branchName ? ` at ${branchName}` : ''}, and the sale stops counting in your reports and in what the buyer owes. This cannot be undone.
+      <p className="alert alert-warning" data-testid="void-sale-question">
+        <strong>Delete this sale?</strong> The stock goes back{branchName ? ` to ${branchName}` : ''}.
       </p>
+      <p className="hint" data-testid="void-sale-warning">
+        The sale stays in your lists marked Deleted, and stops counting in your reports and in what the buyer owes.
+      </p>
+      <label htmlFor="void-sale-reason">Why? (optional)</label>
+      <input id="void-sale-reason" value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
       <Problem error={error} />
       <p className="cluster">
-        <BusyButton type="submit" busy={busy === true} disabled={ready === null}>Void this sale</BusyButton>
+        <BusyButton type="submit" busy={busy === true}>Yes, delete it</BusyButton>
         <button type="button" /* busy-exempt: keep waits for the void */ className="btn-ghost" disabled={busy} onClick={onCancel}>Keep the sale</button>
       </p>
     </form>
@@ -181,7 +186,7 @@ export function VoidFormView({ branchName, busy, error, onVoid, onCancel }: {
 }
 
 /**
- * Void a completed sale (retail.sale.void at the sale's branch). A credit sale that has had a payment says why it cannot be voided;
+ * Delete a completed sale, the old app's words for a void (retail.sale.void at the sale's branch, issue #830). A credit sale that has had a payment says why it cannot be deleted;
  * returns made against a sale are only known to the server, which refuses with sale_has_returns. Nothing shows for anyone else.
  */
 export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: string }) {
@@ -210,13 +215,13 @@ export function VoidSaleAction({ sale, branchName }: { sale: Sale; branchName?: 
       if (error instanceof RetailError && ['sale_voided', 'sale_has_payments', 'sale_has_returns'].includes(error.code ?? '')) void queryClient.invalidateQueries({ queryKey: ['retail'] });
     },
     onSettled: () => { sending.current = false; },
-    meta: { success: (outcome: object) => (isWaiting(outcome) ? null : 'Sale voided') },
+    meta: { success: (outcome: object) => (isWaiting(outcome) ? null : 'Sale deleted. The stock went back.') },
   });
-  if (waiting) return <WaitingForApproval what="The void of this sale waits for an administrator." />;
+  if (waiting) return <WaitingForApproval what="Deleting this sale waits for an administrator." />;
   if (sale.status !== 'completed' || voided || !holdsAt(me, SALE_VOID, sale.branch_id)) return null;
   const blocked = voidBlocked(sale);
   if (blocked) return <p className="hint" data-testid="void-blocked">{blocked}</p>;
-  if (!open) return <p><button type="button" className="btn-sm" onClick={() => { send.reset(); setOpen(true); }}>Void this sale</button></p>;
+  if (!open) return <p><button type="button" className="btn-sm btn-danger" onClick={() => { send.reset(); setOpen(true); }}>Delete this sale</button></p>;
   return <VoidFormView branchName={branchName} busy={send.isPending} error={send.error} onVoid={(reason) => {
     if (sending.current) return;
     sending.current = true;

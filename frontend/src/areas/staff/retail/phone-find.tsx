@@ -140,7 +140,7 @@ export function ItemRow({ product, onOpen }: { product: Product; onOpen: () => v
   const stock = itemStock(product);
   return (
     <ListRow
-      title={<>{product.description}{product.active === false && <span className="badge badge-warning">Inactive</span>}</>}
+      title={<>{product.description}{product.active === false && <span className="badge badge-warning">Deleted</span>}</>}
       meta={[product.category, stock].filter(Boolean).join(' · ')}
       amount={product.sell_minor !== undefined ? <><span className="find-row-word">{WORDS.sellingPrice}</span>{money(product.sell_minor)}</> : undefined}
       onClick={onOpen}

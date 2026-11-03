@@ -39544,6 +39544,52 @@
         "tags" : [ "retail-cashbook" ]
       }
     },
+    "/api/v1/retail/expenses/{expense_id}/replace" : {
+      "post" : {
+        "description" : "The old expense is voided with the reason \"Edited: entered again with the changes\" and the new one, at the same branch, carries an explanation naming it; a refusal of either changes nothing. Needs retail.expense.record at the branch as well, and, as every cash book route, retail.till.close (ADR-055). An amount that would wait for an administrator (ADR-091) is 422 edit_needs_approval.",
+        "operationId" : "replaceRetailExpense",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "expense_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailExpenseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailExpense"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit an expense: void it and record the request in its place, in one transaction (issue #830); M",
+        "tags" : [ "retail-cashbook" ]
+      }
+    },
     "/api/v1/retail/expenses/{expense_id}/void" : {
       "post" : {
         "description" : "ADR-055: the cash book is the till's. Besides the permission of the route the caller needs retail.till.close (Can close the till and do the banking), else 403 permission_denied",
@@ -42962,6 +43008,51 @@
           }
         },
         "summary" : "One restock with its lines and, when voided, the void (issue #351)",
+        "tags" : [ "retail-purchasing" ]
+      }
+    },
+    "/api/v1/retail/purchases/{purchase_id}/replace" : {
+      "post" : {
+        "operationId" : "replaceRetailPurchase",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "purchase_id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RetailPurchaseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/RetailPurchase"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edit a delivery: void the restock and record the request in its place, in one transaction (issue #830); M",
         "tags" : [ "retail-purchasing" ]
       }
     },
