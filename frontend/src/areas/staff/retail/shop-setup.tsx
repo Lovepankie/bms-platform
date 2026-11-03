@@ -16,6 +16,7 @@ import { SHOP_TYPES, shopTypeById } from './shop-starters';
 import { applySetup, key, packNeeds, packText, planSetup, type SetupItem, type SetupResult } from './shop-setup-state';
 import { useSetupHelper } from '../setup-helper/setup-helper';
 import { Gate, Problem } from './ui';
+import { sayDone } from './toast';
 
 // Set up your shop (issue #625, docs/specs/units-packs-and-costing.md section 9 step 5): a new shop owner should not build
 // categories and units one by one. The owner says what kind of shop it is; the app lists that kind's categories, units and
@@ -99,7 +100,7 @@ export function ShopSetupPage() {
       document.getElementById(`setup-size-${firstBadSize.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)?.focus();
       return;
     }
-    // toast-exempt: success screen, it says what was added
+    // success-screen: it says what was added
     setBusy(true);
     try {
       // Read what the shop has now, not what was on screen, so a name another phone added meanwhile is skipped too.
@@ -108,7 +109,9 @@ export function ShopSetupPage() {
         queryClient.fetchQuery({ queryKey: ['retail', 'catalogue', 'units'], queryFn: () => retail.listUnits(), staleTime: 0 }) as Promise<Unit[]>,
       ]);
       const fresh = planSetup(type, nowCategories, nowUnits).map(withEdits);
-      setResult(await applySetup(retail, fresh, ticked, nowUnits));
+      const done = await applySetup(retail, fresh, ticked, nowUnits);
+      setResult(done);
+      if (!done.error && done.added.length > 0) sayDone(`Shop set up, ${done.added.length} added`);
     } catch (error) {
       setResult({ added: [], skipped: [], error });
     } finally {

@@ -277,12 +277,13 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
 
   // The client sale id is the draft's key, so a sale whose answer was lost and that is kept to send later is never twice.
   // The request is kept with the draft once sent: until the server answers, the same request is all that can go again.
-  // toast-exempt: success screen, the sale complete screen headed Sale saved through onSaved
+  // success-screen: the sale complete screen headed Sale saved through onSaved
   // Issue #769: on a weak connection a cash, mobile money or bank sale with no answer within SALE_ANSWER_MS, or lost on the
   // network, goes to the outbox at once under the same key, with when it was taken (recorded offline), and the provisional
   // receipt shows. The answer that comes later is ignored here; the server finds the sale by its client sale id, or answers
   // from the key, whose hash leaves the delivery fields out, so the sale is recorded once (ADR-067 decision 5).
   const save = useMutation({
+    meta: { success: (r: { sale: Sale } | { kept: OutboxItem }) => (r && 'kept' in r ? 'Sale saved on this phone' : 'Sale saved') },
     mutationFn: async ({ body, at, pricesAt }: { body: SaleRequest; at: string; pricesAt?: string }): Promise<{ sale: Sale } | { kept: OutboxItem }> => {
       const asked = retail.createSale(body, key);
       if (!offline || !mayKeepOnPhone({ body })) return { sale: await asked };
@@ -624,8 +625,9 @@ export function SaleForm({ branchId, branchName = '', onSaved, onQueued, startIt
   };
   const entry = useEntryChecks('sell', branchId, warnings, send, draft.lines);
   const lost = locked && !save.isPending && !(save.error instanceof RetailError);
-  // toast-exempt: success screen, the queued notice: the provisional receipt headed Sale saved on this phone through onQueued
+  // success-screen: the queued notice, the provisional receipt headed Sale saved on this phone through onQueued
   const keep = useMutation({
+    meta: { success: 'Sale saved on this phone' },
     mutationFn: async () => {
       if (!offline) throw new Error('Offline sales are not available');
       const item = offlineSale({

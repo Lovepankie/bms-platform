@@ -9,7 +9,8 @@ import { showDate } from './transfers';
 
 // Saving the day's savings as a person does it (issue #538): the three figures (profit, expenses, available), an amount above the
 // available refused under the field in plain words before anything is sent, and after a save the Saved panel with the amount and
-// the day (no success toast besides it) and the record in Savings records at once. Fabricated names and amounts.
+// the day and the record in Savings records at once (the toast beside it, issue #824, is in save-toasts.dom.test.tsx).
+// Fabricated names and amounts.
 
 vi.setConfig({ testTimeout: 20000 });
 
@@ -132,7 +133,7 @@ describe('the savings screen', () => {
     expect('overwrite_reason' in body).toBe(false);
   });
 
-  it('after a save shows the Saved panel with the amount and the day, no success toast, and the record at once', async () => {
+  it('after a save shows the Saved panel with the amount and the day, and the record at once', async () => {
     savingsSuggestion.mockResolvedValue(day);
     // The refetch after the save is held back, so the record can only come from the save itself.
     let release: (rows: Savings[]) => void = () => {};
@@ -143,11 +144,10 @@ describe('the savings screen', () => {
     await screen.findByText('No savings recorded in this period.');
     fireEvent.click(saveButton());
 
-    // The Saved panel replaces the form and is the one success signal: it carries the amount and the day, and no toast says it again.
+    // The Saved panel replaces the form: it carries the amount and the day.
     const panel = await screen.findByRole('region', { name: 'Savings recorded' });
     expect(panel.textContent).toContain('Amount saved: UGX 4,000');
     expect(panel.textContent).toContain(showDate(today));
-    expect(document.querySelector('.toast-success')).toBeNull();
     expect(screen.getByText('Record another day')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Save savings' })).toBeNull();
     const records = screen.getByRole('region', { name: 'Savings records' });

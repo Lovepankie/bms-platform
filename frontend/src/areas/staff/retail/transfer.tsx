@@ -59,8 +59,10 @@ export function TransferForm({ fromBranchId, onSaved, prefill }: { fromBranchId:
     `transfer:${me.user_id ?? ''}:${fromBranchId}`,
     { toBranchId: '', transferDate: businessToday(), note: '', lines: [] },
   );
+  // success-screen: Move stock shows the summary of the move in place of the form, and the toast says it too (#824)
   const save = useMutation({
     mutationFn: () => retail.createTransfer(buildTransfer(fromBranchId, draft), key),
+    meta: { success: (t: Transfer) => (t?.status === 'in_transit' ? `Stock sent to ${label(t.to_branch_id)}` : `Stock moved to ${label(t?.to_branch_id)}`) },
     onSuccess: (t) => {
       entry.saved();
       finish();

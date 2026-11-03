@@ -197,9 +197,10 @@ export function ReturnNewPage() {
   const usualIsStore = (me.branches ?? []).some((b) => b.id === sale.data?.branch_id && b.sells_goods === false);
   const tills = sellingBranches(branches, undefined);
   const form = usualIsStore && draft.refundBranchId === '' && tills.length === 1 ? { ...draft, refundBranchId: tills[0]?.id ?? '' } : draft;
-  // toast-exempt: success screen, the return outcome
+  // success-screen: the return outcome; one that waits for approval says so there and raises no toast
   const send = useMutation({
     mutationFn: (s: Sale) => retail.createSaleReturn(saleId, buildReturnRequest(s, form, back), key),
+    meta: { success: (r: ReturnOutcome) => (!r?.executed ? null : r.sale_return?.credit_note_no ? `Goods taken back, credit note ${r.sale_return.credit_note_no}` : 'Goods taken back') },
     onSuccess: (r) => {
       discard();
       setOutcome(r);

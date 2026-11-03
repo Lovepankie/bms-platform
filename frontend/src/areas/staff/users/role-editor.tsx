@@ -37,7 +37,7 @@ export function RoleEditor({ user, self = false, roles, branches, onSave, onCanc
       return;
     }
     saving.current = true;
-    // toast-exempt: the Staff users screen says the roles are saved through onSave
+    // toast-exempt: said elsewhere: the Staff users screen says the roles are saved through onSave
     setBusy(true);
     setError(null);
     const failure = await onSave(rows.flatMap((r) => assignmentsFor(r.roleKey, r.branchIds)));

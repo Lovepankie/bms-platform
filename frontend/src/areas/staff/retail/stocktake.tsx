@@ -269,7 +269,7 @@ function CountSheet({ branchId, item, from, reopen }: { branchId: string; item?:
   // comes back after the mark moved, or a Commit pressed after it, would take the same difference again, so both check it.
   const reviewMark = useRef(0);
   const markMoved = () => (readCount(saveKey)?.committed ?? 0) > reviewMark.current;
-  // toast-exempt: success screen, the review of the count replaces the form
+  // toast-exempt: saves nothing: it opens the review of the count and changes no stock; Save the count after it says Stock updated
   const review = useMutation({
     mutationFn: async () => {
       // Storage holds a commit this tab missed: it is taken in first, so the sheet drops what went in, and no review is made.
@@ -342,7 +342,7 @@ function CountSheet({ branchId, item, from, reopen }: { branchId: string; item?:
     return entryWarnings(usual, { screen: 'count', product, lineKey: id, qtyMilli: parseCount(v), qtyFieldId: `count-${id}`, recordedMilli: here });
   });
   const entry = useEntryChecks('count', branchId, warnings, () => review.mutate(), totals);
-  // toast-exempt: success screen, the review turns into Stock updated for N items, with the toast issue #681 asks for too;
+  // success-screen: the review turns into Stock updated for N items, with the toast issue #681 asks for too;
   // setDone there is the list of counted items, not a success note
   const commit = useMutation({
     mutationFn: (acknowledged: string[]) => savingCount(draft?.id ?? '', retail.commitStocktake(draft?.id ?? '', acknowledged)),

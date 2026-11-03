@@ -51,8 +51,9 @@ export function AdvanceForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const { key, draft, setDraft, finish } = usePersistedDraft<AdvanceDraft>(`advance:${me.user_id ?? ''}:${branchId}`, { date: businessToday(), partyId: '', takenById: '', principal: '', purpose: '' });
   const parties = useCashParties();
   const minor = amountOrNull(draft.principal);
-  // toast-exempt: success screen, the Saved panel replaces the form
+  // success-screen: the Saved panel replaces the form
   const save = useMutation({
+    meta: { success: 'Advance saved' },
     mutationFn: () =>
       retail.createAdvance({
         branch_id: branchId, business_date: draft.date, party_id: draft.partyId, principal_minor: minor ?? 0,
@@ -102,8 +103,9 @@ export function RepaymentForm({ branchId, onSaved }: { branchId: string; onSaved
   const open = useQuery({ queryKey: ['retail', 'advances', 'open'], queryFn: () => retail.listAdvances({ openOnly: true }), enabled: canList });
   const advance = (open.data ?? []).find((a) => a.id === draft.advanceId);
   const problem = repaymentProblem(advance, draft.amount);
-  // toast-exempt: success screen, the Saved panel replaces the form
+  // success-screen: the Saved panel replaces the form
   const save = useMutation({
+    meta: { success: 'Repayment saved' },
     mutationFn: () => retail.createRepayment(draft.advanceId, { branch_id: branchId, amount_minor: amountOrNull(draft.amount) ?? 0, method: draft.method, paid_on: draft.date }, key),
     onSuccess: (saved) => {
       finish();

@@ -74,12 +74,13 @@ export function SavingsForm({ branchId, onSaved }: { branchId: string; onSaved?:
   const reason = reasonText(draft.reason, draft.other ?? '');
   const plan = s ? planSavings({ branchId, date: draft.date, suggestion: s, amount: draft.amount, reason, canOverwrite, today: businessToday() }) : null;
 
-  // toast-exempt: success screen, the Saved panel replaces the form
+  // success-screen: the Saved panel replaces the form
   const save = useMutation({
     mutationFn: () => {
       if (!plan) throw new Error('The suggestion has not loaded');
       return retail.createSavings(plan.request, key, { salesStaff });
     },
+    meta: { success: 'Savings saved' },
     onSuccess: (saved) => {
       finish();
       showInRecords(queryClient, saved);

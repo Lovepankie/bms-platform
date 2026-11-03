@@ -93,6 +93,7 @@ export function UsersScreen() {
       const made = await resetUserSignIn(user.id ?? '', credential);
       setLink({ userId: user.id, name: user.full_name ?? 'this person', phone: user.phone_e164 ?? null, url: made.url, expiresAt: made.expiresAt, kind: 'reset' });
       setMode(null);
+      sayDone(user.full_name ? `Reset link made for ${user.full_name}` : 'Reset link made');
       return null;
     } catch (e) {
       // The server asked for the other kind of proof: /me is out of date (two-step sign-in was turned on or off elsewhere), so read

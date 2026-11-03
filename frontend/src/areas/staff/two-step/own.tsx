@@ -6,6 +6,7 @@ import { twoStep } from '../../../api/two-step';
 import { ErrorLine, RecoveryCodes, TwoStepSetup } from '../../auth/steps';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
+import { sayDone } from '../retail/toast';
 import { deadlineWords } from './state';
 
 // Turn on your own two-step sign-in from inside the app (issue #348; ADR-046 decision 7). Until now only the first run of an invited
@@ -28,7 +29,7 @@ export function OwnTwoStep({ blocking = false }: { blocking?: boolean }) {
 
   async function run(action: () => Promise<void>) {
     if (busy) return;
-    // toast-exempt: success screen, each step opens the next (the code, then the recovery codes that say it is on)
+    // toast-exempt: said elsewhere: each step opens the next, and confirm below says Two-step sign-in is on when the recovery codes show
     setBusy(true);
     setMessage(null);
     try {
@@ -53,6 +54,7 @@ export function OwnTwoStep({ blocking = false }: { blocking?: boolean }) {
       const codes = await twoStep.confirm(code);
       setCode('');
       setStep({ kind: 'codes', codes });
+      sayDone('Two-step sign-in is on');
     });
   }
 

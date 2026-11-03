@@ -162,7 +162,7 @@ export function StatementView({ detail, canMark }: { detail: PaymentStatementDet
 /** The statements uploaded before, newest first; one can be opened again to see how its lines matched. */
 export function PastStatements({ onOpen }: { onOpen: (detail: PaymentStatementDetail) => void }) {
   const list = useQuery({ queryKey: ['payments', 'statements'], queryFn: statements.list });
-  // toast-exempt: opening reads a past statement and changes nothing; the statement shown below is the answer
+  // toast-exempt: saves nothing: opening reads a past statement and changes nothing; the statement shown below is the answer
   const open = useMutation({ mutationFn: (id: string) => statements.get(id), onSuccess: onOpen });
   const items = list.data ?? [];
   return (

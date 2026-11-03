@@ -426,8 +426,9 @@ export function JoinPage() {
             : there.length + rows.length > MAX_VARIANTS
               ? `An item has at most ${MAX_VARIANTS} sizes and colours, and ${target?.name} has ${there.length}.`
               : !target && name.trim() === '' ? 'Say what customers call the item.' : null;
-  // toast-exempt: success screen
+  // success-screen: the saved sizes and colours replace the form
   const save = useMutation({
+    meta: { success: 'Sizes and colours saved' },
     mutationFn: (duplicateReason?: string) => retail.joinFamily(target?.id ?? null, {
       // An item that exists keeps its name and category: only the items go with it.
       ...(target ? {} : { name: name.trim() }),

@@ -36,9 +36,10 @@ export function ExpenseForm({ branchId, onSaved, onWaiting }: { branchId: string
   const items = itemsOf(list, draft.categoryId);
   const explain = needsExplanation(list, draft.categoryId, draft.itemId);
   const plan = planExpense({ branchId, ...draft }, list);
-  // toast-exempt: success screen, the Saved panel replaces the form
+  // success-screen: the Saved panel replaces the form; one that waits for approval says so on the form instead
   const save = useMutation({
     mutationFn: () => retail.createExpense(plan.request, key),
+    meta: { success: (saved: Expense) => (isWaiting(saved) ? null : 'Expense saved') },
     onSuccess: (saved) => {
       finish();
       void queryClient.invalidateQueries({ queryKey: ['retail'] });

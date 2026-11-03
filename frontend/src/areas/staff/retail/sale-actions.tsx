@@ -274,9 +274,10 @@ export function WriteOffSaleAction({ sale }: { sale: Sale }) {
   const saleId = sale.id ?? '';
   const { key, draft, setDraft, discard } = usePersistedDraft<{ reason: string }>(`sale-write-off:${me.user_id ?? ''}:${saleId}`, { reason: '' });
   const sending = useRef(false);
-  // toast-exempt: success screen, the write off words replace the form
+  // success-screen: the write off words replace the form; one sent for approval says so there and raises no toast
   const send = useMutation({
     mutationFn: (reason: string) => retail.writeOffSale(saleId, reason, key),
+    meta: { success: (outcome: { executed?: boolean }) => (outcome?.executed === true ? 'Debt written off' : null) },
     onSuccess: (outcome) => {
       discard();
       setOpen(false);

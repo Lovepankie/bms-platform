@@ -29,7 +29,7 @@ export function GoodsPicker({ onAdd, chosen }: { onAdd: (receipt: GoodsReceipt) 
   const search = useLiveSearch();
   const term = search.term;
   const found = useQuery({ queryKey: ['retail', 'goods-receipts', 'pick', term], queryFn: ({ signal }) => retail.listGoodsReceipts({ query: term, status: 'posted', signal }) });
-  // toast-exempt: it reads a delivery to put on the form and saves nothing; the delivery shows on the form at once
+  // toast-exempt: saves nothing: it reads a delivery to put on the form and saves nothing; the delivery shows on the form at once
   const add = useMutation({ mutationFn: (id: string) => retail.getGoodsReceipt(id), onSuccess: onAdd });
   const rows = (found.data?.items ?? []).filter((r) => !chosen.includes(r.id ?? ''));
   return (

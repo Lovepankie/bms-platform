@@ -5,6 +5,7 @@ import { UsersError, users } from '../../../api/users';
 import { useShellBrand } from '../../../app/branding';
 import { BusyButton } from '../../../app/ui/BusyButton';
 import { useStaff } from '../context';
+import { sayDone } from '../retail/toast';
 import { LinkBox, type ShownLink } from './link-box';
 import { RolePick } from './role-pick';
 import { WhoCanDoWhat } from './who-can-do-what';
@@ -52,7 +53,7 @@ export function InviteScreen() {
     setTouched(true);
     if (hasProblems(problems) || sending.current) return;
     sending.current = true;
-    // toast-exempt: success screen, the invitation link screen replaces the form
+    // success-screen: the invitation link screen replaces the form
     setBusy(true);
     setError(null);
     setLookInList(false);
@@ -69,6 +70,7 @@ export function InviteScreen() {
       });
       setDraft(emptyInvite());
       setTouched(false);
+      sayDone(`${invited.user?.full_name ?? draft.fullName.trim()} invited`);
     } catch (e) {
       setError(messageOf(e));
       const code = e instanceof UsersError ? e.code : undefined;

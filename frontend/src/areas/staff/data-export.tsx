@@ -59,7 +59,7 @@ export function DataExportCard({ modules, zone }: { modules?: string[] | null; z
     onError: fail,
     meta: { success: (next: DataExportStatus) => (next.weekly_email ? 'Weekly email on' : 'Weekly email off') },
   });
-  // toast-exempt: only fetches a link and opens the file download, nothing is saved
+  // toast-exempt: saves nothing: it only fetches a link and opens the file download, nothing is saved
   const download = useMutation({
     mutationFn: (documentId: string) => reports.downloadUrl(documentId),
     onMutate: () => setMessage(null),

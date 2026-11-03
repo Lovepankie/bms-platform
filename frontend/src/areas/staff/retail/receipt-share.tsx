@@ -259,7 +259,7 @@ export function ShareReceipt({ sale, madeHere = false }: { sale: Sale; madeHere?
     let held = file.current?.key === key ? file.current : null;
     try {
       if (!held) {
-        // toast-exempt: fetching the receipt PDF saves nothing; the share sheet or the downloaded note says what happened
+        // toast-exempt: saves nothing: fetching the receipt PDF saves nothing; the share sheet or the downloaded note says what happened
         setBusy(true);
         held = await pdf();
       }

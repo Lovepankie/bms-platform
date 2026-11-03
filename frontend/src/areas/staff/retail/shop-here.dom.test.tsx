@@ -61,7 +61,7 @@ describe('the shop under the page title (issue #680)', () => {
 });
 
 describe('the toast on a change of shop (issue #680)', () => {
-  it('says where the person now is, politely, in the dark neutral toast, for six seconds (TOAST_MS)', () => {
+  it('says where the person now is, politely, in the dark neutral toast, for about four seconds (TOAST_MS)', () => {
     vi.useFakeTimers();
     render(<Harness choose={() => true} />);
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'b-two' } });
